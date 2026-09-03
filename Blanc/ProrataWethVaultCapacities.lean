@@ -27,18 +27,19 @@ the exact remaining share room, and returns their natural-number minimum.
 The supply word sits immediately after the quote word and is preserved by the
 quote store's half-open write interval. -/
 theorem maxMintAfterAssetCap_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {supply cap : B256} {tail : Stack}
     (supplyWindow : MemWordAt pre (supplyWord * 32).toNat supply)
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : cap :: tail <<+ pre.stack)
     (returnLookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre maxMintAfterAssetCap (.ok final)) :
+    (run : R fs sevm pre maxMintAfterAssetCap final) :
     ReturnsWord
       (Nat.toB256 (min (shareRoomN supply.toNat) cap.toNat)) final := by
   unfold maxMintAfterAssetCap at run
   obtain ⟨quotePre, quoteStoreRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨quoteStack, quoteMemory⟩ :=
     of_run_mstoreAt_val quoteStoreRun stack
   obtain ⟨sourceImage, sourceMemImage⟩ := supplyWindow.memImage
@@ -58,18 +59,18 @@ theorem maxMintAfterAssetCap_trace
     rw [supplyWindow'.slice_eq imageMem.2, B256.toB256_toBytes]
 
   obtain ⟨roomPre, quoteRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨quotePrefix, quoteWf, quoteReads, -⟩ :=
     (ProducesWord.loadWord (sevm := sevm) quoteAt)
       imageMem.1 imageMem.2 quoteStack quoteRun
   obtain ⟨testPre, roomRun, run⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨roomPrefix, roomWf, roomReads, -⟩ :=
     (ProducesWord.shareRoom (sevm := sevm) supplyAt stable)
       quoteWf quoteReads quotePrefix roomRun
   obtain ⟨branchPre, testRun, branchRun⟩ :=
-    runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+    Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource roomPrefix
   have testMemory : testPre.memory = branchPre.memory :=
     Ninst.Hinv.inv (f := Devm.memory) testSource
@@ -86,9 +87,8 @@ theorem maxMintAfterAssetCap_trace
   by_cases roomLt : Nat.toB256 room < cap
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [room, B256.ltCheck, roomLt] using testPrefix
-    obtain ⟨bodyPre, branchWord, branchWordNe, bodyPop, bodyRun,
-        bodyPrefix⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory]
@@ -97,12 +97,13 @@ theorem maxMintAfterAssetCap_trace
       rw [← bodyPop.memory]
       exact branchReads
     obtain ⟨callPre, roomRun, callRun⟩ :=
-      runCompiledTo_prepend_inv bodyRun
+      Func.WalkInv.prepend bodyRun
     obtain ⟨selectedPrefix, -, -, -⟩ :=
       (ProducesWord.shareRoom (sevm := sevm) supplyAt stable)
         bodyWf bodyReads bodyPrefix roomRun
-    obtain ⟨returnPre, callBurn, returnRun⟩ :=
-      runCompiledTo_call_inv returnLookup callRun
+    obtain ⟨callBody, returnPre, callLookup, callBurn, returnRun⟩ :=
+      Func.WalkInv.call callRun
+    obtain rfl := Option.some.inj (callLookup.symm.trans returnLookup)
     have returnPrefix : Nat.toB256 room :: tail <<+ returnPre.stack := by
       rw [← callBurn.stack]
       exact selectedPrefix
@@ -114,7 +115,7 @@ theorem maxMintAfterAssetCap_trace
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
       simpa [room, B256.ltCheck, roomLt] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory]
       exact branchWf
@@ -122,12 +123,13 @@ theorem maxMintAfterAssetCap_trace
       rw [← bodyPop.memory]
       exact branchReads
     obtain ⟨callPre, quoteRun, callRun⟩ :=
-      runCompiledTo_prepend_inv bodyRun
+      Func.WalkInv.prepend bodyRun
     obtain ⟨selectedPrefix, -, -, -⟩ :=
       (ProducesWord.loadWord (sevm := sevm) quoteAt)
         bodyWf bodyReads bodyPrefix quoteRun
-    obtain ⟨returnPre, callBurn, returnRun⟩ :=
-      runCompiledTo_call_inv returnLookup callRun
+    obtain ⟨callBody, returnPre, callLookup, callBurn, returnRun⟩ :=
+      Func.WalkInv.call callRun
+    obtain rfl := Option.some.inj (callLookup.symm.trans returnLookup)
     have returnPrefix : cap :: tail <<+ returnPre.stack := by
       rw [← callBurn.stack]
       exact selectedPrefix
@@ -143,6 +145,7 @@ theorem maxMintAfterAssetCap_trace
 carries the supply word across arithmetic scratch memory, and returns the
 minimum of that cap and the exact share room. -/
 theorem maxMint_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -157,18 +160,18 @@ theorem maxMint_arithmetic_trace
     (returnLookup : fs[returnWordSlot]? = some returnWord)
     (capLookup :
       fs[maxMintAfterAssetCapSlot]? = some maxMintAfterAssetCap)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (productOverTwoPow256 [pushB256 B256.max] stagedDenominator .down
             maxMintAfterAssetCapSlot <?>
           mulDiv [pushB256 B256.max] stagedDenominator stagedAssetFactor
-            .capDown maxMintAfterAssetCapSlot)) (.ok final)) :
+            .capDown maxMintAfterAssetCapSlot)) final) :
     ReturnsWord
       (Nat.toB256 (maxMintN assets.toNat supply.toNat)) final := by
   have supplySlice :
       image.sliceD (supplyWord * 32).toNat 32 0 = supply.toBytes :=
     supplyWindow.slice_eq memoryReads
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -266,6 +269,7 @@ share conversion still fits the remaining supply room.  The
 ceiling-predecessor arithmetic is exact in both the `2^256` asset-factor arm
 and the ordinary full-width product arm. -/
 theorem maxDeposit_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -277,15 +281,15 @@ theorem maxDeposit_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (returnLookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv shareRoomPlusOne stagedDenominator .capCeilPred
             returnWordSlot <?>
           mulDiv shareRoomPlusOne stagedAssetFactor stagedDenominator
-            .capCeilPred returnWordSlot)) (.ok final)) :
+            .capCeilPred returnWordSlot)) final) :
     ReturnsWord
       (Nat.toB256 (maxDepositN assets.toNat supply.toNat)) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -340,6 +344,7 @@ theorem maxDeposit_arithmetic_trace
 the largest return word.  A later exact corollary removes the saturation from
 reachable share-ledger states where the owner balance is bounded by supply. -/
 theorem maxWithdraw_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amount assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -353,16 +358,16 @@ theorem maxWithdraw_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (returnLookup : fs[returnWordSlot]? = some returnWord)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv (loadWord amountWord) stagedDenominator .capDown
             returnWordSlot <?>
           mulDiv (loadWord amountWord) stagedAssetFactor stagedDenominator
-            .capDown returnWordSlot)) (.ok final)) :
+            .capDown returnWordSlot)) final) :
     ReturnsWord
       (Nat.toB256 (min maxWordN
         (maxWithdrawN amount.toNat assets.toNat supply.toNat))) final := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -488,7 +493,7 @@ theorem maxMint_postTotalAssets_body_effect
       assetsStoreRun
   let assetImage := capacityAssetsImage image assets
   change Mem.Reads arithmeticPre.memory assetImage at arithmeticReads
-  have returned := maxMint_arithmetic_trace arithmeticWf arithmeticReads
+  have returned := maxMint_arithmetic_trace (R := Func.RunOk) arithmeticWf arithmeticReads
     (capacityAssetsImage_assets image assets)
     (by
       rw [arithmeticSupplyWindow.slice_eq arithmeticReads,
@@ -553,7 +558,7 @@ theorem maxDeposit_postTotalAssets_body_effect
       assetsStoreRun
   let assetImage := capacityAssetsImage image assets
   change Mem.Reads arithmeticPre.memory assetImage at arithmeticReads
-  have returned := maxDeposit_arithmetic_trace arithmeticWf arithmeticReads
+  have returned := maxDeposit_arithmetic_trace (R := Func.RunOk) arithmeticWf arithmeticReads
     (capacityAssetsImage_assets image assets)
     (by
       rw [arithmeticSupplyWindow.slice_eq arithmeticReads,
@@ -624,7 +629,7 @@ theorem maxWithdraw_postTotalAssets_body_effect
       assetsStoreRun
   let assetImage := capacityAssetsImage image assets
   change Mem.Reads arithmeticPre.memory assetImage at arithmeticReads
-  have returned := maxWithdraw_arithmetic_trace arithmeticWf arithmeticReads
+  have returned := maxWithdraw_arithmetic_trace (R := Func.RunOk) arithmeticWf arithmeticReads
     (by
       rw [arithmeticAmountWindow.slice_eq arithmeticReads,
         B256.toB256_toBytes])
@@ -646,13 +651,13 @@ theorem maxWithdraw_postTotalAssets_body_effect
 /-- Stage the exact share supply and expose a selected-word frame for every
 disjoint pre-existing operation word. -/
 theorem capacitySupplyStaging_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (pushSupplySlot +++ sload ::: mstoreAt supplyWord +++ body)
-      (.ok final)) :
+    (run : R fs sevm pre
+      (pushSupplySlot +++ sload ::: mstoreAt supplyWord +++ body) final) :
     ∃ supply bodyPre,
       supply = Devm.getStorVal pre sevm.currentTarget supplySlot ∧
       tail <<+ bodyPre.stack ∧
@@ -663,8 +668,8 @@ theorem capacitySupplyStaging_trace
         MemWordAt pre offset w → MemWordAt bodyPre offset w) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨sloadPre, slotRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨sloadPre, slotRun, run⟩ := Func.WalkInv.prepend run
   simp only [pushSupplySlot] at slotRun
   rcases Line.of_run_cons slotRun with ⟨notPre, zeroRun, slotRun⟩
   rcases Line.of_run_cons slotRun with ⟨sloadPre', notRun, slotRun⟩
@@ -690,8 +695,8 @@ theorem capacitySupplyStaging_trace
     rw [← slotMemory]
     exact memoryWf
 
-  obtain ⟨storePre, sloadRun, run⟩ := runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨storePre, sloadRun, run⟩ := Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨supply, supplyPrefix, supplyEq⟩ :=
     prefix_of_sload sloadSource slotPrefix
   have sloadState : sloadPre.state = storePre.state :=
@@ -709,7 +714,7 @@ theorem capacitySupplyStaging_trace
     simp
 
   obtain ⟨bodyPre, storeRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨bodyPrefix, storeMemory⟩ :=
     of_run_mstoreAt_val storeRun supplyPrefix
   have supplyWindow :
@@ -740,12 +745,13 @@ theorem capacitySupplyStaging_trace
 
 /-- Stage the exact owner share balance selected by ABI argument zero. -/
 theorem capacityAmountStaging_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (arg 0 +++ sload ::: mstoreAt amountWord +++ body) (.ok final)) :
+    (run : R fs sevm pre
+      (arg 0 +++ sload ::: mstoreAt amountWord +++ body) final) :
     ∃ amount bodyPre,
       amount = Devm.getStorVal pre sevm.currentTarget
         (Sevm.argWord sevm 0) ∧
@@ -753,8 +759,8 @@ theorem capacityAmountStaging_trace
       MemWordAt bodyPre (amountWord * 32).toNat amount ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨sloadPre, argRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨sloadPre, argRun, run⟩ := Func.WalkInv.prepend run
   have argPrefix : Sevm.argWord sevm 0 :: tail <<+ sloadPre.stack :=
     prefix_of_arg stack argRun
   have argState : pre.state = sloadPre.state :=
@@ -766,8 +772,8 @@ theorem capacityAmountStaging_trace
   have sloadWf : Mem.Wf sloadPre.memory := by
     rw [← argMemory]
     exact memoryWf
-  obtain ⟨storePre, sloadRun, run⟩ := runCompiledTo_next_inv run
-  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨storePre, sloadRun, run⟩ := Func.WalkInv.next run
+  have sloadSource := sloadRun
   obtain ⟨amount, amountPrefix, amountEq⟩ :=
     prefix_of_sload sloadSource argPrefix
   have sloadState : sloadPre.state = storePre.state :=
@@ -784,7 +790,7 @@ theorem capacityAmountStaging_trace
     intro index
     simp
   obtain ⟨bodyPre, storeRun, bodyRun⟩ :=
-    runCompiledTo_prepend_inv run
+    Func.WalkInv.prepend run
   obtain ⟨bodyPrefix, storeMemory⟩ :=
     of_run_mstoreAt_val storeRun amountPrefix
   have amountWindow :
@@ -811,13 +817,14 @@ theorem capacityAmountStaging_trace
 otherwise the continuation receives the same operation-word windows and an
 exact stable-supply proof. -/
 theorem stableCapacityBranch_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {supply : B256} {body : Func} {tail : Stack}
     (supplyWindow : MemWordAt pre (supplyWord * 32).toNat supply)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord supplyWord +++ pushB256 maxSupply ::: lt :::
-        (returnConstant 0 <?> body)) (.ok final)) :
+        (returnConstant 0 <?> body)) final) :
     (maxSupplyN < supply.toNat ∧ WordViewEffect 0 pre final) ∨
       (∃ bodyPre,
         supply.toNat ≤ maxSupplyN ∧
@@ -827,20 +834,20 @@ theorem stableCapacityBranch_trace
           MemWordAt bodyPre offset w) ∧
         pre.state = bodyPre.state ∧
         pre.logs = bodyPre.logs ∧
-        Func.RunCompiledTo fs sevm bodyPre body (.ok final)) := by
-  obtain ⟨maxPre, supplyRun, run⟩ := runCompiledTo_prepend_inv run
+        R fs sevm bodyPre body final) := by
+  obtain ⟨maxPre, supplyRun, run⟩ := Func.WalkInv.prepend run
   have supplyPrefix := prefix_of_loadWord_window supplyWindow stack supplyRun
   have supplyWindow' := supplyWindow.acrossLoadWord supplyRun
   have supplyState : pre.state = maxPre.state :=
     Line.of_inv Devm.state (by unfold loadWord; line_inv) supplyRun
   have supplyLogs : pre.logs = maxPre.logs :=
     of_run_loadWordAt_logs supplyRun
-  obtain ⟨testPre, maxRun, run⟩ := runCompiledTo_next_inv run
-  have maxSource := Ninst.Run.of_runCompiled maxRun
+  obtain ⟨testPre, maxRun, run⟩ := Func.WalkInv.next run
+  have maxSource := maxRun
   have maxPrefix := prefix_of_push (of_run_pushB256 maxSource) supplyPrefix
   have supplyWindow'' := supplyWindow'.acrossNinst maxSource
-  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨branchPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource maxPrefix
   have supplyWindow''' := supplyWindow''.acrossNinst testSource
   have suffixState : maxPre.state = branchPre.state :=
@@ -852,9 +859,8 @@ theorem stableCapacityBranch_trace
   by_cases unstable : maxSupply < supply
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.ltCheck, unstable] using testPrefix
-    obtain ⟨zeroPre, branchWord, branchWordNe, zeroPop, zeroRun,
-        zeroPrefix⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨zeroPre, zeroPop, zeroRun, zeroPrefix⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     have effect := returnConstant_effect zeroRun
     have unstableNat : maxSupplyN < supply.toNat := by
@@ -867,7 +873,7 @@ theorem stableCapacityBranch_trace
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.ltCheck, unstable] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have stableWord : supply ≤ maxSupply := B256.not_lt.mp unstable
     have stable : supply.toNat ≤ maxSupplyN := by
       rw [B256.le_iff_toNat_le_toNat, maxSupply_toNat] at stableWord
@@ -888,12 +894,13 @@ theorem stableCapacityBranch_trace
 /-- Route the zero-address policy shared by `maxMint` and `maxDeposit` after
 the outer canonical-address guard. -/
 theorem zeroArgCapacityBranch_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (arg 0 +++ iszero ::: (returnConstant 0 <?> body)) (.ok final)) :
+    (run : R fs sevm pre
+      (arg 0 +++ iszero ::: (returnConstant 0 <?> body)) final) :
     (Sevm.argWord sevm 0 = 0 ∧ WordViewEffect 0 pre final) ∨
       (Sevm.argWord sevm 0 ≠ 0 ∧
         ∃ bodyPre,
@@ -901,8 +908,8 @@ theorem zeroArgCapacityBranch_trace
           Mem.Wf bodyPre.memory ∧
           pre.state = bodyPre.state ∧
           pre.logs = bodyPre.logs ∧
-          Func.RunCompiledTo fs sevm bodyPre body (.ok final)) := by
-  obtain ⟨testPre, argRun, run⟩ := runCompiledTo_prepend_inv run
+          R fs sevm bodyPre body final) := by
+  obtain ⟨testPre, argRun, run⟩ := Func.WalkInv.prepend run
   have argPrefix : Sevm.argWord sevm 0 :: tail <<+ testPre.stack :=
     prefix_of_arg stack argRun
   have argState : pre.state = testPre.state :=
@@ -911,8 +918,8 @@ theorem zeroArgCapacityBranch_trace
     Line.of_inv Devm.memory (by unfold Blanc.arg cdl; line_inv) argRun
   have argLogs : pre.logs = testPre.logs :=
     Line.of_inv Devm.logs (by unfold Blanc.arg cdl; line_inv) argRun
-  obtain ⟨branchPre, zeroRun, branchRun⟩ := runCompiledTo_next_inv run
-  have zeroSource := Ninst.Run.of_runCompiled zeroRun
+  obtain ⟨branchPre, zeroRun, branchRun⟩ := Func.WalkInv.next run
+  have zeroSource := zeroRun
   have testPrefix := prefix_of_iszero zeroSource argPrefix
   have zeroState : testPre.state = branchPre.state :=
     Ninst.Hinv.inv (f := Devm.state) zeroSource
@@ -923,9 +930,8 @@ theorem zeroArgCapacityBranch_trace
   by_cases argZero : Sevm.argWord sevm 0 = 0
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.eqCheck, argZero] using testPrefix
-    obtain ⟨zeroPre, branchWord, branchWordNe, zeroPop, zeroRun,
-        zeroPrefix⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨zeroPre, zeroPop, zeroRun, zeroPrefix⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     have effect := returnConstant_effect zeroRun
     exact Or.inl ⟨argZero,
@@ -935,7 +941,7 @@ theorem zeroArgCapacityBranch_trace
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.eqCheck, argZero] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
       rw [← bodyPop.memory, ← zeroMemory, ← argMemory]
       exact memoryWf

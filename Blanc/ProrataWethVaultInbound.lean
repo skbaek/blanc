@@ -57,14 +57,15 @@ theorem inboundArgImage_receiver
 /-- Both inbound flows begin by staging ABI arguments zero and one into the
 long-lived operation words, leaving persistent state untouched. -/
 theorem inboundArgs_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (arg 0 +++ mstoreAt amountWord +++
-        arg 1 +++ mstoreAt receiverWord +++ body) (.ok final)) :
+        arg 1 +++ mstoreAt receiverWord +++ body) final) :
     ∃ bodyPre,
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
@@ -73,8 +74,8 @@ theorem inboundArgs_trace
           (Sevm.argWord sevm 1)) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨amountStorePre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨amountStorePre, amountRun, run⟩ := Func.WalkInv.prepend run
   have amountPrefix := prefix_of_arg stack amountRun
   have amountMemory : pre.memory = amountStorePre.memory := by
     refine Line.of_inv Devm.memory ?_ amountRun
@@ -92,7 +93,7 @@ theorem inboundArgs_trace
     rw [← amountMemory]; exact memoryWf
   have amountStoreReads : Mem.Reads amountStorePre.memory image := by
     rw [← amountMemory]; exact memoryReads
-  obtain ⟨receiverPre, amountStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverPre, amountStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverStack, receiverWf, receiverReads, amountStoreState⟩ :=
     of_run_mstoreAt_image amountPrefix amountStoreWf amountStoreReads
       amountStoreRun
@@ -100,7 +101,7 @@ theorem inboundArgs_trace
     refine Line.of_inv Devm.logs ?_ amountStoreRun
     unfold mstoreAt
     line_inv
-  obtain ⟨receiverStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverStorePre, receiverRun, run⟩ := Func.WalkInv.prepend run
   have receiverPrefix := prefix_of_arg receiverStack receiverRun
   have receiverMemory : receiverPre.memory = receiverStorePre.memory := by
     refine Line.of_inv Devm.memory ?_ receiverRun
@@ -120,7 +121,7 @@ theorem inboundArgs_trace
       (Bytes.writeAt image (amountWord * 32).toNat
         (Sevm.argWord sevm 0).toBytes) := by
     rw [← receiverMemory]; exact receiverReads
-  obtain ⟨bodyPre, receiverStoreRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPre, receiverStoreRun, bodyRun⟩ := Func.WalkInv.prepend run
   obtain ⟨bodyStack, bodyWf, bodyReads, receiverStoreState⟩ :=
     of_run_mstoreAt_image receiverPrefix receiverStoreWf receiverStoreReads
       receiverStoreRun
@@ -144,6 +145,7 @@ exact-`2^256` and ordinary asset arms are covered, and the continuation
 receives a memory image agreeing with the entry image on every word at or
 above the arithmetic scratch boundary. -/
 theorem depositQuote_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amount assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -157,12 +159,12 @@ theorem depositQuote_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[depositAfterQuoteSlot]? = some depositAfterQuote)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (productOverTwoPow256 (loadWord amountWord) stagedDenominator .down
             depositAfterQuoteSlot <?>
           mulDiv (loadWord amountWord) stagedDenominator stagedAssetFactor
-            .down depositAfterQuoteSlot)) (.ok final)) :
+            .down depositAfterQuoteSlot)) final) :
     convertToSharesN amount.toNat assets.toNat supply.toNat < wordModulusN ∧
       ∃ bodyPre bodyImage,
         Nat.toB256
@@ -171,8 +173,8 @@ theorem depositQuote_arithmetic_trace
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre depositAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+        R fs sevm bodyPre depositAfterQuote final := by
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -215,6 +217,7 @@ theorem depositQuote_arithmetic_trace
 /-- The `mint` arithmetic suffix quotes exactly `ceil(shares*X/D)` from the
 pre-transfer booked assets and supply and calls `mintAfterQuote`. -/
 theorem mintQuote_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amount assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -228,12 +231,12 @@ theorem mintQuote_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[mintAfterQuoteSlot]? = some mintAfterQuote)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv (loadWord amountWord) stagedDenominator .up
             mintAfterQuoteSlot <?>
           mulDiv (loadWord amountWord) stagedAssetFactor stagedDenominator
-            .up mintAfterQuoteSlot)) (.ok final)) :
+            .up mintAfterQuoteSlot)) final) :
     previewMintN amount.toNat assets.toNat supply.toNat < wordModulusN ∧
       ∃ bodyPre bodyImage,
         Nat.toB256 (previewMintN amount.toNat assets.toNat supply.toNat) ::
@@ -241,8 +244,8 @@ theorem mintQuote_arithmetic_trace
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre mintAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+        R fs sevm bodyPre mintAfterQuote final := by
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -430,6 +433,7 @@ theorem canonicalNonzeroAddress_trace
 caller, and rejects a dirty or zero staged receiver.  Persistent state, logs,
 and every operation word other than `quoteWord` are untouched. -/
 theorem inboundGuards_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {quote receiver : B256} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -437,9 +441,9 @@ theorem inboundGuards_trace
     (receiverAt : Bytes.toB256
       (image.sliceD (receiverWord * 32).toNat 32 0) = receiver)
     (stack : quote :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (mstoreAt quoteWord +++
-        nonzeroCaller (nonzeroStagedAddress receiverWord body)) (.ok final)) :
+        nonzeroCaller (nonzeroStagedAddress receiverWord body)) final) :
     ∃ bodyPre,
       sevm.caller.toB256 ≠ 0 ∧
       ValidAdr receiver ∧
@@ -450,8 +454,8 @@ theorem inboundGuards_trace
         (Bytes.writeAt image (quoteWord * 32).toNat quote.toBytes) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨callerPre, quoteStoreRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨callerPre, quoteStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨callerStack, callerWf, callerReads, quoteState⟩ :=
     of_run_mstoreAt_image stack memoryWf memoryReads quoteStoreRun
   have quoteLogs : pre.logs = callerPre.logs :=
@@ -468,7 +472,7 @@ theorem inboundGuards_trace
 
   -- Reject the zero caller.
   obtain ⟨addressPre, callerNonzero, addressStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) callerStack run
+      callerLogs, run⟩ := nonzeroCaller_trace callerStack run
   have addressWf : Mem.Wf addressPre.memory := by
     rw [← callerMemory]
     exact callerWf
@@ -479,7 +483,7 @@ theorem inboundGuards_trace
   -- Reject a dirty or zero staged receiver.
   obtain ⟨bodyPre, receiverValid, receiverNonzero, bodyStack, bodyWf,
       bodyReads, addressState, addressLogs, bodyRun⟩ :=
-    canonicalNonzeroAddress_trace (R := Func.RunOk) addressWf addressReads
+    canonicalNonzeroAddress_trace addressWf addressReads
       (ProducesWord.loadWord receiverAtQuote) addressStack run
   refine ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, bodyStack,
     bodyWf, bodyReads, ?_, ?_, bodyRun⟩
@@ -492,6 +496,7 @@ theorem inboundGuards_trace
 walk proves the quoted share amount fits the exact remaining room and leaves
 memory, persistent state, and logs untouched. -/
 theorem shareRoomGuard_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesWord shares supply : B256}
     {body : Func} {tail : Stack}
@@ -503,9 +508,8 @@ theorem shareRoomGuard_trace
       (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (loadWord sharesWord +++ shareRoom +++ lt ::: (Func.revert <?> body))
-      (.ok final)) :
+    (run : R fs sevm pre
+      (loadWord sharesWord +++ shareRoom +++ lt ::: (Func.revert <?> body)) final) :
     ∃ bodyPre,
       shares.toNat ≤ shareRoomN supply.toNat ∧
       tail <<+ bodyPre.stack ∧
@@ -513,15 +517,15 @@ theorem shareRoomGuard_trace
       Mem.Reads bodyPre.memory image ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨roomPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨roomPre, sharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesPrefix, sharesMemWf, sharesReads, sharesState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads sharesAt sharesRun
   have sharesLogs : pre.logs = roomPre.logs := by
     refine Line.of_inv Devm.logs ?_ sharesRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨testPre, roomRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨testPre, roomRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨roomPrefix, roomWf, roomReads, roomState⟩ :=
     (ProducesWord.shareRoom (sevm := sevm) supplyAt stable)
       sharesMemWf sharesReads sharesPrefix roomRun
@@ -529,8 +533,8 @@ theorem shareRoomGuard_trace
     refine Line.of_inv Devm.logs ?_ roomRun
     unfold ProrataWethVault.shareRoom ProrataWethVault.loadWord
     line_inv
-  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨branchPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_lt testSource roomPrefix
   have testMemory : testPre.memory = branchPre.memory :=
     Ninst.Hinv.inv (f := Devm.memory) testSource
@@ -548,15 +552,14 @@ theorem shareRoomGuard_trace
     intro roomLt
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.ltCheck, roomLt] using testPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨revertPre, revertPop, revertRun, -⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
     simpa [B256.ltCheck, roomLarge] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+    Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by
     rw [← bodyPop.memory, ← testMemory]
     exact roomWf
@@ -821,6 +824,7 @@ increased share supply, emits the share `Transfer` and ERC-4626 `Deposit`
 events in that order, and returns the quoted word.  No other account's
 storage moves. -/
 theorem inboundSettle_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesWord assetsSourceWord returnedWord : B256}
     {receiver shares assets returned supply credited : B256} {tail : Stack}
@@ -842,13 +846,13 @@ theorem inboundSettle_trace
     (assetsAbove : 64 ≤ (assetsSourceWord * 32).toNat)
     (returnedAbove : 64 ≤ (returnedWord * 32).toNat)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord scratchWord +++ loadWord receiverWord +++ sstore :::
         loadWord sharesWord +++ loadWord supplyWord +++ add :::
         pushSupplySlot +++ sstore :::
         logMintTransfer (loadWord sharesWord) +++
         logDeposit (loadWord assetsSourceWord) (loadWord sharesWord) +++
-        loadWord returnedWord +++ returnWord) (.ok final)) :
+        loadWord returnedWord +++ returnWord) final) :
     ReturnsWord returned final ∧
       Devm.getStor final sevm.currentTarget =
         ((Devm.getStor pre sevm.currentTarget).set receiver credited).set
@@ -859,14 +863,14 @@ theorem inboundSettle_trace
         [mintTransferLog sevm receiver shares,
           depositLogEntry sevm receiver assets shares] := by
   -- Credit the receiver's share row.
-  obtain ⟨receiverPre, creditedRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverPre, creditedRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨creditedPrefix, receiverWf, receiverReads, creditedState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads creditedAt creditedRun
   have creditedLogs : pre.logs = receiverPre.logs := by
     refine Line.of_inv Devm.logs ?_ creditedRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨creditStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨creditStorePre, receiverRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverPrefix, creditStoreWf, creditStoreReads, receiverState⟩ :=
     of_run_loadWordAt_image creditedPrefix receiverWf receiverReads
       receiverAt receiverRun
@@ -874,8 +878,8 @@ theorem inboundSettle_trace
     refine Line.of_inv Devm.logs ?_ receiverRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨sharesPre, creditStoreRun, run⟩ := runCompiledTo_next_inv run
-  have creditStoreSource := Ninst.Run.of_runCompiled creditStoreRun
+  obtain ⟨sharesPre, creditStoreRun, run⟩ := Func.WalkInv.next run
+  have creditStoreSource := creditStoreRun
   have creditStoreSet :
       Devm.getStor sharesPre sevm.currentTarget =
         (Devm.getStor creditStorePre sevm.currentTarget).set receiver
@@ -893,7 +897,7 @@ theorem inboundSettle_trace
     rw [← creditStoreMemory]; exact creditStoreReads
 
   -- Increase the share supply.
-  obtain ⟨supplyPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨supplyPre, sharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesPrefix, supplyWf, supplyReads, sharesState⟩ :=
     of_run_loadWordAt_image sharesStack sharesWf sharesReads sharesAt
       sharesRun
@@ -901,7 +905,7 @@ theorem inboundSettle_trace
     refine Line.of_inv Devm.logs ?_ sharesRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨addPre, supplyRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨addPre, supplyRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨supplyPrefix, addWf, addReads, supplyState⟩ :=
     of_run_loadWordAt_image sharesPrefix supplyWf supplyReads supplyAt
       supplyRun
@@ -909,8 +913,8 @@ theorem inboundSettle_trace
     refine Line.of_inv Devm.logs ?_ supplyRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨slotPre, addRun, run⟩ := runCompiledTo_next_inv run
-  have addSource := Ninst.Run.of_runCompiled addRun
+  obtain ⟨slotPre, addRun, run⟩ := Func.WalkInv.next run
+  have addSource := addRun
   have sumPrefix : (supply + shares) :: tail <<+ slotPre.stack := by
     simpa only [B256.add_comm] using prefix_of_add addSource supplyPrefix
   have addMemory : addPre.memory = slotPre.memory :=
@@ -922,7 +926,7 @@ theorem inboundSettle_trace
   have slotWf : Mem.Wf slotPre.memory := by rw [← addMemory]; exact addWf
   have slotReads : Mem.Reads slotPre.memory image := by
     rw [← addMemory]; exact addReads
-  obtain ⟨supplyStorePre, slotRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨supplyStorePre, slotRun, run⟩ := Func.WalkInv.prepend run
   simp only [pushSupplySlot] at slotRun
   rcases Line.of_run_cons slotRun with ⟨notPre, zeroRun, slotRun'⟩
   rcases Line.of_run_cons slotRun' with ⟨notPost, notRun, slotNil⟩
@@ -949,8 +953,8 @@ theorem inboundSettle_trace
     rw [← slotMemory]; exact slotWf
   have supplyStoreReads : Mem.Reads supplyStorePre.memory image := by
     rw [← slotMemory]; exact slotReads
-  obtain ⟨logPre, supplyStoreRun, run⟩ := runCompiledTo_next_inv run
-  have supplyStoreSource := Ninst.Run.of_runCompiled supplyStoreRun
+  obtain ⟨logPre, supplyStoreRun, run⟩ := Func.WalkInv.next run
+  have supplyStoreSource := supplyStoreRun
   have supplyStoreSet :
       Devm.getStor logPre sevm.currentTarget =
         (Devm.getStor supplyStorePre sevm.currentTarget).set supplySlot
@@ -968,7 +972,7 @@ theorem inboundSettle_trace
     rw [← supplyStoreMemory]; exact supplyStoreReads
 
   -- Emit the share `Transfer(0, receiver, shares)` event.
-  obtain ⟨depositLogPre, mintLogRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨depositLogPre, mintLogRun, run⟩ := Func.WalkInv.prepend run
   have mintLogStorage :
       Devm.getStor logPre = Devm.getStor depositLogPre := by
     refine Line.of_inv Devm.getStor ?_ mintLogRun
@@ -1056,7 +1060,7 @@ theorem inboundSettle_trace
     rfl
 
   -- Emit the ERC-4626 `Deposit(caller, receiver, assets, shares)` event.
-  obtain ⟨returnLoadPre, depositRunLine, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨returnLoadPre, depositRunLine, run⟩ := Func.WalkInv.prepend run
   have depositLogStorage :
       Devm.getStor depositLogPre = Devm.getStor returnLoadPre := by
     refine Line.of_inv Devm.getStor ?_ depositRunLine
@@ -1211,7 +1215,7 @@ theorem inboundSettle_trace
         omega
     · right
       omega
-  obtain ⟨returnPre, returnedRun, returnRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨returnPre, returnedRun, returnRun⟩ := Func.WalkInv.prepend run
   obtain ⟨returnedPrefix, -, -, -⟩ :=
     of_run_loadWordAt_image returnLoadStack returnLoadWf returnLoadReads
       returnedAtDeposit returnedRun
@@ -1224,16 +1228,12 @@ theorem inboundSettle_trace
     refine Line.of_inv Devm.getStor ?_ returnedRun
     unfold ProrataWethVault.loadWord
     line_inv
-  have returnStorage : Devm.getStor returnPre = Devm.getStor final := by
-    refine (show Func.CompiledInv fs Devm.getStor Devm.getStor returnWord from
-      ?_) returnRun
-    unfold returnWord
-    compiled_inv
-  have returnLogs : returnPre.logs = final.logs := by
-    refine (show Func.CompiledInv fs Devm.logs Devm.logs returnWord from
-      ?_) returnRun
-    unfold returnWord
-    compiled_inv
+  have returnStorage : Devm.getStor returnPre = Devm.getStor final :=
+    Func.of_inv Devm.getStor Devm.getStor
+      (by unfold returnWord; func_inv) (Func.WalkInv.toRun returnRun)
+  have returnLogs : returnPre.logs = final.logs :=
+    Func.of_inv Devm.logs Devm.logs
+      (by unfold returnWord; func_inv) (Func.WalkInv.toRun returnRun)
   have returned := returnWord_trace returnedPrefix returnRun
 
   -- Assemble the exact settlement effect.
@@ -1281,6 +1281,7 @@ The three word parameters are the exact operation words each flow supplies:
 `(amount, quote, quote)`.  Both lie above the arithmetic scratch region and
 below the staged balance word, which is what the offset premises record. -/
 theorem inboundTail_effect
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesWord assetsSourceWord returnedWord : B256}
     {receiver shares assets returned supply : B256} {tail : Stack}
@@ -1305,7 +1306,7 @@ theorem inboundTail_effect
     (returnedBelow :
       (returnedWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord receiverWord +++ sload ::: mstoreAt balanceWord +++
         loadWord sharesWord +++ loadWord balanceWord +++ add :::
         mstoreAt scratchWord +++
@@ -1316,7 +1317,7 @@ theorem inboundTail_effect
             pushSupplySlot +++ sstore :::
             logMintTransfer (loadWord sharesWord) +++
             logDeposit (loadWord assetsSourceWord) (loadWord sharesWord) +++
-            loadWord returnedWord +++ returnWord))) (.ok final)) :
+            loadWord returnedWord +++ returnWord))) final) :
     ∃ balance,
       balance = Devm.getStorVal pre sevm.currentTarget receiver ∧
       balance.toNat + shares.toNat < wordModulusN ∧
@@ -1333,7 +1334,7 @@ theorem inboundTail_effect
     decide +kernel
   obtain ⟨settlePre, balance, balanceEq, noWrap, settleStack, settleWf,
       settleReads, creditStorage, creditLogs, settleRun⟩ :=
-    inboundCredit_trace (R := Func.RunOk) memoryWf memoryReads receiverAt sharesAt sharesBelow
+    inboundCredit_trace memoryWf memoryReads receiverAt sharesAt sharesBelow
       stack run
   -- Every operation word the settlement reads survives the two staging
   -- writes, which land at the balance and arithmetic scratch words.

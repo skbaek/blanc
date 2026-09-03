@@ -2117,7 +2117,7 @@ theorem quoteSnapshot_effect
     simp
   obtain ⟨supply, quotePre, supplyEq, stable, quoteStack, quoteWf,
       quoteReads, quoteStorage, quoteCode, quoteLogs, quoteRun⟩ :=
-    Blanc.ProrataWethVault.conversionStaging_trace stageWf stageReads
+    Blanc.ProrataWethVault.conversionStaging_trace (R := Func.RunOk) stageWf stageReads
       assetsPrefix stageRun
   have entryStorage : Devm.getStor readPre = Devm.getStor quotePre :=
     stagingStorage.trans (stageStorage.symm.trans quoteStorage)

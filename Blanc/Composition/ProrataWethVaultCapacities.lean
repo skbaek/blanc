@@ -203,7 +203,7 @@ theorem maxMint_body_effect
         (returnConstant 0 <?> stagedSupplyCapacityBody maxMintReadBody))
       (.ok post) := by
     simpa only [receiverCapacityBody] using receiverRun
-  rcases zeroArgCapacityBranch_trace receiverWf receiverStack receiverRoute
+  rcases zeroArgCapacityBranch_trace (R := Func.RunOk) receiverWf receiverStack receiverRoute
     with zeroReceiver | nonzeroReceiver
   · rcases zeroReceiver with ⟨receiverZero, effect⟩
     have lifted := lift_word_view entryState entryLogs effect
@@ -225,14 +225,14 @@ theorem maxMint_body_effect
       simpa only [stagedSupplyCapacityBody] using supplyRun
     obtain ⟨supply, branchEntry, supplyEq, branchStack, supplyWindow,
         -, supplyState, supplyLogs, branchRun⟩ :=
-      capacitySupplyStaging_trace supplyWf supplyStack supplyStageRun
+      capacitySupplyStaging_trace (R := Func.RunOk) supplyWf supplyStack supplyStageRun
     have stableRun :
         Func.RunCompiledTo (vault.main :: vault.aux) sevm branchEntry
           (loadWord supplyWord +++ pushB256 maxSupply ::: lt :::
             (returnConstant 0 <?> readTotalAssets maxMintReadBody))
           (.ok post) := by
       simpa only [stableCapacityBody] using branchRun
-    rcases stableCapacityBranch_trace supplyWindow branchStack stableRun with
+    rcases stableCapacityBranch_trace (R := Func.RunOk) supplyWindow branchStack stableRun with
       unstableSupply | stableSupply
     · rcases unstableSupply with ⟨unstable, effect⟩
       have entryToBranchState :=
@@ -356,7 +356,7 @@ theorem maxDeposit_body_effect
         (returnConstant 0 <?> stagedSupplyCapacityBody maxDepositReadBody))
       (.ok post) := by
     simpa only [receiverCapacityBody] using receiverRun
-  rcases zeroArgCapacityBranch_trace receiverWf receiverStack receiverRoute
+  rcases zeroArgCapacityBranch_trace (R := Func.RunOk) receiverWf receiverStack receiverRoute
     with zeroReceiver | nonzeroReceiver
   · rcases zeroReceiver with ⟨receiverZero, effect⟩
     have lifted := lift_word_view entryState entryLogs effect
@@ -378,14 +378,14 @@ theorem maxDeposit_body_effect
       simpa only [stagedSupplyCapacityBody] using supplyRun
     obtain ⟨supply, branchEntry, supplyEq, branchStack, supplyWindow,
         -, supplyState, supplyLogs, branchRun⟩ :=
-      capacitySupplyStaging_trace supplyWf supplyStack supplyStageRun
+      capacitySupplyStaging_trace (R := Func.RunOk) supplyWf supplyStack supplyStageRun
     have stableRun :
         Func.RunCompiledTo (vault.main :: vault.aux) sevm branchEntry
           (loadWord supplyWord +++ pushB256 maxSupply ::: lt :::
             (returnConstant 0 <?> readTotalAssets maxDepositReadBody))
           (.ok post) := by
       simpa only [stableCapacityBody] using branchRun
-    rcases stableCapacityBranch_trace supplyWindow branchStack stableRun with
+    rcases stableCapacityBranch_trace (R := Func.RunOk) supplyWindow branchStack stableRun with
       unstableSupply | stableSupply
     · rcases unstableSupply with ⟨unstable, effect⟩
       have entryToBranchState :=
@@ -516,7 +516,7 @@ theorem maxWithdraw_body_effect
     ownerRun
   obtain ⟨amount, supplyEntry, amountEq, supplyStack, amountWindow,
       amountState, amountLogs, supplyRun⟩ :=
-    capacityAmountStaging_trace ownerWf ownerStack amountStageRun
+    capacityAmountStaging_trace (R := Func.RunOk) ownerWf ownerStack amountStageRun
   have supplyWf : Mem.Wf supplyEntry.memory := amountWindow.1
   have supplyStageRun :
       Func.RunCompiledTo (vault.main :: vault.aux) sevm supplyEntry
@@ -525,7 +525,7 @@ theorem maxWithdraw_body_effect
     simpa only [stagedSupplyCapacityBody] using supplyRun
   obtain ⟨supply, branchEntry, supplyEq, branchStack, supplyWindow,
       supplyPreserves, supplyState, supplyLogs, branchRun⟩ :=
-    capacitySupplyStaging_trace supplyWf supplyStack supplyStageRun
+    capacitySupplyStaging_trace (R := Func.RunOk) supplyWf supplyStack supplyStageRun
   have branchAmountWindow :
       MemWordAt branchEntry (amountWord * 32).toNat amount :=
     supplyPreserves (Or.inl (by decide +kernel)) amountWindow
@@ -535,7 +535,7 @@ theorem maxWithdraw_body_effect
           (returnConstant 0 <?> readTotalAssets maxWithdrawReadBody))
         (.ok post) := by
     simpa only [stableCapacityBody] using branchRun
-  rcases stableCapacityBranch_trace supplyWindow branchStack stableRun with
+  rcases stableCapacityBranch_trace (R := Func.RunOk) supplyWindow branchStack stableRun with
     unstableSupply | stableSupply
   · rcases unstableSupply with ⟨unstable, effect⟩
     have entryToBranchState :=

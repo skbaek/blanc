@@ -87,15 +87,16 @@ theorem outboundArgImage_owner
 /-- Both outbound flows begin by staging ABI arguments zero, one and two into
 the long-lived operation words, leaving persistent state untouched. -/
 theorem outboundArgs_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
     (memoryReads : Mem.Reads pre.memory image)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (arg 0 +++ mstoreAt amountWord +++
         arg 1 +++ mstoreAt receiverWord +++
-        arg 2 +++ mstoreAt ownerWord +++ body) (.ok final)) :
+        arg 2 +++ mstoreAt ownerWord +++ body) final) :
     ∃ bodyPre,
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
@@ -104,8 +105,8 @@ theorem outboundArgs_trace
           (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
-  obtain ⟨amountStorePre, amountRun, run⟩ := runCompiledTo_prepend_inv run
+      R fs sevm bodyPre body final := by
+  obtain ⟨amountStorePre, amountRun, run⟩ := Func.WalkInv.prepend run
   have amountPrefix := prefix_of_arg stack amountRun
   have amountMemory : pre.memory = amountStorePre.memory := by
     refine Line.of_inv Devm.memory ?_ amountRun
@@ -123,7 +124,7 @@ theorem outboundArgs_trace
     rw [← amountMemory]; exact memoryWf
   have amountStoreReads : Mem.Reads amountStorePre.memory image := by
     rw [← amountMemory]; exact memoryReads
-  obtain ⟨receiverPre, amountStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverPre, amountStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨receiverStack, receiverWf, receiverReads, amountStoreState⟩ :=
     of_run_mstoreAt_image amountPrefix amountStoreWf amountStoreReads
       amountStoreRun
@@ -131,7 +132,7 @@ theorem outboundArgs_trace
     refine Line.of_inv Devm.logs ?_ amountStoreRun
     unfold mstoreAt
     line_inv
-  obtain ⟨receiverStorePre, receiverRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨receiverStorePre, receiverRun, run⟩ := Func.WalkInv.prepend run
   have receiverPrefix := prefix_of_arg receiverStack receiverRun
   have receiverMemory : receiverPre.memory = receiverStorePre.memory := by
     refine Line.of_inv Devm.memory ?_ receiverRun
@@ -151,7 +152,7 @@ theorem outboundArgs_trace
       (Bytes.writeAt image (amountWord * 32).toNat
         (Sevm.argWord sevm 0).toBytes) := by
     rw [← receiverMemory]; exact receiverReads
-  obtain ⟨ownerPre, receiverStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPre, receiverStoreRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerStack, ownerWf, ownerReads, receiverStoreState⟩ :=
     of_run_mstoreAt_image receiverPrefix receiverStoreWf receiverStoreReads
       receiverStoreRun
@@ -159,7 +160,7 @@ theorem outboundArgs_trace
     refine Line.of_inv Devm.logs ?_ receiverStoreRun
     unfold mstoreAt
     line_inv
-  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := Func.WalkInv.prepend run
   have ownerPrefix := prefix_of_arg ownerStack ownerRun
   have ownerMemory : ownerPre.memory = ownerStorePre.memory := by
     refine Line.of_inv Devm.memory ?_ ownerRun
@@ -181,7 +182,7 @@ theorem outboundArgs_trace
           (Sevm.argWord sevm 0).toBytes)
         (receiverWord * 32).toNat (Sevm.argWord sevm 1).toBytes) := by
     rw [← ownerMemory]; exact ownerReads
-  obtain ⟨bodyPre, ownerStoreRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPre, ownerStoreRun, bodyRun⟩ := Func.WalkInv.prepend run
   obtain ⟨bodyStack, bodyWf, bodyReads, ownerStoreState⟩ :=
     of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
       ownerStoreRun
@@ -209,6 +210,7 @@ This is `depositQuote_arithmetic_trace` with the rounding reversed: a
 withdrawal must round the shares it burns *up*, so the vault never pays out
 assets it has not charged for. -/
 theorem withdrawQuote_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amount assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -222,12 +224,12 @@ theorem withdrawQuote_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[withdrawAfterQuoteSlot]? = some withdrawAfterQuote)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (productOverTwoPow256 (loadWord amountWord) stagedDenominator .up
             withdrawAfterQuoteSlot <?>
           mulDiv (loadWord amountWord) stagedDenominator stagedAssetFactor
-            .up withdrawAfterQuoteSlot)) (.ok final)) :
+            .up withdrawAfterQuoteSlot)) final) :
     previewWithdrawN amount.toNat assets.toNat supply.toNat < wordModulusN ∧
       ∃ bodyPre bodyImage,
         Nat.toB256
@@ -236,8 +238,8 @@ theorem withdrawQuote_arithmetic_trace
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre withdrawAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+        R fs sevm bodyPre withdrawAfterQuote final := by
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -283,6 +285,7 @@ booked assets and supply and calls `redeemAfterQuote`.
 This is `mintQuote_arithmetic_trace` with the rounding reversed: a redemption
 must round the assets it pays out *down*. -/
 theorem redeemQuote_arithmetic_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amount assets supply : B256} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -296,12 +299,12 @@ theorem redeemQuote_arithmetic_trace
     (stable : supply.toNat ≤ maxSupplyN)
     (stack : tail <<+ pre.stack)
     (lookup : fs[redeemAfterQuoteSlot]? = some redeemAfterQuote)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord assetsWord +++ isMax +++
         (shiftedDiv (loadWord amountWord) stagedDenominator .down
             redeemAfterQuoteSlot <?>
           mulDiv (loadWord amountWord) stagedAssetFactor stagedDenominator
-            .down redeemAfterQuoteSlot)) (.ok final)) :
+            .down redeemAfterQuoteSlot)) final) :
     previewRedeemN amount.toNat assets.toNat supply.toNat < wordModulusN ∧
       ∃ bodyPre bodyImage,
         Nat.toB256 (previewRedeemN amount.toNat assets.toNat supply.toNat) ::
@@ -309,8 +312,8 @@ theorem redeemQuote_arithmetic_trace
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
         Devm.QuietFrame pre bodyPre ∧
-        Func.RunCompiledTo fs sevm bodyPre redeemAfterQuote (.ok final) := by
-  rcases ProducesWord.isMax_arm_trace (R := Func.RunOk)
+        R fs sevm bodyPre redeemAfterQuote final := by
+  rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
@@ -357,6 +360,7 @@ on behalf of the caller, while `withdraw` and `redeem` may burn someone else's
 shares, so the owner is a third address that must be canonical before it is
 used as a storage key. -/
 theorem outboundGuards_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {quote receiver owner : B256} {body : Func} {tail : Stack}
     (memoryWf : Mem.Wf pre.memory)
@@ -366,10 +370,10 @@ theorem outboundGuards_trace
     (ownerAt : Bytes.toB256
       (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
     (stack : quote :: tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (mstoreAt quoteWord +++
         nonzeroCaller (nonzeroStagedAddress receiverWord
-          (nonzeroStagedAddress ownerWord body))) (.ok final)) :
+          (nonzeroStagedAddress ownerWord body))) final) :
     ∃ bodyPre,
       sevm.caller.toB256 ≠ 0 ∧
       ValidAdr receiver ∧
@@ -382,7 +386,7 @@ theorem outboundGuards_trace
         (Bytes.writeAt image (quoteWord * 32).toNat quote.toBytes) ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   obtain ⟨ownerPre, callerNonzero, receiverValid, receiverNonzero,
       ownerStack, ownerWf, ownerReads, ownerState, ownerLogs, ownerRun⟩ :=
     inboundGuards_trace memoryWf memoryReads receiverAt stack run
@@ -395,7 +399,7 @@ theorem outboundGuards_trace
       decide +kernel
   obtain ⟨bodyPre, ownerValid, ownerNonzero, bodyStack, bodyWf,
       bodyReads, bodyState, bodyLogs, bodyRun⟩ :=
-    canonicalNonzeroAddress_trace (R := Func.RunOk) ownerWf ownerReads
+    canonicalNonzeroAddress_trace ownerWf ownerReads
       (ProducesWord.loadWord ownerAtQuote) ownerStack ownerRun
   exact ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, bodyStack, bodyWf, bodyReads,
@@ -1160,6 +1164,7 @@ theorem outboundStagedImage_readWord
 staged allowance covers the burn and is decremented by exactly it.  Neither
 route moves a share row or the supply, and neither emits a log. -/
 theorem outboundAuthorization_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {amountSel owner amount : B256} {continuation : Nat}
     {body : Func} {tail : Stack}
@@ -1176,11 +1181,11 @@ theorem outboundAuthorization_trace
       (amountSel * 32).toNat + 32 ≤ (allowanceWord * 32).toNat)
     (stack : tail <<+ pre.stack)
     (lookup : fs[continuation]? = some body)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord ownerWord +++ caller ::: eq :::
         (.call continuation <?>
           spendAllowance (loadWord ownerWord) [caller] (loadWord amountSel)
-            continuation)) (.ok final)) :
+            continuation)) final) :
     ∃ bodyPre bodyImage,
       (∀ key, ValidAdr key ∨ key = supplySlot →
         Devm.getStorVal bodyPre sevm.currentTarget key =
@@ -1194,22 +1199,22 @@ theorem outboundAuthorization_trace
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory bodyImage ∧
       outboundStagedImage image owner sevm.caller.toB256 bodyImage ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   -- Compare the staged owner against the frame caller.
-  obtain ⟨callerPre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨callerPre, ownerRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerPrefix, callerWf, callerReads, ownerState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
   have ownerLogs : pre.logs = callerPre.logs := by
     refine Line.of_inv Devm.logs ?_ ownerRun
     unfold ProrataWethVault.loadWord
     line_inv
-  obtain ⟨testPre, callerRun, run⟩ := runCompiledTo_next_inv run
-  have callerSource := Ninst.Run.of_runCompiled callerRun
+  obtain ⟨testPre, callerRun, run⟩ := Func.WalkInv.next run
+  have callerSource := callerRun
   have callerPush := of_run_caller callerSource
   have callerPrefix : sevm.caller.toB256 :: owner :: tail <<+ testPre.stack :=
     prefix_of_push callerPush ownerPrefix
-  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
-  have testSource := Ninst.Run.of_runCompiled testRun
+  obtain ⟨branchPre, testRun, branchRun⟩ := Func.WalkInv.next run
+  have testSource := testRun
   have testPrefix := prefix_of_eq testSource callerPrefix
   have branchWf : Mem.Wf branchPre.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) testSource, ← callerPush.memory]
@@ -1234,10 +1239,12 @@ theorem outboundAuthorization_trace
   · -- The caller owns the shares: tail-call the burn directly.
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.eqCheck, ownerIsCaller] using testPrefix
-    obtain ⟨callPre, branchWord, branchWordNe, callPop, callRun, callStack⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨callPre, callPop, callRun, callStack⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
-    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
+    obtain ⟨callBody, bodyPre, callLookup, burn, bodyRun⟩ :=
+      Func.WalkInv.call callRun
+    obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
     have bodyStorage : Devm.getStor pre = Devm.getStor bodyPre :=
       branchStorage.trans
         ((funext (getStor_eq_of_state_eq callPop.state)).trans
@@ -1264,7 +1271,7 @@ theorem outboundAuthorization_trace
     have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
       simpa [B256.eqCheck, ownerIsCaller] using testPrefix
     obtain ⟨spendPre, spendPop, spendRun, spendStack⟩ :=
-      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have spendWf : Mem.Wf spendPre.memory := by
       rw [← spendPop.memory]; exact branchWf
     have spendReads : Mem.Reads spendPre.memory image := by
@@ -1274,7 +1281,7 @@ theorem outboundAuthorization_trace
     obtain ⟨bodyPre, allowance, keyNotAddress, keyNotSupply, allowanceValue,
         amountFits, allowanceRoute, foreign, logs, spendCode, bodyStack,
         bodyWf, bodyReads, bodyRun⟩ :=
-      spendAllowance_trace (R := Func.RunOk) spendWf spendReads spendOwnerAt amountAt
+      spendAllowance_trace spendWf spendReads spendOwnerAt amountAt
         amountAboveKeyWords amountAboveScratch amountBelowAllowance
         spendStack lookup spendRun
     have spendStorage : Devm.getStor pre = Devm.getStor spendPre :=
@@ -1353,6 +1360,7 @@ direction: `finishInbound` credits *after* its child, while `finishOutbound`
 burns *before* its child, which is what puts the share `Transfer` first in the
 outbound log order. -/
 theorem outboundBurn_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {sharesSel owner balance supply shares : B256}
     {tailFunc : Func} {tail : Stack}
@@ -1367,15 +1375,14 @@ theorem outboundBurn_trace
     (supplyAt : Bytes.toB256
       (image.sliceD (supplyWord * 32).toNat 32 0) = supply)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (loadWord sharesSel +++ loadWord balanceWord +++ sub :::
         loadWord ownerWord +++ sstore :::
         loadWord sharesSel +++ loadWord supplyWord +++ lt :::
         (Func.revert <?>
           (loadWord sharesSel +++ loadWord supplyWord +++ sub :::
             pushSupplySlot +++ sstore :::
-            logBurnTransfer (loadWord sharesSel) +++ tailFunc)))
-      (.ok final)) :
+            logBurnTransfer (loadWord sharesSel) +++ tailFunc))) final) :
     ∃ bodyPre,
       shares.toNat ≤ supply.toNat ∧
       Devm.getStor bodyPre sevm.currentTarget =
@@ -1388,21 +1395,21 @@ theorem outboundBurn_trace
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory (Bytes.writeAt image 0 shares.toBytes) ∧
-      Func.RunCompiledTo fs sevm bodyPre tailFunc (.ok final) := by
+      R fs sevm bodyPre tailFunc final := by
   -- Debit the owner's staged share row.
-  obtain ⟨balanceLoadPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceLoadPre, sharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨sharesPrefix, balanceLoadWf, balanceLoadReads, sharesState⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads sharesAt sharesRun
   have sharesLogs : pre.logs = balanceLoadPre.logs :=
     of_run_loadWordAt_logs sharesRun
-  obtain ⟨subPre, balanceLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨subPre, balanceLoadRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨balanceLoadPrefix, subWf, subReads, balanceLoadState⟩ :=
     of_run_loadWordAt_image sharesPrefix balanceLoadWf balanceLoadReads
       balanceAt balanceLoadRun
   have balanceLoadLogs : balanceLoadPre.logs = subPre.logs :=
     of_run_loadWordAt_logs balanceLoadRun
-  obtain ⟨ownerLoadPre, subRun, run⟩ := runCompiledTo_next_inv run
-  have subSource := Ninst.Run.of_runCompiled subRun
+  obtain ⟨ownerLoadPre, subRun, run⟩ := Func.WalkInv.next run
+  have subSource := subRun
   have subPrefix : (balance - shares) :: tail <<+ ownerLoadPre.stack :=
     prefix_of_sub subSource balanceLoadPrefix
   have subMemory : subPre.memory = ownerLoadPre.memory :=
@@ -1415,14 +1422,14 @@ theorem outboundBurn_trace
     rw [← subMemory]; exact subWf
   have ownerLoadReads : Mem.Reads ownerLoadPre.memory image := by
     rw [← subMemory]; exact subReads
-  obtain ⟨balanceStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceStorePre, ownerRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨ownerPrefix, balanceStoreWf, balanceStoreReads, ownerState⟩ :=
     of_run_loadWordAt_image subPrefix ownerLoadWf ownerLoadReads ownerAt
       ownerRun
   have ownerLogs : ownerLoadPre.logs = balanceStorePre.logs :=
     of_run_loadWordAt_logs ownerRun
-  obtain ⟨supplyTestPre, balanceStoreRun, run⟩ := runCompiledTo_next_inv run
-  have balanceStoreSource := Ninst.Run.of_runCompiled balanceStoreRun
+  obtain ⟨supplyTestPre, balanceStoreRun, run⟩ := Func.WalkInv.next run
+  have balanceStoreSource := balanceStoreRun
   have balanceSet : Devm.getStor supplyTestPre sevm.currentTarget =
       (Devm.getStor balanceStorePre sevm.currentTarget).set owner
         (balance - shares) :=
@@ -1443,21 +1450,21 @@ theorem outboundBurn_trace
     rw [← balanceStoreMemory]; exact balanceStoreReads
 
   -- Require the burn to fit the staged supply.
-  obtain ⟨supplyLoadPre, roomSharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨supplyLoadPre, roomSharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨roomSharesPrefix, supplyLoadWf, supplyLoadReads, roomSharesState⟩ :=
     of_run_loadWordAt_image balanceStoreStack supplyTestWf supplyTestReads
       sharesAt roomSharesRun
   have roomSharesLogs : supplyTestPre.logs = supplyLoadPre.logs :=
     of_run_loadWordAt_logs roomSharesRun
-  obtain ⟨roomTestPre, supplyLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨roomTestPre, supplyLoadRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨supplyLoadPrefix, roomTestWf, roomTestReads, supplyLoadState⟩ :=
     of_run_loadWordAt_image roomSharesPrefix supplyLoadWf supplyLoadReads
       supplyAt supplyLoadRun
   have supplyLoadLogs : supplyLoadPre.logs = roomTestPre.logs :=
     of_run_loadWordAt_logs supplyLoadRun
   obtain ⟨roomBranchPre, roomTestRun, roomBranchRun⟩ :=
-    runCompiledTo_next_inv run
-  have roomTestSource := Ninst.Run.of_runCompiled roomTestRun
+    Func.WalkInv.next run
+  have roomTestSource := roomTestRun
   have roomTestPrefix := prefix_of_lt roomTestSource supplyLoadPrefix
   have roomTestMemory : roomTestPre.memory = roomBranchPre.memory :=
     Ninst.Hinv.inv (f := Devm.memory) roomTestSource
@@ -1470,34 +1477,33 @@ theorem outboundBurn_trace
     intro supplyLt
     have onePrefix : (1 : B256) :: tail <<+ roomBranchPre.stack := by
       simpa [B256.ltCheck, supplyLt] using roomTestPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨revertPre, revertPop, revertRun, -⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix roomBranchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   have roomZeroPrefix : (0 : B256) :: tail <<+ roomBranchPre.stack := by
     simpa [B256.ltCheck, supplyLarge] using roomTestPrefix
   obtain ⟨decrPre, roomPop, run, decrStack⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix roomZeroPrefix roomBranchRun
+    Func.WalkInv.zero_branch_of_prefix roomZeroPrefix roomBranchRun
   have decrWf : Mem.Wf decrPre.memory := by
     rw [← roomPop.memory, ← roomTestMemory]; exact roomTestWf
   have decrReads : Mem.Reads decrPre.memory image := by
     rw [← roomPop.memory, ← roomTestMemory]; exact roomTestReads
 
   -- Decrease the supply by exactly the burn.
-  obtain ⟨decrSupplyPre, decrSharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨decrSupplyPre, decrSharesRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨decrSharesPrefix, decrSupplyWf, decrSupplyReads, decrSharesState⟩ :=
     of_run_loadWordAt_image decrStack decrWf decrReads sharesAt decrSharesRun
   have decrSharesLogs : decrPre.logs = decrSupplyPre.logs :=
     of_run_loadWordAt_logs decrSharesRun
-  obtain ⟨decrSubPre, decrSupplyRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨decrSubPre, decrSupplyRun, run⟩ := Func.WalkInv.prepend run
   obtain ⟨decrSupplyPrefix, decrSubWf, decrSubReads, decrSupplyState⟩ :=
     of_run_loadWordAt_image decrSharesPrefix decrSupplyWf decrSupplyReads
       supplyAt decrSupplyRun
   have decrSupplyLogs : decrSupplyPre.logs = decrSubPre.logs :=
     of_run_loadWordAt_logs decrSupplyRun
-  obtain ⟨slotPushPre, decrSubRun, run⟩ := runCompiledTo_next_inv run
-  have decrSubSource := Ninst.Run.of_runCompiled decrSubRun
+  obtain ⟨slotPushPre, decrSubRun, run⟩ := Func.WalkInv.next run
+  have decrSubSource := decrSubRun
   have decrSubPrefix : (supply - shares) :: tail <<+ slotPushPre.stack :=
     prefix_of_sub decrSubSource decrSupplyPrefix
   have decrSubMemory : decrSubPre.memory = slotPushPre.memory :=
@@ -1506,7 +1512,7 @@ theorem outboundBurn_trace
     Ninst.Hinv.inv (f := Devm.getStor) decrSubSource
   have decrSubLogs : decrSubPre.logs = slotPushPre.logs :=
     Ninst.Hinv.inv (f := Devm.logs) decrSubSource
-  obtain ⟨supplyStorePre, slotPushRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨supplyStorePre, slotPushRun, run⟩ := Func.WalkInv.prepend run
   simp only [pushSupplySlot] at slotPushRun
   rcases Line.of_run_cons slotPushRun with ⟨zeroPost, zeroRun, slotTailRun⟩
   rcases Line.of_run_cons slotTailRun with ⟨_, notRun, slotNil⟩
@@ -1519,8 +1525,8 @@ theorem outboundBurn_trace
     have notZero : (~~~(0 : B256)) = supplySlot := by decide +kernel
     rw [← notZero]
     exact prefix_of_not notRun pushedZero
-  obtain ⟨logPre, supplyStoreRun, run⟩ := runCompiledTo_next_inv run
-  have supplyStoreSource := Ninst.Run.of_runCompiled supplyStoreRun
+  obtain ⟨logPre, supplyStoreRun, run⟩ := Func.WalkInv.next run
+  have supplyStoreSource := supplyStoreRun
   have supplySet : Devm.getStor logPre sevm.currentTarget =
       (Devm.getStor supplyStorePre sevm.currentTarget).set supplySlot
         (supply - shares) :=
@@ -1542,7 +1548,7 @@ theorem outboundBurn_trace
     rw [← slotMemory]; exact decrSubReads
 
   -- Emit the burn transfer.
-  obtain ⟨bodyPre, logRun, bodyRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨bodyPre, logRun, bodyRun⟩ := Func.WalkInv.prepend run
   have logLineRun := logRun
   have logStorage : Devm.getStor logPre = Devm.getStor bodyPre := by
     refine Line.of_inv Devm.getStor ?_ logLineRun
@@ -1694,6 +1700,7 @@ def outboundSettleImage (image : Bytes) (assets shares : B256) : Bytes :=
 /-- The outbound settlement runs *after* the WETH child: it emits the exact
 ERC-4626 `Withdraw` entry and returns the quoted word, writing no storage. -/
 theorem outboundSettle_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {image : Bytes} {assetsSel sharesSel returnedSel : B256}
     {assets shares owner receiver returned : B256} {tail : Stack}
@@ -1712,14 +1719,14 @@ theorem outboundSettle_trace
     (sharesAboveWords : 64 ≤ (sharesSel * 32).toNat)
     (returnedAboveWords : 64 ≤ (returnedSel * 32).toNat)
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
+    (run : R fs sevm pre
       (logWithdraw (loadWord assetsSel) (loadWord sharesSel) +++
-        loadWord returnedSel +++ returnWord) (.ok final)) :
+        loadWord returnedSel +++ returnWord) final) :
     ReturnsWord returned final ∧
       Devm.getStor final = Devm.getStor pre ∧
       final.logs = pre.logs ++
         [withdrawLogEntry sevm receiver owner assets shares] := by
-  obtain ⟨returnLoadPre, logRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨returnLoadPre, logRun, run⟩ := Func.WalkInv.prepend run
   have logLineRun := logRun
   have logStorage : Devm.getStor pre = Devm.getStor returnLoadPre := by
     refine Line.of_inv Devm.getStor ?_ logLineRun
@@ -1834,7 +1841,7 @@ theorem outboundSettle_trace
       omega
     · right
       omega
-  obtain ⟨returnPre, returnedRun, returnRun⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨returnPre, returnedRun, returnRun⟩ := Func.WalkInv.prepend run
   obtain ⟨returnedPrefix, -, -, -⟩ :=
     of_run_loadWordAt_image returnLoadStack returnLoadWf returnLoadReads
       returnedAtStaged returnedRun
@@ -1845,16 +1852,12 @@ theorem outboundSettle_trace
     refine Line.of_inv Devm.getStor ?_ returnedRun
     unfold ProrataWethVault.loadWord
     line_inv
-  have returnStorage : Devm.getStor returnPre = Devm.getStor final := by
-    refine (show Func.CompiledInv fs Devm.getStor Devm.getStor returnWord from
-      ?_) returnRun
-    unfold returnWord
-    compiled_inv
-  have returnLogs : returnPre.logs = final.logs := by
-    refine (show Func.CompiledInv fs Devm.logs Devm.logs returnWord from
-      ?_) returnRun
-    unfold returnWord
-    compiled_inv
+  have returnStorage : Devm.getStor returnPre = Devm.getStor final :=
+    Func.of_inv Devm.getStor Devm.getStor
+      (by unfold returnWord; func_inv) (Func.WalkInv.toRun returnRun)
+  have returnLogs : returnPre.logs = final.logs :=
+    Func.of_inv Devm.logs Devm.logs
+      (by unfold returnWord; func_inv) (Func.WalkInv.toRun returnRun)
   refine ⟨returnWord_trace returnedPrefix returnRun, ?_, ?_⟩
   · rw [← returnStorage, ← returnedStorage, ← logStorage]
   · rw [← returnLogs, ← returnedLogs, emitted, dataWindow, ← logLogs]
