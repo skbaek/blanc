@@ -334,6 +334,207 @@ theorem redeemQuote_arithmetic_trace
     · simpa [previewRedeemN, convertToAssetsN, stagedDenominator_toNat stable,
         stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
+/-! ## Outbound guards -/
+
+/-- Both outbound continuations stage the quote, then reject the zero caller,
+a dirty or zero staged receiver, and a dirty or zero staged owner.
+
+The owner check has no inbound counterpart: `deposit` and `mint` always credit
+on behalf of the caller, while `withdraw` and `redeem` may burn someone else's
+shares, so the owner is a third address that must be canonical before it is
+used as a storage key. -/
+theorem outboundGuards_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {quote receiver owner : B256} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (receiverAt : Bytes.toB256
+      (image.sliceD (receiverWord * 32).toNat 32 0) = receiver)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (stack : quote :: tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (mstoreAt quoteWord +++
+        nonzeroCaller (nonzeroStagedAddress receiverWord
+          (nonzeroStagedAddress ownerWord body))) (.ok final)) :
+    ∃ bodyPre,
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr receiver ∧
+      receiver ≠ 0 ∧
+      ValidAdr owner ∧
+      owner ≠ 0 ∧
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory
+        (Bytes.writeAt image (quoteWord * 32).toNat quote.toBytes) ∧
+      pre.state = bodyPre.state ∧
+      pre.logs = bodyPre.logs ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  obtain ⟨ownerPre, callerNonzero, receiverValid, receiverNonzero,
+      ownerStack, ownerWf, ownerReads, ownerState, ownerLogs, ownerRun⟩ :=
+    inboundGuards_trace memoryWf memoryReads receiverAt stack run
+  have ownerAtQuote : Bytes.toB256
+      ((Bytes.writeAt image (quoteWord * 32).toNat quote.toBytes).sliceD
+        (ownerWord * 32).toNat 32 0) = owner := by
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact ownerAt
+    · left
+      decide +kernel
+  obtain ⟨bodyPre, ownerValid, ownerNonzero, bodyStack, bodyWf,
+      bodyReads, bodyState, bodyLogs, bodyRun⟩ :=
+    nonzeroStagedAddress_trace ownerWf ownerReads ownerAtQuote ownerStack
+      ownerRun
+  exact ⟨bodyPre, callerNonzero, receiverValid, receiverNonzero, ownerValid,
+    ownerNonzero, bodyStack, bodyWf, bodyReads,
+    ownerState.trans bodyState, ownerLogs.trans bodyLogs, bodyRun⟩
+
+/-! ## Owner share-balance guard -/
+
+/-- The outbound share guard reads the owner's share row, stages it, and
+requires the burn amount to fit it.  A successful walk proves the burn is
+covered by the owner's own balance and leaves persistent storage and logs
+untouched.
+
+`SLOAD` is not state-invariant -- it touches the accessed-storage set -- so
+this returns storage equality rather than whole-state equality, exactly as the
+inbound credit walk does. -/
+theorem ownerHasShares_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {sharesWord owner shares : B256}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (sharesAt : Bytes.toB256
+      (image.sliceD (sharesWord * 32).toNat 32 0) = shares)
+    (sharesBelow : (sharesWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (ownerHasShares (loadWord sharesWord) body) (.ok final)) :
+    ∃ bodyPre balance,
+      balance = Devm.getStorVal pre sevm.currentTarget owner ∧
+      shares.toNat ≤ balance.toNat ∧
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory
+        (Bytes.writeAt image (balanceWord * 32).toNat balance.toBytes) ∧
+      Devm.getStor pre = Devm.getStor bodyPre ∧
+      pre.logs = bodyPre.logs ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  simp only [ownerHasShares] at run
+
+  -- Read the owner's share row.
+  obtain ⟨sloadPre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPrefix, sloadWf, sloadReads, ownerState⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
+  have ownerLogs : pre.logs = sloadPre.logs := by
+    refine Line.of_inv Devm.logs ?_ ownerRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨balanceStorePre, sloadRun, run⟩ := runCompiledTo_next_inv run
+  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨balance, balancePrefix, balanceEq⟩ :=
+    prefix_of_sload sloadSource ownerPrefix
+  have sloadStorage : Devm.getStor sloadPre = Devm.getStor balanceStorePre :=
+    Ninst.Hinv.inv (f := Devm.getStor) sloadSource
+  have sloadMemory : sloadPre.memory = balanceStorePre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) sloadSource
+  have sloadLogs : sloadPre.logs = balanceStorePre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) sloadSource
+  have balanceStoreWf : Mem.Wf balanceStorePre.memory := by
+    rw [← sloadMemory]; exact sloadWf
+  have balanceStoreReads : Mem.Reads balanceStorePre.memory image := by
+    rw [← sloadMemory]; exact sloadReads
+
+  -- Stage the balance.
+  obtain ⟨sharesPre, balanceStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sharesStack, sharesWf, sharesReads, balanceStoreState⟩ :=
+    of_run_mstoreAt_image balancePrefix balanceStoreWf balanceStoreReads
+      balanceStoreRun
+  have balanceStoreLogs : balanceStorePre.logs = sharesPre.logs := by
+    refine Line.of_inv Devm.logs ?_ balanceStoreRun
+    unfold mstoreAt
+    line_inv
+  let image1 := Bytes.writeAt image (balanceWord * 32).toNat balance.toBytes
+  change Mem.Reads sharesPre.memory image1 at sharesReads
+  have sharesAt1 : Bytes.toB256
+      (image1.sliceD (sharesWord * 32).toNat 32 0) = shares := by
+    unfold image1
+    rw [Bytes.readWord_writeAt_of_disjoint]
+    · exact sharesAt
+    · left
+      exact sharesBelow
+  have balanceAt1 : Bytes.toB256
+      (image1.sliceD (balanceWord * 32).toNat 32 0) = balance := by
+    unfold image1
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  -- Compare the burn amount against the staged balance.
+  obtain ⟨balanceLoadPre, sharesRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨sharesPrefix, balanceLoadWf, balanceLoadReads, sharesState⟩ :=
+    of_run_loadWordAt_image sharesStack sharesWf sharesReads sharesAt1
+      sharesRun
+  have sharesLogs : sharesPre.logs = balanceLoadPre.logs := by
+    refine Line.of_inv Devm.logs ?_ sharesRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨testPre, balanceLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨balanceLoadPrefix, testWf, testReads, balanceLoadState⟩ :=
+    of_run_loadWordAt_image sharesPrefix balanceLoadWf balanceLoadReads
+      balanceAt1 balanceLoadRun
+  have balanceLoadLogs : balanceLoadPre.logs = testPre.logs := by
+    refine Line.of_inv Devm.logs ?_ balanceLoadRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
+  have testSource := Ninst.Run.of_runCompiled testRun
+  have testPrefix := prefix_of_lt testSource balanceLoadPrefix
+  have testMemory : testPre.memory = branchPre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) testSource
+  have testStorage : Devm.getStor testPre = Devm.getStor branchPre :=
+    Ninst.Hinv.inv (f := Devm.getStor) testSource
+  have testLogs : testPre.logs = branchPre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) testSource
+  have balanceLarge : ¬ balance < shares := by
+    intro balanceLt
+    have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
+      simpa [B256.ltCheck, balanceLt] using testPrefix
+    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) onePrefix branchRun
+    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
+    cases impossible
+  have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
+    simpa [B256.ltCheck, balanceLarge] using testPrefix
+  obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
+    Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← bodyPop.memory, ← testMemory]
+    exact testWf
+  have bodyReads : Mem.Reads bodyPre.memory image1 := by
+    rw [← bodyPop.memory, ← testMemory]
+    exact testReads
+  refine ⟨bodyPre, balance, ?_, ?_, bodyPrefix, bodyWf, bodyReads, ?_, ?_,
+    bodyRun⟩
+  · rw [balanceEq]
+    change
+      (Devm.getStor sloadPre sevm.currentTarget).get owner =
+        (Devm.getStor pre sevm.currentTarget).get owner
+    rw [funext (getStor_eq_of_state_eq ownerState)]
+  · by_contra sharesLarge
+    exact balanceLarge (B256.lt_of_toNat_lt_toNat (by omega))
+  · exact (funext (getStor_eq_of_state_eq ownerState)).trans
+      (sloadStorage.trans
+        ((funext (getStor_eq_of_state_eq balanceStoreState)).trans
+          ((funext (getStor_eq_of_state_eq sharesState)).trans
+            ((funext (getStor_eq_of_state_eq balanceLoadState)).trans
+              (testStorage.trans
+                (funext (getStor_eq_of_state_eq bodyPop.state)))))))
+  · exact ownerLogs.trans (sloadLogs.trans (balanceStoreLogs.trans
+      (sharesLogs.trans (balanceLoadLogs.trans
+        (testLogs.trans bodyPop.logs)))))
+
 end ProrataWethVault
 
 end Blanc
