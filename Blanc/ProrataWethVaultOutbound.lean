@@ -535,6 +535,629 @@ theorem ownerHasShares_trace
       (sharesLogs.trans (balanceLoadLogs.trans
         (testLogs.trans bodyPop.logs)))))
 
+/-! ## Outbound authorization -/
+
+/-- Memory image after the two hashed allowance words are staged. -/
+def allowanceKeyImage (image : Bytes) (owner spender : B256) : Bytes :=
+  Bytes.writeAt (Bytes.writeAt image 0 owner.toBytes) 32 spender.toBytes
+
+/-- The guarded allowance key hashes the staged owner against the frame caller
+and reaches its body only when that hash aliases neither a share row nor the
+reserved supply word.  Both hashed words land in the low scratch region, so
+every long-lived operation word survives. -/
+theorem allowanceKey_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {owner : B256} {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (stack : tail <<+ pre.stack)
+    (run : Func.RunCompiledTo fs sevm pre
+      (guardedAllowanceKey (loadWord ownerWord) [caller] body) (.ok final)) :
+    ∃ bodyPre,
+      ¬ ValidAdr (allowanceKey owner sevm.caller.toB256) ∧
+      allowanceKey owner sevm.caller.toB256 ≠ supplySlot ∧
+      allowanceKey owner sevm.caller.toB256 :: tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory
+        (allowanceKeyImage image owner sevm.caller.toB256) ∧
+      Devm.getStor pre = Devm.getStor bodyPre ∧
+      pre.logs = bodyPre.logs ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  simp only [guardedAllowanceKey] at run
+
+  -- Stage the owner into scratch word zero.
+  obtain ⟨ownerStorePre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPrefix, ownerStoreWf, ownerStoreReads, ownerState⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
+  have ownerLogs : pre.logs = ownerStorePre.logs := by
+    refine Line.of_inv Devm.logs ?_ ownerRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨spenderPre, ownerStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨spenderStack, spenderWf, spenderReads, ownerStoreState⟩ :=
+    of_run_mstoreAt_image ownerPrefix ownerStoreWf ownerStoreReads
+      ownerStoreRun
+  have ownerStoreLogs : ownerStorePre.logs = spenderPre.logs := by
+    refine Line.of_inv Devm.logs ?_ ownerStoreRun
+    unfold mstoreAt
+    line_inv
+
+  -- Stage the frame caller into scratch word one.
+  obtain ⟨spenderStorePre, spenderRun, run⟩ := runCompiledTo_prepend_inv run
+  rcases Line.of_run_cons spenderRun with ⟨_, callerRun, callerNil⟩
+  cases callerNil
+  have callerPush := of_run_caller callerRun
+  have spenderPrefix : sevm.caller.toB256 :: tail <<+ spenderStorePre.stack :=
+    prefix_of_push callerPush spenderStack
+  have spenderStoreWf : Mem.Wf spenderStorePre.memory := by
+    rw [← callerPush.memory]; exact spenderWf
+  have spenderStoreReads : Mem.Reads spenderStorePre.memory
+      (Bytes.writeAt image ((0 : B256) * 32).toNat owner.toBytes) := by
+    rw [← callerPush.memory]; exact spenderReads
+  obtain ⟨windowPre, spenderStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨windowStack, windowWf, windowReads, spenderStoreState⟩ :=
+    of_run_mstoreAt_image spenderPrefix spenderStoreWf spenderStoreReads
+      spenderStoreRun
+  have spenderStoreLogs : spenderStorePre.logs = windowPre.logs := by
+    refine Line.of_inv Devm.logs ?_ spenderStoreRun
+    unfold mstoreAt
+    line_inv
+  have windowImage : Mem.Reads windowPre.memory
+      (allowanceKeyImage image owner sevm.caller.toB256) := by
+    simpa only [allowanceKeyImage,
+      show ((0 : B256) * 32).toNat = 0 by decide +kernel,
+      show ((1 : B256) * 32).toNat = 32 by decide +kernel] using windowReads
+
+  -- Push the hash window and hash it.
+  obtain ⟨keccakPre, pushWindowRun, run⟩ := runCompiledTo_prepend_inv run
+  have pushWindowLine := pushWindowRun
+  simp only [pushList, List.map] at pushWindowRun
+  rcases Line.of_run_cons pushWindowRun with ⟨_, push64Run, pushWindowRun⟩
+  rcases Line.of_run_cons pushWindowRun with ⟨_, push0Run, pushNil⟩
+  cases pushNil
+  have push64 := of_run_pushB256 push64Run
+  have push0 := of_run_pushB256 push0Run
+  have windowPrefix : (0 : B256) :: 64 :: tail <<+ keccakPre.stack :=
+    prefix_of_push push0 (prefix_of_push push64 windowStack)
+  have keccakWf : Mem.Wf keccakPre.memory := by
+    rw [← push0.memory, ← push64.memory]; exact windowWf
+  have keccakReads : Mem.Reads keccakPre.memory
+      (allowanceKeyImage image owner sevm.caller.toB256) := by
+    rw [← push0.memory, ← push64.memory]; exact windowImage
+  obtain ⟨collisionPre, keccakRun, run⟩ := runCompiledTo_next_inv run
+  have keccakSource := Ninst.Run.of_runCompiled keccakRun
+  obtain ⟨hashPrefix, keccakMemory⟩ :=
+    prefix_of_keccak256_val keccakSource windowPrefix
+  have windowRead :
+      (keccakPre.memory.read (0 : B256).toNat (64 : B256).toNat).1 =
+        owner.toBytes ++ sevm.caller.toB256.toBytes := by
+    rw [show ((0 : B256)).toNat = 0 by decide +kernel,
+      show ((64 : B256)).toNat = 64 by decide +kernel,
+      Mem.Reads.read keccakReads]
+    simpa only [allowanceKeyImage] using
+      Bytes.read_two_word_writes_at image 0 owner sevm.caller.toB256
+  have keyPrefix : allowanceKey owner sevm.caller.toB256 :: tail <<+
+      collisionPre.stack := by
+    rw [windowRead] at hashPrefix
+    simpa only [allowanceKey] using hashPrefix
+  have collisionWf : Mem.Wf collisionPre.memory := by
+    rw [keccakMemory]
+    exact keccakWf.extend _ _
+  have collisionReads : Mem.Reads collisionPre.memory
+      (allowanceKeyImage image owner sevm.caller.toB256) := by
+    rw [keccakMemory]
+    exact Mem.Reads.extend keccakReads _ _
+
+  -- Reject a key that aliases a share row or the supply slot.
+  obtain ⟨bodyPre, keyNotAddress, keyNotSupply, bodyRun, bodyPrefix,
+      collisionState, collisionLogs, bodyMemory⟩ :=
+    allowanceCollisionGuard_body_of_ok keyPrefix run
+  refine ⟨bodyPre, keyNotAddress, keyNotSupply, bodyPrefix, ?_, ?_, ?_, ?_,
+    bodyRun⟩
+  · rw [← bodyMemory]; exact collisionWf
+  · rw [← bodyMemory]; exact collisionReads
+  · exact (funext (getStor_eq_of_state_eq ownerState)).trans
+      ((funext (getStor_eq_of_state_eq ownerStoreState)).trans
+        ((funext (getStor_eq_of_state_eq callerPush.state)).trans
+          ((funext (getStor_eq_of_state_eq spenderStoreState)).trans
+            ((Line.of_inv Devm.getStor (by
+                simp only [pushList, List.map]
+                line_inv) pushWindowLine).trans
+              ((Ninst.Hinv.inv (f := Devm.getStor) keccakSource).trans
+                (funext (getStor_eq_of_state_eq collisionState)))))))
+  · exact ownerLogs.trans (ownerStoreLogs.trans
+      (callerPush.logs.trans (spenderStoreLogs.trans
+        ((Line.of_inv Devm.logs (by
+            simp only [pushList, List.map]
+            line_inv) pushWindowLine).trans
+          ((Ninst.Hinv.inv (f := Devm.logs) keccakSource).trans
+            collisionLogs)))))
+
+/-- Memory image after the allowance key and the loaded allowance are staged.
+All four writes land at word `0`, word `1`, the scratch word and the allowance
+word, so every other long-lived operation word survives the spend. -/
+def allowanceStagingImage
+    (image : Bytes) (owner spender key allowance : B256) : Bytes :=
+  Bytes.writeAt
+    (Bytes.writeAt (allowanceKeyImage image owner spender)
+      (scratchWord * 32).toNat key.toBytes)
+    (allowanceWord * 32).toNat allowance.toBytes
+
+/-- Spending a staged allowance either finds it infinite and writes nothing, or
+finds it finite, proves it covers the amount, and decrements exactly that one
+slot.  In both routes the key is neither address-shaped nor the reserved supply
+word, so no share row and not the supply can have moved. -/
+theorem spendAllowance_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {amountSel owner amount : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (amountAt : Bytes.toB256
+      (image.sliceD (amountSel * 32).toNat 32 0) = amount)
+    (amountAboveKeyWords : 64 ≤ (amountSel * 32).toNat)
+    (amountAboveScratch :
+      (scratchWord * 32).toNat + 32 ≤ (amountSel * 32).toNat)
+    (amountBelowAllowance :
+      (amountSel * 32).toNat + 32 ≤ (allowanceWord * 32).toNat)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (spendAllowance (loadWord ownerWord) [caller] (loadWord amountSel)
+        continuation) (.ok final)) :
+    ∃ bodyPre key allowance,
+      ¬ ValidAdr key ∧
+      key ≠ supplySlot ∧
+      allowance = Devm.getStorVal pre sevm.currentTarget key ∧
+      (Devm.getStor bodyPre sevm.currentTarget =
+          Devm.getStor pre sevm.currentTarget ∨
+        (amount.toNat ≤ allowance.toNat ∧
+          Devm.getStor bodyPre sevm.currentTarget =
+            (Devm.getStor pre sevm.currentTarget).set key
+              (allowance - amount))) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor bodyPre account = Devm.getStor pre account) ∧
+      pre.logs = bodyPre.logs ∧
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory
+        (allowanceStagingImage image owner sevm.caller.toB256 key
+          allowance) ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  simp only [spendAllowance] at run
+
+  -- Hash and guard the allowance key.
+  obtain ⟨scratchStorePre, keyNotAddress, keyNotSupply, keyPrefix, keyWf,
+      keyReads, keyState, keyLogs, run⟩ :=
+    allowanceKey_trace memoryWf memoryReads ownerAt stack run
+  set key := allowanceKey owner sevm.caller.toB256 with keyDef
+
+  -- Stage the key.
+  obtain ⟨scratchLoadPre, scratchStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨scratchLoadStack, scratchLoadWf, scratchLoadReads,
+      scratchStoreState⟩ :=
+    of_run_mstoreAt_image keyPrefix keyWf keyReads scratchStoreRun
+  have scratchStoreLogs : scratchStorePre.logs = scratchLoadPre.logs := by
+    refine Line.of_inv Devm.logs ?_ scratchStoreRun
+    unfold mstoreAt
+    line_inv
+  set keyImage :=
+    Bytes.writeAt (allowanceKeyImage image owner sevm.caller.toB256)
+      (scratchWord * 32).toNat key.toBytes with keyImageDef
+  change Mem.Reads scratchLoadPre.memory keyImage at scratchLoadReads
+  have scratchAt : Bytes.toB256
+      (keyImage.sliceD (scratchWord * 32).toNat 32 0) = key := by
+    rw [keyImageDef]
+    exact Bytes.readWord_writeAt_self _ _ _
+
+  -- Read the allowance.
+  obtain ⟨sloadPre, scratchLoadRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨scratchPrefix, sloadWf, sloadReads, scratchLoadState⟩ :=
+    of_run_loadWordAt_image scratchLoadStack scratchLoadWf scratchLoadReads
+      scratchAt scratchLoadRun
+  have scratchLoadLogs : scratchLoadPre.logs = sloadPre.logs := by
+    refine Line.of_inv Devm.logs ?_ scratchLoadRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨allowanceStorePre, sloadRun, run⟩ := runCompiledTo_next_inv run
+  have sloadSource := Ninst.Run.of_runCompiled sloadRun
+  obtain ⟨allowance, allowancePrefix, allowanceEq⟩ :=
+    prefix_of_sload sloadSource scratchPrefix
+  have sloadStorage : Devm.getStor sloadPre = Devm.getStor allowanceStorePre :=
+    Ninst.Hinv.inv (f := Devm.getStor) sloadSource
+  have sloadMemory : sloadPre.memory = allowanceStorePre.memory :=
+    Ninst.Hinv.inv (f := Devm.memory) sloadSource
+  have sloadLogs : sloadPre.logs = allowanceStorePre.logs :=
+    Ninst.Hinv.inv (f := Devm.logs) sloadSource
+  have allowanceStoreWf : Mem.Wf allowanceStorePre.memory := by
+    rw [← sloadMemory]; exact sloadWf
+  have allowanceStoreReads : Mem.Reads allowanceStorePre.memory keyImage := by
+    rw [← sloadMemory]; exact sloadReads
+
+  -- Stage the allowance.
+  obtain ⟨branchPre, allowanceStoreRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨branchStack, branchWf, branchReads, allowanceStoreState⟩ :=
+    of_run_mstoreAt_image allowancePrefix allowanceStoreWf
+      allowanceStoreReads allowanceStoreRun
+  have allowanceStoreLogs : allowanceStorePre.logs = branchPre.logs := by
+    refine Line.of_inv Devm.logs ?_ allowanceStoreRun
+    unfold mstoreAt
+    line_inv
+  set stagedImage :=
+    allowanceStagingImage image owner sevm.caller.toB256 key allowance
+    with stagedImageDef
+  change Mem.Reads branchPre.memory stagedImage at branchReads
+  have allowanceAt : Bytes.toB256
+      (stagedImage.sliceD (allowanceWord * 32).toNat 32 0) = allowance := by
+    rw [stagedImageDef, allowanceStagingImage]
+    exact Bytes.readWord_writeAt_self _ _ _
+  have amountAtStaged : Bytes.toB256
+      (stagedImage.sliceD (amountSel * 32).toNat 32 0) = amount := by
+    rw [stagedImageDef, allowanceStagingImage, allowanceKeyImage]
+    rw [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
+    · exact amountAt
+    · right
+      omega
+    · right
+      omega
+    · right
+      exact amountAboveScratch
+    · left
+      exact amountBelowAllowance
+
+  -- The storage prefix is untouched up to the branch.
+  have entryStorage : Devm.getStor pre = Devm.getStor sloadPre :=
+    keyState.trans
+      ((funext (getStor_eq_of_state_eq scratchStoreState)).trans
+        (funext (getStor_eq_of_state_eq scratchLoadState)))
+  have branchStorage : Devm.getStor pre = Devm.getStor branchPre :=
+    entryStorage.trans (sloadStorage.trans
+      (funext (getStor_eq_of_state_eq allowanceStoreState)))
+  have branchLogs : pre.logs = branchPre.logs :=
+    keyLogs.trans (scratchStoreLogs.trans (scratchLoadLogs.trans
+      (sloadLogs.trans allowanceStoreLogs)))
+  have allowanceValue : allowance = Devm.getStorVal pre sevm.currentTarget
+      key := by
+    rw [allowanceEq]
+    change
+      (Devm.getStor sloadPre sevm.currentTarget).get key =
+        (Devm.getStor pre sevm.currentTarget).get key
+    rw [entryStorage]
+
+  -- Infinite or finite allowance.
+  rcases ProducesWord.isMax_arm_trace (ProducesWord.loadWord allowanceAt)
+      branchWf branchReads branchStack run with maxArm | ordinaryArm
+  · obtain ⟨-, callPre, callStack, callWf, callReads, callQuiet, callRun⟩ :=
+      maxArm
+    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
+    refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
+      allowanceValue, Or.inl ?_, ?_, ?_, ?_, ?_, ?_, bodyRun⟩
+    · rw [← congrFun (funext (getStor_eq_of_state_eq burn.state))
+          sevm.currentTarget,
+        ← congrFun (funext (getStor_eq_of_state_eq callQuiet.1))
+          sevm.currentTarget,
+        ← congrFun branchStorage sevm.currentTarget]
+    · intro account _
+      rw [← congrFun (funext (getStor_eq_of_state_eq burn.state)) account,
+        ← congrFun (funext (getStor_eq_of_state_eq callQuiet.1)) account,
+        ← congrFun branchStorage account]
+    · exact branchLogs.trans (callQuiet.2.trans burn.logs)
+    · rw [← burn.stack]
+      exact callStack
+    · rw [← burn.memory]; exact callWf
+    · rw [← burn.memory]; exact callReads
+  · obtain ⟨-, testPre, testStack, testWf, testReads, testQuiet, run⟩ :=
+      ordinaryArm
+
+    -- Require the allowance to cover the amount.
+    obtain ⟨coverLoadPre, coverAmountRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨coverAmountPrefix, coverLoadWf, coverLoadReads,
+        coverAmountState⟩ :=
+      of_run_loadWordAt_image testStack testWf testReads amountAtStaged
+        coverAmountRun
+    have coverAmountLogs : testPre.logs = coverLoadPre.logs := by
+      refine Line.of_inv Devm.logs ?_ coverAmountRun
+      unfold ProrataWethVault.loadWord
+      line_inv
+    obtain ⟨coverTestPre, coverLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨coverLoadPrefix, coverTestWf, coverTestReads, coverLoadState⟩ :=
+      of_run_loadWordAt_image coverAmountPrefix coverLoadWf coverLoadReads
+        allowanceAt coverLoadRun
+    have coverLoadLogs : coverLoadPre.logs = coverTestPre.logs := by
+      refine Line.of_inv Devm.logs ?_ coverLoadRun
+      unfold ProrataWethVault.loadWord
+      line_inv
+    obtain ⟨coverBranchPre, coverTestRun, coverBranchRun⟩ :=
+      runCompiledTo_next_inv run
+    have coverTestSource := Ninst.Run.of_runCompiled coverTestRun
+    have coverTestPrefix := prefix_of_lt coverTestSource coverLoadPrefix
+    have coverTestMemory : coverTestPre.memory = coverBranchPre.memory :=
+      Ninst.Hinv.inv (f := Devm.memory) coverTestSource
+    have coverTestStorage :
+        Devm.getStor coverTestPre = Devm.getStor coverBranchPre :=
+      Ninst.Hinv.inv (f := Devm.getStor) coverTestSource
+    have coverTestLogs : coverTestPre.logs = coverBranchPre.logs :=
+      Ninst.Hinv.inv (f := Devm.logs) coverTestSource
+    have covered : ¬ allowance < amount := by
+      intro allowanceLt
+      have onePrefix : (1 : B256) :: tail <<+ coverBranchPre.stack := by
+        simpa [B256.ltCheck, allowanceLt] using coverTestPrefix
+      obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
+        Func.RunCompiledTo.succ_branch_of_prefix
+          (by decide : (1 : B256) ≠ 0) onePrefix coverBranchRun
+      obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
+      cases impossible
+    have coverZeroPrefix : (0 : B256) :: tail <<+ coverBranchPre.stack := by
+      simpa [B256.ltCheck, covered] using coverTestPrefix
+    obtain ⟨spendPre, coverPop, run, spendStack⟩ :=
+      Func.RunCompiledTo.zero_branch_of_prefix coverZeroPrefix coverBranchRun
+    have spendWf : Mem.Wf spendPre.memory := by
+      rw [← coverPop.memory, ← coverTestMemory]; exact coverTestWf
+    have spendReads : Mem.Reads spendPre.memory stagedImage := by
+      rw [← coverPop.memory, ← coverTestMemory]; exact coverTestReads
+
+    -- Decrement exactly the allowance slot.
+    obtain ⟨spendLoadPre, spendAmountRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨spendAmountPrefix, spendLoadWf, spendLoadReads, spendAmountState⟩ :=
+      of_run_loadWordAt_image spendStack spendWf spendReads amountAtStaged
+        spendAmountRun
+    have spendAmountLogs : spendPre.logs = spendLoadPre.logs := by
+      refine Line.of_inv Devm.logs ?_ spendAmountRun
+      unfold ProrataWethVault.loadWord
+      line_inv
+    obtain ⟨subPre, spendLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨spendLoadPrefix, subWf, subReads, spendLoadState⟩ :=
+      of_run_loadWordAt_image spendAmountPrefix spendLoadWf spendLoadReads
+        allowanceAt spendLoadRun
+    have spendLoadLogs : spendLoadPre.logs = subPre.logs := by
+      refine Line.of_inv Devm.logs ?_ spendLoadRun
+      unfold ProrataWethVault.loadWord
+      line_inv
+    obtain ⟨keyLoadPre, subRun, run⟩ := runCompiledTo_next_inv run
+    have subSource := Ninst.Run.of_runCompiled subRun
+    have subPrefix : (allowance - amount) :: tail <<+ keyLoadPre.stack :=
+      prefix_of_sub subSource spendLoadPrefix
+    have subMemory : subPre.memory = keyLoadPre.memory :=
+      Ninst.Hinv.inv (f := Devm.memory) subSource
+    have subStorage : Devm.getStor subPre = Devm.getStor keyLoadPre :=
+      Ninst.Hinv.inv (f := Devm.getStor) subSource
+    have subLogs : subPre.logs = keyLoadPre.logs :=
+      Ninst.Hinv.inv (f := Devm.logs) subSource
+    have keyLoadWf : Mem.Wf keyLoadPre.memory := by
+      rw [← subMemory]; exact subWf
+    have keyLoadReads : Mem.Reads keyLoadPre.memory stagedImage := by
+      rw [← subMemory]; exact subReads
+    have scratchAtStaged : Bytes.toB256
+        (stagedImage.sliceD (scratchWord * 32).toNat 32 0) = key := by
+      rw [stagedImageDef, allowanceStagingImage]
+      rw [Bytes.readWord_writeAt_of_disjoint]
+      · exact Bytes.readWord_writeAt_self _ _ _
+      · left
+        decide +kernel
+    obtain ⟨storePre, keyLoadRun, run⟩ := runCompiledTo_prepend_inv run
+    obtain ⟨keyLoadPrefix, storeWf, storeReads, keyLoadState⟩ :=
+      of_run_loadWordAt_image subPrefix keyLoadWf keyLoadReads scratchAtStaged
+        keyLoadRun
+    have keyLoadLogs : keyLoadPre.logs = storePre.logs := by
+      refine Line.of_inv Devm.logs ?_ keyLoadRun
+      unfold ProrataWethVault.loadWord
+      line_inv
+    obtain ⟨callPre, storeRun, run⟩ := runCompiledTo_next_inv run
+    have storeSource := Ninst.Run.of_runCompiled storeRun
+    have storeSet : Devm.getStor callPre sevm.currentTarget =
+        (Devm.getStor storePre sevm.currentTarget).set key
+          (allowance - amount) :=
+      sstore_getStor_set storeSource keyLoadPrefix
+    have storeForeign : ∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor callPre account = Devm.getStor storePre account := by
+      intro account accountNe
+      obtain ⟨pc, registerRun⟩ := of_run_reg storeSource
+      exact sstore_preserves_getStor_ne registerRun accountNe
+    have storeStack : tail <<+ callPre.stack :=
+      prefix_of_sstore storeSource keyLoadPrefix
+    have storeLogs : storePre.logs = callPre.logs :=
+      Ninst.Hinv.inv (f := Devm.logs) storeSource
+    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup run
+
+    have preStore : Devm.getStor pre = Devm.getStor storePre :=
+      branchStorage.trans ((funext (getStor_eq_of_state_eq testQuiet.1)).trans
+        ((funext (getStor_eq_of_state_eq coverAmountState)).trans
+          ((funext (getStor_eq_of_state_eq coverLoadState)).trans
+            (coverTestStorage.trans
+              ((funext (getStor_eq_of_state_eq coverPop.state)).trans
+                ((funext (getStor_eq_of_state_eq spendAmountState)).trans
+                  ((funext (getStor_eq_of_state_eq spendLoadState)).trans
+                    (subStorage.trans
+                      (funext
+                        (getStor_eq_of_state_eq keyLoadState))))))))))
+    have preLogs : pre.logs = storePre.logs :=
+      branchLogs.trans (testQuiet.2.trans (coverAmountLogs.trans
+        (coverLoadLogs.trans (coverTestLogs.trans (coverPop.logs.trans
+          (spendAmountLogs.trans (spendLoadLogs.trans
+            (subLogs.trans keyLoadLogs))))))))
+    refine ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply,
+      allowanceValue, Or.inr ⟨?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, bodyRun⟩
+    · by_contra amountLarge
+      exact covered (B256.lt_of_toNat_lt_toNat (by omega))
+    · rw [← congrFun (funext (getStor_eq_of_state_eq burn.state))
+          sevm.currentTarget, storeSet, ← congrFun preStore sevm.currentTarget]
+    · intro account accountNe
+      rw [← congrFun (funext (getStor_eq_of_state_eq burn.state)) account,
+        storeForeign account accountNe, ← congrFun preStore account]
+    · exact preLogs.trans (storeLogs.trans burn.logs)
+    · rw [← burn.stack]
+      exact storeStack
+    · rw [← burn.memory, ← Ninst.Hinv.inv (f := Devm.memory) storeSource]
+      exact storeWf
+    · rw [← burn.memory, ← Ninst.Hinv.inv (f := Devm.memory) storeSource]
+      exact storeReads
+
+/-- The image the authorization step hands to the burn tail. -/
+def outboundStagedImage
+    (image : Bytes) (owner spender : B256) (bodyImage : Bytes) : Prop :=
+  bodyImage = image ∨
+    ∃ key allowance,
+      bodyImage = allowanceStagingImage image owner spender key allowance
+
+/-- Every operation word above the allowance staging region and below the
+allowance word itself reads the same through either authorization route. -/
+theorem outboundStagedImage_readWord
+    {image bodyImage : Bytes} {owner spender w : B256}
+    (staged : outboundStagedImage image owner spender bodyImage)
+    (aboveKeyWords : 64 ≤ (w * 32).toNat)
+    (aboveScratch : (scratchWord * 32).toNat + 32 ≤ (w * 32).toNat)
+    (belowAllowance : (w * 32).toNat + 32 ≤ (allowanceWord * 32).toNat) :
+    Bytes.toB256 (bodyImage.sliceD (w * 32).toNat 32 0) =
+      Bytes.toB256 (image.sliceD (w * 32).toNat 32 0) := by
+  rcases staged with direct | ⟨key, allowance, spent⟩
+  · rw [direct]
+  · rw [spent, allowanceStagingImage, allowanceKeyImage]
+    rw [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint,
+      Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_of_disjoint]
+    · right
+      omega
+    · right
+      omega
+    · right
+      exact aboveScratch
+    · left
+      exact belowAllowance
+
+/-- The outbound authorization step: either the caller owns the shares, or a
+staged allowance covers the burn and is decremented by exactly it.  Neither
+route moves a share row or the supply, and neither emits a log. -/
+theorem outboundAuthorization_trace
+    {fs : List Func} {sevm : Sevm} {pre final : Devm}
+    {image : Bytes} {amountSel owner amount : B256} {continuation : Nat}
+    {body : Func} {tail : Stack}
+    (memoryWf : Mem.Wf pre.memory)
+    (memoryReads : Mem.Reads pre.memory image)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (ownerWord * 32).toNat 32 0) = owner)
+    (amountAt : Bytes.toB256
+      (image.sliceD (amountSel * 32).toNat 32 0) = amount)
+    (amountAboveKeyWords : 64 ≤ (amountSel * 32).toNat)
+    (amountAboveScratch :
+      (scratchWord * 32).toNat + 32 ≤ (amountSel * 32).toNat)
+    (amountBelowAllowance :
+      (amountSel * 32).toNat + 32 ≤ (allowanceWord * 32).toNat)
+    (stack : tail <<+ pre.stack)
+    (lookup : fs[continuation]? = some body)
+    (run : Func.RunCompiledTo fs sevm pre
+      (loadWord ownerWord +++ caller ::: eq :::
+        (.call continuation <?>
+          spendAllowance (loadWord ownerWord) [caller] (loadWord amountSel)
+            continuation)) (.ok final)) :
+    ∃ bodyPre bodyImage,
+      (∀ key, ValidAdr key ∨ key = supplySlot →
+        Devm.getStorVal bodyPre sevm.currentTarget key =
+          Devm.getStorVal pre sevm.currentTarget key) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor bodyPre account = Devm.getStor pre account) ∧
+      pre.logs = bodyPre.logs ∧
+      tail <<+ bodyPre.stack ∧
+      Mem.Wf bodyPre.memory ∧
+      Mem.Reads bodyPre.memory bodyImage ∧
+      outboundStagedImage image owner sevm.caller.toB256 bodyImage ∧
+      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+  -- Compare the staged owner against the frame caller.
+  obtain ⟨callerPre, ownerRun, run⟩ := runCompiledTo_prepend_inv run
+  obtain ⟨ownerPrefix, callerWf, callerReads, ownerState⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads ownerAt ownerRun
+  have ownerLogs : pre.logs = callerPre.logs := by
+    refine Line.of_inv Devm.logs ?_ ownerRun
+    unfold ProrataWethVault.loadWord
+    line_inv
+  obtain ⟨testPre, callerRun, run⟩ := runCompiledTo_next_inv run
+  have callerSource := Ninst.Run.of_runCompiled callerRun
+  have callerPush := of_run_caller callerSource
+  have callerPrefix : sevm.caller.toB256 :: owner :: tail <<+ testPre.stack :=
+    prefix_of_push callerPush ownerPrefix
+  obtain ⟨branchPre, testRun, branchRun⟩ := runCompiledTo_next_inv run
+  have testSource := Ninst.Run.of_runCompiled testRun
+  have testPrefix := prefix_of_eq testSource callerPrefix
+  have branchWf : Mem.Wf branchPre.memory := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) testSource, ← callerPush.memory]
+    exact callerWf
+  have branchReads : Mem.Reads branchPre.memory image := by
+    rw [← Ninst.Hinv.inv (f := Devm.memory) testSource, ← callerPush.memory]
+    exact callerReads
+  have branchStorage : Devm.getStor pre = Devm.getStor branchPre :=
+    (funext (getStor_eq_of_state_eq ownerState)).trans
+      ((funext (getStor_eq_of_state_eq callerPush.state)).trans
+        (Ninst.Hinv.inv (f := Devm.getStor) testSource))
+  have branchLogs : pre.logs = branchPre.logs :=
+    ownerLogs.trans (callerPush.logs.trans
+      (Ninst.Hinv.inv (f := Devm.logs) testSource))
+  by_cases ownerIsCaller : sevm.caller.toB256 = owner
+  · -- The caller owns the shares: tail-call the burn directly.
+    have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
+      simpa [B256.eqCheck, ownerIsCaller] using testPrefix
+    obtain ⟨callPre, branchWord, branchWordNe, callPop, callRun, callStack⟩ :=
+      Func.RunCompiledTo.succ_branch_of_prefix
+        (by decide : (1 : B256) ≠ 0) onePrefix branchRun
+    obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv lookup callRun
+    have bodyStorage : Devm.getStor pre = Devm.getStor bodyPre :=
+      branchStorage.trans
+        ((funext (getStor_eq_of_state_eq callPop.state)).trans
+          (funext (getStor_eq_of_state_eq burn.state)))
+    refine ⟨bodyPre, image, ?_, ?_, ?_, ?_, ?_, ?_, Or.inl rfl, bodyRun⟩
+    · intro key _
+      change
+        (Devm.getStor bodyPre sevm.currentTarget).get key =
+          (Devm.getStor pre sevm.currentTarget).get key
+      rw [← congrFun bodyStorage sevm.currentTarget]
+    · intro account _
+      rw [← congrFun bodyStorage account]
+    · exact branchLogs.trans (callPop.logs.trans burn.logs)
+    · rw [← burn.stack]
+      exact callStack
+    · rw [← burn.memory, ← callPop.memory]
+      exact branchWf
+    · rw [← burn.memory, ← callPop.memory]
+      exact branchReads
+  · -- Otherwise a staged allowance must cover the burn.
+    have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
+      simpa [B256.eqCheck, ownerIsCaller] using testPrefix
+    obtain ⟨spendPre, spendPop, spendRun, spendStack⟩ :=
+      Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+    have spendWf : Mem.Wf spendPre.memory := by
+      rw [← spendPop.memory]; exact branchWf
+    have spendReads : Mem.Reads spendPre.memory image := by
+      rw [← spendPop.memory]; exact branchReads
+    have spendOwnerAt : Bytes.toB256
+        (image.sliceD (ownerWord * 32).toNat 32 0) = owner := ownerAt
+    obtain ⟨bodyPre, key, allowance, keyNotAddress, keyNotSupply, -,
+        allowanceRoute, foreign, logs, bodyStack, bodyWf, bodyReads,
+        bodyRun⟩ :=
+      spendAllowance_trace spendWf spendReads spendOwnerAt amountAt
+        amountAboveKeyWords amountAboveScratch amountBelowAllowance
+        spendStack lookup spendRun
+    have spendStorage : Devm.getStor pre = Devm.getStor spendPre :=
+      branchStorage.trans (funext (getStor_eq_of_state_eq spendPop.state))
+    refine ⟨bodyPre, _, ?_, ?_, ?_, bodyStack, bodyWf, bodyReads,
+      Or.inr ⟨key, allowance, rfl⟩, bodyRun⟩
+    · intro slot slotShape
+      change
+        (Devm.getStor bodyPre sevm.currentTarget).get slot =
+          (Devm.getStor pre sevm.currentTarget).get slot
+      rw [congrFun spendStorage sevm.currentTarget]
+      rcases allowanceRoute with unchanged | ⟨-, decremented⟩
+      · rw [unchanged]
+      · rw [decremented, Stor.get_set_ne]
+        intro slotIsKey
+        rcases slotShape with slotAddress | slotSupply
+        · exact keyNotAddress (slotIsKey ▸ slotAddress)
+        · exact keyNotSupply (slotIsKey.trans slotSupply)
+    · intro account accountNe
+      rw [foreign account accountNe, ← congrFun spendStorage account]
+    · exact branchLogs.trans (spendPop.logs.trans logs)
+
 end ProrataWethVault
 
 end Blanc

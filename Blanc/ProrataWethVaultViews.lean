@@ -291,7 +291,7 @@ theorem canonicalAddressArg_body_of_ok
 /-- The vault's allowance guard retains the raw key below its collision flag.
 When that flag is zero, the key is neither address-shaped nor the reserved
 supply word. -/
-private theorem of_checkAllowanceSlotCollision
+theorem of_checkAllowanceSlotCollision
     {sevm : Sevm} {pre post : Devm} {key : B256} {tail : Stack}
     (hp : key :: tail <<+ pre.stack)
     (run : Line.Run sevm pre checkAllowanceSlotCollision post) :
@@ -353,8 +353,11 @@ private theorem of_checkAllowanceSlotCollision
 
 /-- A successful compiled allowance-collision branch reaches its body with the
 raw key retained and derives both namespace-separation facts from the executed
-guard. -/
-private theorem allowanceCollisionGuard_body_of_ok
+guard.
+
+Family-visible rather than private: the outbound flows reach the same guard
+through `spendAllowance`, and the walk is proved once here. -/
+theorem allowanceCollisionGuard_body_of_ok
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {key : B256} {tail : Stack} {body : Func}
     (hp : key :: tail <<+ pre.stack)
@@ -365,7 +368,8 @@ private theorem allowanceCollisionGuard_body_of_ok
       Func.RunCompiledTo fs sevm bodyPre body (.ok post) ∧
       key :: tail <<+ bodyPre.stack ∧
       pre.state = bodyPre.state ∧
-      pre.logs = bodyPre.logs := by
+      pre.logs = bodyPre.logs ∧
+      pre.memory = bodyPre.memory := by
   obtain ⟨guardPost, guardLine, branchRun⟩ :=
     runCompiledTo_prepend_inv run
   obtain ⟨flag, guardPrefix, safeOfZero⟩ :=
@@ -381,7 +385,9 @@ private theorem allowanceCollisionGuard_body_of_ok
       (popBurn_pref (Devm.PopBurn.of_popBurnBy guardPop) guardPrefix).2
     exact ⟨bodyPre, notAddress, notSupply, bodyRun, bodyPrefix,
       (Line.of_inv Devm.state (by line_inv) guardLine).trans guardPop.state,
-      (Line.of_inv Devm.logs (by line_inv) guardLine).trans guardPop.logs⟩
+      (Line.of_inv Devm.logs (by line_inv) guardLine).trans guardPop.logs,
+      (Line.of_inv Devm.memory (by line_inv) guardLine).trans
+        guardPop.memory⟩
   · rcases revertRoute with ⟨_, revertPre, -, -, -, revertRun⟩
     rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
     cases impossible
@@ -561,7 +567,7 @@ private theorem allowance_body_effect
 
   rcases allowanceCollisionGuard_body_of_ok keyPrefix collisionRun with
     ⟨readPre, keyNotAddress, keyNotSupply, readRun, readPrefix,
-      collisionState, collisionLogs⟩
+      collisionState, collisionLogs, -⟩
   have readEffect := stackStorageWord_effect readPrefix readRun
 
   have stagedStorage : Devm.getStor bodyPre = Devm.getStor afterKec :=
