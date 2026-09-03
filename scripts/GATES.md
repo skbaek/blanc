@@ -28,6 +28,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | the PRORATA WETH vault's frozen arithmetic, capacity policy, or the independent oracle | `scripts/check-prorata-weth-vault-oracle.sh` | `lake build && scripts/check.sh --no-build` |
 | the PRORATA WETH vault's committed runtime, its oracle, or the vault's frozen behaviour | `scripts/check-prorata-weth-vault-differential.sh` | `lake build && scripts/check.sh --no-build` |
+| the PRORATA WETH vault's deviation register or its pinned reference closure | none yet — `PRORATA_WETH_VAULT_DEVIATIONS.md` is prose until the reference closure is vendored | `scripts/check-prorata-weth-vault-differential.sh` |
 | the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
 | a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
 | a production Lean module, its size baseline, or a bounded module-size exception | `scripts/check-proof-module-size.sh` | the **full set**, in the order below |
