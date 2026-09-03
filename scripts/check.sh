@@ -1267,6 +1267,9 @@ Blanc.Composition.ProrataWethVault.redeem_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.approve_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.transfer_compiled_effect|$STANDARD
 Blanc.ProrataWethVault.transferFrom_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.roundtrip_loss_le|$STANDARD
+Blanc.ProrataWethVault.redemption_le_assets|propext, Quot.sound
+Blanc.ProrataWethVault.victim_loss_le|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved|$STANDARD

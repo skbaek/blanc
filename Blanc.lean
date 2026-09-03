@@ -4,6 +4,7 @@ import Blanc.Ladder
 import Blanc.Upgrade
 import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
+import Blanc.OffsetPricing
 import Blanc.LedgerConservation
 import Blanc.StorageOnlySpec
 import Blanc.WordArithmetic
@@ -297,6 +298,7 @@ import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultOutbound
 import Blanc.ProrataWethVaultShares
 import Blanc.ProrataWethVaultLedgerSpec
+import Blanc.ProrataWethVaultDust
 import Blanc.ProrataWethVaultFunctional
 import Blanc.ProrataWethVaultViews
 import Blanc.Composition.ProrataWethVaultBoundary

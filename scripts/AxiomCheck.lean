@@ -82,6 +82,7 @@ import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.ProrataWethVaultShares
+import Blanc.ProrataWethVaultDust
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
@@ -1054,6 +1055,9 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.approve_compiled_effect
 #print axioms Blanc.ProrataWethVault.transfer_compiled_effect
 #print axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
+#print axioms Blanc.ProrataWethVault.roundtrip_loss_le
+#print axioms Blanc.ProrataWethVault.redemption_le_assets
+#print axioms Blanc.ProrataWethVault.victim_loss_le
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved

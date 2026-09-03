@@ -1,6 +1,6 @@
 -- ProrataAccounting.lean : exact finite-trace accounting for PRORATA.
 
-import Blanc.ProrataArithmetic
+import Blanc.OffsetPricing
 import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Algebra.BigOperators.Ring.Finset
 
