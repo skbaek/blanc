@@ -445,6 +445,24 @@ theorem wordAdd_eq_toB256_add (x y : B256) :
   apply B256.toNat_inj
   rw [B256.toNat_add, B256.toNat_toB256]
 
+/-- EVM word addition wraps below its left summand exactly when the natural
+sum leaves the word domain.  Compiled programs guard an unsigned addition by
+comparing the stored sum with one summand; this is the bridge from that
+executed comparison to an exact natural bound. -/
+theorem wordAdd_lt_left_iff (x y : B256) :
+    x + y < x ↔ wordModulusN ≤ x.toNat + y.toNat := by
+  have xLt : x.toNat < wordModulusN := by
+    simpa [wordModulusN] using B256.toNat_lt (x := x)
+  have yLt : y.toNat < wordModulusN := by
+    simpa [wordModulusN] using B256.toNat_lt (x := y)
+  rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add, Nat.lo_eq,
+    show (2 : Nat) ^ 256 = wordModulusN from rfl]
+  by_cases wraps : wordModulusN ≤ x.toNat + y.toNat
+  · rw [Nat.mod_eq_sub_mod wraps, Nat.mod_eq_of_lt (by omega)]
+    exact iff_of_true (by omega) wraps
+  · rw [Nat.mod_eq_of_lt (by omega)]
+    exact iff_of_false (by omega) wraps
+
 /-- When the subtrahend is no larger than the minuend, EVM word subtraction
 is the ordinary natural difference re-embedded as one word. -/
 theorem wordSub_eq_toB256_sub_of_le
