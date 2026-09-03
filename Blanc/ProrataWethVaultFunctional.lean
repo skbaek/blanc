@@ -485,6 +485,33 @@ theorem runCompiled_enters_endpoint_compiled_logs
   · exact rootBurn.output.trans ((fsig_output hfsig).trans dispatchOutput)
   · simpa only [routed] using selectedRun
 
+/-- **Dispatch exhaustiveness for the vault.**  A successful compiled vault
+execution must have matched one of the selectors in the table.
+
+Every miss falls through to the revert slot, and a revert is not a success.
+This is what makes a whole-program statement about "any successful message"
+provable: the case analysis over the selector table is complete, so no
+unmatched selector is left as a gap. -/
+theorem selector_mem_vaultFuncs_of_ok
+    {sevm : Sevm} {pre post : Devm}
+    (run : Prog.RunCompiled sevm pre vault post) :
+    ∃ body, (Sevm.selector sevm, body) ∈ vaultFuncs := by
+  rcases run with ⟨rootPre, rootBurn, rootRun⟩
+  have mainRun :
+      Func.RunCompiledTo (vault.main :: vault.aux) sevm rootPre
+        (fsig +++ dispatchWith revertSlot vaultTree) (.ok post) := by
+    simpa only [vault, Func.mainWith] using
+      (Func.RunCompiledTo.of_runCompiled rootRun)
+  obtain ⟨dispatchPre, hfsig, hdispatch⟩ := runCompiledTo_prepend_inv mainRun
+  have selectorPrefix : Sevm.selector sevm :: [] <<+ dispatchPre.stack :=
+    prefix_of_fsig nil_pref hfsig
+  have revertLookup :
+      (vault.main :: vault.aux)[revertSlot]? = some Func.revert := by
+    simp [vault, vaultAux, revertSlot]
+  obtain ⟨body, treeMem⟩ :=
+    sig_mem_of_dispatchWith_ok revertLookup selectorPrefix hdispatch
+  exact ⟨body, DispatchTree.mem_of_mem_ofSorted (by decide) treeMem⟩
+
 /-- Gas-exact successful entry to the actual vault endpoint body.  The result
 simultaneously retains child-occurrence evidence and derives the shared ABI
 guards from the run itself. -/

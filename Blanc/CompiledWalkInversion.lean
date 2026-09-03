@@ -841,4 +841,65 @@ theorem Devm.QuietFrame.ofBurnBy {cost : Nat} {a b : Devm}
     (burn : Devm.BurnBy cost a b) : Devm.QuietFrame a b :=
   ⟨burn.state, burn.logs⟩
 
+/-- **Dispatch exhaustiveness.**  A compiled walk through `dispatchWith` that
+*succeeds* must have matched one of the tree's selectors.
+
+The contrapositive is the content: every miss falls through to the revert slot,
+and a revert is not a success.  This is what lets a whole-program theorem case
+on the selector table and know the case analysis is complete -- without it, a
+statement about "any successful message" would have to leave the unmatched
+selector as an unproved gap. -/
+theorem sig_mem_of_dispatchWith_ok :
+    ∀ {dt : DispatchTree} {sig : B256} {fs : List Func} {k : Nat}
+      {sevm : Sevm} {s post : Devm} {tail : Stack},
+      fs[k]? = some Func.revert →
+      sig :: tail <<+ s.stack →
+      Func.RunCompiledTo fs sevm s (dispatchWith k dt) (.ok post) →
+      ∃ body, (sig, body) ∈ dt := by
+  intro dt
+  induction dt with
+  | leaf w p =>
+    intro sig fs k sevm s post tail revertLookup hp run
+    simp only [dispatchWith] at run
+    obtain ⟨pushPost, pushRun, run⟩ := runCompiledTo_next_inv run
+    have pushed := of_run_pushB256 (Ninst.Run.of_runCompiled pushRun)
+    have hp1 : w :: sig :: tail <<+ pushPost.stack :=
+      prefix_of_push pushed hp
+    obtain ⟨testPost, testRun, branchRun⟩ := runCompiledTo_next_inv run
+    have testPrefix :=
+      prefix_of_eq (Ninst.Run.of_runCompiled testRun) hp1
+    by_cases hit : w = sig
+    · exact ⟨p, by rw [hit]; exact rfl⟩
+    · exfalso
+      have zeroPrefix : (0 : B256) :: tail <<+ testPost.stack := by
+        simpa [B256.eqCheck, hit] using testPrefix
+      obtain ⟨missPre, -, missRun, -⟩ :=
+        Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      exact Func.RunCompiledTo.not_ok_call_revert revertLookup missRun
+  | fork tl tr ihl ihr =>
+    intro sig fs k sevm s post tail revertLookup hp run
+    simp only [dispatchWith] at run
+    obtain ⟨dupPost, dupRun, run⟩ := runCompiledTo_next_inv run
+    have dupPrefix : sig :: sig :: tail <<+ dupPost.stack :=
+      prefix_of_dup_val (Ninst.Run.of_runCompiled dupRun) (by show_nth) hp
+    obtain ⟨pushPost, pushRun, run⟩ := runCompiledTo_next_inv run
+    have pushed := of_run_pushB256 (Ninst.Run.of_runCompiled pushRun)
+    have hp1 : leftmostFsig tr :: sig :: sig :: tail <<+ pushPost.stack :=
+      prefix_of_push pushed dupPrefix
+    obtain ⟨testPost, testRun, branchRun⟩ := runCompiledTo_next_inv run
+    have testPrefix :=
+      prefix_of_gt (Ninst.Run.of_runCompiled testRun) hp1
+    rcases runCompiledTo_branch_inv branchRun with left | right
+    · obtain ⟨leftPre, -, leftPop, leftRun⟩ := left
+      have leftPrefix : sig :: tail <<+ leftPre.stack :=
+        (popBurn_pref (Devm.PopBurn.of_popBurnBy leftPop) testPrefix).2
+      obtain ⟨body, mem⟩ := ihr revertLookup leftPrefix leftRun
+      exact ⟨body, Or.inr mem⟩
+    · obtain ⟨flag, rightPre, -, -, rightPop, rightRun⟩ := right
+      have rightPrefix : sig :: tail <<+ rightPre.stack :=
+        (popBurn_pref (Devm.PopBurn.of_popBurnBy rightPop) testPrefix).2
+      obtain ⟨body, mem⟩ := ihl revertLookup rightPrefix rightRun
+      exact ⟨body, Or.inl mem⟩
+
+
 end Blanc
