@@ -71,7 +71,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
         "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
         "launch_population": 53,
         "launch_ci_population": 34,
-        "final_ci_population": 40,
+        "final_ci_population": 41,
         "split_families": [
             "lido-circuit-breaker-registry",
             "execution-occurrence",
@@ -83,6 +83,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-assurance",
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
+            "drip-evidence",
         ],
     }
     for key, expected in expected_meta.items():
@@ -200,14 +201,12 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Two gates landed on main after the launch inventory: the cheap BeaconDeposit assurance",
-        "  row runs early at position 3, while the deployment control at position 44 uses exact",
-        "  evaluator stdout and authority as a material-output certificate. Its positive and",
-        "  mutation checks are unchanged, but proof-only movement with identical emitted evidence",
-        "  does not rerun the EELS/Jaune body.",
-        "  The final population is therefore 53 + 5 + 2 = 60; no required content was dropped.",
-        "- CI makes the same five splits and adds the cheap assurance row, so its registered",
-        "  command population moves from 34 to 40. The deployment control remains a local",
+        "- Four gates landed after the launch inventory: BeaconDeposit assurance runs early;",
+        "  BeaconDeposit deployment and WETH10 current-mainnet retain their reviewed output-aware",
+        "  boundaries; and the target-independent DRIP evidence row enters at position 62.",
+        "  The final population is therefore 53 + 5 + 4 = 62; no required content was dropped.",
+        "- CI makes the same five splits and adds the assurance, WETH10 current-mainnet, and DRIP",
+        "  rows, so its registered command population moves from 34 to 41. Deployment remains a local",
         "  merge-candidate row. The prerequisite column also records nested launch composition",
         "  now represented by runner-enforced dependencies that consume exact earlier green",
         "  evidence.",

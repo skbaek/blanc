@@ -2761,6 +2761,33 @@
           "^OK — proxy-pair-upgrade semantic: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-drip.sh"
+      ],
+      "id": "drip-evidence",
+      "inputs": {
+        "files": [
+          "scripts/check-drip.sh",
+          "scripts/check-drip-oracle.py",
+          "scripts/gen-drip-oracle-vectors.py",
+          "scripts/drip_oracle.py",
+          "scripts/drip-oracle-vectors.json"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Target-independent exact-integer and rollback evidence. Compiled runtime, fixture population, and external target inputs are added to this row only when those G2/G8 artifacts exist.",
+      "order": 62,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — DRIP evidence: "
+        ]
+      }
     }
   ],
   "schema": 1

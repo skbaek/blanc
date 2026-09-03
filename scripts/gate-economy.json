@@ -3,7 +3,7 @@
   "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
   "launch_population": 53,
   "launch_ci_population": 34,
-  "final_ci_population": 40,
+  "final_ci_population": 41,
   "split_families": [
     "lido-circuit-breaker-registry",
     "execution-occurrence",
@@ -14,7 +14,8 @@
   "post_launch_gates": [
     "beacon-deposit-assurance",
     "beacon-deposit-deployment",
-    "weth10-current-mainnet"
+    "weth10-current-mainnet",
+    "drip-evidence"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -77,6 +78,7 @@
     {"id":"fmint-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"weth-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"proxy-pair-upgrade-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]}
+    {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]},
+    {"id":"drip-evidence","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["a nominal underfunded fixture whose floored payout still fit the target balance"]}
   ]
 }

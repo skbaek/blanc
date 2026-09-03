@@ -80,6 +80,8 @@ jobs:
         run: scripts/check-lido-ossifiable-proxy-performance.sh
       - name: Lido OssifiableProxy generated artifacts (offline)
         run: scripts/check-lido-ossifiable-proxy-artifacts.sh
+      - name: DRIP exact-integer evidence (offline)
+        run: scripts/check-drip.sh
       # The Lido dispatcher and both differential matrices remain mandatory
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.
