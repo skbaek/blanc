@@ -44,14 +44,14 @@ theorem ProducesWord.isMax_arm_trace
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre maxBody (.ok final)) ∨
     (value ≠ B256.max ∧
       ∃ bodyPre,
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre ordinaryBody (.ok final)) := by
   obtain ⟨valuePre, valueRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨valuePrefix, valueWf, valueReads, valueState⟩ :=
@@ -75,9 +75,9 @@ theorem ProducesWord.isMax_arm_trace
   have testReads : Mem.Reads testPre.memory image := by
     rw [← testMemory]
     exact valueReads
-  have testState : pre.state = testPre.state :=
+  have testState : Devm.QuietFrame pre testPre :=
     valueState.trans
-      (Line.of_inv Devm.state (by line_inv)
+      (Devm.QuietFrame.ofLine (by line_inv) (by line_inv)
         (Line.Run.cons notRun (Line.Run.cons zeroRun Line.Run.nil)))
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
@@ -93,7 +93,7 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inl ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      testState.trans bodyPop.state, bodyRun⟩
+      testState.trans (Devm.QuietFrame.ofPopBurnBy bodyPop), bodyRun⟩
   · have notNonzero : (~~~ value) ≠ 0 := by
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
@@ -108,7 +108,7 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inr ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      testState.trans bodyPop.state, bodyRun⟩
+      testState.trans (Devm.QuietFrame.ofPopBurnBy bodyPop), bodyRun⟩
 
 /-- A successful stable-supply guard proves the staged word is within the
 declared supply cap and exposes the guarded body without changing the

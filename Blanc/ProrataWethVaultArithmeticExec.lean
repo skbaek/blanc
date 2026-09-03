@@ -2,12 +2,14 @@
 
 import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultFunctional
+import Blanc.CompiledFixedInvariance
 import Blanc.MemoryImage
 
 namespace Blanc
 
 open Jaune
 open Jaune.Ninst Ninst
+open scoped LogOutputHinv
 
 namespace ProrataWethVault
 
@@ -1643,7 +1645,7 @@ theorem finishQuotient_down_image_trace
     ∃ bodyPre,
       quotient :: tail <<+ bodyPre.stack ∧
       MemImage bodyPre image ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   simp only [finishQuotient] at run
   obtain ⟨callPre, quotientRun, callRun⟩ :=
@@ -1652,7 +1654,9 @@ theorem finishQuotient_down_image_trace
     of_run_loadWordAt_image stack memoryWf memoryReads quotientAt quotientRun
   obtain ⟨bodyPre, callBurn, bodyRun⟩ :=
     runCompiledTo_call_inv lookup callRun
-  refine ⟨bodyPre, ?_, ?_, quotientState.trans callBurn.state, bodyRun⟩
+  refine ⟨bodyPre, ?_, ?_,
+    Devm.QuietFrame.mk' (quotientState.trans callBurn.state)
+      ((of_run_loadWordAt_logs quotientRun).trans callBurn.logs), bodyRun⟩
   · rw [← callBurn.stack]
     exact quotientPrefix
   · constructor <;> rw [← callBurn.memory]
@@ -1702,7 +1706,7 @@ theorem finishQuotient_up_image_trace
         (if remainder = 0 then quotient else quotient + 1) :: tail <<+
           bodyPre.stack ∧
         MemImage bodyPre image ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   simp only [finishQuotient] at run
   obtain ⟨remainderPost, remainderRun, run⟩ :=
@@ -1724,9 +1728,10 @@ theorem finishQuotient_up_image_trace
   have remainderTestReads : Mem.Reads remainderTest.memory image := by
     rw [← remainderTestMemory]
     exact remainderReads
-  have entryState : pre.state = remainderTest.state :=
-    remainderState.trans
-      (Ninst.Hinv.inv (f := Devm.state) remainderZeroSource)
+  have entryState : Devm.QuietFrame pre remainderTest :=
+    (Devm.QuietFrame.mk' remainderState
+        (of_run_loadWordAt_logs remainderRun)).trans
+      (Devm.QuietFrame.ofNinst remainderZeroSource)
 
   by_cases remainderZero : remainder = 0
   · have onePrefix : (1 : B256) :: tail <<+ remainderTest.stack := by
@@ -1758,7 +1763,10 @@ theorem finishQuotient_up_image_trace
       · exact quotientWf
       · exact quotientReads
     · exact entryState.trans
-        (exactPop.state.trans (quotientState.trans callBurn.state))
+        ((Devm.QuietFrame.ofPopBurnBy exactPop).trans
+          ((Devm.QuietFrame.mk' quotientState
+              (of_run_loadWordAt_logs quotientRun)).trans
+            (Devm.QuietFrame.mk' callBurn.state callBurn.logs)))
   · have zeroPrefix : (0 : B256) :: tail <<+ remainderTest.stack := by
       simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
     obtain ⟨roundPre, roundPop, roundRun, roundPrefix⟩ :=
@@ -1822,13 +1830,13 @@ theorem finishQuotient_up_image_trace
               (maxPop.memory.trans
                 ((Ninst.Hinv.inv (f := Devm.memory) oneSource).trans
                   (Ninst.Hinv.inv (f := Devm.memory) sumSource)))))
-      have roundState : quotientPost.state = sumPost.state :=
-        (Ninst.Hinv.inv (f := Devm.state) dupSource).trans
-          ((Ninst.Hinv.inv (f := Devm.state) notSource).trans
-            ((Ninst.Hinv.inv (f := Devm.state) maxZeroSource).trans
-              (maxPop.state.trans
-                ((Ninst.Hinv.inv (f := Devm.state) oneSource).trans
-                  (Ninst.Hinv.inv (f := Devm.state) sumSource)))))
+      have roundState : Devm.QuietFrame quotientPost sumPost :=
+        (Devm.QuietFrame.ofNinst dupSource).trans
+          ((Devm.QuietFrame.ofNinst notSource).trans
+            ((Devm.QuietFrame.ofNinst maxZeroSource).trans
+              ((Devm.QuietFrame.ofPopBurnBy maxPop).trans
+                ((Devm.QuietFrame.ofNinst oneSource).trans
+                  (Devm.QuietFrame.ofNinst sumSource)))))
       obtain ⟨bodyPre, callBurn, bodyRun⟩ :=
         runCompiledTo_call_inv lookup callRun
       refine ⟨(fun _ => quotientMax), bodyPre, ?_, ?_, ?_, bodyRun⟩
@@ -1839,8 +1847,11 @@ theorem finishQuotient_up_image_trace
         · exact quotientWf
         · exact quotientReads
       · exact entryState.trans
-          (roundPop.state.trans
-            (quotientState.trans (roundState.trans callBurn.state)))
+          ((Devm.QuietFrame.ofPopBurnBy roundPop).trans
+            ((Devm.QuietFrame.mk' quotientState
+                (of_run_loadWordAt_logs quotientRun)).trans
+              (roundState.trans
+                (Devm.QuietFrame.mk' callBurn.state callBurn.logs))))
 
 /-- Ceiling-mode finishing selects the staged quotient when the staged
 remainder is zero. Otherwise it rejects the all-ones quotient through the
@@ -1906,7 +1917,7 @@ theorem finishQuotient_capDown_image_trace
     ∃ bodyPre,
       quotient :: tail <<+ bodyPre.stack ∧
       MemImage bodyPre image ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   apply finishQuotient_down_image_trace memoryWf memoryReads quotientAt stack
     lookup
@@ -2049,18 +2060,22 @@ theorem divideWideCore_staging_trace
           (finishImage.sliceD (remainderWord * 32).toNat 32 0) =
         wideRemainderWord high low denominator ∧
       Bytes.WordFrameFrom image finishImage arithmeticScratchEnd ∧
-      pre.state = finishPre.state ∧
+      Devm.QuietFrame pre finishPre ∧
       Func.RunCompiledTo fs sevm finishPre
         (finishQuotient mode continuation) (.ok final) := by
   rw [divideWideCore_eq_arithmeticLine] at run
   obtain ⟨arithmeticPost, arithmeticRun, finishRun⟩ :=
     runCompiledTo_prepend_inv run
-  have arithmeticState : pre.state = arithmeticPost.state := by
-    refine Line.of_inv Devm.state ?_ arithmeticRun
-    unfold wideCoreArithmeticLine wideReductionLine wideRemainderLine
-      wideSubtractRemainderLine wideFactorFoldLine inverseSeedLine
-      sixNewtonSteps newtonStep wideQuotientStoreLine loadWord mstoreAt
-    line_inv
+  have arithmeticState : Devm.QuietFrame pre arithmeticPost := by
+    refine Devm.QuietFrame.ofLine ?_ ?_ arithmeticRun
+    · unfold wideCoreArithmeticLine wideReductionLine wideRemainderLine
+        wideSubtractRemainderLine wideFactorFoldLine inverseSeedLine
+        sixNewtonSteps newtonStep wideQuotientStoreLine loadWord mstoreAt
+      line_inv
+    · unfold wideCoreArithmeticLine wideReductionLine wideRemainderLine
+        wideSubtractRemainderLine wideFactorFoldLine inverseSeedLine
+        sixNewtonSteps newtonStep wideQuotientStoreLine loadWord mstoreAt
+      line_inv
   unfold wideCoreArithmeticLine at arithmeticRun
 
   rcases of_run_append wideReductionLine arithmeticRun with
@@ -2336,7 +2351,7 @@ theorem divideWideCore_down_image_trace
       wideQuotientWord high low denominator :: tail <<+ bodyPre.stack ∧
       MemImage bodyPre bodyImage ∧
       Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨finishPre, finishImage, finishStack, finishWf, finishReads,
       quotientAt, -, frame, finishState, finishRun⟩ :=
@@ -2374,7 +2389,7 @@ theorem divideWideCore_up_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨finishPre, finishImage, finishStack, finishWf, finishReads,
       quotientAt, remainderAt, frame, finishState, finishRun⟩ :=
@@ -2504,7 +2519,7 @@ theorem divideWide_arm_trace
         tail <<+ corePre.stack ∧
         Mem.Wf corePre.memory ∧
         Mem.Reads corePre.memory image ∧
-        pre.state = corePre.state ∧
+        Devm.QuietFrame pre corePre ∧
         Func.RunCompiledTo fs sevm corePre
           (divideWideCore mode continuation) (.ok final)) ∨
     (¬ high < denominator ∧
@@ -2512,18 +2527,22 @@ theorem divideWide_arm_trace
         tail <<+ overflowPre.stack ∧
         Mem.Wf overflowPre.memory ∧
         Mem.Reads overflowPre.memory image ∧
-        pre.state = overflowPre.state ∧
+        Devm.QuietFrame pre overflowPre ∧
         Func.RunCompiledTo fs sevm overflowPre
           (divisionOverflow mode continuation) (.ok final)) := by
   unfold divideWide at run
   obtain ⟨s1, denominatorRun, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p1, wf1, reads1, st1⟩ :=
+  obtain ⟨p1, wf1, reads1, st1'⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads denominatorAt
       denominatorRun
+  have st1 : Devm.QuietFrame pre s1 :=
+    Devm.QuietFrame.mk' st1' (of_run_loadWordAt_logs denominatorRun)
   obtain ⟨s2, highRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨p2, wf2, reads2, st2⟩ :=
+  obtain ⟨p2, wf2, reads2, st2'⟩ :=
     of_run_loadWordAt_image p1 wf1 reads1 highAt highRun
+  have st2 : Devm.QuietFrame s1 s2 :=
+    Devm.QuietFrame.mk' st2' (of_run_loadWordAt_logs highRun)
   obtain ⟨s3, ltRun, branchRun⟩ := runCompiledTo_next_inv run
   have ltSource := Ninst.Run.of_runCompiled ltRun
   have p3 := prefix_of_lt ltSource p2
@@ -2535,8 +2554,8 @@ theorem divideWide_arm_trace
   have reads3 : Mem.Reads s3.memory image := by
     rw [← ltMemory]
     exact reads2
-  have st3 : pre.state = s3.state :=
-    st1.trans (st2.trans (Ninst.Hinv.inv (f := Devm.state) ltSource))
+  have st3 : Devm.QuietFrame pre s3 :=
+    st1.trans (st2.trans (Devm.QuietFrame.ofNinst ltSource))
   by_cases noOverflow : high < denominator
   · have onePrefix : (1 : B256) :: tail <<+ s3.stack := by
       simpa [B256.ltCheck, noOverflow] using p3
@@ -2551,7 +2570,7 @@ theorem divideWide_arm_trace
       rw [← corePop.memory]
       exact reads3
     exact Or.inl ⟨noOverflow, corePre, corePrefix, coreWf, coreReads,
-      st3.trans corePop.state, coreRun⟩
+      st3.trans (Devm.QuietFrame.ofPopBurnBy corePop), coreRun⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ s3.stack := by
       simpa [B256.ltCheck, noOverflow] using p3
     obtain ⟨overflowPre, overflowPop, overflowRun, overflowPrefix⟩ :=
@@ -2563,7 +2582,8 @@ theorem divideWide_arm_trace
       rw [← overflowPop.memory]
       exact reads3
     exact Or.inr ⟨noOverflow, overflowPre, overflowPrefix, overflowWf,
-      overflowReads, st3.trans overflowPop.state, overflowRun⟩
+      overflowReads, st3.trans (Devm.QuietFrame.ofPopBurnBy overflowPop),
+      overflowRun⟩
 
 /-- When a division mode rejects wide overflow, every successful `divideWide`
 walk proves the guard `high < denominator` and reaches the shared wide core. -/
@@ -2588,7 +2608,7 @@ theorem divideWide_core_trace
       tail <<+ corePre.stack ∧
       Mem.Wf corePre.memory ∧
       Mem.Reads corePre.memory image ∧
-      pre.state = corePre.state ∧
+      Devm.QuietFrame pre corePre ∧
       Func.RunCompiledTo fs sevm corePre
         (divideWideCore mode continuation) (.ok final) := by
   rcases divideWide_arm_trace memoryWf memoryReads denominatorAt highAt lowAt
@@ -2692,7 +2712,7 @@ theorem divideWide_down_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨corePre, noOverflow, corePrefix, coreWf, coreReads, coreEntryState,
       coreRun⟩ :=
@@ -2775,7 +2795,7 @@ theorem divideWide_up_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨corePre, noOverflow, corePrefix, coreWf, coreReads, coreEntryState,
       coreRun⟩ :=
@@ -3144,21 +3164,25 @@ theorem divideSimple_staging_trace
       Mem.Wf finishPre.memory ∧
       Mem.Reads finishPre.memory
         (simpleDivisionTraceImage image low denominator) ∧
-      pre.state = finishPre.state ∧
+      Devm.QuietFrame pre finishPre ∧
       Func.RunCompiledTo fs sevm finishPre
         (finishQuotient mode continuation) (.ok final) := by
   unfold divideSimple at run
 
   obtain ⟨s1, denominatorRun, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p1, wf1, reads1, st1⟩ :=
+  obtain ⟨p1, wf1, reads1, st1'⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads denominatorAt
       denominatorRun
+  have st1 : Devm.QuietFrame pre s1 :=
+    Devm.QuietFrame.mk' st1' (of_run_loadWordAt_logs denominatorRun)
 
   obtain ⟨s2, lowRun, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p2, wf2, reads2, st2⟩ :=
+  obtain ⟨p2, wf2, reads2, st2'⟩ :=
     of_run_loadWordAt_image p1 wf1 reads1 lowAt lowRun
+  have st2 : Devm.QuietFrame s1 s2 :=
+    Devm.QuietFrame.mk' st2' (of_run_loadWordAt_logs lowRun)
 
   obtain ⟨s3, modRun, run⟩ := runCompiledTo_next_inv run
   have modSource := Ninst.Run.of_runCompiled modRun
@@ -3172,13 +3196,16 @@ theorem divideSimple_staging_trace
   have reads3 : Mem.Reads s3.memory image := by
     rw [← memory3]
     exact reads2
-  have st3 : s2.state = s3.state :=
-    Ninst.Hinv.inv (f := Devm.state) modSource
+  have st3 : Devm.QuietFrame s2 s3 := Devm.QuietFrame.ofNinst modSource
 
   obtain ⟨s4, remainderStoreRun, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p4, wf4, reads4, st4⟩ :=
+  obtain ⟨p4, wf4, reads4, st4'⟩ :=
     of_run_mstoreAt_image p3 wf3 reads3 remainderStoreRun
+  have st4 : Devm.QuietFrame s3 s4 := by
+    refine Devm.QuietFrame.mk' st4' (Line.of_inv Devm.logs ?_ remainderStoreRun)
+    unfold mstoreAt
+    line_inv
   let image1 := Bytes.writeAt image
     (remainderWord * 32).toNat (low % denominator).toBytes
   change Mem.Reads s4.memory image1 at reads4
@@ -3192,9 +3219,11 @@ theorem divideSimple_staging_trace
       decide +kernel
   obtain ⟨s5, denominatorRun2, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p5, wf5, reads5, st5⟩ :=
+  obtain ⟨p5, wf5, reads5, st5'⟩ :=
     of_run_loadWordAt_image p4 wf4 reads4 denominatorAt1
       denominatorRun2
+  have st5 : Devm.QuietFrame s4 s5 :=
+    Devm.QuietFrame.mk' st5' (of_run_loadWordAt_logs denominatorRun2)
 
   have lowAt1 : Bytes.toB256
       (image1.sliceD (lowWord * 32).toNat 32 0) = low := by
@@ -3205,8 +3234,10 @@ theorem divideSimple_staging_trace
       decide +kernel
   obtain ⟨s6, lowRun2, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p6, wf6, reads6, st6⟩ :=
+  obtain ⟨p6, wf6, reads6, st6'⟩ :=
     of_run_loadWordAt_image p5 wf5 reads5 lowAt1 lowRun2
+  have st6 : Devm.QuietFrame s5 s6 :=
+    Devm.QuietFrame.mk' st6' (of_run_loadWordAt_logs lowRun2)
 
   obtain ⟨s7, divRun, run⟩ := runCompiledTo_next_inv run
   have divSource := Ninst.Run.of_runCompiled divRun
@@ -3220,13 +3251,16 @@ theorem divideSimple_staging_trace
   have reads7 : Mem.Reads s7.memory image1 := by
     rw [← memory7]
     exact reads6
-  have st7 : s6.state = s7.state :=
-    Ninst.Hinv.inv (f := Devm.state) divSource
+  have st7 : Devm.QuietFrame s6 s7 := Devm.QuietFrame.ofNinst divSource
 
   obtain ⟨s8, quotientStoreRun, run⟩ :=
     runCompiledTo_prepend_inv run
-  obtain ⟨p8, wf8, reads8, st8⟩ :=
+  obtain ⟨p8, wf8, reads8, st8'⟩ :=
     of_run_mstoreAt_image p7 wf7 reads7 quotientStoreRun
+  have st8 : Devm.QuietFrame s7 s8 := by
+    refine Devm.QuietFrame.mk' st8' (Line.of_inv Devm.logs ?_ quotientStoreRun)
+    unfold mstoreAt
+    line_inv
   let image2 := Bytes.writeAt image1
     (quotientWord * 32).toNat (low / denominator).toBytes
   change Mem.Reads s8.memory image2 at reads8
@@ -3256,7 +3290,7 @@ theorem divideSimple_down_image_trace
     ∃ bodyPre,
       (low / denominator) :: tail <<+ bodyPre.stack ∧
       MemImage bodyPre (simpleDivisionTraceImage image low denominator) ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨finishPre, finishStack, finishWf, finishReads, finishState,
       finishRun⟩ :=
@@ -3313,7 +3347,7 @@ theorem divideSimple_up_image_trace
         (if low % denominator = 0 then low / denominator
           else low / denominator + 1) :: tail <<+ bodyPre.stack ∧
         MemImage bodyPre (simpleDivisionTraceImage image low denominator) ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨finishPre, finishStack, finishWf, finishReads, finishState,
       finishRun⟩ :=
@@ -3375,7 +3409,7 @@ theorem divideSimple_up_toB256_image_trace
         Nat.toB256 (ceilDiv low.toNat denominator.toNat) :: tail <<+
           bodyPre.stack ∧
         MemImage bodyPre (simpleDivisionTraceImage image low denominator) ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨roundingSafe, bodyPre, roundedPrefix, bodyImage, bodyState,
       bodyRun⟩ :=
@@ -3567,7 +3601,7 @@ theorem divide512_arm_trace
             tail <<+ simplePre.stack ∧
             Mem.Wf simplePre.memory ∧
             Mem.Reads simplePre.memory image ∧
-            pre.state = simplePre.state ∧
+            Devm.QuietFrame pre simplePre ∧
             Func.RunCompiledTo fs sevm simplePre
               (divideSimple mode continuation) (.ok final)) ∨
         (high ≠ B256.zero ∧
@@ -3575,14 +3609,14 @@ theorem divide512_arm_trace
             tail <<+ widePre.stack ∧
             Mem.Wf widePre.memory ∧
             Mem.Reads widePre.memory image ∧
-            pre.state = widePre.state ∧
+            Devm.QuietFrame pre widePre ∧
             Func.RunCompiledTo fs sevm widePre
               (divideWide mode continuation) (.ok final))) := by
   unfold divide512 at run
   obtain ⟨denominatorPost, denominatorRun, run⟩ :=
     runCompiledTo_prepend_inv run
   obtain ⟨denominatorPrefix, denominatorWf, denominatorReads,
-      denominatorState⟩ :=
+      denominatorState'⟩ :=
     of_run_loadWordAt_image stack memoryWf memoryReads denominatorAt
       denominatorRun
   obtain ⟨denominatorTest, denominatorZeroRun, branchRun⟩ :=
@@ -3599,9 +3633,10 @@ theorem divide512_arm_trace
   have denominatorTestReads : Mem.Reads denominatorTest.memory image := by
     rw [← denominatorTestMemory]
     exact denominatorReads
-  have denominatorTestState : pre.state = denominatorTest.state :=
-    denominatorState.trans
-      (Ninst.Hinv.inv (f := Devm.state) denominatorZeroSource)
+  have denominatorTestState : Devm.QuietFrame pre denominatorTest :=
+    (Devm.QuietFrame.mk' denominatorState'
+        (of_run_loadWordAt_logs denominatorRun)).trans
+      (Devm.QuietFrame.ofNinst denominatorZeroSource)
 
   by_cases denominatorNonzero : denominator ≠ B256.zero
   · have denominatorNonzero' : denominator ≠ (0 : B256) := by
@@ -3620,7 +3655,7 @@ theorem divide512_arm_trace
       exact denominatorTestReads
     obtain ⟨highPost, highRun, highGuardRun⟩ :=
       runCompiledTo_prepend_inv highGuardRun
-    obtain ⟨highPrefix, highWf, highReads, highState⟩ :=
+    obtain ⟨highPrefix, highWf, highReads, highState'⟩ :=
       of_run_loadWordAt_image highPrePrefix highPreWf highPreReads highAt
         highRun
     obtain ⟨highTest, highZeroRun, highBranchRun⟩ :=
@@ -3635,11 +3670,12 @@ theorem divide512_arm_trace
     have highTestReads : Mem.Reads highTest.memory image := by
       rw [← highTestMemory]
       exact highReads
-    have highTestState : pre.state = highTest.state :=
+    have highTestState : Devm.QuietFrame pre highTest :=
       denominatorTestState.trans
-        (denominatorPop.state.trans
-          (highState.trans
-            (Ninst.Hinv.inv (f := Devm.state) highZeroSource)))
+        ((Devm.QuietFrame.ofPopBurnBy denominatorPop).trans
+          ((Devm.QuietFrame.mk' highState'
+              (of_run_loadWordAt_logs highRun)).trans
+            (Devm.QuietFrame.ofNinst highZeroSource)))
     by_cases highZero : high = B256.zero
     · have highOnePrefix : (1 : B256) :: tail <<+ highTest.stack := by
         have highZero' : high = (0 : B256) :=
@@ -3657,7 +3693,8 @@ theorem divide512_arm_trace
         exact highTestReads
       exact ⟨denominatorNonzero, Or.inl
         ⟨highZero, simplePre, simplePrefix, simpleWf, simpleReads,
-          highTestState.trans simplePop.state, simpleRun⟩⟩
+          highTestState.trans (Devm.QuietFrame.ofPopBurnBy simplePop),
+          simpleRun⟩⟩
     · have highNonzero : high ≠ (0 : B256) := by
         intro highZero'
         apply highZero
@@ -3674,7 +3711,8 @@ theorem divide512_arm_trace
         exact highTestReads
       exact ⟨denominatorNonzero, Or.inr
         ⟨highZero, widePre, widePrefix, wideWf, wideReads,
-          highTestState.trans highPop.state, wideRun⟩⟩
+          highTestState.trans (Devm.QuietFrame.ofPopBurnBy highPop),
+          wideRun⟩⟩
   · have denominatorZero : denominator = B256.zero :=
       not_ne_iff.mp denominatorNonzero
     have onePrefix : (1 : B256) :: tail <<+ denominatorTest.stack := by
@@ -3750,7 +3788,7 @@ theorem divide512_down_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨denominatorNonzero, arms⟩ :=
     divide512_arm_trace memoryWf memoryReads denominatorAt highAt stack run
@@ -3843,7 +3881,7 @@ theorem divide512_up_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨denominatorNonzero, arms⟩ :=
     divide512_arm_trace memoryWf memoryReads denominatorAt highAt stack run
@@ -4434,20 +4472,21 @@ def ProducesWord
       value :: tail <<+ post.stack ∧
         Mem.Wf post.memory ∧
         Mem.Reads post.memory image ∧
-        pre.state = post.state
+        Devm.QuietFrame pre post
 
 theorem ProducesWord.pushB256
     (sevm : Sevm) (image : Bytes) (value : B256) :
     ProducesWord sevm [Ninst.pushB256 value] image value := by
   intro pre post tail memoryWf memoryReads stack run
   have state := Line.of_inv Devm.state (by line_inv) run
+  have logs := Line.of_inv Devm.logs (by line_inv) run
   have memory := Line.of_inv Devm.memory (by line_inv) run
   rcases Line.of_run_cons run with ⟨afterPush, pushRun, run⟩
   cases run
   have valuePrefix : value :: tail <<+ post.stack := by
     simpa only [List.singleton_append] using
       prefix_of_push (of_run_pushB256 pushRun) stack
-  refine ⟨valuePrefix, ?_, ?_, state⟩
+  refine ⟨valuePrefix, ?_, ?_, Devm.QuietFrame.mk' state logs⟩
   · rw [← memory]
     exact memoryWf
   · rw [← memory]
@@ -4459,7 +4498,10 @@ theorem ProducesWord.loadWord
       (image.sliceD (word * 32).toNat 32 0) = value) :
     ProducesWord sevm (ProrataWethVault.loadWord word) image value := by
   intro pre post tail memoryWf memoryReads stack run
-  exact of_run_loadWordAt_image stack memoryWf memoryReads valueAt run
+  obtain ⟨valuePrefix, valueWf, valueReads, valueState⟩ :=
+    of_run_loadWordAt_image stack memoryWf memoryReads valueAt run
+  exact ⟨valuePrefix, valueWf, valueReads,
+    Devm.QuietFrame.mk' valueState (of_run_loadWordAt_logs run)⟩
 
 theorem ProducesWord.arg
     (sevm : Sevm) (image : Bytes) (index : B256) :
@@ -4467,8 +4509,9 @@ theorem ProducesWord.arg
       (Sevm.argWord sevm index) := by
   intro pre post tail memoryWf memoryReads stack run
   have state := Line.of_inv Devm.state (by unfold Blanc.arg cdl; line_inv) run
+  have logs := Line.of_inv Devm.logs (by unfold Blanc.arg cdl; line_inv) run
   have memory := Line.of_inv Devm.memory (by unfold Blanc.arg cdl; line_inv) run
-  refine ⟨prefix_of_arg stack run, ?_, ?_, state⟩
+  refine ⟨prefix_of_arg stack run, ?_, ?_, Devm.QuietFrame.mk' state logs⟩
   · rw [← memory]
     exact memoryWf
   · rw [← memory]
@@ -4489,6 +4532,8 @@ theorem ProducesWord.addConst
     produces memoryWf memoryReads stack lineRun
   have suffixState :=
     Line.of_inv Devm.state (by line_inv) suffixRun
+  have suffixLogs :=
+    Line.of_inv Devm.logs (by line_inv) suffixRun
   have suffixMemory :=
     Line.of_inv Devm.memory (by line_inv) suffixRun
   rcases Line.of_run_cons suffixRun with
@@ -4501,7 +4546,8 @@ theorem ProducesWord.addConst
   have resultPrefix : (value + constant) :: tail <<+ post.stack := by
     simpa only [B256.add_comm] using
       prefix_of_add addRun constantPrefix
-  refine ⟨resultPrefix, ?_, ?_, lineState.trans suffixState⟩
+  refine ⟨resultPrefix, ?_, ?_,
+    lineState.trans (Devm.QuietFrame.mk' suffixState suffixLogs)⟩
   · rw [← suffixMemory]
     exact lineWf
   · rw [← suffixMemory]
@@ -4522,6 +4568,8 @@ theorem ProducesWord.subFromConst
     produces memoryWf memoryReads stack lineRun
   have suffixState :=
     Line.of_inv Devm.state (by line_inv) suffixRun
+  have suffixLogs :=
+    Line.of_inv Devm.logs (by line_inv) suffixRun
   have suffixMemory :=
     Line.of_inv Devm.memory (by line_inv) suffixRun
   rcases Line.of_run_cons suffixRun with
@@ -4533,7 +4581,8 @@ theorem ProducesWord.subFromConst
     prefix_of_push (of_run_pushB256 pushRun) valuePrefix
   have resultPrefix : (constant - value) :: tail <<+ post.stack :=
     prefix_of_sub subRun constantPrefix
-  refine ⟨resultPrefix, ?_, ?_, lineState.trans suffixState⟩
+  refine ⟨resultPrefix, ?_, ?_,
+    lineState.trans (Devm.QuietFrame.mk' suffixState suffixLogs)⟩
   · rw [← suffixMemory]
     exact lineWf
   · rw [← suffixMemory]
@@ -4649,7 +4698,7 @@ theorem ProducesWord.store_trace
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory
         (Bytes.writeAt image (word * 32).toNat value.toBytes) ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨linePost, lineRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨valuePrefix, lineWf, lineReads, lineState⟩ :=
@@ -4657,8 +4706,12 @@ theorem ProducesWord.store_trace
   obtain ⟨bodyPre, storeRun, bodyRun⟩ := runCompiledTo_prepend_inv run
   obtain ⟨bodyPrefix, bodyWf, bodyReads, storeState⟩ :=
     of_run_mstoreAt_image valuePrefix lineWf lineReads storeRun
+  have storeLogs : linePost.logs = bodyPre.logs := by
+    refine Line.of_inv Devm.logs ?_ storeRun
+    unfold mstoreAt
+    line_inv
   exact ⟨bodyPre, bodyPrefix, bodyWf, bodyReads,
-    lineState.trans storeState, bodyRun⟩
+    lineState.trans (Devm.QuietFrame.mk' storeState storeLogs), bodyRun⟩
 
 /-- The complete proof image after the two producer values and the exact
 two-word product have been staged. -/
@@ -4747,15 +4800,19 @@ theorem multiply512_trace
       tail <<+ bodyPre.stack ∧
       Mem.Wf bodyPre.memory ∧
       Mem.Reads bodyPre.memory (multiply512TraceImage image x y) ∧
-      pre.state = bodyPre.state ∧
+      Devm.QuietFrame pre bodyPre ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   rw [multiply512_eq_producers_arithmetic] at run
   obtain ⟨xPost, xRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨xPrefix, xWf, xReads, xState⟩ :=
     xProduces memoryWf memoryReads stack xRun
   obtain ⟨xStored, xStoreRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨xStoredPrefix, xStoredWf, xStoredReads, xStoreState⟩ :=
+  obtain ⟨xStoredPrefix, xStoredWf, xStoredReads, xStoreState'⟩ :=
     of_run_mstoreAt_image xPrefix xWf xReads xStoreRun
+  have xStoreState : Devm.QuietFrame xPost xStored := by
+    refine Devm.QuietFrame.mk' xStoreState' (Line.of_inv Devm.logs ?_ xStoreRun)
+    unfold mstoreAt
+    line_inv
   let image1 := Bytes.writeAt image (xWord * 32).toNat x.toBytes
   change Mem.Reads xStored.memory image1 at xStoredReads
 
@@ -4763,8 +4820,12 @@ theorem multiply512_trace
   obtain ⟨yPrefix, yWf, yReads, yState⟩ :=
     yProduces xStoredWf xStoredReads xStoredPrefix yRun
   obtain ⟨yStored, yStoreRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨yStoredPrefix, yStoredWf, yStoredReads, yStoreState⟩ :=
+  obtain ⟨yStoredPrefix, yStoredWf, yStoredReads, yStoreState'⟩ :=
     of_run_mstoreAt_image yPrefix yWf yReads yStoreRun
+  have yStoreState : Devm.QuietFrame yPost yStored := by
+    refine Devm.QuietFrame.mk' yStoreState' (Line.of_inv Devm.logs ?_ yStoreRun)
+    unfold mstoreAt
+    line_inv
   let image2 := Bytes.writeAt image1 (yWord * 32).toNat y.toBytes
   change Mem.Reads yStored.memory image2 at yStoredReads
   have xAt2 : Bytes.toB256
@@ -4784,10 +4845,17 @@ theorem multiply512_trace
   obtain ⟨bodyPrefix, bodyWf, bodyReads, arithmeticState⟩ :=
     multiply512Arithmetic_trace yStoredWf yStoredReads xAt2 yAt2
       yStoredPrefix arithmeticRun
+  have arithmeticLogs : yStored.logs = bodyPre.logs := by
+    refine Line.of_inv Devm.logs ?_ arithmeticRun
+    unfold multiply512ArithmeticLine loadWord mstoreAt
+    line_inv
   refine ⟨bodyPre, bodyPrefix, bodyWf, ?_, ?_, bodyRun⟩
   · simpa [multiply512TraceImage, image2, image1] using bodyReads
   · exact xState.trans
-      (xStoreState.trans (yState.trans (yStoreState.trans arithmeticState)))
+      (xStoreState.trans
+        (yState.trans
+          (yStoreState.trans
+            (Devm.QuietFrame.mk' arithmeticState arithmeticLogs))))
 
 /-! ## Full-width multiply/divide composition -/
 
@@ -4864,7 +4932,7 @@ theorem mulDiv_staging_trace
       tail <<+ dividePre.stack ∧
       Mem.Wf dividePre.memory ∧
       Mem.Reads dividePre.memory (mulDivTraceImage image x y denominator) ∧
-      pre.state = dividePre.state ∧
+      Devm.QuietFrame pre dividePre ∧
       Func.RunCompiledTo fs sevm dividePre
         (divide512 mode continuation) (.ok final) := by
   unfold mulDiv at run
@@ -4994,7 +5062,7 @@ theorem mulDiv_down_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨dividePre, dividePrefix, divideWf, divideReads, divideState,
       divideRun⟩ :=
@@ -5041,7 +5109,7 @@ theorem mulDiv_up_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨dividePre, dividePrefix, divideWf, divideReads, divideState,
       divideRun⟩ :=
@@ -5268,7 +5336,7 @@ theorem shiftedDiv_staging_trace
       Mem.Wf dividePre.memory ∧
       Mem.Reads dividePre.memory
         (shiftedDivTraceImage image high denominator) ∧
-      pre.state = dividePre.state ∧
+      Devm.QuietFrame pre dividePre ∧
       Func.RunCompiledTo fs sevm dividePre
         (divide512 mode continuation) (.ok final) := by
   unfold shiftedDiv at run
@@ -5391,7 +5459,7 @@ theorem shiftedDiv_up_image_trace
           bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨dividePre, dividePrefix, divideWf, divideReads, divideState,
       divideRun⟩ :=
@@ -5559,7 +5627,7 @@ theorem productOverTwoPow256_staging_trace
       Mem.Wf finishPre.memory ∧
       Mem.Reads finishPre.memory
         (productOverTwoPow256TraceImage image x y) ∧
-      pre.state = finishPre.state ∧
+      Devm.QuietFrame pre finishPre ∧
       Func.RunCompiledTo fs sevm finishPre
         (finishQuotient mode continuation) (.ok final) := by
   unfold productOverTwoPow256 at run
@@ -5614,7 +5682,7 @@ theorem productOverTwoPow256_down_image_trace
         Nat.toB256 (x.toNat * y.toNat / wordModulusN) :: tail <<+
           bodyPre.stack ∧
         MemImage bodyPre (productOverTwoPow256TraceImage image x y) ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨finishPre, finishPrefix, finishWf, finishReads, finishState,
       finishRun⟩ :=
