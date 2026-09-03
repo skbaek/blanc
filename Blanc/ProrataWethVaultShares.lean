@@ -1,6 +1,7 @@
 -- ProrataWethVaultShares.lean : exact local seams for the ERC-20 share ledger.
 
 import Blanc.ProrataWethVaultOutbound
+import Blanc.LedgerConservation
 
 namespace Blanc
 
@@ -1258,6 +1259,130 @@ theorem transferFrom_compiled_effect
   · intro account accountNe
     rw [foreign account accountNe, ← congrFun storEq account]
   · rw [logged, ← entryLogs]
+
+/-! ## Ledger conservation
+
+The share ledger is conserved when the supply word is exactly the sum of every
+share balance.  Each mutating share operation preserves it, and for different
+reasons: an approval writes a slot the invariant cannot see, and a transfer is
+a conservative rearrangement that leaves the supply alone. -/
+
+/-- The vault's share ledger is conserved. -/
+abbrev Conserved (s : Stor) : Prop := LedgerConserved supplySlot s
+
+/-- `approve` cannot move the invariant: its write lands at a key the collision
+guard has proved is not address-shaped, so the balances cannot see it, and not
+the supply slot, so the supply cannot see it either. -/
+theorem approve_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "approve" [.address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, -, -, -, keyNotAddress, keyNotSupply, -, allowanceSet, -, -⟩ :=
+    approve_compiled_effect memoryWf run selectorEq
+  refine conserved.of_rest_eq ?_ ?_
+  · rw [allowanceSet, rest_set_of_not_validAdr keyNotAddress]
+  · rw [allowanceSet, Stor.get_set_ne _ keyNotSupply]
+
+/-- `transfer` is a conservative rearrangement: the supply word does not move,
+so the sum cannot either. -/
+theorem transfer_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "transfer" [.address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, -, receiverValid, -, -, supplyKept, ownerBalance,
+      receiverBalance, ownerBalanceEq, covered, receiverBalanceEq, -,
+      settleStorage, -, -⟩ :=
+    transfer_compiled_effect memoryWf run selectorEq
+  obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
+  have coveredRest :
+      Sevm.argWord sevm 1 ≤ Stor.rest (Devm.getStor pre sevm.currentTarget)
+        sevm.caller := by
+    have : Stor.rest (Devm.getStor pre sevm.currentTarget) sevm.caller =
+        ownerBalance := ownerBalanceEq.symm
+    rw [this]
+    exact B256.le_of_toNat_le_toNat covered
+  refine conserved.transfer (a := sevm.caller) (a' := receiverAdr)
+    (x := Sevm.argWord sevm 1) ?_ ?_
+  · have shape := transfer_of_debit_credit (s :=
+      Devm.getStor pre sevm.currentTarget) (owner := sevm.caller)
+      (receiver := receiverAdr) (amount := Sevm.argWord sevm 1) coveredRest
+    rw [settleStorage]
+    have ownerRest : Stor.rest (Devm.getStor pre sevm.currentTarget)
+        sevm.caller = ownerBalance := ownerBalanceEq.symm
+    have receiverRest :
+        Stor.rest ((Devm.getStor pre sevm.currentTarget).set
+          sevm.caller.toB256 (ownerBalance - Sevm.argWord sevm 1))
+            receiverAdr = receiverBalance := by
+      rw [← receiverAdrEq] at receiverBalanceEq
+      exact receiverBalanceEq.symm
+    rw [← receiverAdrEq]
+    rw [ownerRest] at shape
+    rw [receiverRest] at shape
+    exact shape
+  · exact supplyKept
+
+/-- `transferFrom` is the same rearrangement, after an allowance write the
+invariant cannot see. -/
+theorem transferFrom_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256])
+    (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
+    Conserved (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, -, ownerValid, -, receiverValid, -, -, keyNotAddress,
+      keyNotSupply, supplyKept, allowance, afterAllowance, ownerBalance,
+      receiverBalance, -, -, route, ownerBalanceEq, covered,
+      receiverBalanceEq, -, settleStorage, -, -⟩ :=
+    transferFrom_compiled_effect memoryWf run selectorEq
+  obtain ⟨ownerAdr, ownerAdrEq⟩ := ownerValid
+  obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
+  have spentConserved : Conserved afterAllowance := by
+    rcases route with ⟨-, unchanged⟩ | decremented
+    · exact conserved.of_eq unchanged.symm
+    · refine conserved.of_rest_eq ?_ ?_
+      · rw [decremented, rest_set_of_not_validAdr keyNotAddress]
+      · rw [decremented, Stor.get_set_ne _ keyNotSupply]
+  have coveredRest :
+      Sevm.argWord sevm 2 ≤ Stor.rest afterAllowance ownerAdr := by
+    have ownerRest : Stor.rest afterAllowance ownerAdr = ownerBalance := by
+      rw [← ownerAdrEq] at ownerBalanceEq
+      exact ownerBalanceEq.symm
+    rw [ownerRest]
+    exact B256.le_of_toNat_le_toNat covered
+  refine spentConserved.transfer (a := ownerAdr) (a' := receiverAdr)
+    (x := Sevm.argWord sevm 2) ?_ ?_
+  · have shape := transfer_of_debit_credit (s := afterAllowance)
+      (owner := ownerAdr) (receiver := receiverAdr)
+      (amount := Sevm.argWord sevm 2) coveredRest
+    rw [settleStorage]
+    have ownerRest : Stor.rest afterAllowance ownerAdr = ownerBalance := by
+      rw [← ownerAdrEq] at ownerBalanceEq
+      exact ownerBalanceEq.symm
+    have receiverRest :
+        Stor.rest (afterAllowance.set ownerAdr.toB256
+          (ownerBalance - Sevm.argWord sevm 2)) receiverAdr =
+          receiverBalance := by
+      rw [← ownerAdrEq, ← receiverAdrEq] at receiverBalanceEq
+      exact receiverBalanceEq.symm
+    rw [← ownerAdrEq, ← receiverAdrEq]
+    rw [ownerRest] at shape
+    rw [receiverRest] at shape
+    exact shape
+  · rcases route with ⟨-, unchanged⟩ | decremented
+    · rw [unchanged]
+      exact supplyKept
+    · rw [decremented, Stor.get_set_ne _ keyNotSupply]
+      exact supplyKept
 
 end ProrataWethVault
 

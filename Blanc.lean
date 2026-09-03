@@ -5,6 +5,7 @@ import Blanc.StaticStores
 import Blanc.Upgrade
 import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
+import Blanc.LedgerConservation
 import Blanc.WordArithmetic
 import Blanc.MemoryImage
 import Blanc.BytesWrite
