@@ -802,4 +802,43 @@ lemma Func.runCompiledTo_preserves_getCode
   · intro a b burn account _
     exact (getCode_eq_of_state_eq burn.state account).symm
 
+
+/-- The frame a quiet stretch of a compiled walk leaves behind: neither the
+persistent world nor the event log moves.  Arithmetic bodies that only touch
+memory and the stack satisfy it, and it composes along a walk, so a
+configuration premise stated at one point carries to any later point the frame
+reaches. -/
+def Devm.QuietFrame (pre post : Devm) : Prop :=
+  pre.state = post.state ∧ pre.logs = post.logs
+
+theorem Devm.QuietFrame.rfl' (d : Devm) : Devm.QuietFrame d d := ⟨rfl, rfl⟩
+
+theorem Devm.QuietFrame.mk' {a b : Devm} (state : a.state = b.state)
+    (logs : a.logs = b.logs) : Devm.QuietFrame a b := ⟨state, logs⟩
+
+theorem Devm.QuietFrame.trans {a b c : Devm}
+    (first : Devm.QuietFrame a b) (second : Devm.QuietFrame b c) :
+    Devm.QuietFrame a c :=
+  ⟨first.1.trans second.1, first.2.trans second.2⟩
+
+/-- Every `Line` whose instructions preserve both projections is quiet. -/
+theorem Devm.QuietFrame.ofLine {sevm : Sevm} {a b : Devm} {line : Line}
+    (stateInv : Line.Inv Devm.state line) (logsInv : Line.Inv Devm.logs line)
+    (run : Line.Run sevm a line b) : Devm.QuietFrame a b :=
+  ⟨Line.of_inv Devm.state stateInv run, Line.of_inv Devm.logs logsInv run⟩
+
+/-- One quiet instruction. -/
+theorem Devm.QuietFrame.ofNinst {sevm : Sevm} {a b : Devm} {i : Ninst}
+    [Ninst.Hinv Devm.state i] [Ninst.Hinv Devm.logs i]
+    (run : Ninst.Run sevm a i b) : Devm.QuietFrame a b :=
+  ⟨Ninst.Hinv.inv (f := Devm.state) run, Ninst.Hinv.inv (f := Devm.logs) run⟩
+
+theorem Devm.QuietFrame.ofPopBurnBy {xs : List B256} {cost : Nat}
+    {a b : Devm} (pop : Devm.PopBurnBy xs cost a b) : Devm.QuietFrame a b :=
+  ⟨pop.state, pop.logs⟩
+
+theorem Devm.QuietFrame.ofBurnBy {cost : Nat} {a b : Devm}
+    (burn : Devm.BurnBy cost a b) : Devm.QuietFrame a b :=
+  ⟨burn.state, burn.logs⟩
+
 end Blanc

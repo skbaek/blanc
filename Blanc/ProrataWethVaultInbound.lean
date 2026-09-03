@@ -170,7 +170,7 @@ theorem depositQuote_arithmetic_trace
           tail <<+ bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre depositAfterQuote (.ok final) := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
@@ -240,7 +240,7 @@ theorem mintQuote_arithmetic_trace
           tail <<+ bodyPre.stack ∧
         MemImage bodyPre bodyImage ∧
         Bytes.WordFrameFrom image bodyImage arithmeticScratchEnd ∧
-        pre.state = bodyPre.state ∧
+        Devm.QuietFrame pre bodyPre ∧
         Func.RunCompiledTo fs sevm bodyPre mintAfterQuote (.ok final) := by
   rcases ProducesWord.isMax_arm_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
@@ -549,7 +549,7 @@ theorem shareRoomGuard_trace
     exact roomLarge
       (B256.lt_of_toNat_lt_toNat (by rw [roomNat]; omega))
   · exact sharesState.trans
-      (roomState.trans (testState.trans bodyPop.state))
+      (roomState.1.trans (testState.trans bodyPop.state))
   · exact sharesLogs.trans
       (roomLogs.trans (testLogs.trans bodyPop.logs))
 
