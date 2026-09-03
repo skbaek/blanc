@@ -20,7 +20,16 @@ concurrency:
 jobs:
   build-and-audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Sized for a COLD build, not a warm one. lean-action's cache key includes
+    # the lake-manifest hash, so every jaune pin bump, toolchain bump or mathlib
+    # bump misses the cache and recompiles jaune from source: ~33 min instead of
+    # ~2 min. Measured cold total is ~64 min (5.5 min static gates + ~33 min
+    # lean-action + ~26 min Lean-dependent gates) against ~34 min warm. A 45 min
+    # ceiling fit the warm path only and killed run 33682682661 (and 33507722119
+    # before it) mid-gate on exactly the bumps CI exists to check, skipping 20
+    # gates. Keep this well clear of the cold path rather than tightened to the
+    # warm one, for the same reason canary.yml keeps its own 60 min slack.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v6

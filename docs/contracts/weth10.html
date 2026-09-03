@@ -58,12 +58,13 @@
         <div class="term"><span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — WETH10 claim statements: 188 definitions/statements and exact
+<span class="ok">OK — claim statements: 382 definitions/statements and exact
      record constructors pinned by Lean</span></div>
-        <p class="cap"><b>Fig. 1</b> — two WETH10 gates, verbatim (2026-08-13 and 2026-08-12):
-          the differential suite beside the deployed runtime, and the statement-pinning gate
-          that makes a silently weakened theorem <em>statement</em> fail as loudly as a broken
-          proof. The differential line continues “… 7 state-mutating reentrancy rows, 26
+        <p class="cap"><b>Fig. 1</b> — the WETH10 differential suite beside the deployed
+          runtime, and the repository-wide statement-pinning gate that makes a silently
+          weakened theorem <em>statement</em> fail as loudly as a broken proof. The
+          statement-pin count spans every protected family, not WETH10 alone. The
+          differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</p>
         <div class="pills">
           <span class="pill"><span class="d"></span>6,313 B runtime — vs 9,975 deployed</span>
