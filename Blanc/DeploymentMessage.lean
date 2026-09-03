@@ -209,16 +209,28 @@ def deploymentFinalBout
       (deploymentReceiptKey index) receipt
     blockLogs := charged.blockLogs ++ out.logs}
 
-/-- Contract-neutral configured base and protocol-system-code facts. Every
-field describes only the supplied prestate. -/
+/-- Contract-neutral configured base and protocol-system-code facts.  The
+schedule is the caller's `cfg` and every rule-sensitive fact is either stated
+against the block's selected `rules` or quantified over every successful
+`rulesAt`, so no named fork is fixed here.  Every field describes only the
+supplied prestate. -/
 structure CanonicalDeploymentBase
-    (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (sender ca : Adr) : Prop where
+  configValid : cfg.Valid
+  chainId_eq : cfg.chainId = base.chainId
   validContext : base.ValidContext
-  chainId_eq : chainId = base.chainId
   sumNof : SumNof base.state.bal
   target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ¬ pragueRules.isPrecomp ca
+  target_not_precompile : ∀ {timestamp selected},
+    cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca
+  beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress
+  history_not_precompile : ¬ rules.isPrecomp historyStorageAddress
+  withdrawalRequest_not_precompile :
+    ¬ rules.isPrecomp withdrawalRequestPredeployAddress
+  consolidationRequest_not_precompile :
+    ¬ rules.isPrecomp consolidationRequestPredeployAddress
   sender_ne_target : sender ≠ ca
   withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
   consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
@@ -240,32 +252,34 @@ structure CanonicalDeploymentBase
       Prog.compile deploymentSystemProgram
 
 /-- The mandatory beacon-roots and history-storage calls recovered from the
-real block prefix. This structure is conclusion evidence, never input data. -/
+real block prefix, under the block's selected `rules`. This structure is
+conclusion evidence, never input data. -/
 structure DeploymentSystemPrefix
+    (rules : ForkRules)
     (base : BlockChain) (block : Block) (txInput : Benv) : Type where
-  outBeacon : MsgCallOutput
   stBeacon : State
+  outBeacon : MsgCallOutput
   lastHash : B256
   stHistory : State
   outHistory : MsgCallOutput
   beaconRun :
     processUncheckedSystemTransaction
-      (initBenv pragueRules base block.header)
+      (initBenv rules base block.header)
       beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
       .ok (stBeacon, outBeacon)
   lastHashEq :
     List.getLast?
-      ((initBenv pragueRules base block.header).withState stBeacon).stat.blockHashes =
+      ((initBenv rules base block.header).withState stBeacon).stat.blockHashes =
         some lastHash
   historyRun :
     processUncheckedSystemTransaction
-      ((initBenv pragueRules base block.header).withState stBeacon)
+      ((initBenv rules base block.header).withState stBeacon)
       historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
   txInput_eq :
     txInput =
-      ((initBenv pragueRules base block.header).withState stBeacon).withState
+      ((initBenv rules base block.header).withState stBeacon).withState
         stHistory
-  environment_eq : txInput = initBenv pragueRules base block.header
+  environment_eq : txInput = initBenv rules base block.header
   state_eq : txInput.state = base.state
   createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
@@ -403,27 +417,28 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
   simp [Except.mapError, herr]
 
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
-configured prestate. -/
+configured prestate; neither call is smuggled into the input record. -/
 theorem canonicalDeploymentSystemPrefix
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca) :
-    Nonempty (Σ txInput, DeploymentSystemPrefix base cb.block txInput) := by
-  let initial := initBenv pragueRules base cb.block.header
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
+    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) := by
+  let initial := initBenv rules base cb.block.header
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
       (by simpa [initial, initBenv] using hbase.beaconCode)
-      (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide)
+      hbase.beacon_not_precompile
   obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
   obtain ⟨outHistory, hhistory, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       (initial.withState base.state) historyStorageAddress lastHash.toBytes
       (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
-      (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide)
+      hbase.history_not_precompile
   refine ⟨⟨initial, {
-    outBeacon := outBeacon
     stBeacon := base.state
+    outBeacon := outBeacon
     lastHash := lastHash
     stHistory := base.state
     outHistory := outHistory

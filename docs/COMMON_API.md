@@ -995,6 +995,18 @@ This pattern does not make the contract-local carrier common infrastructure.
 A literal block/history adapter or repeated schedule-selection lemma is a
 hoisting candidate only after another consumer needs the same shape.
 
+**Already hoisted.** The deployment *shell* is no longer contract-local: a
+second consumer needed the same `cfg`/selected-rules/root fields, so
+`CanonicalDeploymentBase`, `DeploymentSystemPrefix`, and
+`canonicalDeploymentSystemPrefix` now live in
+[`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean) with the
+field list WETH10 proved out, and step 2 above means consuming them rather than
+writing a private copy. What has **not** been hoisted is schedule
+classification: `mainnet_rulesAt_eq_named` and `mainnet_rulesAt_eq_bpo2_of_ge`
+remain WETH10-local because no second contract has needed them, and a
+contract-local copy of either would be the duplication this note exists to
+prevent — lift them to a shared owner instead.
+
 The shared current-mainnet executable lane deliberately exposes no fork
 override, so it cannot supply a cross-activation witness. Consumers deployed
 before the current fork need a historical deployment root at the rule record
@@ -1032,7 +1044,21 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `Prog.exec_of_runCompiledTo_appended` when the retained compiled walk ends in
   an arbitrary success or failure outcome while runtime/ABI bytes follow it.
 - Generic deployment-message facts:
-  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).  An inner
+  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).  This
+  owner also holds the **configured deployment shell** every contract's
+  direct-deployment ladder stands on: `CanonicalDeploymentBase cfg rules base
+  sender ca` carries schedule validity, the chain-identity equation, valid
+  context, balance non-overflow, the derived target with its collision and
+  system-address separation facts, the schedule-wide `∀ ts selected,
+  cfg.rulesAt ts = .ok selected → ¬ selected.isPrecomp ca` fact a root needs to
+  support arbitrary future blocks, the four selected-rules precompile-membership
+  premises, and the four protocol-system-code equations;
+  `DeploymentSystemPrefix rules base block txInput` is the recovered
+  beacon-roots/history-storage prefix at those same selected rules, and
+  `canonicalDeploymentSystemPrefix` reconstructs it.  No named fork appears in
+  any of them.  A consumer that wants a fixed-fork ladder instantiates the
+  shell — `ChainConfig.pragueOnly chainId` with `pragueRules` — rather than
+  copying it.  An inner
   creation error crosses through
   `processCreateMessage_ok_of_processMessage_error`; a raw creation-code
   REVERT with no separate code address crosses through

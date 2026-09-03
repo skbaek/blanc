@@ -37,7 +37,8 @@ ROOT_LEAN_CONTROL = r'''example
     (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
     (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -268,7 +269,7 @@ def main() -> int:
         ("transaction-receipt-success", "Blanc/LidoCircuitBreakerDeploymentTransaction.lean", "  receiptSucceeded :\n", "  receiptWasSuccessful :\n", "missing required semantic fragment 'receiptSucceeded :'", "OfficialDeploymentTransactionResult", False),
         ("suffix-withdrawal", "Blanc/LidoCircuitBreakerDeploymentBlock.lean", "  withdrawalRun :", "  withdrawalSkipped :", "missing required semantic fragment 'withdrawalRun'", "OfficialDeploymentSuffixResult", False),
         ("suffix-general-purpose", "Blanc/LidoCircuitBreakerDeploymentBlock.lean", "  run : processGeneralPurposeRequests", "  run : skipGeneralPurposeRequests", "missing required semantic fragment 'processGeneralPurposeRequests'", "OfficialDeploymentSuffixResult", False),
-        ("root-transition", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "    stateTransitionUsing (ChainConfig.pragueOnly chainId)", "    stateTransitionUsing looseConfig", "missing required semantic fragment 'ChainConfig.pragueOnly'", "DeploymentRoot", False),
+        ("root-transition", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "    stateTransitionUsing (ChainConfig.pragueOnly chainId)", "    stateTransitionUsing looseConfig", "missing required semantic fragment 'stateTransitionUsing (ChainConfig.pragueOnly chainId)'", "DeploymentRoot", False),
         ("root-suffix", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "Nonempty (OfficialDeploymentSuffixResult", "Nonempty (SkippedDeploymentSuffixResult", "missing required semantic fragment 'OfficialDeploymentSuffixResult'", "DeploymentRoot", False),
         ("root-chain-validity", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "  deployed_validContext :", "  deployed_context :", "missing required semantic fragment 'deployed_validContext'", "DeploymentRoot", False),
         ("root-hstep-only", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "    (hstep : stateTransitionUsing", "    (hreceipt : Bool)\n    (hstep : stateTransitionUsing", "expected only hbase, henv, hstep", "canonicalDeploymentStep_establishes_root", False),

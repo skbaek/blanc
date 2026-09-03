@@ -60,46 +60,6 @@ def deploymentFinalBout
     (out : MsgCallOutput) (usedGas : Nat) : BlockOutput :=
   Blanc.deploymentFinalBout bout tx index out usedGas
 
-/-- Valid configured base state and collision-free target facts.  The four
-system-address fields describe only pre-state code; no system-call result or
-post-state is admitted here. -/
-structure CanonicalDeploymentBase
-    (cfg : ChainConfig) (rules : ForkRules)
-    (base : BlockChain) (sender ca : Adr) : Prop where
-  configValid : cfg.Valid
-  chainId_eq : cfg.chainId = base.chainId
-  validContext : base.ValidContext
-  sumNof : SumNof base.state.bal
-  target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
-  target_ne_zero : ca ≠ 0
-  target_not_precompile : ∀ {timestamp selected},
-    cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca
-  beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress
-  history_not_precompile : ¬ rules.isPrecomp historyStorageAddress
-  withdrawalRequest_not_precompile :
-    ¬ rules.isPrecomp withdrawalRequestPredeployAddress
-  consolidationRequest_not_precompile :
-    ¬ rules.isPrecomp consolidationRequestPredeployAddress
-  sender_ne_target : sender ≠ ca
-  withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
-  consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
-  target_noCodeOrNonce : accountHasCodeOrNonce base.state ca = false
-  target_noStorage : accountHasStorage base.state ca = false
-  lastBlockHash : ∃ lastHash,
-    List.getLast? (getLast256BlockHashes base) = some lastHash
-  beaconCode :
-    some (base.state.getCode beaconRootsAddress).toList =
-      Prog.compile deploymentSystemProgram
-  historyCode :
-    some (base.state.getCode historyStorageAddress).toList =
-      Prog.compile deploymentSystemProgram
-  withdrawalRequestCode :
-    some (base.state.getCode withdrawalRequestPredeployAddress).toList =
-      Prog.compile deploymentSystemProgram
-  consolidationRequestCode :
-    some (base.state.getCode consolidationRequestPredeployAddress).toList =
-      Prog.compile deploymentSystemProgram
-
 /-- A strict configured block and type-2 creation transaction profile.  The
 `CanonicalBlock` parameter itself retains the original bytes, strict
 `rlpToBlock` equation, and exact re-encoding equation.  Every field below is
@@ -144,37 +104,6 @@ structure CanonicalWeth10DeploymentBlock
   target_eq : ca = computeContractAddress sender deploymentTx.nonce
 
 /-! ## Proof-produced pipeline contexts -/
-
-/-- The mandatory beacon-roots and history-storage calls recovered from the
-real block prefix. This structure is conclusion evidence, never input data. -/
-structure DeploymentSystemPrefix
-    (rules : ForkRules)
-    (base : BlockChain) (block : Block) (txInput : Benv) : Type where
-  stBeacon : State
-  outBeacon : MsgCallOutput
-  lastHash : B256
-  stHistory : State
-  outHistory : MsgCallOutput
-  beaconRun :
-    processUncheckedSystemTransaction
-      (initBenv rules base block.header)
-      beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
-      .ok (stBeacon, outBeacon)
-  lastHashEq :
-    List.getLast?
-      ((initBenv rules base block.header).withState stBeacon).stat.blockHashes =
-        some lastHash
-  historyRun :
-      processUncheckedSystemTransaction
-      ((initBenv rules base block.header).withState stBeacon)
-      historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
-  txInput_eq :
-    txInput =
-      ((initBenv rules base block.header).withState stBeacon).withState
-        stHistory
-  environment_eq : txInput = initBenv rules base block.header
-  state_eq : txInput.state = base.state
-  createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
 /-- The transaction contexts are kept distinct: recovered prefix input,
 `beginTransaction`, nonce/fee-updated state, and the actual prepared message.
@@ -252,42 +181,6 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
       out.returnData = [] := by
   exact Blanc.processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
-
-/-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
-canonical pre-state; neither call is smuggled into the input record. -/
-theorem canonicalDeploymentSystemPrefix
-    (cfg : ChainConfig) (rules : ForkRules)
-    (base : BlockChain) (cb : CanonicalBlock)
-    (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
-    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) := by
-  let initial := initBenv rules base cb.block.header
-  obtain ⟨outBeacon, hbeacon, _⟩ :=
-    processUncheckedSystemTransaction_deploymentSystemProgram
-      initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
-      (by simpa [initial, initBenv] using hbase.beaconCode)
-      hbase.beacon_not_precompile
-  obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
-  obtain ⟨outHistory, hhistory, _⟩ :=
-    processUncheckedSystemTransaction_deploymentSystemProgram
-      (initial.withState base.state) historyStorageAddress lastHash.toBytes
-      (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
-      hbase.history_not_precompile
-  refine ⟨⟨initial, {
-    stBeacon := base.state
-    outBeacon := outBeacon
-    lastHash := lastHash
-    stHistory := base.state
-    outHistory := outHistory
-    beaconRun := hbeacon
-    lastHashEq := ?_
-    historyRun := ?_
-    txInput_eq := by rfl
-    environment_eq := by rfl
-    state_eq := by rfl
-    createdAccounts_eq := by rfl }⟩⟩
-  · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
-  · simpa [initial, Benv.withState] using hhistory
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.

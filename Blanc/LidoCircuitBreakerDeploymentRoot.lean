@@ -21,7 +21,8 @@ structure DeploymentRoot
       (sender : Adr)
       (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
       (post : State) (bout : BlockOutput),
-    CanonicalDeploymentBase chainId base sender ca ∧
+    CanonicalDeploymentBase (ChainConfig.pragueOnly chainId) pragueRules
+      base sender ca ∧
     CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca ∧
     OfficialDeploymentTransactionResult chainId ca ctx post bout ∧
     Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) ∧
@@ -50,7 +51,8 @@ theorem canonicalDeploymentStep_establishes_root
     (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -102,7 +104,8 @@ theorem canonicalDeploymentStep_establishes_root
     exact checkedDeployed.validContext
   have hchain : chainId = deployed.chainId :=
     hbase.chainId_eq.trans (stateTransitionWith_preserves_chainId hwith).symm
-  refine ⟨?_, hbase.target_ne_zero, hbase.target_not_precompile,
+  refine ⟨?_, hbase.target_ne_zero,
+    hbase.target_not_precompile (ChainConfig.pragueOnly_rulesAt chainId 0),
     ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
   · exact ⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,
       ⟨suffix⟩, hstep, happly, hstate⟩

@@ -2761,6 +2761,36 @@
           "^OK — proxy-pair-upgrade semantic: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-fork-containment.sh"
+      ],
+      "id": "fork-containment",
+      "inputs": {
+        "files": [
+          "scripts/check-fork-containment.sh",
+          "scripts/check-fork-containment.py"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The verdict depends on the complete content of every Lean module under Blanc/: a renamed module changes which declarations exist and a moved literal changes which allowance covers it, so the population is path-and-content over Blanc/**/*.lean rather than a file list. The allowances and their exact counts live in the checker's own source, which is why the checker identifies the gate.",
+      "order": 62,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK \u2014 fork-containment: "
+        ]
+      }
     }
   ],
   "schema": 1

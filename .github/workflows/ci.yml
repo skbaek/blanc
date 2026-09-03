@@ -55,6 +55,12 @@ jobs:
             --output .lake/ci-gate-selection.json
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
+      # Static and fail-closed like the row above: a named-fork literal that
+      # escapes into a generic module, or a `_mainnet` specialization published
+      # without its retained `_prague` corollary, fails here rather than in
+      # review.
+      - name: Named-fork containment
+        run: scripts/check-fork-containment.sh
       # Static and fail-closed: it reads committed files only, so it needs no
       # Lean toolchain, no build and no network, and fails in well under a
       # second when the assurance register stops describing the tree.

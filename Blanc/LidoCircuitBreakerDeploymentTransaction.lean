@@ -56,7 +56,8 @@ transaction result. -/
 theorem canonicalDeploymentTransaction_succeeds
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :

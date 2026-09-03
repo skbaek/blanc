@@ -315,6 +315,49 @@ block as a separate finite channel. It is no Lean premise, and neither it nor
 the finite differential manifest enlarges the Lean theorems or the
 port-conformance claim.
 
+The BeaconDeposit deposit contract has a boundary of the same shape, and its
+deployment family is now stated at the same altitude as WETH10's. Its
+deployment root, its exact strict envelope, and its open-history rungs are
+stated over an arbitrary valid `ChainConfig`: the creation block retains its
+own `cfg.rulesAt` witness, executes under the record that lookup selects, and
+steps with `stateTransitionUsing cfg`. Every fork-sensitive fact the older
+Prague-only form discharged by computation — the deployed-code size limit and
+the address-`0x2` precompile membership that makes SHA-256 warm — is now an
+explicit premise of the envelope rather than a fact about one named fork.
+`canonicalDeploymentStep_establishes_root_mainnet` and the `_mainnet` history
+rungs are the published specialization at Ethereum mainnet's configured
+schedule; `canonicalDeploymentStep_establishes_root_prague` and the `_prague`
+rungs retain the exact statements this contract published before that
+migration, and `pragueOnly_history_extends` keeps its name.
+
+That specialization is a statement about a schedule and nothing more. **No
+executable lane witnesses the mainnet deployment root.** The BPO2 consumer
+`scripts/check-beacon-deposit-current-mainnet.sh` witnesses the artifact rows —
+runtime bytes, receipt, logs, storage, ETH and gas — not this root; the
+deployment control that replays a real block is the Prague one. Nothing in the
+family claims a result under a fork whose *execution semantics* Jaune does not
+model: a schedule-parametric statement survives new rule data, not a new gas
+meter, and a fork that changes the meter is a Jaune change and a re-proof, not
+a premise to be assumed away.
+
+The shared deployment shell those ladders stand on —
+`CanonicalDeploymentBase`, `DeploymentSystemPrefix`, and
+`canonicalDeploymentSystemPrefix` in
+[DeploymentMessage.lean](Blanc/DeploymentMessage.lean) — is contract-neutral
+and schedule-parametric, and no longer fixes a fork for the contracts built on
+it. The Lido CircuitBreaker deployment root instantiates it at the fixed
+Prague-only schedule and keeps its fixed-Prague statements; that contract's own
+configured migration is a separate, unstarted piece of work, and no surface
+here should be read as saying otherwise.
+
+WETH's solvency and FMINT's supply conservation carry the same distinction at
+the chain rung. `chainUsing_preserves_solvent` and
+`chainUsing_preserves_conserved` hold over an arbitrary valid `ChainConfig`;
+their `_mainnet` instances are the published specialization and their `_prague`
+instances, together with the unqualified `chain_preserves_*` forms over Jaune's
+fixed-Prague entry points, are retained corollaries. Neither contract has a
+current-mainnet executable lane, and neither statement is offered as one.
+
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
 not covered, this property is not attempted — bounds the claim and asserts

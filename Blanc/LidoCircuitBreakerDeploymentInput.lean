@@ -90,7 +90,7 @@ structure PreparedDeploymentContext
   debit : State
   tenv : Tenv
   msg : Msg
-  systemPrefix : DeploymentSystemPrefix base cb.block txInput
+  systemPrefix : DeploymentSystemPrefix pragueRules base cb.block txInput
   begun_eq : begun = txInput.beginTransaction
   debit_eq :
     (begun.state.incrNonce sender).subBal sender
@@ -127,12 +127,14 @@ boundary, upfront nonce/fee debit, and the message returned by
 theorem prepareCanonicalDeploymentContext
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca) :
     Nonempty (PreparedDeploymentContext chainId base cb tx sender ca) := by
   obtain ⟨⟨txInput, hprefix⟩⟩ :=
-    canonicalDeploymentSystemPrefix chainId base cb sender ca hbase
+    canonicalDeploymentSystemPrefix (ChainConfig.pragueOnly chainId)
+      pragueRules base cb sender ca hbase
   let begun := txInput.beginTransaction
   let fee := tx.gas * deploymentEffectiveGasPrice txInput tx
   have hbegunState : begun.state = base.state := by
@@ -220,7 +222,7 @@ theorem prepareCanonicalDeploymentContext
   have hmsgChain : msg.benv.stat.chainId = chainId := by
     dsimp only [msg, msgBenv, begun]
     simpa [Benv.beginTransaction] using
-      htxChain.trans hbase.chainId_eq.symm
+      htxChain.trans (show base.chainId = chainId from hbase.chainId_eq.symm)
   have hmsgRules : msg.benv.stat.rules = pragueRules := by
     dsimp only [msg, msgBenv, begun]
     simpa [Benv.beginTransaction] using htxRules

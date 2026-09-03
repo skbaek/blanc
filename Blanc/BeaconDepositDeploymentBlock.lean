@@ -11,13 +11,13 @@ namespace BeaconDeposit
 
 /-! ## Exact post-transaction request suffix -/
 
-/-- Proof-produced evidence for Prague's two checked request-system calls.
-Both calls execute the installed nonempty system program, return no request
-bytes, and leave the BeaconDeposit constructor poststate and block output
-unchanged. -/
+/-- Proof-produced evidence for the selected rules' two checked request-system
+calls. Both calls execute the installed nonempty system program, return no
+request bytes, and leave the BeaconDeposit constructor poststate and block
+output unchanged. -/
 structure DeploymentSuffixResult
-    (chainId : UInt64) (ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (cfg : ChainConfig) (rules : ForkRules) (ca : Adr)
+    (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca)
     (post : State) (bout : BlockOutput) : Type where
   withdrawalOut : MsgCallOutput
   consolidationOut : MsgCallOutput
@@ -41,20 +41,21 @@ structure DeploymentSuffixResult
 /-- Execute the exact checked request suffix after the strict BeaconDeposit
 deployment transaction. -/
 theorem canonicalDeploymentSuffix_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca)
     (post : State) (bout : BlockOutput)
-    (htx : DeploymentTransactionResult chainId ca ctx post bout) :
-    Nonempty (DeploymentSuffixResult chainId ca ctx post bout) := by
+    (htx : DeploymentTransactionResult cfg rules ca ctx post bout) :
+    Nonempty (DeploymentSuffixResult cfg rules ca ctx post bout) := by
   obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _, hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
       (by simpa [Benv.withState] using htx.withdrawalRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
-        change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress
-        decide)
+        exact hbase.withdrawalRequest_not_precompile)
   obtain ⟨consolidationOut, hconsolidation, _, _, _, _,
       hconsolidationReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
@@ -63,8 +64,7 @@ theorem canonicalDeploymentSuffix_succeeds
       (by simpa [Benv.withState] using htx.consolidationRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
-        change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress
-        decide)
+        exact hbase.consolidationRequest_not_precompile)
   have hrun : processGeneralPurposeRequests
       (ctx.txInput.withState post) bout = .ok (post, bout) := by
     unfold processGeneralPurposeRequests
@@ -96,22 +96,23 @@ theorem canonicalDeploymentSuffix_succeeds
 transaction, empty withdrawal stage, and exact request suffix into Jaune's real
 block body. -/
 theorem canonicalDeploymentApplyBody_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (txBytes : Bytes) (tx : Tx) (sender ca : Adr)
-    (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
+    (henv : CanonicalBeaconDepositDeploymentBlock cfg rules base cb
       txBytes tx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca)
     (post : State) (bout : BlockOutput)
-    (htx : DeploymentTransactionResult chainId ca ctx post bout)
-    (hsuffix : DeploymentSuffixResult chainId ca ctx post bout) :
-    applyBody (initBenv pragueRules base cb.block.header)
+    (htx : DeploymentTransactionResult cfg rules ca ctx post bout)
+    (hsuffix : DeploymentSuffixResult cfg rules ca ctx post bout) :
+    applyBody (initBenv rules base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) := by
   unfold applyBody
   have hbeacon := ctx.systemPrefix.beaconRun
   change processUncheckedSystemTransaction
-    (initBenv pragueRules base cb.block.header)
+    (initBenv rules base cb.block.header)
     beaconRootsAddress
-    (initBenv pragueRules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
+    (initBenv rules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
       .ok (ctx.systemPrefix.stBeacon, ctx.systemPrefix.outBeacon) at hbeacon
   rw [hbeacon]
   simp only [Except.mapError, bind, Except.bind]
