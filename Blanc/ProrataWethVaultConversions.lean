@@ -44,15 +44,17 @@ theorem ProducesWord.isMax_arm_trace
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
+        pre.state = bodyPre.state ∧
         Func.RunCompiledTo fs sevm bodyPre maxBody (.ok final)) ∨
     (value ≠ B256.max ∧
       ∃ bodyPre,
         tail <<+ bodyPre.stack ∧
         Mem.Wf bodyPre.memory ∧
         Mem.Reads bodyPre.memory image ∧
+        pre.state = bodyPre.state ∧
         Func.RunCompiledTo fs sevm bodyPre ordinaryBody (.ok final)) := by
   obtain ⟨valuePre, valueRun, run⟩ := runCompiledTo_prepend_inv run
-  obtain ⟨valuePrefix, valueWf, valueReads, -⟩ :=
+  obtain ⟨valuePrefix, valueWf, valueReads, valueState⟩ :=
     produces memoryWf memoryReads stack valueRun
   obtain ⟨testPre, testRun, branchRun⟩ :=
     runCompiledTo_prepend_inv run
@@ -73,6 +75,10 @@ theorem ProducesWord.isMax_arm_trace
   have testReads : Mem.Reads testPre.memory image := by
     rw [← testMemory]
     exact valueReads
+  have testState : pre.state = testPre.state :=
+    valueState.trans
+      (Line.of_inv Devm.state (by line_inv)
+        (Line.Run.cons notRun (Line.Run.cons zeroRun Line.Run.nil)))
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
       simpa [valueMax, B256.not_max, B256.eqCheck] using testPrefix
@@ -87,7 +93,7 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inl ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      bodyRun⟩
+      testState.trans bodyPop.state, bodyRun⟩
   · have notNonzero : (~~~ value) ≠ 0 := by
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
@@ -102,7 +108,7 @@ theorem ProducesWord.isMax_arm_trace
       rw [← bodyPop.memory]
       exact testReads
     exact Or.inr ⟨valueMax, bodyPre, bodyPrefix, bodyWf, bodyReads,
-      bodyRun⟩
+      testState.trans bodyPop.state, bodyRun⟩
 
 /-- A successful stable-supply guard proves the staged word is within the
 declared supply cap and exposes the guarded body without changing the
@@ -495,7 +501,7 @@ theorem convertToShares_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       productOverTwoPow256_down_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
@@ -508,7 +514,7 @@ theorem convertToShares_arithmetic_trace
     · simpa [convertToSharesN, assetsMax, maxWord_toNat,
         assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     let amount := Sevm.argWord sevm 0
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
@@ -557,7 +563,7 @@ theorem convertToAssets_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       shiftedDiv_down_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
@@ -570,7 +576,7 @@ theorem convertToAssets_arithmetic_trace
     · simpa [convertToAssetsN, assetsMax, maxWord_toNat,
         assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let amount := Sevm.argWord sevm 0
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
@@ -619,7 +625,7 @@ theorem previewMint_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       shiftedDiv_up_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
@@ -632,7 +638,7 @@ theorem previewMint_arithmetic_trace
     · simpa [previewMintN, assetsMax, maxWord_toNat,
         assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let amount := Sevm.argWord sevm 0
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
@@ -682,7 +688,7 @@ theorem previewWithdraw_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=
       productOverTwoPow256_up_trace bodyWf bodyReads
         (ProducesWord.arg sevm image 0)
@@ -695,7 +701,7 @@ theorem previewWithdraw_arithmetic_trace
     · simpa [previewWithdrawN, assetsMax, maxWord_toNat,
         assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     let amount := Sevm.argWord sevm 0
     obtain ⟨quotientFits, returnPre, quotientStack, returnRun⟩ :=

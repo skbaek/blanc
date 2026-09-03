@@ -172,9 +172,9 @@ theorem maxMint_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
-    obtain ⟨quotientFits, capPre, capStack, capImage, capRun⟩ :=
+    obtain ⟨quotientFits, capPre, capStack, capImage, -, capRun⟩ :=
       productOverTwoPow256_down_image_trace bodyWf bodyReads
         (ProducesWord.pushB256 sevm image B256.max)
         (ProducesWord.stagedDenominator_after_productScratch supplyAt)
@@ -203,7 +203,7 @@ theorem maxMint_arithmetic_trace
     rw [assetsMax, maxWord_toNat, assetFactorN_maxWord]
     exact returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     obtain ⟨capPre, capImage, capStack, capMemImage, capFrame, capRun⟩ :=
@@ -289,7 +289,7 @@ theorem maxDeposit_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let high := Nat.toB256 (shareRoomN supply.toNat + 1)
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     have highPositive : 0 < high.toNat := by
@@ -309,7 +309,7 @@ theorem maxDeposit_arithmetic_trace
       B256.toNat_toB256_of_lt
         (shareRoomN_add_one_lt_wordModulusN supply.toNat)] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let high := Nat.toB256 (shareRoomN supply.toNat + 1)
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let factor := Nat.toB256 (assetFactorN assets.toNat)
@@ -366,7 +366,7 @@ theorem maxWithdraw_arithmetic_trace
       (ProducesWord.loadWord assetsAt) memoryWf memoryReads stack run with
     maxArm | ordinaryArm
   · rcases maxArm with
-      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     obtain ⟨returnPre, quotientStack, returnRun⟩ :=
       shiftedDiv_capDown_trace bodyWf bodyReads
@@ -378,7 +378,7 @@ theorem maxWithdraw_arithmetic_trace
       maxWord_toNat, assetFactorN_maxWord,
       stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
-      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyRun⟩
+      ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
     let factor := Nat.toB256 (assetFactorN assets.toNat)
     obtain ⟨returnPre, quotientStack, returnRun⟩ :=

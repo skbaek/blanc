@@ -777,4 +777,29 @@ lemma Ninst.runCompiled_preserves_getCode
       cases raw <;> exact Exec.preserves_getCode childRun
   exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
 
+
+/-- A whole successful compiled walk leaves already-installed code where it is.
+
+This lifts `Ninst.runCompiled_preserves_getCode` over every constructor of the
+compiled walk, including internal `Func.call` jumps and CALL-family crossings
+that retain a sub-execution.  It is what lets a configuration premise about an
+installed program survive an arbitrary stretch of a contract body without
+threading state through each individual step. -/
+lemma Func.runCompiledTo_preserves_getCode
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func} {owner : Adr}
+    (run : Func.RunCompiledTo fs sevm pre f (.ok post))
+    (nonempty : (pre.getCode owner).toList ≠ []) :
+    post.getCode owner = pre.getCode owner := by
+  have sourceRun : Func.Run fs sevm pre f post :=
+    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+  refine Func.effect codePreserve_refl_trans.2 ?_ ?_
+    (Ninst.effect_of_effectRec codePreserve_refl_trans.1
+      codePreserve_refl_trans.2 Ninst.codePreserve_effectRec
+      Jinst.codePreserve_effect Linst.codePreserve_effect)
+    Linst.codePreserve_effect sourceRun owner nonempty
+  · intro xs a b pop account _
+    exact (getCode_eq_of_state_eq pop.state account).symm
+  · intro a b burn account _
+    exact (getCode_eq_of_state_eq burn.state account).symm
+
 end Blanc
