@@ -295,6 +295,109 @@ def check_zero_receiver_deposit_reverts(run: Runner) -> None:
         fail("a zero-receiver deposit changed state; it must roll back whole")
 
 
+
+def event_topic(signature: str) -> str:
+    return "0x" + keccak256(signature.encode("ascii")).hex()
+
+
+def logs_of(result: dict) -> list:
+    receipts = result["result"].get("receipts") or []
+    return receipts[0].get("logs", []) if receipts else []
+
+
+def check_deposit_event_order(run: Runner) -> None:
+    """SF section 5: the child's Transfer, then the share Transfer, then Deposit.
+
+    Order is part of the frozen statement, so it is checked as a sequence and
+    not as a set.
+    """
+    assets = 10 ** 6
+    result = run.call(run.alloc(10 ** 18, 10 ** 18),
+                      abi("deposit(uint256,address)", assets, run.user))
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"deposit event order: got {got}, statement says {want}")
+        return
+    shares = V.convert_to_shares(assets, 0, 0)
+    # The share Transfer is a mint: from the zero address to the receiver.
+    mint = entries[1]
+    if int(mint["topics"][1], 16) != 0:
+        fail("the share Transfer's source is not the zero address")
+    if int(mint["topics"][2], 16) != run.user:
+        fail("the share Transfer's destination is not the receiver")
+    if int(mint["data"], 16) != shares:
+        fail(f"the share Transfer's amount is {int(mint['data'], 16)}, "
+             f"oracle {shares}")
+    if int(entries[2]["data"][2:66], 16) != assets:
+        fail("the Deposit event's asset word disagrees with the call")
+    if int(entries[2]["data"][66:130], 16) != shares:
+        fail("the Deposit event's share word disagrees with the oracle")
+
+
+def check_share_transfer_event(run: Runner) -> None:
+    seeded, other = 5000, 0xBEEF
+    vault_storage = {word(run.user): word(seeded), word(SUPPLY_SLOT): word(seeded)}
+    result = run.call(run.alloc(10 ** 18, 0, vault_storage),
+                      abi("transfer(address,uint256)", other, 1500))
+    entries = logs_of(result)
+    if len(entries) != 1:
+        fail(f"a share transfer emitted {len(entries)} events, statement says 1")
+        return
+    entry = entries[0]
+    if entry["address"] != address(VAULT_ADDR):
+        fail("the share Transfer was not emitted by the vault")
+    if entry["topics"][0] != event_topic("Transfer(address,address,uint256)"):
+        fail("the share Transfer's topic is not ERC-20 Transfer")
+    if (int(entry["topics"][1], 16) != run.user
+            or int(entry["topics"][2], 16) != other):
+        fail("the share Transfer's from/to topics are wrong")
+    if int(entry["data"], 16) != 1500:
+        fail("the share Transfer's amount word is wrong")
+
+
+def _must_revert(run: Runner, label: str, data: str, value: int = 0) -> None:
+    """The call must fail and leave no trace: no state change, no events."""
+    result = run.call(run.alloc(10 ** 18, 10 ** 18), data, value=value)
+    if result["result"].get("rejected"):
+        return          # rejected before execution is also a refusal
+    receipts = result["result"].get("receipts") or []
+    # The runner spells a successful status "0x1", not "0x01"; compare as a
+    # number so the check cannot silently never fire.
+    if receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
+        fail(f"{label}: the call succeeded; the statement says it reverts")
+        return
+    vault, weth = vault_state(result)
+    if storage_get(vault, SUPPLY_SLOT) != 0 or storage_get(weth, VAULT_ADDR) != 0:
+        fail(f"{label}: reverted but left state behind")
+    if logs_of(result):
+        fail(f"{label}: reverted but emitted events")
+
+
+def check_malformed_calls_revert(run: Runner) -> None:
+    """Malformed dispatch and ABI: the frozen policy is an empty revert."""
+    _must_revert(run, "unknown selector", "0x" + "deadbeef")
+    _must_revert(run, "empty calldata", "0x")
+    _must_revert(run, "one-byte calldata", "0x00")
+    # A recognised selector whose static argument head is short.
+    _must_revert(run, "truncated deposit arguments",
+                 "0x" + selector("deposit(uint256,address)").hex()
+                 + format(1, "064x"))
+
+
+def check_value_bearing_call_reverts(run: Runner) -> None:
+    """Every endpoint is nonpayable; the vault holds no ether."""
+    _must_revert(run, "value-bearing deposit",
+                 abi("deposit(uint256,address)", 1, run.user), value=1)
+    _must_revert(run, "value-bearing transfer",
+                 abi("transfer(address,uint256)", 0xBEEF, 1), value=1)
+
+
 CHECKS = [
     check_deposit_into_empty_vault,
     check_deposit_into_donated_vault,
@@ -303,6 +406,10 @@ CHECKS = [
     check_withdraw,
     check_share_transfer,
     check_zero_receiver_deposit_reverts,
+    check_deposit_event_order,
+    check_share_transfer_event,
+    check_malformed_calls_revert,
+    check_value_bearing_call_reverts,
 ]
 
 
