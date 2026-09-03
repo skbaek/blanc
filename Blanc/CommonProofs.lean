@@ -748,6 +748,27 @@ def Func.SilentIn {Observation : Type}
   | .next i body => Ninst.Inv observe i ∧ Func.SilentIn observe P body
   | .call k => P k
 
+/-- Walk a `Func.SilentIn` goal structurally: `And.intro` at each `branch` and
+`next`, the synthesised `Ninst`/`Linst` instance at each leaf.  A tail call
+leaves the slot obligation `P k` open; supply `with tac` to close those, since
+what makes a slot permitted is contract-specific.
+
+Two consumers: the beacon deposit root's mutually recursive loop and the
+WETH-backed PRORATA vault's live-quoting views. -/
+syntax "silent_structure" (ppSpace "with" ppSpace tacticSeq)? : tactic
+macro_rules
+| `(tactic| silent_structure) =>
+  `(tactic| repeat' first
+      | exact Ninst.Hinv.inv
+      | exact Linst.Hinv.inv
+      | apply And.intro)
+| `(tactic| silent_structure with $d:tacticSeq) =>
+  `(tactic| repeat' first
+      | exact Ninst.Hinv.inv
+      | exact Linst.Hinv.inv
+      | apply And.intro
+      | ($d))
+
 /-- A `SilentIn` body preserves its observation in a fixed function context
 closed under permitted tail calls.  Recursion is on the successful run, so a
 closed set of mutually recursive slots needs no fuel premise. -/
