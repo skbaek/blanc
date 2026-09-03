@@ -25,6 +25,39 @@ balance, and that is exactly how the ETH-backed PRORATA
 (`Blanc/ProrataInvariant.lean`) carries its own backing bound.  Replacing the
 native asset with an ERC-20 is what moves that conjunct out of the record's
 reach; it is the substance of the port, not an oversight here.
+
+## Why only twenty-one of the twenty-five targets are here
+
+The eighteen read-only targets and the three share writers make no external
+call, so each preserves conservation outright and the obligation is
+unconditional.
+
+The four ERC-4626 flows do not, and the reason is a property of the source, not
+of this file.  `finishInbound` snapshots the supply *before* the WETH child —
+`snapshotQuoteState` does the `sload` into `supplyWord`, and `guardStableSupply`
+runs on that snapshot — but performs its two writes *after* the child returns.
+The receiver's balance is re-read post-call (`loadWord receiverWord +++ sload`),
+while the supply is written as `shares + loadWord supplyWord`, from the
+pre-call snapshot.  `requireCanonicalWethTrue` checks only that the child
+returned the word `1`; nothing re-reads the supply.
+
+So if the account at `assetAddress` held code that re-entered the vault and
+moved the ledger, the post-call supply write would discard that movement while
+the balance credit would keep it, and conservation would not survive the frame.
+`outboundSettle` has the same shape.
+
+The port is sound because `DirectWethConfiguration` pins that account's code to
+`Blanc.wethCode`, and real WETH's `transferFrom` makes no outbound call.  But
+that is a premise about a *second account's code*, and `ContractSpec` has no
+slot for one: `Pre` carries the contract's own code, `Side` is a predicate on
+the balance map alone.  The four flows therefore need a configured ladder that
+threads `DirectWethConfiguration`, not this generic one — which is what the
+goal's own "configured two-runtime root" and "configured-history preservation"
+conditions were always asking for.
+
+Recorded here rather than only in the goal's state brief because it is a
+standing assumption of the artifact: this vault is safe against its configured
+asset, and would not be safe against a re-entrant one.
 -/
 
 namespace Blanc
