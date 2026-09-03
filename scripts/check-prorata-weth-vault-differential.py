@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -413,6 +414,79 @@ CHECKS = [
 ]
 
 
+
+# --- self-test: the gate must be able to fail ---
+
+PERTURBATIONS = [
+    ("the virtual-share offset", "O = 1000\n", "O = 1001\n"),
+    ("convertToShares' rounding",
+     "return representable(floor_div(a * denominator(supply), numerator(assets)))",
+     "return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
+    ("previewWithdraw's rounding",
+     "return representable(ceil_div(a * denominator(supply), numerator(assets)))"
+     "\n\n\npreview_deposit",
+     "return representable(floor_div(a * denominator(supply), numerator(assets)))"
+     "\n\n\npreview_deposit"),
+    ("convertToAssets' rounding",
+     "return representable(floor_div(s * numerator(assets), denominator(supply)))",
+     "return representable(ceil_div(s * numerator(assets), denominator(supply)))"),
+    ("previewMint's rounding",
+     "return representable(ceil_div(s * numerator(assets), denominator(supply)))",
+     "return representable(floor_div(s * numerator(assets), denominator(supply)))"),
+]
+
+
+def self_test() -> int:
+    """Perturb the oracle and require the gate to notice, every time.
+
+    A differential that has not been shown to fail is not evidence.  This is
+    not a hypothetical: the first draft of these cases all divided evenly, so
+    every rounding direction could be flipped without the gate noticing, and
+    the revert check compared the receipt status against a spelling the runner
+    never emits.  Both were found here.
+    """
+    model = Path(__file__).resolve().parent / "prorata_weth_vault_oracle.py"
+    original = model.read_text()
+    missed = []
+    try:
+        for label, old, new in PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: the perturbation no longer applies "
+                              f"cleanly to the oracle; this self-test has "
+                              f"rotted and must be repaired, not skipped")
+                continue
+            model.write_text(original.replace(old, new, 1))
+            # Python's bytecode cache keys on mtime at one-second granularity,
+            # so a second write inside the same second can leave a stale .pyc
+            # looking fresh and the child would import the *unperturbed* model
+            # and pass. Drop the cache and forbid writing a new one.
+            shutil.rmtree(model.parent / "__pycache__", ignore_errors=True)
+            result = subprocess.run([sys.executable, "-B", __file__],
+                                    capture_output=True, text=True,
+                                    env={**os.environ,
+                                         "PYTHONDONTWRITEBYTECODE": "1"})
+            if result.returncode == 0:
+                missed.append(f"{label}: perturbed, and the gate still passed")
+    finally:
+        model.write_text(original)
+
+    run = Runner()
+    FAILURES.clear()
+    _must_revert(run, "a genuinely valid deposit",
+                 abi("deposit(uint256,address)", 10 ** 6, run.user))
+    if not FAILURES:
+        missed.append("a valid deposit passed the revert check")
+    FAILURES.clear()
+
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — vault differential self-test: {message}")
+        return 1
+    print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
+          f"perturbations and one valid-call-as-revert probe are all caught")
+    return 0
+
+
 def main() -> int:
     if not JAUNE.exists():
         print("REGRESSION — vault differential: the Jaune runner is not built "
@@ -435,4 +509,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--self-test" in sys.argv[1:]:
+        raise SystemExit(self_test())
     raise SystemExit(main())
