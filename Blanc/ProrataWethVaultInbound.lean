@@ -280,50 +280,46 @@ theorem mintQuote_arithmetic_trace
 /-- A successful zero-caller guard proves the executing frame's caller is
 nonzero and leaves memory, state, and logs untouched. -/
 theorem nonzeroCaller_trace
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
     {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {body : Func} {tail : Stack}
     (stack : tail <<+ pre.stack)
-    (run : Func.RunCompiledTo fs sevm pre
-      (nonzeroCaller body) (.ok final)) :
+    (run : R fs sevm pre (nonzeroCaller body) final) :
     ∃ bodyPre,
       sevm.caller.toB256 ≠ 0 ∧
       tail <<+ bodyPre.stack ∧
       pre.memory = bodyPre.memory ∧
       pre.state = bodyPre.state ∧
       pre.logs = bodyPre.logs ∧
-      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
+      R fs sevm bodyPre body final := by
   unfold nonzeroCaller at run
-  obtain ⟨callerTest, callerRun, run⟩ := runCompiledTo_next_inv run
-  have callerSource := Ninst.Run.of_runCompiled callerRun
-  have callerPush := of_run_caller callerSource
+  obtain ⟨callerTest, callerRun, run⟩ := Func.WalkInv.next run
+  have callerPush := of_run_caller callerRun
   have callerPrefix : sevm.caller.toB256 :: tail <<+ callerTest.stack :=
     prefix_of_push callerPush stack
-  obtain ⟨zeroTest, callerZeroRun, callerBranchRun⟩ :=
-    runCompiledTo_next_inv run
-  have callerZeroSource := Ninst.Run.of_runCompiled callerZeroRun
-  have zeroTestPrefix := prefix_of_iszero callerZeroSource callerPrefix
+  obtain ⟨zeroTest, callerZeroRun, callerBranchRun⟩ := Func.WalkInv.next run
+  have zeroTestPrefix := prefix_of_iszero callerZeroRun callerPrefix
   have callerMemory : pre.memory = zeroTest.memory :=
     callerPush.memory.trans
-      (Ninst.Hinv.inv (f := Devm.memory) callerZeroSource)
+      (Ninst.Hinv.inv (f := Devm.memory) callerZeroRun)
   have callerState : pre.state = zeroTest.state :=
     callerPush.state.trans
-      (Ninst.Hinv.inv (f := Devm.state) callerZeroSource)
+      (Ninst.Hinv.inv (f := Devm.state) callerZeroRun)
   have callerLogs : pre.logs = zeroTest.logs :=
     callerPush.logs.trans
-      (Ninst.Hinv.inv (f := Devm.logs) callerZeroSource)
+      (Ninst.Hinv.inv (f := Devm.logs) callerZeroRun)
   have callerNonzero : sevm.caller.toB256 ≠ 0 := by
     intro callerZero
     have onePrefix : (1 : B256) :: tail <<+ zeroTest.stack := by
       simpa [B256.eqCheck, callerZero] using zeroTestPrefix
-    obtain ⟨revertPre, branchWord, branchWordNe, revertPop, revertRun, -⟩ :=
-      Func.RunCompiledTo.succ_branch_of_prefix
+    obtain ⟨armPre, armMid, -, -, revertRun, -⟩ :=
+      Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix callerBranchRun
-    obtain ⟨revertPost, impossible, -⟩ := runCompiledTo_revert_inv revertRun
-    cases impossible
+    exact absurd revertRun Func.WalkInv.noRevert
   have callerZeroPrefix : (0 : B256) :: tail <<+ zeroTest.stack := by
     simpa [B256.eqCheck, callerNonzero] using zeroTestPrefix
   obtain ⟨bodyPre, callerPop, bodyRun, bodyStack⟩ :=
-    Func.RunCompiledTo.zero_branch_of_prefix callerZeroPrefix callerBranchRun
+    Func.WalkInv.zero_branch_of_prefix callerZeroPrefix callerBranchRun
   exact ⟨bodyPre, callerNonzero, bodyStack,
     callerMemory.trans callerPop.memory,
     callerState.trans callerPop.state,
@@ -473,7 +469,7 @@ theorem inboundGuards_trace
 
   -- Reject the zero caller.
   obtain ⟨addressPre, callerNonzero, addressStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace callerStack run
+      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) callerStack run
   have addressWf : Mem.Wf addressPre.memory := by
     rw [← callerMemory]
     exact callerWf

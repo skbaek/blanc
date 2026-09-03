@@ -15,6 +15,109 @@ namespace Blanc
 open Jaune
 open scoped LogOutputHinv
 
+/-! ## One walk vocabulary for two relations
+
+`Func.Run` and `Func.RunCompiledTo … (.ok ·)` are inverted by the same five
+principles, and a contract's storage, memory, stack and log reasoning uses
+nothing else.  Only the *gas* differs: the compiled relation pins each step's
+cost, the source relation only requires it not to rise.
+
+`Func.WalkInv` names those five principles at the source shapes, which the
+compiled relation satisfies by forgetting its gas.  A trace stated over an
+abstract `R` therefore serves both consumers from one proof: a compiled caller
+instantiates `R` at the compiled relation and keeps compiled continuations, a
+ladder obligation instantiates it at `Func.Run`.
+
+This is what lets a contract's effect proofs be written once instead of once
+per relation — and the alternative is not two cheap proofs but one proof and
+one near-identical copy, which the proof-duplication ratchet rejects. -/
+
+/-- The inversion principles shared by the source walk and the gas-exact
+compiled walk, stated at the source shapes. -/
+class Func.WalkInv
+    (R : List Func → Sevm → Devm → Func → Devm → Prop) : Prop where
+  /-- A `.next` node runs its instruction and continues. -/
+  next : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {i : Ninst}
+    {f : Func}, R fs sevm pre (Func.next i f) post →
+    ∃ mid, Ninst.Run sevm pre i mid ∧ R fs sevm mid f post
+  /-- A `.branch` node takes the zero arm or a nonzero arm. -/
+  branch : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {f g : Func},
+    R fs sevm pre (Func.branch f g) post →
+    (∃ mid, Devm.PopBurn [0] pre mid ∧ R fs sevm mid f post) ∨
+      (∃ (w : B256) (mid mid' : Devm), w ≠ 0 ∧ Devm.PopBurn [w] pre mid ∧
+        Devm.Burn mid mid' ∧ R fs sevm mid' g post)
+  /-- A `.call` node resolves its index in the fixed context. -/
+  call : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {k : Nat},
+    R fs sevm pre (Func.call k) post →
+    ∃ f mid, fs[k]? = some f ∧ Devm.Burn pre mid ∧ R fs sevm mid f post
+  /-- No successful walk witnesses `Func.revert`. -/
+  noRevert : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm},
+    ¬ R fs sevm pre Func.revert post
+
+instance : Func.WalkInv Func.Run where
+  next := of_run_next
+  branch := of_run_branch
+  call := fun h => by
+    obtain ⟨f, mid, hget, hburn, hrun⟩ := of_run_call h
+    exact ⟨f, mid, hget, hburn, hrun⟩
+  noRevert := not_run_revert
+
+/-- A `Line` prefix, derived from `next` rather than assumed. -/
+theorem Func.WalkInv.prepend
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {post : Devm} {l : Line} {f : Func} :
+    ∀ {pre : Devm}, R fs sevm pre (l +++ f) post →
+      ∃ mid, Line.Run sevm pre l mid ∧ R fs sevm mid f post := by
+  induction l with
+  | nil => exact fun h => ⟨_, Line.Run.nil, h⟩
+  | cons i l ih =>
+    intro pre h
+    obtain ⟨mid, hstep, hrest⟩ := Func.WalkInv.next h
+    obtain ⟨fin, hline, hf⟩ := ih hrest
+    exact ⟨fin, Line.Run.cons hstep hline, hf⟩
+
+/-- The zero arm, selected by a known stack prefix rather than by inspecting
+the branch word. -/
+theorem Func.WalkInv.zero_branch_of_prefix
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {left right : Func}
+    {xs : Stack}
+    (hp : (0 : B256) :: xs <<+ pre.stack)
+    (run : R fs sevm pre (Func.branch left right) post) :
+    ∃ armPre, Devm.PopBurn [0] pre armPre ∧ R fs sevm armPre left post ∧
+      xs <<+ armPre.stack := by
+  rcases Func.WalkInv.branch run with
+    ⟨mid, hpop, harm⟩ | ⟨w, mid, mid', hw, hpop, -, -⟩
+  · exact ⟨mid, hpop, harm, (popBurn_pref hpop hp).2⟩
+  · exact absurd (popBurn_pref hpop hp).1 hw
+
+/-- The nonzero arm, selected the same way. -/
+theorem Func.WalkInv.succ_branch_of_prefix
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {left right : Func}
+    {w : B256} {xs : Stack}
+    (hw : w ≠ 0) (hp : w :: xs <<+ pre.stack)
+    (run : R fs sevm pre (Func.branch left right) post) :
+    ∃ armPre armMid, Devm.PopBurn [w] pre armPre ∧ Devm.Burn armPre armMid ∧
+      R fs sevm armMid right post ∧ xs <<+ armMid.stack := by
+  rcases Func.WalkInv.branch run with
+    ⟨mid, hpop, -⟩ | ⟨w', mid, mid', hw', hpop, hburn, harm⟩
+  · exact absurd (popBurn_pref hpop hp).1.symm hw
+  · obtain rfl : w' = w := (popBurn_pref hpop hp).1
+    refine ⟨mid, mid', hpop, hburn, harm, ?_⟩
+    rw [← hburn.stack]
+    exact (popBurn_pref hpop hp).2
+
+/-- The zero arm of a guard whose nonzero arm reverts. -/
+theorem Func.WalkInv.branch_revert
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
+    (h : R fs sevm pre (Func.revert <?> f) post) :
+    ∃ mid, Devm.PopBurn [0] pre mid ∧ R fs sevm mid f post := by
+  rcases Func.WalkInv.branch h with ⟨mid, hpop, hrun⟩ | ⟨w, mid, mid', _, _, _, hrun⟩
+  · exact ⟨mid, hpop, hrun⟩
+  · exact absurd hrun Func.WalkInv.noRevert
+
 /-- `Func.RunCompiledTo` at a `.next` node. -/
 theorem runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
     {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
@@ -269,6 +372,37 @@ theorem runCompiledTo_revert_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
   have hstk : d2.stack = (0 : B256) :: (0 : B256) :: devm.stack := by
     rw [p2.stack, p1.stack]; rfl
   exact of_run_revert_empty hstk hrev
+
+/-- The successful compiled walk as a five-place relation.  A generic trace is
+instantiated at this name — `nonzeroCaller_trace (R := Func.RunOk) …` — because
+recovering the outcome wrapper from `Func.RunCompiledTo … (.ok post)` is a
+higher-order unification Lean will not guess. -/
+abbrev Func.RunOk (fs : List Func) (sevm : Sevm) (pre : Devm) (f : Func)
+    (post : Devm) : Prop :=
+  Func.RunCompiledTo fs sevm pre f (.ok post)
+
+/-- The gas-exact compiled walk meets the shared inversion vocabulary: each
+principle is its compiled counterpart with the cost forgotten.  The `.succ`
+arm has no separate `Devm.Burn` step — the compiled relation folds the
+jumpdest into the pop's cost — so the source shape is met at a reflexive
+burn. -/
+instance : Func.WalkInv Func.RunOk where
+  next h := by
+    obtain ⟨mid, hstep, hrest⟩ := runCompiledTo_next_inv h
+    exact ⟨mid, Ninst.Run.of_runCompiled hstep, hrest⟩
+  branch h := by
+    rcases runCompiledTo_branch_inv h with
+      ⟨mid, -, hpop, hrun⟩ | ⟨w, mid, hne, -, hpop, hrun⟩
+    · exact Or.inl ⟨mid, Devm.PopBurn.of_popBurnBy hpop, hrun⟩
+    · exact Or.inr ⟨w, mid, mid, hne, Devm.PopBurn.of_popBurnBy hpop,
+        Devm.Burn.refl, hrun⟩
+  call h := by
+    cases h with
+    | call hget _ hburn hrest =>
+      exact ⟨_, _, hget, Devm.Burn.of_burnBy hburn, hrest⟩
+  noRevert h := by
+    obtain ⟨_, hex, -⟩ := runCompiledTo_revert_inv h
+    exact absurd hex (by simp)
 
 /-- A compiled walk of `nonpayable body` at nonzero call value takes the
 empty-revert arm. No premise about `body` is admitted, so the compiler guard

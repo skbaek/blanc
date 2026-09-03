@@ -457,7 +457,7 @@ theorem approve_body_effect
     intro index
     simp
   obtain ⟨spenderPre, callerNonzero, spenderStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace stack run
+      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
   have spenderWf : Mem.Wf spenderPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have spenderReads :
@@ -754,7 +754,7 @@ theorem transfer_body_effect
     intro index
     simp
   obtain ⟨receiverPre, callerNonzero, receiverStack, callerMemory,
-      callerState, callerLogs, run⟩ := nonzeroCaller_trace stack run
+      callerState, callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
   have receiverWf : Mem.Wf receiverPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have receiverReads :
@@ -898,7 +898,7 @@ theorem transferFrom_body_effect
     intro index
     simp
   obtain ⟨ownerPre, callerNonzero, ownerStack, callerMemory, callerState,
-      callerLogs, run⟩ := nonzeroCaller_trace stack run
+      callerLogs, run⟩ := nonzeroCaller_trace (R := Func.RunOk) stack run
   have ownerWf : Mem.Wf ownerPre.memory := by
     rw [← callerMemory]; exact memoryWf
   have ownerReads : Mem.Reads ownerPre.memory pre.memory.data.toList := by
