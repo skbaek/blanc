@@ -2489,6 +2489,14 @@ example (q : Nat) :
     exact bpo2Rules_redemptionRuntimeCeiling_gasCap
       (q := q)
 
+example {timestamp gas : Nat} {rules : ForkRules}
+    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hgas : gas ≤ 2 ^ 24) :
+    checkTransactionGasCap rules.tx gas = .ok () :=
+  by
+    exact mainnet_checkTransactionGasCap_of_le
+      (hrules := hrules) (hgas := hgas)
+
 example :
     mainnetChainConfig.rulesAt 1_767_747_683 = .ok bpo2Rules :=
   by
