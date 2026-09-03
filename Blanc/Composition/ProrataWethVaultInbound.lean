@@ -1,6 +1,7 @@
 import Blanc.ProrataWethVaultInbound
 import Blanc.CompiledFixedInvariance
 import Blanc.Composition.ProrataWethVaultStaging
+import Blanc.LedgerConservation
 
 /-!
 # WETH-backed compiled inbound flows
@@ -340,6 +341,46 @@ theorem inboundQuoteStaging_effect
       (Devm.getStor quotePre sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot
     rw [entryStorage]
+
+/-- An inbound flow preserves ledger conservation: it is a paired mint, one
+share row and the supply rising by exactly the same quoted amount.
+
+The supply-side overflow bound is not a premise — it follows from the vault's
+own supply-room guard, which is why the contract carries no separate overflow
+check on the supply. -/
+theorem inboundEffect_preserves_conserved
+    {sevm : Sevm} {pre post : Devm}
+    {receiver assets shares returned supply : B256}
+    (receiverValid : ValidAdr receiver)
+    (supplyEq : supply = Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (roomFits : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat)
+    (effect : InboundEffect sevm receiver assets shares returned pre post)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨-, -, vaultStorage, -, -⟩ := effect
+  obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
+  have overflow : B256.Nof
+      ((Devm.getStor pre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot) shares := by
+    have supplyNat : supply.toNat =
+        ((Devm.getStor pre sevm.currentTarget).get
+          Blanc.ProrataWethVault.supplySlot).toNat :=
+      congrArg B256.toNat supplyEq
+    have room : Blanc.ProrataWethVault.shareRoomN supply.toNat =
+        Blanc.ProrataWethVault.maxSupplyN - supply.toNat := rfl
+    have maxLt : Blanc.ProrataWethVault.maxSupplyN < 2 ^ 256 := by
+      unfold Blanc.ProrataWethVault.maxSupplyN maxWordN wordModulusN
+      omega
+    unfold B256.Nof
+    rw [room] at roomFits
+    omega
+  rw [vaultStorage, ← receiverAdrEq]
+  exact conserved.mint_set Blanc.ProrataWethVault.supplySlot_not_validAdr
+    overflow
 
 /-- Join one flow's quote arithmetic to the shared settlement.
 

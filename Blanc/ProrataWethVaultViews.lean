@@ -44,6 +44,13 @@ def nameOutput : Bytes :=
 def symbolOutput : Bytes :=
   shortStringOutput (Blanc.String.toBytes "prWETH").toB256 208 6
 
+/-- The reserved supply word is not address-shaped, so it can never alias a
+share row.  Everything the ledger-conservation invariant needs rests on this
+one bit fact. -/
+theorem supplySlot_not_validAdr : ¬ ValidAdr supplySlot := by
+  rw [validAdr_iff]
+  decide +kernel
+
 /-- Exact raw allowance key computed by the vault from canonical ABI words. -/
 def allowanceKey (owner spender : B256) : B256 :=
   Bytes.keccak (owner.toBytes ++ spender.toBytes)

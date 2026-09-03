@@ -718,13 +718,6 @@ theorem approve_body_effect
 
 /-! ## Share transfers -/
 
-/-- The supply slot is not address-shaped, so it can never alias a share row.
-This is what makes a share transfer unable to change the total supply. -/
-theorem supplySlot_not_validAdr' :
-    ¬ ValidAdr supplySlot := by
-  rw [validAdr_iff]
-  decide +kernel
-
 /-- `transfer(receiver, amount)` moves the caller's own shares. -/
 theorem transfer_body_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
@@ -831,10 +824,10 @@ theorem transfer_body_effect
     ⟨sevm.caller, rfl⟩
   have supplyNotOwner : supplySlot ≠ sevm.caller.toB256 := by
     intro slotEq
-    exact supplySlot_not_validAdr' (slotEq ▸ callerValid)
+    exact supplySlot_not_validAdr (slotEq ▸ callerValid)
   have supplyNotReceiver : supplySlot ≠ Sevm.argWord sevm 0 := by
     intro slotEq
-    exact supplySlot_not_validAdr' (slotEq ▸ receiverValid)
+    exact supplySlot_not_validAdr (slotEq ▸ receiverValid)
   refine ⟨callerNonzero, receiverValid, receiverNonzero, returnsTrue, ?_,
     ownerBalance, receiverBalance, ownerBalanceEq.trans (storVal _).symm,
     covered,
@@ -1027,10 +1020,10 @@ theorem transferFrom_body_effect
     rw [congrFun preToSpend sevm.currentTarget]
   have supplyNotOwner : supplySlot ≠ Sevm.argWord sevm 0 := by
     intro slotEq
-    exact supplySlot_not_validAdr' (slotEq ▸ ownerValid)
+    exact supplySlot_not_validAdr (slotEq ▸ ownerValid)
   have supplyNotReceiver : supplySlot ≠ Sevm.argWord sevm 1 := by
     intro slotEq
-    exact supplySlot_not_validAdr' (slotEq ▸ receiverValid)
+    exact supplySlot_not_validAdr (slotEq ▸ receiverValid)
   refine ⟨callerNonzero, ownerValid, ownerNonzero, receiverValid,
     receiverNonzero, returnsTrue, keyNotAddress, keyNotSupply, ?_,
     allowance, Devm.getStor callPre sevm.currentTarget, ownerBalance,
