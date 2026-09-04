@@ -94,7 +94,7 @@ def enumKeyFromMemoryAt (word : Nat) (region : Nat) : Line :=
   [pushB256 low252Mask, and, pushB256 (regionWord region), or]
 
 def onlyRole (role : B256) (body : Func) : Func :=
-  roleMembershipSlotFrom [pushB256 role] [caller] +++
+  viewRoleMembershipSlotFrom [pushB256 role] [caller] +++
     (sload ::: iszero ::: ((.call missingRoleSlot) <?> body))
 
 def requireStaticArgs (words : Nat) (body : Func) : Func :=
@@ -241,19 +241,19 @@ def getRoleAdmin : Func :=
 
 def getRoleMember : Func :=
   requireStaticArgs 2 <|
-    (arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
-      roleEnumerationBaseSlotFrom (mloadWord 0) ++ [sload] ++
-        mloadWord 1 ++ [lt]) +++
-      (((roleEnumerationMemberSlotFrom (mloadWord 0) (mloadWord 1) ++
+    (viewRoleEnumerationBaseSlotFrom (arg 0) ++ [sload] ++
+        arg 1 ++ [lt]) +++
+      (((viewRoleEnumerationMemberSlotFrom (arg 0) (arg 1) ++
           [sload]) +++ returnWord) <?> Func.revert)
 
 def getRoleMemberCount : Func :=
   requireStaticArgs 1 <|
-    (roleEnumerationBaseSlotFrom (arg 0) ++ [sload]) +++ returnWord
+    (viewRoleEnumerationBaseSlotFrom (arg 0) ++ [sload]) +++ returnWord
 
 def hasRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <|
-    (roleMembershipSlotFrom (arg 0) (arg 1) ++ [sload, iszero, iszero]) +++
+    (viewRoleMembershipSlotFrom (arg 0) (arg 1) ++
+      [sload, iszero, iszero]) +++
       returnWord
 
 def isPaused : Func :=
@@ -456,9 +456,44 @@ def funcs (dp : DeployParams) : List (B256 × Func) :=
     (selGetRoleMember, nonpayable getRoleMember),
     (selGetRoleMemberCount, nonpayable getRoleMemberCount) ]
 
+/-! The payable trigger is selected before this table.  All remaining entries
+share one nonpayable guard.  Hot role views move ahead of large-margin writers;
+this changes no selector semantics and targets the measured 27--194 gas
+dispatcher residue without sacrificing an existing strict win. -/
+def sharedNonpayableFuncs : List (B256 × Func) :=
+  [ (selPauseFor, pauseFor),
+    (selIsPaused, isPaused),
+    (selHasRole, hasRole),
+    (selGetRoleMember, getRoleMember),
+    (selGetRoleMemberCount, getRoleMemberCount),
+    (selPauseRole, constantWord pauseRole),
+    (selResumeRole, constantWord resumeRole),
+    (selAddFullWithdrawalRequestRole,
+      constantWord addFullWithdrawalRequestRole),
+    (selTwExitLimitManagerRole, constantWord twExitLimitManagerRole),
+    (selTwrLimitPosition, constantWord twrLimitPosition),
+    (selVersion, constantWord version),
+    (selResume, resume),
+    (selPauseUntil, pauseUntil),
+    (selSetExitRequestLimit, setExitRequestLimit),
+    (selGetExitRequestLimitFullInfo, getExitRequestLimitFullInfo),
+    (selPauseInfinitely, constantWord pauseInfinitely),
+    (selGetResumeSinceTimestamp, getResumeSinceTimestamp),
+    (selDefaultAdminRole, constantWord defaultAdminRole),
+    (selSupportsInterface, supportsInterface),
+    (selGetRoleAdmin, getRoleAdmin),
+    (selGrantRole, grantRole),
+    (selRevokeRole, revokeRole),
+    (selRenounceRole, renounceRole) ]
+
 def runtimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::
-    (Func.revert <?> (fsig +++ linearDispatchWith fallbackSlot (funcs dp)))
+    (Func.revert <?>
+      (fsig +++ dup 0 ::: pushB256 selTriggerFullWithdrawals ::: eq :::
+        ((pop ::: triggerFullWithdrawals dp) <?>
+          (callvalue ::: iszero :::
+            (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
+              Func.revert)))))
 
 def baseAux : List Func :=
   [Func.revert,

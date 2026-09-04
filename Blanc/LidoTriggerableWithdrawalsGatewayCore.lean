@@ -140,6 +140,34 @@ def roleEnumerationIndexSlotFrom (role account : Line) : Line :=
 def roleEnumerationMemberSlotFrom (role index : Line) : Line :=
   keccakWordLine (roleEnumerationBaseSlotFrom role) ++ index ++ [add]
 
+/-! Read-only/runtime-entry role checks can use the first two memory words:
+their inputs are still in calldata or are immediate instructions, and callers
+do not depend on earlier memory.  Keeping this separate from the general
+helpers preserves constructor arguments, role-update scratch, and the
+post-decoder trigger packet while avoiding word-64 memory expansion on views. -/
+def viewKeccakPairLines (first second : Line) : Line :=
+  first ++ mstoreAt 0 ++ second ++ mstoreAt 1 ++
+  [pushB256 64, pushB256 0, keccak256]
+
+def viewKeccakPairLinesRightFirst (first second : Line) : Line :=
+  second ++ mstoreAt 1 ++ first ++ mstoreAt 0 ++
+  [pushB256 64, pushB256 0, keccak256]
+
+def viewKeccakWordLine (word : Line) : Line :=
+  word ++ mstoreAt 0 ++ [pushB256 32, pushB256 0, keccak256]
+
+def viewRoleDataSlotFrom (role : Line) : Line :=
+  viewKeccakPairLines role [pushB256 accessControlRolesPosition]
+
+def viewRoleMembershipSlotFrom (role account : Line) : Line :=
+  viewKeccakPairLinesRightFirst account (viewRoleDataSlotFrom role)
+
+def viewRoleEnumerationBaseSlotFrom (role : Line) : Line :=
+  viewKeccakPairLines role [pushB256 accessControlRoleMembersPosition]
+
+def viewRoleEnumerationMemberSlotFrom (role index : Line) : Line :=
+  viewKeccakWordLine (viewRoleEnumerationBaseSlotFrom role) ++ index ++ [add]
+
 def unpackUint32Lane (packedWord destinationWord shift : B256) : Line :=
   storageMloadWord packedWord ++ [pushB256 shift, shr,
     pushB256 limitUint32Mask, and] ++ mstoreAt destinationWord
