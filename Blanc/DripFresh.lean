@@ -444,6 +444,8 @@ theorem now_base : SlotsDisjoint nowWord baseWord := by decide +kernel
 theorem now_accumulator : SlotsDisjoint nowWord accumulatorWord := by
   decide +kernel
 theorem now_freshChi : SlotsDisjoint nowWord freshChiWord := by decide +kernel
+theorem argument_route : SlotsDisjoint argumentWord routeWord := by
+  decide +kernel
 
 /-! ## What the whole machine may touch
 
@@ -1645,6 +1647,256 @@ theorem of_run_drip {fs : List Func} (hlookup : AuxLookup fs)
     rw [hfresh, hnow] at hstor
     rw [hfresh] at hret
     exact ⟨hlower, hupper, hclock, helapsed, hguards, hnofm, hcap, hstor, hret⟩
+  · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
+
+/-! ## The two conversion views
+
+Both views are arithmetic-only previews at the same realized index a mutation
+would use.  They perform the machine's whole guard route and then one exact
+surface floor; neither writes storage, so a successful view leaves the
+contract's rows exactly as it found them. -/
+
+theorem of_run_afterConvertToAssets {fs : List Func} {e : Sevm}
+    {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s afterConvertToAssets r) :
+    Devm.getStor s = Devm.getStor r ∧
+      ReturnsWord
+        ((scratch image freshChiWord * scratch image argumentWord) / scale) r := by
+  refine ⟨Func.of_inv Devm.getStor Devm.getStor (by func_inv) run, ?_⟩
+  unfold Drip.afterConvertToAssets at run
+  refine run_prepend_elim _ (loadWord argumentWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
+  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  intro s2 hline2 run
+  obtain ⟨hp2, frame2⟩ := frame1.loadWord hp1 hline2
+  refine run_prepend_elim _ [mul, pushB256 scale, swap 0, div] ?_ run
+  intro s3 hline3 run
+  have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
+  have hp3 : ((scratch image freshChiWord * scratch image argumentWord) /
+      scale) :: tail <<+ s3.stack := by
+    rcases Line.of_run_cons hline3 with ⟨u1, hmul, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u3, hswap, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u4, hdiv, hnil⟩
+    cases hnil
+    have h1 := prefix_of_mul hmul hp2
+    have h2 := prefix_of_push (of_run_pushB256 hpush) h1
+    have h3 : (scratch image freshChiWord * scratch image argumentWord) ::
+        scale :: tail <<+ u3.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap 0
+            (scale :: (scratch image freshChiWord *
+              scratch image argumentWord) :: tail)
+            ((scratch image freshChiWord * scratch image argumentWord) ::
+              scale :: tail)
+          from Stack.swapCore_zero)
+        (of_run_swap hswap) h2
+    exact prefix_of_div hdiv h3
+  refine run_prepend_elim _ (mstoreAt resultWord) ?_ run
+  intro s4 hline4 run
+  obtain ⟨hp4, frame4⟩ := frame3.mstoreAt hp3 hline4
+  refine run_prepend_elim _ (loadWord resultWord) ?_ run
+  intro s5 hline5 run
+  obtain ⟨hp5, frame5⟩ := frame4.loadWord hp4 hline5
+  rw [scratch_setScratch_self] at hp5
+  exact (returnsWord_of_storeReturn hp5 run).1
+
+theorem of_run_afterConvertToUnits {fs : List Func} {e : Sevm}
+    {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s afterConvertToUnits r) :
+    Devm.getStor s = Devm.getStor r ∧
+      ReturnsWord
+        ((scale * scratch image argumentWord) /
+          scratch image freshChiWord) r := by
+  refine ⟨Func.of_inv Devm.getStor Devm.getStor (by func_inv) run, ?_⟩
+  unfold Drip.afterConvertToUnits at run
+  refine run_prepend_elim _ (loadWord argumentWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
+  refine run_prepend_elim _ [pushB256 scale, mul] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : (scale * scratch image argumentWord) :: tail <<+ s2.stack := by
+    rcases Line.of_run_cons hline2 with ⟨u1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hmul, hnil⟩
+    cases hnil
+    exact prefix_of_mul hmul (prefix_of_push (of_run_pushB256 hpush) hp1)
+  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  intro s3 hline3 run
+  obtain ⟨hp3, frame3⟩ := frame2.loadWord hp2 hline3
+  refine run_prepend_elim _ [swap 0, div] ?_ run
+  intro s4 hline4 run
+  have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
+  have hp4 : ((scale * scratch image argumentWord) /
+      scratch image freshChiWord) :: tail <<+ s4.stack := by
+    rcases Line.of_run_cons hline4 with ⟨u1, hswap, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hdiv, hnil⟩
+    cases hnil
+    have h1 : (scale * scratch image argumentWord) ::
+        scratch image freshChiWord :: tail <<+ u1.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap 0
+            (scratch image freshChiWord ::
+              (scale * scratch image argumentWord) :: tail)
+            ((scale * scratch image argumentWord) ::
+              scratch image freshChiWord :: tail)
+          from Stack.swapCore_zero)
+        (of_run_swap hswap) hp3
+    exact prefix_of_div hdiv h1
+  refine run_prepend_elim _ (mstoreAt resultWord) ?_ run
+  intro s5 hline5 run
+  obtain ⟨hp5, frame5⟩ := frame4.mstoreAt hp4 hline5
+  refine run_prepend_elim _ (loadWord resultWord) ?_ run
+  intro s6 hline6 run
+  obtain ⟨hp6, frame6⟩ := frame5.loadWord hp5 hline6
+  rw [scratch_setScratch_self] at hp6
+  exact (returnsWord_of_storeReturn hp6 run).1
+
+/-! ## The two views, end to end at source level -/
+
+private theorem of_run_viewEntry {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    {cap route : B256}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s
+      (arg 0 +++ dup 0 ::: mstoreAt argumentWord +++ pushB256 cap ::: lt :::
+        (.revert <?> (stageRoute route +++ Func.call freshStartSlot))) r) :
+    ∃ t image',
+      ¬ cap < Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      scratch image' routeWord = route ∧
+      scratch image' argumentWord = Sevm.dataWord e (32 * 0 + 4) ∧
+      scratch image' freshChiWord =
+        (B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+      Frame image' entry t ∧ (tail <<+ t.stack) ∧
+      Func.Run fs e t (.call freshRouteSlot) r := by
+  refine run_prepend_elim _ (arg 0) ?_ run
+  intro s1 hline1 run
+  have frame1 := frame.line (by line_inv) (by line_inv) (by line_inv) hline1
+  have hp1 : Sevm.dataWord e (32 * 0 + 4) :: tail <<+ s1.stack :=
+    prefix_of_cdl_val hp hline1
+  refine run_prepend_elim _ [dup 0] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : Sevm.dataWord e (32 * 0 + 4) :: Sevm.dataWord e (32 * 0 + 4) ::
+      tail <<+ s2.stack :=
+    prefix_of_dup_val (of_run_single hline2) (by show_nth) hp1
+  refine run_prepend_elim _ (mstoreAt argumentWord) ?_ run
+  intro s3 hline3 run
+  obtain ⟨hp3, frame3⟩ := frame2.mstoreAt hp2 hline3
+  refine run_prepend_elim _ [pushB256 cap, lt] ?_ run
+  intro s4 hline4 run
+  have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
+  have hp4 : (cap <? Sevm.dataWord e (32 * 0 + 4)) :: tail <<+ s4.stack := by
+    rcases Line.of_run_cons hline4 with ⟨u1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hlt, hnil⟩
+    cases hnil
+    exact prefix_of_lt hlt (prefix_of_push (of_run_pushB256 hpush) hp3)
+  obtain ⟨hflagCap, s5, hp5, hpop5, run⟩ := of_run_guard hp4 run
+  have frame5 := frame4.of_popBurn hpop5
+  have hcap := not_lt_of_ltCheck_eq_zero hflagCap
+  unfold Drip.stageRoute at run
+  refine run_prepend_elim _ [pushB256 route] ?_ run
+  intro s6 hline6 run
+  have frame6 := frame5.line (by line_inv) (by line_inv) (by line_inv) hline6
+  have hp6 : route :: tail <<+ s6.stack := by
+    rcases Line.of_run_cons hline6 with ⟨u, hpush, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hpush) hp5
+  refine run_prepend_elim _ (mstoreAt routeWord) ?_ run
+  intro s7 hline7 run
+  obtain ⟨hp7, frame7⟩ := frame6.mstoreAt hp6 hline7
+  obtain ⟨t8, image8, hlower, hupper, hclock, helapsed, hguards, hnofm, hcapChi,
+    hfresh, hnow, hmachine, frame8, hp8, run⟩ :=
+    of_run_freshStart hlookup frame7 hp7 run
+  refine ⟨t8, image8, hcap, hlower, hupper, hclock, helapsed, hguards, ?_, ?_,
+    hfresh, frame8, hp8, run⟩
+  · rw [hmachine.1, scratch_setScratch_self]
+  · rw [hmachine.2.1,
+      scratch_setScratch_of_disjoint _ _ argument_route,
+      scratch_setScratch_self]
+
+theorem of_run_convertToAssets {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.convertToAssets r) :
+    ¬ maxUnits < Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      Devm.getStor entry = Devm.getStor r ∧
+      ReturnsWord
+        (((B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale) *
+          Sevm.dataWord e (32 * 0 + 4) / scale) r := by
+  unfold Drip.convertToAssets at run
+  obtain ⟨t, image', hcap, hlower, hupper, hclock, helapsed, hguards, htag,
+    harg, hfresh, framet, hpt, run⟩ := of_run_viewEntry hlookup frame hp run
+  obtain ⟨t2, frame2, hp2, hroute⟩ := of_run_freshRoute hlookup framet hpt run
+  rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
+    ⟨htagD, run⟩ | ⟨htagJ, run⟩
+  · obtain ⟨hstor, hret⟩ := of_run_afterConvertToAssets frame2 hp2 run
+    rw [hfresh, harg] at hret
+    exact ⟨hcap, hlower, hupper, hclock, helapsed, hguards,
+      (getStor_of_state frame2.state).trans hstor, hret⟩
+  · exact absurd (htag.symm.trans htagE) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagU) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagD) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
+
+theorem of_run_convertToUnits {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.convertToUnits r) :
+    ¬ maxAsset < Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      Devm.getStor entry = Devm.getStor r ∧
+      ReturnsWord
+        (scale * Sevm.dataWord e (32 * 0 + 4) /
+          ((B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale)) r := by
+  unfold Drip.convertToUnits at run
+  obtain ⟨t, image', hcap, hlower, hupper, hclock, helapsed, hguards, htag,
+    harg, hfresh, framet, hpt, run⟩ := of_run_viewEntry hlookup frame hp run
+  obtain ⟨t2, frame2, hp2, hroute⟩ := of_run_freshRoute hlookup framet hpt run
+  rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
+    ⟨htagD, run⟩ | ⟨htagJ, run⟩
+  · exact absurd (htag.symm.trans htagA) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagE) (by decide +kernel)
+  · obtain ⟨hstor, hret⟩ := of_run_afterConvertToUnits frame2 hp2 run
+    rw [hfresh, harg] at hret
+    exact ⟨hcap, hlower, hupper, hclock, helapsed, hguards,
+      (getStor_of_state frame2.state).trans hstor, hret⟩
+  · exact absurd (htag.symm.trans htagD) (by decide +kernel)
   · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
 
 end Drip
