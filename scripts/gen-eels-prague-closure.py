@@ -21,11 +21,12 @@ specification package actually imports, with exact versions — and renders it a
 a pip constraints file that provisioning consumes.  See eels_semantic_closure
 for how the closure is derived and why it is narrow.
 
-Content digests are recorded per platform, and enforced on a platform once its
-row has been generated there.  Unlike the current-mainnet lock, an ungenerated
-platform is not fatal here: CI provisions this lane on Linux, versions are the
-half of the pin that determines the result, and failing closed on a byte
-measurement nobody has taken would only stop the lane from running at all.
+Distribution and loaded-standard-library content digests are recorded per
+platform, and enforced on a platform once its row has been generated there.
+Unlike the current-mainnet lock, an ungenerated platform is not fatal here:
+the longstanding ``whereGenerated`` policy permits that lane to run but says
+plainly that byte evidence is unavailable there.  Only a generated row is
+content-verified evidence for its platform.
 """
 
 from __future__ import annotations
@@ -158,6 +159,7 @@ def closure_section(observed: dict[str, Any]) -> dict[str, Any]:
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
+        "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
         "distributions": [
             {
                 "name": entry["name"],
@@ -174,8 +176,10 @@ def closure_section(observed: dict[str, Any]) -> dict[str, Any]:
 def platform_row(observed: dict[str, Any]) -> dict[str, Any]:
     return {
         "generated": True,
+        "pythonExecutableSha256": observed["pythonExecutableSha256"],
         "fileRecords": observed["fileRecords"],
         "contentSha256": observed["contentSha256"],
+        "standardLibrary": observed["standardLibrary"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -212,7 +216,7 @@ def build(root: Path, observed: dict[str, Any]) -> dict[str, Any]:
         platforms = copy.deepcopy(previous["platforms"])
     platforms[native_key()] = platform_row(observed)
     document = {
-        "schema": 1,
+        "schema": 2,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY,
@@ -252,7 +256,7 @@ def validate(document: Any) -> dict[str, Any]:
         },
         "prague closure pin",
     )
-    if top["schema"] != 1 or top["lane"] != LANE:
+    if top["schema"] != 2 or top["lane"] != LANE:
         fail("prague closure pin identity differs")
     checkout = keys(
         top["checkout"], {"repository", "commit", "sourceRoot"}, "pin.checkout"
@@ -275,6 +279,7 @@ def validate(document: Any) -> dict[str, Any]:
         top["semanticClosure"],
         {
             "policy", "contentExcludes", "installerMetadataExcludes",
+            "standardLibraryPolicy",
             "distributions", "count", "versionsSha256",
         },
         "pin.semanticClosure",
@@ -284,6 +289,8 @@ def validate(document: Any) -> dict[str, Any]:
     if section["contentExcludes"] != list(closure.CONTENT_EXCLUDES) \
             or section["installerMetadataExcludes"] != list(closure.INSTALLER_METADATA):
         fail("prague closure exclusion policy differs")
+    if section["standardLibraryPolicy"] != dict(closure.STANDARD_LIBRARY_POLICY):
+        fail("prague closure standard-library policy differs")
     entries = section["distributions"]
     if not isinstance(entries, list) or not entries:
         fail("prague closure names no distribution")
@@ -309,11 +316,23 @@ def validate(document: Any) -> dict[str, Any]:
     for key in sorted(platforms):
         row = keys(
             platforms[key],
-            {"generated", "fileRecords", "contentSha256", "distributions"},
+            {
+                "generated", "pythonExecutableSha256", "fileRecords", "contentSha256",
+                "standardLibrary", "distributions",
+            },
             f"pin.platforms.{key}",
         )
         if row["generated"] is not True:
             fail(f"pin.platforms.{key} is recorded but not generated")
+        if not closure.is_sha256(row["pythonExecutableSha256"]):
+            fail(f"pin.platforms.{key} Python executable digest is malformed")
+        standard_library = closure.validate_standard_library(
+            row["standardLibrary"], fail,
+            label=f"pin.platforms.{key}.standardLibrary",
+        )
+        if standard_library["implementation"] != PYTHON_IMPLEMENTATION.lower() \
+                or ".".join(standard_library["version"].split(".")[:2]) != PYTHON_SERIES:
+            fail(f"pin.platforms.{key} standard library is not pinned CPython 3.11")
         names = {cell["name"] for cell in row["distributions"]}
         if names != seen:
             fail(
@@ -323,7 +342,9 @@ def validate(document: Any) -> dict[str, Any]:
         total = sum(int(cell["files"]) for cell in row["distributions"])
         if row["fileRecords"] != total:
             fail(f"pin.platforms.{key} file-record total does not match its rows")
-        if row["contentSha256"] != closure.content_digest(row["distributions"]):
+        if row["contentSha256"] != closure.environment_content_digest(
+            row["distributions"], standard_library
+        ):
             fail(f"pin.platforms.{key} content digest does not match its own rows")
     return top
 
@@ -343,8 +364,19 @@ def self_check() -> int:
         {"name": "ethereum_rlp", "files": 8, "contentSha256": "a" * 64},
         {"name": "coincurve", "files": 17, "contentSha256": "b" * 64},
     ]
+    standard_library_files = [
+        {"path": "stdlib/hashlib.py", "sha256": "d" * 64},
+        {"path": "stdlib/json/__init__.py", "sha256": "e" * 64},
+    ]
+    standard_library = {
+        "implementation": PYTHON_IMPLEMENTATION.lower(),
+        "version": "3.11.9",
+        "fileRecords": len(standard_library_files),
+        "contentSha256": closure.standard_library_digest(standard_library_files),
+        "files": standard_library_files,
+    }
     document = {
-        "schema": 1,
+        "schema": 2,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY, "commit": EELS_PIN, "sourceRoot": SOURCE_ROOT,
@@ -358,6 +390,7 @@ def self_check() -> int:
             "policy": copy.deepcopy(CLOSURE_POLICY),
             "contentExcludes": list(closure.CONTENT_EXCLUDES),
             "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
+            "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
             "distributions": copy.deepcopy(distributions),
             "count": 2,
             "versionsSha256": closure.versions_digest(distributions),
@@ -365,8 +398,12 @@ def self_check() -> int:
         "platforms": {
             "macos-arm64": {
                 "generated": True,
+                "pythonExecutableSha256": "3" * 64,
                 "fileRecords": 25,
-                "contentSha256": closure.content_digest(measured),
+                "contentSha256": closure.environment_content_digest(
+                    measured, standard_library
+                ),
+                "standardLibrary": copy.deepcopy(standard_library),
                 "distributions": copy.deepcopy(measured),
             }
         },
@@ -382,6 +419,10 @@ def self_check() -> int:
     unpolicied = copy.deepcopy(document)
     unpolicied["semanticClosure"]["policy"]["transitionPackages"] = []
     mutants.append(("emptied-closure-policy", unpolicied))
+
+    unbounded_stdlib = copy.deepcopy(document)
+    del unbounded_stdlib["semanticClosure"]["standardLibraryPolicy"]
+    mutants.append(("standard-library-policy-dropped", unbounded_stdlib))
 
     restated = copy.deepcopy(document)
     restated["semanticClosure"]["distributions"][0]["version"] = "0.1.6"
@@ -404,6 +445,16 @@ def self_check() -> int:
     repacked = copy.deepcopy(document)
     repacked["platforms"]["macos-arm64"]["distributions"][0]["contentSha256"] = "c" * 64
     mutants.append(("row-digest-disagrees-with-total", repacked))
+
+    changed_stdlib = copy.deepcopy(document)
+    changed_stdlib["platforms"]["macos-arm64"]["standardLibrary"]["files"][0][
+        "sha256"
+    ] = "f" * 64
+    mutants.append(("changed-stdlib-byte", changed_stdlib))
+
+    changed_python = copy.deepcopy(document)
+    changed_python["platforms"]["macos-arm64"]["pythonExecutableSha256"] = "z" * 64
+    mutants.append(("malformed-python-executable-digest", changed_python))
 
     unmeasured = copy.deepcopy(document)
     unmeasured["platforms"] = {}
@@ -507,7 +558,8 @@ def main() -> int:
         print(
             f"OK — prague closure pin matches: {section['count']} pinned "
             f"distributions at their exact versions, {observed['fileRecords']} files; "
-            f"content digests are not recorded for {native}, so bytes are "
+            f"content digests (including {observed['standardLibrary']['fileRecords']} "
+            f"loaded standard-library files) are not recorded for {native}, so bytes are "
             f"unverified here (run --write on {native} to record them)"
         )
         return 0
@@ -522,7 +574,9 @@ def main() -> int:
         fail(f"prague closure content digest differs for {native}")
     print(
         f"OK — prague closure pin matches: {section['count']} pinned "
-        f"distributions, {observed['fileRecords']} files, content verified on {native}"
+        f"distributions, {observed['fileRecords']} distribution files and "
+        f"{observed['standardLibrary']['fileRecords']} loaded standard-library files, "
+        f"content verified on {native}"
     )
     return 0
 

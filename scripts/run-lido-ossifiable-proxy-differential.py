@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, NoReturn, Sequence
 
+import eels_semantic_closure
+
 from lido_ossifiable_proxy_differential_schema import (
     CASE_COUNT,
     EELS_COMMIT,
@@ -140,6 +142,7 @@ def verify_eels(root: Path) -> None:
     module_path = Path(ethereum.__file__).resolve()
     if not module_path.is_relative_to(expected_source):
         die(f"ethereum package was not imported from pinned EELS root: {module_path}")
+    eels_semantic_closure.assert_prague_environment(die)
 
 
 def parse_blanc_artifacts(path: Path) -> Dict[str, Any]:

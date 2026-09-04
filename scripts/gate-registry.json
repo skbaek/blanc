@@ -1047,6 +1047,8 @@
           "Blanc/LidoCircuitBreakerDeploymentRoot.lean",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "@eels/venv/pyvenv.cfg",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/bin/python"
         ],
         "lean_entries": [
@@ -1060,6 +1062,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1274,6 +1283,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1283,7 +1299,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Owns the Prague differential lane's reference Python environment. The checkout commit pins the specification's own source and nothing else: EELS declares keccak-256, secp256k1 recovery, the BN254/BLS/KZG precompiles, RLP encoding and U256 arithmetic as version ranges, so two clean checkouts at the same commit can disagree on a differential result. This gate derives the semantic closure — the distributions the specification package actually imports — from the live environment, holds it against a committed pin by exact version everywhere and by exact installed bytes on any platform whose row has been generated, and renders the constraints file provisioning consumes. The closure is re-derived on every run, so a revision that reaches for a new library reddens the pin instead of passing unnoticed.",
+      "note": "Owns the Prague differential lane's reference Python environment. The checkout commit pins the specification's own source and nothing else: EELS declares keccak-256, secp256k1 recovery, the BN254/BLS/KZG precompiles, RLP encoding and U256 arithmetic as version ranges, so two clean checkouts at the same commit can disagree on a differential result. This gate derives the semantic closure — installed distributions and file-backed standard-library modules actually loaded by the isolated specification import — from the live environment, holds exact versions everywhere and exact bytes on any platform whose row has been generated, and renders the constraints file provisioning consumes. The cache identity includes the selected native CPython standard library; the closure is re-derived on every execution, so reaching for a new library module reddens the pin instead of passing unnoticed.",
       "order": 32,
       "verdict": {
         "expect_exit": 0,
@@ -1316,6 +1332,8 @@
           "scripts/check-runtime-bytes.py",
           "scripts/weth10-reference.json",
           "scripts/fixtures/weth10/manifest.json",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -1340,6 +1358,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1383,6 +1408,8 @@
           "scripts/eels_differential_common.py",
           "scripts/lido_circuit_breaker_ac5_shape_schema.py",
           "scripts/lido-circuit-breaker-reference.json",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -1397,6 +1424,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1442,6 +1476,8 @@
           "scripts/check-lido-circuit-breaker-dispatchers.py",
           "scripts/lido-circuit-breaker-reference.json",
           "scripts/fixtures/lido-circuit-breaker/manifest.json",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -1455,6 +1491,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1518,6 +1561,8 @@
           "scripts/lido-twg-compatibility.py",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -1531,6 +1576,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           },
           {
             "pattern": "**/*",
@@ -1581,6 +1633,8 @@
           "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
           "scripts/lido-ossifiable-proxy-reference.json",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -1605,6 +1659,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1649,6 +1710,8 @@
           "scripts/check-runtime-bytes.py",
           "scripts/fixtures/weth10-redemption/manifest.json",
           "Blanc/Weth10Code.lean",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
           "@eels/venv/pyvenv.cfg",
@@ -1665,6 +1728,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1707,6 +1777,8 @@
           "scripts/gen-weth10-redemption-fixtures.py",
           "scripts/gen-weth-fixtures.py",
           "scripts/check-runtime-bytes.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
           "@eels/venv/pyvenv.cfg",
@@ -1722,6 +1794,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -1858,7 +1937,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. A generated two-platform runtime lock owns exact native macOS arm64 and Linux x86_64 closures; cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
+      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. The schema-3 runtime lock binds exact distribution and loaded-standard-library bytes on generated native rows: macOS arm64 is measured here, while Linux x86_64 remains explicitly ungenerated and fail-closed. Cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
       "order": 42,
       "verdict": {
         "expect_exit": 0,
@@ -2047,7 +2126,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the generated two-platform runtime lock; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
+      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the two-row runtime lock, whose Linux row is explicitly ungenerated; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
       "order": 44,
       "verdict": {
         "expect_exit": 0,
@@ -2082,6 +2161,8 @@
           "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
           "scripts/fixtures/beacon-deposit/manifest.json",
           "BEACON_DEPOSIT_DEVIATIONS.md",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
         ],
@@ -2095,6 +2176,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [
@@ -2134,6 +2222,8 @@
           "scripts/check-beacon-deposit-deployment.sh",
           "scripts/gen-beacon-deposit-deployment-fixture.py",
           "scripts/gen-weth-fixtures.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "@eels/venv/pyvenv.cfg",
           "@eels/venv/bin/python"
@@ -2159,6 +2249,13 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
           }
         ],
         "tools": [

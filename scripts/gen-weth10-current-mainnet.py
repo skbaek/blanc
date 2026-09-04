@@ -1612,7 +1612,7 @@ def load_runtime_lock(profile: Mapping[str, object]) -> dict[str, object]:
         lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         die(f"cannot read current-mainnet runtime lock: {exc}")
-    if not isinstance(lock, dict) or lock.get("schema") != 2:
+    if not isinstance(lock, dict) or lock.get("schema") != 3:
         die("current-mainnet runtime lock schema differs")
     target = lock.get("target")
     platforms = lock.get("platforms")
@@ -2133,7 +2133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "OK — WETH10 current-mainnet static self-check: exact five-function "
             "API, 27 selectors + receive, five BPO2 system accounts, CREATE and "
-            "timestamp pins, EIP-7702 signer, two-platform runtime lock, four "
+            "timestamp pins, EIP-7702 signer, two-row runtime lock, four "
             "API-boundary and four evidence-boundary falsifiers"
         )
         return 0

@@ -36,14 +36,14 @@
   "cacheInputs": {
     "repositoryFiles": {
       "BEACON_DEPOSIT_DEVIATIONS.md": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45",
-      "scripts/check-beacon-deposit-current-mainnet.sh": "5020c54c465a25c96af1b163d1976a8f0a4b86c83155b5af615027a4388965aa",
-      "scripts/current-mainnet-runtime-lock.json": "b69a9b2d40238850f2f70fb5aea07979fcdd19bd087c770262142eb82f85eb82",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "abdab2027fbda84be5a314bf350a037f93c791512a6e2abaea243a52844d2e61",
+      "scripts/current-mainnet-runtime-lock.json": "1dcd4604187f3c82b7787e615d7e4b4ed84667abd1aff22f51842c15371cc2f9",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
-      "scripts/current_mainnet.py": "f8f1fc8e67eec4db5efccb0af17997675e2f0b645fe16037a19285e3e43f59ed",
-      "scripts/eels_semantic_closure.py": "9c0be5b40902f6854fac25b876ab419f623893ac325a84fd6a554df060ea1e68",
+      "scripts/current_mainnet.py": "85f08606fc36f536076993da2d5e880dedbd39f49f2bcf8c02212b172caeea16",
+      "scripts/eels_semantic_closure.py": "7fc55efb7769ad854c04cb1cc98488541e0281dd4f42af9ac9a78a2be73adcf0",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
-      "scripts/gen-beacon-deposit-current-mainnet.py": "5ce5112531619cfbf3f9699393d34557da6c2cc0d83126279c140621a4b68594",
-      "scripts/gen-current-mainnet-runtime-lock.py": "74aa826232ede5d9a0cca4102bd806d52431de9475b172e74d558e9c45281c90",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "f1114801921d6230f46af4e97d76ad5410d213e185096221199c538db5b5ce49",
+      "scripts/gen-current-mainnet-runtime-lock.py": "77288ac0815fe41ee3d309b84741bf07433976d39b46e484283f335d286d1d2a",
       "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.sol": "2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073"
@@ -54,9 +54,9 @@
         "linux-x86_64"
       ],
       "relativePath": "scripts/current-mainnet-runtime-lock.json",
-      "sha256": "b69a9b2d40238850f2f70fb5aea07979fcdd19bd087c770262142eb82f85eb82"
+      "sha256": "1dcd4604187f3c82b7787e615d7e4b4ed84667abd1aff22f51842c15371cc2f9"
     },
-    "sharedGateOwnership": "the shared runtime lock owns the reference environment's semantic closure: exact versions on every platform and exact installed bytes on each platform whose row has been generated there; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
+    "sharedGateOwnership": "the shared runtime lock owns the reference environment's semantic closure: exact versions on every platform and exact distribution plus loaded-standard-library bytes on each generated row; the Linux row is explicitly ungenerated and fail-closed; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and selected CPython 3.11.9 standard library"
   },
   "channel": "finite-bpo2-execution-witness-not-a-lean-premise",
   "counts": {

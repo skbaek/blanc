@@ -16,14 +16,19 @@ every file under ``site-packages`` verifies an environment but never describes
 one: it cannot say what to install, what changed, or whether the change could
 matter, and it fails on documentation tooling that no transition ever imports.
 
-This module answers it by *derivation*.  The semantic closure is the set of
-installed distributions that provide a module imported when the pinned
-transition code is imported — the specification package and, where the lane
-drives it through a tool, that tool's entry module.  Nothing here is curated:
-the policy names the entry points, the probe reports what Python actually
-loaded, and the checker re-derives the closure on every run.  A future revision
-that reaches for a new library grows the closure and reddens the lock until it
-is regenerated, so the narrowness cannot rot silently.
+This module answers it by *derivation*.  The package half of the semantic
+closure is the set of installed distributions that provide a module imported
+when the pinned transition code is imported — the specification package and,
+where the lane drives it through a tool, that tool's entry module.  The Python
+standard library is a different ownership domain: it has no ``dist-info``
+record, so each generated platform row also inventories and hashes the
+file-backed standard-library modules actually loaded by the isolated semantic
+probe.  Nothing here is curated: the policy names the entry points, the target
+interpreter names its standard-library roots, the probe reports what Python
+actually loaded, and the checker re-derives both halves on every run.  A future
+revision that reaches for a new distribution or standard-library module grows
+the closure and reddens the lock until it is regenerated; a changed recorded
+standard-library file reddens the platform row directly.
 
 Distributions loaded only through a package's ``__init__`` chain — test
 frameworks, HTTP clients, Git bindings pulled in by importing a test-support
@@ -51,7 +56,7 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, Iterable, NoReturn
+from typing import Any, Iterable, Mapping, NoReturn
 
 
 class ClosureError(RuntimeError):
@@ -80,6 +85,19 @@ INSTALLER_METADATA = (
 # Byte-compiled output is a cache of source already inside the digest.
 CONTENT_EXCLUDES = ("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
 
+# The standard library has no RECORD owner.  Its configured roots come from
+# the target interpreter itself and the isolated probe selects only loaded,
+# file-backed modules.  This policy is recorded in both pins so that a future
+# writer cannot silently return to distribution-only measurement.
+STANDARD_LIBRARY_POLICY = {
+    "roots": ["stdlib", "platstdlib"],
+    "selection": "loadedModuleFiles",
+    "excludes": [
+        "**/site-packages/**",
+        "**/dist-packages/**",
+    ],
+}
+
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True) + "\n"
@@ -90,6 +108,12 @@ def _digest(value: Any) -> str:
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
 
 
 def versions_digest(distributions: Iterable[dict[str, Any]]) -> str:
@@ -106,6 +130,157 @@ def content_digest(distributions: Iterable[dict[str, Any]]) -> str:
     return _digest(
         sorted([entry["name"], entry["contentSha256"]] for entry in distributions)
     )
+
+
+def standard_library_digest(files: Iterable[dict[str, Any]]) -> str:
+    """Digest an attributable standard-library file inventory."""
+
+    return _digest(
+        sorted([entry["path"], entry["sha256"]] for entry in files)
+    )
+
+
+def environment_content_digest(
+    distributions: Iterable[dict[str, Any]], standard_library: dict[str, Any]
+) -> str:
+    """Digest both byte-owning domains behind one platform row."""
+
+    return _digest(
+        {
+            "distributions": sorted(
+                [entry["name"], entry["contentSha256"]]
+                for entry in distributions
+            ),
+            "standardLibrary": standard_library["contentSha256"],
+        }
+    )
+
+
+def _is_under(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def measure_standard_library(
+    roots: Mapping[str, str | Path],
+    *,
+    loaded_files: Iterable[str | Path],
+    implementation: str,
+    version: str,
+    site_packages: Iterable[str | Path] = (),
+) -> dict[str, Any]:
+    """Inventory the target interpreter's loaded standard-library bytes.
+
+    Paths in the committed inventory are relative to the logical sysconfig
+    root, never host-absolute.  Resolved files are de-duplicated when stdlib and
+    platstdlib name the same tree.  Site-package roots are excluded because the
+    distribution closure owns those bytes separately.  Built-in and frozen
+    modules have no file to add; their code is part of the interpreter.
+    """
+
+    expected_roots = STANDARD_LIBRARY_POLICY["roots"]
+    if set(roots) != set(expected_roots):
+        fail(
+            "standard-library roots differ: "
+            f"missing={sorted(set(expected_roots) - set(roots))}, "
+            f"extra={sorted(set(roots) - set(expected_roots))}"
+        )
+    excluded_roots = [Path(path).resolve() for path in site_packages]
+    resolved_roots = [
+        (label, Path(roots[label]).resolve()) for label in expected_roots
+    ]
+    for label, root in resolved_roots:
+        if not root.is_dir():
+            fail(f"target {label} standard-library root is absent: {root}")
+    seen_files: set[Path] = set()
+    records: list[dict[str, str]] = []
+    for supplied in sorted(Path(path) for path in loaded_files):
+        try:
+            resolved = supplied.resolve(strict=True)
+        except OSError as exc:
+            fail(f"cannot resolve loaded module file {supplied}: {exc}")
+        if any(_is_under(resolved, excluded) for excluded in excluded_roots):
+            continue
+        selected = next(
+            (
+                (label, root, resolved.relative_to(root))
+                for label, root in resolved_roots
+                if _is_under(resolved, root)
+            ),
+            None,
+        )
+        if selected is None or resolved in seen_files:
+            continue
+        label, _root, relative = selected
+        if "site-packages" in relative.parts or "dist-packages" in relative.parts:
+            continue
+        seen_files.add(resolved)
+        try:
+            sha256 = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        except OSError as exc:
+            fail(f"cannot fingerprint standard-library file {resolved}: {exc}")
+        records.append({"path": f"{label}/{relative.as_posix()}", "sha256": sha256})
+    records.sort(key=lambda entry: entry["path"])
+    if not records:
+        fail("target standard-library inventory is empty")
+    return {
+        "implementation": implementation,
+        "version": version,
+        "fileRecords": len(records),
+        "contentSha256": standard_library_digest(records),
+        "files": records,
+    }
+
+
+def validate_standard_library(
+    document: Any, fail_with: Any, *, label: str
+) -> dict[str, Any]:
+    """Validate a content-addressed loaded-stdlib inventory."""
+
+    expected = {
+        "implementation", "version", "fileRecords", "contentSha256", "files",
+    }
+    if not isinstance(document, dict) or set(document) != expected:
+        actual = set(document) if isinstance(document, dict) else set()
+        fail_with(
+            f"{label} keys differ: missing={sorted(expected - actual)}, "
+            f"extra={sorted(actual - expected)}"
+        )
+    for field in ("implementation", "version"):
+        if not isinstance(document[field], str) or not document[field]:
+            fail_with(f"{label} {field} is malformed")
+    if not is_sha256(document["contentSha256"]):
+        fail_with(f"{label} content digest is malformed")
+    files = document["files"]
+    if not isinstance(files, list) or not files:
+        fail_with(f"{label} names no loaded standard-library file")
+    seen: set[str] = set()
+    for entry in files:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+            fail_with(f"{label} file row is malformed")
+        path = entry["path"]
+        sha256 = entry["sha256"]
+        if not isinstance(path, str) or not path:
+            fail_with(f"{label} file path is malformed")
+        root, separator, relative = path.partition("/")
+        if not separator or root not in STANDARD_LIBRARY_POLICY["roots"] \
+                or not relative or Path(relative).is_absolute() \
+                or ".." in Path(relative).parts:
+            fail_with(f"{label} file path is outside its configured roots: {path!r}")
+        if path in seen:
+            fail_with(f"{label} names {path} twice")
+        seen.add(path)
+        if not is_sha256(sha256):
+            fail_with(f"{label} {path} digest is malformed")
+    if type(document["fileRecords"]) is not int \
+            or document["fileRecords"] != len(files):
+        fail_with(f"{label} file-record count does not match its list")
+    if document["contentSha256"] != standard_library_digest(files):
+        fail_with(f"{label} content digest does not match its file rows")
+    return document
 
 
 def file_records(distributions: Iterable[dict[str, Any]]) -> int:
@@ -142,6 +317,7 @@ import json
 import os
 import pkgutil
 import sys
+import sysconfig
 from pathlib import Path
 
 request = json.loads(sys.argv[1])
@@ -320,6 +496,11 @@ print(json.dumps({
         "implementation": sys.implementation.name,
         "version": ".".join(str(part) for part in sys.version_info[:3]),
     },
+    "standardLibraryRoots": {
+        "stdlib": sysconfig.get_path("stdlib"),
+        "platstdlib": sysconfig.get_path("platstdlib"),
+    },
+    "standardLibraryFiles": sorted(loaded_files()),
     "sitePackages": str(site_packages),
 }, sort_keys=True))
 '''
@@ -363,14 +544,29 @@ def derive(
     distributions = observed["distributions"]
     if not distributions:
         fail("semantic closure is empty; the probe imported no pinned dependency")
+    standard_library = measure_standard_library(
+        observed["standardLibraryRoots"],
+        loaded_files=observed["standardLibraryFiles"],
+        implementation=observed["interpreter"]["implementation"],
+        version=observed["interpreter"]["version"],
+        site_packages=[site_packages],
+    )
+    try:
+        python_executable_sha256 = hashlib.sha256(python.read_bytes()).hexdigest()
+    except OSError as exc:
+        fail(f"cannot fingerprint target interpreter {python}: {exc}")
     return {
         "policy": checked,
         "interpreter": observed["interpreter"],
+        "pythonExecutableSha256": python_executable_sha256,
         "distributions": distributions,
         "count": len(distributions),
         "fileRecords": file_records(distributions),
         "versionsSha256": versions_digest(distributions),
-        "contentSha256": content_digest(distributions),
+        "contentSha256": environment_content_digest(
+            distributions, standard_library
+        ),
+        "standardLibrary": standard_library,
         "runtimeOnly": observed["runtimeOnly"],
         "skipped": observed["skipped"],
     }
@@ -433,6 +629,43 @@ def compare_content(recorded: dict[str, Any], observed: dict[str, Any]) -> list[
                 f"{name} file count is {now[name]['files']}, pinned at "
                 f"{was[name].get('files')}"
             )
+    recorded_stdlib = recorded.get("standardLibrary")
+    observed_stdlib = observed.get("standardLibrary")
+    if recorded_stdlib is None and observed_stdlib is not None:
+        problems.append("the pinned platform row does not bind the Python standard library")
+    elif recorded_stdlib is not None and observed_stdlib is None:
+        problems.append("the observed environment did not measure the Python standard library")
+    elif recorded_stdlib is not None and observed_stdlib is not None:
+        stdlib_problems: list[str] = []
+        for field in ("implementation", "version"):
+            if recorded_stdlib.get(field) != observed_stdlib.get(field):
+                stdlib_problems.append(
+                    f"standard library {field} is {observed_stdlib.get(field)!r}, "
+                    f"pinned at {recorded_stdlib.get(field)!r}"
+                )
+        old_files = {
+            entry["path"]: entry["sha256"] for entry in recorded_stdlib.get("files", [])
+        }
+        new_files = {
+            entry["path"]: entry["sha256"] for entry in observed_stdlib.get("files", [])
+        }
+        for path in sorted(set(new_files) - set(old_files)):
+            stdlib_problems.append(f"standard-library file {path} is newly present")
+        for path in sorted(set(old_files) - set(new_files)):
+            stdlib_problems.append(f"standard-library file {path} is missing")
+        for path in sorted(set(old_files) & set(new_files)):
+            if old_files[path] != new_files[path]:
+                stdlib_problems.append(
+                    f"standard-library file {path} does not match the pinned bytes"
+                )
+        if not stdlib_problems and (
+            recorded_stdlib.get("fileRecords") != observed_stdlib.get("fileRecords")
+            or recorded_stdlib.get("contentSha256") != observed_stdlib.get("contentSha256")
+        ):
+            stdlib_problems.append(
+                "standard-library digest differs with no named file cause"
+            )
+        problems.extend(stdlib_problems)
     return problems
 
 
@@ -503,15 +736,64 @@ def assert_prague_environment(fail_with: Any) -> str:
     imports.  Both have to hold before a comparison against EELS means anything.
     """
 
-    return assert_pinned_versions(
-        load_pin(), fail_with, label="pinned EELS Prague environment"
+    pin = load_pin()
+    versions = assert_pinned_versions(
+        pin, fail_with, label="pinned EELS Prague environment"
+    )
+    import platform
+    import sys
+    import sysconfig
+
+    native = platform_key(platform.system(), platform.machine())
+    row = pin.get("platforms", {}).get(native)
+    if row is None:
+        return f"{versions}; standard-library bytes unrecorded on {native}"
+    try:
+        roots = {
+            "stdlib": sysconfig.get_path("stdlib"),
+            "platstdlib": sysconfig.get_path("platstdlib"),
+        }
+        recorded = row.get("standardLibrary")
+        if not isinstance(recorded, dict):
+            fail_with("pinned EELS Prague platform row does not bind stdlib bytes")
+        loaded_files = []
+        for entry in recorded.get("files", []):
+            label, separator, relative = entry.get("path", "").partition("/")
+            if not separator or label not in roots or not relative:
+                fail_with("pinned EELS Prague standard-library path is invalid")
+            loaded_files.append(Path(roots[label]) / relative)
+        observed = measure_standard_library(
+            roots,
+            loaded_files=loaded_files,
+            implementation=sys.implementation.name,
+            version=".".join(str(part) for part in sys.version_info[:3]),
+        )
+        executable_sha256 = hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()
+    except ClosureError as exc:
+        fail_with(f"pinned EELS Prague environment cannot measure stdlib: {exc}")
+    except OSError as exc:
+        fail_with(f"pinned EELS Prague environment cannot fingerprint Python: {exc}")
+    if executable_sha256 != row.get("pythonExecutableSha256"):
+        fail_with("pinned EELS Prague Python executable does not match its native row")
+    problems = compare_content(
+        {"distributions": [], "standardLibrary": row.get("standardLibrary")},
+        {"distributions": [], "standardLibrary": observed},
+    )
+    if problems:
+        fail_with(
+            "pinned EELS Prague standard library does not match its pin: "
+            + "; ".join(problems)
+        )
+    return (
+        f"{versions}; {observed['fileRecords']} pinned standard-library files "
+        f"at {observed['contentSha256'][:12]}"
     )
 
 
 def render_constraints(document: dict[str, Any], *, header: Iterable[str] = ()) -> str:
     """Render the closure as a pip constraints file a provisioner can consume."""
 
-    lines = [f"# {line}" for line in header]
+    lines = [f"# {line}" if line else "#" for line in header]
     lines.extend(versions_of(document))
     return "\n".join(lines) + "\n"
 
@@ -521,6 +803,12 @@ def report(document: dict[str, Any], *, label: str) -> str:
         f"{label}: {document['count']} distributions, "
         f"{document['fileRecords']} files, versions {document['versionsSha256'][:12]}"
     ]
+    if document.get("standardLibrary"):
+        stdlib = document["standardLibrary"]
+        lines.append(
+            f"  standard library: {stdlib['implementation']} {stdlib['version']}, "
+            f"{stdlib['fileRecords']} files, content {stdlib['contentSha256'][:12]}"
+        )
     for entry in document["distributions"]:
         lines.append(
             f"  {entry['name']}=={entry['version']}"
@@ -540,6 +828,14 @@ def self_check() -> int:
     """Prove the comparators reject each way a closure can silently drift."""
 
     def closure(distributions):
+        stdlib_files = [{"path": "stdlib/hashlib.py", "sha256": "e" * 64}]
+        standard_library = {
+            "implementation": "cpython",
+            "version": "3.11.9",
+            "fileRecords": len(stdlib_files),
+            "contentSha256": standard_library_digest(stdlib_files),
+            "files": stdlib_files,
+        }
         return {
             "policy": {
                 "transitionModules": [],
@@ -550,7 +846,10 @@ def self_check() -> int:
             "count": len(distributions),
             "fileRecords": file_records(distributions),
             "versionsSha256": versions_digest(distributions),
-            "contentSha256": content_digest(distributions),
+            "contentSha256": environment_content_digest(
+                distributions, standard_library
+            ),
+            "standardLibrary": standard_library,
             "runtimeOnly": [],
         }
 
@@ -589,6 +888,22 @@ def self_check() -> int:
     recounted = closure([entry("ethereum_rlp", "0.1.6", "a" * 64, files=4),
                          entry("pycryptodome", "3.23.0", "b" * 64)])
     mutants.append(("same digest, different file count", recounted, False))
+
+    stdlib_repacked = closure([entry("ethereum_rlp", "0.1.6", "a" * 64),
+                               entry("pycryptodome", "3.23.0", "b" * 64)])
+    stdlib_repacked["standardLibrary"]["files"][0]["sha256"] = "f" * 64
+    mutants.append(("same interpreter, changed stdlib byte", stdlib_repacked, False))
+
+    stdlib_grew = closure([entry("ethereum_rlp", "0.1.6", "a" * 64),
+                           entry("pycryptodome", "3.23.0", "b" * 64)])
+    stdlib_grew["standardLibrary"]["files"].append(
+        {"path": "stdlib/json/__init__.py", "sha256": "1" * 64}
+    )
+    stdlib_grew["standardLibrary"]["fileRecords"] = 2
+    stdlib_grew["standardLibrary"]["contentSha256"] = standard_library_digest(
+        stdlib_grew["standardLibrary"]["files"]
+    )
+    mutants.append(("closure loaded a new stdlib module", stdlib_grew, False))
 
     widened = closure([entry("ethereum_rlp", "0.1.6", "a" * 64),
                        entry("pycryptodome", "3.23.0", "b" * 64)])

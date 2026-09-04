@@ -183,10 +183,11 @@ CACHE_RUNTIME_LOCK = "scripts/current-mainnet-runtime-lock.json"
 CACHE_RUNTIME_PLATFORMS = ("macos-arm64", "linux-x86_64")
 CACHE_OWNERSHIP = (
     "the shared runtime lock owns the reference environment's semantic "
-    "closure: exact versions on every platform and exact installed bytes on "
-    "each platform whose row has been generated there; the gate registry "
+    "closure: exact versions on every platform and exact distribution plus "
+    "loaded-standard-library bytes on each generated row; the Linux row is "
+    "explicitly ungenerated and fail-closed; the gate registry "
     "additionally fingerprints the selected exact checkout, site-packages "
-    "population, and CPython 3.11.9 standard library"
+    "population, and selected CPython 3.11.9 standard library"
 )
 
 

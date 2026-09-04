@@ -16,5 +16,6 @@ require jaune from git
 
 @[default_target]
 lean_lib «Blanc» where
+  roots := #[`Blanc, `Blanc.ProofRecipeTactic]
 lean_exe «blanc» where
   root := `Main

@@ -4,7 +4,7 @@
       "generated": false
     },
     "macos-arm64": {
-      "contentSha256": "0782b8c1735adcd0976c3a8cf872c6d83a02592fa3c49461ebed0254afcc5fc3",
+      "contentSha256": "37f868f812c966960ba6f56d50469a9644052bf17d4fd9fc278519495ef27f8d",
       "distributions": [
         {
           "contentSha256": "648cd23d81b5241c0a19f85d8f7b94d7c177c5b58ec0906c025da1f44ca03e49",
@@ -104,10 +104,814 @@
       ],
       "fileRecords": 854,
       "generated": true,
-      "pythonExecutableSha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884"
+      "pythonExecutableSha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884",
+      "standardLibrary": {
+        "contentSha256": "691a6d0a6867358d89a3bc5b7e7bf240b989b35069c5b6262b15a80e08c621ce",
+        "fileRecords": 199,
+        "files": [
+          {
+            "path": "stdlib/__future__.py",
+            "sha256": "981d4c398849f9ebcab72300d9c1fe288fd6d7f28957b3b3fa3a493a5836d95c"
+          },
+          {
+            "path": "stdlib/_collections_abc.py",
+            "sha256": "ec646ef7e27aae261adef3c57b9d18822c6526b3e9562dabb9f3cb4e6803066c"
+          },
+          {
+            "path": "stdlib/_compression.py",
+            "sha256": "3ad5d60627477a60939ee44fc1bb3a05dbe8fb52f0f75039b8f5d8f1a278b981"
+          },
+          {
+            "path": "stdlib/_osx_support.py",
+            "sha256": "363d3240acbba18a270bd3161f1ddb478f8492dc14fc451b2dc314db5c5ee09c"
+          },
+          {
+            "path": "stdlib/_sitebuiltins.py",
+            "sha256": "b9388bc1d6d12ed6be12da420ab1feca40f99c0e33ec315d92b1e01cb69b25bc"
+          },
+          {
+            "path": "stdlib/_sysconfigdata__darwin_darwin.py",
+            "sha256": "76d93d6abe2b9e95b5fe8c5d122086d992ee63c96b2cce870ddde04222d902b9"
+          },
+          {
+            "path": "stdlib/_weakrefset.py",
+            "sha256": "91895a451d06e9f521a1171b31b9b19bc9740f35af00d4fa106338ab7167c9ac"
+          },
+          {
+            "path": "stdlib/abc.py",
+            "sha256": "e558702a95cdce3febd289da021715d2b92bc43995b8a1bc58dfa1c3d8010287"
+          },
+          {
+            "path": "stdlib/argparse.py",
+            "sha256": "e878677e158d0bc0fb5119e0df74d94236f3653777bc9f2ea3fee49c167fe001"
+          },
+          {
+            "path": "stdlib/ast.py",
+            "sha256": "c513073798bdbf3cdef09327d0d2d381a53213a13a4ba3f02729695327539406"
+          },
+          {
+            "path": "stdlib/asyncio/__init__.py",
+            "sha256": "d70b5f90b186ae41464b740f0ee1f2c2ab2dcf02f1403e749edc48002ba27426"
+          },
+          {
+            "path": "stdlib/asyncio/base_events.py",
+            "sha256": "cc9ac9cf0cea307701991c275fda4d972228f6d174451ffa116800fb0fb856ca"
+          },
+          {
+            "path": "stdlib/asyncio/base_futures.py",
+            "sha256": "385a1fd5e8688f1f79e0fdfea8c27d7ca6dd78a770f0bd9a438863628a7589fb"
+          },
+          {
+            "path": "stdlib/asyncio/base_subprocess.py",
+            "sha256": "d69ba8f97bf8c89564cadce49427574ddb98103a5db6f04b98798240332e7adf"
+          },
+          {
+            "path": "stdlib/asyncio/base_tasks.py",
+            "sha256": "70f6b21a2371eaa8e7a3beab9700cd1920329b02708975ae6c9450dc77d64502"
+          },
+          {
+            "path": "stdlib/asyncio/constants.py",
+            "sha256": "7c2efc8c6c767227f25c5c14b7e1e6ff0237b78879ba8d6587d44ed1c360ed30"
+          },
+          {
+            "path": "stdlib/asyncio/coroutines.py",
+            "sha256": "8b60928d13116c28bbd2e1df0a34a6cc87c3416d89c31291677ed63f77b54580"
+          },
+          {
+            "path": "stdlib/asyncio/events.py",
+            "sha256": "7276ed5173080703d41a4a9e54d73b45fe159d8f67d86c196b2ce1eb82d7d983"
+          },
+          {
+            "path": "stdlib/asyncio/exceptions.py",
+            "sha256": "a5971f88be14cd1417d59adf539ae48c5d818f95362a4e0eb00017e3690ab37b"
+          },
+          {
+            "path": "stdlib/asyncio/format_helpers.py",
+            "sha256": "6377b672b3f4ba8b6f0f7a5f0ea00cde24c8cddc0ca764e3329f302763477f59"
+          },
+          {
+            "path": "stdlib/asyncio/futures.py",
+            "sha256": "a1b23b2d0a1333a27115676a934157057b3007306957f005100e1ff27276baed"
+          },
+          {
+            "path": "stdlib/asyncio/locks.py",
+            "sha256": "3c8d4862ec147ca51c6a18a160ff2c954ecf90ac2348a3ec0bc4907216a11eb9"
+          },
+          {
+            "path": "stdlib/asyncio/log.py",
+            "sha256": "80e4cc3ded4b138baba486519e7444801a23d6ac35f229d336a407a96af7e8d2"
+          },
+          {
+            "path": "stdlib/asyncio/mixins.py",
+            "sha256": "8f4a3e16eca845ebfba422550cbcee7340ec8166d2bff6b750a8ed0de6b9ae3c"
+          },
+          {
+            "path": "stdlib/asyncio/protocols.py",
+            "sha256": "1d1b49988c338b4ef06e30f9e92d9db2e00080c341f0a3f573bb8312deb8aff6"
+          },
+          {
+            "path": "stdlib/asyncio/queues.py",
+            "sha256": "8f020744ebd1f557dcb051a1530b504447660df906c2127a94bbcc8450ea7ef9"
+          },
+          {
+            "path": "stdlib/asyncio/runners.py",
+            "sha256": "0f11dcd59cd7f9e24a092d55dd1e7037288f3a524da53e882114b11326de21dd"
+          },
+          {
+            "path": "stdlib/asyncio/selector_events.py",
+            "sha256": "c7859582a5b505f0ab2bb6e5f0d17f4475b58598f56c5166e2edf3b766e8cc68"
+          },
+          {
+            "path": "stdlib/asyncio/sslproto.py",
+            "sha256": "c747273038c3d27d0447f84eace19faf6c0e2730a0aa89639f9a40af41b5d180"
+          },
+          {
+            "path": "stdlib/asyncio/staggered.py",
+            "sha256": "ff289bdc20a50ad9620393479d785bc653e71c2e3298f53ab27907cd136498e9"
+          },
+          {
+            "path": "stdlib/asyncio/streams.py",
+            "sha256": "995c45d23a1335a529ba62d690e282f7639c7f1cf48eed9efdb5b02e606c69a3"
+          },
+          {
+            "path": "stdlib/asyncio/subprocess.py",
+            "sha256": "027198037c8735a75231f660fbb51b626b4e83ccde40b0eb872a60bb4fdac2b4"
+          },
+          {
+            "path": "stdlib/asyncio/taskgroups.py",
+            "sha256": "553c0ce39014fff454bdd4454bd53c6599890375b5fdd528ac19334c9221b650"
+          },
+          {
+            "path": "stdlib/asyncio/tasks.py",
+            "sha256": "e88c1a5e5ddd4fff195ad3d086fb774f9fda4956d3b1711f403576804a4ba5c7"
+          },
+          {
+            "path": "stdlib/asyncio/threads.py",
+            "sha256": "39d37295383641565f0c08bd992e2f661dc8051eb17e890b834fce96bde0910e"
+          },
+          {
+            "path": "stdlib/asyncio/timeouts.py",
+            "sha256": "3e40ca0dca3e54776579797837cd4936d73d04aae09fe0cf83ce1e5449d00163"
+          },
+          {
+            "path": "stdlib/asyncio/transports.py",
+            "sha256": "940108bc133de399f38928cad3274f463096168d8a3ee5148f2478d3cb636f1c"
+          },
+          {
+            "path": "stdlib/asyncio/trsock.py",
+            "sha256": "c0eac37debcc51b702b808f6b7ed3e417343f5ff5f57125dad600a27eb082328"
+          },
+          {
+            "path": "stdlib/asyncio/unix_events.py",
+            "sha256": "a68a39b8ac56468a005d86c708e66e13d6d163f9c787b4fe70442bb2f8c1f198"
+          },
+          {
+            "path": "stdlib/base64.py",
+            "sha256": "7de2ffc30db7b791f482ee8e6cba30a7b69452324d466231f29395be00154b4b"
+          },
+          {
+            "path": "stdlib/bdb.py",
+            "sha256": "314d8bf11b4824d47471ad25dab64bda895e39673fb744e88e7f622a3dd374f2"
+          },
+          {
+            "path": "stdlib/bisect.py",
+            "sha256": "e5b2ff166f48a06e70ae831d8c9b47283fcd0c254306eee12d3dae9c55e11526"
+          },
+          {
+            "path": "stdlib/bz2.py",
+            "sha256": "76ab3252924e71e859d7d90e8d3db13b6554975cfcac0fdadced4de7f8779330"
+          },
+          {
+            "path": "stdlib/cProfile.py",
+            "sha256": "0a97cf92d0e3efd2e08c2f9b0f0fb8e52a2b26978550804d8e59435201f3fa84"
+          },
+          {
+            "path": "stdlib/calendar.py",
+            "sha256": "15903bacf6416869a58abff7d1680e16f26e9bd0186ad0562a0668d05f076fd9"
+          },
+          {
+            "path": "stdlib/codecs.py",
+            "sha256": "f16a81d14e7f73931ecf9f9f2e17c10bc0ca29bbe38b0243f6919b70882fcfea"
+          },
+          {
+            "path": "stdlib/collections/__init__.py",
+            "sha256": "64b09e7062bb7f41e080900d414988c289624aea0ee6ca4037f1e317a11374ee"
+          },
+          {
+            "path": "stdlib/collections/abc.py",
+            "sha256": "9cb4208f99128a0489b6c8e6c61637617dd7d4250c59e065491957eda084dd10"
+          },
+          {
+            "path": "stdlib/concurrent/__init__.py",
+            "sha256": "87ad5c8954dd56fbbca04517bf87477ff4dce575170c7dd1281d7ef1f4214ac8"
+          },
+          {
+            "path": "stdlib/concurrent/futures/__init__.py",
+            "sha256": "9bcec785db3eddc6d462883957ba6d3ff4370501fece505101444bae542883e8"
+          },
+          {
+            "path": "stdlib/concurrent/futures/_base.py",
+            "sha256": "8c6d5f09f7c535d40fa1c30ebfcb35e0601c2abf32286a82cf151af7ddf72473"
+          },
+          {
+            "path": "stdlib/configparser.py",
+            "sha256": "230b09836340e7c66765f14c36de250f3f67fe427849c6dca6714db65abb5a49"
+          },
+          {
+            "path": "stdlib/contextlib.py",
+            "sha256": "d732c045bc7450997f97b2f79cfdb1546b68d2655e89ab3170f3b19b3930d83c"
+          },
+          {
+            "path": "stdlib/contextvars.py",
+            "sha256": "5ed260be8d1f4fe92261b7810b4bb1e8539c42093d7493f677d076e1a87f459a"
+          },
+          {
+            "path": "stdlib/copy.py",
+            "sha256": "27dcfc53a4b9d4fbc3d90c74e549eb6eca9301524d6d2fbff9a6589cf51b6fd5"
+          },
+          {
+            "path": "stdlib/copyreg.py",
+            "sha256": "5499e1be7ba52d4715a911ae65ef2d703db9379d21fff2a07fad8877c318e070"
+          },
+          {
+            "path": "stdlib/csv.py",
+            "sha256": "6c68a5186e3b85e6e267a7ef96479327a45ae2b40bf5e9f2017e4b2282b3f5b1"
+          },
+          {
+            "path": "stdlib/dataclasses.py",
+            "sha256": "77a41ea9eb35d959781087b72ef5b452218b57b9d8f2d28688d45a40ca7f8a09"
+          },
+          {
+            "path": "stdlib/datetime.py",
+            "sha256": "cc9bcb0f1c2f44e1a6cd51882979e113e973c2e65ed84b9aaedabb48d47aa356"
+          },
+          {
+            "path": "stdlib/decimal.py",
+            "sha256": "000c00bad31d126b054c6ec7f3e02b27c0f9a4d579f987d3c4f879cee1bacb81"
+          },
+          {
+            "path": "stdlib/difflib.py",
+            "sha256": "0c6afc23568d55b3e9ac914f9c5361e3033e778aa5b58d3cc82835fc5c638679"
+          },
+          {
+            "path": "stdlib/dis.py",
+            "sha256": "2e8d70c8cd2f4ce1fab5574f4a5ee81f5572d929da00067d14e6f6582356d240"
+          },
+          {
+            "path": "stdlib/email/__init__.py",
+            "sha256": "e4f46e3414c4602c9abb8b404a45e84412fc49dbe38a3d163f9575132dc7c93e"
+          },
+          {
+            "path": "stdlib/email/_encoded_words.py",
+            "sha256": "4178321600c0a19ca04cfe8542ce44487f339d15d89a473b58cea63c0b230217"
+          },
+          {
+            "path": "stdlib/email/_parseaddr.py",
+            "sha256": "4308932872acbf4a674312a45a49b870e48026e3dfedc878ee2f512ddf2f30ba"
+          },
+          {
+            "path": "stdlib/email/_policybase.py",
+            "sha256": "967a41672b54f3443eac096968ad189d75c77be7eb42611b4d81d12a41605be9"
+          },
+          {
+            "path": "stdlib/email/base64mime.py",
+            "sha256": "e2b4b87a5f42a8c5780e343f675513bbcc6abdd23fa14f8f1a7d4f7d72304770"
+          },
+          {
+            "path": "stdlib/email/charset.py",
+            "sha256": "3ccb2e860390656664d271f08da8c0bae9a4297cc7e90be664d7c82d364e442f"
+          },
+          {
+            "path": "stdlib/email/encoders.py",
+            "sha256": "690b275529788cc48e8f541a2aef321dc31e92f75764ac7924896db72d8a9555"
+          },
+          {
+            "path": "stdlib/email/errors.py",
+            "sha256": "33fc889cbff57bb78c913bb6c24c5d52bd02f3cba0f4b1cb2913340294a6ec1a"
+          },
+          {
+            "path": "stdlib/email/feedparser.py",
+            "sha256": "ca333e0462c96505d8c510f260192256306fa889c011c6f2eaa8d50c70503cce"
+          },
+          {
+            "path": "stdlib/email/header.py",
+            "sha256": "4d9baa908ad5288dd8fad8cf20b3802ffac77ba1642727804a633b201c56e5ca"
+          },
+          {
+            "path": "stdlib/email/iterators.py",
+            "sha256": "1080a2d03779176d6d45f6ecd976dbe69f5579f7e4e83b75224c3f92fd258102"
+          },
+          {
+            "path": "stdlib/email/message.py",
+            "sha256": "f488699fc255eb1537e4028efd80e6eec5d824c49e4721df58f8030cfc26b632"
+          },
+          {
+            "path": "stdlib/email/parser.py",
+            "sha256": "7a665bc106e9d4f6f8f2c8de53b2c1d5b97f5105cc7da638b82d731f6f9e354e"
+          },
+          {
+            "path": "stdlib/email/quoprimime.py",
+            "sha256": "77b454bd3ba3b5e3776be28ae3a0fd8de5d1e50d5b8ee10dd539c37c2bd68082"
+          },
+          {
+            "path": "stdlib/email/utils.py",
+            "sha256": "f1967c470aeff896f051d3a9d476985aa1f0c99a31d1f4ad906acfa93b01c4ff"
+          },
+          {
+            "path": "stdlib/encodings/__init__.py",
+            "sha256": "78c4744d407690f321565488710b5aaf6486b5afa8d185637aa1e7633ab59cd8"
+          },
+          {
+            "path": "stdlib/encodings/aliases.py",
+            "sha256": "6fdcc49ba23a0203ae6cf28e608f8e6297d7c4d77d52e651db3cb49b9564c6d2"
+          },
+          {
+            "path": "stdlib/encodings/idna.py",
+            "sha256": "4fc5a79f53d60fd0576f94dfe8aa7677357d9ad95315ea220ba523f53c89229b"
+          },
+          {
+            "path": "stdlib/encodings/utf_8.py",
+            "sha256": "ba0cac060269583523ca9506473a755203037c57d466a11aa89a30a5f6756f3d"
+          },
+          {
+            "path": "stdlib/enum.py",
+            "sha256": "01addb65722daecee235caf6b345e4a910b1882aacc29e4fb846e0e0904043e6"
+          },
+          {
+            "path": "stdlib/fnmatch.py",
+            "sha256": "6683da36e47af523f3f41e18ad244d837783e19e98911cc0b7415dea81494ebc"
+          },
+          {
+            "path": "stdlib/fractions.py",
+            "sha256": "d52a647a86a32e1905d38fe7a19cf200291f598dc4ed51273ac27f38723fb559"
+          },
+          {
+            "path": "stdlib/functools.py",
+            "sha256": "6d80018a3fa9fed44c5b78f881987ee3ab3fb1238b077b4e6dcb4b76da7db73b"
+          },
+          {
+            "path": "stdlib/genericpath.py",
+            "sha256": "9d58ad64056a89f12258a62596c2073cd9e52b459dde152f710edc0cffcd865b"
+          },
+          {
+            "path": "stdlib/getpass.py",
+            "sha256": "e74fd445337ff503223dd8aa4bdd7d04917067d00c796a10bedb7a1381a4960a"
+          },
+          {
+            "path": "stdlib/gettext.py",
+            "sha256": "a5c249a522b6b8e3aa6f1b12a8bcc09508b99ad612b58d2fc973db27ea3b7cc3"
+          },
+          {
+            "path": "stdlib/glob.py",
+            "sha256": "c9e5f9ae0752660ede63328a456f58f87c29500b31f58c1b813458b00fceb6d5"
+          },
+          {
+            "path": "stdlib/hashlib.py",
+            "sha256": "e2bffb462e4d43e6637b9450e259e8ba2a56626ba3037d68aa1cee68b3f61d4a"
+          },
+          {
+            "path": "stdlib/heapq.py",
+            "sha256": "6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9"
+          },
+          {
+            "path": "stdlib/hmac.py",
+            "sha256": "7facd1330e5487ed995eda5c8619df0d3e32f69cb619f97662372fb76325746e"
+          },
+          {
+            "path": "stdlib/html/__init__.py",
+            "sha256": "923d82d821e75e8d235392c10c145ab8587927b3faf9c952bbd48081eebd8522"
+          },
+          {
+            "path": "stdlib/html/entities.py",
+            "sha256": "282b7cdd567bbbf3d7d7ccd49fae1d3ebc7f7ab64058d781193620913773731b"
+          },
+          {
+            "path": "stdlib/http/__init__.py",
+            "sha256": "fec3d2f335260c6da338cc45955b053e80039a9611ef2651519724f84def641c"
+          },
+          {
+            "path": "stdlib/http/client.py",
+            "sha256": "c3968eae8a9f38b0026e9b0ae0d2396b5fb3ade65688a17ed0ffeb4d7d9630f6"
+          },
+          {
+            "path": "stdlib/http/cookiejar.py",
+            "sha256": "9587a95edc194a19513e8a8fa9a942cd9fe6217489697ee998a7ae544fb9d603"
+          },
+          {
+            "path": "stdlib/http/cookies.py",
+            "sha256": "a4712e985f8d892e290e8317d0d4d692313a39d5b0bd22fc640b885a79043ff7"
+          },
+          {
+            "path": "stdlib/http/server.py",
+            "sha256": "d471860df3a8e1264c410d0a7fc092024b2f8ada109f378da50119b81513114e"
+          },
+          {
+            "path": "stdlib/importlib/__init__.py",
+            "sha256": "49ad4fdc8139026f7f3773e3f50f09207ff6bd8e92a2c382545525235448e525"
+          },
+          {
+            "path": "stdlib/importlib/_abc.py",
+            "sha256": "e24fa90513d1fd6e10df30dc28044dfcad857b88161c79de10f7109c18227e8d"
+          },
+          {
+            "path": "stdlib/importlib/_bootstrap.py",
+            "sha256": "2aa31b7369a9725ce893fed35e33a2ffb1c908ecc7411a34d7975cb25a28f695"
+          },
+          {
+            "path": "stdlib/importlib/_bootstrap_external.py",
+            "sha256": "7c9a59da1b351a226a092b1e1671cf9935255f2c22d593a138c8938dec7e399e"
+          },
+          {
+            "path": "stdlib/importlib/abc.py",
+            "sha256": "10c316fd409976a2b5a0a379451048e418cce21d2b792820738debe5e2b74c5e"
+          },
+          {
+            "path": "stdlib/importlib/machinery.py",
+            "sha256": "d045cd7ecf2a12b6ecbfbef79eb114e87ef2ebd756f5b705f73e6f3266e3dede"
+          },
+          {
+            "path": "stdlib/importlib/metadata/__init__.py",
+            "sha256": "bc6d98cd94459ad3b6ea5cb75cde38383647655054f065b897176f7635d2d8bc"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_adapters.py",
+            "sha256": "07a7c28b9fbc98b543154663de4ac8e67028fa62a9d5d1ffa886afc88c85ac9b"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_collections.py",
+            "sha256": "089d0e4c21c88d6034648552e2fa0e440b27d91e11d9c40112d3ec6442690126"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_functools.py",
+            "sha256": "3ec636fb8aeb297e1155e442d681a9d65075a660bd78a37cf3f7fe6c3f6e3a80"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_itertools.py",
+            "sha256": "72faffdaff0145bc5c225e71e6575fa9d1e3848f188bcb3cca4e741bf9e6ea34"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_meta.py",
+            "sha256": "c920f8096b01e6a23a15375520bf3de6b418504df58d6e506f2fb203395d4512"
+          },
+          {
+            "path": "stdlib/importlib/metadata/_text.py",
+            "sha256": "1c2b0592c66924b7933f734493f9e0ac079755146d4ebb7287d78e001a113f80"
+          },
+          {
+            "path": "stdlib/importlib/readers.py",
+            "sha256": "d0d57d118d64916f7e6edb04f8bd1a760a1abb879125899ef50a36d09ef54df4"
+          },
+          {
+            "path": "stdlib/importlib/resources/__init__.py",
+            "sha256": "7af3e6d7690b818a939bea5bce6eb46cebae9ae993f08a41356169d2e332af31"
+          },
+          {
+            "path": "stdlib/importlib/resources/_adapters.py",
+            "sha256": "a39d6d3f686956da213f7de0498c809063692df60306ac7162c69dca24598b51"
+          },
+          {
+            "path": "stdlib/importlib/resources/_common.py",
+            "sha256": "d4c487b710c16cbb061999417d2bf297ce6f21309f9d81d353d6e627b1126d8c"
+          },
+          {
+            "path": "stdlib/importlib/resources/_itertools.py",
+            "sha256": "582749d46b3f90d170284372206ed33b4638df82160aed338d5552b126d9c14f"
+          },
+          {
+            "path": "stdlib/importlib/resources/_legacy.py",
+            "sha256": "4cc2e4c7a68433a53cc484443d7a8666b31b5214e23d4b8f97a1120fb45d623e"
+          },
+          {
+            "path": "stdlib/importlib/resources/abc.py",
+            "sha256": "d106439f012fb61aa2410e779fcd979ac1d3d677a85e0db5588baf8080100ea8"
+          },
+          {
+            "path": "stdlib/importlib/resources/readers.py",
+            "sha256": "21505ac8f35d6d23d737623baec9651e021ccb5f789271703e5fd447d9942d10"
+          },
+          {
+            "path": "stdlib/importlib/util.py",
+            "sha256": "a1f26649b3409cc90627d3657dd8d38d159bd7e7a2ce34ecca1297119701f608"
+          },
+          {
+            "path": "stdlib/inspect.py",
+            "sha256": "7a134c67f2256307547f2f0b81eb6f89b652c078ab22e59c062770ba9736c6ff"
+          },
+          {
+            "path": "stdlib/io.py",
+            "sha256": "12636601d4f488b583cff41668c3a386c3b2d93499df09de0df9d9a2a4b95194"
+          },
+          {
+            "path": "stdlib/ipaddress.py",
+            "sha256": "b157f2f318650698ac4cb81f41ece82a7a860f264c24cfc8dcc538977709ced3"
+          },
+          {
+            "path": "stdlib/json/__init__.py",
+            "sha256": "d5d41e2c29049515d295d81a6d40b4890fbec8d8482cfb401630f8ef2f77e4d5"
+          },
+          {
+            "path": "stdlib/json/decoder.py",
+            "sha256": "9f02654649816145bc76f8c210a5fe3ba1de142d4d97a1c93105732e747c285b"
+          },
+          {
+            "path": "stdlib/json/encoder.py",
+            "sha256": "af7bd40a0d0d0a3e726a9b4b3a2a543019f6ab97a340d0162a9c29ca9da97869"
+          },
+          {
+            "path": "stdlib/json/scanner.py",
+            "sha256": "8604d9d03786d0d509abb49e9f069337278ea988c244069ae8ca2c89acc2cb08"
+          },
+          {
+            "path": "stdlib/keyword.py",
+            "sha256": "afbe73afb68d32fa998e5ff3d081090deec457152470f5331cc2bd430a0e9d2a"
+          },
+          {
+            "path": "stdlib/linecache.py",
+            "sha256": "c985113d9219c02950916e75090158bccf44cacac09014741b1c59b07968d111"
+          },
+          {
+            "path": "stdlib/locale.py",
+            "sha256": "ac828df41b2fac93ba3e66a2735216c98c0e1853b8dfb9b859e301fe64153feb"
+          },
+          {
+            "path": "stdlib/logging/__init__.py",
+            "sha256": "fb2531d0c21738a13eb38093e22c5c7bb651c309dcc79fa444227ce841859c7f"
+          },
+          {
+            "path": "stdlib/lzma.py",
+            "sha256": "58fb9d2fdc8a8af7b25e218f17ea3b51bdfa53bdf40f440ab33c605974ca5c2e"
+          },
+          {
+            "path": "stdlib/mimetypes.py",
+            "sha256": "c8604af9340bee72663b73109223e57abc2d5e7511c94ad3e40f6533414734fc"
+          },
+          {
+            "path": "stdlib/ntpath.py",
+            "sha256": "030fdd768135c4de3b4c56ca0f13d2f4801ccbcde4144382334cf75a477dd0de"
+          },
+          {
+            "path": "stdlib/numbers.py",
+            "sha256": "6d70991643a109e9c99e94d6ea2734a995fa8e89114a70ea09737413fa9ae292"
+          },
+          {
+            "path": "stdlib/opcode.py",
+            "sha256": "e6fc6dc49ced415d6ec285aaf1076148b8c4cb253d3a4d2384a7bab994d394bf"
+          },
+          {
+            "path": "stdlib/operator.py",
+            "sha256": "b2af20f67667203c1730e686cc5d0427becc94db4c97f1d3efe3ed2158473f6a"
+          },
+          {
+            "path": "stdlib/os.py",
+            "sha256": "8a5d4ac7b87c6c5b31fcb5081f7f7c06f8403a2fdb3eb23692c48933baeb899e"
+          },
+          {
+            "path": "stdlib/pathlib.py",
+            "sha256": "3b21ac188fd9ac20bacc8ccd976fabd5d8ccf5000f8e157d3dfff005b228fb3d"
+          },
+          {
+            "path": "stdlib/pkgutil.py",
+            "sha256": "54e8463bc398757aeb01253996c0ef12e2ba8fefdef89dd2e54b15bd70669228"
+          },
+          {
+            "path": "stdlib/platform.py",
+            "sha256": "4a3cc68ba7354f8d5cc28c55315a7d77b77dcdbbaa3a092572a636b5fb5b6938"
+          },
+          {
+            "path": "stdlib/posixpath.py",
+            "sha256": "115bb3d2051318ee3d951cdb13c60f118f15cea837cb69fb52cf543c12fe25c3"
+          },
+          {
+            "path": "stdlib/pprint.py",
+            "sha256": "3a51d754e876047c9891c29817d979edf4e717801ad283b2cfcf242cc196ad7e"
+          },
+          {
+            "path": "stdlib/profile.py",
+            "sha256": "4d87bdc8b85bf0a9bdee3e9d975a8a1a0c7360cb264fb68c4c48a102e718e3a3"
+          },
+          {
+            "path": "stdlib/queue.py",
+            "sha256": "f6c37fc37cd7440979f7d22d40ee818fa3b714c573610c08fa52911d541193f0"
+          },
+          {
+            "path": "stdlib/quopri.py",
+            "sha256": "7070b61e5a582423a1bb405e3d23cb3e26c4faafcb142a8cbb88ec3f2d6104e9"
+          },
+          {
+            "path": "stdlib/random.py",
+            "sha256": "b931a2d452db89ab9e1f79d59b66ce194dbd6748049cfe44699726da52b9c956"
+          },
+          {
+            "path": "stdlib/re/__init__.py",
+            "sha256": "029ead61f362489e9bb034f4c2503abee95462056541e9ad07715de3c353b0da"
+          },
+          {
+            "path": "stdlib/re/_casefix.py",
+            "sha256": "41572ac50cf96b04496e676d8a6708898bb8e752e06dad34ed4c50c5d8f1fe40"
+          },
+          {
+            "path": "stdlib/re/_compiler.py",
+            "sha256": "c05067f8bfa4c13cbbf1eedc4d5cafc9b621bcb6ebc5771ba0518a18095af15a"
+          },
+          {
+            "path": "stdlib/re/_constants.py",
+            "sha256": "3e4463dc8ba87c4a3563be46d2d593e82ca9a0fb91768cfe5a07554ed3de82c5"
+          },
+          {
+            "path": "stdlib/re/_parser.py",
+            "sha256": "4748e39c77d6dc14f81af80e68a62ad99031a8182d5e0b219a6666d0cfb1626f"
+          },
+          {
+            "path": "stdlib/reprlib.py",
+            "sha256": "264433cc232332db871666b3bb6e4c2cb97b092cb8d5056a45ec2e53daea2b1c"
+          },
+          {
+            "path": "stdlib/selectors.py",
+            "sha256": "1eeb102373e18c96311203f30c516e785bd8642275aa0bd66e43a284c9692385"
+          },
+          {
+            "path": "stdlib/shlex.py",
+            "sha256": "42ab6060f316e121e374e6621d8c1c98b8db323903c3df289a810c45a8ae46a7"
+          },
+          {
+            "path": "stdlib/shutil.py",
+            "sha256": "aa2c11b95294111edddfeb02f9082ec7c4c21060d87f6857364b5bb95fb94e09"
+          },
+          {
+            "path": "stdlib/signal.py",
+            "sha256": "0363c964c90ac0b3e515de5749205e6e6454051a1211058375d84d91eab6071a"
+          },
+          {
+            "path": "stdlib/site.py",
+            "sha256": "0577e4b379d8ef4aa0ecf88a264ef18c10f72ea72119afae36524d1aae77c9bf"
+          },
+          {
+            "path": "stdlib/socket.py",
+            "sha256": "db2da0702eca1e4fd62f7ff7bbd1050ccc0764184237726e784fec2d087bbf4c"
+          },
+          {
+            "path": "stdlib/socketserver.py",
+            "sha256": "a1402df8627949d0b72591e742795fcd48f911172610d4e3c2f16bd7dcae8128"
+          },
+          {
+            "path": "stdlib/ssl.py",
+            "sha256": "5c9b4daa3d54e9941978c75076a6d0c60be3324a7bcda5b54b5fdf33e1d156d6"
+          },
+          {
+            "path": "stdlib/stat.py",
+            "sha256": "052af0327eae6941b69b05c088b3e748f79995635f80ac4cc7125eb333eb4c77"
+          },
+          {
+            "path": "stdlib/string.py",
+            "sha256": "24aeae1f0526250f442022022bf98df9a823b1cb330543ee79e70e44907462e9"
+          },
+          {
+            "path": "stdlib/stringprep.py",
+            "sha256": "60b6c83581093029312efb6670b11c540090b3f78bcf72264467b494f02f21a5"
+          },
+          {
+            "path": "stdlib/struct.py",
+            "sha256": "9c231f9497caf513a22dee8f790b07f969b0e45854a0bdd6dd84b492e08c2856"
+          },
+          {
+            "path": "stdlib/subprocess.py",
+            "sha256": "baa9f9138d8d20df6284f67e7d2e790f847f65e2c5370de322d54cccd737f2d9"
+          },
+          {
+            "path": "stdlib/sysconfig.py",
+            "sha256": "c16887bf792dc21f27fe5d2ca4ee271f131b7f6a88593def43be52cfbc846759"
+          },
+          {
+            "path": "stdlib/tarfile.py",
+            "sha256": "51352daa1efde19526070319d378557ed5e15d337b129fe09ef268bf16510d88"
+          },
+          {
+            "path": "stdlib/tempfile.py",
+            "sha256": "ea4b01b1dfd4ab1f3974a98c216879770a4f7db060bf233a48e3a4223487c836"
+          },
+          {
+            "path": "stdlib/textwrap.py",
+            "sha256": "62867e40cdea6669b361f72af4d7daf0359f207c92cbeddfc7c7506397c1f31c"
+          },
+          {
+            "path": "stdlib/threading.py",
+            "sha256": "f8b8d9ebd040e1373d76e73c23c683f7c7c204add96bf9d8d9c21ac751cf5252"
+          },
+          {
+            "path": "stdlib/token.py",
+            "sha256": "2cabb6a81cafa84b475fc852c20b6bad45955ec0f88063720a831495215f776b"
+          },
+          {
+            "path": "stdlib/tokenize.py",
+            "sha256": "79aa94ebe1761811ea9b2da2ada409a8cb9abd7c6eac241d0c181a36684bb609"
+          },
+          {
+            "path": "stdlib/traceback.py",
+            "sha256": "c40d394aad6a3456d6b62385732a7d6272fb3444e9fa388710efefe75070201d"
+          },
+          {
+            "path": "stdlib/types.py",
+            "sha256": "0c08fbb650c37535a7d8361fc12029e3f4c72a418cf564e8779dae14b979e5ba"
+          },
+          {
+            "path": "stdlib/typing.py",
+            "sha256": "eff3df4f1d65e13d690b8f427cada4dd3b88431dd1e7f319fda1bd0062113203"
+          },
+          {
+            "path": "stdlib/unittest/__init__.py",
+            "sha256": "2a24d1843801ba82eef666abecfa49768422a8058f442af8666bf71baf68d752"
+          },
+          {
+            "path": "stdlib/unittest/case.py",
+            "sha256": "f062e82d6bcdc231865b62bd3f8fc8847e49211f4884c685ec696216e227b957"
+          },
+          {
+            "path": "stdlib/unittest/loader.py",
+            "sha256": "44b8d2c7eea54b02dd687d9615fe198cb67af12c832889009bc85cf5cf064d82"
+          },
+          {
+            "path": "stdlib/unittest/main.py",
+            "sha256": "a05b67e605dfd82e5232735d4093c36496a818ab9e4e7db7190d05cd8405caa9"
+          },
+          {
+            "path": "stdlib/unittest/result.py",
+            "sha256": "eb3f6ed6a6d339b8113479f6878f1946bf082b8818a89daf85f0b63a5be1f9c1"
+          },
+          {
+            "path": "stdlib/unittest/runner.py",
+            "sha256": "bc559dd2b01b373929ef342697b1a4c102f10259d96351c3961e9364de5097b8"
+          },
+          {
+            "path": "stdlib/unittest/signals.py",
+            "sha256": "f8286e818ca56e10e03745bc056cdfd31147678f9a1dc8cb6b0fe96ef9a4362a"
+          },
+          {
+            "path": "stdlib/unittest/suite.py",
+            "sha256": "ed2da92bc9f97c53403ee2d3d12cc53b16a96e85d596ebc887b5a93458f3f6bc"
+          },
+          {
+            "path": "stdlib/unittest/util.py",
+            "sha256": "fdcc640c3505d16deab9c32eae7c3f5f67c3b5e81c563dc6698fa7fcf403854d"
+          },
+          {
+            "path": "stdlib/urllib/__init__.py",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "stdlib/urllib/error.py",
+            "sha256": "d12b3cc66af3f42a8ebe63e1c91d24f92c6237b6a93a3702938dffabd812d77b"
+          },
+          {
+            "path": "stdlib/urllib/parse.py",
+            "sha256": "a7b4f543a226f9411487f19bee7be14cce21723c1b2ff1bb448ee4a7d4fb3a10"
+          },
+          {
+            "path": "stdlib/urllib/request.py",
+            "sha256": "14b9b807a9751574c103c95a59ac856cc85b494956ea8a3552aa161f3c2a9e45"
+          },
+          {
+            "path": "stdlib/urllib/response.py",
+            "sha256": "7e6c3b6d7a95f0d74f5968f51a87adae8a51bf42390cdfec98c7a99203e7bb76"
+          },
+          {
+            "path": "stdlib/uuid.py",
+            "sha256": "e936b632e7b14cbdad7da077edf59d1de77f5a4c8507a5e7d0028b1d336d9883"
+          },
+          {
+            "path": "stdlib/warnings.py",
+            "sha256": "47328418f0365f0897a2d3789f684dbaba1d5b9c492871f1b72a35b8e2e92021"
+          },
+          {
+            "path": "stdlib/weakref.py",
+            "sha256": "56f8d313fb74019e53eb9287400702fbce788b7fe30e097b0b6e06296f3f080c"
+          },
+          {
+            "path": "stdlib/zipfile.py",
+            "sha256": "8c9811fa6cffdd8af880a4db66e046ba9dd2a97a95676a4a053736f6ab4a1a66"
+          },
+          {
+            "path": "stdlib/zipimport.py",
+            "sha256": "e84b98dd13d3a8ae3ff2094ef2889dcead41d754f0531686f0b70b8d225676cc"
+          },
+          {
+            "path": "stdlib/zoneinfo/__init__.py",
+            "sha256": "ac7fb403e4371d07482ef2fda81dbcf6879484e9fc41d4be42c156d7e54c68a8"
+          },
+          {
+            "path": "stdlib/zoneinfo/_common.py",
+            "sha256": "67deaf0ba41aa4865e007297677207485a89b75629eea0ee5c472be8a3e83bf6"
+          },
+          {
+            "path": "stdlib/zoneinfo/_tzpath.py",
+            "sha256": "90326cdd057e1161f1049c6c4a8b486d8ade35371c44fc3fb42dd13f2bedd6b6"
+          }
+        ],
+        "implementation": "cpython",
+        "version": "3.11.9"
+      }
     }
   },
-  "schema": 2,
+  "schema": 3,
   "semanticClosure": {
     "contentExcludes": [
       "**/__pycache__/**",
@@ -269,6 +1073,17 @@
       "transitionPackages": [
         "ethereum"
       ]
+    },
+    "standardLibraryPolicy": {
+      "excludes": [
+        "**/site-packages/**",
+        "**/dist-packages/**"
+      ],
+      "roots": [
+        "stdlib",
+        "platstdlib"
+      ],
+      "selection": "loadedModuleFiles"
     },
     "versionsSha256": "bcd3ee8c34adf8c9e91d1a01214611703237d0f7e0aacf3d9dbe70b9e4bed2b7"
   },

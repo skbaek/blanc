@@ -622,6 +622,7 @@ def _closure_document(observed: dict[str, Any]) -> dict[str, Any]:
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
+        "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
         "distributions": [
             {
                 "name": entry["name"],
@@ -643,6 +644,7 @@ def _runtime_entry(paths: TargetPaths, observed: dict[str, Any]) -> dict[str, An
         "pythonExecutableSha256": _sha256_file(paths.python),
         "fileRecords": observed["fileRecords"],
         "contentSha256": observed["contentSha256"],
+        "standardLibrary": observed["standardLibrary"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -686,6 +688,7 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
             "policy",
             "contentExcludes",
             "installerMetadataExcludes",
+            "standardLibraryPolicy",
             "distributions",
             "count",
             "versionsSha256",
@@ -702,6 +705,11 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
         section["installerMetadataExcludes"],
         list(closure.INSTALLER_METADATA),
         "runtime lock closure installer-metadata excludes",
+    )
+    _literal(
+        section["standardLibraryPolicy"],
+        dict(closure.STANDARD_LIBRARY_POLICY),
+        "runtime lock standard-library policy",
     )
     entries = section["distributions"]
     if not isinstance(entries, list) or not entries:
@@ -733,7 +741,7 @@ def _validate_runtime_lock_document(
         {"schema", "target", "semanticClosure", "platforms"},
         "runtime lock",
     )
-    _literal(top["schema"], 2, "runtime lock.schema")
+    _literal(top["schema"], 3, "runtime lock.schema")
     target = _exact_keys(
         top["target"],
         {
@@ -780,6 +788,7 @@ def _validate_runtime_lock_document(
                 "pythonExecutableSha256",
                 "fileRecords",
                 "contentSha256",
+                "standardLibrary",
                 "distributions",
             },
             f"runtime lock.platforms.{key}",
@@ -787,6 +796,20 @@ def _validate_runtime_lock_document(
         for field in ("pythonExecutableSha256", "contentSha256"):
             if not _is_sha256(row[field]):
                 _fail(f"runtime lock {key} {field} is malformed")
+        standard_library = closure.validate_standard_library(
+            row["standardLibrary"], _fail,
+            label=f"runtime lock.platforms.{key}.standardLibrary",
+        )
+        _literal(
+            standard_library["implementation"],
+            target["pythonImplementation"].lower(),
+            f"runtime lock {key} standard-library implementation",
+        )
+        _literal(
+            standard_library["version"],
+            target["pythonVersion"],
+            f"runtime lock {key} standard-library version",
+        )
         measured = row["distributions"]
         if not isinstance(measured, list):
             _fail(f"runtime lock {key} measures no distribution")
@@ -811,11 +834,8 @@ def _validate_runtime_lock_document(
             )
         if type(row["fileRecords"]) is not int or row["fileRecords"] != total:
             _fail(f"runtime lock {key} file-record total does not match its rows")
-        if row["contentSha256"] != closure.content_digest(
-            [
-                {"name": cell["name"], "contentSha256": cell["contentSha256"]}
-                for cell in measured
-            ]
+        if row["contentSha256"] != closure.environment_content_digest(
+            measured, standard_library
         ):
             _fail(f"runtime lock {key} content digest does not match its own rows")
     if generated == 0:
@@ -959,8 +979,14 @@ def _verify_runtime_lock(
         f"runtime-lock {key} Python executable",
     )
     content = closure.compare_content(
-        {"distributions": row["distributions"]},
-        {"distributions": observed["distributions"]},
+        {
+            "distributions": row["distributions"],
+            "standardLibrary": row["standardLibrary"],
+        },
+        {
+            "distributions": observed["distributions"],
+            "standardLibrary": observed["standardLibrary"],
+        },
     )
     if content:
         _fail(
