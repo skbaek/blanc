@@ -327,7 +327,7 @@ staging — the fixed `pushList` window and the `pushB256 assetAddress` constant
 before the `CALL`. Whatever is expensive there is expensive during
 elaboration, not in the finished term, so the next thing to try is a lemma
 stated directly about `callWethTransferFrom body`, proved once with those
-constants opaque, rather than another tactic shape.
+constants held abstract, rather than another tactic shape.
 
 Slots a flow may tail-jump into on its way to a write. -/
 def FlowStoreSlot (k : Nat) : Prop :=
