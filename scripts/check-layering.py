@@ -149,7 +149,7 @@ CONTRACTS = {
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy",
-             "DripCreationCode", "DripRpow"],
+             "DripCreationCode", "DripRpow", "DripIngress"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

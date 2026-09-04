@@ -56,7 +56,19 @@ registry has identified the likely vocabulary.
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
   exact selector/list membership and return the selected body with the
   selector removed while preserving world state and memory; neither asserts
-  that an execution exists.
+  that an execution exists.  `reach_of_dispatch_logs` and
+  `reach_of_dispatchWith_logs` are the same factorizations with the
+  dispatcher's log and output silence carried to the selected body.
+- Rule a selector *out* at source level with `not_run_dispatch_of_miss` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean): a selector with no
+  leaf in the tree has no successful inline-revert dispatcher run at all, so a
+  contract's selector census becomes "every successful call is one of these
+  entries".  It is the `Func.Run` counterpart of the compiled
+  `DispatchTree.dispatchMiss_runCompiledTo_with_path`.
+- Peel the shared `nonpayable` entry wrapper on a source run with
+  `run_body_of_run_nonpayable_frame`, or with `run_body_of_run_nonpayable_logs`
+  when the endpoint's events or returndata must also be related to the public
+  frame's entry.  Both derive zero call value.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
@@ -417,10 +429,13 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   `prefix_of_xor`, and `prefix_of_argCheckNonAddress`. These declarations are
   also registered with the
   `stack-prefix-transport` recipe.
-- `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic
-  and comparison instructions (`show_hinv_state` builds those from
+- `Devm.state` is preserved by `mstore`, `mload`, `swap`, and the register
+  instructions other than the two store forms — including `sload`,
+  `timestamp`, `caller`, `gas`, and `pop` (`show_hinv_state` builds those from
   `Rinst.preserves_state`); `Devm.memory` likewise now covers the full binary
-  arithmetic family.  A walk that tracks a single account's balance states its
+  arithmetic family.  The scoped `LogOutputHinv` instances cover `callvalue`,
+  `calldatasize`, `timestamp`, `mul`, `div`, and `sub` beside the earlier
+  arithmetic, stack, and environment instructions.  A walk that tracks a single account's balance states its
   invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A terminal `Linst.Inv` goal is discharged from its registered `Linst.Hinv`
