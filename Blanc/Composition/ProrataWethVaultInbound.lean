@@ -893,4 +893,43 @@ theorem mint_preserves_conserved
     mint_compiled_effect config memoryWf resources run selectorEq
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
+
+/-- `deposit_compiled_effect` with the quoted share count *named*.
+
+The exact-effect theorem states the quote as a full
+`Nat.toB256 (convertToSharesN …)` term wherever it appears.  That is the right
+shape for a reader checking the arithmetic, and the wrong shape for a consumer
+that needs to rewrite a supply equation underneath it: doing so exceeds the
+elaborator's heartbeat budget, and substituting instead exceeds its recursion
+depth.
+
+This form binds the quote to a variable and records separately that the
+variable *is* the quote, so a consumer reasons about `shares` and reaches for
+the equation only when it wants the arithmetic.  Nothing new is proved here;
+the content is `deposit_compiled_effect`'s. -/
+theorem deposit_compiled_effect_named
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources :
+      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    ∃ supply shares : B256,
+      supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+        (Sevm.argWord sevm 0).toNat
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat
+        supply.toNat ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+        shares shares pre post := by
+  obtain ⟨-, supply, supplyEq, stable, fits, -, -, -, roomFits, effect⟩ :=
+    deposit_compiled_effect config memoryWf resources run selectorEq
+  exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, stable, roomFits,
+    effect⟩
+
 end Blanc.Composition.ProrataWethVault
