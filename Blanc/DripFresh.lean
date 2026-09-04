@@ -2599,12 +2599,17 @@ theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
       B256.RPowGuards scale half rate
         (e.benvStat.time -
           Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
-      ∃ t freshChi,
+      ∃ t freshChi settledImage,
         freshChi =
           (B256.rpow scale half rate
                 (e.benvStat.time -
                   Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
               Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+        scratch settledImage resultWord =
+          (freshChi * Sevm.dataWord e (32 * 0 + 4)) / scale ∧
+        tail <<+ t.stack ∧
+        Mem.Wf t.memory ∧
+        Mem.Reads t.memory settledImage ∧
         Devm.getStor t e.currentTarget =
           ((((Devm.getStor entry e.currentTarget).set chiSlot freshChi).set
               rhoSlot e.benvStat.time).set e.caller.toB256
@@ -2790,12 +2795,299 @@ theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagA) (by decide +kernel)
   · obtain ⟨t26, hstor, hp26, hwf26, hreads26, run⟩ :=
       of_run_afterExit_settles frame25 hp25 run
-    simp only [harg, hrow, htotal, hfresh, hnow] at hstor
+    simp only [harg, hrow, htotal, hfresh, hnow] at hstor hreads26
     exact ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
-      helapsed, hguards, t26, _, rfl, hstor, run⟩
+      helapsed, hguards, t26, _,
+      setScratch image24 resultWord
+        (((B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale *
+            Sevm.dataWord e (32 * 0 + 4)) / scale),
+      rfl, scratch_setScratch_self _ _ _, hp26, hwf26, hreads26, hstor, run⟩
   · exact absurd (htag.symm.trans htagU) (by decide +kernel)
   · exact absurd (htag.symm.trans htagD) (by decide +kernel)
   · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
+
+/-! ## `exit`'s entered child and exact return
+
+The settlement theorem above stops just before the payout word is loaded for
+the outbound call.  The remaining walk matters: the call uses the recipient,
+value and two empty memory windows frozen by the statement memo; a zero status
+word selects `Func.revert`; and only an entered, clean child can reach the
+one-word return.  The raw parent/child equalities below retain the whole-frame
+rollback boundary supplied by `of_run_call_val_with_depth_frame` instead of
+summarizing the call as an unexplained success flag. -/
+
+private theorem exit_sendToCaller_frame
+    {sevm : Sevm} {pre callPost : Devm} {p : B256} {xs : Stack}
+    (hp : p :: xs <<+ pre.stack)
+    (run : Line.Run sevm pre sendToCaller callPost) :
+    ∃ callPre gasWord,
+      gasWord :: sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 :: xs <<+
+        callPre.stack ∧
+      Ninst.Run sevm callPre call callPost ∧
+      Devm.getStor callPre = Devm.getStor pre ∧
+      Devm.getBal callPre = Devm.getBal pre ∧
+      Devm.getCode callPre = Devm.getCode pre ∧
+      callPre.logs = pre.logs ∧
+      callPre.output = pre.output ∧
+      callPre.memory = pre.memory := by
+  unfold sendToCaller at run
+  let callPrefix : Line := pushList [0, 0, 0, 0] ++ [swap 3, caller, gas]
+  rcases of_run_append callPrefix run with ⟨callPre, hprefix, hcall⟩
+  have hstorPrefix : Devm.getStor pre = Devm.getStor callPre :=
+    Line.of_inv Devm.getStor (by unfold callPrefix; line_inv) hprefix
+  have hbalPrefix : Devm.getBal pre = Devm.getBal callPre :=
+    Line.of_inv Devm.getBal (by unfold callPrefix; line_inv) hprefix
+  have hcodePrefix : Devm.getCode pre = Devm.getCode callPre :=
+    Line.of_inv Devm.getCode (by unfold callPrefix; line_inv) hprefix
+  have hlogsPrefix : pre.logs = callPre.logs :=
+    Line.of_inv Devm.logs (by unfold callPrefix; line_inv) hprefix
+  have houtPrefix : pre.output = callPre.output :=
+    Line.of_inv Devm.output (by unfold callPrefix; line_inv) hprefix
+  have hmemPrefix : pre.memory = callPre.memory :=
+    Line.of_inv Devm.memory (by unfold callPrefix; line_inv) hprefix
+  rcases Line.of_run_cons hcall with ⟨callPost', qcall, hnil⟩
+  cases hnil
+  unfold callPrefix pushList at hprefix
+  simp only [List.map] at hprefix
+  rcases Line.of_run_cons hprefix with ⟨s1, q1, hprefix⟩
+  have p1 : (0 : B256) :: p :: xs <<+ s1.stack :=
+    prefix_of_push (of_run_pushB256 q1) hp
+  rcases Line.of_run_cons hprefix with ⟨s2, q2, hprefix⟩
+  have p2 : (0 : B256) :: 0 :: p :: xs <<+ s2.stack :=
+    prefix_of_push (of_run_pushB256 q2) p1
+  rcases Line.of_run_cons hprefix with ⟨s3, q3, hprefix⟩
+  have p3 : (0 : B256) :: 0 :: 0 :: p :: xs <<+ s3.stack :=
+    prefix_of_push (of_run_pushB256 q3) p2
+  rcases Line.of_run_cons hprefix with ⟨s4, q4, hprefix⟩
+  have p4 : (0 : B256) :: 0 :: 0 :: 0 :: p :: xs <<+ s4.stack :=
+    prefix_of_push (of_run_pushB256 q4) p3
+  rcases Line.of_run_cons hprefix with ⟨s5, qswap, hprefix⟩
+  have hswap : Stack.Swap (3 : Fin 16).val
+      ((0 : B256) :: 0 :: 0 :: 0 :: p :: xs)
+      (p :: 0 :: 0 :: 0 :: 0 :: xs) :=
+    Stack.swapCore_succ (Stack.swapCore_succ
+      (Stack.swapCore_succ Stack.swapCore_zero))
+  have p5 : p :: 0 :: 0 :: 0 :: 0 :: xs <<+ s5.stack :=
+    Stack.prefix_of_swap hswap (of_run_swap qswap) p4
+  rcases Line.of_run_cons hprefix with ⟨s6, qcaller, hprefix⟩
+  have p6 : sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 :: xs <<+
+      s6.stack :=
+    prefix_of_push (of_run_caller qcaller) p5
+  rcases Line.of_run_cons hprefix with ⟨s7, qgas, hnil⟩
+  cases hnil
+  rcases of_run_gas qgas with ⟨gasWord, hgas⟩
+  refine ⟨callPre, gasWord, ?_, qcall,
+    hstorPrefix.symm, hbalPrefix.symm, hcodePrefix.symm, hlogsPrefix.symm,
+    houtPrefix.symm, hmemPrefix.symm⟩
+  simpa only [List.cons_append, List.nil_append] using prefix_of_push hgas p6
+
+/-- An `exit` payout whose status word is consumed by the success guard.  The
+carrier retains the exact EIP-150 child message, delegation choice, empty
+calldata/output windows, successful child settlement and caller resumption.
+The first disjunct of `of_run_call_val_with_depth_frame` is absent precisely
+because its zero flag selects the outer `Func.revert`; that inversion still
+supplies `Devm.WorldEq` for the rejected child-failure arm. -/
+def AcceptedPayout (sevm : Sevm) (p : B256)
+    (callPre callPost guardPost returnPre : Devm) : Prop :=
+  ∃ (gasWord : B256) (xs : Stack) (parent child : Devm) (xl : Xlot)
+    (delegated : Bool) (nextAddress : Adr) (code : ByteArray) (avail pc : Nat),
+    (gasWord :: sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 :: xs) <<+
+      callPre.stack ∧
+    Ninst.Run sevm callPre call callPost ∧
+    Devm.PopBurn [1] callPost guardPost ∧
+    Devm.Burn guardPost returnPre ∧
+    Ninst.StepRun pc sevm callPre call xl (.ok callPost) ∧
+    0 < sevm.depth ∧
+    callPre.stack = gasWord :: sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 ::
+      parent.stack ∧
+    parent.state = callPre.state ∧
+    parent.memory = callPre.memory.extends [(0, 0), (0, 0)] ∧
+    parent.logs = callPre.logs ∧
+    parent.output = callPre.output ∧
+    ((getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) =
+          none ∧
+        nextAddress = sevm.caller.toB256.toAdr ∧
+        code = callPre.getCode sevm.caller.toB256.toAdr ∧
+        delegated = false) ∨
+      (∃ d,
+        getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) =
+            some d ∧
+          nextAddress = d ∧ code = callPre.getCode d ∧ delegated = true)) ∧
+    Xlot.Filled xl ∧
+    ProcessMessage
+      (callMsg sevm parent
+        (min gasWord.toNat (except64th avail) +
+          (if p.toNat = 0 then 0 else gCallStipend))
+        p sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+        ((callPre.memory.read 0 0).1) code delegated)
+      xl (.ok child) ∧
+    child.error.isSome = false ∧
+    (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output ∧
+    callPost.memory = parent.memory.write 0 (child.output.take 0) ∧
+    callPost.stack = (1 : B256) :: parent.stack
+
+/-- The complete successful source-level `exit`: all guards hold, the four
+ledger writes are already present at the call boundary, the exact value call
+entered and settled cleanly, and the outer frame returns the payout word.
+Callback-final storage and balance are related to the resumed child rather
+than falsely summarized as a callback-free delta. -/
+def ExitPaysExactly (sevm : Sevm) (entry post : Devm) : Prop :=
+  let units := Sevm.dataWord sevm (32 * 0 + 4)
+  let oldRow := Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256
+  let oldTotal := Devm.getStorVal entry sevm.currentTarget totalUnitsSlot
+  let oldChi := Devm.getStorVal entry sevm.currentTarget chiSlot
+  let oldRho := Devm.getStorVal entry sevm.currentTarget rhoSlot
+  let elapsed := sevm.benvStat.time - oldRho
+  let freshChi :=
+    (B256.rpow scale half rate elapsed.toNat * oldChi) / scale
+  let payout := (freshChi * units) / scale
+  ¬ maxUnits < units ∧
+    ¬ maxUnits < oldRow ∧
+    ¬ maxPie < oldTotal ∧
+    ¬ oldRow < units ∧
+    ¬ oldTotal < units ∧
+    ¬ oldChi < scale ∧
+    ¬ maxChi < oldChi ∧
+    ¬ sevm.benvStat.time < oldRho ∧
+    ¬ maxElapsed < elapsed ∧
+    B256.RPowGuards scale half rate elapsed.toNat ∧
+    ∃ callPre callPost guardPost returnPre,
+      Devm.getStor callPre sevm.currentTarget =
+        ((((Devm.getStor entry sevm.currentTarget).set chiSlot freshChi).set
+              rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+              (oldRow - units)).set totalUnitsSlot (oldTotal - units) ∧
+      AcceptedPayout sevm payout callPre callPost guardPost returnPre ∧
+      Devm.getStor post = Devm.getStor callPost ∧
+      Devm.getBal post = Devm.getBal callPost ∧
+      ReturnsWord payout post
+
+theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
+    {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs sevm s Drip.exit post) :
+    ExitPaysExactly sevm entry post := by
+  unfold ExitPaysExactly
+  dsimp only
+  rcases of_run_exit_settles hlookup frame hp run with
+    ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
+      helapsed, hguards, callStart, freshChi, settledImage, hfresh,
+      hresult, hpStart, hwfStart, hreadsStart, hstorStart, suffix⟩
+  subst freshChi
+  refine ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper,
+    hclock, helapsed, hguards, ?_⟩
+  rcases of_run_prepend (loadWord resultWord) _ suffix with
+    ⟨sendPre, hload, suffix⟩
+  obtain ⟨hpSend, hwfSend, hreadsSend, hstateSend⟩ :=
+    of_run_loadWordAt_image (word := resultWord)
+      (value :=
+        ((B256.rpow scale half rate
+              (sevm.benvStat.time -
+                Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
+          Sevm.dataWord sevm (32 * 0 + 4)) / scale)
+      hpStart hwfStart hreadsStart hresult hload
+  rcases of_run_prepend sendToCaller _ suffix with
+    ⟨callPost, hsend, hbranch⟩
+  rcases exit_sendToCaller_frame hpSend hsend with
+    ⟨callPre, gasWord, hstack, hcall, hstorSend, hbalSend, hcodeSend,
+      hlogsSend, houtSend, hmemSend⟩
+  have hstorTail : Devm.getStor callPost = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hbranch
+  have hbalTail : Devm.getBal callPost = Devm.getBal post :=
+    Func.of_inv Devm.getBal Devm.getBal (by func_inv) hbranch
+  rcases of_run_branch hbranch with
+    ⟨_, hzero, hrev⟩ |
+      ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
+  · exact (not_run_revert hrev).elim
+  rcases of_run_call_val_with_depth_frame hstack hcall with
+      hfailed | hentered
+  · exact (hw (popBurn_pref hpop hfailed.1).1).elim
+  rcases hentered with
+    ⟨parent, child, xl, delegated, nextAddress, code, avail, pc, hstep,
+      hdepth, hstackEq, hparentState, hparentMemory, hparentLogs,
+      hparentOutput, hdelegated, hfilled, hmessage, hclean, hresume,
+      hpostState, hpostReturnData, hpostMemory, hpostStack⟩
+  have hpostPrefix : (1 : B256) :: tail <<+ callPost.stack := by
+    rw [hpostStack]
+    apply pref_cons
+    rw [hstackEq] at hstack
+    exact cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+      (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+        (cons_pref_cons_inv hstack))))))
+  have hpop1 : Devm.PopBurn [1] callPost guardPost := by
+    have hwone : w = 1 := (popBurn_pref hpop hpostPrefix).1
+    subst w
+    exact hpop
+  have hguardPrefix : tail <<+ guardPost.stack :=
+    (popBurn_pref hpop1 hpostPrefix).2
+  have hreturnPrefix : tail <<+ returnPre.stack := by
+    rw [← hburn.stack]
+    exact hguardPrefix
+  have hstorCallPre :
+      Devm.getStor callPre sevm.currentTarget =
+        ((((Devm.getStor entry sevm.currentTarget).set chiSlot
+                ((B256.rpow scale half rate
+                      (sevm.benvStat.time -
+                        Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+                    Devm.getStorVal entry sevm.currentTarget chiSlot) /
+                  scale)).set rhoSlot sevm.benvStat.time).set
+            sevm.caller.toB256
+            (Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256 -
+              Sevm.dataWord sevm (32 * 0 + 4))).set totalUnitsSlot
+          (Devm.getStorVal entry sevm.currentTarget totalUnitsSlot -
+            Sevm.dataWord sevm (32 * 0 + 4)) := by
+    rw [hstorSend,
+      ← congrFun (getStor_of_state hstateSend) sevm.currentTarget,
+      hstorStart]
+  refine ⟨callPre, callPost, guardPost, returnPre, hstorCallPre, ?_,
+    hstorTail.symm, hbalTail.symm, ?_⟩
+  · unfold AcceptedPayout
+    exact ⟨gasWord, tail, parent, child, xl, delegated, nextAddress, code,
+      avail, pc, hstack, hcall, hpop1, hburn, hstep, hdepth, hstackEq,
+      hparentState, hparentMemory, hparentLogs, hparentOutput, hdelegated,
+      hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
+      hpostMemory, hpostStack⟩
+  · have hcallMemory : callPost.memory = callPre.memory := by
+      rw [hpostMemory, hparentMemory]
+      rfl
+    have hwfCallPre : Mem.Wf callPre.memory := by
+      rw [hmemSend]
+      exact hwfSend
+    have hreadsCallPre : Mem.Reads callPre.memory settledImage := by
+      rw [hmemSend]
+      exact hreadsSend
+    have hwfCallPost : Mem.Wf callPost.memory := by
+      rw [hcallMemory]
+      exact hwfCallPre
+    have hreadsCallPost : Mem.Reads callPost.memory settledImage := by
+      rw [hcallMemory]
+      exact hreadsCallPre
+    have hmemoryReturn : callPost.memory = returnPre.memory :=
+      hpop1.memory.trans hburn.memory
+    have hwfReturn : Mem.Wf returnPre.memory := by
+      rw [← hmemoryReturn]
+      exact hwfCallPost
+    have hreadsReturn : Mem.Reads returnPre.memory settledImage := by
+      rw [← hmemoryReturn]
+      exact hreadsCallPost
+    unfold returnScratch at hreturn
+    rcases of_run_prepend (loadWord resultWord) _ hreturn with
+      ⟨returnWordPre, hloadReturn, hstoreReturn⟩
+    obtain ⟨hpReturn, _, _, _⟩ :=
+      of_run_loadWordAt_image (word := resultWord)
+        (value :=
+          ((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
+            Sevm.dataWord sevm (32 * 0 + 4)) / scale)
+        hreturnPrefix hwfReturn hreadsReturn hresult hloadReturn
+    exact (returnsWord_of_storeReturn hpReturn hstoreReturn).1
 
 end Drip
 
