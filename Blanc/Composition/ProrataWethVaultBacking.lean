@@ -421,11 +421,23 @@ vault execution be exhibited as an accounting step, and so lets the attack and
 dust results in `Blanc/ProrataWethVaultDust.lean` speak about histories the
 deployed pair can produce rather than histories the arithmetic merely admits. -/
 
-/-- The accounting snapshot the vault and WETH jointly present at a state. -/
+/-- The accounting snapshot the vault and WETH jointly present at a state.
+
+Indexed by the account rather than by a machine, because the snapshot depends
+on the frame only through its target: a chain of messages at the same vault
+reads the same two coordinates whoever sent each one.  `snapshotAt` is the
+frame-shaped spelling and is definitionally this. -/
+def vaultSnapshot (vault : Adr) (state : Devm) :
+    Blanc.Prorata.AccountingSnapshot :=
+  ⟨(Devm.getStorVal state vault Blanc.ProrataWethVault.supplySlot).toNat,
+   (Stor.rest (Devm.getStor state wethAccount) vault).toNat⟩
+
+/-- The snapshot at a frame's own target. -/
 def snapshotAt (sevm : Sevm) (state : Devm) : Blanc.Prorata.AccountingSnapshot :=
-  ⟨(Devm.getStorVal state sevm.currentTarget
-      Blanc.ProrataWethVault.supplySlot).toNat,
-   (Stor.rest (Devm.getStor state wethAccount) sevm.currentTarget).toNat⟩
+  vaultSnapshot sevm.currentTarget state
+
+@[simp] theorem snapshotAt_eq (sevm : Sevm) (state : Devm) :
+    snapshotAt sevm state = vaultSnapshot sevm.currentTarget state := rfl
 
 /-- **A successful inbound flow is a `deposit` accounting step.**
 
@@ -880,5 +892,70 @@ theorem nonflow_message_accountingStep
       (body := Blanc.ProrataWethVault.previewDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+
+
+/-! ## Composing messages into an accounting history
+
+The step bridges above each turn one compiled vault message into the accounting
+step it induces.  This turns a *sequence* of them into a
+`ProrataAccountingPath`, which is what the dust and attack results in
+`Blanc/ProrataWethVaultDust.lean` quantify over.
+
+The chain is deliberately indifferent to *which* class each message was: it
+carries whatever step that message's bridge produced.  That is what lets the
+composition be stated once instead of once per interleaving, and it is why the
+`mint`/`withdraw` modelling gap above blocks only those two messages rather
+than the composition itself. -/
+
+/-- A sequence of vault messages, each carrying the accounting step it induces. -/
+inductive SteppedMessages (vault : Adr) : Devm → Devm → Prop
+  | nil (state : Devm) : SteppedMessages vault state state
+  | cons {entry mid final : Devm} {sevm : Sevm}
+      {kind : Blanc.Prorata.ProrataAccountingKind} :
+      sevm.currentTarget = vault →
+      Prog.RunCompiled sevm entry Blanc.ProrataWethVault.vault mid →
+      Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+        (vaultSnapshot vault entry) kind (vaultSnapshot vault mid) →
+      SteppedMessages vault mid final →
+      SteppedMessages vault entry final
+
+/-- **The composition.**  A stepped message sequence is an accounting history
+running from the snapshot it starts at to the snapshot it ends at. -/
+theorem SteppedMessages.toPath {vault : Adr} {entry final : Devm}
+    (chain : SteppedMessages vault entry final) :
+    ∃ path : Blanc.Prorata.ProrataAccountingPath
+      Blanc.ProrataWethVault.offsetN,
+      path.first = vaultSnapshot vault entry ∧
+        path.last = vaultSnapshot vault final := by
+  induction chain with
+  | nil state =>
+      exact ⟨Blanc.Prorata.ProrataAccountingPath.nil _ (vaultSnapshot vault state),
+        rfl, rfl⟩
+  | cons target run effect _ ih =>
+      obtain ⟨tail, tailFirst, tailLast⟩ := ih
+      refine ⟨Blanc.Prorata.ProrataAccountingPath.cons
+        ⟨_, _, _, ⟨0, none, [], none⟩, effect⟩ tail ?_, ?_, ?_⟩
+      · exact tailFirst.symm
+      · rfl
+      · exact tailLast
+
+/-- **Every result about accounting histories applies to a real message
+sequence.**  The victim's loss across any sequence of vault messages beginning
+just after a deposit is bounded by the pre-deposit price plus one. -/
+theorem SteppedMessages.victim_loss_le {vault : Adr} {entry final : Devm}
+    {initialSupply initialAssets victim minted paid : Nat}
+    (chain : SteppedMessages vault entry final)
+    (hminted : minted = Blanc.ProrataWethVault.convertToSharesN victim
+      initialAssets initialSupply)
+    (hstart : vaultSnapshot vault entry =
+      ⟨initialSupply + minted, initialAssets + victim⟩)
+    (hpaid : paid = Blanc.ProrataWethVault.convertToAssetsN minted
+      (vaultSnapshot vault final).balance (vaultSnapshot vault final).supply) :
+    victim - paid ≤
+      Nat.div (initialAssets + 1)
+        (initialSupply + Blanc.ProrataWethVault.offsetN) + 1 := by
+  obtain ⟨path, first, last⟩ := chain.toPath
+  exact Blanc.ProrataWethVault.victim_loss_le_over_history path hminted
+    (by rw [first, hstart]) (by rw [last]; exact hpaid)
 
 end Blanc.Composition.ProrataWethVault
