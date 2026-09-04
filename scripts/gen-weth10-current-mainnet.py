@@ -99,10 +99,13 @@ AUTHORITY_KEY = 23
 EXPECTED_CREATION_TARGET = "0xcf024a39b81692e3c25b9ceb8474dc6203d584d7"
 
 HISTORICAL_BOUNDARY = (
-    "BPO2 credits status, receipt gas, logs, projected storage, and ETH for "
-    "the canonical 27-selector-plus-receive matrix; the preserved Prague "
-    "differential exclusively owns exact returndata, live CALL traces, and "
-    "malformed, precompile, and OOG cases"
+    "BPO2 credits status, receipt gas, exact returndata, logs, projected "
+    "storage, and ETH for the canonical 27-selector-plus-receive matrix, "
+    "reading returndata from the pinned target's own EIP-3155 trace. The "
+    "preserved Prague differential still owns the 119 rows outside that "
+    "matrix and the live CALL and STATICCALL traces within it; that remainder "
+    "is measured migration debt recorded in scripts/current-mainnet-parity.json, "
+    "not a claim that those behaviours cannot have changed across the fork"
 )
 CURRENT_MAINNET_PUBLIC_API = {
     "load_profile", "resolve_root", "verify_target", "target_paths", "run_t8n",
@@ -215,8 +218,11 @@ def validate_current_mainnet_source(source: str) -> None:
         die(f"current-mainnet public API call inventory differs: {counts}")
     transition = next(call for call in calls if call.func.id == "run_t8n")
     keywords = tuple(keyword.arg for keyword in transition.keywords)
+    # `trace` is an observation flag, pinned here by name and position like the
+    # rest of the shape.  A `fork` keyword would still be rejected, because the
+    # tuple is exact rather than a permitted-set test.
     if len(transition.args) != 3 or keywords != (
-        "root", "profile", "state_test", "timeout",
+        "root", "profile", "state_test", "timeout", "trace",
     ):
         die("run_t8n call shape differs from the closed BPO2 boundary")
 
@@ -228,12 +234,15 @@ def validate_current_mainnet_boundary() -> None:
 
 def current_mainnet_boundary_falsifiers() -> int:
     source = Path(__file__).read_text(encoding="utf-8")
-    call_contract = "root=root, profile=profile, state_test=state_test, timeout=120,"
+    call_contract = (
+        "root=root, profile=profile, state_test=state_test, timeout=120,\n"
+        "        trace=trace,"
+    )
     prefix, separator, suffix = source.rpartition(call_contract)
     fork_mutant = (
         prefix
         + "root=root, profile=profile, fork=\"Prague\", "
-        + "state_test=state_test, timeout=120,"
+        + "state_test=state_test, timeout=120,\n        trace=trace,"
         + suffix
         if separator else source
     )
@@ -555,10 +564,12 @@ def _run_transition(
     root: Path,
     profile: Mapping[str, object],
     state_test: bool,
+    trace: bool = False,
 ):
     return run_t8n(
         alloc, environment, transactions,
         root=root, profile=profile, state_test=state_test, timeout=120,
+        trace=trace,
     )
 
 
@@ -1377,12 +1388,35 @@ def matrix_state_test_environment() -> dict[str, object]:
     }
 
 
+def matrix_returndata(scenario, side: str, traces: Sequence[object]) -> str:
+    """The top-level call's exact returndata, from the target's own trace.
+
+    A receipt does not carry returndata, which is why this channel was left to
+    the preserved Prague differential.  The pinned t8n does carry it, on the
+    summary record it writes once the traced top-level call returns.
+    """
+
+    where = f"matrix/{scenario.name}/{side}"
+    if len(traces) != 1:
+        die(f"{where}: expected exactly one traced transaction, got {len(traces)}")
+    summary = getattr(traces[0], "summary", None)
+    if not isinstance(summary, Mapping):
+        die(f"{where}: traced transaction carries no summary record")
+    output = summary.get("output")
+    if not isinstance(output, str):
+        die(f"{where}: traced summary has no string output")
+    if output and not re.fullmatch(r"(?:[0-9a-f]{2})+", output):
+        die(f"{where}: traced summary output is not lowercase hex bytes: {output!r}")
+    return "0x" + output
+
+
 def matrix_projection(
     scenario,
     side: str,
     pre: Mapping[str, Mapping[str, object]],
     post: object,
     result: object,
+    traces: Sequence[object],
 ) -> dict[str, object]:
     receipts = validate_result(result, 1, f"matrix/{scenario.name}/{side}")
     status = receipt_status(receipts[0], f"matrix/{scenario.name}/{side}")
@@ -1456,6 +1490,7 @@ def matrix_projection(
     return {
         "receiptSucceeded": status,
         "receiptGasUsed": gas,
+        "returndata": matrix_returndata(scenario, side, traces),
         "logs": list(logs),
         "projectedStorage": logical,
         "auxiliaryStorage": auxiliary,
@@ -1484,8 +1519,11 @@ def execute_matrix_side(
         root=root,
         profile=profile,
         state_test=True,
+        trace=True,
     )
-    return matrix_projection(scenario, side, alloc, outputs.alloc, outputs.result)
+    return matrix_projection(
+        scenario, side, alloc, outputs.alloc, outputs.result, outputs.traces
+    )
 
 
 def ordinary_matrix(
@@ -1500,8 +1538,8 @@ def ordinary_matrix(
     scenarios = canonical_matrix_scenarios(lock, sender)
     rows: list[dict[str, object]] = []
     comparison_fields = (
-        "receiptSucceeded", "logs", "projectedStorage", "auxiliaryStorage",
-        "feeNeutralEth", "senderDeltaExcludingFees",
+        "receiptSucceeded", "returndata", "logs", "projectedStorage",
+        "auxiliaryStorage", "feeNeutralEth", "senderDeltaExcludingFees",
     )
     for scenario in scenarios:
         reference = execute_matrix_side(
@@ -1528,7 +1566,8 @@ def ordinary_matrix(
             "transactionType": 2,
             "value": int(scenario.value),
             "creditedChannels": [
-                "status", "receipt-gas", "logs", "projected-storage", "ETH",
+                "status", "receipt-gas", "returndata", "logs",
+                "projected-storage", "ETH",
             ],
             "reference": reference,
             "blanc": blanc,
@@ -1554,7 +1593,8 @@ def ordinary_matrix(
             "receive": 1,
             "rows": 28,
             "creditedChannels": [
-                "status", "receipt-gas", "logs", "projected-storage", "ETH",
+                "status", "receipt-gas", "returndata", "logs",
+                "projected-storage", "ETH",
             ],
             "historicalBoundary": HISTORICAL_BOUNDARY,
         },

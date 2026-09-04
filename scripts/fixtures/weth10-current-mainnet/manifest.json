@@ -1,6 +1,6 @@
 {
   "claim": "additive BPO2 non-vacuity for evaluated Blanc WETH10; Prague remains the historical differential owner",
-  "historicalBoundary": "BPO2 credits status, receipt gas, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix; the preserved Prague differential exclusively owns exact returndata, live CALL traces, and malformed, precompile, and OOG cases",
+  "historicalBoundary": "BPO2 credits status, receipt gas, exact returndata, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix, reading returndata from the pinned target's own EIP-3155 trace. The preserved Prague differential still owns the 119 rows outside that matrix and the live CALL and STATICCALL traces within it; that remainder is measured migration debt recorded in scripts/current-mainnet-parity.json, not a claim that those behaviours cannot have changed across the fork",
   "leanEvaluators": {
     "deployment": {
       "outputSha256": "3888e6fb64bf68d5938d019b9f333218afc08ae1bffc3d5c374eb862a7fb39de",
@@ -212,7 +212,7 @@
       "receive": 1,
       "rows": 28,
       "selectors": 27,
-      "sha256": "7a65d4469316eeba8c5c3e4ed88c2b8ab0fa11e6954d2ef94ec827975d5a09ff"
+      "sha256": "a3d98d047e94935f550c4887f1f7a4533796d706f879ede7cc799d85ce28dde4"
     }
   },
   "profile": {

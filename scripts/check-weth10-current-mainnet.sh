@@ -48,7 +48,7 @@ if [ ! -x "$TARGET_PYTHON" ]; then
   exit 1
 fi
 
-HISTORICAL_BOUNDARY="BPO2 credits status, receipt gas, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix; the preserved Prague differential exclusively owns exact returndata, live CALL traces, and malformed, precompile, and OOG cases"
+HISTORICAL_BOUNDARY="BPO2 credits status, receipt gas, exact returndata, logs, projected storage, and ETH for the canonical 27-selector-plus-receive matrix, reading returndata from the pinned target's own EIP-3155 trace. The preserved Prague differential still owns the 119 rows outside that matrix and the live CALL and STATICCALL traces within it; that remainder is measured migration debt recorded in scripts/current-mainnet-parity.json, not a claim that those behaviours cannot have changed across the fork"
 EVIDENCE_BOUNDARY_FALSIFIERS=4
 
 CHILD_ENV=(
@@ -154,4 +154,4 @@ if [ "$FAIL" -ne 0 ]; then
   exit 1
 fi
 
-echo "OK — WETH10 current-mainnet: generator current, 3/3 BPO2 block fixtures replayed, 28 ordinary-call rows credited"
+echo "OK — WETH10 current-mainnet: generator current, 3/3 BPO2 block fixtures replayed, 28 ordinary-call rows credited across 6 channels including exact returndata"
