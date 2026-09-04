@@ -78,14 +78,18 @@ theorem selected_body_of_exact_runtime
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     {selector : B256} {body : Func}
     (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
     (hselector : Sevm.selector sevm = selector)
-    (huniq : selectorUnique (funcs dp))
-    (hmember : (selector, body) ∈ funcs dp) :
-    ∃ dispatchEntry tail,
-      DispatchBodyWitness ((runtime dp).main :: (runtime dp).aux)
-        sevm dispatchEntry (funcs dp) selector tail body out :=
-  dispatcher_body_of_prog_run hprog hguard hselector huniq hmember
+    (hnotTrigger : selector ≠ selTriggerFullWithdrawals)
+    (hmember : (selector, body) ∈ sharedNonpayableFuncs) :
+    DispatchBodyWitness ((runtime dp).main :: (runtime dp).aux)
+      sevm entry sharedNonpayableFuncs selector [] body out := by
+  obtain ⟨bodyPre, bodyRun, bodyStack, bodyFrame⟩ :=
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue hguard
+      hselector hnotTrigger hmember
+  exact ⟨bodyPre, hmember, bodyRun, bodyStack, bodyFrame⟩
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc
