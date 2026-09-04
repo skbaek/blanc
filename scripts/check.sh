@@ -1280,6 +1280,9 @@ Blanc.ProrataWethVault.attacker_open_context|$STANDARD
 Blanc.ProrataWethVault.attacker_no_profit|$STANDARD
 Blanc.ProrataWethVault.victim_loss_bound|$STANDARD
 Blanc.ProrataWethVault.attack_carrier_inhabited|$STANDARD
+Blanc.ProrataWethVault.transferStaged_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.withdrawBurn_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.redeemBurn_storesOrHalts|$STANDARD
 Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.silent_accountingStep|$STANDARD

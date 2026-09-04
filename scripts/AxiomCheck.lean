@@ -1068,6 +1068,9 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.attacker_no_profit
 #print axioms Blanc.ProrataWethVault.victim_loss_bound
 #print axioms Blanc.ProrataWethVault.attack_carrier_inhabited
+#print axioms Blanc.ProrataWethVault.transferStaged_storesOrHalts
+#print axioms Blanc.ProrataWethVault.withdrawBurn_storesOrHalts
+#print axioms Blanc.ProrataWethVault.redeemBurn_storesOrHalts
 #print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep

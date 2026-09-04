@@ -2,6 +2,7 @@
 
 import Blanc.ProrataWethVaultShares
 import Blanc.StorageOnlySpec
+import Blanc.StaticStores
 
 /-!
 # The vault's share ledger, packaged for the generic execution ladder
@@ -302,6 +303,49 @@ theorem vaultSpec_funcSound_revert {ca : Adr} :
     vaultSpec.FuncSoundNoMem ca vaultAux Func.revert := by
   intro _ _ _ _ _ _ h_run
   exact absurd h_run not_run_revert
+
+
+/-! ## The flows cannot run in a static frame
+
+Every ERC-4626 flow writes storage on every path it can complete, so a
+successful run is itself evidence that the frame was not static.  That turns
+one third of the resource bundle those flows carry into a derived fact rather
+than an assumed one. -/
+
+/-- **Scope.** `transferStaged`, `withdrawBurn` and `redeemBurn` are proved
+below. `depositAfterQuote` and `mintAfterQuote` are not: the structural walk
+exhausts the elaborator's recursion depth before reaching their write, even
+with `StoresOrHalts.prepend` collapsing whole staging lines in one step. The
+ceiling is not raised — the proof-debt gate tracks `maxRecDepth` scopes — so
+those two want either a coarser combinator (one that skips a whole `Func` known
+to be write-free) or an explicit term proof.
+
+Slots a flow may tail-jump into on its way to a write. -/
+def FlowStoreSlot (k : Nat) : Prop :=
+  k = depositAfterQuoteSlot ∨ k = mintAfterQuoteSlot ∨
+    k = withdrawAfterQuoteSlot ∨ k = redeemAfterQuoteSlot ∨
+    k = withdrawBurnSlot ∨ k = redeemBurnSlot ∨
+    k = transferFromAfterAllowanceSlot
+
+/-- Discharge a permitted tail jump. -/
+syntax "flow_slot" : tactic
+macro_rules
+| `(tactic| flow_slot) =>
+  `(tactic| first
+      | exact StoresOrHalts.call (by rfl) (by stores_structure with flow_slot)
+      | exact StoresOrHalts.never not_run_revert)
+
+theorem transferStaged_storesOrHalts :
+    StoresOrHalts (vault.main :: vaultAux) transferStaged := by
+  stores_structure
+
+theorem withdrawBurn_storesOrHalts :
+    StoresOrHalts (vault.main :: vaultAux) withdrawBurn := by
+  stores_structure
+
+theorem redeemBurn_storesOrHalts :
+    StoresOrHalts (vault.main :: vaultAux) redeemBurn := by
+  stores_structure
 
 end ProrataWethVault
 
