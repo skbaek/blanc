@@ -10215,6 +10215,91 @@ lemma Array.getD_copyD {ξ : Type} (xs ys : Array ξ) (d : ξ) (h : xs.size ≤ 
     simp [Array.getD, hi]
   · rw [if_neg (by simpa using hi), if_neg hi]
 
+/-- Pointwise read-back for an in-bounds source byte copied into an in-bounds
+target byte.  Unlike `Array.getD_copyD`, this does not require the whole source
+to fit: raw `Mem` values may have a backing array longer than their logical
+size, and `Mem.write` deliberately truncates that excess when it reallocates. -/
+lemma Array.getD_copyD_of_lt {ξ : Type} (xs ys : Array ξ) (d : ξ) (i : Nat)
+    (hxs : i < xs.size) (hys : i < ys.size) :
+    (Array.copyD xs ys).getD i d = xs.getD i d := by
+  unfold Array.copyD
+  change (Array.foldl (fun (state : Array ξ × Nat) value =>
+    (state.fst.setIfInBounds state.snd value, state.snd + 1))
+    (ys, 0) xs).fst.getD i d = xs.getD i d
+  rw [← Array.foldl_toList]
+  have readsMember : ∀ (values : List ξ) (array : Array ξ)
+      (offset index : Nat), index < array.size → offset ≤ index →
+      index < offset + values.length →
+      (List.foldl (fun (state : Array ξ × Nat) value =>
+        (state.fst.setIfInBounds state.snd value, state.snd + 1))
+        (array, offset) values).fst.getD index d =
+          values.getD (index - offset) d := by
+    intro values
+    induction values with
+    | nil => intro array offset index _ after before; simp at before; omega
+    | cons value rest ih =>
+      intro array offset index inBounds after before
+      simp only [List.foldl_cons]
+      by_cases atOffset : index = offset
+      · subst index
+        have preservesBefore : ∀ (values : List ξ) (array : Array ξ)
+            (offset index : Nat), index < offset →
+            (List.foldl (fun (state : Array ξ × Nat) value =>
+              (state.fst.setIfInBounds state.snd value, state.snd + 1))
+              (array, offset) values).fst.getD index d =
+                array.getD index d := by
+          intro values
+          induction values with
+          | nil => intro _ _ _ _; rfl
+          | cons value rest ih' =>
+            intro array offset index before
+            simp only [List.foldl_cons]
+            rw [ih' _ _ _ (by omega)]
+            by_cases offsetInBounds : offset < array.size
+            · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
+                if_neg (by omega)]
+            · simp [Array.setIfInBounds, offsetInBounds]
+        rw [preservesBefore _ _ _ _ (by omega)]
+        rw [Array.getD_setIfInBounds _ _ _ inBounds, if_pos rfl]
+        simp
+      · rw [ih _ _ _ (by rw [Array.size_setIfInBounds]; exact inBounds)
+          (by omega) (by simp at before ⊢; omega)]
+        have hsub : index - offset = (index - (offset + 1)) + 1 := by omega
+        rw [hsub]
+        rfl
+  rw [readsMember xs.toList ys 0 i hys (by omega) (by simpa using hxs)]
+  simp [Array.getD, hxs]
+
+/-- A copied array preserves a target byte at and after the end of the source.
+This is the other pointwise half needed when the source is longer than the
+target or their relative sizes are otherwise unknown. -/
+lemma Array.getD_copyD_of_size_le {ξ : Type} (xs ys : Array ξ) (d : ξ)
+    (i : Nat) (hxs : xs.size ≤ i) :
+    (Array.copyD xs ys).getD i d = ys.getD i d := by
+  unfold Array.copyD
+  change (Array.foldl (fun (state : Array ξ × Nat) value =>
+    (state.fst.setIfInBounds state.snd value, state.snd + 1))
+    (ys, 0) xs).fst.getD i d = ys.getD i d
+  rw [← Array.foldl_toList]
+  have preservesAfter : ∀ (values : List ξ) (array : Array ξ)
+      (offset index : Nat), offset + values.length ≤ index →
+      (List.foldl (fun (state : Array ξ × Nat) value =>
+        (state.fst.setIfInBounds state.snd value, state.snd + 1))
+        (array, offset) values).fst.getD index d =
+          array.getD index d := by
+    intro values
+    induction values with
+    | nil => intro _ _ _ _; rfl
+    | cons value rest ih =>
+      intro array offset index after
+      simp only [List.foldl_cons]
+      rw [ih _ _ _ (by simp at after ⊢; omega)]
+      by_cases offsetInBounds : offset < array.size
+      · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
+          if_neg (by simp at after; omega)]
+      · simp [Array.setIfInBounds, offsetInBounds]
+  exact preservesAfter xs.toList ys 0 i (by simpa using hxs)
+
 /-! ### The list side of `Bytes.writeAt` -/
 
 lemma List.getD_append_left {ξ : Type} {l₁ l₂ : List ξ} {i : Nat} (d : ξ)
@@ -10746,6 +10831,200 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
           if_pos (by omega)]
         simp [List.getD_eq_getElem?_getD,
           List.getElem?_eq_getElem h2]
+
+/-- Pointwise read-back below the allocated end of a nonempty memory write.
+Inside the written interval the payload wins; below its start the old byte is
+preserved.  The upper bound is what makes this true even for a malformed raw
+`Mem` whose backing array is longer than its logical size: `Mem.write` may
+truncate such an array, but never below the end it allocates for the payload. -/
+lemma Mem.getD_write_below_end (μ : Mem) (start : Nat) {ys : Bytes}
+    (hne : ys ≠ []) {i : Nat} (hi : i < start + ys.length) :
+    (μ.write start ys).data.getD i 0 =
+      if start ≤ i then ys.getD (i - start) 0 else μ.data.getD i 0 := by
+  rcases ys with _ | ⟨b, bs⟩
+  · exact absurd rfl hne
+  · simp only [Mem.write]
+    split
+    · split
+      · rw [Array.getD_writeD (0 : UInt8) (b :: bs) μ.data start i
+          (by omega)]
+        by_cases hstart : start ≤ i
+        · rw [if_pos (by omega), if_pos hstart]
+        · rw [if_neg (by omega), if_neg hstart]
+      · rw [Array.getD_writeD (0 : UInt8) (b :: bs)
+          (Array.copyD μ.data
+            (Array.replicate (start + (b :: bs).length) (0 : UInt8)))
+          start i (by simp [Array.size_copyD])]
+        by_cases hstart : start ≤ i
+        · rw [if_pos (by omega), if_pos hstart]
+        · rw [if_neg (by omega), if_neg hstart]
+          by_cases hold : i < μ.data.size
+          · rw [Array.getD_copyD_of_lt _ _ _ _ hold
+              (by simp [Array.size_replicate]; omega)]
+          · rw [Array.getD_copyD_of_size_le _ _ _ _ (Nat.le_of_not_gt hold),
+              Array.getD_replicate_zero,
+              Array.getD_of_size_le 0 (Nat.not_lt.mp hold)]
+    · rw [Array.getD_writeD (0 : UInt8) (b :: bs)
+        (Array.copyD μ.data
+          (Array.replicate (ceil32 (start + (b :: bs).length))
+            (0 : UInt8)))
+        start i (by
+          rw [Array.size_copyD, Array.size_replicate]
+          exact Nat.le_ceil32 _)]
+      by_cases hstart : start ≤ i
+      · rw [if_pos (by omega), if_pos hstart]
+      · rw [if_neg (by omega), if_neg hstart]
+        by_cases hold : i < μ.data.size
+        · rw [Array.getD_copyD_of_lt _ _ _ _ hold
+            (by simp [Array.size_replicate]; exact lt_of_lt_of_le hi (Nat.le_ceil32 _))]
+        · rw [Array.getD_copyD_of_size_le _ _ _ _ (Nat.le_of_not_gt hold),
+            Array.getD_replicate_zero,
+            Array.getD_of_size_le 0 (Nat.not_lt.mp hold)]
+
+/-- A nonempty raw memory write always allocates backing data and logical size
+through the end of its payload. -/
+lemma Mem.write_end_le_data_size (μ : Mem) (start : Nat) {ys : Bytes}
+    (hne : ys ≠ []) :
+    start + ys.length ≤ (μ.write start ys).data.size := by
+  rcases ys with _ | ⟨b, bs⟩
+  · exact absurd rfl hne
+  · simp only [Mem.write]
+    split
+    · split
+      · simpa [Array.size_writeD]
+      · simp [Array.size_writeD, Array.size_copyD, Array.size_replicate]
+    · simp only [Array.size_writeD, Array.size_copyD, Array.size_replicate]
+      exact Nat.le_ceil32 _
+
+lemma Mem.write_end_le_size (μ : Mem) (start : Nat) {ys : Bytes}
+    (hne : ys ≠ []) : start + ys.length ≤ (μ.write start ys).size := by
+  rcases ys with _ | ⟨b, bs⟩
+  · exact absurd rfl hne
+  · simp only [Mem.write]
+    split
+    · split <;> assumption
+    · exact Nat.le_ceil32 _
+
+/-- Two adjacent whole-word writes determine their 64-byte read window even
+for a raw, not-yet-certified memory value.  This is the exact scratch-memory
+fact needed by nested mapping-key computations reached before a theorem has a
+`Mem.Wf` premise available. -/
+lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
+    (left right : B256) :
+    ((((μ.write start left.toBytes).write (start + 32) right.toBytes).read
+      start 64).1) = left.toBytes ++ right.toBytes := by
+  simp only [Mem.read, Array.sliceD_eq_map]
+  apply List.ext_get
+  · simp [B256.length_toBytes]
+  · intro i hleft hright
+    simp only [List.length_map, List.length_range] at hleft
+    simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range]
+    rw [Mem.getD_write_below_end _ (start + 32)
+      (by
+        intro h
+        have hlen := B256.length_toBytes right
+        simp [h] at hlen)
+      (by simp [B256.length_toBytes]; omega)]
+    by_cases hhalf : i < 32
+    · rw [if_neg (by omega), Mem.getD_write_below_end _ start
+        (by
+          intro h
+          have hlen := B256.length_toBytes left
+          simp [h] at hlen)
+        (by simp [B256.length_toBytes]; omega), if_pos (by omega)]
+      calc
+        left.toBytes.getD (start + i - start) 0 =
+            left.toBytes.getD i 0 := by congr 1 <;> omega
+        _ = (left.toBytes ++ right.toBytes).getD i 0 :=
+          (List.getD_append_left (d := (0 : UInt8))
+            (by simpa [B256.length_toBytes] using hhalf)).symm
+        _ = (left.toBytes ++ right.toBytes)[i] := by
+          rw [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem hright]
+          rfl
+    · rw [if_pos (by omega)]
+      have hsub : start + i - (start + 32) = i - 32 := by omega
+      rw [hsub]
+      calc
+        right.toBytes.getD (i - 32) 0 =
+            (left.toBytes ++ right.toBytes).getD i 0 := by
+          rw [List.getD_append_right (d := (0 : UInt8))
+            (by simp [B256.length_toBytes]; omega), B256.length_toBytes]
+        _ = (left.toBytes ++ right.toBytes)[i] := by
+          rw [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem hright]
+          rfl
+
+/-- Right-first companion used by nested mapping-key helpers: storing the
+right word first necessarily allocates the whole window, so the following
+left-word store cannot truncate it even when the input `Mem` is malformed. -/
+lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
+    (left right : B256) :
+    ((((μ.write (start + 32) right.toBytes).write start left.toBytes).read
+      start 64).1) = left.toBytes ++ right.toBytes := by
+  have hright : right.toBytes ≠ [] := by
+    intro h
+    have hlen := B256.length_toBytes right
+    simp [h] at hlen
+  have hleft : left.toBytes ≠ [] := by
+    intro h
+    have hlen := B256.length_toBytes left
+    simp [h] at hlen
+  let μ' := μ.write (start + 32) right.toBytes
+  have hdata : start + left.toBytes.length ≤ μ'.data.size := by
+    dsimp [μ']
+    have h := Mem.write_end_le_data_size μ (start + 32) hright
+    simp only [B256.length_toBytes] at h ⊢
+    omega
+  have hsize : start + left.toBytes.length ≤ μ'.size := by
+    dsimp [μ']
+    have h := Mem.write_end_le_size μ (start + 32) hright
+    simp only [B256.length_toBytes] at h ⊢
+    omega
+  have hlen : left.toBytes.length = 32 := B256.length_toBytes left
+  generalize heq : left.toBytes = ys at hleft hdata hsize hlen ⊢
+  rcases ys with _ | ⟨b, bs⟩
+  · exact absurd rfl hleft
+  change (((μ'.write start (b :: bs)).read start 64).1) = _
+  simp only [Mem.write]
+  rw [if_pos hsize, if_pos hdata]
+  simp only [Mem.read, Array.sliceD_eq_map]
+  apply List.ext_get
+  · simp only [List.length_map, List.length_range, List.length_append,
+      B256.length_toBytes, List.length_cons] at hlen ⊢
+    omega
+  · intro i hwindow hout
+    simp only [List.length_map, List.length_range] at hwindow
+    simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range]
+    rw [Array.getD_writeD (0 : UInt8) (b :: bs) μ'.data start
+      (start + i) hdata]
+    by_cases hhalf : i < 32
+    · rw [if_pos (by omega)]
+      calc
+        (b :: bs).getD (start + i - start) 0 =
+            (b :: bs).getD i 0 := by congr 1 <;> omega
+        _ = ((b :: bs) ++ right.toBytes).getD i 0 :=
+          (List.getD_append_left (d := (0 : UInt8))
+            (by omega)).symm
+        _ = ((b :: bs) ++ right.toBytes)[i] := by
+          rw [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem hout]
+          rfl
+    · rw [if_neg (by omega)]
+      dsimp [μ']
+      rw [Mem.getD_write_below_end μ (start + 32) hright
+        (by simp [B256.length_toBytes]; omega), if_pos (by omega)]
+      have hsub : start + i - (start + 32) = i - 32 := by omega
+      rw [hsub]
+      calc
+        right.toBytes.getD (i - 32) 0 =
+            ((b :: bs) ++ right.toBytes).getD i 0 := by
+          rw [List.getD_append_right (d := (0 : UInt8))
+            (by omega), hlen]
+        _ = ((b :: bs) ++ right.toBytes)[i] := by
+          rw [List.getD_eq_getElem?_getD,
+            List.getElem?_eq_getElem hout]
+          rfl
 
 /-! ### What memory a written instruction writes
 

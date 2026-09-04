@@ -96,6 +96,24 @@ def accessControlRolesPosition : B256 :=
 def accessControlRoleMembersPosition : B256 :=
   0x8f8c450dae5029cd48cd91dd9db65da48fb742893edfc7941250f6721d93cbbe
 
+/-- The mathematical storage keys mirrored by the executable keccak helpers.
+These definitions are proof/projection names; the program continues to derive
+the keys by executing `KECCAK256` over the two-word images below. -/
+def roleDataSlot (role : B256) : B256 :=
+  (role.toBytes ++ accessControlRolesPosition.toBytes).keccak
+
+def roleMembershipSlot (role account : B256) : B256 :=
+  (account.toBytes ++ (roleDataSlot role).toBytes).keccak
+
+def roleEnumerationBaseSlot (role : B256) : B256 :=
+  (role.toBytes ++ accessControlRoleMembersPosition.toBytes).keccak
+
+def roleEnumerationIndexSlot (role account : B256) : B256 :=
+  (account.toBytes ++ ((roleEnumerationBaseSlot role) + 1).toBytes).keccak
+
+def roleEnumerationMemberSlot (role index : B256) : B256 :=
+  (roleEnumerationBaseSlot role).toBytes.keccak + index
+
 def limitUint32Mask : B256 := 0xffffffff
 
 /-! Storage-key derivation may run after trigger calldata has populated words
