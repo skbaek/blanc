@@ -1367,6 +1367,112 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
     scratch_setScratch_self _ _ _,
     hmachineM.trans (MachineOnly.freshChi imageM _), framet, hpt, run⟩
 
+/-! ## The route dispatcher
+
+The machine returns through a finite five-way tag test.  A successful run
+reaches exactly the endpoint tail its entry body staged; a tag outside the
+five has no successful run, because the last test's rejecting arm is the
+inline reverter. -/
+
+private theorem of_run_routeTest {fs : List Func} {e : Sevm}
+    {entry s r : Devm} {image : Bytes} {tail : Stack}
+    {c : B256} {body next : Func}
+    (frame : Frame image entry s)
+    (hp : scratch image routeWord :: tail <<+ s.stack)
+    (run : Func.Run fs e s
+      (dup 0 ::: pushB256 c ::: eq ::: ((pop ::: body) <?> next)) r) :
+    (scratch image routeWord = c ∧ ∃ t, Frame image entry t ∧
+        (tail <<+ t.stack) ∧ Func.Run fs e t body r) ∨
+      (∃ t, Frame image entry t ∧
+        (scratch image routeWord :: tail <<+ t.stack) ∧
+        Func.Run fs e t next r) := by
+  refine run_prepend_elim _ [dup 0, pushB256 c, eq] ?_ run
+  intro s1 hline1 run
+  have frame1 := frame.line (by line_inv) (by line_inv) (by line_inv) hline1
+  have hp1 : (c =? scratch image routeWord) :: scratch image routeWord ::
+      tail <<+ s1.stack := by
+    rcases Line.of_run_cons hline1 with ⟨u1, hdup, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u3, heq, hnil⟩
+    cases hnil
+    have hdupPrefix : scratch image routeWord :: scratch image routeWord ::
+        tail <<+ u1.stack := prefix_of_dup_val hdup (by show_nth) hp
+    exact prefix_of_eq heq
+      (prefix_of_push (of_run_pushB256 hpush) hdupPrefix)
+  rcases of_run_branch run with
+    ⟨s2, hpop, run⟩ | ⟨w, s2, s3, hnz, hpop, hburn, run⟩
+  · refine Or.inr ⟨s2, frame1.of_popBurn hpop, ?_, run⟩
+    exact (popBurn_pref hpop hp1).2
+  · have htag : scratch image routeWord = c := by
+      by_contra hne
+      rw [B256.eqCheck, if_neg (fun h => hne h.symm)] at hp1
+      exact absurd (popBurn_pref hpop hp1).1 hnz
+    refine Or.inl ⟨htag, ?_⟩
+    have frame3 := (frame1.of_popBurn hpop).of_burn hburn
+    have hp3 : scratch image routeWord :: tail <<+ s3.stack := by
+      rw [← hburn.stack]
+      exact (popBurn_pref hpop hp1).2
+    refine run_prepend_elim _ [pop] ?_ run
+    intro s4 hline4 run
+    have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
+    exact ⟨s4, frame4, prefix_of_pop (of_run_pop (of_run_single hline4)) hp3,
+      run⟩
+
+theorem of_run_freshRoute {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s (.call freshRouteSlot) r) :
+    ∃ t, Frame image entry t ∧ (tail <<+ t.stack) ∧
+      ((scratch image routeWord = routeConvertToAssets ∧
+          Func.Run fs e t afterConvertToAssets r) ∨
+        (scratch image routeWord = routeExit ∧
+          Func.Run fs e t afterExit r) ∨
+        (scratch image routeWord = routeConvertToUnits ∧
+          Func.Run fs e t afterConvertToUnits r) ∨
+        (scratch image routeWord = routeDrip ∧
+          Func.Run fs e t afterDrip r) ∨
+        (scratch image routeWord = routeJoin ∧
+          Func.Run fs e t afterJoin r)) := by
+  obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.freshRoute run
+  have frame0 := frame.of_burn hburn0
+  have hp0 : tail <<+ s0.stack := hburn0.stack ▸ hp
+  unfold Drip.freshRoute at run
+  refine run_prepend_elim _ (loadWord routeWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame0.loadWord hp0 hline1
+  rcases of_run_routeTest frame1 hp1 run with
+    ⟨htag, t, framet, hpt, run⟩ | ⟨s2, frame2, hp2, run⟩
+  · exact ⟨t, framet, hpt, Or.inl ⟨htag, run⟩⟩
+  rcases of_run_routeTest frame2 hp2 run with
+    ⟨htag, t, framet, hpt, run⟩ | ⟨s3, frame3, hp3, run⟩
+  · exact ⟨t, framet, hpt, Or.inr (Or.inl ⟨htag, run⟩)⟩
+  rcases of_run_routeTest frame3 hp3 run with
+    ⟨htag, t, framet, hpt, run⟩ | ⟨s4, frame4, hp4, run⟩
+  · exact ⟨t, framet, hpt, Or.inr (Or.inr (Or.inl ⟨htag, run⟩))⟩
+  rcases of_run_routeTest frame4 hp4 run with
+    ⟨htag, t, framet, hpt, run⟩ | ⟨s5, frame5, hp5, run⟩
+  · exact ⟨t, framet, hpt, Or.inr (Or.inr (Or.inr (Or.inl ⟨htag, run⟩)))⟩
+  -- the last test has no `pop`: the tag word is consumed by the comparison
+  refine run_prepend_elim _ [pushB256 routeJoin, eq] ?_ run
+  intro s6 hline6 run
+  have frame6 := frame5.line (by line_inv) (by line_inv) (by line_inv) hline6
+  have hp6 : (routeJoin =? scratch image routeWord) :: tail <<+ s6.stack := by
+    rcases Line.of_run_cons hline6 with ⟨u1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, heq, hnil⟩
+    cases hnil
+    exact prefix_of_eq heq (prefix_of_push (of_run_pushB256 hpush) hp5)
+  rcases of_run_branch run with
+    ⟨s7, hpop, run⟩ | ⟨w, s7, s8, hnz, hpop, hburn, run⟩
+  · exact absurd run not_run_revert
+  · have htag : scratch image routeWord = routeJoin := by
+      by_contra hne
+      rw [B256.eqCheck, if_neg (fun h => hne h.symm)] at hp6
+      exact absurd (popBurn_pref hpop hp6).1 hnz
+    refine ⟨s8, (frame6.of_popBurn hpop).of_burn hburn, ?_,
+      Or.inr (Or.inr (Or.inr (Or.inr ⟨htag, run⟩)))⟩
+    rw [← hburn.stack]
+    exact (popBurn_pref hpop hp6).2
+
 end Drip
 
 end Blanc
