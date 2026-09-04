@@ -3,7 +3,7 @@
   "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
   "launch_population": 53,
   "launch_ci_population": 34,
-  "final_ci_population": 40,
+  "final_ci_population": 42,
   "split_families": [
     "lido-circuit-breaker-registry",
     "execution-occurrence",
@@ -14,7 +14,9 @@
   "post_launch_gates": [
     "beacon-deposit-assurance",
     "beacon-deposit-deployment",
-    "weth10-current-mainnet"
+    "weth10-current-mainnet",
+    "fork-containment",
+    "eels-prague-closure"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -52,6 +54,7 @@
     {"id":"cycle-write-free-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
     {"id":"transient-settlement-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"transient-settlement-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
+    {"id":"eels-prague-closure","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"weth10-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds the exact compiled WETH10 bytes"},
     {"id":"lido-dispatchers","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: dispatcher proof and semantic campaign are entangled; no cheaper complete projection is established"},
     {"id":"lido-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: the evaluator and case projection have no separately proved cheap complete certificate"},
@@ -77,6 +80,7 @@
     {"id":"fmint-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"weth-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"proxy-pair-upgrade-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]}
+    {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]},
+    {"id":"fork-containment","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]}
   ]
 }

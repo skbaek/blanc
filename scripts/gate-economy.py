@@ -71,7 +71,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
         "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
         "launch_population": 53,
         "launch_ci_population": 34,
-        "final_ci_population": 40,
+        "final_ci_population": 42,
         "split_families": [
             "lido-circuit-breaker-registry",
             "execution-occurrence",
@@ -83,6 +83,8 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-assurance",
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
+            "fork-containment",
+            "eels-prague-closure",
         ],
     }
     for key, expected in expected_meta.items():

@@ -84,6 +84,10 @@ EXPECTED_DECLARATIONS = {
     "P7": [
         "Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root",
         "Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence",
+        "Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet",
+        "Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_mainnet",
+        "Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague",
+        "Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague",
     ],
     "P8-FRAME": [
         "Blanc.BeaconDeposit.historySpec_sound",
@@ -92,9 +96,13 @@ EXPECTED_DECLARATIONS = {
     "P8-HISTORY": [
         "Blanc.BeaconDeposit.pragueOnly_history_extends",
         "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends",
+        "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet",
+        "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague",
     ],
     "P8-READ": [
         "Blanc.BeaconDeposit.DeploymentRoot.future_count_root",
+        "Blanc.BeaconDeposit.DeploymentRoot.future_count_root_mainnet",
+        "Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague",
     ],
 }
 
@@ -147,7 +155,7 @@ EXPECTED_GATES = {
 
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 EXPECTED_TOTAL_ROWS = 11
-EXPECTED_TOTAL_DECLARATIONS = 30
+EXPECTED_TOTAL_DECLARATIONS = 38
 
 NONCLAIM_PHRASES = [
     "different artifacts and independent proof developments",

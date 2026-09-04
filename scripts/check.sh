@@ -316,6 +316,8 @@ Blanc.chain_preserves_solvent|$STANDARD
 Blanc.addBlockToChain_preserves_solvent|$STANDARD
 Blanc.stateTransitionUsing_preserves_solvent|$STANDARD
 Blanc.chainUsing_preserves_solvent|$STANDARD
+Blanc.chainUsing_preserves_solvent_mainnet|$STANDARD
+Blanc.chainUsing_preserves_solvent_prague|$STANDARD
 Blanc.addBlockToChainUsing_preserves_solvent|$STANDARD
 Blanc.fmint_preserves_conserved|$STANDARD
 Blanc.stateTransition_preserves_conserved|$STANDARD
@@ -323,6 +325,8 @@ Blanc.chain_preserves_conserved|$STANDARD
 Blanc.addBlockToChain_preserves_conserved|$STANDARD
 Blanc.stateTransitionUsing_preserves_conserved|$STANDARD
 Blanc.chainUsing_preserves_conserved|$STANDARD
+Blanc.chainUsing_preserves_conserved_mainnet|$STANDARD
+Blanc.chainUsing_preserves_conserved_prague|$STANDARD
 Blanc.addBlockToChainUsing_preserves_conserved|$STANDARD
 Blanc.Fmint.fmint_flashLoan_spec|$STANDARD
 Blanc.Fmint.no_success_of_callback_never_magic|$STANDARD
@@ -1352,6 +1356,14 @@ Blanc.BeaconDeposit.historySpec_preserves|$STANDARD
 Blanc.BeaconDeposit.pragueOnly_history_extends|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_history_extends|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_count_root|$STANDARD
+Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_mainnet|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_count_root_mainnet|$STANDARD
+Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague|$STANDARD
+Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague|$STANDARD
 Blanc.compact_pause_word_eq_projection|$STANDARD
 Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok|$STANDARD

@@ -2659,6 +2659,24 @@ theorem chainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ContractSpec.chainUsing_preserves_inv fa (fmintSpec_preserves fa)
       cfg ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv))
 
+/-- Ethereum mainnet's configured schedule is the published specialization of
+the chain-level rung.  It is a statement over that schedule, not executable
+evidence that any mainnet block was run. -/
+theorem chainUsing_preserves_conserved_mainnet (fa : Adr)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved fa mainnetChainConfig ch ch' h_reach h_inv
+
+/-- The Prague-only schedule is the retained fixed-fork instance of the same
+rung; it says nothing the configured statement does not already say. -/
+theorem chainUsing_preserves_conserved_prague (fa : Adr) (chainId : UInt64)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved fa (ChainConfig.pragueOnly chainId) ch ch'
+    h_reach h_inv
+
 /-- Preservation through RLP decoding and the block-hash checks. -/
 theorem addBlockToChain_preserves_conserved (fa : Adr)
     (ch ch' : BlockChain) (rlp : Bytes)

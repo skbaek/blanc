@@ -1589,8 +1589,28 @@ theorem chainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ContractSpec.chainUsing_preserves_inv wa (wethSpec_preserves wa)
       cfg ch ch' h_reach (wethSpec_stateInv_iff.mpr h_inv))
 
--- Chain-level induction corollary : no sequence of valid blocks can break
--- WETH solvency.
+-- Ethereum mainnet's configured schedule is the published specialization of
+-- the rung above.  It is a statement over that schedule, not executable
+-- evidence that any mainnet block was run.
+theorem chainUsing_preserves_solvent_mainnet (wa : Adr)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent wa mainnetChainConfig ch ch' h_reach h_inv
+
+-- The Prague-only schedule is the retained fixed-fork instance of the same
+-- rung; it says nothing the configured statement does not already say.
+theorem chainUsing_preserves_solvent_prague (wa : Adr) (chainId : UInt64)
+    (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent wa (ChainConfig.pragueOnly chainId) ch ch'
+    h_reach h_inv
+
+-- Chain-level induction corollary over Jaune's fixed-Prague `BlockChain.Reach`
+-- ladder : no sequence of valid blocks can break WETH solvency.  This is the
+-- retained fixed-fork API, kept as an audited corollary of the configured
+-- rung above; it is history, not the published claim.
 theorem chain_preserves_solvent (wa : Adr) (ch ch' : BlockChain)
     (h_reach : BlockChain.Reach ch ch')
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
@@ -1626,14 +1646,17 @@ theorem addBlockToChainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ContractSpec.addBlockToChainUsing_preserves_inv wa (wethSpec_preserves wa)
       cfg ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
 
--- Prague is the `rules := pragueRules` instance here too; the statement is
--- unchanged.
+-- Block import at Jaune's fixed-Prague entry point; the statement is
+-- unchanged, and the proof is the generic ladder's own instance of it rather
+-- than a second local re-instantiation at a named rule record.
 theorem addBlockToChain_preserves_solvent (wa : Adr)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
-  addBlockToChainWith_preserves_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.addBlockToChain_preserves_inv wa (wethSpec_preserves wa)
+      ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
 
 end Blanc

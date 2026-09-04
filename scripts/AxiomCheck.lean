@@ -91,6 +91,8 @@ import Blanc.BeaconDepositWriteSites
 import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
+import Blanc.BeaconDepositMainnet
+import Blanc.BeaconDepositPragueCompat
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -98,6 +100,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.addBlockToChain_preserves_solvent
 #print axioms Blanc.stateTransitionUsing_preserves_solvent
 #print axioms Blanc.chainUsing_preserves_solvent
+#print axioms Blanc.chainUsing_preserves_solvent_mainnet
+#print axioms Blanc.chainUsing_preserves_solvent_prague
 #print axioms Blanc.addBlockToChainUsing_preserves_solvent
 #print axioms Blanc.fmint_preserves_conserved
 #print axioms Blanc.stateTransition_preserves_conserved
@@ -105,6 +109,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.addBlockToChain_preserves_conserved
 #print axioms Blanc.stateTransitionUsing_preserves_conserved
 #print axioms Blanc.chainUsing_preserves_conserved
+#print axioms Blanc.chainUsing_preserves_conserved_mainnet
+#print axioms Blanc.chainUsing_preserves_conserved_prague
 #print axioms Blanc.addBlockToChainUsing_preserves_conserved
 #print axioms Blanc.Fmint.fmint_flashLoan_spec
 #print axioms Blanc.Fmint.no_success_of_callback_never_magic
@@ -1134,6 +1140,14 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.BeaconDeposit.pragueOnly_history_extends
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
+#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root_mainnet
+#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague
 #print axioms Blanc.compact_pause_word_eq_projection
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
 #print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok

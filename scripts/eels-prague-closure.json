@@ -1,10 +1,18 @@
 {
+  "checkout": {
+    "commit": "4198b9c5996713b268aed602739d5aa40e277694",
+    "repository": "https://github.com/ethereum/execution-specs.git",
+    "sourceRoot": "src"
+  },
+  "contentPolicy": "whereGenerated",
+  "interpreter": {
+    "implementation": "CPython",
+    "series": "3.11"
+  },
+  "lane": "blanc-eels-prague-differential",
   "platforms": {
-    "linux-x86_64": {
-      "generated": false
-    },
     "macos-arm64": {
-      "contentSha256": "0782b8c1735adcd0976c3a8cf872c6d83a02592fa3c49461ebed0254afcc5fc3",
+      "contentSha256": "2dbc2071fbccba62683f17a3e1bf81aa403f534db3e0a8ab9542efbd8c812ca0",
       "distributions": [
         {
           "contentSha256": "648cd23d81b5241c0a19f85d8f7b94d7c177c5b58ec0906c025da1f44ca03e49",
@@ -12,14 +20,19 @@
           "name": "annotated_types"
         },
         {
+          "contentSha256": "6221b152da1dfc76027992202df85153b676fbe7140f0772792e382d9dd53f6d",
+          "files": 27,
+          "name": "asn1crypto"
+        },
+        {
           "contentSha256": "c33705dd9d6e251fe0664059eba830249fc8cd9b8deb39447564cb353aa34bb6",
           "files": 29,
           "name": "cffi"
         },
         {
-          "contentSha256": "746ca25b32f4ee988722f387717743e7900734767dd0e51972e302b4a4791dd3",
-          "files": 103,
-          "name": "cryptography"
+          "contentSha256": "4ad75f38d0c21f55bde58743cf424b5a5f2e2287ba7870e487356f23c1230565",
+          "files": 14,
+          "name": "coincurve"
         },
         {
           "contentSha256": "733f22ca87857ff31dec3cd330ea8af24c1d55f2bb7f7da6ef916496272e3c20",
@@ -27,34 +40,29 @@
           "name": "cytoolz"
         },
         {
-          "contentSha256": "1623ef9f356632c76af71020f304bd688e3479585e130568985b4e9f4c87b528",
+          "contentSha256": "694fded0385cab44674ecc27bca321d90bbcf940048ccd1b859d8bb2fd96cbb8",
           "files": 14,
           "name": "eth_hash"
         },
         {
-          "contentSha256": "1e2cf7c953a63da49f00b2ee76b86b280177fd90d61bccd312aeb084ecd692c0",
+          "contentSha256": "068b981e27c35504e5f622548bacaed4adcc99241744a85242880e1fc9ee28ce",
           "files": 14,
           "name": "eth_typing"
         },
         {
-          "contentSha256": "3d928ce2d1b9c4ceaf6cacb2e76c3f98aef01f27ea2e5afef023c915697947d9",
+          "contentSha256": "8bb0b406fe1c204edb3695582f00ab2962985f0c8e722e49d632785f2c8b6361",
           "files": 32,
           "name": "eth_utils"
         },
         {
-          "contentSha256": "fa0df0704bd1fa55efd10023eed9a8343eed5929af0fa58ab48aa9aa6962a3f1",
+          "contentSha256": "f42944adacf60de771d54b54d24dbb359cbb6a55185882dd229923baeb5f5059",
           "files": 8,
           "name": "ethereum_rlp"
         },
         {
-          "contentSha256": "83383cc1a5fd6555c2f90952fb17ef183a7242eade4de21ee63fec6018e40573",
+          "contentSha256": "d562630afbb8cd0524eb189a7ca1c6f2154aeb241fd25f63e917c898086ceba0",
           "files": 9,
           "name": "ethereum_types"
-        },
-        {
-          "contentSha256": "1fe146a91d9c7ed42f40b43acff6b7735241311ae6fa9d9b9a430a0d1de3bcce",
-          "files": 4,
-          "name": "mypy_extensions"
         },
         {
           "contentSha256": "09b51e4e42e815a667cbd317b89fe3fbada3ecbcf5b3f3a82dde69818589d647",
@@ -62,8 +70,8 @@
           "name": "py_ecc"
         },
         {
-          "contentSha256": "de969c883639ef48cd719cbe88de544b14bf0b46c9a501a4c9c47fc713828633",
-          "files": 22,
+          "contentSha256": "13f0b1caf3c97c839378a88f70d4ef38d9d6ef7e4fe4bc187f81cae73d064894",
+          "files": 12,
           "name": "pycparser"
         },
         {
@@ -72,19 +80,14 @@
           "name": "pycryptodome"
         },
         {
-          "contentSha256": "0b2654577b1aaf4095522c9df68e267ca53628cca898652228a40ceba6dfdb0b",
+          "contentSha256": "2582caa97e7f02cfca34e2ceeb50499cfb67983a3a4e1d3cead04bc44b1a10f0",
           "files": 110,
           "name": "pydantic"
         },
         {
-          "contentSha256": "2da142241b826906dd2c644278118658e4eb3dcaede9aefb68a1449ed9fb5bc3",
+          "contentSha256": "9270ce2b784681cacb9a8e8e19496e030f142afc695e5215a776b8ecfac07532",
           "files": 8,
           "name": "pydantic_core"
-        },
-        {
-          "contentSha256": "b1cd5ecc92878f879065f7a5a5ca2112903daf4e7fecfa5cb6bc85ea3829c95c",
-          "files": 9,
-          "name": "spec256k1"
         },
         {
           "contentSha256": "541871e1a4b17fa3a09be5e11a35c7be0dd88551de9a0a5709334de4490f80ee",
@@ -102,19 +105,23 @@
           "name": "typing_inspection"
         }
       ],
-      "fileRecords": 854,
-      "generated": true,
-      "pythonExecutableSha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884"
+      "fileRecords": 769,
+      "generated": true
     }
   },
-  "schema": 2,
+  "provisioning": {
+    "command": "pip install -e . -c scripts/eels-prague-constraints.txt",
+    "constraints": "eels-prague-constraints.txt",
+    "tool": "pip"
+  },
+  "schema": 1,
   "semanticClosure": {
     "contentExcludes": [
       "**/__pycache__/**",
       "**/*.pyc",
       "**/*.pyo"
     ],
-    "count": 19,
+    "count": 18,
     "distributions": [
       {
         "modules": [
@@ -122,6 +129,13 @@
         ],
         "name": "annotated_types",
         "version": "0.7.0"
+      },
+      {
+        "modules": [
+          "asn1crypto"
+        ],
+        "name": "asn1crypto",
+        "version": "1.5.1"
       },
       {
         "modules": [
@@ -133,10 +147,10 @@
       },
       {
         "modules": [
-          "cryptography"
+          "coincurve"
         ],
-        "name": "cryptography",
-        "version": "45.0.7"
+        "name": "coincurve",
+        "version": "20.0.0"
       },
       {
         "modules": [
@@ -150,42 +164,35 @@
           "eth_hash"
         ],
         "name": "eth_hash",
-        "version": "0.7.1"
+        "version": "0.8.0"
       },
       {
         "modules": [
           "eth_typing"
         ],
         "name": "eth_typing",
-        "version": "5.2.1"
+        "version": "6.0.0"
       },
       {
         "modules": [
           "eth_utils"
         ],
         "name": "eth_utils",
-        "version": "5.3.1"
+        "version": "6.0.0"
       },
       {
         "modules": [
           "ethereum_rlp"
         ],
         "name": "ethereum_rlp",
-        "version": "0.1.6"
+        "version": "0.1.5"
       },
       {
         "modules": [
           "ethereum_types"
         ],
         "name": "ethereum_types",
-        "version": "0.4.1"
-      },
-      {
-        "modules": [
-          "mypy_extensions"
-        ],
-        "name": "mypy_extensions",
-        "version": "1.1.0"
+        "version": "0.2.5"
       },
       {
         "modules": [
@@ -199,7 +206,7 @@
           "pycparser"
         ],
         "name": "pycparser",
-        "version": "2.23"
+        "version": "3.0"
       },
       {
         "modules": [
@@ -213,21 +220,14 @@
           "pydantic"
         ],
         "name": "pydantic",
-        "version": "2.12.3"
+        "version": "2.12.5"
       },
       {
         "modules": [
           "pydantic_core"
         ],
         "name": "pydantic_core",
-        "version": "2.41.4"
-      },
-      {
-        "modules": [
-          "spec256k1"
-        ],
-        "name": "spec256k1",
-        "version": "0.2.3"
+        "version": "2.41.5"
       },
       {
         "modules": [
@@ -260,27 +260,12 @@
       "uv_build.json"
     ],
     "policy": {
-      "runtimePackages": [
-        "execution_testing.forks"
-      ],
-      "transitionModules": [
-        "ethereum_spec_tools.evm_tools"
-      ],
+      "runtimePackages": [],
+      "transitionModules": [],
       "transitionPackages": [
         "ethereum"
       ]
     },
-    "versionsSha256": "bcd3ee8c34adf8c9e91d1a01214611703237d0f7e0aacf3d9dbe70b9e4bed2b7"
-  },
-  "target": {
-    "checkoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
-    "entrypointBodySha256": "ab52479bdf9187d1a1684342b7decc774b7e2ddf9133dc51754be17c7dc102af",
-    "provisioning": {
-      "command": "uv sync --all-packages --frozen",
-      "lockfile": "uv.lock",
-      "tool": "uv"
-    },
-    "pythonImplementation": "CPython",
-    "pythonVersion": "3.11.9"
+    "versionsSha256": "58d0c59d1c2065bef993a8c8b2d512ecd415af633d5f6651c1839243fbb59b37"
   }
 }

@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
+import eels_semantic_closure
+
 
 REPO = Path(__file__).resolve().parents[1]
 LOCK_PATH = REPO / "scripts" / "weth10-reference.json"
@@ -1457,6 +1459,10 @@ def verify_eels_pin(root: Path) -> None:
         die(f"EELS pin mismatch: expected {EELS_PIN}, got {actual}")
     if dirty:
         die(f"EELS checkout at {root} is dirty; refusing an unpinned oracle")
+
+    # The commit pins the specification's source; this pins what that source
+    # imports.  Both must hold before an oracle comparison means anything.
+    eels_semantic_closure.assert_prague_environment(die)
 
 
 def self_falsifiers(sample: Scenario, oracle: Mapping, blanc: Mapping) -> int:

@@ -67,13 +67,13 @@ PINS = {
     "OfficialCreateMessageExecution": "f3f2fbb91c379302af9eff908b70bb2761b3be215ce7a07049b269f23e64ec58",
     "OfficialCreateMessageResult": "846e6ca7c073eb4575bf827e1e68c4d671a3e35e13624b81c0766376f3263612",
     "OfficialConstructorMessageResult": "ac72fa7080ad768826622ca3a4d17f6a859c7be69d8b52426fffd0304087b5ab",
-    "CanonicalDeploymentBase": "7a3fcdd9ac9e90418d31c9425eef3e21fdb7d41798ef54f219652bcf0914787a",
+    "CanonicalDeploymentBase": "b608bc0cbb1c04e6c3c01ab36c97a7d953b13eed31f70cbf7e17261072ddd2c9",
     "CanonicalOfficialDeploymentBlock": "d4fe65bff5cbe0eab8bc78a110f75bc0f97bcf0d34231bf5a8f11e04b7cd4205",
-    "PreparedDeploymentContext": "af9495545537f026f4f63b4d206f40f4c8a069aaea9f069b1451a72a44d0bed3",
+    "PreparedDeploymentContext": "b68774592d38942968a53b987edcfa6ea00a631730293183f2c0a6b3f89eeb7c",
     "OfficialDeploymentTransactionResult": "1f9e1762be26367e57e8efd538fc7252095867a40f1963e06d18310d9749710a",
     "OfficialDeploymentSuffixResult": "3c359fd060bd6c981d177062d40bc52e4e7ce5d9d69220e31966b5a02e0f4977",
-    "DeploymentRoot": "1073eeb97564b9b987576c18ff1d48ce6f4aaae10412caf36cf95f7a16409593",
-    "canonicalDeploymentStep_establishes_root": "f9ad429746fde433fd5e942b92e492f8182e494d0a263bd2423585be6f2c705b",
+    "DeploymentRoot": "71498629084d2546a7a34e2faa959d995a192dd2fa3508712e0aaed9dc0c6d32",
+    "canonicalDeploymentStep_establishes_root": "7ab29436d583c208ceb8db9aaf9f45eb86604243caeb5c4d8b13efa37422c020",
     "DeploymentRoot.reflReach": "db5340c05d64eaacd1a250c81e4c87d285672e8ad7a348b5c87f59db04d4e8e7",
     "DeploymentRoot.reachable_registryStable": "6b0e847c71a438cfc66fb641b33c923c87007d60607efffc461030e6f00ba4c4",
     "DeploymentRoot.reachable_code": "81a6786d083b03c2385428f6ca09a79e935ac1ce73242349fe4ecbf136fabbbd",
@@ -177,6 +177,13 @@ CHANNELS = {
     "DeploymentRoot": (
         "CanonicalDeploymentBase", "CanonicalOfficialDeploymentBlock",
         "OfficialDeploymentTransactionResult", "OfficialDeploymentSuffixResult",
+        # The compound fragment, not the bare schedule name: since the shared
+        # deployment shell became schedule-parametric this declaration names
+        # `ChainConfig.pragueOnly` in two places, so a bare token would stay
+        # satisfied by the `CanonicalDeploymentBase` instantiation while the
+        # transition itself was loosened. The `root-transition` falsifier
+        # measured exactly that.
+        "stateTransitionUsing (ChainConfig.pragueOnly chainId)",
         "stateTransitionUsing", "ChainConfig.pragueOnly", "applyBody",
         "post = deployed.state", "target_ne_zero", "target_not_precompile",
         "installed", "pauseDuration", "heartbeatInterval", "emptyRegistry",
