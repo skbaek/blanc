@@ -41,22 +41,11 @@ private def persistentSiteRows : List String :=
   constructorPersistentWriteInventory.map fun (site, cls) =>
     s!"{site.label}|{site.offset}|{persistentClassName cls}"
 
-private def projectionRegions : List (String × Nat) :=
-  [ ("config", configRegion),
-    ("role-lookup-role", roleLookupRoleRegion),
-    ("role-lookup-account", roleLookupAccountRegion),
-    ("role-lookup-index", roleLookupIndexRegion),
-    ("enum-role", enumRoleRegion),
-    ("enum-account", enumAccountRegion) ]
-
 private def projectionSlots : List (String × B256) :=
   [ ("resume-since", resumeSinceSlot),
-    ("max-exit-requests", maxExitRequestsLimitSlot),
-    ("previous-exit-requests", prevExitRequestsLimitSlot),
-    ("previous-timestamp", prevTimestampSlot),
-    ("frame-duration", frameDurationInSecSlot),
-    ("exits-per-frame", exitsPerFrameSlot),
-    ("role-record-length", roleRecordLengthSlot) ]
+    ("packed-exit-limit", maxExitRequestsLimitSlot),
+    ("access-control-roles-root", accessControlRolesPosition),
+    ("access-control-role-members-root", accessControlRoleMembersPosition) ]
 
 #eval show IO Unit from do
   emitBytes "creation-template" lidoTwgCreationTemplate
@@ -71,14 +60,9 @@ private def projectionSlots : List (String × B256) :=
   IO.println s!"patch-controls-valid {runtimePatchControlsValid}"
   IO.println s!"constructor-persistent-sites {persistentSiteRows.length} {String.intercalate "," persistentSiteRows}"
   IO.println s!"constructor-external-sites {constructorExternalCallInventory.length} -"
-  let regions := projectionRegions.map fun (name, region) => s!"{name}|{region}"
-  let regionWords := projectionRegions.map fun (name, region) =>
-    s!"{name}|{(regionWord region).toHex}"
   let slots := projectionSlots.map fun (name, slot) => s!"{name}|{slot.toHex}"
-  IO.println s!"projection-regions {regions.length} {String.intercalate "," regions}"
-  IO.println s!"projection-region-words {regionWords.length} {String.intercalate "," regionWords}"
   IO.println s!"projection-slots {slots.length} {String.intercalate "," slots}"
-  IO.println "projection-formula bitwise-or(region-times-two-pow-252,payload)"
+  IO.println "projection-formula packed-limit-and-nested-keccak-per-role"
   IO.println "constructor-arguments admin,locator,max-exit-requests,exits-per-frame,frame-duration"
   IO.println "constructor-events RoleGranted,ExitRequestsLimitSet"
   IO.println s!"limits {eip170RuntimeLimit} {eip3860InitcodeLimit} {constructorArgumentBytes}"

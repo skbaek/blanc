@@ -6,9 +6,9 @@ import Blanc.LinearDispatch
 
   All selectors have an executable dispatch entry, including the nested
   `ValidatorExitData[]` decoder and outbound trigger choreography.
-  AccessControlEnumerable is represented with full role/account/index lookup
-  records and global role/account arrays; lookup mismatches refuse rather
-  than alias, and removal uses swap-pop with moved-index repair.
+  The disposable P1 shape uses nested-keccak membership and direct per-role
+  length/index/member storage; removal uses swap-pop with moved-index repair.
+  Raw storage remains outside the public logical projection.
 -/
 
 namespace Blanc
@@ -54,20 +54,17 @@ def limitErrorSlot : Nat := 10
 def feeErrorSlot : Nat := 11
 def refundErrorSlot : Nat := 12
 def triggerNestedAbiSlot : Nat := 13
-def roleMemberLoopSlot : Nat := 14
-def roleCountLoopSlot : Nat := 15
-def collisionRefusalSlot : Nat := 16
-def tooLargeMaxExitRequestsLimitSlot : Nat := 17
-def tooLargeFrameDurationSlot : Nat := 18
-def tooLargeExitsPerFrameSlot : Nat := 19
-def zeroFrameDurationSlot : Nat := 20
-def limitCurrentComputeSlot : Nat := 21
-def limitCurrentContinueSlot : Nat := 22
-def setLimitAfterCurrentSlot : Nat := 23
-def setLimitWriteSlot : Nat := 24
-def consumeExitLimitSlot : Nat := 25
-def consumeAfterCurrentSlot : Nat := 26
-def exitRequestsLimitExceededSlot : Nat := 27
+def tooLargeMaxExitRequestsLimitSlot : Nat := 14
+def tooLargeFrameDurationSlot : Nat := 15
+def tooLargeExitsPerFrameSlot : Nat := 16
+def zeroFrameDurationSlot : Nat := 17
+def limitCurrentComputeSlot : Nat := 18
+def limitCurrentContinueSlot : Nat := 19
+def setLimitAfterCurrentSlot : Nat := 20
+def setLimitWriteSlot : Nat := 21
+def consumeExitLimitSlot : Nat := 22
+def consumeAfterCurrentSlot : Nat := 23
+def exitRequestsLimitExceededSlot : Nat := 24
 
 def roleKeyFromMemory (region : Nat) : Line :=
   mloadWord 0 ++ mloadWord 1 ++
@@ -96,20 +93,9 @@ def enumKeyFromMemoryAt (word : Nat) (region : Nat) : Line :=
   mloadWord (Nat.toB256 word) ++
   [pushB256 low252Mask, and, pushB256 (regionWord region), or]
 
-def roleAccountCheck (role : B256) (body : Func) : Func :=
-  roleKeyForCaller role (regionWord roleLookupAccountRegion) +++
-    (sload ::: caller ::: pushB256 addressMask ::: and ::: eq :::
-      (body <?> .call collisionRefusalSlot))
-
-def roleRecordCheck (role : B256) (body : Func) : Func :=
-  roleKeyForCaller role (regionWord roleLookupRoleRegion) +++
-    (sload ::: pushB256 role ::: eq :::
-      (roleAccountCheck role body <?> .call collisionRefusalSlot))
-
 def onlyRole (role : B256) (body : Func) : Func :=
-  roleKeyForCaller role (regionWord roleLookupIndexRegion) +++
-    (sload ::: iszero :::
-      ((.call missingRoleSlot) <?> roleRecordCheck role body))
+  roleMembershipSlotFrom [pushB256 role] [caller] +++
+    (sload ::: iszero ::: ((.call missingRoleSlot) <?> body))
 
 def requireStaticArgs (words : Nat) (body : Func) : Func :=
   pushB256 (Nat.toB256 (4 + 32 * words)) ::: calldatasize ::: lt :::
@@ -124,12 +110,6 @@ def emitOneWord (topic : B256) (word : B256) : Line :=
 
 def emitNoData (topic : B256) : Line :=
   [pushB256 topic] ++ logWith 0 0 0
-
-def roleIdentityMatchesMemory : Line :=
-  roleKeyFromMemory roleLookupRoleRegion ++
-  [sload] ++ mloadWord 0 ++ [eq] ++
-  roleKeyFromMemory roleLookupAccountRegion ++
-  [sload] ++ mloadWord 1 ++ [pushB256 addressMask, and, eq, and]
 
 def emitRoleGranted : Line :=
   [caller] ++ mloadWord 1 ++ mloadWord 0 ++
@@ -153,6 +133,19 @@ exits-per-frame; word 8 is computed current limit; words 9/10 are refill
 scratch; word 11 selects query (zero) versus setter (one); word 12 is the
 current timestamp; word 13 is the old maximum; word 14 is the request count
 for the reusable consume continuation. -/
+
+def packedLimitScratchWord : B256 := 15
+
+def loadPackedLimitWorkingWords : Line :=
+  [pushB256 twrLimitPosition, sload] ++ mstoreAt packedLimitScratchWord ++
+  unpackUint32Lane packedLimitScratchWord 13 0 ++
+  unpackUint32Lane packedLimitScratchWord 4 32 ++
+  unpackUint32Lane packedLimitScratchWord 5 64 ++
+  unpackUint32Lane packedLimitScratchWord 6 96 ++
+  unpackUint32Lane packedLimitScratchWord 7 128
+
+def storePackedLimitWorkingWords : Line :=
+  packFiveUint32Words 13 4 12 6 7 ++ [pushB256 twrLimitPosition, sstore]
 
 def limitCurrentContinue : Func :=
   (mloadWord 11 ++ [iszero]) +++
@@ -193,12 +186,10 @@ def limitCurrentCompute : Func :=
         ((.call arithmeticPanicSlot) <?> limitElapsedContinue)))
 
 def setLimitWrite : Func :=
-  (mloadWord 0 ++ [pushB256 maxExitRequestsLimitSlot, sstore] ++
-   mloadWord 4 ++ [pushB256 prevExitRequestsLimitSlot, sstore] ++
-   mloadWord 12 ++ [pushB256 (Nat.toB256 (2 ^ 32 - 1)), and,
-     pushB256 prevTimestampSlot, sstore] ++
-   mloadWord 2 ++ [pushB256 frameDurationInSecSlot, sstore] ++
-   mloadWord 1 ++ [pushB256 exitsPerFrameSlot, sstore] ++
+  (mloadWord 0 ++ mstoreAt 13 ++
+   mloadWord 2 ++ mstoreAt 6 ++
+   mloadWord 1 ++ mstoreAt 7 ++
+   storePackedLimitWorkingWords ++
    mloadWord 0 ++ mstoreAt 0 ++ mloadWord 1 ++ mstoreAt 1 ++
    mloadWord 2 ++ mstoreAt 2 ++
    [pushB256 (signatureHash "ExitRequestsLimitSet" [.uint256, .uint256, .uint256])] ++
@@ -220,8 +211,7 @@ def consumeAfterCurrentSuccess : Func :=
         mloadWord 6 ++ mloadWord 9 ++ [div] ++
         mloadWord 6 ++ [mul] ++ mstoreAt 10 ++
         mloadWord 5 ++ mloadWord 10 ++ [add] ++ mstoreAt 12 ++
-        mloadWord 4 ++ [pushB256 prevExitRequestsLimitSlot, sstore] ++
-        mloadWord 12 ++ [pushB256 prevTimestampSlot, sstore]) +++
+        storePackedLimitWorkingWords) +++
         Func.stop))
 
 def consumeAfterCurrent : Func :=
@@ -230,24 +220,16 @@ def consumeAfterCurrent : Func :=
       consumeAfterCurrentSuccess)
 
 def consumeExitLimit : Func :=
-  ( [pushB256 maxExitRequestsLimitSlot, sload] ++ mstoreAt 13 ++
-    [pushB256 prevExitRequestsLimitSlot, sload] ++ mstoreAt 4 ++
-    [pushB256 prevTimestampSlot, sload] ++ mstoreAt 5 ++
-    [pushB256 frameDurationInSecSlot, sload] ++ mstoreAt 6 ++
-    [pushB256 exitsPerFrameSlot, sload] ++ mstoreAt 7 ++
+  ( loadPackedLimitWorkingWords ++
     [timestamp] ++ mstoreAt 12 ++ [pushB256 2] ++ mstoreAt 11) +++
     ((mloadWord 13 ++ [iszero]) +++
       (Func.stop <?> .call limitCurrentComputeSlot))
 
 def getExitRequestLimitFullInfo : Func :=
-  ( [pushB256 maxExitRequestsLimitSlot, sload] ++ mstoreAt 0 ++
-    [pushB256 exitsPerFrameSlot, sload] ++ mstoreAt 1 ++
-    [pushB256 frameDurationInSecSlot, sload] ++ mstoreAt 2 ++
-    [pushB256 prevExitRequestsLimitSlot, sload] ++ mstoreAt 4 ++
-    [pushB256 prevTimestampSlot, sload] ++ mstoreAt 5 ++
-    [pushB256 frameDurationInSecSlot, sload] ++ mstoreAt 6 ++
-    [pushB256 exitsPerFrameSlot, sload] ++ mstoreAt 7 ++
-    [pushB256 maxExitRequestsLimitSlot, sload] ++ mstoreAt 13 ++
+  ( loadPackedLimitWorkingWords ++
+    mloadWord 13 ++ mstoreAt 0 ++
+    mloadWord 7 ++ mstoreAt 1 ++
+    mloadWord 6 ++ mstoreAt 2 ++
     [timestamp] ++ mstoreAt 12 ++ [pushB256 0] ++ mstoreAt 11) +++
     .call limitCurrentComputeSlot
 
@@ -257,55 +239,21 @@ def getResumeSinceTimestamp : Func :=
 def getRoleAdmin : Func :=
   requireStaticArgs 1 <| pushB256 defaultAdminRole ::: returnWord
 
-def roleMemberScanAdvance : Func :=
-  (mloadWord 2 ++ [pushB256 1, add] ++ mstoreAt 2) +++
-    .call roleMemberLoopSlot
-
-def roleMemberScanMatch : Func :=
-  (mloadWord 3 ++ [pushB256 1, add] ++ mstoreAt 3) +++
-    roleMemberScanAdvance
-
-def roleMemberLoop : Func :=
-  ([pushB256 roleRecordLengthSlot, sload] ++ mloadWord 2 ++ [lt]) +++
-    (((enumKeyFromMemoryAt 2 enumRoleRegion ++ [sload] ++ mloadWord 0 ++ [eq]) +++
-        (((mloadWord 3 ++ mloadWord 1 ++ [eq]) +++
-            ((enumKeyFromMemoryAt 2 enumAccountRegion ++ [sload]) +++ returnWord)
-              <?> roleMemberScanMatch))
-          <?> roleMemberScanAdvance)
-      <?> Func.revert)
-
-def roleCountScanAdvance : Func :=
-  (mloadWord 2 ++ [pushB256 1, add] ++ mstoreAt 2) +++
-    .call roleCountLoopSlot
-
-def roleCountLoop : Func :=
-  ([pushB256 roleRecordLengthSlot, sload] ++ mloadWord 2 ++ [lt]) +++
-    (((enumKeyFromMemoryAt 2 enumRoleRegion ++ [sload] ++ mloadWord 0 ++ [eq]) +++
-        (((mloadWord 3 ++ [pushB256 1, add] ++ mstoreAt 3) +++
-            roleCountScanAdvance)
-          <?> roleCountScanAdvance))
-      <?> ((mloadWord 3) +++ returnWord))
-
 def getRoleMember : Func :=
-  -- memory 0 = requested role; 1 = requested zero-based ordinal;
-  -- 2 = global scan index; 3 = matching-role count.
   requireStaticArgs 2 <|
     (arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
-      [pushB256 0] ++ mstoreAt 2 ++ [pushB256 0] ++ mstoreAt 3) +++
-      .call roleMemberLoopSlot
+      roleEnumerationBaseSlotFrom (mloadWord 0) ++ [sload] ++
+        mloadWord 1 ++ [lt]) +++
+      (((roleEnumerationMemberSlotFrom (mloadWord 0) (mloadWord 1) ++
+          [sload]) +++ returnWord) <?> Func.revert)
 
 def getRoleMemberCount : Func :=
   requireStaticArgs 1 <|
-    (arg 0 ++ mstoreAt 0 ++ [pushB256 0] ++ mstoreAt 2 ++
-      [pushB256 0] ++ mstoreAt 3) +++
-      .call roleCountLoopSlot
+    (roleEnumerationBaseSlotFrom (arg 0) ++ [sload]) +++ returnWord
 
 def hasRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <|
-    (roleKeyFromArgs roleLookupIndexRegion ++ [sload, iszero, iszero] ++
-      roleKeyFromArgs roleLookupRoleRegion ++ [sload] ++ arg 0 ++ [eq, and] ++
-      roleKeyFromArgs roleLookupAccountRegion ++ [sload] ++ arg 1 ++
-        [pushB256 addressMask, and, eq, and]) +++
+    (roleMembershipSlotFrom (arg 0) (arg 1) ++ [sload, iszero, iszero]) +++
       returnWord
 
 def isPaused : Func :=
@@ -381,56 +329,58 @@ def resume : Func :=
 def grantRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <| onlyRole defaultAdminRole <|
     ((arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
-      roleKeyFromMemory roleLookupIndexRegion ++ [sload, iszero]) +++
-      ((([pushB256 roleRecordLengthSlot, sload] ++ mstoreAt 2 ++
+      roleMembershipSlotFrom (mloadWord 0) (mloadWord 1) ++
+        [dup 0] ++ mstoreAt 3 ++ [sload, iszero]) +++
+      ((([pushB256 1] ++ mloadWord 3 ++ [sstore] ++
+          roleEnumerationBaseSlotFrom (mloadWord 0) ++
+            [dup 0] ++ mstoreAt 4 ++ [sload] ++ mstoreAt 2 ++
+          mloadWord 1 ++ keccakWordLine (mloadWord 4) ++
+            mloadWord 2 ++ [add, sstore] ++
           mloadWord 2 ++ [pushB256 1, add] ++
-            roleKeyFromMemory roleLookupIndexRegion ++ [sstore] ++
-          mloadWord 0 ++ roleKeyFromMemory roleLookupRoleRegion ++ [sstore] ++
-          mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore] ++
-          mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
-          mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
-          mloadWord 2 ++ [pushB256 1, add, pushB256 roleRecordLengthSlot, sstore] ++
+            keccakPairLinesRightFirst (mloadWord 1)
+              (mloadWord 4 ++ [pushB256 1, add]) ++ [sstore] ++
+          mloadWord 2 ++ [pushB256 1, add] ++ mloadWord 4 ++ [sstore] ++
           emitRoleGranted) +++ Func.stop)
-        <?>
-        (roleIdentityMatchesMemory +++ (Func.stop <?> .call collisionRefusalSlot))))
+        <?> Func.stop))
 
 def clearRemovedLookup : Line :=
-  [pushB256 0] ++ roleKeyFromMemory roleLookupIndexRegion ++ [sstore] ++
-  [pushB256 0] ++ roleKeyFromMemory roleLookupRoleRegion ++ [sstore] ++
-  [pushB256 0] ++ roleKeyFromMemory roleLookupAccountRegion ++ [sstore]
+  [pushB256 0] ++ mloadWord 8 ++ [sstore] ++
+  [pushB256 0] ++ mloadWord 2 ++ [sstore]
 
 def clearRoleMembershipLast : Func :=
-  ([pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 4 ++
-   [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
-   [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
+  ([pushB256 0] ++ keccakWordLine (mloadWord 3) ++
+      mloadWord 5 ++ [add, sstore] ++
    clearRemovedLookup ++
-   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
+   mloadWord 5 ++ mloadWord 3 ++ [sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembershipSwap : Func :=
-  ([pushB256 1] ++ mloadWord 3 ++ [sub] ++ mstoreAt 4 ++
-   [pushB256 1] ++ mloadWord 2 ++ [sub] ++ mstoreAt 5 ++
-   enumKeyFromMemoryAt 4 enumRoleRegion ++ [sload] ++ mstoreAt 6 ++
-   enumKeyFromMemoryAt 4 enumAccountRegion ++ [sload] ++ mstoreAt 7 ++
-   mloadWord 6 ++ enumKeyFromMemoryAt 5 enumRoleRegion ++ [sstore] ++
-   mloadWord 7 ++ enumKeyFromMemoryAt 5 enumAccountRegion ++ [sstore] ++
-   mloadWord 2 ++ roleKeyFromMemoryAt 6 7 roleLookupIndexRegion ++ [sstore] ++
-   [pushB256 0] ++ enumKeyFromMemoryAt 4 enumRoleRegion ++ [sstore] ++
-   [pushB256 0] ++ enumKeyFromMemoryAt 4 enumAccountRegion ++ [sstore] ++
+  (keccakWordLine (mloadWord 3) ++ mloadWord 5 ++ [add, sload] ++
+      mstoreAt 7 ++
+   mloadWord 7 ++ keccakWordLine (mloadWord 3) ++
+      mloadWord 6 ++ [add, sstore] ++
+   mloadWord 4 ++ keccakPairLinesRightFirst (mloadWord 7)
+      (mloadWord 3 ++ [pushB256 1, add]) ++ [sstore] ++
+   [pushB256 0] ++ keccakWordLine (mloadWord 3) ++
+      mloadWord 5 ++ [add, sstore] ++
    clearRemovedLookup ++
-   [pushB256 1] ++ mloadWord 3 ++ [sub, pushB256 roleRecordLengthSlot, sstore] ++
+   mloadWord 5 ++ mloadWord 3 ++ [sstore] ++
    emitRoleRevoked) +++ Func.stop
 
 def clearRoleMembership : Func :=
     (arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
-     roleKeyFromMemory roleLookupIndexRegion ++ [sload] ++ mstoreAt 2 ++
-     [pushB256 roleRecordLengthSlot, sload] ++ mstoreAt 3 ++
-     mloadWord 2 ++ [iszero]) +++
+     roleMembershipSlotFrom (mloadWord 0) (mloadWord 1) ++
+       [dup 0] ++ mstoreAt 2 ++ [sload, iszero]) +++
       (Func.stop <?>
-        (roleIdentityMatchesMemory +++
-          (((mloadWord 2 ++ mloadWord 3 ++ [eq]) +++
-              (clearRoleMembershipLast <?> clearRoleMembershipSwap))
-            <?> .call collisionRefusalSlot)))
+          ((roleEnumerationBaseSlotFrom (mloadWord 0) ++
+            [dup 0] ++ mstoreAt 3 ++
+              [sload, pushB256 1, swap 0, sub] ++ mstoreAt 5 ++
+          keccakPairLinesRightFirst (mloadWord 1)
+            (mloadWord 3 ++ [pushB256 1, add]) ++
+            [dup 0] ++ mstoreAt 8 ++ [sload] ++ mstoreAt 4 ++
+          mloadWord 4 ++ [pushB256 1, swap 0, sub] ++ mstoreAt 6 ++
+          mloadWord 6 ++ mloadWord 5 ++ [eq]) +++
+            (clearRoleMembershipLast <?> clearRoleMembershipSwap)))
 
 def revokeRole : Func :=
   requireStaticArgs 2 <| canonicalArg 1 <| onlyRole defaultAdminRole <|
@@ -445,11 +395,7 @@ def renounceRole : Func :=
 def setExitRequestLimitPrepared : Func :=
   (arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
     arg 2 ++ mstoreAt 2 ++ [timestamp] ++ mstoreAt 12 ++
-    [pushB256 maxExitRequestsLimitSlot, sload] ++ mstoreAt 13 ++
-    [pushB256 prevExitRequestsLimitSlot, sload] ++ mstoreAt 4 ++
-    [pushB256 prevTimestampSlot, sload] ++ mstoreAt 5 ++
-    [pushB256 frameDurationInSecSlot, sload] ++ mstoreAt 6 ++
-    [pushB256 exitsPerFrameSlot, sload] ++ mstoreAt 7 ++
+    loadPackedLimitWorkingWords ++
     [pushB256 1] ++ mstoreAt 11 ++ mloadWord 13 ++ [iszero]) +++
     (((mloadWord 0 ++ mstoreAt 4) +++ .call setLimitWriteSlot)
       <?> .call limitCurrentComputeSlot)
@@ -473,9 +419,9 @@ def setExitRequestLimit : Func :=
         setExitRequestLimitDurationChecked)
 
 /-! The trigger packet owns a 22-entry local auxiliary table.  The family
-runtime already occupies global slots 1--27, so local slot one is rebased to
-global slot 28 by adding 27 to every local call. -/
-def triggerAuxDelta : Nat := 27
+runtime occupies global slots 1--24, so local slot one is rebased to global
+slot 25 by adding 24 to every local call. -/
+def triggerAuxDelta : Nat := 24
 
 def triggerFullWithdrawals (dp : DeployParams) : Func :=
   Trigger.rebasedTrigger triggerAuxDelta dp
@@ -528,9 +474,6 @@ def baseAux : List Func :=
    runtimeError "LimitExceeded",
    runtimeError "InsufficientFee" [.uint256, .uint256],
    runtimeError "FeeRefundFailed",
-   Func.revert,
-   roleMemberLoop,
-   roleCountLoop,
    Func.revert,
    runtimeError "TooLargeMaxExitRequestsLimit",
    runtimeError "TooLargeFrameDuration",

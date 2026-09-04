@@ -29,12 +29,13 @@ The calldata walk follows Solidity 0.8.9's relevant decoder boundary:
 
 Two named integration seams are kept explicit:
 
-* `coreFlatRoleGuard` is the concrete guard for Core's role/index/account
-  projection.  Its failure continuation is supplied by the caller because the
+* `coreFlatRoleGuard` is the concrete one-read nested-keccak membership guard.
+  Its failure continuation is supplied by the caller because the
   pinned AccessControl source builds a dynamic `Error(string)` while the
   current family runtime owns a different role-error policy.
-* `consumeExitRequestLimit` is the concrete quota continuation over Core's five
-  flat limit words.  Its success and error continuations are explicit.
+* `consumeExitRequestLimit` is the concrete quota continuation over Core's
+  packed five-`uint32` limit word.  Its success and error continuations are
+  explicit.
 
 All other reverts in the packet are executable and payload-exact: the two
 `ZeroArgument(string)` values, `ResumedExpected()`,
@@ -128,6 +129,12 @@ def routerCallSizeWord : B256 := 37
 def routerTupleCursorWord : B256 := 38
 def stakingRouterWord : B256 := 39
 def roundedPassedTimeWord : B256 := 40
+def maximumLimitWord : B256 := 41
+def previousLimitWord : B256 := 42
+def previousTimestampWord : B256 := 43
+def frameDurationWord : B256 := 44
+def exitsPerFrameWord : B256 := 45
+def packedLimitWord : B256 := 46
 
 def dynamicMemoryBase : B256 := 0x1000
 def maxUint64 : B256 := 0xffffffffffffffff
@@ -145,6 +152,19 @@ def loadWord (word : B256) : Line :=
 
 def storeWord (word : B256) : Line :=
   mstoreAt word
+
+def loadPackedLimit : Line :=
+  [pushB256 twrLimitPosition, sload] ++ storeWord packedLimitWord ++
+  unpackUint32Lane packedLimitWord maximumLimitWord 0 ++
+  unpackUint32Lane packedLimitWord previousLimitWord 32 ++
+  unpackUint32Lane packedLimitWord previousTimestampWord 64 ++
+  unpackUint32Lane packedLimitWord frameDurationWord 96 ++
+  unpackUint32Lane packedLimitWord exitsPerFrameWord 128
+
+def storePackedLimit : Line :=
+  packFiveUint32Words maximumLimitWord previousLimitWord
+    previousTimestampWord frameDurationWord exitsPerFrameWord ++
+  [pushB256 twrLimitPosition, sstore]
 
 def mstoreByteAt (offset : B256) : Line :=
   [pushB256 offset, mstore]
@@ -352,22 +372,11 @@ def validateCalldata : Func :=
 
 /-! ## Modifier and quota integration seams -/
 
-def roleKeyForCaller (region : Nat) : Line :=
-  pushB256 addFullWithdrawalRequestRole :: caller ::
-    pushB256 addressMask :: and :: xor ::
-    pushB256 low252Mask :: and :: pushB256 (regionWord region) :: or :: []
-
-/-- Concrete Core-flat role gate.  A nonzero index is not enough: the stored
-full role and canonical account must both match, which refuses low-252
-collisions.  `onFailure` is the explicit AccessControl error-policy boundary. -/
+/-- One-read nested-keccak role gate.  `onFailure` is the explicit compact
+AccessControl error-policy boundary retained by the Blanc artifact. -/
 def coreFlatRoleGuard (onFailure onAuthorized : Func) : Func :=
-  roleKeyForCaller roleLookupIndexRegion +++ sload ::: iszero :::
-  (onFailure <?>
-    (roleKeyForCaller roleLookupRoleRegion +++ sload :::
-       pushB256 addFullWithdrawalRequestRole ::: eq :::
-     ((roleKeyForCaller roleLookupAccountRegion +++ sload ::: caller :::
-         pushB256 addressMask ::: and ::: eq :::
-       (onAuthorized <?> onFailure)) <?> onFailure)))
+  roleMembershipSlotFrom [pushB256 addFullWithdrawalRequestRole] [caller] +++
+    sload ::: iszero ::: (onFailure <?> onAuthorized)
 
 /-- Consume a previously computed `currentLimitWord`, update the two mutable
 quota projections, and continue. -/
@@ -377,64 +386,64 @@ def consumeComputedLimit (onConsumed : Func) : Func :=
   ((.call exitLimitExceededSlot) <?>
     (-- `updatePrevExitLimit` performs `% frameDuration` only after the
      -- insufficient-limit check above.
-     pushB256 frameDurationInSecSlot ::: sload ::: iszero :::
+     loadWord frameDurationWord +++ iszero :::
      ((.call divisionPanicSlot) <?>
        (loadWord requestsCountWord +++ loadWord currentLimitWord +++ sub :::
-          pushB256 prevExitRequestsLimitSlot ::: sstore :::
+          storeWord previousLimitWord +++
         -- passedTime -= passedTime % frameDuration
-        pushB256 frameDurationInSecSlot ::: sload :::
+        loadWord frameDurationWord +++
           loadWord secondsPassedWord +++ mod :::
           loadWord secondsPassedWord +++ sub :::
           pushB256 maxUint32 ::: and ::: storeWord roundedPassedTimeWord +++
         -- `uint32 prevTimestamp += uint32(passedTime)` is checked in 0.8.9.
-        pushB256 prevTimestampSlot ::: sload :::
+        loadWord previousTimestampWord +++
           loadWord roundedPassedTimeWord +++ add :::
           dup 0 ::: pushB256 maxUint32 ::: swap 0 ::: gt :::
         ((.call arithmeticPanicSlot) <?>
-          (pushB256 prevTimestampSlot ::: sstore ::: onConsumed))))))
+          (storeWord previousTimestampWord +++ storePackedLimit +++ onConsumed))))))
 
 /-- The restored-limit arm of `calculateCurrentExitLimit`, including Solidity
 0.8 checked multiplication and addition. -/
 def consumeRestoredLimit (onConsumed : Func) : Func :=
-  pushB256 frameDurationInSecSlot ::: sload :::
+  loadWord frameDurationWord +++
     loadWord secondsPassedWord +++ div ::: storeWord framesPassedWord +++
-  pushB256 exitsPerFrameSlot ::: sload ::: loadWord framesPassedWord +++ mul :::
+  loadWord exitsPerFrameWord +++ loadWord framesPassedWord +++ mul :::
     storeWord restoredLimitWord +++
   -- restored / frames must recover exitsPerFrame (frames is nonzero here)
   loadWord framesPassedWord +++ loadWord restoredLimitWord +++ div :::
-    pushB256 exitsPerFrameSlot ::: sload ::: eq ::: iszero :::
+    loadWord exitsPerFrameWord +++ eq ::: iszero :::
   ((.call arithmeticPanicSlot) <?>
-    (pushB256 prevExitRequestsLimitSlot ::: sload :::
+    (loadWord previousLimitWord +++
        loadWord restoredLimitWord +++ add ::: storeWord currentLimitWord +++
      -- wrapped addition is Solidity Panic(0x11)
-     pushB256 prevExitRequestsLimitSlot ::: sload :::
+     loadWord previousLimitWord +++
        loadWord currentLimitWord +++ lt :::
      ((.call arithmeticPanicSlot) <?>
-       (pushB256 maxExitRequestsLimitSlot ::: sload :::
+       (loadWord maximumLimitWord +++
           loadWord currentLimitWord +++ gt :::
-        ((pushB256 maxExitRequestsLimitSlot ::: sload :::
+        ((loadWord maximumLimitWord +++
             storeWord currentLimitWord +++ consumeComputedLimit onConsumed)
           <?> consumeComputedLimit onConsumed)))))
 
-/-- Concrete `ExitLimitUtils` continuation over Core's flat fields.  The
+/-- Concrete `ExitLimitUtils` continuation over Core's packed fields.  The
 unlimited `max == 0` arm performs no quota write. -/
 def consumeExitRequestLimit (onConsumed : Func) : Func :=
-  pushB256 maxExitRequestsLimitSlot ::: sload ::: iszero :::
+  loadPackedLimit +++ loadWord maximumLimitWord +++ iszero :::
   (onConsumed <?>
     (-- timestamp - prevTimestamp is checked by Solidity
-     pushB256 prevTimestampSlot ::: sload ::: timestamp ::: lt :::
+     loadWord previousTimestampWord +++ timestamp ::: lt :::
      ((.call arithmeticPanicSlot) <?>
-       (pushB256 prevTimestampSlot ::: sload ::: timestamp ::: sub :::
+       (loadWord previousTimestampWord +++ timestamp ::: sub :::
           storeWord secondsPassedWord +++
-        pushB256 frameDurationInSecSlot ::: sload :::
+        loadWord frameDurationWord +++
           loadWord secondsPassedWord +++ lt :::
-        pushB256 exitsPerFrameSlot ::: sload ::: iszero ::: or :::
-        ((pushB256 prevExitRequestsLimitSlot ::: sload :::
+        loadWord exitsPerFrameWord +++ iszero ::: or :::
+        ((loadWord previousLimitWord +++
             storeWord currentLimitWord +++ consumeComputedLimit onConsumed)
           <?>
           (-- The false arm has nonzero exits; a zero frame therefore reaches
            -- Solidity's checked division-by-zero panic.
-           pushB256 frameDurationInSecSlot ::: sload ::: iszero :::
+           loadWord frameDurationWord +++ iszero :::
            ((.call divisionPanicSlot) <?>
              consumeRestoredLimit onConsumed)))))))
 
