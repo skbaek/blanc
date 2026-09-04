@@ -136,6 +136,16 @@ cannot complete the `SSTORE` the flow performs, and insufficient call gas makes
 the child return zero, which the `iszero` guard turns into a revert. If that is
 right, the obligation is dischargeable — but only by deriving the bundles from
 success rather than assuming them, and the premises exist precisely to avoid
+
+**And the `isStatic` third of that is the recursion-depth ceiling below, not a
+separate problem.** `StoresOrHalts.isStatic_eq_false` is exactly the derivation
+— a frame that completes a write cannot have been static — and the outbound
+flows already have their `StoresOrHalts` witnesses
+(`withdrawBurn_storesOrHalts`, `redeemBurn_storesOrHalts`). The two that do not
+are `depositAfterQuote_storesOrHalts` and `mintAfterQuote_storesOrHalts`, which
+are precisely the two lemmas that exceed `maxRecDepth`. So the elaboration cost
+documented at the end of this module is on G6's critical path rather than
+beside it, and the two obstructions should be worked as one.
 that inversion.
 
 So the decision on this route is whether to derive the resource bundles inside
