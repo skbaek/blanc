@@ -390,8 +390,8 @@ Blanc.tstore_run_zero|$STANDARD
 Blanc.tload_run_cell|$STANDARD
 Blanc.directCall_nonzero_spawn|$STANDARD
 Blanc.directCall_zero_spawn|$STANDARD
-Blanc.directStatcall_spawn|$STANDARD
-Blanc.directDelcall_spawn|$STANDARD
+Blanc.directStaticcall_spawn|$STANDARD
+Blanc.directDelegatecall_spawn|$STANDARD
 Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget|$STANDARD
 Blanc.delegatecall_enters_with_parent_as_storage_owner|$STANDARD
 Blanc.control_delegatecall_separates_call_fuses|$STANDARD

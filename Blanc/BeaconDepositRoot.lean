@@ -1238,7 +1238,7 @@ theorem rootFinishReturn_runCompiled
       (loadWord nodeWord +++ mstoreAt 0 +++
         returnMemoryRange 0 32)
       (rootFinishPost base memory digest G) := by
-  let Mret := memory.write 0 digest.toBytes
+  let Mreturn := memory.write 0 digest.toBytes
   have h0 : (0 : B256).toNat = 0 := by decide +kernel
   have h32 : (32 : B256).toNat = 32 := by decide +kernel
   have h640 : (640 : B256).toNat = 640 := by decide +kernel
@@ -1249,8 +1249,8 @@ theorem rootFinishReturn_runCompiled
     apply memExtSize_of_le
     · exact hmod
     · rw [hsize]
-  have hsizeRet : Mret.size = 672 := by
-    dsimp only [Mret]
+  have hsizeReturn : Mreturn.size = 672 := by
+    dsimp only [Mreturn]
     rw [Mem.size_write_of_le (by
       rw [B256.length_toBytes, hsize]
       omega), hsize]
@@ -1289,7 +1289,7 @@ theorem rootFinishReturn_runCompiled
   refine Func.RunCompiled.next
     (Ninst.runCompiled_mstore_of
       (i := 0) (v := digest) (s := [])
-      (G := G + 5) (e := 0) (M := Mret)
+      (G := G + 5) (e := 0) (M := Mreturn)
       rfl
       (Devm.extCost_zero_of_le hmod (by
         rw [h0, hsize]
@@ -1315,17 +1315,17 @@ theorem rootFinishReturn_runCompiled
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   let returnPre := base.setMach
-    ⟨[(0 : B256), (32 : B256)], Mret, G⟩
+    ⟨[(0 : B256), (32 : B256)], Mreturn, G⟩
   have hext : returnPre.extCost [⟨(0 : Nat), (32 : Nat)⟩] = 0 := by
     apply Devm.extCost_zero_of_le
-    · rw [hsizeRet]
-    · rw [hsizeRet]
+    · rw [hsizeReturn]
+    · rw [hsizeReturn]
       omega
   have hretRead :
       (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
-        ⟨digest.toBytes, base.setMach ⟨[], Mret, G⟩⟩ := by
+        ⟨digest.toBytes, base.setMach ⟨[], Mreturn, G⟩⟩ := by
     apply Prod.ext
-    · change (Mret.read 0 32).1 = digest.toBytes
+    · change (Mreturn.read 0 32).1 = digest.toBytes
       simpa only [B256.length_toBytes] using
         (Mem.read_write_zero memory
           (ys := digest.toBytes)
@@ -1335,19 +1335,19 @@ theorem rootFinishReturn_runCompiled
             rw [hnil] at this
             simp at this))
     · change
-        base.setMach ⟨[], (Mret.read 0 32).2, G⟩ =
-          base.setMach ⟨[], Mret, G⟩
+        base.setMach ⟨[], (Mreturn.read 0 32).2, G⟩ =
+          base.setMach ⟨[], Mreturn, G⟩
       rw [Mem.read_snd_eq_self
-        (memExtSize_of_le (by rw [hsizeRet])
-          (by rw [hsizeRet]; omega))]
+        (memExtSize_of_le (by rw [hsizeReturn])
+          (by rw [hsizeReturn]; omega))]
   change Func.RunCompiled fs sevm returnPre (.last .return_)
     (rootFinishPost base memory digest G)
-  simpa only [rootFinishPost, Mret] using
+  simpa only [rootFinishPost, Mreturn] using
     (Func.runCompiled_return_of
       (fs := fs) (sevm := sevm) (devm := returnPre)
       (i := (0 : B256)) (sz := (32 : B256)) (s := [])
       (out := digest.toBytes)
-      (d' := base.setMach ⟨[], Mret, G⟩)
+      (d' := base.setMach ⟨[], Mreturn, G⟩)
       (G := G) (e := 0)
       rfl
       (by simpa only [h0, h32] using hext)

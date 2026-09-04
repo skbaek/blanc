@@ -160,7 +160,7 @@ theorem isPaused_exact_of_prog_run
     exact Mem.Reads.write beforeReturnWf beforeReturnReads 0 _
 
   rcases of_run_prepend (pushList [32, 0]) _ returnRun with
-    ⟨beforeRet, rangeRun, returnRun⟩
+    ⟨beforeReturnInstruction, rangeRun, returnRun⟩
   have rangeRunFull := rangeRun
   rcases Line.of_run_cons rangeRun with
     ⟨afterSize, sizeRun, rangeRun⟩
@@ -170,9 +170,9 @@ theorem isPaused_exact_of_prog_run
   have sizePrefix : (32 : B256) :: [] <<+ afterSize.stack :=
     prefix_of_push (of_run_pushB256 sizeRun) stackAfterStore
   have offsetPrefix : (0 : B256) :: (32 : B256) :: [] <<+
-      beforeRet.stack :=
+      beforeReturnInstruction.stack :=
     prefix_of_push (of_run_pushB256 offsetRun) sizePrefix
-  have rangeMemory : afterStore.memory = beforeRet.memory :=
+  have rangeMemory : afterStore.memory = beforeReturnInstruction.memory :=
     Line.of_inv Devm.memory (by line_inv) rangeRunFull
   have outputWord :
       post.output =

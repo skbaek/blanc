@@ -1718,7 +1718,7 @@ private theorem revertData_not_successful
   rcases of_run_next run1 with ⟨s2, h2, run2⟩
   exact no_last run2
 
-private theorem Func.LogsAppend.callRevData {fs : List Func} {slot : Nat}
+private theorem Func.LogsAppend.callRevertData {fs : List Func} {slot : Nat}
     {blob : Bytes} (hlookup : fs[slot]? = some (Func.revertData blob)) :
     Func.LogsAppend fs (.call slot) := by
   intro sevm pre post run
@@ -1778,7 +1778,7 @@ private theorem checkedHeartbeatExpiry_logsAppend
     line_inv
   · apply Func.LogsAppend.branch
     · exact registerWrite_logsAppend fs
-    · exact Func.LogsAppend.callRevData hlookup
+    · exact Func.LogsAppend.callRevertData hlookup
 
 private theorem optionalNew_logsAppend (fs : List Func) (blob : Bytes)
     (hlookup : fs[arithmeticPanicSlot]? = some (Func.revertData blob)) :

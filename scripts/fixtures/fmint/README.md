@@ -218,13 +218,13 @@ transaction is a legacy transaction at gas price 10.
 |---|---|---|---|
 | `01-flashloan-compliant.json` | `flashLoan` full success path | the compliant borrower: approves inside its own callback (benign reentrancy, deliberately), returns the magic | the trigger's flag/return word; the borrower's eight mid-callback observations, including balance/supply already reflecting the mint; fmint's storage returns exactly to its pre-state under fee ≡ 0 |
 | `02-flashloan-wrong-magic.json` | wrong magic word | zoo member 2: the callback runs (mint + observations happen) but the returned word is provably not the ERC-3156 magic | the WHOLE frame reverts, including the mint AND the borrower's own SSTOREs — "the callback ran and wrote, then it was erased," which "nothing changed" alone cannot distinguish from "the callback never ran" |
-| `03-flashloan-reverting-borrower.json` | `Func.rev` borrower | zoo member 3: the callback CALL itself fails (not merely its return value) | flashLoan's own success guard on the CALL rejects it; the mint rolls back |
-| `04-flashloan-returndata-spectrum.json` | three receivers: EOA, compliant, compliantOverlong | the returndata-shape spectrum in one fixture | short (< 32 bytes, an EOA's empty returndata) rejected before the magic word is ever read; exactly-32 and overlong-with-correct-head both honoured — `checkRetdataHead` pins only the head word |
+| `03-flashloan-reverting-borrower.json` | `Func.revert` borrower | zoo member 3: the callback CALL itself fails (not merely its return value) | flashLoan's own success guard on the CALL rejects it; the mint rolls back |
+| `04-flashloan-returndata-spectrum.json` | three receivers: EOA, compliant, compliantOverlong | the returndata-shape spectrum in one fixture | short (< 32 bytes, an EOA's empty returndata) rejected before the magic word is ever read; exactly-32 and overlong-with-correct-head both honoured — `checkReturnDataHead` pins only the head word |
 | `05-flashloan-data-length-spectrum.json` | six lengths (0, 1, 31, 32, 33, 65) to the passive borrower | `forwardArgTail`'s offset/length/payload arithmetic at every length boundary | every length succeeds (pre-approved allowance) and `OBS_DATAHASH` matches `keccak(data)` computed independently in Python from the same bytes asked of the oracle |
 | `06-flashloan-allowance-spectrum.json` | passive borrower × 5 pre-set allowances | zoo member 5 (no-approval) plus the full spectrum | no-approval and insufficient are rejected, pre-set allowances left untouched by the revert; exact ends at zero; residual leaves the exact leftover; infinite (`isMax`) is bit-for-bit preserved, not decremented |
 | `07-flashloan-transfer-then-default.json` | transfer-away borrower, sufficient allowance | zoo member 7: the borrower moves its whole minted balance away before returning the magic | `burnAndReturn`'s balance check fails (nothing left to burn) and the WHOLE frame reverts — the internal transfer-away, itself a nested CALL, is undone with everything else |
 | `08-flashloan-reentrant.json` | reentrant borrower, depth 2 | zoo member 6: one nested `flashLoan` (receiver = self) from inside the callback | the nested loan must itself return true before the outer continues; both mints (outer then inner) are visible in the mid-INNER-callback `balanceOf`/`totalSupply` observations; under fee ≡ 0 both loans fully unwind |
-| `09-guards.json` | nine guard and dispatcher probes in one fixture | `flashLoan`/`flashFee` rejecting `token ≠ self`; `maxFlashLoan` answering 0 (not reverting) for `token ≠ self` — the EIP's one MUST-not-revert sibling; the dirty (non-address-shaped) receiver rejected before any mint (conservation-critical); `amount > maxFlashLoan`; and two **dispatcher misses** (an unknown selector, and empty calldata — which `fsig` zero-extends to selector `0x00000000`), which reach the shared `Func.rev` through `mainWith`'s fallback rather than through any guard | all nine reject/answer as specified, each of the six rejections recording the full clean-failure triple; fmint's only nonzero slot afterward is the pre-set supply itself, unmoved |
+| `09-guards.json` | nine guard and dispatcher probes in one fixture | `flashLoan`/`flashFee` rejecting `token ≠ self`; `maxFlashLoan` answering 0 (not reverting) for `token ≠ self` — the EIP's one MUST-not-revert sibling; the dirty (non-address-shaped) receiver rejected before any mint (conservation-critical); `amount > maxFlashLoan`; and two **dispatcher misses** (an unknown selector, and empty calldata — which `fsig` zero-extends to selector `0x00000000`), which reach the shared `Func.revert` through `mainWith`'s fallback rather than through any guard | all nine reject/answer as specified, each of the six rejections recording the full clean-failure triple; fmint's only nonzero slot afterward is the pre-set supply itself, unmoved |
 | `10-erc20-views-and-transferFrom.json` | `name`/`symbol`/`decimals`/`allowance` via a prober, plus a direct `approve`+`transferFrom` pair | selector coverage for the four entries no borrower's internal calls ever reach, and `transferFrom`'s OWN dispatch entry (distinct from the repayment fragment, which never calls it) | the three ABI-derived strings/values; `transferFrom` debits the owner (not the calling spender), credits the recipient, and fully spends the allowance |
 | `11-flashloan-solc-borrower.json` | the same success path as `01`, driven into a **`solc`-compiled** borrower | the callback ABI read back by an *independent decoder* — 26 bytes of `data`, deliberately not word-aligned, so the recorded keccak separates the declared length from the padded word | the byte-identical eight-observation map case `01` asserts of the Blanc `compliantBorrower`, plus D6's identical three-log sequence — a disagreement between the two borrowers would be a divergence between Blanc's ABI encoding and the standard |
 
@@ -311,7 +311,7 @@ failing too (the transaction itself ran out of gas). Capping every reverting
 trigger, exactly as WETH's suite already does, bounded the damage — a harness
 accommodation for a contract defect, never a property of the contract.
 
-**What retired it.** `Blanc.Func.rev` is now `PUSH0 PUSH0 REVERT`
+**What retired it.** `Blanc.Func.revert` is now `PUSH0 PUSH0 REVERT`
 (`~/plans/fmint-hygiene.md` Step 1), so every guard failure is a clean,
 empty-data `REVERT` that refunds the frame's remaining gas. Every reverting
 trigger here again forwards all available gas, exactly as the succeeding ones
@@ -330,7 +330,7 @@ uncapped-and-normalized:
 
 The other four fixtures then present — `01`, `05`, `08`, `10`, none of which
 has a rejected probe; `11` did not exist yet — are unchanged **to the gas**,
-which is the other half of the evidence: the two extra bytes per rev site are
+which is the other half of the evidence: the two extra bytes per revert site are
 never executed on a success path.
 
 Note what this table is and is not. It is the *mechanism* check — the old
@@ -387,7 +387,7 @@ prober, which is the historical cascade above):
 
 | callee | flag | marker | `rds+1` | gas floor | verdict |
 |---|---:|---:|---:|---:|---|
-| `PUSH0 PUSH0 REVERT` — the current `Func.rev` | 0 | 1 | 1 | 1 | **matches the committed triple** |
+| `PUSH0 PUSH0 REVERT` — the current `Func.revert` | 0 | 1 | 1 | 1 | **matches the committed triple** |
 | bare `REVERT`, empty stack — the underflow halt | 0 | 1 | 1 | **0** | caught |
 | `REVERT(0, 2^250)` — the memory-expansion OOG halt | 0 | 1 | 1 | **0** | caught |
 | `REVERT(0, 32)` — the garbage-**data** revert | 0 | 1 | **33** | 1 | caught |

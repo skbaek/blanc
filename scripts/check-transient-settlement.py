@@ -45,7 +45,7 @@ MUTANTS = {
     "-- CALLCODE-DIRECT-MUTANT-CONTROL":
         "private theorem callcodeDirectMutant : (match Xinst.step dynamicSevm staticCallPre .callcode with | .spawn frame _ => frame.inner.currentTarget == addressB | _ => false) = true := by native_decide\n",
     "-- DELEGATECALL-DIRECT-MUTANT-CONTROL":
-        "private theorem delegatecallDirectMutant : (match Xinst.step dynamicSevm staticDelcallPre .delegatecall with | .spawn frame _ => frame.inner.shouldTransferValue | _ => false) = true := by native_decide\n",
+        "private theorem delegatecallDirectMutant : (match Xinst.step dynamicSevm staticDelegatecallPre .delegatecall with | .spawn frame _ => frame.inner.shouldTransferValue | _ => false) = true := by native_decide\n",
     "-- STATIC-PARENT-MUTANT-CONTROL":
         "private theorem staticParentMutant : staticCallFamilyControls = false := by native_decide\n",
     "-- STATIC-CREATE-MUTANT-CONTROL":

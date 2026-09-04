@@ -259,7 +259,7 @@ theorem directCall_zero_spawn
   exact hf.transientStorage.symm
 
 /-- A STATICCALL's exact child message, tied to the actual `.staticcall` edge. -/
-theorem directStatcall_spawn
+theorem directStaticcall_spawn
     {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
@@ -303,7 +303,7 @@ storage while `dadr` supplies the code alone, and `caller`/`value` are the
 outer frame's rather than the parent's address and zero. As above, delegation
 may choose `code` from another account, so the code-address equality claims no
 byte or installation identity. -/
-theorem directDelcall_spawn
+theorem directDelegatecall_spawn
     {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}

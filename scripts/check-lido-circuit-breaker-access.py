@@ -950,8 +950,8 @@ ROLES = {
         # crossing premise `pauseStat_boundary` consumes; and its `.ok` shadow,
         # which carries no case hypothesis at all and converts "the frame got
         # past the branch" into "the pauseFor(uint256) call succeeded".
-        "pauseCall_successArm_reachesStatcall":
-            "28acb5699f8bd59181c4695c1bcf71d7b1b4d932d539f8b8172a3d5dcc7ad3b7",
+        "pauseCall_successArm_reachesStaticcall":
+            "10779181527de9e8ffe447475afa2b6010754e5e64a71d13d6165cf6e544053b",
         "pauseAfterCall_ok_forces_callSuccess":
             "81e787056f24d0a6ced43fdcc6159636c1d63c406fb42d5eda5027b1530053bf",
         # The CALL's argument window built from the staged duration word by the
@@ -1725,7 +1725,7 @@ def main() -> None:
           "CALL by a rfl identity, the branch flag shown to take exactly two "
           "values and to invert the callee's error, both arms produced from "
           "the derivation rather than assumed, the failure arm reaching the "
-          "deployed table's own revReturnData slot, settling at no commit and "
+          "deployed table's own revertReturnData slot, settling at no commit and "
           "outputting the child's returndata or the bubble's own "
           "memory-expansion refusal, the success arm as the sole route to the "
           "STATICCALL, and any successful walk past the branch forcing the "

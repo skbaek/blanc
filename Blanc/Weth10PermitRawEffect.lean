@@ -892,7 +892,7 @@ this frame executes from a state carrying the given code map, on permit's six
 ECRECOVER operands, leaves the current target's allowance region unchanged.
 The code map is an explicit parameter so that the assumption transports along
 the childless prefixes the chain walks through. -/
-def PermitStatcallRegionSilent (sevm : Sevm) (code : Adr → ByteArray) : Prop :=
+def PermitStaticcallRegionSilent (sevm : Sevm) (code : Adr → ByteArray) : Prop :=
   ∀ {u v : Devm} {gasWord : B256} {tail : Stack},
     Devm.getCode u = code →
     gasWord :: (1 : B256) :: (0 : B256) :: (128 : B256) ::
@@ -903,10 +903,10 @@ def PermitStatcallRegionSilent (sevm : Sevm) (code : Adr → ByteArray) : Prop :
         (Devm.getStor u sevm.currentTarget).get key
 
 /-- Transport the crossing assumption along a code-map equality. -/
-theorem PermitStatcallRegionSilent.mono {sevm : Sevm}
+theorem PermitStaticcallRegionSilent.mono {sevm : Sevm}
     {code code' : Adr → ByteArray}
-    (h : PermitStatcallRegionSilent sevm code) (heq : code' = code) :
-    PermitStatcallRegionSilent sevm code' := by
+    (h : PermitStaticcallRegionSilent sevm code) (heq : code' = code) :
+    PermitStaticcallRegionSilent sevm code' := by
   intro u v gasWord tail hcode hstack run
   exact h (hcode.trans heq) hstack run
 
@@ -915,7 +915,7 @@ discharged from the caller's assumption, so no precompile-routing premise
 occurs; the recovered word stays existential exactly as above. -/
 theorem of_recoverPermitSigner_raw_region
     {sevm : Sevm} {s t : Devm} {digest : B256} {xs : Stack}
-    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
+    (hsilent : PermitStaticcallRegionSilent sevm (Devm.getCode s))
     (hp : digest :: xs <<+ s.stack)
     (run : Line.Run sevm s recoverPermitSigner t) :
     (∃ signer : B256, signer :: xs <<+ t.stack) ∧
@@ -972,7 +972,7 @@ the allowance write is still the raw third argument word at
 `permitRuntimeAllowanceKey`. -/
 theorem permit_selected_raw_effect_region (dp : DeployParams)
     {sevm : Sevm} {s r : Devm} {xs : Stack}
-    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
+    (hsilent : PermitStaticcallRegionSilent sevm (Devm.getCode s))
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r) :
     let nonce :=
@@ -1035,7 +1035,7 @@ allowance key.  There is deliberately no `DecodesPermit` premise, exactly as
 in the full-map form. -/
 theorem permit_exec_raw_effect_region (dp : DeployParams)
     {sevm : Sevm} {pre post : Devm}
-    (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode pre))
+    (hsilent : PermitStaticcallRegionSilent sevm (Devm.getCode pre))
     (hwf : Mem.Wf pre.memory)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
