@@ -1289,6 +1289,8 @@ Blanc.Composition.ProrataWethVault.silent_accountingStep_of_view|$STANDARD
 Blanc.Composition.ProrataWethVault.readOnlyEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.transferFromEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_message_accountingStep|$STANDARD
 Blanc.Prorata.ProrataAccountingPath.priceLe_first_last|propext, Quot.sound
 Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD

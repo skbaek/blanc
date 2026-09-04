@@ -651,24 +651,67 @@ theorem transferFromEffect_accountingStep
 
 /-! ## The flows' message-level step
 
-Not written.  The bridge itself (`inboundEffect_accountingStep`) is proved; what
-is missing is the wrapper that derives its two non-wrap premises from
-`deposit_compiled_effect` instead of taking them.
+`deposit_compiled_effect_named` is what makes this reachable: it binds the
+quoted share count to a variable, so the supply equation can be rewritten
+without the elaborator having to see through a
+`Nat.toB256 (convertToSharesN …)` term.  No resource ceiling is raised. -/
 
-The obstruction is mechanical and worth recording so it is not rediscovered.
-That effect's conclusion binds the quoted share count under an existential and
-mentions it as a full `Nat.toB256 (convertToSharesN …)` term in several places.
-Rewriting the supply equation inside that term exceeds the elaborator's
-heartbeat budget, and substituting it instead exceeds the recursion depth.
-Neither ceiling may be raised to get past this: the proof-debt gate tracks both,
-and raising one to make a proof land is weakening a gate rather than doing the
-work.
+/-- **A compiled `deposit` message is a `deposit` accounting step.**
 
-The fix belongs upstream: give `deposit_compiled_effect` a form that names the
-quoted amount once — an abbreviation or a separate equation — so the wrapper
-can reason about a variable rather than about the term.  With that, this
-wrapper is the same shape as the three silent ones below.
--/
+The two non-wrap facts the snapshot bridge needs are derived here rather than
+assumed: the supply cannot wrap because the executed share-room guard bounds
+the mint, and the vault's WETH row cannot wrap because WETH's own balance sum
+does not.  `wethSumNof` is the side condition G6 asks this invariant to be
+coupled with; `depositorNotVault` is what makes the caller's row and the
+vault's two distinct summands of that sum. -/
+theorem deposit_message_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources :
+      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (wethSumNof : SumNof (Stor.rest (Devm.getStor pre wethAccount)))
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    ∃ shares : B256,
+      Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+        (snapshotAt sevm pre)
+        (.deposit (Sevm.argWord sevm 0).toNat shares.toNat)
+        (snapshotAt sevm post) := by
+  obtain ⟨supply, shares, supplyEq, quoteEq, stable, roomFits, effect⟩ :=
+    deposit_compiled_effect_named config memoryWf resources run selectorEq
+  have effectWhole := effect
+  obtain ⟨-, movement, -, -, -⟩ := effect
+  have supplyNof : B256.Nof supply shares := by
+    unfold B256.Nof
+    have roomNat : Blanc.ProrataWethVault.shareRoomN supply.toNat =
+        Blanc.ProrataWethVault.maxSupplyN - supply.toNat := rfl
+    have maxLt : Blanc.ProrataWethVault.maxSupplyN < 2 ^ 256 := by
+      unfold Blanc.ProrataWethVault.maxSupplyN maxWordN wordModulusN
+      omega
+    rw [roomNat] at roomFits
+    omega
+  have rowNof : B256.Nof
+      (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget)
+      (Sevm.argWord sevm 0) := by
+    unfold B256.Nof
+    have pairLe : (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget).toNat +
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.caller).toNat ≤
+        sum (Stor.rest (Devm.getStor pre wethAccount)) :=
+      add_le_sum_of_ne _ (fun h => depositorNotVault h.symm)
+    have movedLe := B256.toNat_le_toNat movement.1
+    have sumLt : sum (Stor.rest (Devm.getStor pre wethAccount)) < 2 ^ 256 :=
+      wethSumNof
+    omega
+  refine ⟨shares, inboundEffect_accountingStep depositorNotVault ?_ rowNof
+    effectWhole ?_⟩
+  · rw [← supplyEq]
+    exact supplyNof
+  · rw [quoteEq, supplyEq]
+    rfl
 
 
 /-! ## Every non-flow message is a silent accounting step
