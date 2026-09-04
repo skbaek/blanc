@@ -223,6 +223,65 @@ theorem victim_loss_bound
       Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 :=
   path.victim_loss_bound_of_attackPath offsetN_ne_zero hphase
 
+
+
+/-! ## The carrier is inhabited
+
+A concrete first-depositor inflation trace, built from the constructors so that
+Lean computes every intermediate state.  It exists to rule out the failure mode
+where the headlines above are true only because nothing satisfies their
+hypotheses.
+
+The numbers are the ones the independent oracle predicts for the same
+transcript, and the same ones the ETH-denominated PRORATA oracle froze: the
+coalition seeds one wei, donates a million, the victim deposits a million and
+is minted 1999 shares, and the coalition's exit pays it 500125 against the
+1000001 it put in — a loss, not a profit, which is what the offset buys. -/
+
+/-- The coalition seeds the vault, donates, the victim deposits, the coalition
+exits, and the victim exits.
+
+Built one step at a time rather than as a single nested term: each `have` fully
+elaborates before the next, so every side condition sees the concrete state its
+step runs from.  The intermediate states are computed by the constructors and
+never written out. -/
+theorem attack_carrier_inhabited :
+    ∃ state : Blanc.Prorata.ProrataAttackState offsetN,
+      Blanc.Prorata.ProrataAttackPath offsetN state ∧
+        state.inA = 1000001 ∧ state.outA = 500125 ∧
+        state.outsideSubsidy = 0 := by
+  have prov : Blanc.Prorata.ProrataAccountingProvenance := ⟨0, none, [], none⟩
+  -- The coalition seeds one wei and is minted the offset's worth of shares.
+  have p1 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
+    .snoc ⟨_, _, _, prov,
+      .nonVictimDeposit
+        (Blanc.Prorata.ProrataAttackState.genesis offsetN)
+        .coalition 1 1000 (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+          Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ .genesis
+  -- and donates a million, which moves the price and not the supply.
+  have p2 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
+    .snoc ⟨_, _, _, prov,
+      .externalCredit _ .coalition 1000000 (by decide)⟩ p1
+  -- The victim deposits a million into the moved price.
+  have p3 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
+    .snoc ⟨_, _, _, prov,
+      .victimDeposit _ 1000000 1999 rfl (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+          Blanc.Prorata.mintN, Blanc.Prorata.payN])
+        (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+          Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p2
+  -- The coalition exits.
+  have p4 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
+    .snoc ⟨_, _, _, prov,
+      .nonVictimWithdraw _ .coalition 1000 500125 (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+          Blanc.Prorata.mintN, Blanc.Prorata.payN])
+        (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+          Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p3
+  refine ⟨_, p4, ?_, ?_, ?_⟩ <;>
+    simp [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+      Blanc.Prorata.AttackAttribution.coalitionAmount,
+      Blanc.Prorata.AttackAttribution.outsideAmount,
+      Blanc.Prorata.mintN, Blanc.Prorata.payN]
+
 end ProrataWethVault
 
 end Blanc
