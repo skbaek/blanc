@@ -203,6 +203,7 @@ CONTRACTS = {
                        "BeaconDepositHistoryChain"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy",
              "DripCreationCode", "DripRpow", "DripIngress",
+             "DripFunctional", "DripAccounting",
              "DripStackSafetyData", "DripStackSafety",
              "DripStackSafetyRegion214", "DripStackSafetyRegion576",
              "DripStackSafetyRegion1022", "DripStackSafetyRegion1459",
