@@ -100,6 +100,24 @@ class CurrentMainnetError(RuntimeError):
     """A malformed profile, target mismatch, or failed lane assertion."""
 
 
+# Within one gate process the pinned checkout's provenance and the isolated
+# interpreter's identity are immutable once verified, so re-deriving them for
+# every transition re-checks an answer that cannot have changed.  Both memos
+# below are deliberately process-local module state: they are never written to
+# disk, never keyed by anything a caller supplies, and never survive the
+# process that filled them, so a fresh gate run always verifies from scratch.
+#
+# What is *not* memoized is as important as what is.  Each call still runs the
+# checkout's exact-commit and clean-tree assertions, so a mid-run dirty tree or
+# a mutated overlay file — which makes the tree dirty — still fails at the row
+# that observes it.  The interpreter memo additionally revalidates a cheap stat
+# witness over every identity-bearing file it verified, so a mid-run substituted
+# interpreter, entrypoint, imported fork module, or site-packages tree drops the
+# memo and re-runs the full preflight rather than passing on a stale answer.
+_TARGET_PROVENANCE_MEMO: dict[tuple[str, ...], dict[str, Any]] = {}
+_PREFLIGHT_MEMO: dict[tuple[str, ...], tuple[Any, dict[str, Any]]] = {}
+
+
 @dataclass(frozen=True)
 class TargetPaths:
     root: Path
@@ -482,6 +500,23 @@ def verify_target(
     ).strip()
     if dirty:
         _fail(f"current-mainnet checkout is dirty: {dirty.splitlines()[0]}")
+
+    # Everything below is a function of (checkout, profile) alone: the parent
+    # set, origin, overlay path set and overlay diff bytes of an exact commit
+    # cannot change while HEAD is that commit and the tree is clean, both of
+    # which were just asserted.  Memoize it per process; keep the two
+    # assertions above on every call so a mid-run dirty tree or mutated overlay
+    # file still fails at the transition that observes it.
+    memo_key = (
+        str(paths.root),
+        str(git),
+        head,
+        _canonical_json_sha256(selected_profile),
+    )
+    memoized = _TARGET_PROVENANCE_MEMO.get(memo_key)
+    if memoized is not None:
+        return dict(memoized)
+
     parents = str(_git(paths.root, ["show", "-s", "--format=%P", "HEAD"])).split()
     _literal(parents, [selected_profile["target"]["upstreamCommit"]], "target parent set")
     origin = str(_git(paths.root, ["remote", "get-url", "origin"])).strip()
@@ -516,7 +551,7 @@ def verify_target(
     for label, executable in (("target python", paths.python), ("target t8n", paths.t8n)):
         if not executable.is_file() or not os.access(executable, os.X_OK):
             _fail(f"{label} is absent or not executable: {executable}")
-    return {
+    evidence = {
         "root": str(paths.root),
         "git": str(git),
         "head": head,
@@ -524,6 +559,8 @@ def verify_target(
         "overlayPaths": changed,
         "overlayDiffSha256": digest,
     }
+    _TARGET_PROVENANCE_MEMO[memo_key] = dict(evidence)
+    return evidence
 
 
 _RUNTIME_EXCLUDES = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
@@ -877,12 +914,84 @@ print(json.dumps(evidence, sort_keys=True))
 '''
 
 
+def _stat_signature(path: Path) -> tuple[Any, ...]:
+    try:
+        status = path.lstat()
+    except OSError as exc:
+        _fail(f"cannot stat identity-bearing target file {path}: {exc}")
+    return (
+        path.as_posix(),
+        status.st_mode,
+        status.st_size,
+        status.st_mtime_ns,
+        status.st_ino,
+        status.st_dev,
+    )
+
+
+def _identity_witness(
+    paths: TargetPaths,
+    evidence: dict[str, Any],
+    *,
+    verify_runtime: bool,
+) -> tuple[Any, ...]:
+    """A cheap signature over exactly the files the preflight vouched for.
+
+    The preflight's own guarantees rest on the interpreter, the t8n entrypoint,
+    the four resolved imports and — when the runtime lock is checked — the
+    selected site-packages tree.  Re-deriving this signature costs about 25 ms
+    against the 545 ms the preflight and lock fingerprint cost, and it changes
+    whenever any of those files is replaced, so a memo guarded by it cannot let
+    a mid-run substitution through.
+    """
+
+    imports = evidence.get("imports")
+    if not isinstance(imports, dict) or not imports:
+        _fail("preflight evidence carries no import identities to witness")
+    signatures: list[tuple[Any, ...]] = [
+        _stat_signature(paths.python),
+        _stat_signature(Path(str(paths.python)).resolve()),
+        _stat_signature(paths.t8n),
+    ]
+    for name in sorted(imports):
+        signatures.append(_stat_signature(Path(str(imports[name]))))
+    if verify_runtime:
+        series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
+        root = paths.venv / "lib" / f"python{series}" / "site-packages"
+        if not root.is_dir():
+            _fail(f"selected target site-packages tree is absent: {root}")
+        tree: list[tuple[Any, ...]] = []
+        for item in sorted(root.rglob("*"), key=lambda entry: entry.as_posix()):
+            if "__pycache__" in item.parts or item.suffix in (".pyc", ".pyo"):
+                continue
+            tree.append(_stat_signature(item))
+        signatures.append(tuple(tree))
+    return tuple(signatures)
+
+
 def _python_preflight(
     paths: TargetPaths,
     profile: dict[str, Any],
     *,
     verify_runtime: bool = True,
 ) -> dict[str, Any]:
+    memo_key = (
+        str(paths.root),
+        str(paths.venv),
+        str(paths.python),
+        str(paths.t8n),
+        profile["execution"]["module"],
+        _canonical_json_sha256(profile),
+        "runtime" if verify_runtime else "no-runtime",
+    )
+    memoized = _PREFLIGHT_MEMO.get(memo_key)
+    if memoized is not None:
+        witnessed, evidence = memoized
+        if _identity_witness(
+            paths, evidence, verify_runtime=verify_runtime
+        ) == witnessed:
+            return dict(evidence)
+        del _PREFLIGHT_MEMO[memo_key]
     result = _run(
         [
             str(paths.python),
@@ -959,6 +1068,10 @@ def _python_preflight(
             "runtime-lock selected platform",
         )
     evidence["platformKey"] = platform_key
+    _PREFLIGHT_MEMO[memo_key] = (
+        _identity_witness(paths, evidence, verify_runtime=verify_runtime),
+        dict(evidence),
+    )
     return evidence
 
 
