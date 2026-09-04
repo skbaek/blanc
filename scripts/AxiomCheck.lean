@@ -1073,6 +1073,9 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.ProrataWethVault.attack_carrier_inhabited
 #print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.transferEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.approveEffect_accountingStep
 #print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved

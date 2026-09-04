@@ -2,6 +2,7 @@ import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.ProrataAccounting
 import Blanc.ProrataWethVaultDust
+import Blanc.ProrataWethVaultShares
 
 /-!
 # The joint two-contract backing invariant
@@ -507,5 +508,68 @@ theorem outboundEffect_accountingStep
   rw [shape, quote]
   exact Blanc.ProrataWethVault.redeemStep (snapshotAt sevm pre).balance
     (snapshotAt sevm pre).supply burnable
+
+
+/-- **A step that moves neither the supply word nor the vault's WETH row is a
+`silent` accounting step.**
+
+This is what carries the share surface into the carrier.  A share transfer, a
+`transferFrom` and an approval all rearrange the vault's own storage without
+touching either coordinate the snapshot reads, so the carrier sees them as
+no-ops — which is the honest classification, not a convenience: they move no
+value between the vault and its asset. -/
+theorem silent_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (distinct : wethAccount ≠ sevm.currentTarget)
+    (supplyKept : Devm.getStorVal post sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot =
+      Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot)
+    (foreign : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor post account = Devm.getStor pre account) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  have shape : snapshotAt sevm post = snapshotAt sevm pre := by
+    refine congrArg₂ Blanc.Prorata.AccountingSnapshot.mk ?_ ?_
+    · show (Devm.getStorVal post sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot).toNat = _
+      rw [supplyKept]
+    · show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat
+        = _
+      rw [foreign wethAccount (Ne.symm distinct)]
+  rw [shape]
+  exact Blanc.Prorata.ProrataAccountingEffect.silent _
+
+/-- A share transfer is a `silent` accounting step. -/
+theorem transferEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transfer" [.address, .uint256]) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  obtain ⟨-, -, -, -, -, supplyKept, -, -, -, -, -, -, -, foreign, -⟩ :=
+    Blanc.ProrataWethVault.transfer_compiled_effect memoryWf run selectorEq
+  exact silent_accountingStep config.distinct supplyKept foreign
+
+/-- An approval is a `silent` accounting step: the guard has shown its write
+lands away from the supply word, and it never touches WETH. -/
+theorem approveEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "approve" [.address, .uint256]) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  obtain ⟨-, -, -, -, -, keyNotSupply, -, allowanceSet, foreign, -⟩ :=
+    Blanc.ProrataWethVault.approve_compiled_effect memoryWf run selectorEq
+  refine silent_accountingStep config.distinct ?_ foreign
+  show (Devm.getStor post sevm.currentTarget).get _ = _
+  rw [allowanceSet, Stor.get_set_ne _ keyNotSupply]
+  rfl
 
 end Blanc.Composition.ProrataWethVault
