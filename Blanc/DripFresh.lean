@@ -419,6 +419,245 @@ private theorem toNat_one_and (x : B256) :
   rw [B256.toNat_and, show (1 : B256).toNat = 1 by decide +kernel]
   exact Nat.one_and_eq_mod_two x.toNat
 
+/-! ## Halving the exponent, and the conditional multiply
+
+`rpowAdvance` divides the exponent word by two and re-enters the loop;
+`rpowAfterSquare` multiplies the accumulator by the freshly squared base
+exactly when the exponent's low bit is set, and then advances.  Both are
+stated over an abstract scratch image so the loop induction never has to carry
+a concrete one. -/
+
+private theorem of_run_rpowAdvance {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s (.call rpowAdvanceSlot) r) :
+    ∃ t, (tail <<+ t.stack) ∧
+      Frame (setScratch image exponentWord (scratch image exponentWord / 2))
+        entry t ∧
+      Func.Run fs e t (.call rpowLoopSlot) r := by
+  obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.rpowAdvance run
+  have frame0 := frame.of_burn hburn0
+  have hp0 : tail <<+ s0.stack := hburn0.stack ▸ hp
+  unfold Drip.rpowAdvance at run
+  refine run_prepend_elim _ (loadWord exponentWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame0.loadWord hp0 hline1
+  refine run_prepend_elim _ [pushB256 2, swap 0, div] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : (scratch image exponentWord / 2) :: tail <<+ s2.stack := by
+    rcases Line.of_run_cons hline2 with ⟨v1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨v2, hswap, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨v3, hdiv, hnil⟩
+    cases hnil
+    have h1 := prefix_of_push (of_run_pushB256 hpush) hp1
+    have h2 : scratch image exponentWord :: (2 : B256) :: tail <<+ v2.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap 0 ((2 : B256) :: scratch image exponentWord :: tail)
+            (scratch image exponentWord :: (2 : B256) :: tail)
+          from Stack.swapCore_zero)
+        (of_run_swap hswap) h1
+    exact prefix_of_div hdiv h2
+  refine run_prepend_elim _ (mstoreAt exponentWord) ?_ run
+  intro s3 hline3 run
+  obtain ⟨hp3, frame3⟩ := frame2.mstoreAt hp2 hline3
+  exact ⟨s3, hp3, frame3, run⟩
+
+private theorem of_run_rpowAfterSquare {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s (.call rpowAfterSquareSlot) r) :
+    ∃ t image',
+      (if (scratch image exponentWord).toNat % 2 = 1 then
+          B256.Nofm (scratch image accumulatorWord) (scratch image baseWord) ∧
+          B256.Nof (scratch image baseWord * scratch image accumulatorWord) half
+        else True) ∧
+      scratch image' accumulatorWord =
+        (if (scratch image exponentWord).toNat % 2 = 1 then
+            B256.mulr scale half (scratch image accumulatorWord)
+              (scratch image baseWord)
+          else scratch image accumulatorWord) ∧
+      scratch image' baseWord = scratch image baseWord ∧
+      scratch image' exponentWord = scratch image exponentWord / 2 ∧
+      LoopOnly image image' ∧
+      Frame image' entry t ∧ (tail <<+ t.stack) ∧
+      Func.Run fs e t (.call rpowLoopSlot) r := by
+  obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.rpowAfterSquare run
+  have frame0 := frame.of_burn hburn0
+  have hp0 : tail <<+ s0.stack := hburn0.stack ▸ hp
+  unfold Drip.rpowAfterSquare at run
+  refine run_prepend_elim _ (loadWord exponentWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame0.loadWord hp0 hline1
+  refine run_prepend_elim _ [pushB256 1, and] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : ((1 : B256) &&& scratch image exponentWord) :: tail <<+ s2.stack := by
+    rcases Line.of_run_cons hline2 with ⟨v1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨v2, hand, hnil⟩
+    cases hnil
+    exact prefix_of_and hand (prefix_of_push (of_run_pushB256 hpush) hp1)
+  have hparity : ((1 : B256) &&& scratch image exponentWord) = 0 ↔
+      (scratch image exponentWord).toNat % 2 ≠ 1 := by
+    constructor
+    · intro hzero hodd
+      have := toNat_one_and (scratch image exponentWord)
+      rw [hzero, B256.toNat_zero, hodd] at this
+      exact absurd this.symm (by decide)
+    · intro heven
+      apply B256.toNat_inj
+      rw [toNat_one_and, B256.toNat_zero]
+      omega
+  rcases of_run_branch run with
+    ⟨v, hpop, run⟩ | ⟨w, v, v', hnz, hpop, hburn, run⟩
+  · -- low bit clear: skip the multiply
+    have hflag : ((1 : B256) &&& scratch image exponentWord) = 0 :=
+      (popBurn_pref hpop hp2).1.symm
+    have heven : (scratch image exponentWord).toNat % 2 ≠ 1 := hparity.1 hflag
+    have frameV := frame2.of_popBurn hpop
+    have hpV : tail <<+ v.stack := (popBurn_pref hpop hp2).2
+    obtain ⟨t, hpt, framet, run⟩ := of_run_rpowAdvance hlookup frameV hpV run
+    refine ⟨t, setScratch image exponentWord (scratch image exponentWord / 2),
+      by rw [if_neg heven]; trivial, ?_, ?_, ?_, ?_, framet, hpt, run⟩
+    · rw [if_neg heven]
+      exact scratch_setScratch_of_disjoint image _ exponent_accumulator.symm
+    · exact scratch_setScratch_of_disjoint image _ exponent_base.symm
+    · exact scratch_setScratch_self image exponentWord _
+    · exact LoopOnly.exponent image _
+  · -- low bit set: multiply the accumulator by the squared base
+    have hflag : ((1 : B256) &&& scratch image exponentWord) ≠ 0 := by
+      rw [← (popBurn_pref hpop hp2).1]
+      exact hnz
+    have hodd : (scratch image exponentWord).toNat % 2 = 1 := by
+      by_contra heven
+      exact hflag (hparity.2 heven)
+    have frameV := (frame2.of_popBurn hpop).of_burn hburn
+    have hpV : tail <<+ v'.stack := by
+      rw [← hburn.stack]
+      exact (popBurn_pref hpop hp2).2
+    obtain ⟨v1, hnofm, hnof, hpV1, frameV1, run⟩ :=
+      of_run_guardedRoundedMul frameV hpV run
+    obtain ⟨t, hpt, framet, run⟩ := of_run_rpowAdvance hlookup frameV1 hpV1 run
+    refine ⟨t, _, by rw [if_pos hodd]; exact ⟨hnofm, hnof⟩, ?_, ?_, ?_, ?_,
+      framet, hpt, run⟩
+    · rw [if_pos hodd,
+        scratch_setScratch_of_disjoint _ _ exponent_accumulator.symm,
+        scratch_setScratch_self]
+      unfold B256.mulr
+      rw [@B256.add_comm half
+          (scratch image baseWord * scratch image accumulatorWord),
+        b256_mul_comm (scratch image baseWord)]
+    · rw [scratch_setScratch_of_disjoint _ _ exponent_base.symm,
+        scratch_setScratch_of_disjoint _ _ base_accumulator,
+        scratch_setScratch_of_disjoint _ _ base_rounded]
+    · rw [scratch_setScratch_self,
+        scratch_setScratch_of_disjoint _ _ exponent_accumulator,
+        scratch_setScratch_of_disjoint _ _ exponent_rounded]
+    · exact ((LoopOnly.rounded image _).trans
+        (LoopOnly.accumulator _ _)).trans (LoopOnly.exponent _ _)
+
+/-! ## The square-and-multiply loop
+
+A successful run of the machine's loop slot is exactly Jaune's guarded word
+loop: it establishes `B256.RPowLoopGuards` from the checks the runtime
+actually crossed, leaves `B256.rpowLoop` in the accumulator slot, and reaches
+the index-composition slot.  The induction is on the exponent's `Nat` image,
+which the runtime halves once per iteration. -/
+
+theorem of_run_rpowLoop {fs : List Func} (hlookup : AuxLookup fs) {e : Sevm}
+    {entry r : Devm} :
+    ∀ (n : Nat) {s : Devm} {image : Bytes} {tail : Stack},
+      (scratch image exponentWord).toNat = n →
+      Frame image entry s → (tail <<+ s.stack) →
+      Func.Run fs e s (.call rpowLoopSlot) r →
+      ∃ t image',
+        B256.RPowLoopGuards scale half (scratch image accumulatorWord)
+          (scratch image baseWord) n ∧
+        scratch image' accumulatorWord =
+          B256.rpowLoop scale half (scratch image accumulatorWord)
+            (scratch image baseWord) n ∧
+        LoopOnly image image' ∧
+        Frame image' entry t ∧ (tail <<+ t.stack) ∧
+        Func.Run fs e t (.call composeFreshSlot) r := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+  intro s image tail hexp frame hp run
+  obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.rpowLoop run
+  have frame0 := frame.of_burn hburn0
+  have hp0 : tail <<+ s0.stack := hburn0.stack ▸ hp
+  unfold Drip.rpowLoop at run
+  refine run_prepend_elim _ (loadWord exponentWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, frame1⟩ := frame0.loadWord hp0 hline1
+  refine run_prepend_elim _ [iszero] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : ((scratch image exponentWord) =? 0) :: tail <<+ s2.stack :=
+    prefix_of_iszero (of_run_single hline2) hp1
+  by_cases hn : n = 0
+  · -- exponent zero: the loop is the identity and jumps straight to composition
+    have hE : scratch image exponentWord = 0 :=
+      B256.toNat_inj _ 0 (by rw [hexp, hn, B256.toNat_zero])
+    rw [hE, B256.eqCheck, if_pos rfl] at hp2
+    rcases of_run_branch run with
+      ⟨u, hpop, hsquare⟩ | ⟨w, u, v, hnz, hpop, hburn, hcompose⟩
+    · exact absurd (popBurn_pref hpop hp2).1 (by decide +kernel)
+    · refine ⟨v, image, ?_, ?_, LoopOnly.rfl' image,
+        (frame2.of_popBurn hpop).of_burn hburn, ?_, hcompose⟩
+      · rw [B256.RPowLoopGuards, dif_pos hn]
+        trivial
+      · rw [B256.rpowLoop, dif_pos hn]
+      · rw [← hburn.stack]
+        exact (popBurn_pref hpop hp2).2
+  · -- exponent nonzero: square, conditionally multiply, halve, recurse
+    have hE : scratch image exponentWord ≠ 0 := by
+      intro hzero
+      exact hn (by rw [← hexp, hzero, B256.toNat_zero])
+    rw [B256.eqCheck, if_neg hE] at hp2
+    rcases of_run_branch run with
+      ⟨u, hpop, hsquare⟩ | ⟨w, u, v, hnz, hpop, hburn, hcompose⟩
+    swap
+    · exact absurd (popBurn_pref hpop hp2).1 hnz
+    have frameU := frame2.of_popBurn hpop
+    have hpU : tail <<+ u.stack := (popBurn_pref hpop hp2).2
+    obtain ⟨u1, hnofmSquare, hnofSquare, hpU1, frameU1, run⟩ :=
+      of_run_guardedRoundedMul frameU hpU hsquare
+    obtain ⟨t1, image2, hcond, hacc2, hbase2, hexp2, hloop12, framet1, hpt1,
+      run⟩ := of_run_rpowAfterSquare hlookup frameU1 hpU1 run
+    rw [scratch_setScratch_self] at hcond hacc2 hbase2
+    rw [scratch_setScratch_of_disjoint _ _ exponent_base,
+      scratch_setScratch_of_disjoint _ _ exponent_rounded] at hcond hacc2 hexp2
+    rw [scratch_setScratch_of_disjoint _ _ base_accumulator.symm,
+      scratch_setScratch_of_disjoint _ _ accumulator_rounded] at hcond hacc2
+    have hxx : (half + scratch image baseWord * scratch image baseWord) / scale =
+        B256.mulr scale half (scratch image baseWord)
+          (scratch image baseWord) := by
+      unfold B256.mulr
+      rw [@B256.add_comm half
+        (scratch image baseWord * scratch image baseWord)]
+    rw [hxx, hexp] at hcond hacc2
+    rw [hxx] at hbase2
+    have hexpNat : (scratch image2 exponentWord).toNat = n / 2 := by
+      rw [hexp2, B256.toNat_div (by decide +kernel : (2 : B256) ≠ 0),
+        show (2 : B256).toNat = 2 by decide +kernel, hexp]
+    obtain ⟨t2, image3, hguards2, hacc3, hloop23, framet2, hpt2, run⟩ :=
+      ih (n / 2) (Nat.div_lt_self (Nat.pos_of_ne_zero hn) (by decide))
+        hexpNat framet1 hpt1 run
+    rw [hacc2, hbase2] at hguards2 hacc3
+    refine ⟨t2, image3, ?_, ?_, ?_, framet2, hpt2, run⟩
+    · rw [B256.RPowLoopGuards, dif_neg hn]
+      refine ⟨hnofmSquare, hnofSquare, ?_, hguards2⟩
+      by_cases hpar : n % 2 = 1
+      · rw [if_pos hpar] at hcond ⊢
+        exact ⟨hcond.1, by rw [b256_mul_comm]; exact hcond.2⟩
+      · rw [if_neg hpar]
+        trivial
+    · rw [B256.rpowLoop, dif_neg hn]
+      exact hacc3
+    · exact (((LoopOnly.rounded image _).trans
+        (LoopOnly.base _ _)).trans hloop12).trans hloop23
+
 end Drip
 
 end Blanc
