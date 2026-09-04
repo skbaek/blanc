@@ -1,10 +1,9 @@
 # Lido TriggerableWithdrawalsGateway compatibility contract
 
-> **Published evidence status:** the identities, counts, comparisons, and
-> finite observations below are filled from the validated B1 reference lock
-> and generated B2 differential manifest. The synchronization gate rejects
-> marker drift, non-dispositioned deviations, or a mismatch with either evidence
-> source.
+> **Draft status:** incomplete until every `machine-owned` token below is
+> replaced from the validated B1 reference lock or generated B2 differential
+> manifest. The synchronization gate rejects marker drift, non-dispositioned
+> deviations, or a mismatch with either evidence source.
 
 This document freezes the public conformance boundary for Blanc's port of
 Lido's `TriggerableWithdrawalsGateway`. It is read with [`PORTING.md`](PORTING.md):
@@ -34,14 +33,14 @@ prose, own artifact identities and finite observations.
 | Reference creation bytes | `10256` bytes; SHA-256 `0e7dd55e589cf6bd38b2ebae7581ff169a354f9399087ecb6b8940f56bacc7e7` |
 | Reference runtime | `8128` bytes; SHA-256 `12c9d210f25202cf535622f93ba5237181512cc23970f2da08434f77e68d3a7b` |
 | Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `25866991`; code hash `0xbf27dab01ae7fb4507657a02d975bd38aeea9eaba4498225da3a0ee5f815f123`; role/pause snapshot `b22333b245132e24f43328f46030b09f2ccf805ad3937382d1636a849626cc23` |
-| Blanc artifact/runtime program commit | `35a196fd50192aa269d6cb07699ea0910ad3c468` |
-| First compile-valid pinned-target proof certificate | `a0e04e7a69558b8744ced81ea4a3defdfc478d36` |
+| Blanc artifact/runtime program commit | `df9ce992b98b1eb784ab631be312cba4550ff61b` |
+| Optimized-runtime theorem ladder and pinned-target certificate | `35ba1e1b137529482180adccd44ae0da70417ac4` |
 | Jaune pin | `949cf97ee1956828a3ac0eb12a62c438656ba76e` |
-| Blanc creation template | `17976` bytes; SHA-256 `1c7a59c47cb97dbd8da1ccd02ed2913d553d18e6f353c640b308ce47b638eeb1` |
-| Blanc complete CREATE input | `18136` bytes; SHA-256 `8091507f8753791e74a3ba7704436dac4bc7db3fcbf973a97b5296934432347a` |
-| Blanc runtime | `15948` bytes; SHA-256 `2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08` |
+| Blanc creation template | `9806` bytes; SHA-256 `0e1ee072fc51e1f93917004d7a0e67164bc7bc668087dd2f707f21f52e06f872` |
+| Blanc complete CREATE input | `9966` bytes; SHA-256 `6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690` |
+| Blanc runtime | `8094` bytes; SHA-256 `6fdb5afdafc949df0677cea1e2f61f6363e21fd6348ff9843186fa8c68ca3c56` |
 | EELS oracle | `ethereum/execution-specs` commit `4198b9c5996713b268aed602739d5aa40e277694`, Prague |
-| Differential manifest | schema `1`; SHA-256 `4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4` |
+| Differential manifest | schema `1`; SHA-256 `30a62c2866e8a504aaece1b220622e16a774024b5aa6ab9f0d28bb38ba3de60c` |
 | Differential result | `PASS`; `71` cases, `186` measured resource boundaries |
 
 The mainnet snapshot is provenance and selection-time context. It is not a
@@ -63,8 +62,9 @@ criterion, which the generated manifest and its gate establish:
    `pauseUntil(2^256 - 1)`, truthful paused/resumed queries, and authorization
    negatives;
 5. AccessControl coverage contains membership, admin lookup, grant, revoke,
-   self-renounce, wrong-account renounce, enumeration, removal histories, and
-   the five known difference classes `TWG-D01` through `TWG-D05`;
+   self-renounce, wrong-account renounce, per-role enumeration, removal
+   histories, the three retained differences `TWG-D01` through `TWG-D03`,
+   and repaired-regression rows for `TWG-D04` and `TWG-D05`;
 6. limit coverage contains initial configuration, valid reconfiguration,
    validation failures, consumption, exceeded quota, same-frame observation,
    whole-frame refill, capping, and the named checked arithmetic boundaries;
@@ -253,9 +253,9 @@ excluded`. Decoder-edge coverage is bounded by the calldata scope below.
 <!-- LIDO-TWG-ENDPOINT {"signature":"hasRole(bytes32,address)","selector":"0x91d14854"} -->
 ### `hasRole(bytes32,address)`
 
-The canonical zero-value corpus row returns membership. Blanc verifies the full stored
-role/account identity rather than aliasing a flat-key collision; see
-`TWG-D05`.
+The canonical zero-value corpus row returns membership. Blanc derives a
+collision-separated nested-keccak membership slot from the complete role and
+canonical account.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleAdmin(bytes32)","selector":"0x248a9ca3"} -->
 ### `getRoleAdmin(bytes32)`
@@ -267,31 +267,30 @@ configuration.
 ### `grantRole(bytes32,address)`
 
 Requires the role's admin role. A fresh grant adds membership and emits
-`RoleGranted`; an existing identical membership is a successful no-op. Error
-payloads and collision refusal are governed by `TWG-D01` and `TWG-D05`.
+`RoleGranted`; an existing identical membership is a successful no-op. The
+unauthorized error payload is governed by `TWG-D01`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"revokeRole(bytes32,address)","selector":"0xd547741f"} -->
 ### `revokeRole(bytes32,address)`
 
-Requires the role's admin role. Existing membership is removed and
-`RoleRevoked` is emitted; absent membership is a successful no-op. Error
-payloads, enumeration order, and collision refusal are governed by `TWG-D01`,
-`TWG-D04`, and `TWG-D05`.
+Requires the role's admin role. Existing membership is removed by the same
+per-role swap-pop order as the reference and `RoleRevoked` is emitted; absent
+membership is a successful no-op. Unauthorized error payloads are governed by
+`TWG-D01`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"renounceRole(bytes32,address)","selector":"0x36568abe"} -->
 ### `renounceRole(bytes32,address)`
 
 The account must be the caller. Existing self-membership is removed and
 `RoleRevoked` is emitted; absent self-membership is a successful no-op. The
-wrong-account error payload is `TWG-D02`; enumeration and collision behavior
-are `TWG-D04` and `TWG-D05`.
+wrong-account error payload is governed by `TWG-D02`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleMember(bytes32,uint256)","selector":"0x9010d07c"} -->
 ### `getRoleMember(bytes32,uint256)`
 
-The canonical zero-value corpus row returns the member at the requested zero-based ordinal in the
-implementation's enumeration order. Out-of-bounds error data differs under
-`TWG-D03`, and histories may expose the ordering difference `TWG-D04`.
+The canonical zero-value corpus row returns the member at the requested
+zero-based ordinal in the reference-matching per-role swap-pop order.
+Out-of-bounds error data differs under `TWG-D03`.
 
 <!-- LIDO-TWG-ENDPOINT {"signature":"getRoleMemberCount(bytes32)","selector":"0xca15c873"} -->
 ### `getRoleMemberCount(bytes32)`
@@ -396,10 +395,11 @@ a status-only allowlist.
 <!-- LIDO-TWG-CROSSCUT role-enumeration -->
 ### Role enumeration and collision domain
 
-Membership and count are compared through a logical projection. Enumeration
-order and out-of-range returndata retain their observable differences
-`TWG-D03` and `TWG-D04`. Blanc's collision-refusing lookup domain is `TWG-D05`;
-no theorem or fixture may assume global injectivity of the low-252-bit key.
+Membership, count, and per-role swap-pop order are compared through a logical
+projection. Out-of-range returndata retains the observable difference
+`TWG-D03`. The former global-enumeration and low-252-bit collision differences
+`TWG-D04` and `TWG-D05` are repaired and retained as regression rows and
+artifact controls.
 
 <!-- LIDO-TWG-CROSSCUT exit-limit -->
 ### Exit-limit frame arithmetic
@@ -408,8 +408,8 @@ The logical projection contains maximum, previous limit, previous timestamp,
 frame duration, and exits per frame. Current limit is calculated from elapsed
 whole frames, capped by the maximum, with the named checked-arithmetic rows.
 The corpus observes configured same-frame and whole-frame worlds; zero/unlimited
-mode and partial-frame behavior are untested and excluded. Raw
-packed/reference slots and Blanc's five flat words are not compared.
+mode and partial-frame behavior are untested and excluded. Both artifacts use
+packed five-`uint32` logical fields, but raw slots remain outside equivalence.
 
 <!-- LIDO-TWG-CROSSCUT trigger-choreography -->
 ### Trigger choreography and dependencies
@@ -431,9 +431,10 @@ does not reclassify rolled-back effects as committed ones.
 ### Logical-state projection
 
 Comparison maps the reference's keccak-derived pause, packed exit-limit, and
-AccessControl storage to Blanc's pause word, five limit words, full-identity
-role records, and filtered enumeration. Raw slots, storage roots/proofs, and
-layout are deliberately outside equivalence. See `TWG-I01`.
+AccessControl storage to Blanc's pause word, packed limit word, nested-keccak
+membership, and direct per-role length/index/member storage. Raw slots,
+storage roots/proofs, and layout are deliberately outside equivalence. See
+`TWG-I01`.
 
 <!-- LIDO-TWG-CROSSCUT finite-evidence -->
 ### Finite evidence
@@ -443,24 +444,24 @@ The B2 corpus has `71` cases and
 only the manifest-listed observations in the manifest-listed worlds. Passing
 every row is not proof of the reference, exhaustive equality, future
 enabledness, or behavior outside the coverage criterion.
+Per-selector resource coverage is
+`24/24 census selectors each own at least one direct action boundary`.
 
 <!-- LIDO-TWG-CROSSCUT gas-boundary -->
 ### Code size and named-path gas
 
-The machine-filled comparison tables live in the deviation registry. Exact gas
-identity and universal dominance are not claimed. Every measured positive
-public final-action delta and the successful constructor cost must be repaired
-or receive its own accepted gas-cost disposition; aggregate savings cannot
-hide it. These `TWG-Gnn` cost rows do not expand the behavioral-deviation
-inventory beyond `TWG-D01` through `TWG-D05`.
+The machine-filled comparison tables live in the deviation registry. All 51
+named constructor/public-path cells are strict Blanc wins on this exact finite
+Prague ledger. Exact arbitrary-world gas identity and universal dominance are
+not claimed; any later nonnegative named cell reopens this boundary.
 
 <!-- LIDO-TWG-CROSSCUT formal-proof-boundary -->
 ### Formal Blanc boundary
 
 The runtime/artifact program is frozen at
-`35a196fd50192aa269d6cb07699ea0910ad3c468`. The first compile-valid
-pinned-target certificate is commit
-`a0e04e7a69558b8744ced81ea4a3defdfc478d36`, which certifies that exact
+`df9ce992b98b1eb784ab631be312cba4550ff61b`. The optimized-runtime theorem
+ladder and pinned-target certificate is commit
+`35ba1e1b137529482180adccd44ae0da70417ac4`, which certifies that exact
 program's pause-face, authorization, protected-surface, and
 `PinnedPauseTarget` properties within
 `[propext, Classical.choice, Quot.sound]`. The bundle's CircuitBreaker-cell
@@ -482,9 +483,9 @@ Solidity account invariant.
 The published finite claim is:
 
 > For the exact Blanc runtime/artifact program at
-> `35a196fd50192aa269d6cb07699ea0910ad3c468`, certified by the first
-> compile-valid pinned-target proof commit
-> `a0e04e7a69558b8744ced81ea4a3defdfc478d36`, Jaune pin
+> `df9ce992b98b1eb784ab631be312cba4550ff61b`, certified by the
+> optimized-runtime theorem ladder and pinned-target commit
+> `35ba1e1b137529482180adccd44ae0da70417ac4`, Jaune pin
 > `949cf97ee1956828a3ac0eb12a62c438656ba76e`, reference lock
 > `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f`, and EELS commit
 > `4198b9c5996713b268aed602739d5aa40e277694`, the exact compiled Blanc
