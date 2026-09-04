@@ -288,21 +288,6 @@ private theorem Ninst.step_staticcall_spawn_facts
       simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
   exact Xinst.step_staticcall_spawn_facts gasWord tail operands hx
 
-/-- Value transfer preserves the static block environment. -/
-private theorem benvAfterTransfer_stat {msg : Msg} {benv : Benv}
-    (h : msg.benvAfterTransfer = .ok benv) :
-    benv.stat = msg.benv.stat := by
-  cases htransfer : msg.shouldTransferValue with
-  | false =>
-      have hnot : ¬ msg.shouldTransferValue = true := by
-        simp [htransfer]
-      have hbenv := of_benvAfterTransfer_no hnot h
-      subst benv
-      rfl
-  | true =>
-      rcases of_benvAfterTransfer htransfer h with ⟨debit, hsub, rfl⟩
-      rfl
-
 /-- No interpreted child can be spawned at the permit call boundary when
 the precompile is enabled and undelegated: frame entry would resolve the
 message synchronously. -/
