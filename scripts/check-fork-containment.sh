@@ -18,7 +18,18 @@
 #
 # The allowlist is a control, not a convenience. Adding a generic module to it
 # to obtain green is a weakening of exactly the property the gate exists to
-# keep.
+# keep. Every allowance opens with a category from a closed vocabulary --
+# `specialization` or `compatibility` for a whole module, plus `bridge` and
+# `debt` for a single declaration -- and an entry filed under any other word
+# fails before the tree is read, so a third category cannot be introduced by
+# prose alone.
+#
+# The gate catches fork *naming*, not fork *dependence*. Its population is a
+# vocabulary of identifiers, so a generic module that hard-codes a
+# fork-sensitive value -- `def a : Nat := 24576` -- passes, while
+# `def a : Nat := pragueCodeLimits.maxCodeSize` is caught. The checker's own
+# docstring records why blocklisting the value is not the fix and names the two
+# live debts this blind spot leaves to review.
 #
 # This gate needs no Lean toolchain, no build and no network -- it reads
 # committed files only -- so it is instant, takes no report or heavy lock (it

@@ -34,6 +34,37 @@ an already-allowed module or declaration still fails.  An allowance that
 matches nothing fails as an orphan, so a deleted module or renamed declaration
 cannot leave a stale blessing behind.
 
+Every allowance also carries a **category** -- the word before the colon in its
+reason -- and the vocabulary is closed and checked here, so a third category
+cannot be introduced by prose alone.  Fixed decision 7 of
+`blanc-configured-deployment-spine-v1` authorises exactly two reasons for a
+whole module to name a fork: it is a `specialization` or a `compatibility`
+module by design.  `MODULE_CATEGORIES` is that decision, and an entry filed
+under any other word fails the gate before the tree is even read.  The
+declaration level blesses one declaration inside a module that stays generic
+and adds two more: `bridge`, a fixed-fork ladder connected to the configured
+one, and `debt`, an entry that records a debt rather than a design choice and
+is disclosed as such in this gate's catalogue row.
+
+**What this gate does not catch: fork *dependence* that never names a fork.**
+The detected population is a vocabulary of identifiers, so a generic module
+that hard-codes a fork-sensitive *value* passes.  `def a : Nat := 24576` in
+`Blanc/Ladder.lean` is green here, while
+`def a : Nat := pragueCodeLimits.maxCodeSize` is caught -- the same dependence,
+told and not told.  Blocklisting the number is not the fix:
+`Blanc/BeaconDepositCode.lean` legitimately contains
+`eip170RuntimeLimit_exact : eip170RuntimeLimit = 24576`, the pin that *proves*
+the value, and that pin is good practice.  The two live instances of this debt
+in the tree are visible at all only because they also name a fork:
+`Blanc/BeaconDepositCode.lean`'s `eip170RuntimeLimit` and
+`Blanc/BeaconDepositDeploy.lean`'s `eip3860InitcodeLimit` bind EIP-170 and
+EIP-3860 limits to `pragueCodeLimits`, and
+`scripts/check-beacon-deposit-current-mainnet.sh` asserts both by name at BPO2.
+They are carried below as `debt` declaration allowances.  Restating a limit
+against the block's selected `rules` is what removes the dependence; an
+inlined value that no longer names a fork is a review obligation this gate
+cannot discharge.
+
 Deliberately **not** in the detected population: `mainnetChainConfig` and the
 four `mainnet*Timestamp` constants.  The population is exactly the five
 rule/schedule literals the configured-deployment-spine goal fixed for this
@@ -97,8 +128,22 @@ DECL_START = re.compile(
 NAME_TOKEN = re.compile(r"[^\s({\[⦃:]+")
 
 # ---------------------------------------------------------------------------
-# The allowances.  Every entry carries the reason it is not a generic module.
+# The allowances.  Every entry carries the reason it is not a generic module,
+# and the reason opens with a category from the closed vocabulary below.
 # ---------------------------------------------------------------------------
+
+# Fixed decision 7 of `blanc-configured-deployment-spine-v1`: a module is added
+# to the module allowance "only because it is a specialization or compatibility
+# module by design".  Those are the only two words a whole-module allowance may
+# open with.  A closed concrete fixture is a specialization to one named
+# schedule and says so in its own reason text; it is not a third category.
+MODULE_CATEGORIES = ("specialization", "compatibility")
+
+# The declaration level blesses one declaration inside a module that stays
+# generic, so it carries two further categories that decision 7 does not reach:
+# `bridge` for a fixed-fork ladder connected to the configured one, and `debt`
+# for an entry that records a debt rather than a design choice.
+DECLARATION_CATEGORIES = ("specialization", "compatibility", "bridge", "debt")
 
 MODULE_ALLOWANCE: dict[str, tuple[str, int]] = {
     "Blanc/Weth10Mainnet.lean": (
@@ -116,16 +161,24 @@ MODULE_ALLOWANCE: dict[str, tuple[str, int]] = {
         "specialization: fixed-Prague Lido deployment block body", 5),
     "Blanc/LidoCircuitBreakerDeploymentTransaction.lean": (
         "specialization: fixed-Prague Lido deployment transaction", 4),
+    # The five closed-fixture modules below were first filed under a third
+    # category, `fixture`, which fixed decision 7 does not authorise. A closed
+    # certificate is a specialization to one concrete world -- it fixes the
+    # schedule rather than leaking it out of a generic statement -- so they are
+    # filed as `specialization` and each reason still says, in full, that the
+    # thing specialized to is a closed concrete Prague fixture.
     "Blanc/ProxyPairUpgradeExecution.lean": (
-        "fixture: closed concrete Prague block environment", 1),
+        "specialization: closed concrete Prague block-environment fixture", 1),
     "Blanc/ProxyPairUpgradeRefinement.lean": (
-        "fixture: private refinement of that closed Prague execution fixture", 7),
+        "specialization: private refinement of that closed Prague execution "
+        "fixture", 7),
     "Blanc/ProxyPairOssifiableDeploymentFixture.lean": (
-        "fixture: closed concrete Prague CREATE certificate", 2),
+        "specialization: closed concrete Prague CREATE-certificate fixture", 2),
     "Blanc/ProxyPairOssifiableBothSlotFixture.lean": (
-        "fixture: closed concrete Prague setup certificate", 1),
+        "specialization: closed concrete Prague setup-certificate fixture", 1),
     "Blanc/ProxyPairOssifiableBothSlotDeployment.lean": (
-        "fixture: closed concrete Prague both-slot deployment certificate", 1),
+        "specialization: closed concrete Prague both-slot deployment-"
+        "certificate fixture", 1),
 }
 
 DECLARATION_ALLOWANCE: dict[tuple[str, str], tuple[str, int]] = {
@@ -340,7 +393,31 @@ def census(root: Path) -> None:
     print(f"\nsuffixed declarations: {len(pairs)}")
 
 
+def check_categories() -> None:
+    """The allowance vocabulary is closed, and closed by this check.
+
+    Runs before the tree is read, because it is a property of this file rather
+    than of the tree: an allowance filed under a category nobody authorised
+    fails even on a green tree.
+    """
+    for module, (reason, _expected) in sorted(MODULE_ALLOWANCE.items()):
+        category = reason.split(":", 1)[0].strip()
+        if category not in MODULE_CATEGORIES:
+            fail(f"module allowance for {module} is filed as `{category}`, "
+                 f"which is not one of {', '.join(MODULE_CATEGORIES)}. Fixed "
+                 f"decision 7 authorises no other reason for a whole module "
+                 f"to name a fork")
+    for (module, name), (reason, _expected) in sorted(
+            DECLARATION_ALLOWANCE.items()):
+        category = reason.split(":", 1)[0].strip()
+        if category not in DECLARATION_CATEGORIES:
+            fail(f"declaration allowance for {name} in {module} is filed as "
+                 f"`{category}`, which is not one of "
+                 f"{', '.join(DECLARATION_CATEGORIES)}")
+
+
 def check(root: Path) -> None:
+    check_categories()
     occurrences, declaration_names, modules = scan(root)
 
     if len(modules) < MIN_MODULES:
@@ -430,20 +507,60 @@ def check(root: Path) -> None:
 
 
 def self_test(root: Path) -> None:
-    """Three-control bite demonstration, each in a disposable copy."""
+    """Bite demonstration: three controls in disposable copies of the
+    tree, and one in a disposable copy of this checker."""
     failures: list[str] = []
 
-    def run(tree: Path) -> subprocess.CompletedProcess:
+    controls = 0
+
+    def run(tree: Path,
+            script: Path | None = None) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(Path(__file__).resolve()), "--root", str(tree)],
+            [sys.executable, str(script or Path(__file__).resolve()),
+             "--root", str(tree)],
             capture_output=True, text=True)
 
     def control(label: str, mutate, expect_ok: bool, expect_text: str = "") -> None:
+        nonlocal controls
+        controls += 1
         with tempfile.TemporaryDirectory() as tmp:
             tree = Path(tmp) / "tree"
             shutil.copytree(root / "Blanc", tree / "Blanc")
             mutate(tree)
             result = run(tree)
+            ok = result.returncode == 0
+            if ok != expect_ok:
+                failures.append(
+                    f"{label}: expected {'pass' if expect_ok else 'fail'}, "
+                    f"got exit {result.returncode}")
+                return
+            if expect_text and expect_text not in result.stdout:
+                failures.append(
+                    f"{label}: expected {expect_text!r} in output, got "
+                    f"{result.stdout.strip()[:200]!r}")
+                return
+            print(f"  control {label}: "
+                  f"{'green' if ok else 'fails at the intended boundary'}")
+
+    def script_control(label: str, mutate, expect_ok: bool,
+                       expect_text: str = "") -> None:
+        """Mutate a copy of *this file* and run it against the real tree.
+
+        The allowance and its category live in this script, not in the tree, so
+        the control that shows the category vocabulary bites has to move the
+        script rather than the modules.
+        """
+        nonlocal controls
+        controls += 1
+        source = Path(__file__).resolve().read_text()
+        mutated = mutate(source)
+        if mutated == source:
+            failures.append(f"{label}: the mutation matched nothing")
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "mutated-check-fork-containment.py"
+            script.write_text(mutated)
+            result = run(root, script)
             ok = result.returncode == 0
             if ok != expect_ok:
                 failures.append(
@@ -481,11 +598,20 @@ def self_test(root: Path) -> None:
     control("deleted _prague corollary", drop_prague, False,
             "holderFlow_withdrawal_floor_mainnet has no matching")
 
+    script_control(
+        "unauthorised allowance category",
+        lambda source: source.replace(
+            '"specialization: closed concrete Prague block-environment fixture"',
+            '"fixture: closed concrete Prague block-environment fixture"', 1),
+        False,
+        "is filed as `fixture`")
+
     if failures:
         for entry in failures:
             print(f"  {entry}")
         fail(f"{len(failures)} control(s) did not behave as declared")
-    print("OK — fork-containment self-test: 3/3 controls behaved as declared")
+    print(f"OK — fork-containment self-test: {controls}/{controls} controls "
+          f"behaved as declared")
 
 
 def main() -> None:
