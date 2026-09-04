@@ -61,11 +61,8 @@ def controlProtectedSurface : List B256 :=
 /-! ## Installed role and program world -/
 
 def controlInitialStor : Stor :=
-  ((((Stor.empty : Stor).set resumeSinceSlot 0).set
-        (roleLookupIndexSlot pauseRole controlCircuitBreaker.toB256) 1).set
-      (roleLookupRoleSlot pauseRole controlCircuitBreaker.toB256) pauseRole).set
-    (roleLookupAccountSlot pauseRole controlCircuitBreaker.toB256)
-    controlCircuitBreaker.toB256
+  ((Stor.empty : Stor).set resumeSinceSlot 0).set
+    (roleMembershipSlot pauseRole controlCircuitBreaker.toB256) 1
 
 /-- A non-nil caller account makes the transfer-enabled zero-value entry an
 identity without identifying the CircuitBreaker and target addresses. -/
@@ -128,8 +125,9 @@ def productionProgram : Prog :=
 /-! ## A full-runtime wrapping-add mutant
 
 Only the sentinel body is different.  The finite arm retains the production
-overflow check and all dispatch entries after `selPauseFor` are copied from
-`funcs controlParams`. -/
+overflow check and all shared nonpayable dispatch entries after `selPauseFor`
+are copied from `sharedNonpayableFuncs`; the separately selected payable
+trigger is unchanged. -/
 
 def wrappingPauseForSentinel : Func :=
   ([timestamp, pushB256 pauseInfinitely, add,
@@ -148,16 +146,20 @@ def wrappingPauseFor : Func :=
     ([pushB256 resumeSinceSlot, sload, timestamp, lt, iszero]) +++
       (wrappingPauseForUnpaused <?> .call resumedExpectedSlot)
 
-/-- The production selector table begins with `selPauseFor`.  Replacing that
-head and retaining its tail keeps the mutation local and leaves the trigger and
-all other public entries intact. -/
-def wrappingFuncs (dp : DeployParams) : List (B256 × Func) :=
-  (selPauseFor, nonpayable wrappingPauseFor) :: (funcs dp).drop 1
+/-- The production shared-nonpayable table begins with `selPauseFor`.
+Replacing that head and retaining its tail keeps the mutation local and leaves
+the separately selected trigger and all other public entries intact. -/
+def wrappingSharedNonpayableFuncs : List (B256 × Func) :=
+  (selPauseFor, wrappingPauseFor) :: sharedNonpayableFuncs.drop 1
 
 def wrappingRuntimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::
     (Func.revert <?>
-      (fsig +++ linearDispatchWith fallbackSlot (wrappingFuncs dp)))
+      (fsig +++ dup 0 ::: pushB256 selTriggerFullWithdrawals ::: eq :::
+        ((pop ::: triggerFullWithdrawals dp) <?>
+          (callvalue ::: iszero :::
+            (linearDispatchWith fallbackSlot wrappingSharedNonpayableFuncs <?>
+              Func.revert)))))
 
 def wrappingPauseRuntime : Prog :=
   ⟨wrappingRuntimeMain controlParams, aux controlParams⟩
