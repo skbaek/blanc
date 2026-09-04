@@ -51,25 +51,25 @@ theorem isPaused_exact_of_prog_run
         (selected := selIsPaused) (tail := [])
     · rfl
     · simpa [isPausedCalldata] using calldata
-  have member : (selIsPaused, nonpayable isPaused) ∈ funcs dp := by
-    simp [funcs]
+  have member : (selIsPaused, isPaused) ∈ sharedNonpayableFuncs := by
+    simp [sharedNonpayableFuncs]
+  have notTrigger : selIsPaused ≠ selTriggerFullWithdrawals := by decide
+  have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
+    run entryStack guard selected notTrigger
   obtain ⟨bodyPre, bodyCompiled, _bodyStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame run entryStack guard selected
-      member
-  have bodyRun :
+    dispatcher_body_of_prog_run_empty_frame run entryStack valueZero guard
+      selected notTrigger member
+  have queryRun :
       Func.Run ((runtime dp).main :: (runtime dp).aux) sevm bodyPre
-        (nonpayable isPaused) post :=
+        isPaused post :=
     Func.Run.of_runCompiled
       (Func.RunCompiled.of_runCompiledTo_ok bodyCompiled)
-  obtain ⟨queryPre, valueZero, wrapperState, wrapperMemory, queryRun⟩ :=
-    run_body_of_run_nonpayable_frame bodyRun
 
-  have routeStorage : Devm.getStor pre = Devm.getStor queryPre := by
+  have routeStorage : Devm.getStor pre = Devm.getStor bodyPre := by
     funext owner
     unfold Devm.getStor Devm.getAcct
-    rw [dispatchFrame.state, wrapperState]
-  have routeMemory : pre.memory = queryPre.memory :=
-    dispatchFrame.memory.trans wrapperMemory
+    rw [dispatchFrame.state]
+  have routeMemory : pre.memory = bodyPre.memory := dispatchFrame.memory
 
   unfold isPaused at queryRun
   rcases of_run_prepend
@@ -77,7 +77,7 @@ theorem isPaused_exact_of_prog_run
         Ninst.timestamp, Ninst.lt]
       returnWord queryRun with
     ⟨beforeReturn, queryLineRun, returnRun⟩
-  have queryStorage : Devm.getStor queryPre = Devm.getStor beforeReturn :=
+  have queryStorage : Devm.getStor bodyPre = Devm.getStor beforeReturn :=
     Line.of_inv Devm.getStor (by line_inv) queryLineRun
   have returnRunFull := returnRun
   have returnStorage : Devm.getStor beforeReturn = Devm.getStor post :=
@@ -105,7 +105,7 @@ theorem isPaused_exact_of_prog_run
     rcases of_run_reg timeRun with ⟨_, instructionRun⟩
     simp only [Rinst.run, Rinst.runCore] at instructionRun
     exact Devm.pushBurn_of_pushItem instructionRun
-  have queryMemory : queryPre.memory = beforeReturn.memory :=
+  have queryMemory : bodyPre.memory = beforeReturn.memory :=
     (of_run_pushB256 keyRun).memory.trans
       ((Ninst.Hinv.inv (f := Devm.memory) loadRun).trans
         (timePush.memory.trans
@@ -117,7 +117,7 @@ theorem isPaused_exact_of_prog_run
       beforeReturn.stack :=
     prefix_of_lt ltRun timePrefix
 
-  have keyStorage : Devm.getStor queryPre = Devm.getStor afterKey :=
+  have keyStorage : Devm.getStor bodyPre = Devm.getStor afterKey :=
     Ninst.Hinv.inv (f := Devm.getStor) keyRun
   have resumeReadAtEntry :
       resumeSince = pre.getStorVal sevm.currentTarget resumeSinceSlot := by

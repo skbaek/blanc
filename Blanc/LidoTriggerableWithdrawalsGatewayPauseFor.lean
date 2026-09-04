@@ -329,10 +329,14 @@ theorem pauseFor_ok_authorized_effect
       (selected := selPauseFor) (tail := duration.toBytes)
     · rfl
     · simpa [pauseForCalldata] using hdata
-  have hmember : (selPauseFor, nonpayable pauseFor) ∈ funcs dp := by
-    simp [funcs]
+  have hmember : (selPauseFor, pauseFor) ∈ sharedNonpayableFuncs := by
+    simp [sharedNonpayableFuncs]
+  have hnotTrigger : selPauseFor ≠ selTriggerFullWithdrawals := by decide
+  have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
+    run hstack hguard hselector hnotTrigger
   obtain ⟨bodyPre, bodyRun, hbodyStack, hentryFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame run hstack hguard hselector hmember
+    dispatcher_body_of_prog_run_empty_frame run hstack valueZero hguard
+      hselector hnotTrigger hmember
   have pBody : ([] : Stack) <<+ bodyPre.stack := by
     rw [hbodyStack]
     exact nil_pref
@@ -345,19 +349,16 @@ theorem pauseFor_ok_authorized_effect
       rfl
     · simpa [pauseForCalldata] using hdata
 
-  obtain ⟨valueZero, pausePre, pauseRun, pPause, wrapperStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_ok pBody bodyRun
-
   have staticGuard : B256.ltCheck sevm.data.length.toB256
       (Nat.toB256 (4 + 32 * 1)) = 0 := by
     rw [hdata, pauseForCalldata_length]
     decide
-  unfold pauseFor at pauseRun
+  unfold pauseFor at bodyRun
   obtain ⟨onlyRolePre, onlyRoleRun, pOnlyRole, staticStor⟩ :=
     requireStaticArgs_body_of_sufficient_calldata
-      pPause staticGuard pauseRun
+      pBody staticGuard bodyRun
   have onlyRoleStor : Devm.getStor pre = Devm.getStor onlyRolePre :=
-    rootStor.trans (wrapperStor.trans staticStor)
+    rootStor.trans staticStor
 
   obtain ⟨pauseGuardPre, authorizedAtRole, pauseGuardRun,
       pPauseGuard, roleStor⟩ :=

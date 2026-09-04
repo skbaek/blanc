@@ -383,17 +383,19 @@ theorem pauseUntil_ok_authorized_effect
         (selected := selPauseUntil) (tail := expiry.toBytes)
     · rfl
     · simpa [pauseUntilCalldata] using calldata
-  have member : (selPauseUntil, nonpayable pauseUntil) ∈ funcs dp := by
-    simp [funcs]
+  have member : (selPauseUntil, pauseUntil) ∈ sharedNonpayableFuncs := by
+    simp [sharedNonpayableFuncs]
+  have notTrigger : selPauseUntil ≠ selTriggerFullWithdrawals := by decide
+  have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
+    run entryStack guard selected notTrigger
   obtain ⟨routePre, routeRun, routeStack, routeFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame run entryStack guard selected member
+    dispatcher_body_of_prog_run_empty_frame run entryStack valueZero guard
+      selected notTrigger member
   have pRoute : ([] : Stack) <<+ routePre.stack := by
     rw [routeStack]
     exact nil_pref
   have entryRouteStor : Devm.getStor pre = Devm.getStor routePre :=
     funext (getStor_eq_of_state_eq routeFrame.state)
-  obtain ⟨valueZero, pausePre, pauseRun, pPause, wrapperStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_ok pRoute routeRun
   have harg : Sevm.argWord sevm 0 = expiry := by
     apply dataWord_of_append
       (pre := abiSelectorBytes selPauseUntil) (post := [])
@@ -404,14 +406,14 @@ theorem pauseUntil_ok_authorized_effect
       (Nat.toB256 (4 + 32 * 1)) = 0 := by
     rw [calldata, pauseUntilCalldata_length]
     decide
-  unfold pauseUntil at pauseRun
+  unfold pauseUntil at routeRun
   obtain ⟨onlyRolePre, onlyRoleRun, pOnlyRole, staticStor⟩ :=
     requireStaticArgs_body_of_sufficient_calldata
-      pPause staticGuard pauseRun
+      pRoute staticGuard routeRun
   obtain ⟨guardPre, authorizedAtRole, guardRun, pGuard, roleStor⟩ :=
     onlyRole_body_of_ok pOnlyRole onlyRoleRun
   have entryRoleStor : Devm.getStor pre = Devm.getStor onlyRolePre :=
-    entryRouteStor.trans (wrapperStor.trans staticStor)
+    entryRouteStor.trans staticStor
   have authorized : CallerHasRole (Devm.getStor pre sevm.currentTarget)
       pauseRole sevm.caller.toB256 := by
     rw [congrFun entryRoleStor sevm.currentTarget]
@@ -592,22 +594,24 @@ theorem resume_ok_authorized_effect
         (selected := selResume) (tail := [])
     · rfl
     · simpa [resumeCalldata] using calldata
-  have member : (selResume, nonpayable resume) ∈ funcs dp := by
-    simp [funcs]
+  have member : (selResume, resume) ∈ sharedNonpayableFuncs := by
+    simp [sharedNonpayableFuncs]
+  have notTrigger : selResume ≠ selTriggerFullWithdrawals := by decide
+  have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
+    run entryStack guard selected notTrigger
   obtain ⟨routePre, routeRun, routeStack, routeFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame run entryStack guard selected member
+    dispatcher_body_of_prog_run_empty_frame run entryStack valueZero guard
+      selected notTrigger member
   have pRoute : ([] : Stack) <<+ routePre.stack := by
     rw [routeStack]
     exact nil_pref
   have entryRouteStor : Devm.getStor pre = Devm.getStor routePre :=
     funext (getStor_eq_of_state_eq routeFrame.state)
-  obtain ⟨valueZero, resumePre, resumeRun, pResume, wrapperStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_ok pRoute routeRun
-  unfold resume at resumeRun
+  unfold resume at routeRun
   obtain ⟨guardPre, authorizedAtRole, guardRun, pGuard, roleStor⟩ :=
-    onlyRole_body_of_ok pResume resumeRun
-  have entryRoleStor : Devm.getStor pre = Devm.getStor resumePre :=
-    entryRouteStor.trans wrapperStor
+    onlyRole_body_of_ok pRoute routeRun
+  have entryRoleStor : Devm.getStor pre = Devm.getStor routePre :=
+    entryRouteStor
   have authorized : CallerHasRole (Devm.getStor pre sevm.currentTarget)
       resumeRole sevm.caller.toB256 := by
     rw [congrFun entryRoleStor sevm.currentTarget]
