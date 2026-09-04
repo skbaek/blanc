@@ -1083,6 +1083,7 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Composition.ProrataWethVault.redeem_message_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.toPath
 #print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le
+#print axioms Blanc.Composition.ProrataWethVault.PairBacked.donation
 #print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved

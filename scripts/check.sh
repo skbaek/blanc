@@ -1295,6 +1295,7 @@ Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named|$STANDARD
 Blanc.Composition.ProrataWethVault.redeem_message_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.SteppedMessages.toPath|$STANDARD
 Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le|$STANDARD
+Blanc.Composition.ProrataWethVault.PairBacked.donation|$STANDARD
 Blanc.Prorata.ProrataAccountingPath.priceLe_first_last|propext, Quot.sound
 Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD
