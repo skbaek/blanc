@@ -21,8 +21,10 @@ specification package actually imports, with exact versions — and renders it a
 a pip constraints file that provisioning consumes.  See eels_semantic_closure
 for how the closure is derived and why it is narrow.
 
-Distribution and loaded-standard-library content digests are recorded per
-platform, and enforced on a platform once its row has been generated there.
+Distribution, loaded-standard-library, and loaded native-interpreter content
+digests are recorded per platform, and enforced on a platform once its row has
+been generated there.  Every accepted process also uses an unreachable
+bytecode-cache prefix, so excluded ``pyc`` files cannot become executable input.
 Unlike the current-mainnet lock, an ungenerated platform is not fatal here:
 the longstanding ``whereGenerated`` policy permits that lane to run but says
 plainly that byte evidence is unavailable there.  Only a generated row is
@@ -158,8 +160,10 @@ def closure_section(observed: dict[str, Any]) -> dict[str, Any]:
     return {
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
+        "bytecodePolicy": dict(closure.BYTECODE_POLICY),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
         "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
+        "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
         "distributions": [
             {
                 "name": entry["name"],
@@ -180,6 +184,7 @@ def platform_row(observed: dict[str, Any]) -> dict[str, Any]:
         "fileRecords": observed["fileRecords"],
         "contentSha256": observed["contentSha256"],
         "standardLibrary": observed["standardLibrary"],
+        "interpreterRuntime": observed["interpreterRuntime"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -216,7 +221,7 @@ def build(root: Path, observed: dict[str, Any]) -> dict[str, Any]:
         platforms = copy.deepcopy(previous["platforms"])
     platforms[native_key()] = platform_row(observed)
     document = {
-        "schema": 2,
+        "schema": 3,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY,
@@ -256,7 +261,7 @@ def validate(document: Any) -> dict[str, Any]:
         },
         "prague closure pin",
     )
-    if top["schema"] != 2 or top["lane"] != LANE:
+    if top["schema"] != 3 or top["lane"] != LANE:
         fail("prague closure pin identity differs")
     checkout = keys(
         top["checkout"], {"repository", "commit", "sourceRoot"}, "pin.checkout"
@@ -278,8 +283,9 @@ def validate(document: Any) -> dict[str, Any]:
     section = keys(
         top["semanticClosure"],
         {
-            "policy", "contentExcludes", "installerMetadataExcludes",
-            "standardLibraryPolicy",
+            "policy", "contentExcludes", "bytecodePolicy",
+            "installerMetadataExcludes", "standardLibraryPolicy",
+            "interpreterRuntimePolicy",
             "distributions", "count", "versionsSha256",
         },
         "pin.semanticClosure",
@@ -289,8 +295,13 @@ def validate(document: Any) -> dict[str, Any]:
     if section["contentExcludes"] != list(closure.CONTENT_EXCLUDES) \
             or section["installerMetadataExcludes"] != list(closure.INSTALLER_METADATA):
         fail("prague closure exclusion policy differs")
+    if section["bytecodePolicy"] != dict(closure.BYTECODE_POLICY):
+        fail("prague closure bytecode policy differs")
     if section["standardLibraryPolicy"] != dict(closure.STANDARD_LIBRARY_POLICY):
         fail("prague closure standard-library policy differs")
+    if section["interpreterRuntimePolicy"] != \
+            dict(closure.INTERPRETER_RUNTIME_POLICY):
+        fail("prague closure interpreter-runtime policy differs")
     entries = section["distributions"]
     if not isinstance(entries, list) or not entries:
         fail("prague closure names no distribution")
@@ -318,7 +329,7 @@ def validate(document: Any) -> dict[str, Any]:
             platforms[key],
             {
                 "generated", "pythonExecutableSha256", "fileRecords", "contentSha256",
-                "standardLibrary", "distributions",
+                "standardLibrary", "interpreterRuntime", "distributions",
             },
             f"pin.platforms.{key}",
         )
@@ -329,6 +340,10 @@ def validate(document: Any) -> dict[str, Any]:
         standard_library = closure.validate_standard_library(
             row["standardLibrary"], fail,
             label=f"pin.platforms.{key}.standardLibrary",
+        )
+        interpreter_runtime = closure.validate_interpreter_runtime(
+            row["interpreterRuntime"], fail,
+            label=f"pin.platforms.{key}.interpreterRuntime",
         )
         if standard_library["implementation"] != PYTHON_IMPLEMENTATION.lower() \
                 or ".".join(standard_library["version"].split(".")[:2]) != PYTHON_SERIES:
@@ -343,7 +358,7 @@ def validate(document: Any) -> dict[str, Any]:
         if row["fileRecords"] != total:
             fail(f"pin.platforms.{key} file-record total does not match its rows")
         if row["contentSha256"] != closure.environment_content_digest(
-            row["distributions"], standard_library
+            row["distributions"], standard_library, interpreter_runtime
         ):
             fail(f"pin.platforms.{key} content digest does not match its own rows")
     return top
@@ -375,8 +390,16 @@ def self_check() -> int:
         "contentSha256": closure.standard_library_digest(standard_library_files),
         "files": standard_library_files,
     }
+    runtime_files = [
+        {"path": "basePrefix/lib/libpython3.11.dylib", "sha256": "f" * 64}
+    ]
+    interpreter_runtime = {
+        "fileRecords": len(runtime_files),
+        "contentSha256": closure.interpreter_runtime_digest(runtime_files),
+        "files": runtime_files,
+    }
     document = {
-        "schema": 2,
+        "schema": 3,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY, "commit": EELS_PIN, "sourceRoot": SOURCE_ROOT,
@@ -389,8 +412,10 @@ def self_check() -> int:
         "semanticClosure": {
             "policy": copy.deepcopy(CLOSURE_POLICY),
             "contentExcludes": list(closure.CONTENT_EXCLUDES),
+            "bytecodePolicy": dict(closure.BYTECODE_POLICY),
             "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
             "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
+            "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
             "distributions": copy.deepcopy(distributions),
             "count": 2,
             "versionsSha256": closure.versions_digest(distributions),
@@ -401,9 +426,10 @@ def self_check() -> int:
                 "pythonExecutableSha256": "3" * 64,
                 "fileRecords": 25,
                 "contentSha256": closure.environment_content_digest(
-                    measured, standard_library
+                    measured, standard_library, interpreter_runtime
                 ),
                 "standardLibrary": copy.deepcopy(standard_library),
+                "interpreterRuntime": copy.deepcopy(interpreter_runtime),
                 "distributions": copy.deepcopy(measured),
             }
         },
@@ -423,6 +449,14 @@ def self_check() -> int:
     unbounded_stdlib = copy.deepcopy(document)
     del unbounded_stdlib["semanticClosure"]["standardLibraryPolicy"]
     mutants.append(("standard-library-policy-dropped", unbounded_stdlib))
+
+    bytecode_readable = copy.deepcopy(document)
+    bytecode_readable["semanticClosure"]["bytecodePolicy"]["pycachePrefix"] = None
+    mutants.append(("bytecode-cache-made-readable", bytecode_readable))
+
+    unbound_runtime = copy.deepcopy(document)
+    del unbound_runtime["semanticClosure"]["interpreterRuntimePolicy"]
+    mutants.append(("interpreter-runtime-policy-dropped", unbound_runtime))
 
     restated = copy.deepcopy(document)
     restated["semanticClosure"]["distributions"][0]["version"] = "0.1.6"
@@ -451,6 +485,12 @@ def self_check() -> int:
         "sha256"
     ] = "f" * 64
     mutants.append(("changed-stdlib-byte", changed_stdlib))
+
+    changed_runtime = copy.deepcopy(document)
+    changed_runtime["platforms"]["macos-arm64"]["interpreterRuntime"]["files"][0][
+        "sha256"
+    ] = "0" * 64
+    mutants.append(("changed-interpreter-runtime-byte", changed_runtime))
 
     changed_python = copy.deepcopy(document)
     changed_python["platforms"]["macos-arm64"]["pythonExecutableSha256"] = "z" * 64
@@ -559,7 +599,9 @@ def main() -> int:
             f"OK — prague closure pin matches: {section['count']} pinned "
             f"distributions at their exact versions, {observed['fileRecords']} files; "
             f"content digests (including {observed['standardLibrary']['fileRecords']} "
-            f"loaded standard-library files) are not recorded for {native}, so bytes are "
+            f"loaded standard-library files and "
+            f"{observed['interpreterRuntime']['fileRecords']} loaded interpreter runtime "
+            f"image record(s)) are not recorded for {native}, so bytes are "
             f"unverified here (run --write on {native} to record them)"
         )
         return 0
@@ -576,6 +618,8 @@ def main() -> int:
         f"OK — prague closure pin matches: {section['count']} pinned "
         f"distributions, {observed['fileRecords']} distribution files and "
         f"{observed['standardLibrary']['fileRecords']} loaded standard-library files, "
+        f"plus {observed['interpreterRuntime']['fileRecords']} loaded interpreter runtime "
+        f"image record(s), "
         f"content verified on {native}"
     )
     return 0

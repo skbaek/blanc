@@ -4817,13 +4817,14 @@ example {msg : Msg} {post : Devm}
 
 example :
     ∃ post, OssifiableEmptySetupCreateResult
-      OssifiableCreateFixture.message OssifiableCreateFixture.implementation
+      (OssifiableCreateFixture.message pragueRules)
+      OssifiableCreateFixture.implementation
       OssifiableCreateFixture.admin post :=
-  OssifiableCreateFixture.message_success
+  OssifiableCreateFixture.message_success pragueRules (by decide)
 
 example :
     ∃ post,
-      processMessage OssifiableBothSlotFixture.message = .ok post ∧
+      processMessage (OssifiableBothSlotFixture.message pragueRules) = .ok post ∧
       post.error = .none ∧
       post.output = [] ∧
       post.getStorVal OssifiableBothSlotFixture.target implementationSlotLit =
@@ -4831,7 +4832,7 @@ example :
       post.getStorVal OssifiableBothSlotFixture.target adminSlotLit =
         OssifiableBothSlotFixture.postSetupAdmin.toB256 ∧
       post.logs = [] :=
-  OssifiableBothSlotFixture.message_success
+  OssifiableBothSlotFixture.message_success pragueRules
 
 example {sevm : Sevm} {base : Devm}
     (hvalue : sevm.value = 0)
@@ -4888,7 +4889,8 @@ example {sevm : Sevm} {base : Devm}
 example :
     ∃ post,
       processCreateMessage
-          OssifiableBothSlotCreateFixture.creationMessage = .ok post ∧
+          (OssifiableBothSlotCreateFixture.creationMessage pragueRules) =
+            .ok post ∧
       post.getCode OssifiableBothSlotFixture.target =
         ⟨⟨runtimeBaselineBytes⟩⟩ ∧
       post.getStorVal OssifiableBothSlotFixture.target
@@ -4905,11 +4907,12 @@ example :
           OssifiableBothSlotFixture.requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
       post.gasLeft =
-        OssifiableBothSlotCreateFixture.creationMessage.gas -
+        (OssifiableBothSlotCreateFixture.creationMessage pragueRules).gas -
           OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas ∧
       post.error = .none := by
   obtain ⟨post, result⟩ :=
-    OssifiableBothSlotCreateFixture.creationMessage_success
+    OssifiableBothSlotCreateFixture.creationMessage_success pragueRules
+      (by decide) (by decide)
   exact ⟨post, result.run, result.installed, result.implementationSlot,
     result.adminSlot, result.logs, result.output, result.gasLeft,
     result.error⟩

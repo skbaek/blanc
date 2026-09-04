@@ -390,12 +390,20 @@ def fixtureMigratedState : State :=
     (fixturePrestate.setStorVal upgradeProxy implementationSlotLit
       v2Implementation.toB256)
 
-private def sharedValueMessage (state : State) : Msg :=
+private structure SharedValueFixtureConfig where
+  rules : ForkRules
+  proxyNotPrecompile : ¬rules.isPrecomp upgradeProxy
+  v1ImplementationNotPrecompile :
+    rules.isPrecomp v1Implementation = false
+  v2ImplementationNotPrecompile :
+    rules.isPrecomp v2Implementation = false
+
+private def sharedValueMessage (cfg : SharedValueFixtureConfig) (state : State) : Msg :=
   { (default : Msg) with
     benv :=
-      { fixtureBenv with
+      { fixtureBenv cfg.rules with
         state := state
-        stat := { fixtureBenv.stat with origState := state } }
+        stat := { (fixtureBenv cfg.rules).stat with origState := state } }
     caller := upgradeAdmin
     target := some upgradeProxy
     currentTarget := upgradeProxy
@@ -411,16 +419,16 @@ private def sharedValueMessage (state : State) : Msg :=
     accessedStorageKeys := .emptyWithCapacity
     disablePrecompiles := true }
 
-private def sharedValueAfterTransfer (state : State) : Benv :=
-  let outer := sharedValueMessage state
+private def sharedValueAfterTransfer (cfg : SharedValueFixtureConfig) (state : State) : Benv :=
+  let outer := sharedValueMessage cfg state
   (outer.benv.withState
       (outer.benv.state.setBal outer.caller
         (outer.benv.state.bal outer.caller - outer.value))).addBal
     outer.currentTarget outer.value
 
-private theorem sharedValueMessage_transfer (state : State) :
-    (sharedValueMessage state).benvAfterTransfer =
-      .ok (sharedValueAfterTransfer state) := by
+private theorem sharedValueMessage_transfer (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueMessage cfg state).benvAfterTransfer =
+      .ok (sharedValueAfterTransfer cfg state) := by
   unfold Msg.benvAfterTransfer sharedValueAfterTransfer
   simp only [sharedValueMessage, if_true, Benv.subBal, State.subBal]
   rw [if_neg]
@@ -430,9 +438,9 @@ private theorem sharedValueMessage_transfer (state : State) :
     change (state.bal upgradeAdmin).toNat < 0 at insufficient
     exact Nat.not_lt_zero _ insufficient
 
-private theorem sharedValueAfterTransfer_stor
+private theorem sharedValueAfterTransfer_stor (cfg : SharedValueFixtureConfig)
     (state : State) (address : Adr) :
-    ((sharedValueAfterTransfer state).state.get address).stor =
+    ((sharedValueAfterTransfer cfg state).state.get address).stor =
       (state.get address).stor := by
   unfold sharedValueAfterTransfer
   change ((((state.setBal upgradeAdmin (state.bal upgradeAdmin - 0)).addBal
@@ -440,23 +448,23 @@ private theorem sharedValueAfterTransfer_stor
   unfold State.addBal
   rw [State.setBal_get_stor, State.setBal_get_stor]
 
-private theorem sharedValueAfterTransfer_code
+private theorem sharedValueAfterTransfer_code (cfg : SharedValueFixtureConfig)
     (state : State) (address : Adr) :
-    (sharedValueAfterTransfer state).state.getCode address =
+    (sharedValueAfterTransfer cfg state).state.getCode address =
       state.getCode address := by
   unfold sharedValueAfterTransfer
   change ((state.setBal upgradeAdmin (state.bal upgradeAdmin - 0)).addBal
     upgradeProxy 0).getCode address = _
   rw [State.addBal_getCode, State.setBal_getCode]
 
-private theorem sharedValuePrefixCost (state : State) :
+private theorem sharedValuePrefixCost (cfg : SharedValueFixtureConfig) (state : State) :
     ossifiableFallbackPrefixCost
-      (initSevm (sharedValueMessage state))
-      (ossifiableRuntimeFallbackEntry (sharedValueMessage state)
-        (sharedValueAfterTransfer state) 4999825) = 2128 := by
-  let sevm := initSevm (sharedValueMessage state)
-  let entry := ossifiableRuntimeFallbackEntry (sharedValueMessage state)
-    (sharedValueAfterTransfer state) 4999825
+      (initSevm (sharedValueMessage cfg state))
+      (ossifiableRuntimeFallbackEntry (sharedValueMessage cfg state)
+        (sharedValueAfterTransfer cfg state) 4999825) = 2128 := by
+  let sevm := initSevm (sharedValueMessage cfg state)
+  let entry := ossifiableRuntimeFallbackEntry (sharedValueMessage cfg state)
+    (sharedValueAfterTransfer cfg state) 4999825
   have dataLength : sevm.data.length = 4 := by rfl
   have copyCost : ossifiableFallbackCopyCost sevm entry = 9 := by
     unfold ossifiableFallbackCopyCost
@@ -477,52 +485,52 @@ private theorem sharedValuePrefixCost (state : State) :
   rw [copyCost, cold]
   decide +kernel
 
-private def sharedValuePrefixBudget (state : State) :
+private def sharedValuePrefixBudget (cfg : SharedValueFixtureConfig) (state : State) :
     OssifiableFallbackPrefixBudget
-      (initSevm (sharedValueMessage state))
-      (ossifiableRuntimeFallbackEntry (sharedValueMessage state)
-        (sharedValueAfterTransfer state) 4999825) where
+      (initSevm (sharedValueMessage cfg state))
+      (ossifiableRuntimeFallbackEntry (sharedValueMessage cfg state)
+        (sharedValueAfterTransfer cfg state) 4999825) where
   callGas := 4997697
   dataLength := by
     change valueCalldata.length < 2 ^ 256
     decide
   entryStack := rfl
   gasBudget := by
-    rw [sharedValuePrefixCost]
+    rw [sharedValuePrefixCost cfg]
     rfl
 
-private def sharedValueCallPre (state : State) : Devm :=
-  (sharedValuePrefixBudget state).callPre
+private def sharedValueCallPre (cfg : SharedValueFixtureConfig) (state : State) : Devm :=
+  (sharedValuePrefixBudget cfg state).callPre
 
-private def sharedValueAfterAccess (state : State)
+private def sharedValueAfterAccess (cfg : SharedValueFixtureConfig) (state : State)
     (implementation : Adr) : Devm :=
   addAccessedAddress
-    ((sharedValueCallPre state).setMach
-      ⟨[], (sharedValueCallPre state).memory,
-        (sharedValueCallPre state).gasLeft⟩)
+    ((sharedValueCallPre cfg state).setMach
+      ⟨[], (sharedValueCallPre cfg state).memory,
+        (sharedValueCallPre cfg state).gasLeft⟩)
     implementation
 
-private theorem sharedValueCallPre_stack
+private theorem sharedValueCallPre_stack (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr)
     (slot : (state.get upgradeProxy).stor.get implementationSlotLit =
       implementation.toB256) :
-    (sharedValueCallPre state).stack =
+    (sharedValueCallPre cfg state).stack =
       Nat.toB256 4997697 :: implementation.toB256 :: 0 :: 4 :: 0 :: 0 ::
         [] := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
   rw [show
-      (ossifiableRuntimeFallbackEntry (sharedValueMessage state)
-        (sharedValueAfterTransfer state) 4999825).getStorVal
-          (initSevm (sharedValueMessage state)).currentTarget
+      (ossifiableRuntimeFallbackEntry (sharedValueMessage cfg state)
+        (sharedValueAfterTransfer cfg state) 4999825).getStorVal
+          (initSevm (sharedValueMessage cfg state)).currentTarget
           implementationSlotLit = implementation.toB256 by
-    change ((sharedValueAfterTransfer state).state.get
+    change ((sharedValueAfterTransfer cfg state).state.get
       upgradeProxy).stor.get implementationSlotLit = _
-    rw [sharedValueAfterTransfer_stor]
+    rw [sharedValueAfterTransfer_stor cfg]
     exact slot]
   rfl
 
-private theorem sharedValueCallPre_memory_size (state : State) :
-    (sharedValueCallPre state).memory.size = 32 := by
+private theorem sharedValueCallPre_memory_size (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).memory.size = 32 := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     ossifiableFallbackCopiedMemory ossifiableRuntimeFallbackEntry
   change (Mem.empty.write 0 valueCalldata).size = 32
@@ -530,93 +538,93 @@ private theorem sharedValueCallPre_memory_size (state : State) :
     Mem.size_write_cons]
   decide
 
-private theorem sharedValueBeforeSload_cold (state : State) :
-    (⟨(initSevm (sharedValueMessage state)).currentTarget,
+private theorem sharedValueBeforeSload_cold (cfg : SharedValueFixtureConfig) (state : State) :
+    (⟨(initSevm (sharedValueMessage cfg state)).currentTarget,
         implementationSlotLit⟩ : Adr × B256) ∉
-      (sharedValuePrefixBudget state).beforeSload.accessedStorageKeys := by
+      (sharedValuePrefixBudget cfg state).beforeSload.accessedStorageKeys := by
   change (upgradeProxy, implementationSlotLit) ∉
     (.emptyWithCapacity : Std.HashSet (Adr × B256))
   simp
 
-private theorem sharedValueCallPre_state (state : State) :
-    (sharedValueCallPre state).state =
-      (sharedValueAfterTransfer state).state := by
+private theorem sharedValueCallPre_state (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).state =
+      (sharedValueAfterTransfer cfg state).state := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueCallPre_addresses (state : State) :
-    (sharedValueCallPre state).accessedAddresses =
+private theorem sharedValueCallPre_addresses (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).accessedAddresses =
       (.emptyWithCapacity : Std.HashSet Adr) := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueCallPre_keys (state : State) :
-    (sharedValueCallPre state).accessedStorageKeys =
+private theorem sharedValueCallPre_keys (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).accessedStorageKeys =
       (.emptyWithCapacity : Std.HashSet (Adr × B256)).insert
         (upgradeProxy, implementationSlotLit) := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueCallPre_gas (state : State) :
-    (sharedValueCallPre state).gasLeft = 4997697 := by
+private theorem sharedValueCallPre_gas (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).gasLeft = 4997697 := by
   rfl
 
-private theorem sharedValueCallPre_error (state : State) :
-    (sharedValueCallPre state).error = none := by
+private theorem sharedValueCallPre_error (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).error = none := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueCallPre_logs (state : State) :
-    (sharedValueCallPre state).logs = [] := by
+private theorem sharedValueCallPre_logs (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).logs = [] := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueCallPre_transient (state : State) :
-    (sharedValueCallPre state).transientStorage =
-      (sharedValueMessage state).tenv.transientStorage := by
+private theorem sharedValueCallPre_transient (cfg : SharedValueFixtureConfig) (state : State) :
+    (sharedValueCallPre cfg state).transientStorage =
+      (sharedValueMessage cfg state).tenv.transientStorage := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [if_neg (sharedValueBeforeSload_cold cfg state)]
   rfl
 
-private theorem sharedValueAfterAccess_code
+private theorem sharedValueAfterAccess_code (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr) (code : ByteArray)
     (installed : state.getCode implementation = code) :
-    (sharedValueAfterAccess state implementation).getCode implementation =
+    (sharedValueAfterAccess cfg state implementation).getCode implementation =
       code := by
   unfold sharedValueAfterAccess
   rw [addAccessedAddress_getCode, Devm.getCode_setMach]
-  change (sharedValueCallPre state).state.getCode implementation = code
-  rw [sharedValueCallPre_state, sharedValueAfterTransfer_code]
+  change (sharedValueCallPre cfg state).state.getCode implementation = code
+  rw [sharedValueCallPre_state cfg, sharedValueAfterTransfer_code cfg]
   exact installed
 
-private theorem sharedValueAfterAccess_gas
+private theorem sharedValueAfterAccess_gas (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr) :
-    (sharedValueAfterAccess state implementation).gasLeft = 4997697 := by
+    (sharedValueAfterAccess cfg state implementation).gasLeft = 4997697 := by
   unfold sharedValueAfterAccess
   rw [addAccessedAddress_gasLeft, Devm.gasLeft_setMach,
-    sharedValueCallPre_gas]
+    sharedValueCallPre_gas cfg]
 
-private def sharedValueSpawn
+private def sharedValueSpawn (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr) (code : ByteArray)
     (slot : (state.get upgradeProxy).stor.get implementationSlotLit =
       implementation.toB256)
     (installed : state.getCode implementation = code)
     (ordinaryCode : getDelegatedCodeAddress code = none)
-    (notPrecompile : pragueRules.isPrecomp implementation = false) :
+    (notPrecompile : cfg.rules.isPrecomp implementation = false) :
     DelegatecallSpawnDescriptor
-      (initSevm ((sharedValueMessage state).withBenv
-        (sharedValueAfterTransfer state))) (sharedValueCallPre state) := {
+      (initSevm ((sharedValueMessage cfg state).withBenv
+        (sharedValueAfterTransfer cfg state))) (sharedValueCallPre cfg state) := {
     gasWord := Nat.toB256 4997697
     codeWord := implementation.toB256
     inputOffsetWord := 0
@@ -628,67 +636,67 @@ private def sharedValueSpawn
     resolvedCodeAddress := implementation
     code := code
     delegationGas := 0
-    afterAccess := sharedValueAfterAccess state implementation
+    afterAccess := sharedValueAfterAccess cfg state implementation
     extensionCost := 0
     accessCharge := 2600
     callCost := 4919649
     childGas := 4917049
-    stackEq := sharedValueCallPre_stack state implementation slot
+    stackEq := sharedValueCallPre_stack cfg state implementation slot
     extensionEq := by
       simp only [show (0 : B256).toNat = 0 by decide,
         show (4 : B256).toNat = 4 by decide]
       exact Devm.extCost_covered (by
-        rw [sharedValueCallPre_memory_size]
+        rw [sharedValueCallPre_memory_size cfg]
         decide)
     delegationEq := by
       simp only [show implementation.toB256.toAdr = implementation by
         exact toAdr_toB256 implementation]
       change accessDelegation
-        (sharedValueAfterAccess state implementation) implementation =
+        (sharedValueAfterAccess cfg state implementation) implementation =
           (false, implementation, code, 0,
-            sharedValueAfterAccess state implementation)
+            sharedValueAfterAccess cfg state implementation)
       unfold accessDelegation
       have codeEq :
-          (sharedValueAfterAccess state implementation).state.getCode
+          (sharedValueAfterAccess cfg state implementation).state.getCode
               implementation = code :=
-        sharedValueAfterAccess_code state implementation code installed
+        sharedValueAfterAccess_code cfg state implementation code installed
       dsimp only
       rw [codeEq, ordinaryCode]
     accessEq := by
       simp only [show implementation.toB256.toAdr = implementation by
         exact toAdr_toB256 implementation,
         Devm.setMach_accessedAddresses,
-        sharedValueCallPre_addresses]
+        sharedValueCallPre_addresses cfg]
       simp [accessCost, gasColdAccountAccess]
     splitEq := by
       change calculateMsgCallGas 0 4997697
-        (sharedValueAfterAccess state implementation).gasLeft 0 2600 =
+        (sharedValueAfterAccess cfg state implementation).gasLeft 0 2600 =
           (4919649, 4917049)
-      rw [sharedValueAfterAccess_gas]
+      rw [sharedValueAfterAccess_gas cfg]
       decide +kernel
     affordable := by
       change 4919649 ≤
-        (sharedValueAfterAccess state implementation).gasLeft
-      rw [sharedValueAfterAccess_gas]
+        (sharedValueAfterAccess cfg state implementation).gasLeft
+      rw [sharedValueAfterAccess_gas cfg]
       decide
     depthHeadroom := by
       change (1024 : Nat) ≠ 0
       decide
     resolvedNotPrecompile := by
-      change pragueRules.isPrecomp implementation = false
+      change cfg.rules.isPrecomp implementation = false
       exact notPrecompile
   }
 
-private theorem sharedValueSpawn_exists
+private theorem sharedValueSpawn_exists (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr) (code : ByteArray)
     (slot : (state.get upgradeProxy).stor.get implementationSlotLit =
       implementation.toB256)
     (installed : state.getCode implementation = code)
     (ordinaryCode : getDelegatedCodeAddress code = none)
-    (notPrecompile : pragueRules.isPrecomp implementation = false) :
+    (notPrecompile : cfg.rules.isPrecomp implementation = false) :
     ∃ spawn : DelegatecallSpawnDescriptor
-        (initSevm ((sharedValueMessage state).withBenv
-          (sharedValueAfterTransfer state))) (sharedValueCallPre state),
+        (initSevm ((sharedValueMessage cfg state).withBenv
+          (sharedValueAfterTransfer cfg state))) (sharedValueCallPre cfg state),
       spawn.gasWord = Nat.toB256 4997697 ∧
       spawn.codeWord = implementation.toB256 ∧
       spawn.inputOffsetWord = 0 ∧
@@ -696,50 +704,50 @@ private theorem sharedValueSpawn_exists
       spawn.outputOffsetWord = 0 ∧
       spawn.outputSizeWord = 0 ∧
       spawn.stackTail = [] ∧
-      spawn.afterAccess = sharedValueAfterAccess state implementation ∧
+      spawn.afterAccess = sharedValueAfterAccess cfg state implementation ∧
       spawn.callCost = 4919649 ∧
       spawn.extensionCost = 0 ∧
       spawn.childGas = 4917049 ∧
       spawn.code = code ∧
       spawn.resolvedCodeAddress = implementation ∧
-      spawn = sharedValueSpawn state implementation code slot installed
+      spawn = sharedValueSpawn cfg state implementation code slot installed
         ordinaryCode notPrecompile := by
-  exact ⟨sharedValueSpawn state implementation code slot installed
+  exact ⟨sharedValueSpawn cfg state implementation code slot installed
       ordinaryCode notPrecompile,
     rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
     rfl⟩
 
-private theorem sharedValueRoute_exists
+private theorem sharedValueRoute_exists (cfg : SharedValueFixtureConfig)
     (state : State) (implementation : Adr) (code : ByteArray)
     (slot : (state.get upgradeProxy).stor.get implementationSlotLit =
       implementation.toB256)
     (installed : state.getCode implementation = code)
     (proxyInstalled : state.getCode upgradeProxy = runtimeBaselineCode)
     (ordinaryCode : getDelegatedCodeAddress code = none)
-    (notPrecompile : pragueRules.isPrecomp implementation = false)
+    (notPrecompile : cfg.rules.isPrecomp implementation = false)
     (codeNonempty : code.toList ≠ []) :
     ∃ (spawn : DelegatecallSpawnDescriptor
-        (initSevm ((sharedValueMessage state).withBenv
-          (sharedValueAfterTransfer state))) (sharedValueCallPre state))
-      (route : OssifiableForwardingRoute (sharedValueMessage state)
-        (sharedValueAfterTransfer state) (sharedValueCallPre state) spawn),
+        (initSevm ((sharedValueMessage cfg state).withBenv
+          (sharedValueAfterTransfer cfg state))) (sharedValueCallPre cfg state))
+      (route : OssifiableForwardingRoute (sharedValueMessage cfg state)
+        (sharedValueAfterTransfer cfg state) (sharedValueCallPre cfg state) spawn),
       route.ValidInstallation ∧
         spawn.resolvedCodeAddress = implementation ∧
         spawn.code = code ∧
-        spawn = sharedValueSpawn state implementation code slot installed
+        spawn = sharedValueSpawn cfg state implementation code slot installed
           ordinaryCode notPrecompile := by
   obtain ⟨spawn, gasWord, codeWord, inputOffset, inputSize,
       outputOffset, outputSize, stackTail, afterAccess, callCost,
       extensionCost, childGas, spawnCode, resolved, spawnExact⟩ :=
-    sharedValueSpawn_exists state implementation code slot installed
+    sharedValueSpawn_exists cfg state implementation code slot installed
       ordinaryCode notPrecompile
   have parentMemory : spawn.parent.memory =
-      (sharedValueCallPre state).memory := by
+      (sharedValueCallPre cfg state).memory := by
     rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_memory,
       spawn.afterAccess_memory]
     exact Mem.extends_covered (by
       rw [inputOffset, inputSize, outputOffset, outputSize,
-        sharedValueCallPre_memory_size]
+        sharedValueCallPre_memory_size cfg]
       decide)
   have childData : spawn.child.data = valueCalldata := by
     rw [spawn.child_data, inputOffset, inputSize,
@@ -754,41 +762,39 @@ private theorem sharedValueRoute_exists
       afterAccess]
     rfl
   have parentState : spawn.parent.state =
-      (sharedValueAfterTransfer state).state := by
+      (sharedValueAfterTransfer cfg state).state := by
     rw [DelegatecallSpawnDescriptor.parent]
     change spawn.afterAccess.state = _
     rw [afterAccess]
     unfold sharedValueAfterAccess
-    change (sharedValueCallPre state).state = _
-    exact sharedValueCallPre_state state
+    change (sharedValueCallPre cfg state).state = _
+    exact sharedValueCallPre_state cfg state
   have parentError : spawn.parent.error = none := by
     rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_error,
       afterAccess]
     unfold sharedValueAfterAccess
-    change (sharedValueCallPre state).error = none
-    exact sharedValueCallPre_error state
+    change (sharedValueCallPre cfg state).error = none
+    exact sharedValueCallPre_error cfg state
   have parentLogs : spawn.parent.logs = [] := by
     rw [DelegatecallSpawnDescriptor.parent, afterAccess]
     unfold sharedValueAfterAccess
-    change (sharedValueCallPre state).logs = []
-    exact sharedValueCallPre_logs state
+    change (sharedValueCallPre cfg state).logs = []
+    exact sharedValueCallPre_logs cfg state
   have parentTransient : MessageTransientEqualAt upgradeProxy
       spawn.parent.transientStorage
-      (sharedValueMessage state).tenv.transientStorage := by
+      (sharedValueMessage cfg state).tenv.transientStorage := by
     intro key
     rw [DelegatecallSpawnDescriptor.parent, afterAccess]
     unfold sharedValueAfterAccess
-    change ((sharedValueCallPre state).transientStorage.getD upgradeProxy
+    change ((sharedValueCallPre cfg state).transientStorage.getD upgradeProxy
       Stor.empty).get key = _
-    rw [sharedValueCallPre_transient]
-  let route : OssifiableForwardingRoute (sharedValueMessage state)
-      (sharedValueAfterTransfer state) (sharedValueCallPre state) spawn := {
-    transfer := sharedValueMessage_transfer state
+    rw [sharedValueCallPre_transient cfg]
+  let route : OssifiableForwardingRoute (sharedValueMessage cfg state)
+      (sharedValueAfterTransfer cfg state) (sharedValueCallPre cfg state) spawn := {
+    transfer := sharedValueMessage_transfer cfg state
     target := rfl
     codeAddress := rfl
-    proxyNotPrecompile := by
-      change ¬pragueRules.isPrecomp upgradeProxy
-      decide +kernel
+    proxyNotPrecompile := cfg.proxyNotPrecompile
     runtimeInstalled := rfl
     runtimeCodeLink := by
       change runtimeBaselineCode = state.getCode upgradeProxy
@@ -796,8 +802,8 @@ private theorem sharedValueRoute_exists
     selectorMiss := by
       intro selector member equal
       have selected : Sevm.selector
-          (initSevm ((sharedValueMessage state).withBenv
-            (sharedValueAfterTransfer state))) = valueSelector := by
+          (initSevm ((sharedValueMessage cfg state).withBenv
+            (sharedValueAfterTransfer cfg state))) = valueSelector := by
         apply selector_of_valueCalldata
         rfl
       have valueMember : valueSelector ∈ runtimeSelectors := by
@@ -807,10 +813,10 @@ private theorem sharedValueRoute_exists
         (by simp [upgradeWitnessSelectors])) valueMember
     implementationSlotWord := by
       rw [codeWord, ← implementationSlotLit_eq_slot,
-        sharedValueAfterTransfer_stor]
+        sharedValueAfterTransfer_stor cfg]
       exact slot
     descriptorCode := by
-      rw [spawnCode, resolved, sharedValueAfterTransfer_code]
+      rw [spawnCode, resolved, sharedValueAfterTransfer_code cfg]
       exact installed.symm
     inputOffset := inputOffset
     inputSize := by
@@ -827,7 +833,7 @@ private theorem sharedValueRoute_exists
     parentLogs := parentLogs
     parentStorage := by
       intro key
-      rw [parentState, sharedValueAfterTransfer_stor]
+      rw [parentState, sharedValueAfterTransfer_stor cfg]
       rfl
     parentTransient := parentTransient
     fallbackGas := 4999825
@@ -836,7 +842,7 @@ private theorem sharedValueRoute_exists
         linearDispatchFallbackCost runtimeBaselineEntries + fsigCost +
           gJumpdest
       decide +kernel
-    prefixBudget := sharedValuePrefixBudget state
+    prefixBudget := sharedValuePrefixBudget cfg state
     callPreEq := rfl
     compileLink := by
       change some runtimeBaselineCode.toList = Prog.compile runtimeBaseline
@@ -935,128 +941,135 @@ private theorem v2Code_nonempty : v2Code.toList ≠ [] := by
   rw [v2Code_toList, v2Bytes_length] at lengthEq
   contradiction
 
-private theorem v1Implementation_notPrecompile :
-    pragueRules.isPrecomp v1Implementation = false := by
-  decide +kernel
 
-private theorem v2Implementation_notPrecompile :
-    pragueRules.isPrecomp v2Implementation = false := by
-  decide +kernel
-
-private def v1ValueSpawn : DelegatecallSpawnDescriptor
-    (initSevm ((sharedValueMessage fixturePrestate).withBenv
-      (sharedValueAfterTransfer fixturePrestate)))
-    (sharedValueCallPre fixturePrestate) :=
-  sharedValueSpawn fixturePrestate v1Implementation v1Code
+private def v1ValueSpawn (cfg : SharedValueFixtureConfig) : DelegatecallSpawnDescriptor
+    (initSevm ((sharedValueMessage cfg fixturePrestate).withBenv
+      (sharedValueAfterTransfer cfg fixturePrestate)))
+    (sharedValueCallPre cfg fixturePrestate) :=
+  sharedValueSpawn cfg fixturePrestate v1Implementation v1Code
     fixturePrestate_implementation fixturePrestate_v1Code v1Code_ordinary
-      v1Implementation_notPrecompile
+      cfg.v1ImplementationNotPrecompile
 
-private def v2ValueSpawn : DelegatecallSpawnDescriptor
-    (initSevm ((sharedValueMessage fixtureMigratedState).withBenv
-      (sharedValueAfterTransfer fixtureMigratedState)))
-    (sharedValueCallPre fixtureMigratedState) :=
-  sharedValueSpawn fixtureMigratedState v2Implementation v2Code
+private def v2ValueSpawn (cfg : SharedValueFixtureConfig) : DelegatecallSpawnDescriptor
+    (initSevm ((sharedValueMessage cfg fixtureMigratedState).withBenv
+      (sharedValueAfterTransfer cfg fixtureMigratedState)))
+    (sharedValueCallPre cfg fixtureMigratedState) :=
+  sharedValueSpawn cfg fixtureMigratedState v2Implementation v2Code
     fixtureMigratedState_implementation fixtureMigratedState_v2Code
-      v2Code_ordinary v2Implementation_notPrecompile
+      v2Code_ordinary cfg.v2ImplementationNotPrecompile
 
 /-- The actual v1 child spawned by the closed `value()` proxy route. -/
-def fixtureV1ValueChildMessage : Msg := v1ValueSpawn.child
+private def fixtureV1ValueChildMessage (cfg : SharedValueFixtureConfig) : Msg := (v1ValueSpawn cfg).child
 
 /-- The actual initialized-v2 child spawned by the closed `value()` route. -/
-def fixtureV2ValueChildMessage : Msg := v2ValueSpawn.child
+private def fixtureV2ValueChildMessage (cfg : SharedValueFixtureConfig) : Msg := (v2ValueSpawn cfg).child
 
-private theorem fixtureV1ValueChild_data :
-    fixtureV1ValueChildMessage.data = valueCalldata := by
+private theorem fixtureV1ValueChild_data (cfg : SharedValueFixtureConfig) :
+    (fixtureV1ValueChildMessage cfg).data = valueCalldata := by
   obtain ⟨spawn, route, _, _, _, spawnExact⟩ :=
-    sharedValueRoute_exists fixturePrestate v1Implementation v1Code
+    sharedValueRoute_exists cfg fixturePrestate v1Implementation v1Code
       fixturePrestate_implementation fixturePrestate_v1Code
       fixturePrestate_proxyCode v1Code_ordinary
-      v1Implementation_notPrecompile v1Code_nonempty
+      cfg.v1ImplementationNotPrecompile v1Code_nonempty
   subst spawn
   simpa [fixtureV1ValueChildMessage, v1ValueSpawn,
     sharedValueMessage] using route.childData
 
-private theorem fixtureV2ValueChild_data :
-    fixtureV2ValueChildMessage.data = valueCalldata := by
+private theorem fixtureV2ValueChild_data (cfg : SharedValueFixtureConfig) :
+    (fixtureV2ValueChildMessage cfg).data = valueCalldata := by
   obtain ⟨spawn, route, _, _, _, spawnExact⟩ :=
-    sharedValueRoute_exists fixtureMigratedState v2Implementation v2Code
+    sharedValueRoute_exists cfg fixtureMigratedState v2Implementation v2Code
       fixtureMigratedState_implementation fixtureMigratedState_v2Code
       fixtureMigratedState_proxyCode v2Code_ordinary
-      v2Implementation_notPrecompile v2Code_nonempty
+      cfg.v2ImplementationNotPrecompile v2Code_nonempty
   subst spawn
   simpa [fixtureV2ValueChildMessage, v2ValueSpawn,
     sharedValueMessage] using route.childData
 
-private theorem fixtureV1ValueChild_initialMemory :
-    (initDevm fixtureV1ValueChildMessage).memory = Mem.empty := by
+private theorem fixtureV1ValueChild_initialMemory (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV1ValueChildMessage cfg)).memory = Mem.empty := by
   rfl
 
-private theorem fixtureV2ValueChild_initialMemory :
-    (initDevm fixtureV2ValueChildMessage).memory = Mem.empty := by
+private theorem fixtureV2ValueChild_initialMemory (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV2ValueChildMessage cfg)).memory = Mem.empty := by
   rfl
 
-private theorem fixtureV1ValueChild_initialStack :
-    (initDevm fixtureV1ValueChildMessage).stack = [] := by
+private theorem fixtureV1ValueChild_initialStack (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV1ValueChildMessage cfg)).stack = [] := by
   rfl
 
-private theorem fixtureV2ValueChild_initialStack :
-    (initDevm fixtureV2ValueChildMessage).stack = [] := by
+private theorem fixtureV2ValueChild_initialStack (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV2ValueChildMessage cfg)).stack = [] := by
   rfl
 
-private theorem fixtureV1ValueChild_currentTarget :
-    (initSevm fixtureV1ValueChildMessage).currentTarget = upgradeProxy := by
+private theorem fixtureV1ValueChild_currentTarget (cfg : SharedValueFixtureConfig) :
+    (initSevm (fixtureV1ValueChildMessage cfg)).currentTarget = upgradeProxy := by
   rfl
 
-private theorem fixtureV2ValueChild_currentTarget :
-    (initSevm fixtureV2ValueChildMessage).currentTarget = upgradeProxy := by
+private theorem fixtureV2ValueChild_currentTarget (cfg : SharedValueFixtureConfig) :
+    (initSevm (fixtureV2ValueChildMessage cfg)).currentTarget = upgradeProxy := by
   rfl
 
-private theorem fixtureV1ValueChild_initialKeys :
-    (initDevm fixtureV1ValueChildMessage).accessedStorageKeys =
+private theorem fixtureV1ValueChild_initialKeys (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV1ValueChildMessage cfg)).accessedStorageKeys =
       (.emptyWithCapacity : Std.HashSet (Adr × B256)).insert
         (upgradeProxy, implementationSlotLit) := by
-  change (sharedValueAfterAccess fixturePrestate
+  change (sharedValueAfterAccess cfg fixturePrestate
     v1Implementation).accessedStorageKeys = _
   unfold sharedValueAfterAccess
-  change (sharedValueCallPre fixturePrestate).accessedStorageKeys = _
-  exact sharedValueCallPre_keys fixturePrestate
+  change (sharedValueCallPre cfg fixturePrestate).accessedStorageKeys = _
+  exact sharedValueCallPre_keys cfg fixturePrestate
 
-private theorem fixtureV2ValueChild_initialKeys :
-    (initDevm fixtureV2ValueChildMessage).accessedStorageKeys =
+private theorem fixtureV2ValueChild_initialKeys (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV2ValueChildMessage cfg)).accessedStorageKeys =
       (.emptyWithCapacity : Std.HashSet (Adr × B256)).insert
         (upgradeProxy, implementationSlotLit) := by
-  change (sharedValueAfterAccess fixtureMigratedState
+  change (sharedValueAfterAccess cfg fixtureMigratedState
     v2Implementation).accessedStorageKeys = _
   unfold sharedValueAfterAccess
-  change (sharedValueCallPre fixtureMigratedState).accessedStorageKeys = _
-  exact sharedValueCallPre_keys fixtureMigratedState
+  change (sharedValueCallPre cfg fixtureMigratedState).accessedStorageKeys = _
+  exact sharedValueCallPre_keys cfg fixtureMigratedState
 
-private theorem fixtureV1ValueChild_value :
-    (initDevm fixtureV1ValueChildMessage).getStorVal upgradeProxy
-      v1ValueSlot = 42 := by
-  change (v1ValueSpawn.parent.state.get upgradeProxy).stor.get
-    v1ValueSlot = 42
-  change ((sharedValueAfterAccess fixturePrestate
-    v1Implementation).state.get upgradeProxy).stor.get v1ValueSlot = 42
+private theorem delegatecallChild_state
+    {sevm : Sevm} {callPre : Devm}
+    (spawn : DelegatecallSpawnDescriptor sevm callPre) :
+    (initDevm spawn.child).state = spawn.afterAccess.state := by
+  rfl
+
+private theorem fixtureV1ValueChild_state (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV1ValueChildMessage cfg)).state =
+      (sharedValueAfterTransfer cfg fixturePrestate).state := by
+  rw [fixtureV1ValueChildMessage, delegatecallChild_state]
+  change (sharedValueAfterAccess cfg fixturePrestate v1Implementation).state = _
   unfold sharedValueAfterAccess
-  change ((sharedValueCallPre fixturePrestate).state.get
-    upgradeProxy).stor.get v1ValueSlot = 42
-  rw [sharedValueCallPre_state]
-  rw [sharedValueAfterTransfer_stor]
+  change (sharedValueCallPre cfg fixturePrestate).state = _
+  exact sharedValueCallPre_state cfg fixturePrestate
+
+private theorem fixtureV2ValueChild_state (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV2ValueChildMessage cfg)).state =
+      (sharedValueAfterTransfer cfg fixtureMigratedState).state := by
+  rw [fixtureV2ValueChildMessage, delegatecallChild_state]
+  change (sharedValueAfterAccess cfg fixtureMigratedState v2Implementation).state = _
+  unfold sharedValueAfterAccess
+  change (sharedValueCallPre cfg fixtureMigratedState).state = _
+  exact sharedValueCallPre_state cfg fixtureMigratedState
+
+private theorem fixtureV1ValueChild_value (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV1ValueChildMessage cfg)).getStorVal upgradeProxy
+      v1ValueSlot = 42 := by
+  change (((initDevm (fixtureV1ValueChildMessage cfg)).state.get
+    upgradeProxy).stor.get v1ValueSlot) = 42
+  rw [fixtureV1ValueChild_state cfg]
+  rw [sharedValueAfterTransfer_stor cfg]
   unfold fixturePrestate fixtureProxyStorage
   rw [State.get_set_self, Stor.get_set_self]
 
-private theorem fixtureV2ValueChild_value :
-    (initDevm fixtureV2ValueChildMessage).getStorVal upgradeProxy
+private theorem fixtureV2ValueChild_value (cfg : SharedValueFixtureConfig) :
+    (initDevm (fixtureV2ValueChildMessage cfg)).getStorVal upgradeProxy
       v2ValueSlot = 42 := by
-  change (v2ValueSpawn.parent.state.get upgradeProxy).stor.get
-    v2ValueSlot = 42
-  change ((sharedValueAfterAccess fixtureMigratedState
-    v2Implementation).state.get upgradeProxy).stor.get v2ValueSlot = 42
-  unfold sharedValueAfterAccess
-  change ((sharedValueCallPre fixtureMigratedState).state.get
-    upgradeProxy).stor.get v2ValueSlot = 42
-  rw [sharedValueCallPre_state, sharedValueAfterTransfer_stor]
+  change (((initDevm (fixtureV2ValueChildMessage cfg)).state.get
+    upgradeProxy).stor.get v2ValueSlot) = 42
+  rw [fixtureV2ValueChild_state cfg, sharedValueAfterTransfer_stor cfg]
   change storageWord fixtureMigratedState upgradeProxy v2ValueSlot = 42
   unfold fixtureMigratedState
   rw [migration_writes_v2]
@@ -1080,191 +1093,257 @@ private theorem fsig_prepend_runCompiledTo
   func_run (4) [selector]
   case a => exact body
 
-private theorem fixtureV1ValueChild_run :
+private theorem v1Value_runCompiled
+    (sevm : Sevm) (base : Devm)
+    (data : sevm.data = valueCalldata)
+    (target : sevm.currentTarget = upgradeProxy)
+    (sevmValue : sevm.value = 0)
+    (memory : base.memory = Mem.empty)
+    (stack : base.stack = [])
+    (gas : base.gasLeft = 4917049)
+    (error : base.error = none)
+    (keys : base.accessedStorageKeys =
+      (.emptyWithCapacity : Std.HashSet (Adr × B256)).insert
+        (upgradeProxy, implementationSlotLit))
+    (value : base.getStorVal upgradeProxy v1ValueSlot = 42) :
     ∃ child,
-      Prog.RunCompiledTo (initSevm fixtureV1ValueChildMessage)
-        (initDevm fixtureV1ValueChildMessage) v1Prog (.ok child) ∧
+      Prog.RunCompiledTo sevm base v1Prog (.ok child) ∧
       child.error = none ∧
       child.output = (42 : B256).toBytes ∧
       child.gasLeft = 4914877 := by
   have slotCold :
-      ((initSevm fixtureV1ValueChildMessage).currentTarget,
-        v1ValueSlot) ∉
-        (initDevm fixtureV1ValueChildMessage).accessedStorageKeys := by
-    rw [fixtureV1ValueChild_currentTarget,
-      fixtureV1ValueChild_initialKeys]
+      (sevm.currentTarget, v1ValueSlot) ∉ base.accessedStorageKeys := by
+    rw [target, keys]
     simp [show implementationSlotLit ≠ v1ValueSlot by decide]
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_⟩
   · apply Prog.runCompiledTo_intro (G := 4917048)
-    · rfl
+    · rw [gas]
+      rfl
     · rfl
     · unfold v1Prog
+      rw [stack, show (4917048 : Nat) = 4917037 + 11 by decide]
       apply fsig_prepend_runCompiledTo
-        (base := initDevm fixtureV1ValueChildMessage)
+        (base := base)
         (selector := valueSelector)
-        (memory := (initDevm fixtureV1ValueChildMessage).memory)
+        (memory := base.memory)
         (gas := 4917037)
       · apply selector_of_valueCalldata
-        simpa [initSevm] using fixtureV1ValueChild_data
+        exact data
       · unfold v1Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
         all_goals try
           norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
-        case h_ext => decide
+        case h_val => rw [sevmValue]; decide
+        case h_ext =>
+          exact Devm.extCost_of_size (n := 0) (e := 3)
+            (by rw [memory]; rfl) (by decide)
         case a =>
           apply Func.runCompiledTo_return_word
             (i := 0) (sz := 32) (s := []) (e := 0) (G := 4914877)
             (out := (42 : B256).toBytes)
           · rfl
           · apply Devm.extCost_covered
-            rfl
+            rw [memory, Mem.size_write_word_at]
+            decide
           · simp only [Devm.gasLeft_setMach]
           · apply Devm.memRead_word_fst
-            change Mem.empty.write 0
-                ((initDevm fixtureV1ValueChildMessage).getStorVal
-                  upgradeProxy v1ValueSlot).toBytes =
-              Mem.empty.write 0 (42 : B256).toBytes
-            rw [fixtureV1ValueChild_value]
-  · rfl
+            simp only [Devm.memory_setMach, Devm.getStorVal_setMach,
+              target, value, memory]
+            rfl
+  · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
+      Devm.setMach_error]
+    exact error
   · rfl
   · rfl
 
-private theorem fixtureV2ValueChild_run :
+private theorem v2Value_runCompiled
+    (sevm : Sevm) (base : Devm)
+    (data : sevm.data = valueCalldata)
+    (target : sevm.currentTarget = upgradeProxy)
+    (sevmValue : sevm.value = 0)
+    (memory : base.memory = Mem.empty)
+    (stack : base.stack = [])
+    (gas : base.gasLeft = 4917049)
+    (error : base.error = none)
+    (keys : base.accessedStorageKeys =
+      (.emptyWithCapacity : Std.HashSet (Adr × B256)).insert
+        (upgradeProxy, implementationSlotLit))
+    (value : base.getStorVal upgradeProxy v2ValueSlot = 42) :
     ∃ child,
-      Prog.RunCompiledTo (initSevm fixtureV2ValueChildMessage)
-        (initDevm fixtureV2ValueChildMessage) v2Prog (.ok child) ∧
+      Prog.RunCompiledTo sevm base v2Prog (.ok child) ∧
       child.error = none ∧
       child.output = (42 : B256).toBytes ∧
       child.gasLeft = 4914877 := by
   have slotCold :
-      ((initSevm fixtureV2ValueChildMessage).currentTarget,
-        v2ValueSlot) ∉
-        (initDevm fixtureV2ValueChildMessage).accessedStorageKeys := by
-    rw [fixtureV2ValueChild_currentTarget,
-      fixtureV2ValueChild_initialKeys]
+      (sevm.currentTarget, v2ValueSlot) ∉ base.accessedStorageKeys := by
+    rw [target, keys]
     simp [show implementationSlotLit ≠ v2ValueSlot by decide]
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_⟩
   · apply Prog.runCompiledTo_intro (G := 4917048)
-    · rfl
+    · rw [gas]
+      rfl
     · rfl
     · unfold v2Prog
+      rw [stack, show (4917048 : Nat) = 4917037 + 11 by decide]
       apply fsig_prepend_runCompiledTo
-        (base := initDevm fixtureV2ValueChildMessage)
+        (base := base)
         (selector := valueSelector)
-        (memory := (initDevm fixtureV2ValueChildMessage).memory)
+        (memory := base.memory)
         (gas := 4917037)
       · apply selector_of_valueCalldata
-        simpa [initSevm] using fixtureV2ValueChild_data
+        exact data
       · unfold v2Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
         all_goals try
           norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
-        case h_ext => decide
+        case h_val => rw [sevmValue]; decide
+        case h_ext =>
+          exact Devm.extCost_of_size (n := 0) (e := 3)
+            (by rw [memory]; rfl) (by decide)
         case a =>
           apply Func.runCompiledTo_return_word
             (i := 0) (sz := 32) (s := []) (e := 0) (G := 4914877)
             (out := (42 : B256).toBytes)
           · rfl
           · apply Devm.extCost_covered
-            rfl
+            rw [memory, Mem.size_write_word_at]
+            decide
           · simp only [Devm.gasLeft_setMach]
           · apply Devm.memRead_word_fst
-            change Mem.empty.write 0
-                ((initDevm fixtureV2ValueChildMessage).getStorVal
-                  upgradeProxy v2ValueSlot).toBytes =
-              Mem.empty.write 0 (42 : B256).toBytes
-            rw [fixtureV2ValueChild_value]
-  · rfl
+            simp only [Devm.memory_setMach, Devm.getStorVal_setMach,
+              target, value, memory]
+            rfl
+  · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
+      Devm.setMach_error]
+    exact error
   · rfl
   · rfl
 
-private theorem fixtureV1ValueChild_compiled :
-    some (initSevm fixtureV1ValueChildMessage).code.toList =
+private theorem fixtureV1ValueChild_run (cfg : SharedValueFixtureConfig) :
+    ∃ child,
+      Prog.RunCompiledTo (initSevm (fixtureV1ValueChildMessage cfg))
+        (initDevm (fixtureV1ValueChildMessage cfg)) v1Prog (.ok child) ∧
+      child.error = none ∧
+      child.output = (42 : B256).toBytes ∧
+      child.gasLeft = 4914877 := by
+  exact v1Value_runCompiled _ _
+    (by simpa [initSevm] using fixtureV1ValueChild_data cfg)
+    (fixtureV1ValueChild_currentTarget cfg)
+    (by rfl)
+    (fixtureV1ValueChild_initialMemory cfg)
+    (fixtureV1ValueChild_initialStack cfg)
+    (by rfl)
+    (by rfl)
+    (fixtureV1ValueChild_initialKeys cfg)
+    (fixtureV1ValueChild_value cfg)
+
+private theorem fixtureV2ValueChild_run (cfg : SharedValueFixtureConfig) :
+    ∃ child,
+      Prog.RunCompiledTo (initSevm (fixtureV2ValueChildMessage cfg))
+        (initDevm (fixtureV2ValueChildMessage cfg)) v2Prog (.ok child) ∧
+      child.error = none ∧
+      child.output = (42 : B256).toBytes ∧
+      child.gasLeft = 4914877 := by
+  exact v2Value_runCompiled _ _
+    (by simpa [initSevm] using fixtureV2ValueChild_data cfg)
+    (fixtureV2ValueChild_currentTarget cfg)
+    (by rfl)
+    (fixtureV2ValueChild_initialMemory cfg)
+    (fixtureV2ValueChild_initialStack cfg)
+    (by rfl)
+    (by rfl)
+    (fixtureV2ValueChild_initialKeys cfg)
+    (fixtureV2ValueChild_value cfg)
+
+private theorem fixtureV1ValueChild_compiled (cfg : SharedValueFixtureConfig) :
+    some (initSevm (fixtureV1ValueChildMessage cfg)).code.toList =
       Prog.compile v1Prog := by
-  change some v1ValueSpawn.child.code.toList = Prog.compile v1Prog
+  change some (v1ValueSpawn cfg).child.code.toList = Prog.compile v1Prog
   rw [DelegatecallSpawnDescriptor.child_code]
   change some v1Code.toList = Prog.compile v1Prog
   rw [v1Code_toList, v1Prog_compile]
 
-private theorem fixtureV2ValueChild_compiled :
-    some (initSevm fixtureV2ValueChildMessage).code.toList =
+private theorem fixtureV2ValueChild_compiled (cfg : SharedValueFixtureConfig) :
+    some (initSevm (fixtureV2ValueChildMessage cfg)).code.toList =
       Prog.compile v2Prog := by
-  change some v2ValueSpawn.child.code.toList = Prog.compile v2Prog
+  change some (v2ValueSpawn cfg).child.code.toList = Prog.compile v2Prog
   rw [DelegatecallSpawnDescriptor.child_code]
   change some v2Code.toList = Prog.compile v2Prog
   rw [v2Code_toList, v2Prog_compile]
 
-private theorem fixtureV1ValueChild_initialStorage :
+private theorem fixtureV1ValueChild_initialStorage (cfg : SharedValueFixtureConfig) :
     MessageStorageEqualAt upgradeProxy
-      fixtureV1ValueChildMessage.benv.state fixturePrestate := by
+      (fixtureV1ValueChildMessage cfg).benv.state fixturePrestate := by
   intro key
-  change (v1ValueSpawn.parent.state.get upgradeProxy).stor.get key = _
-  change ((sharedValueAfterAccess fixturePrestate
-    v1Implementation).state.get upgradeProxy).stor.get key = _
-  unfold sharedValueAfterAccess
-  change ((sharedValueCallPre fixturePrestate).state.get
-    upgradeProxy).stor.get key = _
-  rw [sharedValueCallPre_state, sharedValueAfterTransfer_stor]
+  change (((initDevm (fixtureV1ValueChildMessage cfg)).state.get
+    upgradeProxy).stor.get key) = _
+  rw [fixtureV1ValueChild_state cfg, sharedValueAfterTransfer_stor cfg]
 
-private theorem fixtureV2ValueChild_initialStorage :
+private theorem fixtureV2ValueChild_initialStorage (cfg : SharedValueFixtureConfig) :
     MessageStorageEqualAt upgradeProxy
-      fixtureV2ValueChildMessage.benv.state fixtureMigratedState := by
+      (fixtureV2ValueChildMessage cfg).benv.state fixtureMigratedState := by
   intro key
-  change (v2ValueSpawn.parent.state.get upgradeProxy).stor.get key = _
-  change ((sharedValueAfterAccess fixtureMigratedState
-    v2Implementation).state.get upgradeProxy).stor.get key = _
-  unfold sharedValueAfterAccess
-  change ((sharedValueCallPre fixtureMigratedState).state.get
-    upgradeProxy).stor.get key = _
-  rw [sharedValueCallPre_state, sharedValueAfterTransfer_stor]
+  change (((initDevm (fixtureV2ValueChildMessage cfg)).state.get
+    upgradeProxy).stor.get key) = _
+  rw [fixtureV2ValueChild_state cfg, sharedValueAfterTransfer_stor cfg]
 
-private theorem v1ValueSpawn_parentMemorySize :
-    v1ValueSpawn.parent.memory.size = 32 := by
+private theorem v1ValueSpawn_parentMemorySize (cfg : SharedValueFixtureConfig) :
+    (v1ValueSpawn cfg).parent.memory.size = 32 := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_memory,
-    v1ValueSpawn.afterAccess_memory]
-  change ((sharedValueCallPre fixturePrestate).memory.extends
+    (v1ValueSpawn cfg).afterAccess_memory]
+  have inputOffset : (v1ValueSpawn cfg).inputOffsetWord = 0 := rfl
+  have inputSize : (v1ValueSpawn cfg).inputSizeWord = 4 := rfl
+  have outputOffset : (v1ValueSpawn cfg).outputOffsetWord = 0 := rfl
+  have outputSize : (v1ValueSpawn cfg).outputSizeWord = 0 := rfl
+  rw [inputOffset, inputSize, outputOffset, outputSize]
+  change ((sharedValueCallPre cfg fixturePrestate).memory.extends
     [(0, 4), (0, 0)]).size = 32
   rw [Mem.extends_covered (by
-    rw [sharedValueCallPre_memory_size]
-    decide), sharedValueCallPre_memory_size]
+    rw [sharedValueCallPre_memory_size cfg]
+    decide), sharedValueCallPre_memory_size cfg]
 
-private theorem v2ValueSpawn_parentMemorySize :
-    v2ValueSpawn.parent.memory.size = 32 := by
+private theorem v2ValueSpawn_parentMemorySize (cfg : SharedValueFixtureConfig) :
+    (v2ValueSpawn cfg).parent.memory.size = 32 := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_memory,
-    v2ValueSpawn.afterAccess_memory]
-  change ((sharedValueCallPre fixtureMigratedState).memory.extends
+    (v2ValueSpawn cfg).afterAccess_memory]
+  have inputOffset : (v2ValueSpawn cfg).inputOffsetWord = 0 := rfl
+  have inputSize : (v2ValueSpawn cfg).inputSizeWord = 4 := rfl
+  have outputOffset : (v2ValueSpawn cfg).outputOffsetWord = 0 := rfl
+  have outputSize : (v2ValueSpawn cfg).outputSizeWord = 0 := rfl
+  rw [inputOffset, inputSize, outputOffset, outputSize]
+  change ((sharedValueCallPre cfg fixtureMigratedState).memory.extends
     [(0, 4), (0, 0)]).size = 32
   rw [Mem.extends_covered (by
-    rw [sharedValueCallPre_memory_size]
-    decide), sharedValueCallPre_memory_size]
+    rw [sharedValueCallPre_memory_size cfg]
+    decide), sharedValueCallPre_memory_size cfg]
 
-private theorem v1ValueSpawn_parentStack :
-    v1ValueSpawn.parent.stack = [] := by
+private theorem v1ValueSpawn_parentStack (cfg : SharedValueFixtureConfig) :
+    (v1ValueSpawn cfg).parent.stack = [] := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_stack]
   rfl
 
-private theorem v2ValueSpawn_parentStack :
-    v2ValueSpawn.parent.stack = [] := by
+private theorem v2ValueSpawn_parentStack (cfg : SharedValueFixtureConfig) :
+    (v2ValueSpawn cfg).parent.stack = [] := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_stack]
   rfl
 
-private theorem v1ValueSpawn_parentGas :
-    v1ValueSpawn.parent.gasLeft = 78048 := by
+private theorem v1ValueSpawn_parentGas (cfg : SharedValueFixtureConfig) :
+    (v1ValueSpawn cfg).parent.gasLeft = 78048 := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_gasLeft]
-  change (sharedValueAfterAccess fixturePrestate
+  change (sharedValueAfterAccess cfg fixturePrestate
     v1Implementation).gasLeft - (4919649 + 0) = 78048
-  rw [sharedValueAfterAccess_gas]
+  rw [sharedValueAfterAccess_gas cfg]
 
-private theorem v2ValueSpawn_parentGas :
-    v2ValueSpawn.parent.gasLeft = 78048 := by
+private theorem v2ValueSpawn_parentGas (cfg : SharedValueFixtureConfig) :
+    (v2ValueSpawn cfg).parent.gasLeft = 78048 := by
   rw [DelegatecallSpawnDescriptor.parent, callSpawnParent_gasLeft]
-  change (sharedValueAfterAccess fixtureMigratedState
+  change (sharedValueAfterAccess cfg fixtureMigratedState
     v2Implementation).gasLeft - (4919649 + 0) = 78048
-  rw [sharedValueAfterAccess_gas]
+  rw [sharedValueAfterAccess_gas cfg]
 
 private noncomputable def delegatedChildCertificate_of_run
     {sevm : Sevm} {callPre : Devm}
@@ -1340,28 +1419,40 @@ private def closedValueTailBudget
 /-- A closed inhabitant of the full exact forwarding package for `value()`.
 Both delegated children are the descriptors' actual spawned messages, and
 both certificates come from the compiled v1/v2 walks above. -/
-theorem fixture_exactProxyPairSharedExecution_value :
+theorem fixture_exactProxyPairSharedExecution_value
+    (rules : ForkRules)
+    (proxyNotPrecompile : ¬rules.isPrecomp upgradeProxy)
+    (v1ImplementationNotPrecompile :
+      rules.isPrecomp v1Implementation = false)
+    (v2ImplementationNotPrecompile :
+      rules.isPrecomp v2Implementation = false) :
     ExactProxyPairSharedExecution runtimeBaseline fixturePrestate
       fixtureMigratedState .value := by
+  let cfg : SharedValueFixtureConfig := {
+    rules := rules
+    proxyNotPrecompile := proxyNotPrecompile
+    v1ImplementationNotPrecompile := v1ImplementationNotPrecompile
+    v2ImplementationNotPrecompile := v2ImplementationNotPrecompile
+  }
   obtain ⟨childV1, runV1, errorV1, outputV1, gasV1⟩ :=
-    fixtureV1ValueChild_run
+    fixtureV1ValueChild_run cfg
   obtain ⟨childV2, runV2, errorV2, outputV2, gasV2⟩ :=
-    fixtureV2ValueChild_run
+    fixtureV2ValueChild_run cfg
   obtain ⟨spawnV1, routeV1, validV1, resolvedV1, codeV1,
       spawnExactV1⟩ :=
-    sharedValueRoute_exists fixturePrestate v1Implementation v1Code
+    sharedValueRoute_exists cfg fixturePrestate v1Implementation v1Code
       fixturePrestate_implementation fixturePrestate_v1Code
       fixturePrestate_proxyCode v1Code_ordinary
-      v1Implementation_notPrecompile v1Code_nonempty
+      cfg.v1ImplementationNotPrecompile v1Code_nonempty
   subst spawnV1
   obtain ⟨spawnV2, routeV2, validV2, resolvedV2, codeV2,
       spawnExactV2⟩ :=
-    sharedValueRoute_exists fixtureMigratedState v2Implementation v2Code
+    sharedValueRoute_exists cfg fixtureMigratedState v2Implementation v2Code
       fixtureMigratedState_implementation fixtureMigratedState_v2Code
       fixtureMigratedState_proxyCode v2Code_ordinary
-      v2Implementation_notPrecompile v2Code_nonempty
+      cfg.v2ImplementationNotPrecompile v2Code_nonempty
   subst spawnV2
-  have implementationV1 : V1SharedChildExecution v1ValueSpawn.child
+  have implementationV1 : V1SharedChildExecution (v1ValueSpawn cfg).child
       fixturePrestate .value childV1 := {
     code := by
       rw [DelegatecallSpawnDescriptor.child_code]
@@ -1370,16 +1461,16 @@ theorem fixture_exactProxyPairSharedExecution_value :
       simpa [v1ValueSpawn, sharedCalldata, sharedValueMessage] using
         routeV1.childData
     owner := by rfl
-    initialStorage := fixtureV1ValueChild_initialStorage
+    initialStorage := fixtureV1ValueChild_initialStorage cfg
     run := by simpa [fixtureV1ValueChildMessage] using runV1
-    certificate := delegatedChildCertificate_of_run v1ValueSpawn
+    certificate := delegatedChildCertificate_of_run (v1ValueSpawn cfg)
       (by simpa [fixtureV1ValueChildMessage] using runV1)
       (by simpa [fixtureV1ValueChildMessage] using
-        fixtureV1ValueChild_compiled)
+        fixtureV1ValueChild_compiled cfg)
       errorV1
     clean := by rw [errorV1]; rfl
   }
-  have implementationV2 : V2SharedChildExecution v2ValueSpawn.child
+  have implementationV2 : V2SharedChildExecution (v2ValueSpawn cfg).child
       fixtureMigratedState .value childV2 := {
     code := by
       rw [DelegatecallSpawnDescriptor.child_code]
@@ -1388,30 +1479,30 @@ theorem fixture_exactProxyPairSharedExecution_value :
       simpa [v2ValueSpawn, sharedCalldata, sharedValueMessage] using
         routeV2.childData
     owner := by rfl
-    initialStorage := fixtureV2ValueChild_initialStorage
+    initialStorage := fixtureV2ValueChild_initialStorage cfg
     run := by simpa [fixtureV2ValueChildMessage] using runV2
-    certificate := delegatedChildCertificate_of_run v2ValueSpawn
+    certificate := delegatedChildCertificate_of_run (v2ValueSpawn cfg)
       (by simpa [fixtureV2ValueChildMessage] using runV2)
       (by simpa [fixtureV2ValueChildMessage] using
-        fixtureV2ValueChild_compiled)
+        fixtureV2ValueChild_compiled cfg)
       errorV2
     clean := by rw [errorV2]; rfl
   }
-  let tailV1 : ForwardingTailBudget v1ValueSpawn childV1 :=
-    closedValueTailBudget v1ValueSpawn childV1 rfl
-      v1ValueSpawn_parentMemorySize v1ValueSpawn_parentStack
-      v1ValueSpawn_parentGas errorV1 outputV1 gasV1
-  let tailV2 : ForwardingTailBudget v2ValueSpawn childV2 :=
-    closedValueTailBudget v2ValueSpawn childV2 rfl
-      v2ValueSpawn_parentMemorySize v2ValueSpawn_parentStack
-      v2ValueSpawn_parentGas errorV2 outputV2 gasV2
-  refine ⟨rfl, sharedValueMessage fixturePrestate,
-    sharedValueAfterTransfer fixturePrestate,
-    sharedValueCallPre fixturePrestate, v1ValueSpawn, routeV1,
+  let tailV1 : ForwardingTailBudget (v1ValueSpawn cfg) childV1 :=
+    closedValueTailBudget (v1ValueSpawn cfg) childV1 rfl
+      (v1ValueSpawn_parentMemorySize cfg) (v1ValueSpawn_parentStack cfg)
+      (v1ValueSpawn_parentGas cfg) errorV1 outputV1 gasV1
+  let tailV2 : ForwardingTailBudget (v2ValueSpawn cfg) childV2 :=
+    closedValueTailBudget (v2ValueSpawn cfg) childV2 rfl
+      (v2ValueSpawn_parentMemorySize cfg) (v2ValueSpawn_parentStack cfg)
+      (v2ValueSpawn_parentGas cfg) errorV2 outputV2 gasV2
+  refine ⟨rfl, sharedValueMessage cfg fixturePrestate,
+    sharedValueAfterTransfer cfg fixturePrestate,
+    sharedValueCallPre cfg fixturePrestate, v1ValueSpawn cfg, routeV1,
     childV1, implementationV1, tailV1, validV1, rfl, resolvedV1,
-    codeV1, sharedValueMessage fixtureMigratedState,
-    sharedValueAfterTransfer fixtureMigratedState,
-    sharedValueCallPre fixtureMigratedState, v2ValueSpawn, routeV2,
+    codeV1, sharedValueMessage cfg fixtureMigratedState,
+    sharedValueAfterTransfer cfg fixtureMigratedState,
+    sharedValueCallPre cfg fixtureMigratedState, v2ValueSpawn cfg, routeV2,
     childV2, implementationV2, tailV2, validV2, rfl, resolvedV2,
     codeV2⟩
 
@@ -1428,10 +1519,17 @@ theorem fixtureMigratedState_relation :
     (by decide)]
 
 /-- The closed exact pair has a concrete settled through-proxy refinement. -/
-theorem fixture_throughProxy_value_refinement :
+theorem fixture_throughProxy_value_refinement
+    (rules : ForkRules)
+    (proxyNotPrecompile : ¬rules.isPrecomp upgradeProxy)
+    (v1ImplementationNotPrecompile :
+      rules.isPrecomp v1Implementation = false)
+    (v2ImplementationNotPrecompile :
+      rules.isPrecomp v2Implementation = false) :
     ThroughProxyRefinementResult :=
   throughProxy_primary_refinement runtimeBaseline
-    fixture_exactProxyPairSharedExecution_value
+    (fixture_exactProxyPairSharedExecution_value rules proxyNotPrecompile
+      v1ImplementationNotPrecompile v2ImplementationNotPrecompile)
     fixtureMigratedState_initialized fixtureMigratedState_relation
 
 /-- Direct composition from one exact primary `upgradeToAndCall` execution to

@@ -53,7 +53,7 @@ if [ -n "${TMPDIR:-}" ]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-REPLAY_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+REPLAY_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s \
   "$SCRIPT_DIR/gen-lido-ossifiable-proxy-current-mainnet.py" \
   --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$REPLAY_OUT" >&2

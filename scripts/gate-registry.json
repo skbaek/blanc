@@ -1069,6 +1069,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1290,6 +1294,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1299,7 +1307,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Owns the Prague differential lane's reference Python environment. The checkout commit pins the specification's own source and nothing else: EELS declares keccak-256, secp256k1 recovery, the BN254/BLS/KZG precompiles, RLP encoding and U256 arithmetic as version ranges, so two clean checkouts at the same commit can disagree on a differential result. This gate derives the semantic closure — installed distributions and file-backed standard-library modules actually loaded by the isolated specification import — from the live environment, holds exact versions everywhere and exact bytes on any platform whose row has been generated, and renders the constraints file provisioning consumes. The cache identity includes the selected native CPython standard library; the closure is re-derived on every execution, so reaching for a new library module reddens the pin instead of passing unnoticed.",
+      "note": "Owns the Prague differential lane's reference Python environment. The checkout commit pins the specification's own source and nothing else: EELS declares keccak-256, secp256k1 recovery, the BN254/BLS/KZG precompiles, RLP encoding and U256 arithmetic as version ranges, so two clean checkouts at the same commit can disagree on a differential result. This gate derives the semantic closure — installed distributions, file-backed standard-library modules, and native interpreter images actually loaded by the isolated specification import — from the live environment, holds exact versions everywhere and exact bytes on any platform whose row has been generated, and renders the constraints file provisioning consumes. Every accepted process uses an unreachable bytecode-cache prefix; the cache identity includes the selected native CPython standard library and libpython image. The closure is re-derived on every execution, so reaching for a new library module or native runtime image reddens the pin instead of passing unnoticed.",
       "order": 32,
       "verdict": {
         "expect_exit": 0,
@@ -1365,6 +1373,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1431,6 +1443,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1498,6 +1514,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1585,6 +1605,10 @@
             "root": "@eels_python_base/lib/python3.11"
           },
           {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
+          },
+          {
             "pattern": "**/*",
             "root": "@twgref"
           }
@@ -1666,6 +1690,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1735,6 +1763,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1801,6 +1833,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1929,6 +1965,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -1937,7 +1977,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. The schema-3 runtime lock binds exact distribution and loaded-standard-library bytes on generated native rows: macOS arm64 is measured here, while Linux x86_64 remains explicitly ungenerated and fail-closed. Cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
+      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. The schema-4 runtime lock binds exact distribution, loaded-standard-library, launcher, and loaded native-interpreter bytes on generated native rows, while an unreachable bytecode-cache prefix prevents excluded pyc files from affecting execution. macOS arm64 is measured here; Linux x86_64 remains explicitly ungenerated and fail-closed. Cache identity derives the selected CPython 3.11.9 standard library and libpython image from the venv instead of naming one host path.",
       "order": 42,
       "verdict": {
         "expect_exit": 0,
@@ -2031,6 +2071,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2117,6 +2161,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2183,6 +2231,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -2256,6 +2308,10 @@
             ],
             "pattern": "**/*",
             "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -2342,6 +2398,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2421,6 +2481,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2429,7 +2493,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the selected native CPython standard library.",
+      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages, the selected native CPython standard library, and the loaded libpython image.",
       "order": 48,
       "verdict": {
         "expect_exit": 0,

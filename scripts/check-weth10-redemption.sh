@@ -14,6 +14,8 @@ BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 NETWORK="Prague"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 
 BUILD=1
 while [ $# -gt 0 ]; do

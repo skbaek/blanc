@@ -14,6 +14,8 @@ namespace Blanc.ProxyPair.Upgrade.Witness
 open Jaune
 open Blanc Blanc.ProxyPair Blanc.ProxyPair.Upgrade
 
+private abbrev rules : ForkRules := pragueRules
+
 private def outcomeRow (label : String) (msg : Msg) : String :=
   match processMessage msg with
   | .error _ => s!"{label}|wrapper=error"
@@ -26,32 +28,34 @@ private def outcomeRow (label : String) (msg : Msg) : String :=
         s!"|logs={post.logs.length}|output={post.output.length}"
 
 private def unauthorizedMessage : Msg :=
-  { primaryMessage with caller := v1Implementation }
+  { primaryMessage rules with caller := v1Implementation }
 
 private def ossifiedState : State :=
   fixturePrestate.setStorVal upgradeProxy adminSlotLit 0
 
 private def ossifiedMessage : Msg :=
-  { primaryMessage with
-      benv := { primaryMessage.benv with
+  { primaryMessage rules with
+      benv := { (primaryMessage rules).benv with
         state := ossifiedState
-        stat := { primaryMessage.benv.stat with origState := ossifiedState } } }
+        stat := { (primaryMessage rules).benv.stat with
+          origState := ossifiedState } } }
 
 private def missingCodeState : State :=
   State.set fixturePrestate v2Implementation Acct.nil
 
 private def missingCodeMessage : Msg :=
-  { primaryMessage with
-      benv := { primaryMessage.benv with
+  { primaryMessage rules with
+      benv := { (primaryMessage rules).benv with
         state := missingCodeState
-        stat := { primaryMessage.benv.stat with origState := missingCodeState } } }
+        stat := { (primaryMessage rules).benv.stat with
+          origState := missingCodeState } } }
 
 private def revertingSetupMessage : Msg :=
-  upgradeMessage (proxyUpgradeToAndCallCalldata v2Implementation
+  upgradeMessage rules (proxyUpgradeToAndCallCalldata v2Implementation
     [0xde, 0xad, 0xbe, 0xef] false)
 
 private def relationRow : String :=
-  match processMessage primaryMessage with
+  match processMessage (primaryMessage rules) with
   | .error _ => "RELATION|primary-wrapper=error"
   | .ok post =>
       let wrong := post.state.setStorVal upgradeProxy v2ValueSlot 41
@@ -69,10 +73,10 @@ private def relationRow : String :=
         s!"|wrong-r2={preS1 == wrongS2}"
 
 private def messageOnState (state : State) (data : Bytes) : Msg :=
-  { upgradeMessage data with
-      benv := { fixtureBenv with
+  { upgradeMessage rules data with
+      benv := { fixtureBenv rules with
         state := state
-        stat := { fixtureBenv.stat with origState := state } } }
+        stat := { (fixtureBenv rules).stat with origState := state } } }
 
 private def sharedOutcomeRow (label : String) (msg : Msg) : String :=
   match processMessage msg with
@@ -87,15 +91,15 @@ private def sharedOutcomeRow (label : String) (msg : Msg) : String :=
         s!"|word={(Bytes.toB256 post.output).toNat}"
 
 #eval show IO Unit from do
-  IO.println (outcomeRow "PRIMARY" primaryMessage)
-  IO.println (outcomeRow "UPGRADE_TO" upgradeToMessage)
-  IO.println (outcomeRow "SKIPPED_EMPTY" skippedEmptyMessage)
+  IO.println (outcomeRow "PRIMARY" (primaryMessage rules))
+  IO.println (outcomeRow "UPGRADE_TO" (upgradeToMessage rules))
+  IO.println (outcomeRow "SKIPPED_EMPTY" (skippedEmptyMessage rules))
   IO.println (outcomeRow "UNAUTHORIZED" unauthorizedMessage)
   IO.println (outcomeRow "OSSIFIED" ossifiedMessage)
   IO.println (outcomeRow "MISSING_CODE" missingCodeMessage)
   IO.println (outcomeRow "REVERTING_SETUP" revertingSetupMessage)
   IO.println relationRow
-  match processMessage primaryMessage with
+  match processMessage (primaryMessage rules) with
   | .error _ =>
       IO.println "POST_VALUE|primary-wrapper=error"
       IO.println "POST_SET|primary-wrapper=error"

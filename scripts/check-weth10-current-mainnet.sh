@@ -69,7 +69,7 @@ fi
 
 # Reject widened APIs, stale inventories, a pre-BPO2 timestamp, or a changed
 # historical-channel boundary before any shared t8n, Lean evaluator, or build.
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s \
   "$SCRIPT_DIR/gen-weth10-current-mainnet.py" \
   --static-self-check \
   --wrapper-historical-boundary "$HISTORICAL_BOUNDARY" \
@@ -115,7 +115,7 @@ if [ "$WRITE" -eq 1 ]; then
   GENERATOR_ARGS+=(--write)
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s \
   "$SCRIPT_DIR/gen-weth10-current-mainnet.py" "${GENERATOR_ARGS[@]}"
 
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"

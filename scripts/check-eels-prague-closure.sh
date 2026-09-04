@@ -10,6 +10,7 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 

@@ -621,8 +621,10 @@ def _closure_document(observed: dict[str, Any]) -> dict[str, Any]:
     return {
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
+        "bytecodePolicy": dict(closure.BYTECODE_POLICY),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
         "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
+        "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
         "distributions": [
             {
                 "name": entry["name"],
@@ -645,6 +647,7 @@ def _runtime_entry(paths: TargetPaths, observed: dict[str, Any]) -> dict[str, An
         "fileRecords": observed["fileRecords"],
         "contentSha256": observed["contentSha256"],
         "standardLibrary": observed["standardLibrary"],
+        "interpreterRuntime": observed["interpreterRuntime"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -687,8 +690,10 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
         {
             "policy",
             "contentExcludes",
+            "bytecodePolicy",
             "installerMetadataExcludes",
             "standardLibraryPolicy",
+            "interpreterRuntimePolicy",
             "distributions",
             "count",
             "versionsSha256",
@@ -702,6 +707,11 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
         "runtime lock closure content excludes",
     )
     _literal(
+        section["bytecodePolicy"],
+        dict(closure.BYTECODE_POLICY),
+        "runtime lock bytecode policy",
+    )
+    _literal(
         section["installerMetadataExcludes"],
         list(closure.INSTALLER_METADATA),
         "runtime lock closure installer-metadata excludes",
@@ -710,6 +720,11 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
         section["standardLibraryPolicy"],
         dict(closure.STANDARD_LIBRARY_POLICY),
         "runtime lock standard-library policy",
+    )
+    _literal(
+        section["interpreterRuntimePolicy"],
+        dict(closure.INTERPRETER_RUNTIME_POLICY),
+        "runtime lock interpreter-runtime policy",
     )
     entries = section["distributions"]
     if not isinstance(entries, list) or not entries:
@@ -741,7 +756,7 @@ def _validate_runtime_lock_document(
         {"schema", "target", "semanticClosure", "platforms"},
         "runtime lock",
     )
-    _literal(top["schema"], 3, "runtime lock.schema")
+    _literal(top["schema"], 4, "runtime lock.schema")
     target = _exact_keys(
         top["target"],
         {
@@ -789,6 +804,7 @@ def _validate_runtime_lock_document(
                 "fileRecords",
                 "contentSha256",
                 "standardLibrary",
+                "interpreterRuntime",
                 "distributions",
             },
             f"runtime lock.platforms.{key}",
@@ -799,6 +815,10 @@ def _validate_runtime_lock_document(
         standard_library = closure.validate_standard_library(
             row["standardLibrary"], _fail,
             label=f"runtime lock.platforms.{key}.standardLibrary",
+        )
+        interpreter_runtime = closure.validate_interpreter_runtime(
+            row["interpreterRuntime"], _fail,
+            label=f"runtime lock.platforms.{key}.interpreterRuntime",
         )
         _literal(
             standard_library["implementation"],
@@ -835,7 +855,7 @@ def _validate_runtime_lock_document(
         if type(row["fileRecords"]) is not int or row["fileRecords"] != total:
             _fail(f"runtime lock {key} file-record total does not match its rows")
         if row["contentSha256"] != closure.environment_content_digest(
-            measured, standard_library
+            measured, standard_library, interpreter_runtime
         ):
             _fail(f"runtime lock {key} content digest does not match its own rows")
     if generated == 0:
@@ -982,10 +1002,12 @@ def _verify_runtime_lock(
         {
             "distributions": row["distributions"],
             "standardLibrary": row["standardLibrary"],
+            "interpreterRuntime": row["interpreterRuntime"],
         },
         {
             "distributions": observed["distributions"],
             "standardLibrary": observed["standardLibrary"],
+            "interpreterRuntime": observed["interpreterRuntime"],
         },
     )
     if content:
@@ -1015,6 +1037,13 @@ venv = pathlib.Path(sys.argv[2]).resolve()
 expected_python = pathlib.Path(sys.argv[3]).absolute()
 entrypoint = pathlib.Path(sys.argv[4]).absolute()
 module_name = sys.argv[5]
+
+if not sys.dont_write_bytecode:
+    raise RuntimeError("selected Python can write bytecode")
+if sys.pycache_prefix != "/dev/null":
+    raise RuntimeError(
+        f"selected Python pycache prefix is {sys.pycache_prefix!r}, expected '/dev/null'"
+    )
 
 actual_python = pathlib.Path(sys.executable).absolute()
 if actual_python != expected_python:
@@ -1082,6 +1111,8 @@ evidence = {
     "pythonVersion": platform.python_version(),
     "pythonExecutable": str(actual_python),
     "pythonExecutableTarget": str(actual_python.resolve()),
+    "dontWriteBytecode": sys.dont_write_bytecode,
+    "pycachePrefix": sys.pycache_prefix,
     "sysPrefix": str(actual_prefix),
     "sysBasePrefix": str(pathlib.Path(sys.base_prefix).resolve()),
     "t8nEntrypoint": str(entrypoint),
@@ -1111,8 +1142,7 @@ def _python_preflight(
     result = _run(
         [
             str(paths.python),
-            "-I",
-            "-s",
+            *closure.PYTHON_ISOLATION_ARGS,
             "-c",
             _PREFLIGHT,
             str(paths.root),
@@ -1151,6 +1181,12 @@ def _python_preflight(
         "preflight Python version",
     )
     _literal(evidence.get("pythonExecutable"), str(paths.python), "preflight sys.executable")
+    _literal(evidence.get("dontWriteBytecode"), True, "preflight bytecode writes")
+    _literal(
+        evidence.get("pycachePrefix"),
+        closure.BYTECODE_POLICY["pycachePrefix"],
+        "preflight pycache prefix",
+    )
     _literal(
         evidence.get("pythonExecutableTarget"),
         str(paths.python.resolve()),
@@ -1227,6 +1263,8 @@ def _t8n_process(
         _json_write(env_in, environment)
         _json_write(txs_in, txs)
         args = [
+            str(paths.python),
+            *closure.PYTHON_ISOLATION_ARGS,
             str(paths.t8n),
             "t8n",
             f"--input.alloc={alloc_in}",

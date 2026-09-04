@@ -12,7 +12,7 @@
   "lane": "blanc-eels-prague-differential",
   "platforms": {
     "macos-arm64": {
-      "contentSha256": "1505c76c94811bfd8e82d9ff7640c233ff635f7117c1214cef4ca21fef454ae7",
+      "contentSha256": "a09f35ca9447c889088a4fc8292448ffc74477e6f86575177ab005237d24c49c",
       "distributions": [
         {
           "contentSha256": "648cd23d81b5241c0a19f85d8f7b94d7c177c5b58ec0906c025da1f44ca03e49",
@@ -107,10 +107,20 @@
       ],
       "fileRecords": 769,
       "generated": true,
+      "interpreterRuntime": {
+        "contentSha256": "35ef9ae2949030ff29b8e925a562cef98c3095b259ab4d0eb68e40f30f882b56",
+        "fileRecords": 1,
+        "files": [
+          {
+            "path": "basePrefix/lib/libpython3.11.dylib",
+            "sha256": "5de477e428a806f24119eba2b456815aa36703a42ffe895584662d0c5fb21958"
+          }
+        ]
+      },
       "pythonExecutableSha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884",
       "standardLibrary": {
-        "contentSha256": "ee243845df9489b7b84f3f9309b9f06b46c2861fdc5301df0b485fca8e9999dc",
-        "fileRecords": 161,
+        "contentSha256": "989d56b41ab692cf0f2726a78ff2dcf518b44847b4b8d95a806655f24bff4328",
+        "fileRecords": 163,
         "files": [
           {
             "path": "stdlib/__future__.py",
@@ -323,6 +333,14 @@
           {
             "path": "stdlib/csv.py",
             "sha256": "6c68a5186e3b85e6e267a7ef96479327a45ae2b40bf5e9f2017e4b2282b3f5b1"
+          },
+          {
+            "path": "stdlib/ctypes/__init__.py",
+            "sha256": "a31058a86719567745b80200dcc40218663e7516026a79ac0911d97c67574f71"
+          },
+          {
+            "path": "stdlib/ctypes/_endian.py",
+            "sha256": "38dc998ee2d180a64d4fe561b79287b19850df405f48fe72dede7a65d71de844"
           },
           {
             "path": "stdlib/dataclasses.py",
@@ -767,8 +785,12 @@
     "constraints": "eels-prague-constraints.txt",
     "tool": "pip"
   },
-  "schema": 2,
+  "schema": 3,
   "semanticClosure": {
+    "bytecodePolicy": {
+      "dontWriteBytecode": true,
+      "pycachePrefix": "/dev/null"
+    },
     "contentExcludes": [
       "**/__pycache__/**",
       "**/*.pyc",
@@ -912,6 +934,10 @@
       "uv_cache.json",
       "uv_build.json"
     ],
+    "interpreterRuntimePolicy": {
+      "root": "basePrefix",
+      "selection": "loadedNativeImagesOutsideStandardLibraryAndExecutable"
+    },
     "policy": {
       "runtimePackages": [],
       "transitionModules": [],

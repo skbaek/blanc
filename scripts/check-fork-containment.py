@@ -19,9 +19,8 @@ Two independent static properties over the committed `Blanc/` tree:
 The allowlist is a control, not a convenience.  It has two levels, and the
 level is the claim:
 
-*   `MODULE_ALLOWANCE` names a module that is a specialization, compatibility
-    or closed-fixture module **by design**.  Naming a fork is that module's
-    entire job.
+*   `MODULE_ALLOWANCE` names a module that is a specialization or compatibility
+    module **by design**.  Naming a fork is that module's entire job.
 *   `DECLARATION_ALLOWANCE` names a single declaration inside an otherwise
     generic module: a retained fixed-fork corollary, a bridge from a
     fixed-fork ladder to the configured one, or a published specialization
@@ -161,24 +160,6 @@ MODULE_ALLOWANCE: dict[str, tuple[str, int]] = {
         "specialization: fixed-Prague Lido deployment block body", 5),
     "Blanc/LidoCircuitBreakerDeploymentTransaction.lean": (
         "specialization: fixed-Prague Lido deployment transaction", 4),
-    # The five closed-fixture modules below were first filed under a third
-    # category, `fixture`, which fixed decision 7 does not authorise. A closed
-    # certificate is a specialization to one concrete world -- it fixes the
-    # schedule rather than leaking it out of a generic statement -- so they are
-    # filed as `specialization` and each reason still says, in full, that the
-    # thing specialized to is a closed concrete Prague fixture.
-    "Blanc/ProxyPairUpgradeExecution.lean": (
-        "specialization: closed concrete Prague block-environment fixture", 1),
-    "Blanc/ProxyPairUpgradeRefinement.lean": (
-        "specialization: private refinement of that closed Prague execution "
-        "fixture", 7),
-    "Blanc/ProxyPairOssifiableDeploymentFixture.lean": (
-        "specialization: closed concrete Prague CREATE-certificate fixture", 2),
-    "Blanc/ProxyPairOssifiableBothSlotFixture.lean": (
-        "specialization: closed concrete Prague setup-certificate fixture", 1),
-    "Blanc/ProxyPairOssifiableBothSlotDeployment.lean": (
-        "specialization: closed concrete Prague both-slot deployment-"
-        "certificate fixture", 1),
 }
 
 DECLARATION_ALLOWANCE: dict[tuple[str, str], tuple[str, int]] = {
@@ -601,8 +582,8 @@ def self_test(root: Path) -> None:
     script_control(
         "unauthorised allowance category",
         lambda source: source.replace(
-            '"specialization: closed concrete Prague block-environment fixture"',
-            '"fixture: closed concrete Prague block-environment fixture"', 1),
+            '"specialization: WETH10\'s only mainnet module"',
+            '"fixture: WETH10\'s only mainnet module"', 1),
         False,
         "is filed as `fixture`")
 

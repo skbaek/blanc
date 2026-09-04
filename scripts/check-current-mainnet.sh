@@ -38,14 +38,14 @@ if [[ -n "${TMPDIR:-}" ]]; then
 fi
 
 /usr/bin/env -i "${CHILD_ENV[@]}" \
-  "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
+  "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
     --self-check
 /usr/bin/env -i "${CHILD_ENV[@]}" \
-  "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
+  "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
     --check --root "$TARGET_ROOT"
 
 exec /usr/bin/env -i "${CHILD_ENV[@]}" \
-  "$TARGET_PYTHON" -I -s "$SCRIPT_DIR/current_mainnet.py" \
+  "$TARGET_PYTHON" -I -s -B -X pycache_prefix=/dev/null "$SCRIPT_DIR/current_mainnet.py" \
     --check \
     --root "$TARGET_ROOT" \
     --_expected-schema 1 \

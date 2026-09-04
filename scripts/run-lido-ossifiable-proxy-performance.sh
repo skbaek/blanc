@@ -12,6 +12,7 @@ fi
 
 export EELS_ROOT=$EELS
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 export PYTHONPATH=$EELS/src
 exec "$PYTHON" -B "$ROOT/scripts/run-lido-ossifiable-proxy-performance.py" \
   --repo-root "$ROOT" --eels-root "$EELS" "$@"

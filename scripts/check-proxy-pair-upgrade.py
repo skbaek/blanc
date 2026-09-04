@@ -29,6 +29,14 @@ PRODUCTION = (
     "Blanc/ProxyPairUpgradeRefinement.lean",
 )
 
+CONFIGURED_FIXTURES = (
+    "Blanc/ProxyPairUpgradeExecution.lean",
+    "Blanc/ProxyPairUpgradeRefinement.lean",
+    "Blanc/ProxyPairOssifiableDeploymentFixture.lean",
+    "Blanc/ProxyPairOssifiableBothSlotFixture.lean",
+    "Blanc/ProxyPairOssifiableBothSlotDeployment.lean",
+)
+
 SUPPORT = (
     "Blanc.lean",
     "docs/PROXY_PAIR_UPGRADE.md",
@@ -167,7 +175,8 @@ def normalized(text: str) -> str:
 
 def static_errors(root: Path) -> list[str]:
     errors: list[str] = []
-    texts = {path: read(root, path, errors) for path in PRODUCTION + SUPPORT}
+    paths = tuple(dict.fromkeys(PRODUCTION + CONFIGURED_FIXTURES + SUPPORT))
+    texts = {path: read(root, path, errors) for path in paths}
     if errors:
         return errors
 
@@ -254,6 +263,34 @@ def static_errors(root: Path) -> list[str]:
             if forbidden in fields:
                 errors.append(f"FORWARDING — {structure} stores forbidden certificate field {forbidden}")
 
+    configured_fragments = (
+        ("Blanc/ProxyPairUpgradeExecution.lean",
+         "def fixtureBenv (rules : ForkRules)"),
+        ("Blanc/ProxyPairOssifiableDeploymentFixture.lean",
+         "theorem message_success (rules : ForkRules)"),
+        ("Blanc/ProxyPairOssifiableBothSlotFixture.lean",
+         "theorem message_success (rules : ForkRules)"),
+        ("Blanc/ProxyPairOssifiableBothSlotDeployment.lean",
+         "theorem creationMessage_success (rules : ForkRules)"),
+        ("Blanc/ProxyPairUpgradeRefinement.lean",
+         "theorem fixture_exactProxyPairSharedExecution_value (rules : ForkRules)"),
+        ("Blanc/ProxyPairUpgradeRefinement.lean",
+         "proxyNotPrecompile : ¬rules.isPrecomp upgradeProxy"),
+        ("Blanc/ProxyPairUpgradeRefinement.lean",
+         "rules.isPrecomp v1Implementation = false"),
+        ("Blanc/ProxyPairUpgradeRefinement.lean",
+         "rules.isPrecomp v2Implementation = false"),
+    )
+    for relative in CONFIGURED_FIXTURES:
+        if "pragueRules" in texts[relative]:
+            errors.append(
+                f"CONFIGURATION — named Prague rules remain in {relative}")
+    for relative, fragment in configured_fragments:
+        if normalized(fragment) not in normalized(texts[relative]):
+            errors.append(
+                f"CONFIGURATION — explicit selected-rule surface is missing "
+                f"from {relative}: {normalized(fragment)}")
+
     doc = texts["docs/PROXY_PAIR_UPGRADE.md"]
     for token in CLAIM_TOKENS:
         if normalized(token).lower() not in normalized(doc).lower():
@@ -268,6 +305,10 @@ def static_errors(root: Path) -> list[str]:
             errors.append(f"AXIOM — expected one probe row for {full_name}")
 
     witness = texts["scripts/ProxyPairUpgradeWitness.lean"]
+    if witness.count("pragueRules") != 1 or (
+            "private abbrev rules : ForkRules := pragueRules" not in witness):
+        errors.append(
+            "WITNESS — expected one explicit Prague specialization boundary")
     for label in ("PRIMARY", "UPGRADE_TO", "SKIPPED_EMPTY", "UNAUTHORIZED",
                   "OSSIFIED", "MISSING_CODE", "REVERTING_SETUP",
                   "POST_VALUE", "POST_SET", "POST_GET", "POST_MARKER"):
@@ -276,7 +317,7 @@ def static_errors(root: Path) -> list[str]:
     if witness.count('"RELATION|') != 2:
         errors.append("WITNESS — expected the two exhaustive evaluator branches for RELATION")
 
-    for relative in PRODUCTION + ("scripts/ProxyPairUpgradeWitness.lean",):
+    for relative in tuple(dict.fromkeys(PRODUCTION + CONFIGURED_FIXTURES)):
         for match in FORBIDDEN.finditer(texts[relative]):
             line = texts[relative].count("\n", 0, match.start()) + 1
             errors.append(f"TRUST — forbidden token {match.group(0)!r} at {relative}:{line}")
@@ -333,7 +374,7 @@ def run_layering(root: Path) -> list[str]:
 
 
 def copy_static_tree(source: Path, target: Path) -> None:
-    for relative in PRODUCTION + SUPPORT:
+    for relative in tuple(dict.fromkeys(PRODUCTION + CONFIGURED_FIXTURES + SUPPORT)):
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source / relative, destination)
@@ -356,6 +397,7 @@ def self_test(root: Path) -> list[str]:
         ("missing-primary-composition", "Blanc/ProxyPairUpgradeRefinement.lean", "theorem upgradeToAndCall_primary_throughProxy_refinement", "theorem upgradeToAndCall_primary_throughProxy_refinement_MUTANT", "ASSURANCE"),
         ("detached-child-run", "Blanc/ProxyPairUpgradeRefinement.lean", "Prog.RunCompiledTo (initSevm spawn.child)", "Prog.RunCompiledTo (initSevm fixtureV1ValueChildMessage)", "FORWARDING"),
         ("stored-output-certificate", "Blanc/ProxyPairUpgradeRefinement.lean", "initialStorage : MessageStorageEqualAt", "output : MessageStorageEqualAt", "FORWARDING"),
+        ("named-fork-regression", "Blanc/ProxyPairUpgradeExecution.lean", "fixtureBenv rules", "fixtureBenv pragueRules", "CONFIGURATION"),
         ("disabled-rollback", "scripts/ProxyPairUpgradeWitness.lean", '"REVERTING_SETUP"', '"DISABLED_SETUP"', "WITNESS"),
         ("disabled-post-value", "scripts/ProxyPairUpgradeWitness.lean", '"POST_VALUE"', '"DISABLED_POST_VALUE"', "WITNESS"),
         ("disabled-post-marker", "scripts/ProxyPairUpgradeWitness.lean", '"POST_MARKER"', '"DISABLED_POST_MARKER"', "WITNESS"),
@@ -421,7 +463,7 @@ def main(argv: list[str]) -> int:
             print(f"FAIL — {SUBJECT}: {error}")
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
-    suffix = "; 23 disposable controls bite" if args.self_test else ""
+    suffix = "; 24 disposable controls bite" if args.self_test else ""
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
