@@ -1279,6 +1279,7 @@ Blanc.ProrataWethVault.two_le_offsetN|
 Blanc.ProrataWethVault.attacker_open_context|$STANDARD
 Blanc.ProrataWethVault.attacker_no_profit|$STANDARD
 Blanc.ProrataWethVault.victim_loss_bound|$STANDARD
+Blanc.ProrataWethVault.attack_carrier_inhabited|$STANDARD
 Blanc.Prorata.ProrataAccountingPath.priceLe_first_last|propext, Quot.sound
 Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD

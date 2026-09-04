@@ -1067,6 +1067,7 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.attacker_open_context
 #print axioms Blanc.ProrataWethVault.attacker_no_profit
 #print axioms Blanc.ProrataWethVault.victim_loss_bound
+#print axioms Blanc.ProrataWethVault.attack_carrier_inhabited
 #print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
