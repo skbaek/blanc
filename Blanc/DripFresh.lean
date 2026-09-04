@@ -439,6 +439,11 @@ theorem accumulator_exponent : SlotsDisjoint accumulatorWord exponentWord := by
 theorem base_exponent : SlotsDisjoint baseWord exponentWord := by decide +kernel
 theorem accumulator_base : SlotsDisjoint accumulatorWord baseWord := by
   decide +kernel
+theorem now_exponent : SlotsDisjoint nowWord exponentWord := by decide +kernel
+theorem now_base : SlotsDisjoint nowWord baseWord := by decide +kernel
+theorem now_accumulator : SlotsDisjoint nowWord accumulatorWord := by
+  decide +kernel
+theorem now_freshChi : SlotsDisjoint nowWord freshChiWord := by decide +kernel
 
 /-! ## What the whole machine may touch
 
@@ -921,13 +926,14 @@ staged exponent, run the loop, and arrive at index composition with the
 realized factor in the accumulator slot. -/
 private theorem of_run_halveExponent {fs : List Func} (hlookup : AuxLookup fs)
     {e : Sevm} {entry s' r : Devm} {image img : Bytes} {tail : Stack}
-    {acc k chi : B256}
+    {acc k chi now : B256}
     (hkNat : k.toNat ≠ 0)
     (hacc : acc = (if k.toNat % 2 = 1 then rate else scale))
     (hexpImg : scratch img exponentWord = k)
     (haccImg : scratch img accumulatorWord = acc)
     (hbaseImg : scratch img baseWord = rate)
     (hchiImg : scratch img storedChiWord = chi)
+    (hnowImg : scratch img nowWord = now)
     (hmachineImg : MachineOnly image img)
     (frameImg : Frame img entry s') (hpImg : tail <<+ s'.stack)
     (run : Func.Run fs e s'
@@ -937,6 +943,7 @@ private theorem of_run_halveExponent {fs : List Func} (hlookup : AuxLookup fs)
       B256.RPowGuards scale half rate k.toNat ∧
       scratch imageM accumulatorWord = B256.rpow scale half rate k.toNat ∧
       scratch imageM storedChiWord = chi ∧
+      scratch imageM nowWord = now ∧
       MachineOnly image imageM ∧
       Frame imageM entry tm ∧ (tail <<+ tm.stack) ∧
       Func.Run fs e tm (.call composeFreshSlot) r := by
@@ -974,12 +981,13 @@ private theorem of_run_halveExponent {fs : List Func} (hlookup : AuxLookup fs)
   rw [scratch_setScratch_of_disjoint _ _ accumulator_exponent, haccImg,
       scratch_setScratch_of_disjoint _ _ base_exponent, hbaseImg]
     at hguardsL haccF
-  refine ⟨t2, imageF, ?_, ?_, ?_, ?_, frameF, hpF, run⟩
+  refine ⟨t2, imageF, ?_, ?_, ?_, ?_, ?_, frameF, hpF, run⟩
   · rw [B256.RPowGuards, if_neg hrateNe, if_neg hkNat, ← hacc]
     exact hguardsL
   · rw [haccF, B256.rpow, if_neg hrateNe, if_neg hkNat, ← hacc]
   · rw [hloopF.storedChi,
       scratch_setScratch_of_disjoint _ _ storedChi_exponent, hchiImg]
+  · rw [hloopF.now, scratch_setScratch_of_disjoint _ _ now_exponent, hnowImg]
   · exact hmachineImg.trans
       ((MachineOnly.exponent img _).trans hloopF.toMachineOnly)
 
@@ -1025,6 +1033,7 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
               (e.benvStat.time -
                 Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
             Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+      scratch image' nowWord = e.benvStat.time ∧
       MachineOnly image image' ∧
       Frame image' entry t ∧ (tail <<+ t.stack) ∧
       Func.Run fs e t (.call freshRouteSlot) r := by
@@ -1217,6 +1226,7 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
             Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
       scratch imageM storedChiWord =
         Devm.getStorVal entry e.currentTarget chiSlot ∧
+      scratch imageM nowWord = e.benvStat.time ∧
       MachineOnly image imageM ∧
       Frame imageM entry tm ∧ (tail <<+ tm.stack) ∧
       Func.Run fs e tm (.call composeFreshSlot) r := by
@@ -1273,7 +1283,7 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
         intro s34 hline34 run
         obtain ⟨hp34, frame34⟩ := frame33.mstoreAt hp33 hline34
         refine of_run_halveExponent hlookup hkNat (by rw [if_neg heven]) ?_
-          (scratch_setScratch_self _ _ _) ?_ ?_ ?_ frame34 hp34 run
+          (scratch_setScratch_self _ _ _) ?_ ?_ ?_ ?_ frame34 hp34 run
         · rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
             scratch_setScratch_of_disjoint _ _ exponent_base,
             scratch_setScratch_self]
@@ -1283,6 +1293,10 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
             scratch_setScratch_of_disjoint _ _ storedChi_base,
             scratch_setScratch_of_disjoint _ _ storedChi_exponent,
             scratch_setScratch_of_disjoint _ _ storedChi_now,
+            scratch_setScratch_self]
+        · rw [scratch_setScratch_of_disjoint _ _ now_accumulator,
+            scratch_setScratch_of_disjoint _ _ now_base,
+            scratch_setScratch_of_disjoint _ _ now_exponent,
             scratch_setScratch_self]
         · exact ((((MachineOnly.storedChi image _).trans
             (MachineOnly.now _ _)).trans (MachineOnly.exponent _ _)).trans
@@ -1308,7 +1322,7 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
         intro s34 hline34 run
         obtain ⟨hp34, frame34⟩ := frame33.mstoreAt hp33 hline34
         refine of_run_halveExponent hlookup hkNat (by rw [if_pos hodd]) ?_
-          (scratch_setScratch_self _ _ _) ?_ ?_ ?_ frame34 hp34 run
+          (scratch_setScratch_self _ _ _) ?_ ?_ ?_ ?_ frame34 hp34 run
         · rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
             scratch_setScratch_of_disjoint _ _ exponent_base,
             scratch_setScratch_self]
@@ -1318,6 +1332,10 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
             scratch_setScratch_of_disjoint _ _ storedChi_base,
             scratch_setScratch_of_disjoint _ _ storedChi_exponent,
             scratch_setScratch_of_disjoint _ _ storedChi_now,
+            scratch_setScratch_self]
+        · rw [scratch_setScratch_of_disjoint _ _ now_accumulator,
+            scratch_setScratch_of_disjoint _ _ now_base,
+            scratch_setScratch_of_disjoint _ _ now_exponent,
             scratch_setScratch_self]
         · exact ((((MachineOnly.storedChi image _).trans
             (MachineOnly.now _ _)).trans (MachineOnly.exponent _ _)).trans
@@ -1346,7 +1364,7 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
       refine run_prepend_elim _ (mstoreAt accumulatorWord) ?_ run
       intro s31 hline31 run
       obtain ⟨hp31, frame31⟩ := frame30.mstoreAt hp30 hline31
-      refine ⟨s31, _, ?_, ?_, ?_, ?_, frame31, hp31, run⟩
+      refine ⟨s31, _, ?_, ?_, ?_, ?_, ?_, frame31, hp31, run⟩
       · rw [hkNat, B256.RPowGuards, if_neg hrateNe, if_pos rfl]
         trivial
       · rw [scratch_setScratch_self, hkNat, B256.rpow, if_neg hrateNe,
@@ -1356,16 +1374,22 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
           scratch_setScratch_of_disjoint _ _ storedChi_exponent,
           scratch_setScratch_of_disjoint _ _ storedChi_now,
           scratch_setScratch_self]
+      · rw [scratch_setScratch_of_disjoint _ _ now_accumulator,
+          scratch_setScratch_of_disjoint _ _ now_base,
+          scratch_setScratch_of_disjoint _ _ now_exponent,
+          scratch_setScratch_self]
       · exact ((((MachineOnly.storedChi image _).trans
           (MachineOnly.now _ _)).trans (MachineOnly.exponent _ _)).trans
           (MachineOnly.base _ _)).trans (MachineOnly.accumulator _ _)
-  obtain ⟨tm, imageM, hguards, haccM, hchiM, hmachineM, frameM, hpM, run⟩ := key
+  obtain ⟨tm, imageM, hguards, haccM, hchiM, hnowM, hmachineM, frameM, hpM,
+    run⟩ := key
   obtain ⟨t, hnofm, hcap, hpt, framet, run⟩ :=
     of_run_composeFresh hlookup frameM hpM run
   rw [haccM, hchiM] at hnofm hcap framet
-  exact ⟨t, _, hlower, hupper, hclock, helapsed, hguards, hnofm, hcap,
-    scratch_setScratch_self _ _ _,
+  refine ⟨t, _, hlower, hupper, hclock, helapsed, hguards, hnofm, hcap,
+    scratch_setScratch_self _ _ _, ?_,
     hmachineM.trans (MachineOnly.freshChi imageM _), framet, hpt, run⟩
+  rw [scratch_setScratch_of_disjoint _ _ now_freshChi, hnowM]
 
 /-! ## The route dispatcher
 
@@ -1472,6 +1496,156 @@ theorem of_run_freshRoute {fs : List Func} (hlookup : AuxLookup fs)
       Or.inr (Or.inr (Or.inr (Or.inr ⟨htag, run⟩)))⟩
     rw [← hburn.stack]
     exact (popBurn_pref hpop hp6).2
+
+/-! ## The `drip()` tail
+
+`afterDrip` is the smallest of the five endpoint tails and the one that makes
+the machine's output visible: commit the fresh index and the timestamp to
+their frozen scalar slots, in that order, and return the new index. -/
+
+private theorem getStor_of_state {s t : Devm} (h : s.state = t.state) :
+    Devm.getStor s = Devm.getStor t := by
+  funext a
+  unfold Devm.getStor Devm.getAcct
+  rw [h]
+
+theorem of_run_afterDrip {fs : List Func} {e : Sevm}
+    {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s afterDrip r) :
+    Devm.getStor r e.currentTarget =
+        ((Devm.getStor entry e.currentTarget).set chiSlot
+          (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) ∧
+      ReturnsWord (scratch image freshChiWord) r := by
+  unfold Drip.afterDrip Drip.commitFresh at run
+  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  intro s1 hline1 run
+  obtain ⟨hp1, hwf1, hreads1, hst1⟩ :=
+    of_run_loadWordAt_image (word := freshChiWord)
+      (value := scratch image freshChiWord) hp frame.wf frame.reads rfl hline1
+  refine run_prepend_elim _ [pushB256 chiSlot, sstore] ?_ run
+  intro s2 hline2 run
+  rcases Line.of_run_cons hline2 with ⟨u1, hpush1, hrest⟩
+  rcases Line.of_run_cons hrest with ⟨u2, hstore1, hnil⟩
+  cases hnil
+  have hpu1 : chiSlot :: scratch image freshChiWord :: tail <<+ u1.stack :=
+    prefix_of_push (of_run_pushB256 hpush1) hp1
+  have hstor2 : Devm.getStor s2 e.currentTarget =
+      (Devm.getStor entry e.currentTarget).set chiSlot
+        (scratch image freshChiWord) := by
+    rw [sstore_getStor_set hstore1 hpu1,
+      ← congrFun (getStor_of_state (of_run_pushB256 hpush1).state)
+        e.currentTarget,
+      ← congrFun (getStor_of_state hst1) e.currentTarget,
+      ← congrFun (getStor_of_state frame.state) e.currentTarget]
+  have hp2 : tail <<+ s2.stack := prefix_of_sstore hstore1 hpu1
+  have hmem2 : s1.memory = s2.memory :=
+    Line.of_inv Devm.memory (by line_inv) hline2
+  have hwf2 : Mem.Wf s2.memory := by rw [← hmem2]; exact hwf1
+  have hreads2 : Mem.Reads s2.memory image := by rw [← hmem2]; exact hreads1
+  refine run_prepend_elim _ (loadWord nowWord) ?_ run
+  intro s3 hline3 run
+  obtain ⟨hp3, hwf3, hreads3, hst3⟩ :=
+    of_run_loadWordAt_image (word := nowWord)
+      (value := scratch image nowWord) hp2 hwf2 hreads2 rfl hline3
+  refine run_prepend_elim _ [pushB256 rhoSlot, sstore] ?_ run
+  intro s4 hline4 run
+  rcases Line.of_run_cons hline4 with ⟨v1, hpush2, hrest⟩
+  rcases Line.of_run_cons hrest with ⟨v2, hstore2, hnil⟩
+  cases hnil
+  have hpv1 : rhoSlot :: scratch image nowWord :: tail <<+ v1.stack :=
+    prefix_of_push (of_run_pushB256 hpush2) hp3
+  have hstor4 : Devm.getStor s4 e.currentTarget =
+      ((Devm.getStor entry e.currentTarget).set chiSlot
+        (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) := by
+    rw [sstore_getStor_set hstore2 hpv1,
+      ← congrFun (getStor_of_state (of_run_pushB256 hpush2).state)
+        e.currentTarget,
+      ← congrFun (getStor_of_state hst3) e.currentTarget, hstor2]
+  have hp4 : tail <<+ s4.stack := prefix_of_sstore hstore2 hpv1
+  have hmem4 : s3.memory = s4.memory :=
+    Line.of_inv Devm.memory (by line_inv) hline4
+  have hwf4 : Mem.Wf s4.memory := by rw [← hmem4]; exact hwf3
+  have hreads4 : Mem.Reads s4.memory image := by rw [← hmem4]; exact hreads3
+  -- the return tail leaves storage alone and returns the fresh index
+  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  intro s5 hline5 run
+  obtain ⟨hp5, hwf5, hreads5, hst5⟩ :=
+    of_run_loadWordAt_image (word := freshChiWord)
+      (value := scratch image freshChiWord) hp4 hwf4 hreads4 rfl hline5
+  refine ⟨?_, (returnsWord_of_storeReturn hp5 run).1⟩
+  rw [← congrFun
+      (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run) e.currentTarget,
+    ← congrFun (getStor_of_state hst5) e.currentTarget, hstor4]
+
+/-! ## `drip()`, end to end at source level
+
+The first complete DRIP endpoint: a successful permissionless `drip()` crosses
+the four frozen guards, computes the exact Jaune-certified factor under
+Jaune's own word-safety bundle, writes the composed index and the block
+timestamp to their frozen scalar slots in that order, and returns the new
+index. -/
+
+theorem of_run_drip {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.drip r) :
+    ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      B256.Nofm (Devm.getStorVal entry e.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat) ∧
+      ¬ maxChi <
+        (B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+      Devm.getStor r e.currentTarget =
+        ((Devm.getStor entry e.currentTarget).set chiSlot
+            ((B256.rpow scale half rate
+                  (e.benvStat.time -
+                    Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+                Devm.getStorVal entry e.currentTarget chiSlot) / scale)).set
+          rhoSlot e.benvStat.time ∧
+      ReturnsWord
+        ((B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale) r := by
+  unfold Drip.drip Drip.stageRoute at run
+  refine run_prepend_elim _ [pushB256 routeDrip] ?_ run
+  intro s1 hline1 run
+  have frame1 := frame.line (by line_inv) (by line_inv) (by line_inv) hline1
+  have hp1 : routeDrip :: tail <<+ s1.stack := by
+    rcases Line.of_run_cons hline1 with ⟨u, hpush, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hpush) hp
+  refine run_prepend_elim _ (mstoreAt routeWord) ?_ run
+  intro s2 hline2 run
+  obtain ⟨hp2, frame2⟩ := frame1.mstoreAt hp1 hline2
+  obtain ⟨t3, image3, hlower, hupper, hclock, helapsed, hguards, hnofm, hcap,
+    hfresh, hnow, hmachine, frame3, hp3, run⟩ :=
+    of_run_freshStart hlookup frame2 hp2 run
+  have htag : scratch image3 routeWord = routeDrip := by
+    rw [hmachine.1, scratch_setScratch_self]
+  obtain ⟨t4, frame4, hp4, hroute⟩ := of_run_freshRoute hlookup frame3 hp3 run
+  rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
+    ⟨htagD, run⟩ | ⟨htagJ, run⟩
+  · exact absurd (htag.symm.trans htagA) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagE) (by decide +kernel)
+  · exact absurd (htag.symm.trans htagU) (by decide +kernel)
+  · obtain ⟨hstor, hret⟩ := of_run_afterDrip frame4 hp4 run
+    rw [hfresh, hnow] at hstor
+    rw [hfresh] at hret
+    exact ⟨hlower, hupper, hclock, helapsed, hguards, hnofm, hcap, hstor, hret⟩
+  · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
 
 end Drip
 
