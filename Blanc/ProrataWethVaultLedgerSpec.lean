@@ -95,7 +95,9 @@ Three of its pieces are built, generic, and live with their siblings in
 `Blanc/Semantics.lean` rather than here, because nothing about them is
 vault-specific:
 
-- `Msg.benvAfterTransfer_stat` — moving the call value preserves `BenvStat`.
+- `benvAfterTransfer_stat` — moving the call value preserves `BenvStat`
+  (hoisted down from `Blanc/DeploymentMessage.lean`, which had proved it for
+  four deployment families).
 - `Frame.enter_run_benvStat` — entering a frame preserves it, the `enter_run_`
   companion to `enter_run_depth`.
 - `RunFrame.benvStat_eq` — the same fact read off a filled slot, shaped like
@@ -137,15 +139,14 @@ the child return zero, which the `iszero` guard turns into a revert. If that is
 right, the obligation is dischargeable — but only by deriving the bundles from
 success rather than assuming them, and the premises exist precisely to avoid
 
-**And the `isStatic` third of that is the recursion-depth ceiling below, not a
-separate problem.** `StoresOrHalts.isStatic_eq_false` is exactly the derivation
-— a frame that completes a write cannot have been static — and the outbound
-flows already have their `StoresOrHalts` witnesses
-(`withdrawBurn_storesOrHalts`, `redeemBurn_storesOrHalts`). The two that do not
-are `depositAfterQuote_storesOrHalts` and `mintAfterQuote_storesOrHalts`, which
-are precisely the two lemmas that exceed `maxRecDepth`. So the elaboration cost
-documented at the end of this module is on G6's critical path rather than
-beside it, and the two obstructions should be worked as one.
+**The `isStatic` third of that is now discharged.**
+`StoresOrHalts.isStatic_eq_false` is the derivation — a frame that completes a
+write cannot have been static — and all four flows now have their witnesses.
+The outbound two always did; the inbound two were blocked only by the
+elaboration cost documented at the end of this module, which is now fixed, so
+`depositAfterQuote_not_static` and `mintAfterQuote_not_static` derive
+`isStatic = false` from the run rather than assuming it. What remains of the
+bundle is `depth ≠ 0` and the call-gas bound.
 that inversion.
 
 So the decision on this route is whether to derive the resource bundles inside
@@ -369,33 +370,32 @@ exhausts the ceiling. It is `callWethTransferFrom`: a lemma about that
 definition alone, with its asset line a variable and its body a hypothesis,
 exhausts the ceiling on its own.
 
-**What the measurement says.** `set_option diagnostics true` on the smallest
-failing lemma reports `List.rec` unfolded 1902 times, `List.casesOn` 1869,
-`List.concat` 820, `List.get` 704 and `Fin.rec` 704. The cost is list
-reduction during elaboration, not depth in the finished term — which is only
-about twenty constructors.
+**Resolved.** The obvious tactic — `repeat' first | apply StoresOrHalts.next
+| apply StoresOrHalts.prepend | ...` — exceeded the default `maxRecDepth` on
+the two inbound continuations. `set_option diagnostics true` on the smallest
+failing case reported `List.rec` unfolded 1902 times, `List.casesOn` 1869,
+`List.concat` 820 and `List.get` 704: list reduction during elaboration,
+though the finished term is about twenty constructors deep.
 
-**What has been ruled out, each by trying it:**
+Five candidate causes were tried and refuted — the flows' outer structure and
+literal staging lines, `StoresOrHalts.store` as the expensive alternative, the
+concrete function context, the position of `exact h`, and dropping `prepend`
+altogether. The sixth was right, and it was `prepend` after all, but for the
+opposite reason to the one tested: not that the lemma is expensive, but that
+its conclusion `l +++ f` makes unification *search* for a split of a concrete
+chain, and every candidate split re-reduces the `Line` machinery. Dropping it
+does not help, because then the walk cannot cross a `+++` at all.
 
-- the flows' outer structure, and the literal staging lines: restating the
-  shared tail over *variable* lines does not help;
-- `StoresOrHalts.store` as the expensive alternative: removing it entirely —
-  sound here, since every write is inside the body the hypothesis covers —
-  does not help;
-- the concrete function context: `callWethTransferFrom` contains no
-  `Func.call`, and abstracting `fs` to a variable does not help, so the
-  `List.get` traffic is not context lookup;
-- `StoresOrHalts.prepend`'s higher-order unification: dropping it does not
-  help;
-- the position of `exact h` in the alternatives: trying it last rather than
-  first does not help.
+Naming each `Line` — `apply StoresOrHalts.prepend (mstoreAt 0)` rather than
+letting `repeat'` guess — turns that search into a check. The ceiling
+disappears, and `maxRecDepth` and `maxHeartbeats` are untouched: the
+proof-debt gate tracks those scopes, and widening one would have spent the
+budget instead of fixing the cost.
 
-So the list traffic is inside the `Line` machinery the `Func` is built from —
-`++` on lines, `mstoreAt`, `pushList` — reduced afresh as the walk exposes each
-`next`. The next thing to try is a proof that never asks the elaborator to
-expose those heads at all: an explicit term, or a `Func`-level induction
-principle proved once. Four readings have been wrong; this one is a direction,
-not a diagnosis.
+The lesson generalises to any `StoresOrHalts` walk over a staged program: name
+the chunks. It is recorded here rather than in `Blanc/StaticStores.lean`
+because one contract has needed it so far; a second consumer should hoist it
+into that module's `stores_structure` tactic.
 
 Slots a flow may tail-jump into on its way to a write. -/
 def FlowStoreSlot (k : Nat) : Prop :=
@@ -423,6 +423,132 @@ theorem withdrawBurn_storesOrHalts :
 theorem redeemBurn_storesOrHalts :
     StoresOrHalts (vault.main :: vaultAux) redeemBurn := by
   stores_structure
+
+/-- The WETH child's staging reaches its body, so a storing body makes the
+whole call storing.
+
+**Why every `Line` is named.** The obvious proof — `repeat' first | apply
+StoresOrHalts.next | apply StoresOrHalts.prepend | …` — exceeds the default
+`maxRecDepth`, and five plausible causes were tried and refuted before the
+right one. It is `prepend`: its conclusion `l +++ f` makes unification search
+for a split of a concrete chain, and that search reduces the `Line` machinery
+afresh at every step (`List.rec` unfolded 1902 times, `List.get` 704). Naming
+each chunk turns the search into a check and the ceiling disappears, with no
+resource option raised. -/
+theorem callWethTransferFrom_storesOrHalts {fs : List Func}
+    (assets : Line) {body : Func} (h : StoresOrHalts fs body) :
+    StoresOrHalts fs (callWethTransferFrom assets body) := by
+  unfold callWethTransferFrom
+  apply StoresOrHalts.next
+  apply StoresOrHalts.prepend (mstoreAt 0)
+  apply StoresOrHalts.next
+  apply StoresOrHalts.prepend (mstoreAt 1)
+  apply StoresOrHalts.next
+  apply StoresOrHalts.prepend (mstoreAt 2)
+  apply StoresOrHalts.prepend assets
+  apply StoresOrHalts.prepend (mstoreAt 3)
+  apply StoresOrHalts.prepend (pushList [32, 0, 100, 28, 0])
+  apply StoresOrHalts.next
+  apply StoresOrHalts.next
+  apply StoresOrHalts.next
+  apply StoresOrHalts.next
+  apply StoresOrHalts.branch
+  · unfold requireCanonicalWethTrue
+    apply StoresOrHalts.next
+    apply StoresOrHalts.next
+    apply StoresOrHalts.next
+    apply StoresOrHalts.next
+    apply StoresOrHalts.branch
+    · apply StoresOrHalts.next
+      apply StoresOrHalts.next
+      apply StoresOrHalts.next
+      apply StoresOrHalts.next
+      apply StoresOrHalts.next
+      apply StoresOrHalts.branch
+      · exact h
+      · exact StoresOrHalts.never not_run_revert
+    · exact StoresOrHalts.never not_run_revert
+  · exact StoresOrHalts.never not_run_revert
+
+/-- The shared inbound tail either writes or halts: both post-child arms reach
+an `SSTORE`, and every guard that does not is a `revert`. -/
+theorem finishInbound_storesOrHalts {fs : List Func}
+    (shares assets returned : Line) :
+    StoresOrHalts fs (finishInbound shares assets returned) := by
+  unfold finishInbound
+  apply StoresOrHalts.prepend shares
+  apply StoresOrHalts.prepend shareRoom
+  apply StoresOrHalts.next
+  apply StoresOrHalts.branch
+  · apply callWethTransferFrom_storesOrHalts
+    apply StoresOrHalts.prepend (loadWord receiverWord)
+    apply StoresOrHalts.next
+    apply StoresOrHalts.prepend (mstoreAt balanceWord)
+    apply StoresOrHalts.prepend shares
+    apply StoresOrHalts.prepend (loadWord balanceWord)
+    apply StoresOrHalts.next
+    apply StoresOrHalts.prepend (mstoreAt scratchWord)
+    apply StoresOrHalts.prepend (loadWord balanceWord)
+    apply StoresOrHalts.prepend (loadWord scratchWord)
+    apply StoresOrHalts.next
+    apply StoresOrHalts.branch
+    · apply StoresOrHalts.prepend (loadWord scratchWord)
+      apply StoresOrHalts.prepend (loadWord receiverWord)
+      exact StoresOrHalts.store
+    · exact StoresOrHalts.never not_run_revert
+  · exact StoresOrHalts.never not_run_revert
+
+/-- The staged-entry wrapper shared by both inbound flows. -/
+theorem inboundAfterQuote_storesOrHalts {fs : List Func}
+    (shares assets returned : Line) :
+    StoresOrHalts fs
+      (mstoreAt quoteWord +++
+        nonzeroCaller (nonzeroStagedAddress receiverWord
+          (finishInbound shares assets returned))) := by
+  apply StoresOrHalts.prepend (mstoreAt quoteWord)
+  unfold nonzeroCaller
+  apply StoresOrHalts.next
+  apply StoresOrHalts.next
+  apply StoresOrHalts.branch
+  · unfold nonzeroStagedAddress
+    apply StoresOrHalts.prepend (loadWord receiverWord)
+    apply StoresOrHalts.next
+    apply StoresOrHalts.prepend checkNonAddress
+    apply StoresOrHalts.branch
+    · apply StoresOrHalts.next
+      apply StoresOrHalts.branch
+      · exact finishInbound_storesOrHalts shares assets returned
+      · exact StoresOrHalts.never not_run_revert
+    · exact StoresOrHalts.never not_run_revert
+  · exact StoresOrHalts.never not_run_revert
+
+/-- `deposit`'s post-quote continuation writes or halts. -/
+theorem depositAfterQuote_storesOrHalts {fs : List Func} :
+    StoresOrHalts fs depositAfterQuote :=
+  inboundAfterQuote_storesOrHalts _ _ _
+
+/-- `mint`'s post-quote continuation writes or halts. -/
+theorem mintAfterQuote_storesOrHalts {fs : List Func} :
+    StoresOrHalts fs mintAfterQuote :=
+  inboundAfterQuote_storesOrHalts _ _ _
+
+/-- A `deposit` continuation that runs at all ran in a non-static frame.
+
+This is `isStatic = false` **derived from the run having succeeded**, rather
+than assumed as a premise. It is one of the three components of the resource
+bundle that `lift_inv_admitted`'s `with_depth_ind` obligation needs at an
+arbitrary re-entrant vault frame, and the one the rely rung could not supply
+from `σ`, since it is a fact about a frame rather than about the world. The
+outbound flows already had their witnesses; these two were blocked only by the
+elaboration cost documented above. -/
+theorem depositAfterQuote_not_static {fs : List Func} {e : Sevm} {s r : Devm}
+    (run : Func.Run fs e s depositAfterQuote r) : e.isStatic = false :=
+  depositAfterQuote_storesOrHalts.isStatic_eq_false run
+
+/-- A `mint` continuation that runs at all ran in a non-static frame. -/
+theorem mintAfterQuote_not_static {fs : List Func} {e : Sevm} {s r : Devm}
+    (run : Func.Run fs e s mintAfterQuote r) : e.isStatic = false :=
+  mintAfterQuote_storesOrHalts.isStatic_eq_false run
 
 end ProrataWethVault
 

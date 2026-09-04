@@ -1283,6 +1283,15 @@ Blanc.ProrataWethVault.attack_carrier_inhabited|$STANDARD
 Blanc.ProrataWethVault.transferStaged_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.withdrawBurn_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.redeemBurn_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.finishInbound_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.depositAfterQuote_not_static|$STANDARD
+Blanc.ProrataWethVault.mintAfterQuote_not_static|$STANDARD
+Blanc.Frame.enter_run_benvStat|$STANDARD
+Blanc.RunFrame.benvStat_eq|$STANDARD
 Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.silent_accountingStep|$STANDARD

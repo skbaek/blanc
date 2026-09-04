@@ -456,8 +456,14 @@ lemma Frame.enter_run_depth {f : Frame} {cevm : Evm}
 /-- Moving the call value preserves the block environment's static part.
 
 `benvAfterTransfer` either returns the environment untouched or rebuilds it
-through `Benv.withState`, which replaces the state and nothing else. -/
-lemma Msg.benvAfterTransfer_stat {msg : Msg} {benv : Benv}
+through `Benv.withState`, which replaces the state and nothing else.
+
+Lives here, below every consumer, because it had been proved three times:
+in `Blanc/DeploymentMessage.lean` for four deployment-message families, again
+privately in `Blanc/Weth10AllowanceArmsPermit.lean`, and once more for
+`Frame.enter_run_benvStat` just below. Both copies are gone and every caller
+resolves to this one unchanged. -/
+lemma benvAfterTransfer_stat {msg : Msg} {benv : Benv}
     (h : msg.benvAfterTransfer = .ok benv) : benv.stat = msg.benv.stat := by
   unfold Msg.benvAfterTransfer at h
   split at h
@@ -487,7 +493,7 @@ lemma Frame.enter_run_benvStat {f : Frame} {cevm : Evm}
   split at h
   · cases h
   · rename_i benv hbenv
-    rw [← Msg.benvAfterTransfer_stat hbenv]
+    rw [← benvAfterTransfer_stat hbenv]
     split at h
     · cases h
       rename_i heq

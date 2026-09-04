@@ -1071,6 +1071,15 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.transferStaged_storesOrHalts
 #print axioms Blanc.ProrataWethVault.withdrawBurn_storesOrHalts
 #print axioms Blanc.ProrataWethVault.redeemBurn_storesOrHalts
+#print axioms Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts
+#print axioms Blanc.ProrataWethVault.finishInbound_storesOrHalts
+#print axioms Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.depositAfterQuote_not_static
+#print axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
+#print axioms Blanc.Frame.enter_run_benvStat
+#print axioms Blanc.RunFrame.benvStat_eq
 #print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep

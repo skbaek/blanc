@@ -39,16 +39,6 @@ theorem benvAfterTransfer_exists_zero
   · rw [if_neg htransfer]
     exact ⟨_, rfl⟩
 
-/-- Message-entry balance transfer preserves the static block environment. -/
-theorem benvAfterTransfer_stat
-    {msg : Msg} {benv : Benv}
-    (h : msg.benvAfterTransfer = .ok benv) :
-    benv.stat = msg.benv.stat := by
-  by_cases htransfer : msg.shouldTransferValue = true
-  · obtain ⟨middle, hsub, rfl⟩ := of_benvAfterTransfer htransfer h
-    rfl
-  · rw [of_benvAfterTransfer_no htransfer h]
-
 /-- A successful raw `exec` with no frame error settles as the corresponding
 ordinary message result. -/
 theorem processMessage_ok_of_exec

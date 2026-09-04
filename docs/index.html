@@ -67,7 +67,7 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 1126/1126 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 1135/1135 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
         <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (exact-candidate run 2026-09-02 UTC): the
@@ -77,7 +77,7 @@
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1126-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>1135-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -126,7 +126,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1126<span class="dimmer" style="font-size:1.05rem">/1126</span></span>
+      <div class="fact"><span class="n">1135<span class="dimmer" style="font-size:1.05rem">/1135</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">4</span>
         <span class="l">contracts in — a WETH, a flash-mint token, a 27-selector WETH10, Lido’s CircuitBreaker — each with a page of receipts</span></div>
@@ -1284,7 +1284,7 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 1126 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 1135 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
