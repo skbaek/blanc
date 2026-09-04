@@ -58,6 +58,25 @@ conditions were always asking for.
 Recorded here rather than only in the goal's state brief because it is a
 standing assumption of the artifact: this vault is safe against its configured
 asset, and would not be safe against a re-entrant one.
+
+## Why the ladder cannot be made to carry it
+
+`Blanc/Ladder.lean`'s `preserves_lift` is generic in the frame invariant `σ`,
+which invites the thought that `σ` could simply carry
+`DirectWethConfiguration` and hand it to the flows' obligation. It cannot, and
+the reason is one of `preserves_lift`'s own transport hypotheses:
+
+    σ_of_ne : e.currentTarget ≠ ca → c.Pre ca e d → σ e d
+
+At every *foreign* frame the induction must rebuild `σ` from `Pre` alone. So
+`σ` may not carry anything `Pre` does not, and `Pre` carries the contract's own
+code, `Side` on the balance map, and `PreInv` — no second account's code, and
+no room to put one. Strengthening `σ` makes `σ_of_ne` unprovable rather than
+making the flows provable.
+
+That is the precise obstruction, and it is why the remaining rely and history
+rungs need machinery rather than another instantiation. Anyone tempted by the
+generic ladder again should start here.
 -/
 
 namespace Blanc
