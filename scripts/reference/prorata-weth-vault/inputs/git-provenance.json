@@ -1,0 +1,113 @@
+{
+  "acquisition": {
+    "date": "2026-09-04",
+    "route": "copied from the clean local Git checkout of the pinned commit used for the SF dossier (/private/tmp/prorata-ref.BjJLXF/openzeppelin-contracts, HEAD verified) after every file matched the SHA-256 frozen in reports/prorata-erc4626-port-sf.md section 10; no network fetch was required",
+    "verifiedAgainst": "reports/prorata-erc4626-port-sf.md section 10 (Plans goal store)"
+  },
+  "closureManifest": {
+    "construction": "not reproduced from the per-file table; per-file hashes are the identity",
+    "sha256": "a1b486f5b2bc52ff8d28377424e0fed2a23d9cd28afa9b9f934148fbe1f1e6c8",
+    "sources": 17
+  },
+  "harness": {
+    "bytes": 564,
+    "owner": "goal prorata-erc4626-port-v1 (Blanc), MIT",
+    "path": "contracts/ProrataWethVaultReference.sol",
+    "sha256": "db2d9df13d9c89b97a35f9e28b334a9dcee4565737779f6458a107494894d280"
+  },
+  "openzeppelin": {
+    "commit": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3",
+    "files": {
+      "contracts/interfaces/IERC1363.sol": {
+        "blob": "7bf3e1f7bbe9a20d1bef5468a55786556c6525aa",
+        "bytes": 4454,
+        "sha256": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b"
+      },
+      "contracts/interfaces/IERC165.sol": {
+        "blob": "d2c99a5bdfe9611dcfc67e8f0c40164d64ab5dd3",
+        "bytes": 193,
+        "sha256": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368"
+      },
+      "contracts/interfaces/IERC20.sol": {
+        "blob": "078e9ec9b403252bd480873adf10add00076eb0b",
+        "bytes": 182,
+        "sha256": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1"
+      },
+      "contracts/interfaces/IERC20Metadata.sol": {
+        "blob": "adffeb5f8c6e4e2d4e45d072dc9f82d310714023",
+        "bytes": 216,
+        "sha256": "0ef8d844d8e066abd5c0d8cc1c550c89f2628a4ea9c9bb16c7593d4207800ca8"
+      },
+      "contracts/interfaces/IERC4626.sol": {
+        "blob": "66e83390ec18f5b40d605ca6de6976e8fc526e85",
+        "bytes": 12210,
+        "sha256": "a43d346b74ce2cfa871ce3386aaaf6aec719e205e7c8148efc1c95612fc7b8eb"
+      },
+      "contracts/interfaces/draft-IERC6093.sol": {
+        "blob": "e9d6249ef521e073253a8681aa8f022af7640850",
+        "bytes": 6540,
+        "sha256": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30"
+      },
+      "contracts/token/ERC20/ERC20.sol": {
+        "blob": "4d9d6b6d1c1f33e7cc3013d70e6c5af900bcbe9a",
+        "bytes": 10800,
+        "sha256": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d"
+      },
+      "contracts/token/ERC20/IERC20.sol": {
+        "blob": "b493743a10c4fba04d91014cbdb7f69b639480c1",
+        "bytes": 2781,
+        "sha256": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c"
+      },
+      "contracts/token/ERC20/extensions/ERC4626.sol": {
+        "blob": "498ef28ddf1dadaafd681467b09adc85bdd5f4f5",
+        "bytes": 13451,
+        "sha256": "c3d57303bb40361934115b490514f3327ff88652cc2ac980bfd1b63a901ef7b4"
+      },
+      "contracts/token/ERC20/extensions/IERC20Metadata.sol": {
+        "blob": "87bbafa84b834af1da027455bdc2e8a87beeb438",
+        "bytes": 684,
+        "sha256": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a"
+      },
+      "contracts/token/ERC20/utils/SafeERC20.sol": {
+        "blob": "39f8df5d03133351cdac0f5f4c26f62f37fa83e5",
+        "bytes": 13961,
+        "sha256": "93685e4e976be584a5e6abfc37376fe17c99bee53e07610efcc1ce51868e90d1"
+      },
+      "contracts/utils/Context.sol": {
+        "blob": "4e535fe03c243f864568b8f4430c17c25dbadb47",
+        "bytes": 963,
+        "sha256": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6"
+      },
+      "contracts/utils/Panic.sol": {
+        "blob": "e168824d34b3f0ba0be33317fb34b9e74fc148b6",
+        "bytes": 1973,
+        "sha256": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec"
+      },
+      "contracts/utils/introspection/IERC165.sol": {
+        "blob": "be1932f267f9c794f21d934a6bc21a322c6d2709",
+        "bytes": 871,
+        "sha256": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca"
+      },
+      "contracts/utils/math/Math.sol": {
+        "blob": "e7288595b6539e986aef1a7a524884d86fc2d643",
+        "bytes": 32664,
+        "sha256": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457"
+      },
+      "contracts/utils/math/SafeCast.sol": {
+        "blob": "ccb979f61c9577e6338276cff49625d5a2191eb3",
+        "bytes": 34940,
+        "sha256": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134"
+      }
+    },
+    "license": {
+      "blob": "8a8f57f6ce57e689540fe7f99aa37b53bed21f06",
+      "path": "LICENSE",
+      "sha256": "20aebc68b11c063133aa2af0ef4bb29875477c6d16d715718f0daec563938b84",
+      "spdx": "MIT"
+    },
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "tag": "v5.7.0",
+    "upstreamUrlTemplate": "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/cab19933c33c2ad1d4c7a84864a3601dddfd16f3/<path>"
+  },
+  "schema": 1
+}
