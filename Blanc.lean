@@ -8,6 +8,7 @@ import Blanc.BalanceAlgebra
 import Blanc.OffsetPricing
 import Blanc.LedgerConservation
 import Blanc.StorageOnlySpec
+import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.MemoryImage
 import Blanc.BytesWrite

@@ -138,6 +138,13 @@ theorem applyAllowanceLedger_writeFree_append
     lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
   cases lastAllowanceWriteAt right.reverse key <;> rfl
 
+/-! ## Compiled bodies that cannot avoid a storage write -/
+
+/-! `StoresOrHalts` and `StoresOrHalts.isStatic_eq_false` are
+`Blanc/StaticStores.lean`, hoisted there once the WETH-backed PRORATA vault
+became a second consumer.  Nothing in them named this contract. -/
+
+
 /-! ## The writing WETH10 selectors all store -/
 
 /-- A guard arm dispatching to a constant `Error(string)` reverter never
