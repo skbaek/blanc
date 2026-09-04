@@ -20,25 +20,27 @@ there with per-file blob and SHA-256 identities.
 
 ## Status of this file
 
-**Incomplete, and saying so.** Every row's *decision* was frozen at G1 and is
-final. The **evidence** column is partial, and the reason is stated per row
-rather than papered over:
+Every row's *decision* was frozen at G1 and is final. Every row now carries
+evidence, and the kind of evidence is stated per row:
 
 - Rows whose behaviour the executed differential covers cite
   `scripts/check-prorata-weth-vault-differential.sh`, which runs the committed
-  17481-byte runtime on Jaune's EVM and compares against an independent
-  exact-integer oracle.
+  17481-byte runtime **and** the constructor-patched OpenZeppelin reference on
+  Jaune's EVM, and compares both against an independent exact-integer oracle.
 - Rows whose behaviour is arithmetic cite
   `scripts/check-prorata-weth-vault-oracle.sh`.
-- Rows that need the reference *compiled and executed* alongside Blanc are
-  marked **not yet evidenced**. The OpenZeppelin sources are not vendored in
-  this repository, so the compiled-reference half of the differential does not
-  exist yet; per the claim-hygiene rule, evidence is never asserted where none
-  exists.
+- Rows about the reference's identity and surface cite
+  `scripts/check-prorata-weth-vault-reference.sh`, which verifies the vendored
+  closure under `scripts/reference/prorata-weth-vault/` against the hashes
+  above, the committed `solc 0.8.36+commit.8a079791` input and output against
+  the frozen template identities, and the reference ABI against the vault's own
+  25 selectors.
+- Rows about size and gas cite the measurements the differential records in
+  `scripts/prorata-weth-vault-reference-measurements.json`, which it regenerates
+  on every run and fails on drift.
 
-The register becomes complete when the reference closure is vendored and its
-identity checked against the hashes above, and the differential runs both sides
-of each row.
+The closure was vendored on 2026-09-04 from a clean checkout of the pinned
+commit after every file matched the frozen hashes; no network fetch was needed.
 
 ## Deviation matrix
 
@@ -54,16 +56,18 @@ listed here is *not* a permitted difference: an unexpected mismatch fails.
 | 5 | Supply cap | unbounded up to the word ceiling | capped at `U - O` | deposit/mint maxima differ near the ceiling | the cap is what keeps `D = S + O` a nonzero word | oracle: `check_max_mint_tight`, `check_max_deposit_tight` |
 | 6 | `A = U` denominator | checked `A + 1` reverts on overflow | exact 257-bit `A + 1` | the vault still quotes at the word ceiling instead of reverting | the standard's converters are required not to revert; wrapping would be worse | oracle: `A = U` is one of the boundary states in every battery |
 | 7 | Child return check | `SafeERC20` also accepts empty successful returndata | requires canonical `true`, exactly 32 bytes | a non-canonical WETH would be refused | the configured asset returns canonical true; accepting empty returndata would weaken the exact-child claim | proved: `requireCanonicalWethTrue` is on the success path of every flow |
-| 8 | Permit and extra interfaces | not in `ERC4626.sol`; commonly added | absent | no EIP-2612, no ERC-165 | out of the frozen surface | **not yet evidenced** — an absence is shown by the ABI catalogue, not by a differential row |
-| 9 | Runtime and code size | solc output | 17481 bytes, independently authored | different bytecode and gas | byte-identity is a permanent non-goal (`PORTING.md` §1) | **not yet evidenced** — needs the reference compiled to compare sizes and gas |
+| 8 | Permit and extra interfaces | not in `ERC4626.sol`; commonly added | absent | no EIP-2612, no ERC-165 | out of the frozen surface | reference gate: the reference's compiled method identifiers are exactly the 25 signatures of `vaultFuncs`, and its ABI carries no `permit`, `nonces`, `DOMAIN_SEPARATOR` or `supportsInterface`; neither side exposes them |
+| 9 | Runtime and code size | solc output: 4347-byte constructor-patched runtime | 17481 bytes, independently authored | different bytecode; Blanc's runtime is 4.0× larger and every measured call is cheaper | the size is the priced cost of inlined full-width arithmetic and per-path guards; the gas is where that design wins, and `PORTING.md` counts bytes and gas rather than asserting them | measured on Jaune at BPO2 against the same WETH (`scripts/prorata-weth-vault-reference-measurements.json`): deposit into an empty vault 107986 vs 110152, deposit into a donated vault 56662 vs 58828, mint 56726 vs 58926, redeem 52276 vs 54942, withdraw 52337 vs 56969, share transfer 50797 vs 51587 (Blanc first, gas) |
 
 ## What this file does not claim
 
 It does not claim the Blanc vault and the OpenZeppelin reference agree
 everywhere else. It claims that the nine rows above are the *only* intended
 differences, and that an unexpected mismatch is a failure rather than a new
-row. Establishing "everywhere else" is the compiled-reference differential that
-does not exist yet.
+row. The compiled-reference differential establishes agreement on its eleven
+cases — the four flows, share transfer, event order and data, zero-receiver,
+malformed and value-bearing calls — and nowhere it does not execute: finite
+evidence on a stated corpus, never a proof.
 
 It also does not claim ERC-4626 conformance as a certification. Blanc's
 theorems stop at the Blanc program; the standard is the source of the frozen
