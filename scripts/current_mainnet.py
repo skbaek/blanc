@@ -21,7 +21,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Mapping, NoReturn
 
 
 PROFILE_PATH = Path(__file__).with_name("current-mainnet-target.json")
@@ -127,10 +127,28 @@ class TargetPaths:
 
 
 @dataclass(frozen=True)
+class T8nExecutionTrace:
+    """One transaction's EIP-3155 trace, as the pinned target emits it.
+
+    `steps` are the per-opcode records in execution order, each carrying at
+    least `pc`, `op`, `opName`, `depth`, `gas`, `gasCost`, `stack`,
+    `returnData` and, where memory is populated, `memory`.  `summary` is the
+    trailing record the target writes once the top-level call returns, whose
+    `output` is that call's exact returndata.
+    """
+
+    index: int
+    transactionHash: str
+    steps: tuple[Mapping[str, Any], ...]
+    summary: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class T8nOutputs:
     alloc: Any
     result: Any
     body: Any
+    traces: tuple[T8nExecutionTrace, ...] = ()
 
 
 def _fail(message: str) -> NoReturn:
@@ -1092,6 +1110,54 @@ def _read_output(path: Path, label: str) -> Any:
         _fail(f"t8n {label} output is not readable JSON: {exc}")
 
 
+_TRACE_NAME = re.compile(r"^trace-(\d+)-(0x[0-9a-f]{64})\.jsonl$")
+
+
+def _read_traces(work: Path) -> tuple[T8nExecutionTrace, ...]:
+    """Parse the EIP-3155 files the target wrote beside its ordinary outputs."""
+
+    collected: list[T8nExecutionTrace] = []
+    for path in sorted(work.iterdir(), key=lambda item: item.name):
+        matched = _TRACE_NAME.match(path.name)
+        if matched is None:
+            continue
+        try:
+            lines = [
+                line for line in path.read_text(encoding="utf-8").splitlines() if line
+            ]
+        except OSError as exc:
+            _fail(f"cannot read t8n trace {path.name}: {exc}")
+        if not lines:
+            _fail(f"t8n trace {path.name} is empty")
+        records: list[Mapping[str, Any]] = []
+        for number, line in enumerate(lines, start=1):
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                _fail(f"t8n trace {path.name} line {number} is not JSON: {exc}")
+        summary = records[-1]
+        if "output" not in summary or "gasUsed" not in summary:
+            _fail(
+                f"t8n trace {path.name} has no trailing output/gasUsed summary; "
+                "the target did not finish the traced call"
+            )
+        for number, record in enumerate(records[:-1], start=1):
+            for key in ("pc", "opName", "depth", "stack", "returnData"):
+                if key not in record:
+                    _fail(f"t8n trace {path.name} step {number} has no {key!r}")
+        collected.append(
+            T8nExecutionTrace(
+                index=int(matched.group(1)),
+                transactionHash=matched.group(2),
+                steps=tuple(records[:-1]),
+                summary=summary,
+            )
+        )
+    if not collected:
+        _fail("tracing was requested but the target wrote no trace file")
+    return tuple(collected)
+
+
 def _t8n_process(
     paths: TargetPaths,
     alloc: Any,
@@ -1100,6 +1166,7 @@ def _t8n_process(
     *,
     state_test: bool,
     timeout: int,
+    trace: bool = False,
     falsifier_fork: str | None = None,
     omit_fork: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], T8nOutputs | None]:
@@ -1136,6 +1203,14 @@ def _t8n_process(
         args.extend(["--state.chainid=1", "--state.reward=-1"])
         if state_test:
             args.append("--state-test")
+        if trace:
+            # Observation only.  These flags ask the pinned target to write the
+            # EIP-3155 record it already produces internally; they select no
+            # fork, change no input, and are asserted below to leave the alloc,
+            # result and body bytes identical.
+            args.extend(
+                ["--trace", "--trace.memory", "--trace.returndata"]
+            )
         result = _run(
             args,
             cwd=paths.root,
@@ -1148,6 +1223,7 @@ def _t8n_process(
             alloc=_read_output(alloc_out, "alloc"),
             result=_read_output(result_out, "result"),
             body=_read_output(body_out, "body"),
+            traces=_read_traces(work) if trace else (),
         )
         return result, outputs
 
@@ -1161,11 +1237,23 @@ def run_t8n(
     profile: dict[str, Any] | None = None,
     state_test: bool = True,
     timeout: int = 60,
+    trace: bool = False,
 ) -> T8nOutputs:
-    """Run arbitrary JSON inputs at BPO2; callers cannot override the fork."""
+    """Run arbitrary JSON inputs at BPO2; callers cannot override the fork.
+
+    `trace` asks the pinned target for its EIP-3155 record of the same
+    execution, returned on `T8nOutputs.traces`.  It selects nothing and changes
+    no input: the fork stays the literal BPO2 this lane executes, the chain id
+    and reward stay literal, and one real subprocess still runs one transition
+    against the real pinned binary.  It exists because the channels the BPO2
+    lanes were leaving to Prague -- exact returndata, live CALL and STATICCALL
+    traces -- are observable here and were being assumed instead.
+    """
 
     if type(state_test) is not bool:
         _fail("state_test must be a boolean")
+    if type(trace) is not bool:
+        _fail("trace must be a boolean")
     if type(timeout) is not int or timeout <= 0:
         _fail("timeout must be a positive integer")
     selected_profile = _validate_profile(profile) if profile is not None else load_profile()
@@ -1173,7 +1261,13 @@ def run_t8n(
     paths = target_paths(root, selected_profile)
     _python_preflight(paths, selected_profile)
     result, outputs = _t8n_process(
-        paths, alloc, environment, txs, state_test=state_test, timeout=timeout
+        paths,
+        alloc,
+        environment,
+        txs,
+        state_test=state_test,
+        timeout=timeout,
+        trace=trace,
     )
     if result.returncode != 0 or outputs is None:
         _fail(
@@ -1341,6 +1435,99 @@ def _expect_profile_rejection(profile: dict[str, Any], needle: str, label: str) 
     _fail(f"static mutant {label} was accepted")
 
 
+def _trace_surface_controls() -> None:
+    """The tracer is an observation flag, and these prove it cannot be more.
+
+    Tracing was added because the BPO2 lanes were leaving exact returndata and
+    live call traces to Prague on the unstated assumption that they could not
+    have changed across the fork.  Adding an observation flag to a lane whose
+    trust rests on executing one literal fork through the real pinned binary
+    earns the same scrutiny as anything else here.
+    """
+
+    # A non-boolean trace request is refused before any subprocess starts.
+    try:
+        run_t8n({}, {}, [], trace="yes")  # type: ignore[arg-type]
+    except CurrentMainnetError as exc:
+        if "trace must be a boolean" not in str(exc):
+            _fail(f"non-boolean trace control failed through the wrong channel: {exc}")
+    else:
+        _fail("non-boolean trace control was accepted")
+
+    # Tracing selects no fork, no chain and no reward, and adds only the three
+    # observation flags.  Capture the real argument vector rather than trusting
+    # the source to read the way it looks.
+    captured: list[list[str]] = []
+
+    def capture(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        captured.append(list(args))
+        return subprocess.CompletedProcess(args, 1, "", "captured by control")
+
+    paths = TargetPaths(Path("/t"), Path("/t/.venv"), Path("/t/.venv/p"), Path("/t/.venv/e"))
+    real_run = globals()["_run"]
+    globals()["_run"] = capture
+    try:
+        _t8n_process(paths, {}, {}, [], state_test=True, timeout=1, trace=False)
+        _t8n_process(paths, {}, {}, [], state_test=True, timeout=1, trace=True)
+    finally:
+        globals()["_run"] = real_run
+    if len(captured) != 2:
+        _fail(f"trace argument control captured {len(captured)} invocations, expected 2")
+    plain, traced = captured
+    for label, args in (("untraced", plain), ("traced", traced)):
+        forks = [item for item in args if item.startswith("--state.fork")]
+        _literal(forks, ["--state.fork=BPO2"], f"{label} fork arguments")
+        if any(item.startswith("--input.") and "fork" in item for item in args):
+            _fail(f"{label} argument vector smuggled a fork through an input path")
+    # Each invocation gets its own temporary directory, so compare the
+    # path-free arguments: those are the ones that select behaviour.
+    def selectors(args: list[str]) -> list[str]:
+        return [item for item in args if "/" not in item]
+
+    plain_selectors, traced_selectors = selectors(plain), selectors(traced)
+    added = [item for item in traced_selectors if item not in plain_selectors]
+    _literal(
+        sorted(added),
+        ["--trace", "--trace.memory", "--trace.returndata"],
+        "arguments tracing adds",
+    )
+    if [item for item in plain_selectors if item not in traced_selectors]:
+        _fail("tracing removed an argument the untraced run passes")
+
+    # A trace whose top-level call never returned has no summary, and a run
+    # that asked for tracing and got no file at all must not pass silently.
+    with tempfile.TemporaryDirectory(prefix="blanc-trace-control-") as temporary:
+        work = Path(temporary)
+        try:
+            _read_traces(work)
+        except CurrentMainnetError as exc:
+            if "wrote no trace file" not in str(exc):
+                _fail(f"absent-trace control failed through the wrong channel: {exc}")
+        else:
+            _fail("absent-trace control was accepted")
+        name = "trace-0-0x" + "ab" * 32 + ".jsonl"
+        (work / name).write_text(
+            json.dumps(
+                {
+                    "pc": 0,
+                    "opName": "PUSH1",
+                    "depth": 1,
+                    "stack": [],
+                    "returnData": "0x",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        try:
+            _read_traces(work)
+        except CurrentMainnetError as exc:
+            if "no trailing output/gasUsed summary" not in str(exc):
+                _fail(f"unfinished-trace control failed through the wrong channel: {exc}")
+        else:
+            _fail("unfinished-trace control was accepted")
+
+
 def _static_self_check(profile: dict[str, Any]) -> int:
     mutants: list[tuple[str, dict[str, Any], str]] = []
 
@@ -1442,6 +1629,8 @@ def _static_self_check(profile: dict[str, Any]) -> int:
             _fail(f"unsupported-platform control failed through wrong channel: {exc}")
     else:
         _fail("unsupported-platform control was accepted")
+
+    _trace_surface_controls()
 
     contaminated = TargetPaths(Path("/target"), Path("/target/.venv"), Path("/p"), Path("/t"))
     old = {name: os.environ.get(name) for name in ("EELS_ROOT", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX")}
