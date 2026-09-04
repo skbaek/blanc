@@ -87,6 +87,27 @@ So the rely and history rungs need that route rather than new machinery. The
 generated proof recipes already say as much — "drop to `preserves_lift_admitted`
 or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is
 insufficient" — and this vault is exactly a case where it is.
+
+### The next obstruction on that route
+
+`lift_inv_admitted`'s `with_depth_ind` obligation is the vault's own-frame
+argument, and it must hold at an *arbitrary* frame the induction reaches. The
+four flows' effect theorems each take a resource bundle —
+`InboundCompiledResources` and its outbound twin — carrying `sevm.depth ≠ 0`,
+`sevm.isStatic = false`, and a call-gas bound. `σ` cannot supply those: they
+are facts about the particular frame, not about the world.
+
+They do look like *consequences* of the run having succeeded: a static frame
+cannot complete the `SSTORE` the flow performs, and insufficient call gas makes
+the child return zero, which the `iszero` guard turns into a revert. If that is
+right, the obligation is dischargeable — but only by deriving the bundles from
+success rather than assuming them, and the premises exist precisely to avoid
+that inversion.
+
+So the decision on this route is whether to derive the resource bundles inside
+the effect theorems or to thread them. That is worth settling before the
+transport obligations are attempted, because a `σ` chosen for the wrong answer
+is expensive to discover.
 -/
 
 namespace Blanc
