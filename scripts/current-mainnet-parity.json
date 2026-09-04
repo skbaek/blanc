@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "consumers": [
+    {
+      "id": "weth10",
+      "prague": {
+        "kind": "json",
+        "source": "scripts/fixtures/weth10/manifest.json",
+        "rowsPath": "rows",
+        "nameKey": "name",
+        "channelsKey": "channels"
+      },
+      "bpo2": {
+        "kind": "json",
+        "source": "scripts/fixtures/weth10-current-mainnet/ordinary-call-matrix.json",
+        "rowsPath": "rows",
+        "nameKey": "name",
+        "channelsKey": "creditedChannels"
+      },
+      "channelEquivalence": {
+        "outcome": "status",
+        "logs": "logs",
+        "logical-state": "projected-storage",
+        "eth": "ETH",
+        "returndata": "returndata",
+        "call-trace": "call-trace",
+        "call-shape": "call-shape",
+        "ecrecover": "ecrecover"
+      },
+      "rowAliases": {}
+    },
+    {
+      "id": "beacon-deposit",
+      "prague": {
+        "kind": "json",
+        "source": "scripts/fixtures/beacon-deposit/manifest.json",
+        "rowsPath": "rows",
+        "nameKey": "name",
+        "channelsKey": "channels"
+      },
+      "bpo2": {
+        "kind": "json",
+        "source": "scripts/fixtures/beacon-deposit-current-mainnet/manifest.json",
+        "rowsPath": "runtime.rows",
+        "nameKey": "name",
+        "channelsKey": "creditedChannels"
+      },
+      "channelEquivalence": {
+        "status": "status",
+        "logs": "deposit-log",
+        "state-projection": "deposit-storage",
+        "eth": "deposit-eth",
+        "returndata": "returndata",
+        "sha-staticcall": "sha-staticcall"
+      },
+      "rowAliases": {
+        "selector-deposit-success": "deposit-success",
+        "selector-get-deposit-root-empty": "get-deposit-root",
+        "selector-get-deposit-count-empty": "get-deposit-count",
+        "supports-ffffffff": "supports-invalid",
+        "fallback-unknown-selector": "no-match"
+      }
+    },
+    {
+      "id": "lido-ossifiable-proxy",
+      "prague": {
+        "kind": "python-constant",
+        "source": "scripts/lido_ossifiable_proxy_differential_schema.py",
+        "attribute": "EXPECTED_CASE_IDS"
+      },
+      "bpo2": {
+        "kind": "json-keys",
+        "source": "scripts/reference/lido-ossifiable-proxy/current-mainnet-results.json",
+        "rowsPath": "cases"
+      },
+      "channelEquivalence": {},
+      "rowAliases": {}
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "weth10-top-level-static-context",
+      "consumer": "weth10",
+      "kind": "missing-row",
+      "rows": [
+        "static-CALLBACK_SUCCESS",
+        "static-DOMAIN_SEPARATOR",
+        "static-PERMIT_TYPEHASH",
+        "static-allowance",
+        "static-approve-write",
+        "static-balanceOf",
+        "static-decimals",
+        "static-deploymentChainId",
+        "static-deposit-write",
+        "static-depositToAndCall-write",
+        "static-flashFee",
+        "static-flashLoan-cap-guard",
+        "static-flashLoan-token-guard",
+        "static-flashLoan-write",
+        "static-flashMinted",
+        "static-maxFlashLoan",
+        "static-name",
+        "static-nonces",
+        "static-permit-expired-guard",
+        "static-permit-nonce-write",
+        "static-symbol",
+        "static-totalSupply",
+        "static-transfer-balance-guard",
+        "static-transfer-write",
+        "static-withdraw-balance-guard",
+        "static-withdraw-write"
+      ],
+      "channels": [],
+      "reason": "The Prague lane enters these rows through process_message_call with is_static set at depth 0, which tests the runtime's static-context guard precedence. A t8n transaction is never static at depth 0, so the BPO2 lane can only approach this through a probe contract that STATICCALLs the target, which changes the observed caller from the signing EOA to the probe. That is a different row, not a transcription of this one, and it is recorded here rather than executed under a name it no longer fits.",
+      "basis": {
+        "kind": "expressibility",
+        "obstacle": "a top-level transaction has no static flag; EIP-214 static context is reachable only from an enclosing STATICCALL, which substitutes a contract caller for the EOA the Prague row observes",
+        "measuredOn": "2026-09-04",
+        "escape": "a probe-contract analogue is authorable and would credit the same guard precedence under a different caller; it belongs to a successor goal that names the substitution in the row"
+      },
+      "decision": "R3-pending \u2014 recorded by blanc-current-mainnet-evidence-symmetry-v1 on 2026-09-04; not yet approved by the goal owner"
+    },
+    {
+      "id": "weth10-synthetic-identity-world",
+      "consumer": "weth10",
+      "kind": "missing-row",
+      "rows": [
+        "synthetic-deployment-chain",
+        "synthetic-domain",
+        "synthetic-flash-token-self",
+        "synthetic-transfer-self"
+      ],
+      "channels": [],
+      "reason": "These four rows execute in the synthetic chain-31337 identity world so that the EIP-712 domain separator's chainId dependence is exercised against a second value. run_t8n executes at literal chain 1 and exposes no chainId parameter, and that closed shape is a deliberate trust property of the shared lane. A current-mainnet lane executing a 31337 world would also be describing something mainnet is not.",
+      "basis": {
+        "kind": "expressibility",
+        "obstacle": "run_t8n passes --state.chainid=1 as a literal and takes no chain parameter; widening it would reopen the closed five-function API the consumers' AST self-checks pin",
+        "measuredOn": "2026-09-04",
+        "escape": "none is wanted: the Prague lane keeps the second identity world, and this lane's subject is chain 1"
+      },
+      "decision": "R3-pending \u2014 recorded by blanc-current-mainnet-evidence-symmetry-v1 on 2026-09-04; not yet approved by the goal owner"
+    }
+  ]
+}
