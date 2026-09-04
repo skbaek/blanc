@@ -1078,6 +1078,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts
 #print axioms Blanc.ProrataWethVault.depositAfterQuote_not_static
 #print axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
+#print axioms Blanc.ProrataWethVault.mint_never_overmints
+#print axioms Blanc.ProrataWethVault.withdraw_never_overpays
 #print axioms Blanc.Frame.enter_run_benvStat
 #print axioms Blanc.RunFrame.benvStat_eq
 #print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep

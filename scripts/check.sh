@@ -1290,6 +1290,8 @@ Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.depositAfterQuote_not_static|$STANDARD
 Blanc.ProrataWethVault.mintAfterQuote_not_static|$STANDARD
+Blanc.ProrataWethVault.mint_never_overmints|propext, Quot.sound
+Blanc.ProrataWethVault.withdraw_never_overpays|propext, Quot.sound
 Blanc.Frame.enter_run_benvStat|$STANDARD
 Blanc.RunFrame.benvStat_eq|$STANDARD
 Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD
