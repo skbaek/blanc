@@ -2072,8 +2072,13 @@ def ci_commands(root: Path) -> list[list[str]]:
             line = line[2:].strip()
         if line.startswith("run:"):
             line = line[4:].strip()
-        if line.startswith("scripts/check-") and ".sh" in line:
-            commands.append(line.split())
+        words = line.split()
+        if (
+            words
+            and words[0].startswith("scripts/check")
+            and words[0].endswith(".sh")
+        ):
+            commands.append(words)
     return commands
 
 

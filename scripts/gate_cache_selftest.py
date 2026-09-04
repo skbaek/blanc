@@ -1903,6 +1903,25 @@ def control_audit_accepts_a_reconciled_registry() -> None:
         require(code == 0, f"a reconciled registry must pass:\n{s.output}")
 
 
+def control_ci_extraction_includes_unhyphenated_check_sh() -> None:
+    """The axiom audit is named check.sh, not check-*.sh.
+
+    The launch extractor's narrower prefix silently omitted that real workflow
+    command while still reporting its own selected population as complete.
+    """
+
+    with scratch() as s:
+        s.catalogue(
+            ["scripts/check-a.sh", "scripts/check.sh --no-build"],
+            ["scripts/check-a.sh", "scripts/check.sh --no-build"],
+        )
+        require(
+            gc.ci_commands(s.root)
+            == [["scripts/check-a.sh"], ["scripts/check.sh", "--no-build"]],
+            "CI extraction omitted the unhyphenated axiom-audit command",
+        )
+
+
 def control_audit_fails_on_catalogue_drift() -> None:
     """Adding, deleting, renaming or re-arguing a catalogued command must fail
     the audit until the registry is reconciled -- otherwise the registry is its
@@ -2377,6 +2396,7 @@ CONTROLS = (
     control_always_fresh_rows_never_reuse,
     control_report_and_manifest_are_self_contained,
     control_audit_accepts_a_reconciled_registry,
+    control_ci_extraction_includes_unhyphenated_check_sh,
     control_audit_fails_on_catalogue_drift,
     control_audit_fails_on_a_stale_generated_inventory,
     control_audit_needs_a_catalogue_block,

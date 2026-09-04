@@ -367,14 +367,20 @@ consumer. Time-dependent exception rows hash the next semantic expiry
 transition rather than the civil date, so an empty registry survives midnight
 while the first date that can change an active set invalidates it.
 
-**CI trust boundary.** Production CI executes its 39 registered commands fresh
-and accepts no cross-run verdict evidence. Pull requests and forks cannot admit
-evidence; an unavailable, moved, or non-ancestor comparison base selects the
-entire CI population; and workflow, registry, or undeclared-input uncertainty
-can only add work or fail the audit. The workflow runs
-`scripts/ci_gate_policy.py` before the gates, and this catalogue audit repeats
-its trust/dependency controls. CI therefore gains an explicit selection record
-without treating local same-clone evidence as portable or trusted.
+**CI trust boundary.** Production CI executes its 44 registered commands fresh
+across the topology in `scripts/ci-topology.json` and accepts no cross-run
+verdict evidence. Pull requests and forks cannot admit evidence; an unavailable,
+moved, or non-ancestor comparison base selects the entire CI population; and
+workflow, registry, topology, or undeclared-input uncertainty fails the audit
+before any gate lane starts. Four independent static lanes then precede one
+shared `Blanc jaune/jaune` build. Semantic lanes restore only that exact
+candidate cache with fail-on-miss behavior and configure their Lean action with
+building and fallback caches disabled. The policy pins one full build and
+rejects a duplicate, partial, permissive, or previous-commit restore.
+`scripts/ci_gate_policy.py` audits every named action/command as well as every
+gate, and this catalogue audit repeats its trust/dependency controls. CI
+therefore gains an explicit, complete selection record without treating local
+same-clone evidence as portable or trusted.
 
 **Campaign sampling.** Production sampling is disabled. The reviewed policy
 classifies every candidate-positive and harness case as complete or mandatory,

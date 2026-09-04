@@ -3,7 +3,7 @@
   "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
   "launch_population": 53,
   "launch_ci_population": 34,
-  "final_ci_population": 40,
+  "final_ci_population": 44,
   "split_families": [
     "lido-circuit-breaker-registry",
     "execution-occurrence",

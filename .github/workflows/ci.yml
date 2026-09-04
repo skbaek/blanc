@@ -10,156 +10,261 @@ on:
 permissions:
   contents: read
 
-# One in-flight run per ref: a newer push cancels the older run instead of
-# stacking a second build (which recompiles jaune from source) on a superseded
-# commit.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-audit:
+  policy:
+    name: CI policy
     runs-on: ubuntu-24.04
-    # Sized for a COLD build, not a warm one. lean-action's cache key includes
-    # the lake-manifest hash, so every jaune pin bump, toolchain bump or mathlib
-    # bump misses the cache and recompiles jaune from source: ~33 min instead of
-    # ~2 min. Measured cold total is ~64 min (5.5 min static gates + ~33 min
-    # lean-action + ~26 min Lean-dependent gates) against ~34 min warm. A 45 min
-    # ceiling fit the warm path only and killed run 33682682661 (and 33507722119
-    # before it) mid-gate on exactly the bumps CI exists to check, skipping 20
-    # gates. Keep this well clear of the cold path rather than tightened to the
-    # warm one, for the same reason canary.yml keeps its own 60 min slack.
-    timeout-minutes: 90
-
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
         with:
-          # Full history: the OssifiableProxy performance contract verifies its
-          # campaign base commit with git cat-file, which a shallow clone fails.
           fetch-depth: 0
-      - name: CI gate selection and trust policy
+      - name: CI topology mutation controls
+        run: python3 scripts/ci_gate_policy.py --self-test
+      - name: CI topology audit and fresh selection
         env:
-          BLANC_CI_EVENT: ${{ github.event_name }}
           BLANC_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BLANC_CI_EVENT: ${{ github.event_name }}
           BLANC_CI_HEAD: ${{ github.sha }}
-          BLANC_CI_REPOSITORY: ${{ github.repository }}
           BLANC_CI_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-        run: |
-          python3 scripts/ci_gate_policy.py --self-test
-          python3 scripts/ci_gate_policy.py --audit \
-            --event "$BLANC_CI_EVENT" \
-            --base "$BLANC_CI_BASE" \
-            --head "$BLANC_CI_HEAD" \
-            --repository "$BLANC_CI_REPOSITORY" \
-            --head-repository "$BLANC_CI_HEAD_REPOSITORY" \
-            --output .lake/ci-gate-selection.json
+          BLANC_CI_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/ci_gate_policy.py --audit --event "$BLANC_CI_EVENT" --base "$BLANC_CI_BASE" --head "$BLANC_CI_HEAD" --repository "$BLANC_CI_REPOSITORY" --head-repository "$BLANC_CI_HEAD_REPOSITORY" --output .lake/ci-gate-selection.json
+
+  source-trust:
+    name: Source and trust static checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [policy]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
-      # Static and fail-closed: it reads committed files only, so it needs no
-      # Lean toolchain, no build and no network, and fails in well under a
-      # second when the assurance register stops describing the tree.
       - name: Lido CircuitBreaker assurance register
         run: scripts/check-lido-circuit-breaker-assurance.sh
       - name: BeaconDeposit assurance register
         run: scripts/check-beacon-deposit-assurance.sh
+      - name: Proof-recipe change review
+        run: scripts/check-proof-recipes.sh --base main
       - name: Proof-resource ceiling debt
         run: scripts/check-proof-debt.sh
+      - name: Proof-module size ratchet
+        run: scripts/check-proof-module-size.sh
       - name: Proof-duplication ratchet
         run: scripts/check-proof-duplication.sh
       - name: Registered proof residue ratchet
         run: scripts/check-proof-residue.sh
-      # Ahead of the toolchain deliberately: this gate reads .lean files only,
-      # so it needs no Lean, no build and no network, and fails in under a
-      # second when a contract reaches into another contract's modules.
       - name: Import hierarchy (contracts are siblings)
         run: scripts/check-layering.sh
       - name: Execution-settlement extraction ownership
         run: scripts/check-extraction-ownership.sh
       - name: Imported source trust surface
         run: scripts/check-trust-surface.sh
-      - name: Deployed WETH10 reference lock (offline)
-        run: scripts/check-weth10-reference.sh
-      - name: Lido CircuitBreaker reference lock (offline)
-        run: scripts/check-lido-circuit-breaker-reference.sh
-      - name: Lido TWG reference lock (offline)
-        run: scripts/check-lido-twg-reference.sh
-      - name: Lido OssifiableProxy reference lock (offline)
-        run: scripts/check-lido-ossifiable-proxy-reference.sh
-      - name: Lido OssifiableProxy performance contract (static)
-        run: scripts/check-lido-ossifiable-proxy-performance.sh
-      - name: Lido OssifiableProxy generated artifacts (offline)
-        run: scripts/check-lido-ossifiable-proxy-artifacts.sh
-      # The Lido dispatcher and both differential matrices remain mandatory
-      # local candidate gates. The narrowly provisioned EELS checkout below is
-      # owned by the deployment-root singleton replay only.
-      - uses: leanprover/lean-action@v1
-      - name: Lido CircuitBreaker Registry RI7 static assurance
-        run: scripts/check-lido-circuit-breaker-registry.sh --static-only
-      - name: Lido CircuitBreaker Registry RI7 semantic assurance
-        run: scripts/check-lido-circuit-breaker-registry.sh --semantic-only
-      - name: Lido CircuitBreaker enumeration and observability S3 assurance
-        run: scripts/check-lido-circuit-breaker-enumeration.sh
-      - name: Lido CircuitBreaker access and temporal-authority S5 assurance
-        run: scripts/check-lido-circuit-breaker-access.sh
-      - name: Lido CircuitBreaker Registry-history S7 assurance
-        run: scripts/check-lido-circuit-breaker-history.sh
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Checkout pinned execution-specs for deployment-root replay
+
+  reference-locks:
+    name: Offline reference and artifact locks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [policy]
+    steps:
+      - name: Checkout exact candidate
         uses: actions/checkout@v6
         with:
-          repository: ethereum/execution-specs
-          ref: 4198b9c5996713b268aed602739d5aa40e277694
-          path: execution-specs
-          fetch-depth: 1
-      - name: Install pinned execution-specs environment
-        run: |
-          python -m venv execution-specs/venv
-          execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
-      - name: Build the Jaune fixture runner
-        run: lake build jaune/jaune
-      - name: Lido CircuitBreaker direct deployment-root S9 assurance
-        env:
-          EELS_ROOT: ${{ github.workspace }}/execution-specs
-        run: scripts/check-lido-circuit-breaker-deployment.sh
-      - name: Lido launch/current artifact ownership ledgers (offline)
-        run: scripts/check-lido-circuit-breaker-artifact-profile.sh
-      - name: Lido constructor emitted-byte schema (offline)
-        run: scripts/check-lido-circuit-breaker-constructor.sh
-      - name: Lido runtime error-table schema (offline)
-        run: scripts/check-lido-circuit-breaker-runtime-errors.sh
-      - name: Execution-settlement CREATE rollback regression
-        run: scripts/check-execution-settlement.sh
-      - name: Execution-occurrence static corpus assurance
-        run: scripts/check-execution-occurrence.sh --static-only
-      - name: Execution-occurrence compiled semantic regression
-        run: scripts/check-execution-occurrence.sh --semantic-only --composed-prerequisites
-      - name: Cycle-safe same-frame static corpus assurance
-        run: scripts/check-cycle-write-free.sh --static-only
-      - name: Cycle-safe same-frame compiled semantic regression
-        run: scripts/check-cycle-write-free.sh --semantic-only
+          fetch-depth: 0
+      - name: Deployed WETH10 reference lock
+        run: scripts/check-weth10-reference.sh
+      - name: Lido CircuitBreaker reference lock
+        run: scripts/check-lido-circuit-breaker-reference.sh
+      - name: Lido TWG source and ABI census
+        run: scripts/check-lido-twg-census.sh
+      - name: Lido TWG reference lock
+        run: scripts/check-lido-twg-reference.sh
+      - name: Lido OssifiableProxy reference lock
+        run: scripts/check-lido-ossifiable-proxy-reference.sh
+      - name: Lido OssifiableProxy performance contract
+        run: scripts/check-lido-ossifiable-proxy-performance.sh
+      - name: Lido OssifiableProxy generated artifacts
+        run: scripts/check-lido-ossifiable-proxy-artifacts.sh
+      - name: WETH selector coverage
+        run: scripts/check-weth-coverage.sh
+      - name: fmint selector coverage
+        run: scripts/check-fmint-coverage.sh
+
+  execution-static:
+    name: Execution static assurances
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [policy]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Transaction-scoped transient settlement static assurance
         run: scripts/check-transient-settlement.sh --static-only
+      - name: Execution-occurrence static corpus assurance
+        run: scripts/check-execution-occurrence.sh --static-only
+      - name: Lido CircuitBreaker Registry RI7 static assurance
+        run: scripts/check-lido-circuit-breaker-registry.sh --static-only
+      - name: Proxy-pair upgrade static migration and R2 assurance
+        run: scripts/check-proxy-pair-upgrade.sh --static-only
+
+  cycle-static:
+    name: Cycle-safe static assurance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [policy]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Cycle-safe same-frame static corpus assurance
+        run: scripts/check-cycle-write-free.sh --static-only
+
+  build:
+    name: Single shared Lean and Jaune build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: [source-trust, reference-locks, execution-static, cycle-static]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Build Blanc and the Jaune fixture runner once
+        uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
+        with:
+          build: true
+          build-args: Blanc jaune/jaune
+
+  execution-semantic:
+    name: Execution semantic regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [build]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Restore exact build output
+        uses: actions/cache/restore@v5
+        with:
+          fail-on-cache-miss: true
+          key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
+          path: .lake
+      - name: Install Lean toolchain without rebuilding
+        uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
+        with:
+          build: false
+          use-github-cache: false
+          use-mathlib-cache: false
+      - name: Execution-settlement CREATE rollback regression
+        run: scripts/check-execution-settlement.sh
+      - name: Execution-occurrence compiled semantic regression
+        run: scripts/check-execution-occurrence.sh --semantic-only --composed-prerequisites
+      - name: Cycle-safe same-frame compiled semantic regression
+        run: scripts/check-cycle-write-free.sh --semantic-only
       - name: Transaction-scoped transient settlement semantic regression
         run: scripts/check-transient-settlement.sh --semantic-only
-      - name: Error(string) payload cross-derivation (offline)
+      - name: Proxy-pair upgrade compiled witnesses and axioms
+        run: scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
+
+  contract-semantic:
+    name: Contract proofs and generated artifact semantics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [build]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Restore exact build output
+        uses: actions/cache/restore@v5
+        with:
+          fail-on-cache-miss: true
+          key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
+          path: .lake
+      - name: Install Lean toolchain without rebuilding
+        uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
+        with:
+          build: false
+          use-github-cache: false
+          use-mathlib-cache: false
+      - name: Lido CircuitBreaker Registry RI7 semantic assurance
+        run: scripts/check-lido-circuit-breaker-registry.sh --semantic-only
+      - name: Lido CircuitBreaker enumeration and observability
+        run: scripts/check-lido-circuit-breaker-enumeration.sh
+      - name: Lido CircuitBreaker access and temporal authority
+        run: scripts/check-lido-circuit-breaker-access.sh
+      - name: Lido CircuitBreaker Registry-history assurance
+        run: scripts/check-lido-circuit-breaker-history.sh
+      - name: Lido launch/current artifact ownership ledgers
+        run: scripts/check-lido-circuit-breaker-artifact-profile.sh
+      - name: Lido constructor emitted-byte schema
+        run: scripts/check-lido-circuit-breaker-constructor.sh
+      - name: Lido runtime error-table schema
+        run: scripts/check-lido-circuit-breaker-runtime-errors.sh
+      - name: Error(string) payload cross-derivation
         run: scripts/check-error-data.sh
       - name: Audit headline theorem axioms
         run: scripts/check.sh --no-build
       - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
-      - name: Proxy-pair upgrade static migration and R2 assurance
-        run: scripts/check-proxy-pair-upgrade.sh --static-only
-      - name: Proxy-pair upgrade compiled witnesses and axioms
-        run: scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
-      - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
+
+  deployment-fixtures:
+    name: Pinned EELS deployment and Jaune fixture replays
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [build]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Restore exact build output
+        uses: actions/cache/restore@v5
+        with:
+          fail-on-cache-miss: true
+          key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
+          path: .lake
+      - name: Install Lean toolchain without rebuilding
+        uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
+        with:
+          build: false
+          use-github-cache: false
+          use-mathlib-cache: false
+      - name: Install Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Checkout pinned execution-specs
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          path: execution-specs
+          ref: 4198b9c5996713b268aed602739d5aa40e277694
+          repository: ethereum/execution-specs
+      - name: Create pinned EELS virtual environment
+        run: python -m venv execution-specs/venv
+      - name: Install pinned execution-specs environment
+        run: execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
+      - name: Lido CircuitBreaker direct deployment-root assurance
+        env:
+          EELS_ROOT: ${{ github.workspace }}/execution-specs
+        run: scripts/check-lido-circuit-breaker-deployment.sh
+      - name: WETH fixture suite
         run: scripts/check-weth.sh --no-build
-      - name: PRORATA fixture suite (Jaune vs frozen EELS on the witnessed bytes)
+      - name: PRORATA fixture suite
         run: scripts/check-prorata.sh --no-build
-      - name: WETH selector coverage (shrink-only budget)
-        run: scripts/check-weth-coverage.sh
-      - name: fmint fixture suite (Jaune vs frozen EELS on the witnessed bytes)
+      - name: fmint fixture suite
         run: scripts/check-fmint.sh --no-build
-      - name: fmint selector coverage (shrink-only budget)
-        run: scripts/check-fmint-coverage.sh

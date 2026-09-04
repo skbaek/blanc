@@ -1,0 +1,893 @@
+{
+  "cache_key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
+  "cost_authority": "scripts/GATES.md",
+  "forward_composition": {
+    "4872190aeca5ba2e951ab2a12e3b1061ecb8e92c": {
+      "add": [
+        {
+          "after_gate": "layering",
+          "gate_id": "fork-containment",
+          "job": "source-trust"
+        },
+        {
+          "after_step": "eels-install",
+          "gate_id": "eels-prague-closure",
+          "job": "deployment-fixtures"
+        }
+      ],
+      "note": "Recorded only; reserved spine ancestry is not imported by this candidate."
+    }
+  },
+  "input_authority": "scripts/gate-registry.json",
+  "jobs": [
+    {
+      "id": "policy",
+      "name": "CI policy",
+      "needs": [],
+      "role": "policy",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "scripts/ci_gate_policy.py",
+            "scripts/ci-gate-policy.json",
+            "scripts/ci-topology.json",
+            "scripts/gate-registry.json"
+          ],
+          "expected_cost": "sub-second",
+          "id": "policy-self-test",
+          "kind": "command",
+          "name": "CI topology mutation controls",
+          "purpose": "required-per-change-trust",
+          "run": "python3 scripts/ci_gate_policy.py --self-test"
+        },
+        {
+          "dynamic_inputs": [
+            "event kind",
+            "comparison base",
+            "candidate SHA",
+            "repository trust boundary"
+          ],
+          "env": {
+            "BLANC_CI_BASE": "${{ github.event.pull_request.base.sha || github.event.before }}",
+            "BLANC_CI_EVENT": "${{ github.event_name }}",
+            "BLANC_CI_HEAD": "${{ github.sha }}",
+            "BLANC_CI_HEAD_REPOSITORY": "${{ github.event.pull_request.head.repo.full_name || github.repository }}",
+            "BLANC_CI_REPOSITORY": "${{ github.repository }}"
+          },
+          "expected_cost": "sub-second",
+          "id": "policy-audit",
+          "kind": "command",
+          "name": "CI topology audit and fresh selection",
+          "purpose": "required-per-change-trust",
+          "run": "python3 scripts/ci_gate_policy.py --audit --event \"$BLANC_CI_EVENT\" --base \"$BLANC_CI_BASE\" --head \"$BLANC_CI_HEAD\" --repository \"$BLANC_CI_REPOSITORY\" --head-repository \"$BLANC_CI_HEAD_REPOSITORY\" --output .lake/ci-gate-selection.json"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 10
+    },
+    {
+      "id": "source-trust",
+      "name": "Source and trust static checks",
+      "needs": [
+        "policy"
+      ],
+      "role": "static-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "doc-counts",
+          "id": "doc-counts",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Published audited-theorem count",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-circuit-breaker-assurance",
+          "id": "lido-circuit-breaker-assurance",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker assurance register",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "beacon-deposit-assurance",
+          "id": "beacon-deposit-assurance",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "BeaconDeposit assurance register",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proof-recipes",
+          "id": "proof-recipes",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proof-recipe change review",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proof-debt",
+          "id": "proof-debt",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proof-resource ceiling debt",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proof-module-size",
+          "id": "proof-module-size",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proof-module size ratchet",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proof-duplication",
+          "id": "proof-duplication",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proof-duplication ratchet",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proof-residue",
+          "id": "proof-residue",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Registered proof residue ratchet",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "layering",
+          "id": "layering",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Import hierarchy (contracts are siblings)",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "extraction-ownership",
+          "id": "extraction-ownership",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Execution-settlement extraction ownership",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "trust-surface",
+          "id": "trust-surface",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Imported source trust surface",
+          "purpose": "required-per-change-trust"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 10
+    },
+    {
+      "id": "reference-locks",
+      "name": "Offline reference and artifact locks",
+      "needs": [
+        "policy"
+      ],
+      "role": "static-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "weth10-reference",
+          "id": "weth10-reference",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Deployed WETH10 reference lock",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-reference",
+          "id": "lido-reference",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker reference lock",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-twg-census",
+          "id": "lido-twg-census",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido TWG source and ABI census",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-twg-reference",
+          "id": "lido-twg-reference",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido TWG reference lock",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-ossifiable-proxy-reference",
+          "id": "lido-ossifiable-proxy-reference",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido OssifiableProxy reference lock",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-ossifiable-proxy-performance",
+          "id": "lido-ossifiable-proxy-performance",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido OssifiableProxy performance contract",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-ossifiable-proxy-artifacts",
+          "id": "lido-ossifiable-proxy-artifacts",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido OssifiableProxy generated artifacts",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "weth-coverage",
+          "id": "weth-coverage",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "WETH selector coverage",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "fmint-coverage",
+          "id": "fmint-coverage",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "fmint selector coverage",
+          "purpose": "offline-fixture-replay"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 10
+    },
+    {
+      "id": "execution-static",
+      "name": "Execution static assurances",
+      "needs": [
+        "policy"
+      ],
+      "role": "static-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "transient-settlement-static",
+          "id": "transient-settlement-static",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Transaction-scoped transient settlement static assurance",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "execution-occurrence-static",
+          "id": "execution-occurrence-static",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Execution-occurrence static corpus assurance",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-registry-static",
+          "id": "lido-registry-static",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker Registry RI7 static assurance",
+          "purpose": "required-per-change-trust"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proxy-pair-upgrade-static",
+          "id": "proxy-pair-upgrade-static",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proxy-pair upgrade static migration and R2 assurance",
+          "purpose": "required-per-change-trust"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 10
+    },
+    {
+      "id": "cycle-static",
+      "name": "Cycle-safe static assurance",
+      "needs": [
+        "policy"
+      ],
+      "role": "static-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "cycle-write-free-static",
+          "id": "cycle-write-free-static",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Cycle-safe same-frame static corpus assurance",
+          "purpose": "required-per-change-trust"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 10
+    },
+    {
+      "id": "build",
+      "name": "Single shared Lean and Jaune build",
+      "needs": [
+        "source-trust",
+        "reference-locks",
+        "execution-static",
+        "cycle-static"
+      ],
+      "role": "single-build",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "lean-toolchain",
+            "lakefile.lean",
+            "lake-manifest.json",
+            "GitHub exact/fallback build cache"
+          ],
+          "expected_cost": "98\u2013165 s warm; 1,965 s observed cold",
+          "id": "full-build",
+          "kind": "action",
+          "name": "Build Blanc and the Jaune fixture runner once",
+          "purpose": "build-proof",
+          "uses": "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596",
+          "with": {
+            "build": "true",
+            "build-args": "Blanc jaune/jaune"
+          }
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 60
+    },
+    {
+      "id": "execution-semantic",
+      "name": "Execution semantic regressions",
+      "needs": [
+        "build"
+      ],
+      "role": "semantic-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "exact github.sha build cache; no restore prefix"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "restore-build",
+          "kind": "action",
+          "name": "Restore exact build output",
+          "purpose": "build-proof",
+          "uses": "actions/cache/restore@v5",
+          "with": {
+            "fail-on-cache-miss": "true",
+            "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
+            "path": ".lake"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "lean-toolchain; exact restored .lake tree"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "install-toolchain",
+          "kind": "action",
+          "name": "Install Lean toolchain without rebuilding",
+          "purpose": "build-proof",
+          "uses": "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596",
+          "with": {
+            "build": "false",
+            "use-github-cache": "false",
+            "use-mathlib-cache": "false"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "execution-settlement",
+          "id": "execution-settlement",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Execution-settlement CREATE rollback regression",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "execution-occurrence-semantic",
+          "id": "execution-occurrence-semantic",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Execution-occurrence compiled semantic regression",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "cycle-write-free-semantic",
+          "id": "cycle-write-free-semantic",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Cycle-safe same-frame compiled semantic regression",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "transient-settlement-semantic",
+          "id": "transient-settlement-semantic",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Transaction-scoped transient settlement semantic regression",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "proxy-pair-upgrade-semantic",
+          "id": "proxy-pair-upgrade-semantic",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Proxy-pair upgrade compiled witnesses and axioms",
+          "purpose": "compiled-semantic-regression"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 30
+    },
+    {
+      "id": "contract-semantic",
+      "name": "Contract proofs and generated artifact semantics",
+      "needs": [
+        "build"
+      ],
+      "role": "semantic-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "exact github.sha build cache; no restore prefix"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "restore-build",
+          "kind": "action",
+          "name": "Restore exact build output",
+          "purpose": "build-proof",
+          "uses": "actions/cache/restore@v5",
+          "with": {
+            "fail-on-cache-miss": "true",
+            "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
+            "path": ".lake"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "lean-toolchain; exact restored .lake tree"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "install-toolchain",
+          "kind": "action",
+          "name": "Install Lean toolchain without rebuilding",
+          "purpose": "build-proof",
+          "uses": "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596",
+          "with": {
+            "build": "false",
+            "use-github-cache": "false",
+            "use-mathlib-cache": "false"
+          }
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-registry-semantic",
+          "id": "lido-registry-semantic",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker Registry RI7 semantic assurance",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-enumeration",
+          "id": "lido-enumeration",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker enumeration and observability",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-access",
+          "id": "lido-access",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker access and temporal authority",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-history",
+          "id": "lido-history",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker Registry-history assurance",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-artifact-profile",
+          "id": "lido-artifact-profile",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido launch/current artifact ownership ledgers",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-constructor",
+          "id": "lido-constructor",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido constructor emitted-byte schema",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "lido-runtime-errors",
+          "id": "lido-runtime-errors",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido runtime error-table schema",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "error-data",
+          "id": "error-data",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Error(string) payload cross-derivation",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "axiom-audit",
+          "id": "axiom-audit",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Audit headline theorem axioms",
+          "purpose": "build-proof"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "claims",
+          "id": "claims",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Pin WETH10/Lido artifact statements",
+          "purpose": "build-proof"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 30
+    },
+    {
+      "id": "deployment-fixtures",
+      "name": "Pinned EELS deployment and Jaune fixture replays",
+      "needs": [
+        "build"
+      ],
+      "role": "semantic-independent",
+      "runs_on": "ubuntu-24.04",
+      "steps": [
+        {
+          "dynamic_inputs": [
+            "github repository",
+            "github.sha",
+            "complete candidate history"
+          ],
+          "expected_cost": "2\u20134 s observed",
+          "id": "checkout",
+          "kind": "action",
+          "name": "Checkout exact candidate",
+          "purpose": "infrastructure",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "0"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "exact github.sha build cache; no restore prefix"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "restore-build",
+          "kind": "action",
+          "name": "Restore exact build output",
+          "purpose": "build-proof",
+          "uses": "actions/cache/restore@v5",
+          "with": {
+            "fail-on-cache-miss": "true",
+            "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
+            "path": ".lake"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "lean-toolchain; exact restored .lake tree"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "install-toolchain",
+          "kind": "action",
+          "name": "Install Lean toolchain without rebuilding",
+          "purpose": "build-proof",
+          "uses": "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596",
+          "with": {
+            "build": "false",
+            "use-github-cache": "false",
+            "use-mathlib-cache": "false"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "GitHub-hosted Python 3.11 selected patch/runtime"
+          ],
+          "expected_cost": "0\u20131 s observed",
+          "id": "python-runtime",
+          "kind": "action",
+          "name": "Install Python 3.11",
+          "purpose": "offline-fixture-replay",
+          "uses": "actions/setup-python@v6",
+          "with": {
+            "python-version": "3.11"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "GitHub network",
+            "exact EELS source pin"
+          ],
+          "expected_cost": "1\u20132 s observed",
+          "id": "eels-checkout",
+          "kind": "action",
+          "name": "Checkout pinned execution-specs",
+          "purpose": "offline-fixture-replay",
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": "1",
+            "path": "execution-specs",
+            "ref": "4198b9c5996713b268aed602739d5aa40e277694",
+            "repository": "ethereum/execution-specs"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "selected Python 3.11 runtime"
+          ],
+          "expected_cost": "included in 9\u201311 s environment setup",
+          "id": "eels-venv",
+          "kind": "command",
+          "name": "Create pinned EELS virtual environment",
+          "purpose": "offline-fixture-replay",
+          "run": "python -m venv execution-specs/venv"
+        },
+        {
+          "dynamic_inputs": [
+            "EELS declared Python dependency ranges",
+            "package index/network"
+          ],
+          "expected_cost": "included in 9\u201311 s environment setup",
+          "id": "eels-install",
+          "kind": "command",
+          "name": "Install pinned execution-specs environment",
+          "purpose": "offline-fixture-replay",
+          "run": "execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "env": {
+            "EELS_ROOT": "${{ github.workspace }}/execution-specs"
+          },
+          "gate_id": "lido-deployment",
+          "id": "lido-deployment",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "Lido CircuitBreaker direct deployment-root assurance",
+          "purpose": "compiled-semantic-regression"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "weth-fixtures",
+          "id": "weth-fixtures",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "WETH fixture suite",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "prorata-fixtures",
+          "id": "prorata-fixtures",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "PRORATA fixture suite",
+          "purpose": "offline-fixture-replay"
+        },
+        {
+          "cost_authority": "scripts/GATES.md",
+          "gate_id": "fmint-fixtures",
+          "id": "fmint-fixtures",
+          "input_authority": "scripts/gate-registry.json",
+          "kind": "gate",
+          "name": "fmint fixture suite",
+          "purpose": "offline-fixture-replay"
+        }
+      ],
+      "surface": "pinned-main-per-change",
+      "timeout_minutes": 30
+    }
+  ],
+  "purpose": "Pinned-main per-change CI rejects invalid candidates before one shared build, then preserves independent semantic evidence without admitting cross-run verdicts.",
+  "required_gate_count": 44,
+  "schema": 1,
+  "workflow": ".github/workflows/ci.yml"
+}

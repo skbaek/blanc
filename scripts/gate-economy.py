@@ -53,7 +53,8 @@ def ci_population() -> int:
             line = line[2:].strip()
         if line.startswith("run:"):
             line = line[4:].strip()
-        if line.startswith("scripts/check-") and ".sh" in line:
+        words = line.split()
+        if words and words[0].startswith("scripts/check") and words[0].endswith(".sh"):
             commands.add(line)
     return len(commands)
 
@@ -71,7 +72,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
         "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
         "launch_population": 53,
         "launch_ci_population": 34,
-        "final_ci_population": 40,
+        "final_ci_population": 44,
         "split_families": [
             "lido-circuit-breaker-registry",
             "execution-occurrence",
@@ -200,15 +201,17 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Two gates landed on main after the launch inventory: the cheap BeaconDeposit assurance",
-        "  row runs early at position 3, while the deployment control at position 44 uses exact",
+        "- Three gates landed on main after the launch inventory: the cheap BeaconDeposit assurance",
+        "  row runs early at position 3, while the deployment control at position 45 uses exact",
         "  evaluator stdout and authority as a material-output certificate. Its positive and",
         "  mutation checks are unchanged, but proof-only movement with identical emitted evidence",
         "  does not rerun the EELS/Jaune body.",
-        "  The final population is therefore 53 + 5 + 2 = 60; no required content was dropped.",
-        "- CI makes the same five splits and adds the cheap assurance row, so its registered",
-        "  command population moves from 34 to 40. The deployment control remains a local",
-        "  merge-candidate row. The prerequisite column also records nested launch composition",
+        "  The final population is therefore 53 + 5 + 3 = 61; no required content was dropped.",
+        "- The CI census now includes the already-executed but formerly uncounted",
+        "  `scripts/check.sh --no-build` row and adds the proof-recipe, proof-module-size,",
+        "  and Lido TWG census static rows. Its exact registered command population is 44.",
+        "  Deployment/current-mainnet and full differential rows remain local/full-catalogue.",
+        "  The prerequisite column also records nested launch composition",
         "  now represented by runner-enforced dependencies that consume exact earlier green",
         "  evidence.",
         "- A catalogue timing cell is retained as published evidence, not relabelled as a new",
