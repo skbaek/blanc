@@ -112,8 +112,8 @@ lemma prefix_of_allowanceKeyFromMemory_val {e : Sevm} {xs : Stack}
   have hb0 := of_run_pushB256 hpush0
   have hp2 : (0 : B256) :: 64 :: xs <<+ s2.stack := prefix_of_push hb0 hp1
   have hm2 : s.memory = s2.memory := hb64.memory.trans hb0.memory
-  rcases Line.of_run_cons run2 with ⟨s3, hkec, run3⟩
-  rcases prefix_of_keccak256_val hkec hp2 with ⟨hp3, _⟩
+  rcases Line.of_run_cons run2 with ⟨s3, hkeccak256, run3⟩
+  rcases prefix_of_keccak256_val hkeccak256 hp2 with ⟨hp3, _⟩
   change (s2.memory.read 0 64).1.keccak :: xs <<+ s3.stack at hp3
   rw [← hm2, hread] at hp3
   rcases Line.of_run_cons run3 with ⟨s4, hpushMask, run4⟩
