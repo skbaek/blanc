@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TriggerableWithdrawalsGateway — a Blanc port of Lido’s gateway</title>
+<meta name="description" content="Blanc’s port of Lido’s TriggerableWithdrawalsGateway — the CircuitBreaker’s real pause target: 24 selectors and the constructor, a 60-agreement / 11-deviation differential beside the locked Solidity reference, five accepted deviations and 48 dearer gas rows published as priced costs, the pinned-pause-target bundle proved with noninterference discharged rather than assumed, and the portfolio’s first theorem about two verified contracts at once.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#composition">Composition</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>TriggerableWithdrawalsGateway.</h1>
+        <p class="lede" style="margin-top:20px">
+          The port of the
+          <a href="https://etherscan.io/address/0xDC00116a0D3E064427dA2600449cfD2566B3037B#code" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">TriggerableWithdrawalsGateway</a>
+          that Lido deployed — directly, not behind a proxy — at <span class="mono">0xDC00…037B</span>:
+          the contract through which validator exits are triggered, rate-limited by a refilling
+          frame quota, and at the pinned block the account the deployed CircuitBreaker holds
+          <span class="mono">PAUSE_ROLE</span> on. It was chosen for exactly that reason. The
+          <a href="lido-circuit-breaker.html" style="text-decoration:underline;text-underline-offset:3px">CircuitBreaker port</a>
+          proves that a pause spends its authorization and calls out; this port proves what the
+          callee does with the call — and a new stratum of the repository joins the two.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          It is also the portfolio’s honest loss. The Blanc runtime is 7,820 bytes <em>larger</em>
+          than the reference and dearer on 48 of 51 named gas paths, and every one of those rows
+          is published as a priced cost rather than folded into an aggregate. A port never claims
+          byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs what is claimed and what never is — and this one claims less than most: five
+          accepted behavioral deviations, each with a stance, none defended as an improvement.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-lido-twg-differential.sh
+<span class="ok">OK — Lido TWG differential: 60 agreement rows + 11 exact registered-deviation rows; 24/24 selectors + constructor; 52 causal history messages; 186 resource boundaries …</span>
+<span class="p">$</span> scripts/check-layering.sh
+<span class="ok">OK — layering: 8 contract(s) are siblings; 357 module(s) classified, 355 non-root checked, 2 composition module(s) downstream, no cross-contract, inverted or composition-inverted import</span></div>
+        <p class="cap"><b>Fig. 1</b> — two gates, verbatim (exact-candidate run 2026-09-03 UTC), ellipses marking
+          elision: the differential matrix beside the locked Solidity reference, whose eleven
+          registered-deviation rows are compared as exactly as the sixty agreements, and the
+          layering gate that now classifies a composition stratum strictly downstream of every
+          contract family. The differential line continues “… 46 reference CALL/STATICCALL traces;
+          10 positive artifact checks; 9 live channel/identity/semantic falsifiers.”</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>15,948 B runtime — vs 8,128 deployed</span>
+          <span class="pill"><span class="d"></span>24/24 selectors + constructor</span>
+          <span class="pill"><span class="d"></span>5 accepted deviations</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">A pause target that answers for itself.</h2>
+    <p class="lede" style="margin-top:18px">
+      The gateway family owns three things. The pause face —
+      <span class="mono">pauseFor</span>, <span class="mono">pauseUntil</span>,
+      <span class="mono">resume</span>, with the all-ones sentinel for an infinite pause. The
+      role gate over all of it. And an account-level protocol,
+      <span class="mono">PinnedPauseTarget</span>, stated in target-neutral vocabulary and
+      discharged by the exact compiled runtime in four clauses: a successful
+      <span class="mono">pauseFor</span> stores the shared projection, sentinel included; the
+      <span class="mono">isPaused</span> query is truthful; the pause route writes nothing to the
+      CircuitBreaker’s own cells; and the protected surface reverts while paused. The third
+      clause is the one the CircuitBreaker page keeps loud as an assumption —
+      <span class="mono">PauseSuccessNoninterference</span> — and here, for this target, it is a
+      theorem.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">pinnedPauseTarget</span>, Blanc/LidoTriggerableWithdrawalsGatewayPinnedTarget.lean).</div>
+      <p class="stmt">For every deployment parameter set, every pair of distinct CircuitBreaker and
+        gateway accounts, and every list of CircuitBreaker cells, the exact compiled gateway runtime
+        satisfies the four-clause pinned-pause-target bundle — assembled only from source-derived
+        walks and actual retained-message inversion, with no structure of assumed witnesses.</p>
+<pre><span class="k">structure</span> <span class="t">PinnedPauseTarget</span>
+    (circuitBreaker target : <span class="t">Adr</span>) (program : <span class="t">Prog</span>)
+    (pauseCalldata : <span class="t">B256</span> → <span class="t">Bytes</span>) (queryCalldata : <span class="t">Bytes</span>)
+    (pausedUntil : <span class="t">Adr</span> → <span class="t">Stor</span> → <span class="t">B256</span>)
+    (circuitBreakerCells : <span class="t">List</span> <span class="t">B256</span>)
+    (protectedSurface : <span class="t">List</span> <span class="t">B256</span>) : <span class="t">Prop</span> <span class="k">where</span>
+  pauseFor_effect : …    <span class="c">-- clause (i): the shared projection, sentinel preserved</span>
+  isPaused_truthful : …  <span class="c">-- clause (ii): canonical true iff paused at entry</span>
+  …                      <span class="c">-- clauses (iii), (iv): the CircuitBreaker's cells untouched;</span>
+                         <span class="c">   the protected surface refuses while paused</span></pre>
+    </div>
+    <p class="cap"><b>Read the shape</b> — the bundle never exposes or unfolds
+      <span class="mono">program</span>; its fields say only what the account at
+      <span class="mono">target</span> does on exact settled inbound messages, and the paused
+      projection is local to one account’s storage, so no unrelated change can alter its
+      observation. Clause (i) is unconditional on the sentinel:
+      <span class="mono">pauseFor(2<sup>256</sup> − 1)</span> stores the sentinel and anything else
+      stores <span class="mono">timestamp + duration</span> by checked addition — a disjunct, not a
+      premise excluding the input. Clause (ii) is partial correctness for an exact static query:
+      every clean settled answer preserves the projection and accepts canonical true exactly when
+      the account was paused at entry; exceptional outcomes carry no liveness obligation.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/LidoTriggerableWithdrawalsGateway*.lean · Blanc/Composition/*</span><span class="tag">the substantive stack</span></div>
+<pre>pinnedPauseTarget                        <span class="c">-- the bundle above, over parameters, addresses, cells</span>
+gateway_lidoPinnedPauseTarget            <span class="c">-- …specialized to the CircuitBreaker's two cells:</span>
+                                         <span class="c">   [countSlot pauser, heartbeatIntervalSlot]</span>
+pauseForCalldata_eq · isPausedCalldata_eq <span class="c">-- exact ABI agreement between two encoders defined</span>
+                                         <span class="c">   on independent evidence — a real check</span>
+gatewayBoundaryExecutions_of_afterSet_ok <span class="c">-- direct installation supplies both program</span>
+                                         <span class="c">   occurrences; no code-shape fact asked of the caller</span>
+publicPause_gatewayPinnedTarget          <span class="c">-- entry 3, conditional on the successful run (below)</span>
+gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premise but reachability, discharged</span>
+                                         <span class="c">   for one concrete world</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">compact errors, priced</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          A role-gate failure returns the four-byte selector of a no-argument error rather than
+          the reference’s <span class="mono">Error(string)</span> with account and role; a
+          wrong-account <span class="mono">renounceRole</span> and an out-of-bounds
+          <span class="mono">getRoleMember</span> empty-revert where the reference carries a
+          reason or a <span class="mono">Panic(0x32)</span>. Three accepted deviations, each
+          filed as the declared local cost of one compact, proof-oriented error convention — not
+          as an improvement, and not as a size win, since the whole port is larger.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">flat keys, fail-loud</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Role membership lives at the low 252 bits of
+          <span class="mono">role XOR account</span>, with the full role, canonical account, and a
+          global index in tagged regions. A nonempty record whose full identity differs is
+          refused rather than aliased, and views answer nonmembership rather than reading through
+          it — the WETH precedent, applied to authority. The cost is published: a colliding
+          state the reference admits can fail here, and enumeration order after a cross-role
+          removal can differ, because one global array is filtered where the reference keeps one
+          set per role.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">the withdrawal path, with mocks named as mocks</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">triggerFullWithdrawals</span> decodes its request list, checks its
+          role and the resumed state, consumes the frame quota, resolves the withdrawal vault
+          through the immutable locator, forwards the requests with exactly the computed fee,
+          notifies the staking router, and refunds the excess. The locator, vault, and router are
+          mocks in the corpus and arbitrary callees in the theorems; they are not ported, and the
+          claim says so rather than reaching for a system it did not build.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>Blanc is larger and dearer here. Why publish it at all?</h3><span class="devtag">pushback</span></div>
+      <p>Because the porting policy requires it, and because the point of this port was never
+        bytes. A gas increase on an externally callable path is a deviation like any other,
+        recorded and defended: 48 of the 51 named rows are dearer, each dispositioned as a measured
+        priced cost, and the runtime is 15,948 bytes against 8,128. What the port claims is
+        behavioral agreement on the published corpus, subject to five declared deviations, plus
+        the proved pause bundle — never “a better way to build it”. A portfolio that only reported
+        the contracts it beat would be advertising, not reporting.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Does this say anything about Lido’s gateway on mainnet?</h3><span class="devtag">pushback</span></div>
+      <p>Only as provenance. The deployed account at <span class="mono">0xDC00…037B</span> was
+        snapshotted through two independent providers at block 25,866,991: its code hash agrees
+        with the official compiled runtime, it is unpaused, and the CircuitBreaker holds
+        <span class="mono">PAUSE_ROLE</span>. That fixes <em>which</em> contract was ported. It is
+        not a theorem about deployed Solidity, not a current-state claim, and no dependency
+        contract is covered. Raw storage layout is a declared non-claim: logical pause, limit,
+        membership, count, and locator behavior are compared; slot-for-slot compatibility is not.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      The family’s 24 audited theorems sit in the repository-wide axiom audit, with eight more in
+      the composition stratum below, every one pinned to exactly the standard three axioms. The
+      differential manifest freezes the artifact identity and the proof certificate separately,
+      because six conformance repairs moved the runtime after the first proofs landed — and the
+      port’s claim documents keep that split explicit rather than calling either commit the
+      identity of both.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ COMPOSITION ═══════════ -->
+<section id="composition">
+  <div class="wrap">
+    <p class="eyebrow">Composition — two verified contracts at once</p>
+    <h2 style="max-width:30ch">A pause that leaves its target really paused — up to one premise.</h2>
+    <p class="lede" style="margin-top:18px">
+      The CircuitBreaker port stops, deliberately, at the boundary of its own frame: a target’s
+      canonical <span class="mono">true</span> is evidence the target <em>reported</em> success,
+      never that it is paused. Closing that gap needs a theorem that names two contract families,
+      and under the sibling rule such a theorem has no honest home in either. So the repository
+      grew one place for it — <span class="mono">Blanc/Composition/*</span>, a stratum that may
+      import any number of contract families, that no contract or shared module may import, and
+      whose edges the layering gate checks with committed negative controls. Its first inhabitant
+      is this theorem.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">publicPause_gatewayPinnedTarget</span>, Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean).</div>
+      <p class="stmt">At a successful public <span class="mono">pause(target)</span> run of the
+        production CircuitBreaker, with the exact compiled gateway runtime directly installed at a
+        distinct, non-precompile target account, the committed-outcome family holds, the actual
+        gateway <span class="mono">pauseFor</span> and <span class="mono">isPaused</span>
+        executions occur, and the gateway is left paused at exactly
+        <span class="mono">pauseForProjection entryTime duration</span> on the same successful
+        final state — with the CircuitBreaker’s pauser-count and heartbeat-interval cells
+        preserved by the gateway’s own proved noninterference.</p>
+<pre><span class="k">theorem</span> <span class="d">publicPause_gatewayPinnedTarget</span>
+    {sevm : <span class="t">Sevm</span>} {pre final : <span class="t">Devm</span>} {owner : <span class="t">Adr</span>}
+    {target duration idx0 len0 last0 : <span class="t">B256</span>} {img : <span class="t">Bytes</span>}
+    {dp : <span class="t">LidoTriggerableWithdrawalsGateway.DeployParams</span>}
+    {ex : <span class="t">Execution</span>}
+    (premises : <span class="t">PublicPauseEntryPremises</span> sevm pre owner target duration
+      idx0 len0 last0 img (gatewayCode dp))
+    (targetNe : target.toAdr ≠ sevm.currentTarget)
+    (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
+    (publicRun : <span class="t">Prog</span>.<span class="t">RunCompiledTo</span> sevm pre (runtime officialParams) ex)
+    (success : ex = .ok final) :
+    <span class="t">PublicPausePinnedTargetConclusion</span> sevm pre target duration (gatewayCode dp)
+      (<span class="t">LidoTriggerableWithdrawalsGateway</span>.runtime dp)
+      <span class="t">LidoTriggerableWithdrawalsGateway</span>.pausedUntil ex final</pre>
+    </div>
+    <p class="cap"><b>Read what is absent</b> — no bundle premise (the composition supplies it), no
+      program-occurrence premise (both <span class="mono">MessageExecutesProgram</span> witnesses
+      and the CALL/STATICCALL linkage are derived from the walk’s own spawns), no accepted-query
+      premise, no callback-noninterference premise, no paused-result premise, and no code-shape
+      premise at all: non-delegation and a nonempty byte list follow from the compiler witness,
+      nonzero installed width from the successful polarity — the CircuitBreaker’s own
+      <span class="mono">EXTCODESIZE</span> guard reverts on zero — and nonzero depth from the
+      successful suffix past the <span class="mono">CALL</span>. Four hostile review rounds
+      rejected the candidate before the fourth’s bounded follow-ups accepted it, and each round
+      removed a premise: from three low-level code facts, to one, to none, and finally the last
+      implied hypothesis, <span class="mono">depth ≠ 0</span>, derived inside the crossing rather
+      than asked of any caller.</p>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>So entry 3 — “a successful pause leaves the target really paused” — is closed?</h3><span class="devtag">pushback</span></div>
+      <p>Not yet, and the register says so. The theorem is conditional on a successful production
+        run. <span class="mono">gatewayPauseWorld_closedPremises</span> discharges every other
+        premise for one concrete world — the production CircuitBreaker at its account, the
+        compiler’s own gateway output at the target, and only the explicit role, Registry, time,
+        and storage configuration — so that any successful run of that world yields the
+        conclusion with no further hypothesis. That the world’s public pause run <em>terminates
+        successfully</em> is not established here: it is the single objective of a successor goal,
+        authored and not started. The successor register keeps entry 3 open, and this page keeps
+        it open with it.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Why is the ABI agreement a theorem rather than a definition?</h3><span class="devtag">pushback</span></div>
+      <p>Because sharing one definition would have proved nothing. The CircuitBreaker computes
+        its outbound selectors from <span class="mono">selector "pauseFor" [.uint256]</span>; the
+        gateway carries census-derived literals frozen from the Solidity source. The two
+        equalities are decided by the kernel between encoders defined on independent evidence, so
+        a wrong literal on either side fails — which is also why, with every code-shape premise
+        gone, the ABI agreement is the one thing left that a mutant can still falsify, and it is
+        controlled.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      The stratum is one-way by construction: composition may name several families, the
+      families stay siblings and neither imports the other, and roots aggregate composition
+      without the dependency ever running back. Eight negative controls — an unclassified
+      composition module, shared→composition, contract→composition, composition→root, an ordinary
+      cross-contract import, and prohibited imports hidden behind three comment shapes — each
+      fail at the intended edge in disposable copies and return to green when only the mutation
+      is removed. The CircuitBreaker’s 74-row assurance register carries the three composition
+      rows, and TWG-3 states plainly that no successful concrete production run is established.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is the gateway</p>
+    <h2 style="max-width:30ch">A locked reference, and a corpus that measured the losses.</h2>
+    <p class="lede" style="margin-top:18px">
+      “Right” was written down before it was argued:
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md</a>
+      freezes all 24 endpoints, the constructor, six events, and thirteen cross-cutting
+      boundaries, filled from the validated reference lock and the generated differential
+      manifest — a synchronization gate rejects marker drift, an undispositioned deviation, or a
+      mismatch with either source. Two layers discharge the claims.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The reference lock — which contract, exactly</span><span class="foldsub">13-source closure · byte-for-byte recompilation · dual-provider snapshot · 15 falsifiers</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-twg-reference.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-twg-reference.sh</span></a>
+          reconstructs the exact source, compiler, deployment, and provider lock offline: the
+          thirteen-file Solidity closure at the pinned <span class="mono">lidofinance/core</span>
+          commit recompiled byte for byte with the vendored <span class="mono">solc 0.8.9</span>,
+          both parameter worlds derived, the complete ABI, event, error, role, and storage
+          identities checked, and two independent RPC snapshots at block 25,866,991 reconciled —
+          runtime code hash, pause state, and the CircuitBreaker’s role. Fifteen falsifiers cover
+          deletion, type, digest, closure, artifact, provider, and coordinated-input mutations. A
+          separate census gate pins the 24 selectors, six event topics, fourteen custom errors,
+          six role and slot hashes, and the exact <span class="mono">whenResumed</span> surface.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">60 agreements + 11 registered deviations · 52 causal messages · 186 resource boundaries</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-twg-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-twg-differential.sh</span></a>
+          executes the exact compiler-derived Blanc creation and runtime artifacts beside the
+          locked reference in a pinned EELS Prague interpreter, agreeing on status, exact
+          returndata, the logical projection, ETH, ordered logs, and calls — with the eleven rows
+          that exercise a registered deviation compared just as exactly, each naming its one stable
+          registry row and its expected channels. No status-only allowlist and no unknown-mismatch
+          allowlist exists. The corpus covers both pause polarities and both sentinel arms, seven
+          role negatives, enumeration and collision histories, limit configure, consume, and refill
+          behavior, the trigger path over mock worlds with fee, value, router, refund, ETH, log, and
+          call effects, and explicit rollback.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The corpus earned its keep six times over before the port’s claim could be made:
+          <span class="mono">supportsInterface(bytes4)</span> had been decoded as if the argument
+          were right-aligned; then, in order, a constructor-argument lifetime, the value returned
+          by role enumeration, the revocation decrement, two non-terminating role loops, and the
+          paused/resumed error polarity. Each is a declared conformance repair that moved the
+          runtime, and the family revalidated every affected proof on the repaired program. The
+          cheapest way to be wrong is to prove the wrong program; tests catch that first.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">pause face · authorization · the bundle · the composition</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          Where the corpus samples, the theorems quantify — always about the exact compiled bytes:
+          <span class="mono">lidoTwgCode_compile</span> exposes the exact-bytes equation for
+          arbitrary deployment parameters, and every statement hypothesises those bytes. The
+          pause-face and authorization families cover <span class="mono">pauseUntil</span>,
+          <span class="mono">resume</span>, the role-gated negatives, and the protected surface;
+          the bundle and the composition theorem are stated in full above. The family’s
+          protected statements are pinned by <span class="mono">check-claims.sh</span>, and the
+          three composition rows sit in the
+          <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">CircuitBreaker’s assurance register</a>,
+          whose verifier fails if any cited declaration, axiom set, or non-claim phrase drifts.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">Five accepted — each priced, none an improvement.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md</a>
+      records five behavioral differences, all accepted, zero repaired, zero pending, with no
+      unknown-mismatch allowlist; its policy marker and its five row markers encode the same
+      counts, and the family gate rejects drift between them. Every row names which of the
+      policy’s three defenses it rests on, and none of these five rests on “better”.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Unauthorized role-gate payload</h3><span class="devtag">TWG-D01 — accepted priced cost</span></div>
+      <p>The reference’s <span class="mono">AccessControl</span> base rejects a missing role with
+        dynamic <span class="mono">Error(string)</span> data naming account and role. Blanc rejects
+        with the four-byte selector of a no-argument <span class="mono">AccessControlUnauthorizedAccount()</span>.
+        Status and rollback agree; returndata differs on seven unauthorized paths.</p>
+      <p><b>The argument:</b> one compact, proof-oriented error-table convention, at the declared
+        cost of the reference’s diagnostics. Not defended as an aggregate size win — the complete
+        port is larger — only as the local cost of the simpler verifiable representation.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Two more empty reverts</h3><span class="devtag">TWG-D02, TWG-D03 — accepted priced costs</span></div>
+      <p>A wrong-account <span class="mono">renounceRole</span> and an out-of-bounds
+        <span class="mono">getRoleMember</span> empty-revert where the reference returns a reason
+        string and a <span class="mono">Panic(0x32)</span> respectively; the second costs more
+        gas as well, and the row says so.</p>
+      <p><b>The argument:</b> the same rejection convention, and the terminal result of the same
+        filtered scan used for enumeration. Proof locality and one scan discipline — not size,
+        not gas.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Enumeration order, and collision refusal</h3><span class="devtag">TWG-D04, TWG-D05 — orthogonal; priced fail-loud design</span></div>
+      <p>After a suitable cross-role grant-and-revoke history, membership and count agree while
+        <span class="mono">getRoleMember(role, i)</span> may return a different valid member at
+        the same ordinal. And in a constructed colliding state, an operation the reference admits
+        can be refused, with <span class="mono">hasRole</span> answering false rather than
+        attributing another pair’s membership.</p>
+      <p><b>The argument:</b> ordinal stability after cross-role removal is not part of the
+        pause-and-withdrawal job, so D04 is orthogonal — but ordinals are public, so it is
+        registered rather than hidden as a storage freedom. D05 is a priced design cost with
+        fail-loud behavior: refusing a collision beats silently granting, revoking, or reading
+        another pair’s authority. Neither is claimed as overall superiority.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Larger, and dearer — measured, and published.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed manifest, pinned oracle</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">15,948 B</td><td class="dim">vs 8,128 reference — 7,820 larger; 8,628 B of EIP-170 headroom</td></tr>
+            <tr><td>full CREATE input</td><td class="num">18,136 B</td><td class="dim">vs 10,256 — 7,880 larger</td></tr>
+            <tr><td>successful construction gas</td><td class="num">3,400,489</td><td class="dim">vs 1,744,364, code deposit included, in pinned EELS</td></tr>
+            <tr><td><span class="mono">pauseFor</span>, finite duration</td><td class="num">29,772</td><td class="dim">vs 26,352 — dearer by 3,420</td></tr>
+            <tr><td>unauthorized role gate</td><td class="num">2,270</td><td class="dim">vs 32,304 — the compact error is 30,034 cheaper; one of three negative controls</td></tr>
+            <tr><td>named gas rows dearer</td><td class="num">48 / 51</td><td class="dim">every positive row carries a substantive grouped disposition</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <span class="tick">what is deliberately not claimed</span>
+        <p class="dim" style="font-size:.94rem">
+          No size or gas superiority anywhere on this page — the numbers are measurements against
+          the locked reference under one declared boundary (direct EELS Prague message gas used;
+          constructor rows include code deposit and exclude intrinsic gas and refunds), and
+          sums and averages are never allowed to hide a positive public path. The one cheaper row
+          above is a diagnostic cost the reference pays and Blanc does not, and it is not offered
+          as a defense of anything.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          Universal gas behavior is not claimed in either direction; the family’s executable
+          evidence is under the pinned Prague EELS, and neither this family nor the CircuitBreaker
+          yet has a current-mainnet BPO2 lane of its own — a named follow-up, not an implied
+          coverage.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">the premise ladder</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The composition theorem’s first candidate asked the caller for three low-level facts
+          about the target’s code. A hostile review found each implied by something the caller
+          already supplies — the compiler witness, the successful polarity — and a later review
+          found the last one, <span class="mono">depth ≠ 0</span>, still implied and still
+          unproved: searching for an existing lemma is not the same as asking whether a fact
+          follows. The inversion now exists, at zero depth a zero-value
+          <span class="mono">CALL</span> cannot spawn and the bubble cannot end
+          <span class="mono">.ok</span>, and the reviewer’s probe was treated as a blueprint and
+          re-derived against the semantics. The genuinely surviving hypotheses are two: a
+          non-static enclosing frame, and a target distinct from the caller.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">a mutant needs a hypothesis</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The closure contract asked for mutants refuting the non-delegation and nonempty-code
+          premises. Once those premises were derived rather than assumed, the mutants had nothing
+          to refute, and they were deleted rather than kept: an artefact servicing a deleted
+          premise looks like coverage while testing nothing. What remains falsifiable — the ABI
+          agreement between independently defined encoders — remains controlled. The wording is
+          the user’s, recorded because it generalizes: negative controls exist to bite, and a
+          control that can no longer bite is not evidence, it is furniture.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
+      <span class="mono">0xDC00…037B</span> — its address and snapshot block are provenance
+      identifiers. The composition theorem is conditional on a successful production run that no
+      concrete world has yet been shown to have; it does not cover a target behind a proxy, a
+      second transaction, liveness, or gas sufficiency; and the locator, vault, and router are
+      not ported. The five deviations and the raw-storage non-claim are the registry’s, in the
+      honest register.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— TriggerableWithdrawalsGateway, the Lido port</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, registry rows, gate summaries, and the
+        assurance register; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="lido-circuit-breaker.html">the CircuitBreaker port →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean" target="_blank" rel="noopener">the composition →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>
