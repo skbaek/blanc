@@ -43,28 +43,21 @@ def runtimeError (name : String) (args : List ArgType := []) : Func :=
 
 def fallbackSlot : Nat := 1
 def missingRoleSlot : Nat := 2
-def adminZeroSlot : Nat := 3
-def zeroArgumentSlot : Nat := 4
-def pausedExpectedSlot : Nat := 5
-def resumedExpectedSlot : Nat := 6
-def zeroPauseDurationSlot : Nat := 7
-def pauseUntilPastSlot : Nat := 8
-def arithmeticPanicSlot : Nat := 9
-def limitErrorSlot : Nat := 10
-def feeErrorSlot : Nat := 11
-def refundErrorSlot : Nat := 12
-def triggerNestedAbiSlot : Nat := 13
-def tooLargeMaxExitRequestsLimitSlot : Nat := 14
-def tooLargeFrameDurationSlot : Nat := 15
-def tooLargeExitsPerFrameSlot : Nat := 16
-def zeroFrameDurationSlot : Nat := 17
-def limitCurrentComputeSlot : Nat := 18
-def limitCurrentContinueSlot : Nat := 19
-def setLimitAfterCurrentSlot : Nat := 20
-def setLimitWriteSlot : Nat := 21
-def consumeExitLimitSlot : Nat := 22
-def consumeAfterCurrentSlot : Nat := 23
-def exitRequestsLimitExceededSlot : Nat := 24
+def pausedExpectedSlot : Nat := 3
+def resumedExpectedSlot : Nat := 4
+def zeroPauseDurationSlot : Nat := 5
+def pauseUntilPastSlot : Nat := 6
+def arithmeticPanicSlot : Nat := 7
+def tooLargeMaxExitRequestsLimitSlot : Nat := 8
+def tooLargeFrameDurationSlot : Nat := 9
+def tooLargeExitsPerFrameSlot : Nat := 10
+def zeroFrameDurationSlot : Nat := 11
+def limitCurrentComputeSlot : Nat := 12
+def limitCurrentContinueSlot : Nat := 13
+def setLimitAfterCurrentSlot : Nat := 14
+def setLimitWriteSlot : Nat := 15
+def consumeAfterCurrentSlot : Nat := 16
+def exitRequestsLimitExceededSlot : Nat := 17
 
 def roleKeyFromMemory (region : Nat) : Line :=
   mloadWord 0 ++ mloadWord 1 ++
@@ -261,13 +254,10 @@ def isPaused : Func :=
 
 def supportsInterface : Func :=
   requireStaticArgs 1 <|
-    ((argBytes4 0 ++ [pushB256 0x01ffc9a7, eq]) +++
-      (([pushB256 1] +++ returnWord) <?>
-        ((argBytes4 0 ++ [pushB256 0x7965db0b, eq]) +++
-          (([pushB256 1] +++ returnWord) <?>
-            ((argBytes4 0 ++ [pushB256 0x5a05180f, eq]) +++
-              (([pushB256 1] +++ returnWord) <?>
-                ([pushB256 0] +++ returnWord)))))))
+    (argBytes4 0 ++ [pushB256 0x01ffc9a7, eq] ++
+      argBytes4 0 ++ [pushB256 0x7965db0b, eq, or] ++
+      argBytes4 0 ++ [pushB256 0x5a05180f, eq, or]) +++
+      returnWord
 
 /-! ## Pause and role mutation -/
 
@@ -418,13 +408,52 @@ def setExitRequestLimit : Func :=
       ((.call tooLargeMaxExitRequestsLimitSlot) <?>
         setExitRequestLimitDurationChecked)
 
-/-! The trigger packet owns a 22-entry local auxiliary table.  The family
-runtime occupies global slots 1--24, so local slot one is rebased to global
-slot 25 by adding 24 to every local call. -/
-def triggerAuxDelta : Nat := 24
+/-! The compact family runtime occupies global slots 1--17.  Trigger-local
+selector-only `ResumedExpected`, arithmetic-panic and role-failure bodies are
+identical to family bodies, so the integrated table maps those three calls to
+slots 4, 7 and 2 and omits the duplicate table entries. -/
+def triggerAuxDelta : Nat := 17
+
+def integratedTriggerSlot (slot : Nat) : Nat :=
+  if slot = Trigger.resumedExpectedSlot then resumedExpectedSlot
+  else if slot = Trigger.arithmeticPanicSlot then arithmeticPanicSlot
+  else if slot = Trigger.roleFailureBoundarySlot then missingRoleSlot
+  else if slot < Trigger.resumedExpectedSlot then triggerAuxDelta + slot
+  else if slot < Trigger.arithmeticPanicSlot then triggerAuxDelta + slot - 1
+  else if slot < Trigger.roleFailureBoundarySlot then triggerAuxDelta + slot - 2
+  else triggerAuxDelta + slot - 3
+
+def rebaseIntegratedTriggerCalls : Func → Func
+  | .branch left right =>
+      .branch (rebaseIntegratedTriggerCalls left)
+        (rebaseIntegratedTriggerCalls right)
+  | .last op => .last op
+  | .next op rest => .next op (rebaseIntegratedTriggerCalls rest)
+  | .call slot => .call (integratedTriggerSlot slot)
 
 def triggerFullWithdrawals (dp : DeployParams) : Func :=
-  Trigger.rebasedTrigger triggerAuxDelta dp
+  rebaseIntegratedTriggerCalls (Trigger.triggerFullWithdrawals dp)
+
+def integratedTriggerAux (dp : DeployParams) : List Func :=
+  [ Func.revert,
+    Trigger.zeroMsgValueRevert,
+    Trigger.zeroValidatorsDataRevert,
+    Trigger.exitLimitExceededRevert,
+    Trigger.insufficientFeeRevert,
+    Trigger.feeRefundFailedRevert,
+    Trigger.divisionPanicRevert,
+    Trigger.assertionPanicRevert,
+    Trigger.validateArrayLoop,
+    Trigger.afterValidation,
+    Trigger.consumeExitRequestLimit (.call Trigger.afterQuotaSlot),
+    Trigger.afterQuota dp,
+    Trigger.encodeArraysLoop,
+    Trigger.afterEncoding,
+    Trigger.bubbleRevert,
+    Trigger.afterVaultCall dp,
+    Trigger.refundCall,
+    Trigger.balanceCheck,
+    Trigger.afterNestedValidation ].map rebaseIntegratedTriggerCalls
 
 /-! ## Selector dispatch -/
 
@@ -466,6 +495,12 @@ def sharedNonpayableFuncs : List (B256 × Func) :=
     (selHasRole, hasRole),
     (selGetRoleMember, getRoleMember),
     (selGetRoleMemberCount, getRoleMemberCount),
+    (selSupportsInterface, supportsInterface),
+    (selResume, resume),
+    (selDefaultAdminRole, constantWord defaultAdminRole),
+    (selPauseInfinitely, constantWord pauseInfinitely),
+    (selGetResumeSinceTimestamp, getResumeSinceTimestamp),
+    (selRenounceRole, renounceRole),
     (selPauseRole, constantWord pauseRole),
     (selResumeRole, constantWord resumeRole),
     (selAddFullWithdrawalRequestRole,
@@ -473,18 +508,12 @@ def sharedNonpayableFuncs : List (B256 × Func) :=
     (selTwExitLimitManagerRole, constantWord twExitLimitManagerRole),
     (selTwrLimitPosition, constantWord twrLimitPosition),
     (selVersion, constantWord version),
-    (selResume, resume),
     (selPauseUntil, pauseUntil),
     (selSetExitRequestLimit, setExitRequestLimit),
     (selGetExitRequestLimitFullInfo, getExitRequestLimitFullInfo),
-    (selPauseInfinitely, constantWord pauseInfinitely),
-    (selGetResumeSinceTimestamp, getResumeSinceTimestamp),
-    (selDefaultAdminRole, constantWord defaultAdminRole),
-    (selSupportsInterface, supportsInterface),
     (selGetRoleAdmin, getRoleAdmin),
     (selGrantRole, grantRole),
-    (selRevokeRole, revokeRole),
-    (selRenounceRole, renounceRole) ]
+    (selRevokeRole, revokeRole) ]
 
 def runtimeMain (dp : DeployParams) : Func :=
   pushB256 4 ::: calldatasize ::: lt :::
@@ -498,18 +527,12 @@ def runtimeMain (dp : DeployParams) : Func :=
 def baseAux : List Func :=
   [Func.revert,
    runtimeError "AccessControlUnauthorizedAccount",
-   runtimeError "AdminCannotBeZero",
-   runtimeError "ZeroArgument" [.dynBytes],
    runtimeError "PausedExpected",
    runtimeError "ResumedExpected",
    runtimeError "ZeroPauseDuration",
    runtimeError "PauseUntilMustBeInFuture",
    Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
      (Nat.toB256 0x11).toBytes),
-   runtimeError "LimitExceeded",
-   runtimeError "InsufficientFee" [.uint256, .uint256],
-   runtimeError "FeeRefundFailed",
-   Func.revert,
    runtimeError "TooLargeMaxExitRequestsLimit",
    runtimeError "TooLargeFrameDuration",
    runtimeError "TooLargeExitsPerFrame",
@@ -518,18 +541,13 @@ def baseAux : List Func :=
    limitCurrentContinue,
    setLimitAfterCurrent,
    setLimitWrite,
-   consumeExitLimit,
    consumeAfterCurrent,
    ([pushB256 Trigger.exitLimitExceededSelector] ++ mstoreAt 0 ++
      mloadWord 14 ++ mstoreAt 1 ++ mloadWord 8 ++ mstoreAt 2 ++
      [pushB256 68, pushB256 28]) +++ .last .revert]
 
-def triggerRoleFailure : Func :=
-  runtimeError "AccessControlUnauthorizedAccount"
-
 def aux (dp : DeployParams) : List Func :=
-  baseAux ++ Trigger.rebasedLocalAuxWithRoleFailure triggerAuxDelta dp
-    triggerRoleFailure
+  baseAux ++ integratedTriggerAux dp
 
 def runtime (dp : DeployParams) : Prog :=
   ⟨runtimeMain dp, aux dp⟩
