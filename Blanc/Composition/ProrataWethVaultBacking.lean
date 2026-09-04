@@ -714,6 +714,66 @@ theorem deposit_message_accountingStep
     rfl
 
 
+
+/-- **A compiled `redeem` message is a `withdraw` accounting step.**
+
+`previewRedeemN` *is* `convertToAssetsN`, so the quote matches the carrier's
+withdraw pricing without an extra step, and the coverage the snapshot bridge
+needs is the debit side of the effect's own WETH transfer. -/
+theorem redeem_message_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.quoteWord)
+    (receiverNotVault :
+      sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ assets : B256,
+      Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+        (snapshotAt sevm pre)
+        (.withdraw (Sevm.argWord sevm 0).toNat assets.toNat)
+        (snapshotAt sevm post) := by
+  obtain ⟨supply, assets, supplyEq, quoteEq, burnable, effect⟩ :=
+    redeem_compiled_effect_named config memoryWf resources run selectorEq
+  have effectWhole := effect
+  obtain ⟨-, movement, -, -, -, -, -, -⟩ := effect
+  refine ⟨assets, outboundEffect_accountingStep receiverNotVault ?_ ?_
+    effectWhole ?_⟩
+  · show (Sevm.argWord sevm 0).toNat ≤
+      (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot).toNat
+    rw [← supplyEq]
+    exact burnable
+  · exact B256.toNat_le_toNat movement.1
+  · rw [quoteEq, supplyEq]
+    rfl
+
+
+/-! ### Why `mint` and `withdraw` have no step here
+
+`deposit` and `redeem` are *quoted in the direction the carrier prices*: the
+caller names the asset amount and the vault computes the shares, or the caller
+names the shares and the vault computes the assets.  Those are literally the
+carrier's `deposit` and `withdraw` classes.
+
+`mint` and `withdraw` are quoted the other way round — the caller names the
+shares and the vault computes the asset input, or names the assets and the
+vault computes the share burn.  Exhibiting one of those as a carrier step would
+need the round trip to be exact, `convertToShares (previewMint s) = s`, and
+that is not an identity: the two roundings compose to something at least `s`
+and sometimes more.
+
+So this is a real gap in the carrier's fit, not a missing proof of a true
+statement.  Closing it means either proving the round-trip bound and carrying
+the slack explicitly, or giving the carrier a class for an inverse-quoted
+operation.  Which of those is right is a modelling decision about what the dust
+accounting should say, and it should be made deliberately rather than by
+picking whichever proof lands.
+-/
+
 /-! ## Every non-flow message is a silent accounting step
 
 The twenty-one targets that make no external call move neither the vault's
