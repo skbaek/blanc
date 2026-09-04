@@ -199,12 +199,12 @@
     "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b"
   },
   "touchedConsumerHashes": {
-    "Blanc/Weth10AllowanceArmsPermit.lean": "d6f88a595b2e70d552a7ffcd85886206625e1c9e9ff1908cecd2a1f94138a5b8",
-    "Blanc/Weth10StaticSilence.lean": "e218d347a46adef11c73a78d5066342e3d0277d7a2dc6ec7848312f42cee6643"
+    "Blanc/Weth10AllowanceArmsPermit.lean": "06062305249386944359a87dc9870b8c2db0d267b42ce6dc204cd838d06e6521",
+    "Blanc/Weth10StaticSilence.lean": "0d785799f254ed6cf83cde09de81fd0a7e3be9635b53fa368a80c8c00fd18dd9"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "fda133eb7ba43e41540bf594674fcb2ce2d128061659f34166275ed0bd55baec"
+  "wethPublicHeaderAggregate": "91c152d2fdb9ba5eb1defb59e81271be4091196c57b857da91261e65e3d2658a"
 }

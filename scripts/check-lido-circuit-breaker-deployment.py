@@ -44,12 +44,12 @@ SOURCES = {
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
 AXIOM_GATE = "scripts/check.sh"
-PUBLIC_THEOREM_COUNT = 164
+PUBLIC_THEOREM_COUNT = 163
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "39f728be6a9e22a79230232b9b05780569c8b525a14faad95f4f1b71a72caeb8"
+    "0840e08eb738944185bd1a73888f2b6689ed4f3fc3ddf3af7dd8e07f9c808d0f"
 )
 AXIOM_EXPECTATIONS_SHA256 = (
-    "aa632491d3a791e10077c2a9e7add8b8df96d24ead1fc0c57b44e324cc6a6d7f"
+    "3357972fb6a6856c0744b23f513f1df219a0672938c416db3491e37f36a5327a"
 )
 
 # Kept as digests rather than copies to make this executable readable.  The
