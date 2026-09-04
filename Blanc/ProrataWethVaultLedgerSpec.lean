@@ -322,12 +322,21 @@ those two are open.
 The obstruction has been narrowed. It is not the flows' outer structure and it
 is not the literal staging lines: restating the shared tail over *variable*
 lines, so that `StoresOrHalts.prepend` can collapse each in one step, still
-exhausts the ceiling. What is left inside is `callWethTransferFrom`'s own
-staging — the fixed `pushList` window and the `pushB256 assetAddress` constant
-before the `CALL`. Whatever is expensive there is expensive during
-elaboration, not in the finished term, so the next thing to try is a lemma
-stated directly about `callWethTransferFrom body`, proved once with those
-constants held abstract, rather than another tactic shape.
+exhausts the ceiling. It is `callWethTransferFrom`: a lemma about that
+definition alone, with its asset line a variable and its body a hypothesis,
+exhausts the ceiling on its own.
+
+The likely cause is the tactic's first alternative rather than the term. That
+alternative is `exact StoresOrHalts.store`, whose conclusion is
+`StoresOrHalts fs (sstore ::: f)`, so trying it against a staging head forces
+Lean to decide whether that head *is* `sstore` — and the staging heads are
+`pushB256 (word * 32)` and `pushB256 assetAddress`, whose `B256` numeral
+arithmetic is expensive to reduce. The finished term is only about twenty
+constructors deep, which is nowhere near the ceiling.
+
+So the next thing to try is the alternatives in a different order, or an
+explicit term, rather than a coarser combinator. This reading is not verified:
+it explains the measurements but was not tested by fixing it.
 
 Slots a flow may tail-jump into on its way to a write. -/
 def FlowStoreSlot (k : Nat) : Prop :=
