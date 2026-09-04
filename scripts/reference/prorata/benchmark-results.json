@@ -415,7 +415,7 @@
   },
   "provenance": {
     "blancRuntimeSourceSha256": "1e60109bc4068e05278a30b5759969948d4f9182f17df8a97ed6a9ce15760771",
-    "currentMainnetHelperSha256": "f8f1fc8e67eec4db5efccb0af17997675e2f0b645fe16037a19285e3e43f59ed",
+    "currentMainnetHelperSha256": "c6d1bceec0025f74cea26a7eaf668a98f473c70e95c8bb6e8a2fa7009c30f3b8",
     "fixtureGeneratorSha256": "1cfa40f50a8fb4f8af767954762a7053b7d75b4a93a241c2b36868c43d88092d",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "referenceLockSha256": "c39ca09114507c775624b0d78106c2ddd90390324d6168c113270c710dd8414e"
