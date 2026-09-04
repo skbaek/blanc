@@ -68,6 +68,14 @@ private theorem pauseEntry_callsIn :
       (fun callee => callee ∈ pauseExecMembers) = true := by
   decide +kernel
 
+private theorem pauseBody_localExecFree :
+    pauseFor.localExecFree = true := by
+  decide +kernel
+
+private theorem pauseBody_callsIn :
+    pauseFor.callsIn (fun callee => callee ∈ pauseExecMembers) = true := by
+  decide +kernel
+
 private theorem pauseComponent_missingRole (dp : DeployParams) :
     (match (runtime dp).function? missingRoleSlot with
       | none => false
@@ -137,13 +145,37 @@ theorem pauseFor_reachableExecFree (dp : DeployParams) :
   exact ⟨⟨pauseEntry_localExecFree, pauseEntry_callsIn⟩,
     pauseComponents_execFree dp⟩
 
+/-- Direct-body companion used after the optimized runtime's shared
+nonpayable guard has already been traversed. -/
+theorem pauseForShared_reachableExecFree (dp : DeployParams) :
+    (runtime dp).reachableExecFree pauseFor pauseExecMembers = true := by
+  simp only [Prog.reachableExecFree, Bool.and_eq_true]
+  exact ⟨⟨pauseBody_localExecFree, pauseBody_callsIn⟩,
+    pauseComponents_execFree dp⟩
+
 /-- The exact query entry is locally source-exec-free and has no internal
 call edge. -/
 theorem isPaused_reachableExecFree (dp : DeployParams) :
     (runtime dp).reachableExecFree (nonpayable isPaused) [] = true := by
   rfl
 
+theorem isPausedShared_reachableExecFree (dp : DeployParams) :
+    (runtime dp).reachableExecFree isPaused [] = true := by
+  rfl
+
 /-! ## Exact selected-entry route -/
+
+private theorem processMessage_entry_value
+    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {raw : Execution}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
+    sevm.value = msg.value := by
+  have enter := (RunFrame.some_inv process).1
+  rcases Frame.enter_run_inv enter with ⟨benv, _transfer, evmEq⟩
+  have value := congrArg (fun evm : Evm => evm.sta.value) evmEq
+  simpa [Frame.ofCall, initEvm, initSevm, Msg.withBenv] using value
 
 /-- Any same-frame source `.exec` reached by an exact runtime invocation must
 lie in the calldata-selected entry.  A reachable-exec-free certificate for
@@ -159,8 +191,10 @@ private theorem noExec_of_selectedRuntimeEntry
         (runtime dp) gateway gateway)
     (guardZero :
       B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
+    (valueZero : sevm.value = 0)
     (selectorEq : Sevm.selector sevm = selector)
-    (member : (selector, body) ∈ funcs dp)
+    (notTrigger : selector ≠ selTriggerFullWithdrawals)
+    (member : (selector, body) ∈ sharedNonpayableFuncs)
     (members : List Nat)
     (accepted :
       (runtime dp).reachableExecFree body members = true)
@@ -177,7 +211,12 @@ private theorem noExec_of_selectedRuntimeEntry
     (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) (runtime dp) ⟨0, []⟩
       ([Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt] +++
         (Func.revert <?>
-          (fsig +++ linearDispatchWith fallbackSlot (funcs dp))))
+          (fsig +++ Ninst.dup 0 :::
+            Ninst.pushB256 selTriggerFullWithdrawals ::: Ninst.eq :::
+            ((Ninst.pop ::: triggerFullWithdrawals dp) <?>
+              (Ninst.callvalue ::: Ninst.iszero :::
+                (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
+                  Func.revert))))))
     at mainCursor
   have mainRoute := mainCursor.toward compiled mainReached
     (by trivial) execAt
@@ -216,10 +255,70 @@ private theorem noExec_of_selectedRuntimeEntry
       prefix_of_fsig nil_pref selectorRun
     rw [selectorEq] at actualSelector
     exact actualSelector
+
+  change Exec.Deriv.SourceCursor
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) (runtime dp)
+      _selectorPath
+      ([Ninst.dup 0, Ninst.pushB256 selTriggerFullWithdrawals, Ninst.eq] +++
+        ((Ninst.pop ::: triggerFullWithdrawals dp) <?>
+          (Ninst.callvalue ::: Ninst.iszero :::
+            (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
+              Func.revert)))) at selectorCursor
+  rcases selectorRoute.dropLineRun (by simp [Ninst.pushB256]) with
+    ⟨_triggerBranchPath, triggerBranchCursor, triggerLineRun,
+      _triggerChronology, triggerBranchRoute⟩
+  rcases Line.of_run_cons triggerLineRun with
+    ⟨afterDup, dupRun, triggerLineRun⟩
+  rcases Line.of_run_cons triggerLineRun with
+    ⟨afterTriggerPush, triggerPushRun, triggerLineRun⟩
+  rcases Line.of_run_cons triggerLineRun with
+    ⟨_afterTriggerEq, triggerEqRun, triggerLineNil⟩
+  cases triggerLineNil
+  have duplicated : selector :: selector :: [] <<+ afterDup.stack :=
+    prefix_of_dup_val dupRun (by show_nth) selectorPrefix
+  have triggerPushed : selTriggerFullWithdrawals :: selector :: selector :: [] <<+
+      afterTriggerPush.stack := by
+    simpa using prefix_of_push (of_run_pushB256 triggerPushRun) duplicated
+  have triggerFlagPrefix :
+      (selTriggerFullWithdrawals =? selector) :: selector :: [] <<+
+        triggerBranchCursor.pre.stack :=
+    prefix_of_eq triggerEqRun triggerPushed
+  rw [show (selTriggerFullWithdrawals =? selector) = 0 from by
+    simp [B256.eqCheck, Ne.symm notTrigger]] at triggerFlagPrefix
+  rcases triggerBranchRoute.selectBranchZero triggerBranchCursor compiled
+      (by trivial) execAt triggerFlagPrefix with
+    ⟨nonTriggerCursor, nonTriggerRoute, nonTriggerPrefix⟩
+
+  change Exec.Deriv.SourceCursor
+      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) (runtime dp)
+      ⟨_triggerBranchPath.functionIndex,
+        _triggerBranchPath.steps ++ [.branchLeft]⟩
+      ([Ninst.callvalue, Ninst.iszero] +++
+        (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
+          Func.revert)) at nonTriggerCursor
+  rcases nonTriggerRoute.dropLineRun (by simp) with
+    ⟨_valueBranchPath, valueBranchCursor, valueLineRun,
+      _valueChronology, valueBranchRoute⟩
+  rcases Line.of_run_cons valueLineRun with
+    ⟨afterValue, valueRun, valueLineRun⟩
+  rcases Line.of_run_cons valueLineRun with
+    ⟨_afterValueZero, valueZeroRun, valueLineNil⟩
+  cases valueLineNil
+  have valuePrefix : sevm.value :: selector :: [] <<+ afterValue.stack := by
+    simpa using prefix_of_push (of_run_callvalue valueRun) nonTriggerPrefix
+  have valueFlagPrefix : (sevm.value =? 0) :: selector :: [] <<+
+      valueBranchCursor.pre.stack :=
+    prefix_of_iszero valueZeroRun valuePrefix
+  rw [valueZero, show ((0 : B256) =? 0) = 1 from by
+    simp [B256.eqCheck]] at valueFlagPrefix
+  rcases valueBranchRoute.selectBranchSucc valueBranchCursor compiled
+      (by trivial) execAt (by decide) valueFlagPrefix with
+    ⟨dispatchCursor, dispatchRoute, dispatchPrefix⟩
   rcases
       Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
-        compiled execAt (funcs dp) (funcs_selector_unique dp) member
-          selectorCursor selectorRoute selectorPrefix with
+        compiled execAt sharedNonpayableFuncs
+          sharedNonpayableFuncs_selector_unique member dispatchCursor
+          dispatchRoute dispatchPrefix with
     ⟨_bodyPath, bodyCursor, bodyRoute, _bodyStackPrefix⟩
   exact bodyCursor.noExec_of_reachableExecFree compiled members accepted
     bodyRoute.chronology.cursorToTarget x execAt
@@ -408,9 +507,12 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
             (selected := selPauseFor) (tail := duration.toBytes)
           · rfl
           · simpa [pauseForCalldata] using dataEq
+        have valueZero : sevm.value = 0 :=
+          (processMessage_entry_value process).trans exactCall.valueZero
         exact noExec_of_selectedRuntimeEntry actualRun invocation guardZero
-          selectorEq (by simp [funcs]) pauseExecMembers
-            (pauseFor_reachableExecFree dp) sameFrame x execAt
+          valueZero selectorEq (by decide)
+          (by simp [sharedNonpayableFuncs]) pauseExecMembers
+            (pauseForShared_reachableExecFree dp) sameFrame x execAt
       · have invocation :
             (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv).exactInvocation
               (runtime dp) gateway gateway := by
@@ -429,9 +531,12 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
             (selected := selIsPaused) (tail := [])
           · rfl
           · simpa [isPausedCalldata] using dataEq
+        have valueZero : sevm.value = 0 :=
+          (processMessage_entry_value process).trans exactCall.valueZero
         exact noExec_of_selectedRuntimeEntry actualRun invocation guardZero
-          selectorEq (by simp [funcs]) []
-            (isPaused_reachableExecFree dp) sameFrame x execAt
+          valueZero selectorEq (by decide)
+          (by simp [sharedNonpayableFuncs]) []
+            (isPausedShared_reachableExecFree dp) sameFrame x execAt
   · exact Exec.noRetainedWriteTo_of_not_commits actualRun committed
       circuitBreaker key
 
