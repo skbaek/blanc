@@ -1489,12 +1489,12 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The wrapper composes the independent B1 reference and census gates before evaluating the production Blanc artifacts, executing both complete CREATE inputs under the pinned Prague EELS venv, checking the exact committed manifest through an independent schema, synchronizing the compatibility/deviation documents, and running separate mutation falsifiers. The shared EELS helper, compatibility tool and documents, both composed prerequisite read sets, fixture policy, evaluator, interpreter and gitignored site-packages are therefore direct inputs here. EELS_ROOT and HOME resolve the external checkout; the reference overrides and JSC/NODE can alter the composed offline recompilation. The manifest records the frozen 35a196f artifact-program identity rather than live HEAD, so unrelated documentation or admission commits do not stale semantic evidence.",
+      "note": "The wrapper composes the independent B1 reference and census gates before evaluating the production Blanc artifacts, executing both complete CREATE inputs under the pinned Prague EELS venv, checking the exact committed manifest through an independent schema, synchronizing the compatibility/deviation documents, and running separate mutation falsifiers. The shared EELS helper, compatibility tool and documents, both composed prerequisite read sets, fixture policy, evaluator, interpreter and gitignored site-packages are therefore direct inputs here. EELS_ROOT and HOME resolve the external checkout; the reference overrides and JSC/NODE can alter the composed offline recompilation. The manifest records the frozen df9ce99 artifact-program identity rather than live HEAD, while four production-shape controls and their paired mutants bind packing, nested-keccak role keys, direct per-role enumeration, and the compiled one-read authorization route; unrelated documentation or admission commits do not stale semantic evidence.",
       "order": 35,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
-          "^OK — Lido TWG differential: 60 agreement rows \\+ 11 exact registered-deviation rows; 24/24 selectors \\+ constructor; 52 causal history messages; 186 resource boundaries; 46 reference CALL/STATICCALL traces; 10 positive artifact checks; 9 live channel/identity/semantic falsifiers$"
+          "^OK — Lido TWG differential: 62 agreement rows \\+ 9 exact registered-deviation rows; 24/24 selectors \\+ constructor; 52 causal history messages; 186 resource boundaries; 46 reference CALL/STATICCALL traces; 10 positive artifact checks; 8 performance control/mutant checks; 9 live channel/identity/semantic falsifiers$"
         ]
       }
     },

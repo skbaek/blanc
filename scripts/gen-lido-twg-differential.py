@@ -29,8 +29,8 @@ MANIFEST_PATH = REPO / "scripts" / "fixtures" / "lido-twg" / "manifest.json"
 COMPATIBILITY_TOOL = REPO / "scripts" / "lido-twg-compatibility.py"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 JAUNE_PIN = "949cf97ee1956828a3ac0eb12a62c438656ba76e"
-BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
-BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+BLANC_ARTIFACT_COMMIT = "df9ce992b98b1eb784ab631be312cba4550ff61b"
+BLANC_PROOF_COMMIT = "35ba1e1b137529482180adccd44ae0da70417ac4"
 REFERENCE_WORLD = "differential-corpus"
 DEFAULT_GAS_LIMIT = 20_000_000
 UINT256_MAX = (1 << 256) - 1
@@ -77,8 +77,6 @@ DEVIATION_FIELDS = {
     "TWG-D01": ("returndata",),
     "TWG-D02": ("returndata",),
     "TWG-D03": ("returndata",),
-    "TWG-D04": ("returndata", "logicalState"),
-    "TWG-D05": ("status", "returndata", "logicalState", "logs"),
 }
 
 CHANNEL_FIELDS = {
@@ -144,9 +142,9 @@ GAS_CASES = [
     ("TRIGGER_REFUND_REVERT", "trigger-refund-revert", "trigger-refund-revert"),
 ]
 
-RETAINED_NONPOSITIVE_GAS_CASES = {
-    "view-is-paused-resumed", "view-is-paused-paused", "role-negative-pause-for",
-}
+PERFORMANCE_CONTROL_IDS = (
+    "packing", "keccak-key", "enumeration", "compiled-route",
+)
 
 BOUNDARY_DEFINITION = (
     "direct EELS Prague message gas used, computed as message gas minus "
@@ -154,8 +152,8 @@ BOUNDARY_DEFINITION = (
     "transaction intrinsic gas and refunds"
 )
 PLACEHOLDER_TEMPLATE_DIGESTS = {
-    "compatibility": "527ffa4fa5287d020064c254ea877792f5001a20bb091e136c7aeb26bc03150a",
-    "deviations": "1e17fa747d0702be780cc42462e4382b9d6fe21232ad180b941a1a898c5833b3",
+    "compatibility": "b27f0021eee4a15c71aa2e03b001afd2b1c9c9dfe6dce93c2b9235a667f5483f",
+    "deviations": "c41e5b8df35cabd4553c6b912f16fa88f3674a17269c3d654ce8ec3dadda29b1",
 }
 EVENT_TOPICS = {
     "ExitRequestsLimitSet": "0x3119d910326e0f179e121df55f23f45b8a5022ff10c73c02aabf2b48ae36070a",
@@ -705,7 +703,9 @@ def build_cases() -> List[Case]:
 
 
 def parse_artifacts(text: str) -> Dict[str, object]:
-    result: Dict[str, object] = {"offsets": {}, "projection": {}}
+    result: Dict[str, object] = {
+        "offsets": {}, "projection": {}, "performance-controls": [],
+    }
     byte_labels = {"creation-template", "primary-create", "primary-runtime",
                    "independent-create", "independent-runtime"}
     for line in text.splitlines():
@@ -727,6 +727,13 @@ def parse_artifacts(text: str) -> Dict[str, object]:
             result["offsets"] = {"locator": [int(value) for value in values]}
         elif label in {"offset-metadata-valid", "patch-controls-valid"}:
             result[label] = parts[1] == "true"
+        elif label == "performance-control":
+            expect(len(parts) == 4, "malformed performance-control evaluator row")
+            result["performance-controls"].append({
+                "id": parts[1],
+                "production": parts[2] == "true",
+                "mutantRejected": parts[3] == "true",
+            })
         elif label == "constructor-persistent-sites":
             rows = [] if parts[2] == "-" else parts[2].split(",")
             expect(len(rows) == int(parts[1]), "constructor inventory length mismatch")
@@ -753,6 +760,10 @@ def parse_artifacts(text: str) -> Dict[str, object]:
     expect(not (required - result.keys()), f"Lean evaluator omitted {sorted(required - result.keys())}")
     expect(result["offset-metadata-valid"] is True and result["patch-controls-valid"] is True,
            "Lean evaluator patch controls are not live")
+    expect(result["performance-controls"] == [
+        {"id": control_id, "production": True, "mutantRejected": True}
+        for control_id in PERFORMANCE_CONTROL_IDS
+    ], "Lean evaluator performance controls or paired mutants are not live")
     expect(len(result["offsets"]["locator"]) >= 1, "locator patch inventory is empty")
     expect(len(result["constructor-persistent-sites"]) == 5 and not result["constructor-external-sites"],
            "constructor source-site inventory drifted")
@@ -1214,64 +1225,12 @@ def named_gas_rows(resources: Sequence[Mapping], enforce_frozen_shape: bool = Tr
     expect(len(final_actions) == 63,
            "public final-action inventory must contain exactly the 63 non-constructor rows")
     if enforce_frozen_shape:
-        expected_positive = {
-            str(row["coordinate"]) for row in final_actions.values() if row["delta"] > 0
-        }
         constructor = by_case["constructor-success"][0]
-        expect(constructor["label"] == "constructor" and constructor["delta"] > 0,
-               "successful constructor positive-cost boundary differs")
-        expected_positive.add(str(constructor["coordinate"]))
-        actual_positive = {str(row["coordinate"]) for row in result if row["delta"] > 0}
-        expect(actual_positive == expected_positive and len(actual_positive) == 48,
-               "named gas rows do not cover every positive public final action plus constructor")
-        actual_nonpositive = {
-            str(row["coordinate"]).split("#", 1)[0]
-            for row in result if row["delta"] <= 0
-        }
-        expect(actual_nonpositive == RETAINED_NONPOSITIVE_GAS_CASES,
-               "named gas rows do not retain the exact three negative review controls")
+        expect(constructor["label"] == "constructor",
+               "successful constructor resource boundary differs")
+        expect(len(result) == 51 and all(row["delta"] < 0 for row in result),
+               "the exact 51-cell named gas ledger is not strictly dominant")
     return result
-
-
-def gas_cost_disposition(row: Mapping[str, object]) -> Tuple[str, str]:
-    case = str(row["coordinate"]).split("#", 1)[0]
-    if case == "constructor-success":
-        return (
-            "Accepted deployment cost for explicit constructor validation, tagged role/limit "
-            "initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
-            "deployment initialization and code-deposit boundary",
-        )
-    if case.startswith("trigger-"):
-        return (
-            "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback "
-            "choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "trigger dependency/value/rollback boundary",
-        )
-    if case.startswith("set-limit-") or case.startswith("get-limit-"):
-        return (
-            "Accepted exit-limit cost for explicit five-field projection, validation, checked "
-            "consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "exit-limit projection and validation boundary",
-        )
-    if case.startswith("pause-") or case.startswith("resume-"):
-        return (
-            "Accepted pause-control cost for explicit authorization, sentinel/error-polarity "
-            "checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "pause/resume authorization and tagged-state boundary",
-        )
-    if (case.startswith("grant-role") or case.startswith("revoke-role") or
-            case.startswith("renounce-role") or case.startswith("get-role-member") or
-            case.startswith("role-")):
-        return (
-            "Accepted role-state cost for full-identity collision checks and global enumeration "
-            "maintenance or scanning; TWG-D02–D05 separately delimit observable differences.",
-            "full-identity role lookup/enumeration boundary",
-        )
-    return (
-        "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged "
-        "representation; exact output semantics are pinned and no gas improvement is claimed.",
-        "constant, interface, role, or pause-state read boundary",
-    )
 
 
 def compatibility_contract() -> Mapping[str, object]:
@@ -1295,15 +1254,7 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
                         projection: Mapping) -> Mapping[str, object]:
     fill = copy.deepcopy(contract)
     named = named_gas_rows(resources)
-    positives = []
-    for row in named:
-        if row["delta"] > 0:
-            defense, review_group = gas_cost_disposition(row)
-            positives.append({
-                "id": f"TWG-G{len(positives) + 1:02d}", "gasKey": row["gasKey"],
-                "defense": defense,
-                "evidence": f"manifest resource coordinate {row['coordinate']}; {review_group}",
-            })
+    positives: List[Mapping[str, object]] = []
     template = artifacts["creation-template"]
     full = template + constructor_suffix(PARAMS)
     runtime = patch_blanc_runtime(artifacts, LOCATOR)
@@ -1329,11 +1280,11 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
             "B2_D02_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D02"),
             "B2_D03_RESOURCE_ATTRIBUTION": "out-of-bounds getRoleMember action gas and exact two payload digests are pinned",
             "B2_D03_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D03"),
-            "B2_D04_EXPECTED_ORDERS": "reference role-A order [ACTOR_C, ACTOR_B]; Blanc filtered global order [ACTOR_B, ACTOR_C]",
-            "B2_D04_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D04"),
+            "B2_D04_EXPECTED_ORDERS": "reference and Blanc role-A order [ACTOR_C, ACTOR_B] after the same cross-role removal history",
+            "B2_D04_ROW_SET": "role-enumeration-cross-role-order",
             "B2_D05_PROJECTION_SHA256": digest(projection),
-            "B2_D05_RESOURCE_ATTRIBUTION": "colliding second grant and subsequent hasRole boundaries are pinned",
-            "B2_D05_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D05"),
+            "B2_D05_RESOURCE_ATTRIBUTION": "both formerly colliding grants succeed independently and subsequent hasRole observations remain separated",
+            "B2_D05_ROW_SET": "role-flat-key-collision-refusal",
             "B2_DIFFERENTIAL_VERDICT": "PASS",
             "B2_PER_SELECTOR_RESOURCE_COVERAGE_SUMMARY": "24/24 census selectors each own at least one direct action boundary",
             "B2_PROJECTION_SCHEMA_SHA256": digest(projection),
@@ -1403,11 +1354,12 @@ def build_manifest(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, M
                             "sha256": results["constructor-success"][1]["artifact"]["runtimeSha256"]},
                 "locatorOffsets": artifacts["offsets"]["locator"],
                 "patchControlsValid": True,
+                "performanceControls": artifacts["performance-controls"],
             },
             "proof": {
                 "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
                 "proofCertificateCommit": BLANC_PROOF_COMMIT,
-                "certificate": "first compile-valid pinned-target certificate",
+                "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
             },
             "positiveIdentityChecks": identity_checks,
         },
@@ -1646,7 +1598,8 @@ def main(argv: Sequence[str]) -> int:
     if args.manifest_only:
         print(f"OK — Lido TWG differential manifest: {len(cases)} rows; "
               f"{len(resources)} resource boundaries; 24/24 selectors + constructor; "
-              f"5 stable deviations; {channel_falsifiers + other_live} live in-generator falsifiers")
+              f"3 active + 2 repaired stable deviations; "
+              f"{channel_falsifiers + other_live} live in-generator falsifiers")
         return 0
     histories = sum(len(case.history) for case in cases)
     traces = sum(sum(len(trace) for trace in results[case.name][0]["callTrace"])
@@ -1656,7 +1609,8 @@ def main(argv: Sequence[str]) -> int:
           f"{deviations} exact registered-deviation rows; 24/24 selectors + constructor; "
           f"{histories} causal history messages; {len(resources)} resource boundaries; "
           f"{traces} reference CALL/STATICCALL traces; {identity_checks} positive artifact "
-          f"checks; {channel_falsifiers + other_live} live channel/identity/semantic falsifiers")
+          f"checks; {2 * len(PERFORMANCE_CONTROL_IDS)} performance control/mutant checks; "
+          f"{channel_falsifiers + other_live} live channel/identity/semantic falsifiers")
     return 0
 
 

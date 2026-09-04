@@ -20,16 +20,17 @@ census selectors and complete-constructor rows. Cross-cut rows cover:
   pause polarities, exact already-paused `ResumedExpected` failures, and the
   exact resumed-state `PausedExpected` failure for `resume`;
 - all seven role-gated negative entries, grant/revoke/renounce, membership,
-  count, enumeration, and the two hostile role-layout histories;
+  count, per-role enumeration, and the two repaired hostile role-layout
+  regression histories;
 - limit configuration validation, consumption, insufficient quota, same-frame
   observation, whole-frame restoration, and capping;
 - mock locator, withdrawal-vault, staking-router, and refund-recipient worlds,
   including fee multiplication, exact vault value, router notification,
   explicit and zero-recipient refunds, rollback, gateway ETH preservation,
   dependency failure bubbling, and relevant events; and
-- the exact 51 named gas rows consumed by the claim-document synchronizer:
-  every positive final action among the 63 public cases, the successful
-  constructor, and three retained negative review controls.
+- the exact 51 named gas rows consumed by the claim-document synchronizer,
+  each required to be a strict Blanc win, including the successful constructor
+  and the 50 named public-path comparisons.
 
 The 71-row corpus does not test or claim zero/unlimited or partial-frame limit
 behavior, nested malformed dynamic ABI, empty/unknown/short dispatch, trailing
@@ -37,10 +38,10 @@ calldata, or recognized-selector nonpayability.
 
 ## Logical projection and channels
 
-Solidity's packed/keccak storage and Blanc's tagged flat storage are projected
-independently onto pause state, the five exit-limit fields, role admin and
-membership, per-role ordered members, selected balances, and selected mock
-storage. Raw slots and storage roots are outside the claim.
+Solidity's packed/keccak storage and Blanc's packed/nested-keccak/per-role
+storage are projected independently onto pause state, the five exit-limit
+fields, role admin and membership, per-role ordered members, selected balances,
+and selected mock storage. Raw slots and storage roots are outside the claim.
 
 Rows name the channels they compare: outcome status, returndata, projected
 state, ETH balances, logs, and full CALL/STATICCALL traces. Event rows assert
@@ -54,14 +55,17 @@ make the choreography claims vacuous.
 
 ## Stable behavioral differences
 
-Only these exact differences are admitted, each with a fixed field set and at
-least one discriminating row:
+Only these exact active differences are admitted, each with a fixed field set
+and at least one discriminating row:
 
 - `TWG-D01`: the seven unauthorized role-gate returndata payloads;
 - `TWG-D02`: wrong-account `renounceRole` returndata;
-- `TWG-D03`: out-of-bounds `getRoleMember` returndata;
-- `TWG-D04`: cross-role removal enumeration order and the returned ordinal;
-- `TWG-D05`: the flat full-identity role-key collision refusal.
+- `TWG-D03`: out-of-bounds `getRoleMember` returndata.
+
+The stable IDs `TWG-D04` (cross-role enumeration order) and `TWG-D05`
+(flat-key collision refusal) are repaired. Their former discriminating rows now
+must agree and are paired with evaluator controls whose losing mutants are
+rejected.
 
 No unknown mismatch allowlist exists. Removing a deviation row, widening its
 field set, or making a declared difference stop discriminating fails schema

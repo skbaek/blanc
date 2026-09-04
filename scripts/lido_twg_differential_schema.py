@@ -19,8 +19,8 @@ CENSUS = ROOT / "scripts" / "lido-twg-census.json"
 COMPATIBILITY = ROOT / "scripts" / "lido-twg-compatibility.py"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 JAUNE_PIN = "949cf97ee1956828a3ac0eb12a62c438656ba76e"
-BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
-BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+BLANC_ARTIFACT_COMMIT = "df9ce992b98b1eb784ab631be312cba4550ff61b"
+BLANC_PROOF_COMMIT = "35ba1e1b137529482180adccd44ae0da70417ac4"
 EVENT_TOPICS = {
     "ExitRequestsLimitSet": "0x3119d910326e0f179e121df55f23f45b8a5022ff10c73c02aabf2b48ae36070a",
     "Paused": "0x32fb7c9891bc4f963c7de9f1186d2a7755c7d6e9f4604dabe1d8bb3027c2f49e",
@@ -151,15 +151,11 @@ DEVIATION_ROWS = {
     ),
     "TWG-D02": ("renounce-role-wrong-account",),
     "TWG-D03": ("get-role-member-oob",),
-    "TWG-D04": ("role-enumeration-cross-role-order",),
-    "TWG-D05": ("role-flat-key-collision-refusal",),
 }
 DEVIATION_FIELDS = {
     "TWG-D01": ("returndata",),
     "TWG-D02": ("returndata",),
     "TWG-D03": ("returndata",),
-    "TWG-D04": ("returndata", "logicalState"),
-    "TWG-D05": ("status", "returndata", "logicalState", "logs"),
 }
 
 GAS_ROWS = (
@@ -216,9 +212,9 @@ GAS_ROWS = (
     ("TRIGGER_REFUND_REVERT", "trigger-refund-revert"),
 )
 
-RETAINED_NONPOSITIVE_GAS_CASES = {
-    "view-is-paused-resumed", "view-is-paused-paused", "role-negative-pause-for",
-}
+PERFORMANCE_CONTROL_IDS = (
+    "packing", "keccak-key", "enumeration", "compiled-route",
+)
 CALLDATA_SCOPE_SUMMARY = (
     "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested "
     "malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
@@ -251,8 +247,8 @@ SUMMARY_KEYS = {
     "B2_PER_SELECTOR_RESOURCE_COVERAGE_SUMMARY", "B2_PROJECTION_SCHEMA_SHA256",
 }
 PLACEHOLDER_TEMPLATE_DIGESTS = {
-    "compatibility": "527ffa4fa5287d020064c254ea877792f5001a20bb091e136c7aeb26bc03150a",
-    "deviations": "1e17fa747d0702be780cc42462e4382b9d6fe21232ad180b941a1a898c5833b3",
+    "compatibility": "b27f0021eee4a15c71aa2e03b001afd2b1c9c9dfe6dce93c2b9235a667f5483f",
+    "deviations": "c41e5b8df35cabd4553c6b912f16fa88f3674a17269c3d654ce8ec3dadda29b1",
 }
 
 TOP_KEYS = {
@@ -366,47 +362,6 @@ def validate_evidence(value: Any, label: str) -> None:
         exact_sha(value[key], f"{label}.{key}")
 
 
-def expected_gas_disposition(row: Mapping) -> tuple[str, str]:
-    case = str(row["coordinate"]).split("#", 1)[0]
-    if case == "constructor-success":
-        return (
-            "Accepted deployment cost for explicit constructor validation, tagged role/limit "
-            "initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
-            "deployment initialization and code-deposit boundary",
-        )
-    if case.startswith("trigger-"):
-        return (
-            "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback "
-            "choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "trigger dependency/value/rollback boundary",
-        )
-    if case.startswith("set-limit-") or case.startswith("get-limit-"):
-        return (
-            "Accepted exit-limit cost for explicit five-field projection, validation, checked "
-            "consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "exit-limit projection and validation boundary",
-        )
-    if case.startswith("pause-") or case.startswith("resume-"):
-        return (
-            "Accepted pause-control cost for explicit authorization, sentinel/error-polarity "
-            "checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "pause/resume authorization and tagged-state boundary",
-        )
-    if (case.startswith("grant-role") or case.startswith("revoke-role") or
-            case.startswith("renounce-role") or case.startswith("get-role-member") or
-            case.startswith("role-")):
-        return (
-            "Accepted role-state cost for full-identity collision checks and global enumeration "
-            "maintenance or scanning; TWG-D02–D05 separately delimit observable differences.",
-            "full-identity role lookup/enumeration boundary",
-        )
-    return (
-        "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged "
-        "representation; exact output semantics are pinned and no gas improvement is claimed.",
-        "constant, interface, role, or pause-state read boundary",
-    )
-
-
 def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> None:
     expect(isinstance(fill, dict) and set(fill) == set(contract),
            "documentFill top-level keys differ from compatibility contract")
@@ -455,21 +410,9 @@ def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> N
            "documentFill gas boundary definition differs")
     expect(gas["rows"] == manifest["resourceEvidence"]["namedGasRows"],
            "documentFill named gas rows differ")
-    positives = [row for row in gas["rows"] if row["delta"] > 0]
     deviations = gas["positiveDeviations"]
-    expect(isinstance(deviations, list) and len(deviations) == len(positives),
-           "documentFill positive gas deviations are incomplete")
-    for index, (item, row) in enumerate(zip(deviations, positives), 1):
-        expect(isinstance(item, dict) and set(item) == {"id", "gasKey", "defense", "evidence"},
-               f"positive gas deviation {index} shape differs")
-        expect(item["id"] == f"TWG-G{index:02d}" and item["gasKey"] == row["gasKey"],
-               f"positive gas deviation {index} identity differs")
-        safe_string(item["defense"], f"positive gas deviation {index} defense")
-        safe_string(item["evidence"], f"positive gas deviation {index} evidence")
-        defense, review_group = expected_gas_disposition(row)
-        expect(item["defense"] == defense and item["evidence"] ==
-               f"manifest resource coordinate {row['coordinate']}; {review_group}",
-               f"positive gas deviation {index} lacks the exact substantive cost disposition")
+    expect(deviations == [],
+           "strictly dominant named gas ledger must have no positive deviations")
 
     boundaries = manifest["resourceEvidence"]["boundaries"]
     public_names = [row["name"] for row in manifest["rows"] if row["family"] != "constructor"]
@@ -482,29 +425,11 @@ def validate_document_fill(fill: Any, manifest: Mapping, contract: Mapping) -> N
         expect(len(candidates) == 1,
                f"public case {name} must own exactly one final action boundary")
         final_actions.append(candidates[0])
-    positive_coordinates = {
-        row["coordinate"] for row in final_actions if row["delta"] > 0
-    }
-    expect(len(positive_coordinates) == 47,
-           "positive public final-action inventory must contain exactly 47 rows")
     constructor = [row for row in boundaries
                    if row["case"] == "constructor-success" and row["label"] == "constructor"]
-    expect(len(constructor) == 1 and constructor[0]["delta"] > 0,
-           "successful constructor positive-cost boundary differs")
-    positive_coordinates.add(constructor[0]["coordinate"])
-    named_positive_coordinates = {
-        row["coordinate"] for row in gas["rows"] if row["delta"] > 0
-    }
-    expect(named_positive_coordinates == positive_coordinates and
-           len(named_positive_coordinates) == 48,
-           "named gas rows must cover all 47 positive public actions plus constructor")
-    retained_nonpositive = {
-        row["coordinate"].split("#", 1)[0]
-        for row in gas["rows"] if row["delta"] <= 0
-    }
-    expect(retained_nonpositive == RETAINED_NONPOSITIVE_GAS_CASES and
-           len(gas["rows"]) == 51,
-           "named gas rows must retain exactly three negative controls for 51 total rows")
+    expect(len(constructor) == 1, "successful constructor resource boundary differs")
+    expect(len(gas["rows"]) == 51 and all(row["delta"] < 0 for row in gas["rows"]),
+           "all 51 named gas rows must be strict Blanc wins")
 
 
 def validate_manifest(manifest: Any) -> None:
@@ -532,7 +457,7 @@ def validate_manifest(manifest: Any) -> None:
         "reference artifact inventory differs")
     expect(isinstance(blanc, dict) and set(blanc) == {
         "creationTemplate", "fullCreateInput", "runtime", "locatorOffsets",
-        "patchControlsValid"}, "Blanc artifact inventory differs")
+        "patchControlsValid", "performanceControls"}, "Blanc artifact inventory differs")
     for key in ("creationTemplate", "runtimeTemplate", "fullCreateInput", "runtime"):
         validate_artifact(reference[key], f"reference.{key}")
     for key in ("creationTemplate", "fullCreateInput", "runtime"):
@@ -552,6 +477,10 @@ def validate_manifest(manifest: Any) -> None:
            and blanc["locatorOffsets"] and all(type(item) is int and item >= 0
                                                 for item in blanc["locatorOffsets"]),
            "Blanc locator patch controls invalid")
+    expect(blanc["performanceControls"] == [
+        {"id": control_id, "production": True, "mutantRejected": True}
+        for control_id in PERFORMANCE_CONTROL_IDS
+    ], "Blanc packing/keccak/enumeration/compiled-route controls differ")
     expect(blanc["runtime"]["byteLength"] <= 24_576 and
            blanc["fullCreateInput"]["byteLength"] <= 49_152,
            "Blanc artifacts exceed EIP limits")
@@ -560,7 +489,7 @@ def validate_manifest(manifest: Any) -> None:
     expect(artifacts["proof"] == {
         "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
         "proofCertificateCommit": BLANC_PROOF_COMMIT,
-        "certificate": "first compile-valid pinned-target certificate",
+        "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
     }, "Blanc proof/program identity split differs")
     expect(subprocess.run(
         ["git", "merge-base", "--is-ancestor", BLANC_ARTIFACT_COMMIT, BLANC_PROOF_COMMIT],
@@ -581,7 +510,7 @@ def validate_manifest(manifest: Any) -> None:
         "selected-account-ETH", "selected-mock-storage"],
         "projection boundary differs")
     expect(projection["blanc"].get("formula") ==
-           "bitwise-or(region-times-two-pow-252,payload)",
+           "packed-limit-and-nested-keccak-per-role",
            "Blanc projection formula differs")
 
     census = strict_json(CENSUS.read_bytes(), "census")
@@ -764,7 +693,6 @@ def validate_manifest(manifest: Any) -> None:
         "events.Paused", "events.Resumed", "events.ExitRequestsLimitSet",
         "events.RoleAdminChanged-nonemission",
         "deviation.TWG-D01", "deviation.TWG-D02", "deviation.TWG-D03",
-        "deviation.TWG-D04", "deviation.TWG-D05",
     ):
         expect(required in union_tags, f"required semantic tag {required} missing")
     expect(coverage["deviations"] == [
@@ -776,8 +704,8 @@ def validate_manifest(manifest: Any) -> None:
         "rows", "agreementRows", "deviationRows", "selectorCount",
         "constructorRows", "resourceBoundaries", "callTraceEntries"},
         "count keys differ")
-    expect(counts["rows"] == len(CASE_NAMES) and counts["agreementRows"] == 60
-           and counts["deviationRows"] == 11 and counts["selectorCount"] == 24
+    expect(counts["rows"] == len(CASE_NAMES) and counts["agreementRows"] == 62
+           and counts["deviationRows"] == 9 and counts["selectorCount"] == 24
            and counts["constructorRows"] == 8,
            "fixed case counts differ")
     exact_int(counts["callTraceEntries"], "callTraceEntries")

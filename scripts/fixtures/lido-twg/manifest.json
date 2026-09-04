@@ -2,30 +2,52 @@
   "artifacts": {
     "blanc": {
       "creationTemplate": {
-        "byteLength": 17976,
-        "sha256": "1c7a59c47cb97dbd8da1ccd02ed2913d553d18e6f353c640b308ce47b638eeb1"
+        "byteLength": 9806,
+        "sha256": "0e1ee072fc51e1f93917004d7a0e67164bc7bc668087dd2f707f21f52e06f872"
       },
       "fullCreateInput": {
-        "byteLength": 18136,
-        "sha256": "8091507f8753791e74a3ba7704436dac4bc7db3fcbf973a97b5296934432347a"
+        "byteLength": 9966,
+        "sha256": "6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690"
       },
       "locatorOffsets": [
-        14760,
-        14808,
-        15416,
-        15464
+        6906,
+        6954,
+        7562,
+        7610
       ],
       "patchControlsValid": true,
+      "performanceControls": [
+        {
+          "id": "packing",
+          "mutantRejected": true,
+          "production": true
+        },
+        {
+          "id": "keccak-key",
+          "mutantRejected": true,
+          "production": true
+        },
+        {
+          "id": "enumeration",
+          "mutantRejected": true,
+          "production": true
+        },
+        {
+          "id": "compiled-route",
+          "mutantRejected": true,
+          "production": true
+        }
+      ],
       "runtime": {
-        "byteLength": 15948,
-        "sha256": "2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08"
+        "byteLength": 8094,
+        "sha256": "6fdb5afdafc949df0677cea1e2f61f6363e21fd6348ff9843186fa8c68ca3c56"
       }
     },
     "positiveIdentityChecks": 10,
     "proof": {
-      "artifactProgramCommit": "35a196fd50192aa269d6cb07699ea0910ad3c468",
-      "certificate": "first compile-valid pinned-target certificate",
-      "proofCertificateCommit": "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+      "artifactProgramCommit": "df9ce992b98b1eb784ab631be312cba4550ff61b",
+      "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
+      "proofCertificateCommit": "35ba1e1b137529482180adccd44ae0da70417ac4"
     },
     "reference": {
       "creationTemplate": {
@@ -48,10 +70,10 @@
   },
   "contract": "TriggerableWithdrawalsGateway",
   "counts": {
-    "agreementRows": 60,
+    "agreementRows": 62,
     "callTraceEntries": 46,
     "constructorRows": 8,
-    "deviationRows": 11,
+    "deviationRows": 9,
     "resourceBoundaries": 186,
     "rows": 71,
     "selectorCount": 24
@@ -91,28 +113,6 @@
         "rows": [
           "get-role-member-oob"
         ]
-      },
-      {
-        "fields": [
-          "returndata",
-          "logicalState"
-        ],
-        "id": "TWG-D04",
-        "rows": [
-          "role-enumeration-cross-role-order"
-        ]
-      },
-      {
-        "fields": [
-          "status",
-          "returndata",
-          "logicalState",
-          "logs"
-        ],
-        "id": "TWG-D05",
-        "rows": [
-          "role-flat-key-collision-refusal"
-        ]
       }
     ],
     "requiredTags": [
@@ -124,8 +124,6 @@
       "deviation.TWG-D01",
       "deviation.TWG-D02",
       "deviation.TWG-D03",
-      "deviation.TWG-D04",
-      "deviation.TWG-D05",
       "erc165",
       "errors.PausedExpected",
       "errors.ResumedExpected",
@@ -154,8 +152,10 @@
       "role-admin",
       "role-membership",
       "roles.enumeration",
+      "roles.enumeration-order",
       "roles.grant",
       "roles.grant-idempotent",
+      "roles.keccak-collision-separation",
       "roles.negative",
       "roles.renounce",
       "roles.revoke",
@@ -397,19 +397,19 @@
     "censusSha256": "60ef98c19d78b2e1068e23501a30e7159471f95b25b6b4c1d4dadaebc22083eb",
     "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
     "evidence": {
-      "artifactProgramCommit": "35a196fd50192aa269d6cb07699ea0910ad3c468",
+      "artifactProgramCommit": "df9ce992b98b1eb784ab631be312cba4550ff61b",
       "artifacts": {
         "creationTemplate": {
-          "byteLength": 17976,
-          "sha256": "1c7a59c47cb97dbd8da1ccd02ed2913d553d18e6f353c640b308ce47b638eeb1"
+          "byteLength": 9806,
+          "sha256": "0e1ee072fc51e1f93917004d7a0e67164bc7bc668087dd2f707f21f52e06f872"
         },
         "fullCreateInput": {
-          "byteLength": 18136,
-          "sha256": "8091507f8753791e74a3ba7704436dac4bc7db3fcbf973a97b5296934432347a"
+          "byteLength": 9966,
+          "sha256": "6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690"
         },
         "runtime": {
-          "byteLength": 15948,
-          "sha256": "2a4d45a407f79c896735072ba7f825927a857ec93f4c9c9abeff3e7905ebdb08"
+          "byteLength": 8094,
+          "sha256": "6fdb5afdafc949df0677cea1e2f61f6363e21fd6348ff9843186fa8c68ca3c56"
         }
       },
       "counts": {
@@ -418,711 +418,422 @@
       },
       "gas": {
         "boundaryDefinition": "direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds",
-        "positiveDeviations": [
-          {
-            "defense": "Accepted deployment cost for explicit constructor validation, tagged role/limit initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
-            "evidence": "manifest resource coordinate constructor-success#0:constructor; deployment initialization and code-deposit boundary",
-            "gasKey": "CONSTRUCTOR_SUCCESS",
-            "id": "TWG-G01"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-for-finite#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_FOR_FINITE",
-            "id": "TWG-G02"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-for-sentinel#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_FOR_SENTINEL",
-            "id": "TWG-G03"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-until-finite#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_UNTIL_FINITE",
-            "id": "TWG-G04"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-until-sentinel#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_UNTIL_SENTINEL",
-            "id": "TWG-G05"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate resume-authorized#4:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "RESUME",
-            "id": "TWG-G06"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate grant-role-fresh#1:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "GRANT_ROLE",
-            "id": "TWG-G07"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate revoke-role-existing#2:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "REVOKE_ROLE",
-            "id": "TWG-G08"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate renounce-role-self#2:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "RENOUNCE_ROLE",
-            "id": "TWG-G09"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate get-role-member#2:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "GET_ROLE_MEMBER",
-            "id": "TWG-G10"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate get-role-member-count#2:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "GET_ROLE_MEMBER_COUNT",
-            "id": "TWG-G11"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate set-limit-valid#2:action; exit-limit projection and validation boundary",
-            "gasKey": "SET_LIMIT",
-            "id": "TWG-G12"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate get-limit-same-frame#1:action; exit-limit projection and validation boundary",
-            "gasKey": "GET_LIMIT_SAME_FRAME",
-            "id": "TWG-G13"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate get-limit-refilled#3:action; exit-limit projection and validation boundary",
-            "gasKey": "GET_LIMIT_REFILLED",
-            "id": "TWG-G14"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-empty#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_EMPTY",
-            "id": "TWG-G15"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-single-exact-fee#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_SINGLE_EXACT",
-            "id": "TWG-G16"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-explicit-refund#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_EXPLICIT_REFUND",
-            "id": "TWG-G17"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-sender-refund#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_SENDER_REFUND",
-            "id": "TWG-G18"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-multiple#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_MULTIPLE",
-            "id": "TWG-G19"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-limit-exceeded#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_LIMIT",
-            "id": "TWG-G20"
-          },
-          {
-            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate view-default-admin-role#1:action; constant, interface, role, or pause-state read boundary",
-            "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
-            "id": "TWG-G21"
-          },
-          {
-            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate view-pause-infinitely#1:action; constant, interface, role, or pause-state read boundary",
-            "gasKey": "PAUSE_INFINITELY_VIEW",
-            "id": "TWG-G22"
-          },
-          {
-            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate view-supports-interface#1:action; constant, interface, role, or pause-state read boundary",
-            "gasKey": "SUPPORTS_INTERFACE",
-            "id": "TWG-G23"
-          },
-          {
-            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate view-has-role#1:action; constant, interface, role, or pause-state read boundary",
-            "gasKey": "HAS_ROLE",
-            "id": "TWG-G24"
-          },
-          {
-            "defense": "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged representation; exact output semantics are pinned and no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate view-resume-timestamp#1:action; constant, interface, role, or pause-state read boundary",
-            "gasKey": "GET_RESUME_TIMESTAMP",
-            "id": "TWG-G25"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate grant-role-duplicate#2:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "GRANT_ROLE_DUPLICATE",
-            "id": "TWG-G26"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate revoke-role-missing#1:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "REVOKE_ROLE_MISSING",
-            "id": "TWG-G27"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate renounce-role-wrong-account#1:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
-            "id": "TWG-G28"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate get-role-member-oob#1:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "GET_ROLE_MEMBER_OOB",
-            "id": "TWG-G29"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate role-enumeration-cross-role-order#7:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
-            "id": "TWG-G30"
-          },
-          {
-            "defense": "Accepted role-state cost for full-identity collision checks and global enumeration maintenance or scanning; TWG-D02\u2013D05 separately delimit observable differences.",
-            "evidence": "manifest resource coordinate role-flat-key-collision-refusal#3:action; full-identity role lookup/enumeration boundary",
-            "gasKey": "ROLE_COLLISION_REFUSAL",
-            "id": "TWG-G31"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-for-when-paused#3:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_FOR_WHEN_PAUSED",
-            "id": "TWG-G32"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-until-when-paused#3:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
-            "id": "TWG-G33"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-zero-duration#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_ZERO_DURATION",
-            "id": "TWG-G34"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate pause-until-past#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "PAUSE_UNTIL_PAST",
-            "id": "TWG-G35"
-          },
-          {
-            "defense": "Accepted pause-control cost for explicit authorization, sentinel/error-polarity checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "evidence": "manifest resource coordinate resume-when-resumed#2:action; pause/resume authorization and tagged-state boundary",
-            "gasKey": "RESUME_WHEN_RESUMED",
-            "id": "TWG-G36"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate set-limit-max-too-large#2:action; exit-limit projection and validation boundary",
-            "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
-            "id": "TWG-G37"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate set-limit-frame-too-large#2:action; exit-limit projection and validation boundary",
-            "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
-            "id": "TWG-G38"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate set-limit-exits-above-max#2:action; exit-limit projection and validation boundary",
-            "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
-            "id": "TWG-G39"
-          },
-          {
-            "defense": "Accepted exit-limit cost for explicit five-field projection, validation, checked consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "evidence": "manifest resource coordinate set-limit-zero-frame#2:action; exit-limit projection and validation boundary",
-            "gasKey": "SET_LIMIT_ZERO_FRAME",
-            "id": "TWG-G40"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-insufficient-fee#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_INSUFFICIENT_FEE",
-            "id": "TWG-G41"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-paused#4:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_PAUSED",
-            "id": "TWG-G42"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-zero-value#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_ZERO_VALUE",
-            "id": "TWG-G43"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-locator-revert#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_LOCATOR_REVERT",
-            "id": "TWG-G44"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-fee-query-revert#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_FEE_QUERY_REVERT",
-            "id": "TWG-G45"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-vault-revert#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_VAULT_REVERT",
-            "id": "TWG-G46"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-router-revert#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_ROUTER_REVERT",
-            "id": "TWG-G47"
-          },
-          {
-            "defense": "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "evidence": "manifest resource coordinate trigger-refund-revert#2:action; trigger dependency/value/rollback boundary",
-            "gasKey": "TRIGGER_REFUND_REVERT",
-            "id": "TWG-G48"
-          }
-        ],
+        "positiveDeviations": [],
         "rows": [
           {
-            "blanc": 3400489,
+            "blanc": 1735425,
             "coordinate": "constructor-success#0:constructor",
-            "delta": 1656125,
+            "delta": -8939,
             "gasKey": "CONSTRUCTOR_SUCCESS",
             "path": "constructor-success",
             "reference": 1744364
           },
           {
-            "blanc": 29772,
+            "blanc": 25598,
             "coordinate": "pause-for-finite#2:action",
-            "delta": 3420,
+            "delta": -754,
             "gasKey": "PAUSE_FOR_FINITE",
             "path": "pauseFor-finite",
             "reference": 26352
           },
           {
-            "blanc": 29741,
+            "blanc": 25567,
             "coordinate": "pause-for-sentinel#2:action",
-            "delta": 3516,
+            "delta": -658,
             "gasKey": "PAUSE_FOR_SENTINEL",
             "path": "pauseFor-sentinel",
             "reference": 26225
           },
           {
-            "blanc": 30019,
+            "blanc": 25996,
             "coordinate": "pause-until-finite#2:action",
-            "delta": 3627,
+            "delta": -396,
             "gasKey": "PAUSE_UNTIL_FINITE",
             "path": "pauseUntil-finite",
             "reference": 26392
           },
           {
-            "blanc": 29963,
+            "blanc": 25943,
             "coordinate": "pause-until-sentinel#2:action",
-            "delta": 3720,
+            "delta": -300,
             "gasKey": "PAUSE_UNTIL_SENTINEL",
             "path": "pauseUntil-sentinel",
             "reference": 26243
           },
           {
-            "blanc": 12498,
+            "blanc": 8261,
             "coordinate": "resume-authorized#4:action",
-            "delta": 3960,
+            "delta": -277,
             "gasKey": "RESUME",
             "path": "resume",
             "reference": 8538
           },
           {
-            "blanc": 2220,
+            "blanc": 2242,
             "coordinate": "view-is-paused-resumed#1:action",
-            "delta": -165,
+            "delta": -143,
             "gasKey": "IS_PAUSED_FALSE",
             "path": "isPaused-resumed",
             "reference": 2385
           },
           {
-            "blanc": 2220,
+            "blanc": 2242,
             "coordinate": "view-is-paused-paused#3:action",
-            "delta": -165,
+            "delta": -143,
             "gasKey": "IS_PAUSED_TRUE",
             "path": "isPaused-paused",
             "reference": 2385
           },
           {
-            "blanc": 124650,
+            "blanc": 93807,
             "coordinate": "grant-role-fresh#1:action",
-            "delta": 28154,
+            "delta": -2689,
             "gasKey": "GRANT_ROLE",
             "path": "grantRole-fresh",
             "reference": 96496
           },
           {
-            "blanc": 39316,
+            "blanc": 25482,
             "coordinate": "revoke-role-existing#2:action",
-            "delta": 10935,
+            "delta": -2899,
             "gasKey": "REVOKE_ROLE",
             "path": "revokeRole-existing",
             "reference": 28381
           },
           {
-            "blanc": 32928,
+            "blanc": 23009,
             "coordinate": "renounce-role-self#2:action",
-            "delta": 9174,
+            "delta": -745,
             "gasKey": "RENOUNCE_ROLE",
             "path": "renounceRole-self",
             "reference": 23754
           },
           {
-            "blanc": 9363,
+            "blanc": 4614,
             "coordinate": "get-role-member#2:action",
-            "delta": 4522,
+            "delta": -227,
             "gasKey": "GET_ROLE_MEMBER",
             "path": "getRoleMember",
             "reference": 4841
           },
           {
-            "blanc": 7400,
+            "blanc": 2391,
             "coordinate": "get-role-member-count#2:action",
-            "delta": 4786,
+            "delta": -223,
             "gasKey": "GET_ROLE_MEMBER_COUNT",
             "path": "getRoleMemberCount",
             "reference": 2614
           },
           {
-            "blanc": 31141,
+            "blanc": 10091,
             "coordinate": "set-limit-valid#2:action",
-            "delta": 20027,
+            "delta": -1023,
             "gasKey": "SET_LIMIT",
             "path": "setExitRequestLimit",
             "reference": 11114
           },
           {
-            "blanc": 11470,
+            "blanc": 3044,
             "coordinate": "get-limit-same-frame#1:action",
-            "delta": 8262,
+            "delta": -164,
             "gasKey": "GET_LIMIT_SAME_FRAME",
             "path": "getExitRequestLimitFullInfo-same-frame",
             "reference": 3208
           },
           {
-            "blanc": 11633,
+            "blanc": 3207,
             "coordinate": "get-limit-refilled#3:action",
-            "delta": 8066,
+            "delta": -360,
             "gasKey": "GET_LIMIT_REFILLED",
             "path": "getExitRequestLimitFullInfo-refilled",
             "reference": 3567
           },
           {
-            "blanc": 9164,
+            "blanc": 5074,
             "coordinate": "trigger-empty#2:action",
-            "delta": 3766,
+            "delta": -324,
             "gasKey": "TRIGGER_EMPTY",
             "path": "trigger-empty",
             "reference": 5398
           },
           {
-            "blanc": 242996,
+            "blanc": 230117,
             "coordinate": "trigger-single-exact-fee#2:action",
-            "delta": 9712,
+            "delta": -3167,
             "gasKey": "TRIGGER_SINGLE_EXACT",
             "path": "trigger-single-no-refund",
             "reference": 233284
           },
           {
-            "blanc": 277367,
+            "blanc": 264488,
             "coordinate": "trigger-explicit-refund#2:action",
-            "delta": 9613,
+            "delta": -3266,
             "gasKey": "TRIGGER_EXPLICIT_REFUND",
             "path": "trigger-single-explicit-refund",
             "reference": 267754
           },
           {
-            "blanc": 249876,
+            "blanc": 236997,
             "coordinate": "trigger-sender-refund#2:action",
-            "delta": 9618,
+            "delta": -3261,
             "gasKey": "TRIGGER_SENDER_REFUND",
             "path": "trigger-single-sender-refund",
             "reference": 240258
           },
           {
-            "blanc": 244208,
+            "blanc": 231329,
             "coordinate": "trigger-multiple#2:action",
-            "delta": 9075,
+            "delta": -3804,
             "gasKey": "TRIGGER_MULTIPLE",
             "path": "trigger-multiple",
             "reference": 235133
           },
           {
-            "blanc": 19907,
+            "blanc": 7457,
             "coordinate": "trigger-limit-exceeded#2:action",
-            "delta": 11692,
+            "delta": -758,
             "gasKey": "TRIGGER_LIMIT",
             "path": "trigger-limit-exceeded",
             "reference": 8215
           },
           {
-            "blanc": 2270,
+            "blanc": 2393,
             "coordinate": "role-negative-pause-for#1:action",
-            "delta": -30034,
+            "delta": -29911,
             "gasKey": "ROLE_UNAUTHORIZED",
             "path": "role-gate-unauthorized",
             "reference": 32304
           },
           {
-            "blanc": 422,
+            "blanc": 268,
             "coordinate": "view-default-admin-role#1:action",
-            "delta": 138,
+            "delta": -16,
             "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
             "path": "defaultAdminRole",
             "reference": 284
           },
           {
-            "blanc": 379,
+            "blanc": 291,
             "coordinate": "view-pause-infinitely#1:action",
-            "delta": 70,
+            "delta": -18,
             "gasKey": "PAUSE_INFINITELY_VIEW",
             "path": "pauseInfinitely",
             "reference": 309
           },
           {
-            "blanc": 560,
+            "blanc": 303,
             "coordinate": "view-supports-interface#1:action",
-            "delta": 148,
+            "delta": -109,
             "gasKey": "SUPPORTS_INTERFACE",
             "path": "supportsInterface",
             "reference": 412
           },
           {
-            "blanc": 6953,
+            "blanc": 2450,
             "coordinate": "view-has-role#1:action",
-            "delta": 4222,
+            "delta": -281,
             "gasKey": "HAS_ROLE",
             "path": "hasRole",
             "reference": 2731
           },
           {
-            "blanc": 2501,
+            "blanc": 2413,
             "coordinate": "view-resume-timestamp#1:action",
-            "delta": 27,
+            "delta": -61,
             "gasKey": "GET_RESUME_TIMESTAMP",
             "path": "getResumeSinceTimestamp",
             "reference": 2474
           },
           {
-            "blanc": 13465,
+            "blanc": 5342,
             "coordinate": "grant-role-duplicate#2:action",
-            "delta": 3655,
+            "delta": -4468,
             "gasKey": "GRANT_ROLE_DUPLICATE",
             "path": "grantRole-duplicate",
             "reference": 9810
           },
           {
-            "blanc": 11311,
+            "blanc": 5360,
             "coordinate": "revoke-role-missing#1:action",
-            "delta": 1422,
+            "delta": -4529,
             "gasKey": "REVOKE_ROLE_MISSING",
             "path": "revokeRole-missing",
             "reference": 9889
           },
           {
-            "blanc": 621,
+            "blanc": 401,
             "coordinate": "renounce-role-wrong-account#1:action",
-            "delta": 78,
+            "delta": -142,
             "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
             "path": "renounceRole-wrong-account",
             "reference": 543
           },
           {
-            "blanc": 5069,
+            "blanc": 2385,
             "coordinate": "get-role-member-oob#1:action",
-            "delta": 2482,
+            "delta": -202,
             "gasKey": "GET_ROLE_MEMBER_OOB",
             "path": "getRoleMember-oob",
             "reference": 2587
           },
           {
-            "blanc": 11658,
+            "blanc": 4614,
             "coordinate": "role-enumeration-cross-role-order#7:action",
-            "delta": 6817,
+            "delta": -227,
             "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
             "path": "role-enumeration-cross-role-order",
             "reference": 4841
           },
           {
-            "blanc": 6953,
+            "blanc": 2450,
             "coordinate": "role-flat-key-collision-refusal#3:action",
-            "delta": 4222,
+            "delta": -281,
             "gasKey": "ROLE_COLLISION_REFUSAL",
             "path": "role-flat-key-collision-refusal",
             "reference": 2731
           },
           {
-            "blanc": 8690,
+            "blanc": 4516,
             "coordinate": "pause-for-when-paused#3:action",
-            "delta": 3690,
+            "delta": -484,
             "gasKey": "PAUSE_FOR_WHEN_PAUSED",
             "path": "pauseFor-when-paused",
             "reference": 5000
           },
           {
-            "blanc": 8910,
+            "blanc": 4890,
             "coordinate": "pause-until-when-paused#3:action",
-            "delta": 3887,
+            "delta": -133,
             "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
             "path": "pauseUntil-when-paused",
             "reference": 5023
           },
           {
-            "blanc": 8714,
+            "blanc": 4540,
             "coordinate": "pause-zero-duration#2:action",
-            "delta": 3688,
+            "delta": -486,
             "gasKey": "PAUSE_ZERO_DURATION",
             "path": "pauseFor-zero-duration",
             "reference": 5026
           },
           {
-            "blanc": 8936,
+            "blanc": 4916,
             "coordinate": "pause-until-past#2:action",
-            "delta": 3879,
+            "delta": -141,
             "gasKey": "PAUSE_UNTIL_PAST",
             "path": "pauseUntil-past",
             "reference": 5057
           },
           {
-            "blanc": 8864,
+            "blanc": 4624,
             "coordinate": "resume-when-resumed#2:action",
-            "delta": 4011,
+            "delta": -229,
             "gasKey": "RESUME_WHEN_RESUMED",
             "path": "resume-when-resumed",
             "reference": 4853
           },
           {
-            "blanc": 6834,
+            "blanc": 2814,
             "coordinate": "set-limit-max-too-large#2:action",
-            "delta": 1331,
+            "delta": -2689,
             "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
             "path": "setExitRequestLimit-max-too-large",
             "reference": 5503
           },
           {
-            "blanc": 6859,
+            "blanc": 2839,
             "coordinate": "set-limit-frame-too-large#2:action",
-            "delta": 1330,
+            "delta": -2690,
             "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
             "path": "setExitRequestLimit-frame-too-large",
             "reference": 5529
           },
           {
-            "blanc": 6887,
+            "blanc": 2867,
             "coordinate": "set-limit-exits-above-max#2:action",
-            "delta": 1332,
+            "delta": -2688,
             "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
             "path": "setExitRequestLimit-exits-above-max",
             "reference": 5555
           },
           {
-            "blanc": 6909,
+            "blanc": 2889,
             "coordinate": "set-limit-zero-frame#2:action",
-            "delta": 1337,
+            "delta": -2683,
             "gasKey": "SET_LIMIT_ZERO_FRAME",
             "path": "setExitRequestLimit-zero-frame",
             "reference": 5572
           },
           {
-            "blanc": 29239,
+            "blanc": 16440,
             "coordinate": "trigger-insufficient-fee#2:action",
-            "delta": 10677,
+            "delta": -2122,
             "gasKey": "TRIGGER_INSUFFICIENT_FEE",
             "path": "trigger-insufficient-fee",
             "reference": 18562
           },
           {
-            "blanc": 9099,
+            "blanc": 5009,
             "coordinate": "trigger-paused#4:action",
-            "delta": 3818,
+            "delta": -272,
             "gasKey": "TRIGGER_PAUSED",
             "path": "trigger-paused",
             "reference": 5281
           },
           {
-            "blanc": 9142,
+            "blanc": 5052,
             "coordinate": "trigger-zero-value#2:action",
-            "delta": 3775,
+            "delta": -315,
             "gasKey": "TRIGGER_ZERO_VALUE",
             "path": "trigger-zero-value",
             "reference": 5367
           },
           {
-            "blanc": 26190,
+            "blanc": 13391,
             "coordinate": "trigger-locator-revert#2:action",
-            "delta": 11109,
+            "delta": -1690,
             "gasKey": "TRIGGER_LOCATOR_REVERT",
             "path": "trigger-locator-revert",
             "reference": 15081
           },
           {
-            "blanc": 29089,
+            "blanc": 16290,
             "coordinate": "trigger-fee-query-revert#2:action",
-            "delta": 10898,
+            "delta": -1901,
             "gasKey": "TRIGGER_FEE_QUERY_REVERT",
             "path": "trigger-fee-query-revert",
             "reference": 18191
           },
           {
-            "blanc": 38232,
+            "blanc": 25353,
             "coordinate": "trigger-vault-revert#2:action",
-            "delta": 10751,
+            "delta": -2128,
             "gasKey": "TRIGGER_VAULT_REVERT",
             "path": "trigger-vault-revert",
             "reference": 27481
           },
           {
-            "blanc": 152163,
+            "blanc": 139284,
             "coordinate": "trigger-router-revert#2:action",
-            "delta": 9800,
+            "delta": -3079,
             "gasKey": "TRIGGER_ROUTER_REVERT",
             "path": "trigger-router-revert",
             "reference": 142363
           },
           {
-            "blanc": 252358,
+            "blanc": 239479,
             "coordinate": "trigger-refund-revert#2:action",
-            "delta": 9629,
+            "delta": -3250,
             "gasKey": "TRIGGER_REFUND_REVERT",
             "path": "trigger-refund-revert",
             "reference": 242729
           }
         ]
       },
-      "proofCertificateCommit": "a0e04e7a69558b8744ced81ea4a3defdfc478d36",
+      "proofCertificateCommit": "35ba1e1b137529482180adccd44ae0da70417ac4",
       "summaries": {
         "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded",
-        "B2_CODE_SIZE_HEADROOM_SUMMARY": "runtime 15948 bytes (8628 EIP-170 headroom); full CREATE 18136 bytes (31016 EIP-3860 headroom)",
+        "B2_CODE_SIZE_HEADROOM_SUMMARY": "runtime 8094 bytes (16482 EIP-170 headroom); full CREATE 9966 bytes (39186 EIP-3860 headroom)",
         "B2_CONSTRUCTOR_COVERAGE_SUMMARY": "complete CREATE success plus zero admin, dirty admin, value, and four exit-limit validation failures",
         "B2_COVERAGE_SUMMARY": "71 named rows cover 24/24 selectors, constructor, five reachable emitted event kinds plus RoleAdminChanged non-emission, pause sentinel/error-polarity arms, roles, configured-limit consumption/exceeded/whole-frame refill, and trigger mocks; zero/unlimited and partial-frame limit behavior plus the excluded dispatch/calldata arms are untested",
         "B2_D01_ROW_SET": "role-negative-grant, role-negative-revoke, role-negative-pause-for, role-negative-pause-until, role-negative-resume, role-negative-set-limit, role-negative-trigger",
@@ -1131,14 +842,14 @@
         "B2_D02_ROW_SET": "renounce-role-wrong-account",
         "B2_D03_RESOURCE_ATTRIBUTION": "out-of-bounds getRoleMember action gas and exact two payload digests are pinned",
         "B2_D03_ROW_SET": "get-role-member-oob",
-        "B2_D04_EXPECTED_ORDERS": "reference role-A order [ACTOR_C, ACTOR_B]; Blanc filtered global order [ACTOR_B, ACTOR_C]",
+        "B2_D04_EXPECTED_ORDERS": "reference and Blanc role-A order [ACTOR_C, ACTOR_B] after the same cross-role removal history",
         "B2_D04_ROW_SET": "role-enumeration-cross-role-order",
-        "B2_D05_PROJECTION_SHA256": "d44df671ee050ddbf29add52fb66feecb374479da348819ac5f5cc58e5da4300",
-        "B2_D05_RESOURCE_ATTRIBUTION": "colliding second grant and subsequent hasRole boundaries are pinned",
+        "B2_D05_PROJECTION_SHA256": "2cf7a3070c01f541165e2252ad1c5df14cd0f49fab27a73198a2f91e6b7fe0b5",
+        "B2_D05_RESOURCE_ATTRIBUTION": "both formerly colliding grants succeed independently and subsequent hasRole observations remain separated",
         "B2_D05_ROW_SET": "role-flat-key-collision-refusal",
         "B2_DIFFERENTIAL_VERDICT": "PASS",
         "B2_PER_SELECTOR_RESOURCE_COVERAGE_SUMMARY": "24/24 census selectors each own at least one direct action boundary",
-        "B2_PROJECTION_SCHEMA_SHA256": "d44df671ee050ddbf29add52fb66feecb374479da348819ac5f5cc58e5da4300"
+        "B2_PROJECTION_SCHEMA_SHA256": "2cf7a3070c01f541165e2252ad1c5df14cd0f49fab27a73198a2f91e6b7fe0b5"
       }
     },
     "jauneCommit": "949cf97ee1956828a3ac0eb12a62c438656ba76e",
@@ -1146,8 +857,8 @@
     "referenceWorld": "differential-corpus",
     "schema": 1,
     "templates": {
-      "compatibility": "527ffa4fa5287d020064c254ea877792f5001a20bb091e136c7aeb26bc03150a",
-      "deviations": "1e17fa747d0702be780cc42462e4382b9d6fe21232ad180b941a1a898c5833b3"
+      "compatibility": "b27f0021eee4a15c71aa2e03b001afd2b1c9c9dfe6dce93c2b9235a667f5483f",
+      "deviations": "c41e5b8df35cabd4553c6b912f16fa88f3674a17269c3d654ce8ec3dadda29b1"
     }
   },
   "oracle": {
@@ -1162,24 +873,14 @@
   },
   "projection": {
     "blanc": {
-      "formula": "bitwise-or(region-times-two-pow-252,payload)",
-      "regions": {
-        "config": "1",
-        "enum-account": "6",
-        "enum-role": "5",
-        "role-lookup-account": "3",
-        "role-lookup-index": "4",
-        "role-lookup-role": "2"
-      },
-      "roles": "full-identity lookup records plus filtered global enumeration",
+      "formula": "packed-limit-and-nested-keccak-per-role",
+      "regions": null,
+      "roles": "nested-keccak membership plus direct per-role length/index/member storage",
       "slots": {
-        "exits-per-frame": "1000000000000000000000000000000000000000000000000000000000000005",
-        "frame-duration": "1000000000000000000000000000000000000000000000000000000000000004",
-        "max-exit-requests": "1000000000000000000000000000000000000000000000000000000000000001",
-        "previous-exit-requests": "1000000000000000000000000000000000000000000000000000000000000002",
-        "previous-timestamp": "1000000000000000000000000000000000000000000000000000000000000003",
-        "resume-since": "1000000000000000000000000000000000000000000000000000000000000000",
-        "role-record-length": "1000000000000000000000000000000000000000000000000000000000000006"
+        "access-control-role-members-root": "8f8c450dae5029cd48cd91dd9db65da48fb742893edfc7941250f6721d93cbbe",
+        "access-control-roles-root": "9a627a5d4aa7c17f87ff26e3fe9a42c2b6c559e8b41a42282d0ecebb17c0e4d3",
+        "packed-exit-limit": "1000000000000000000000000000000000000000000000000000000000000001",
+        "resume-since": "1000000000000000000000000000000000000000000000000000000000000000"
       }
     },
     "boundary": [
@@ -1189,7 +890,7 @@
       "selected-account-ETH",
       "selected-mock-storage"
     ],
-    "nonclaim": "raw slots, storage roots, bytecode, and enumeration order at TWG-D04 are not equated",
+    "nonclaim": "raw slots, storage roots, and bytecode are not equated",
     "schema": 1,
     "solidity": {
       "limit": "packed uint32 fields at keccak256(lido.TriggerableWithdrawalsGateway.maxExitRequestLimit)",
@@ -1200,11 +901,11 @@
   "resourceEvidence": {
     "boundaries": [
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "constructor-success",
         "coordinate": "constructor-success#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 0,
         "referenceGas": 1744364,
@@ -1288,1958 +989,1958 @@
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-add-full-withdrawal-request-role",
         "coordinate": "view-add-full-withdrawal-request-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 8,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 203,
+        "blancGas": 401,
         "blancStatus": "success",
         "case": "view-add-full-withdrawal-request-role",
         "coordinate": "view-add-full-withdrawal-request-role#1:action",
-        "delta": -59,
+        "delta": 139,
         "label": "action",
         "ordinal": 9,
         "referenceGas": 262,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-default-admin-role",
         "coordinate": "view-default-admin-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 10,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 422,
+        "blancGas": 268,
         "blancStatus": "success",
         "case": "view-default-admin-role",
         "coordinate": "view-default-admin-role#1:action",
-        "delta": 138,
+        "delta": -16,
         "label": "action",
         "ordinal": 11,
         "referenceGas": 284,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-pause-infinitely",
         "coordinate": "view-pause-infinitely#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 12,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 379,
+        "blancGas": 291,
         "blancStatus": "success",
         "case": "view-pause-infinitely",
         "coordinate": "view-pause-infinitely#1:action",
-        "delta": 70,
+        "delta": -18,
         "label": "action",
         "ordinal": 13,
         "referenceGas": 309,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-pause-role",
         "coordinate": "view-pause-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 14,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 159,
+        "blancGas": 357,
         "blancStatus": "success",
         "case": "view-pause-role",
         "coordinate": "view-pause-role#1:action",
-        "delta": -103,
+        "delta": 95,
         "label": "action",
         "ordinal": 15,
         "referenceGas": 262,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-resume-role",
         "coordinate": "view-resume-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 16,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 181,
+        "blancGas": 379,
         "blancStatus": "success",
         "case": "view-resume-role",
         "coordinate": "view-resume-role#1:action",
-        "delta": -148,
+        "delta": 50,
         "label": "action",
         "ordinal": 17,
         "referenceGas": 329,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-twr-limit-position",
         "coordinate": "view-twr-limit-position#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 18,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 247,
+        "blancGas": 445,
         "blancStatus": "success",
         "case": "view-twr-limit-position",
         "coordinate": "view-twr-limit-position#1:action",
-        "delta": -114,
+        "delta": 84,
         "label": "action",
         "ordinal": 19,
         "referenceGas": 361,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-tw-exit-limit-manager-role",
         "coordinate": "view-tw-exit-limit-manager-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 20,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 225,
+        "blancGas": 423,
         "blancStatus": "success",
         "case": "view-tw-exit-limit-manager-role",
         "coordinate": "view-tw-exit-limit-manager-role#1:action",
-        "delta": -82,
+        "delta": 116,
         "label": "action",
         "ordinal": 21,
         "referenceGas": 307,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-version",
         "coordinate": "view-version#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 22,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 269,
+        "blancGas": 467,
         "blancStatus": "success",
         "case": "view-version",
         "coordinate": "view-version#1:action",
-        "delta": -58,
+        "delta": 140,
         "label": "action",
         "ordinal": 23,
         "referenceGas": 327,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-supports-interface",
         "coordinate": "view-supports-interface#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 24,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 560,
+        "blancGas": 303,
         "blancStatus": "success",
         "case": "view-supports-interface",
         "coordinate": "view-supports-interface#1:action",
-        "delta": 148,
+        "delta": -109,
         "label": "action",
         "ordinal": 25,
         "referenceGas": 412,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-role-admin",
         "coordinate": "view-role-admin#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 26,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 509,
+        "blancGas": 575,
         "blancStatus": "success",
         "case": "view-role-admin",
         "coordinate": "view-role-admin#1:action",
-        "delta": -2070,
+        "delta": -2004,
         "label": "action",
         "ordinal": 27,
         "referenceGas": 2579,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-has-role",
         "coordinate": "view-has-role#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 28,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6953,
+        "blancGas": 2450,
         "blancStatus": "success",
         "case": "view-has-role",
         "coordinate": "view-has-role#1:action",
-        "delta": 4222,
+        "delta": -281,
         "label": "action",
         "ordinal": 29,
         "referenceGas": 2731,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-is-paused-resumed",
         "coordinate": "view-is-paused-resumed#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 30,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2220,
+        "blancGas": 2242,
         "blancStatus": "success",
         "case": "view-is-paused-resumed",
         "coordinate": "view-is-paused-resumed#1:action",
-        "delta": -165,
+        "delta": -143,
         "label": "action",
         "ordinal": 31,
         "referenceGas": 2385,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-resume-timestamp",
         "coordinate": "view-resume-timestamp#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 32,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2501,
+        "blancGas": 2413,
         "blancStatus": "success",
         "case": "view-resume-timestamp",
         "coordinate": "view-resume-timestamp#1:action",
-        "delta": 27,
+        "delta": -61,
         "label": "action",
         "ordinal": 33,
         "referenceGas": 2474,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "get-limit-same-frame",
         "coordinate": "get-limit-same-frame#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 34,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 11470,
+        "blancGas": 3044,
         "blancStatus": "success",
         "case": "get-limit-same-frame",
         "coordinate": "get-limit-same-frame#1:action",
-        "delta": 8262,
+        "delta": -164,
         "label": "action",
         "ordinal": 35,
         "referenceGas": 3208,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "grant-role-fresh",
         "coordinate": "grant-role-fresh#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 36,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "grant-role-fresh",
         "coordinate": "grant-role-fresh#1:action",
-        "delta": 28154,
+        "delta": -2689,
         "label": "action",
         "ordinal": 37,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "grant-role-duplicate",
         "coordinate": "grant-role-duplicate#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 38,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "grant-role-duplicate",
         "coordinate": "grant-role-duplicate#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 39,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 13465,
+        "blancGas": 5342,
         "blancStatus": "success",
         "case": "grant-role-duplicate",
         "coordinate": "grant-role-duplicate#2:action",
-        "delta": 3655,
+        "delta": -4468,
         "label": "action",
         "ordinal": 40,
         "referenceGas": 9810,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "revoke-role-existing",
         "coordinate": "revoke-role-existing#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 41,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "revoke-role-existing",
         "coordinate": "revoke-role-existing#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 42,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 39316,
+        "blancGas": 25482,
         "blancStatus": "success",
         "case": "revoke-role-existing",
         "coordinate": "revoke-role-existing#2:action",
-        "delta": 10935,
+        "delta": -2899,
         "label": "action",
         "ordinal": 43,
         "referenceGas": 28381,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "revoke-role-missing",
         "coordinate": "revoke-role-missing#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 44,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 11311,
+        "blancGas": 5360,
         "blancStatus": "success",
         "case": "revoke-role-missing",
         "coordinate": "revoke-role-missing#1:action",
-        "delta": 1422,
+        "delta": -4529,
         "label": "action",
         "ordinal": 45,
         "referenceGas": 9889,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "renounce-role-self",
         "coordinate": "renounce-role-self#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 46,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "renounce-role-self",
         "coordinate": "renounce-role-self#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 47,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 32928,
+        "blancGas": 23009,
         "blancStatus": "success",
         "case": "renounce-role-self",
         "coordinate": "renounce-role-self#2:action",
-        "delta": 9174,
+        "delta": -745,
         "label": "action",
         "ordinal": 48,
         "referenceGas": 23754,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "renounce-role-wrong-account",
         "coordinate": "renounce-role-wrong-account#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 49,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 621,
+        "blancGas": 401,
         "blancStatus": "revert",
         "case": "renounce-role-wrong-account",
         "coordinate": "renounce-role-wrong-account#1:action",
-        "delta": 78,
+        "delta": -142,
         "label": "action",
         "ordinal": 50,
         "referenceGas": 543,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "get-role-member",
         "coordinate": "get-role-member#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 51,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "get-role-member",
         "coordinate": "get-role-member#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 52,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 9363,
+        "blancGas": 4614,
         "blancStatus": "success",
         "case": "get-role-member",
         "coordinate": "get-role-member#2:action",
-        "delta": 4522,
+        "delta": -227,
         "label": "action",
         "ordinal": 53,
         "referenceGas": 4841,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "get-role-member-count",
         "coordinate": "get-role-member-count#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 54,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "get-role-member-count",
         "coordinate": "get-role-member-count#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 55,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 7400,
+        "blancGas": 2391,
         "blancStatus": "success",
         "case": "get-role-member-count",
         "coordinate": "get-role-member-count#2:action",
-        "delta": 4786,
+        "delta": -223,
         "label": "action",
         "ordinal": 56,
         "referenceGas": 2614,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "get-role-member-oob",
         "coordinate": "get-role-member-oob#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 57,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 5069,
+        "blancGas": 2385,
         "blancStatus": "revert",
         "case": "get-role-member-oob",
         "coordinate": "get-role-member-oob#1:action",
-        "delta": 2482,
+        "delta": -202,
         "label": "action",
         "ordinal": 58,
         "referenceGas": 2587,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 59,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 60,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 76707,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#2:history-1",
-        "delta": 45254,
+        "delta": -2689,
         "label": "history-1",
         "ordinal": 61,
         "referenceGas": 79396,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 76707,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#3:history-2",
-        "delta": 45254,
+        "delta": -2689,
         "label": "history-2",
         "ordinal": 62,
         "referenceGas": 79396,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#4:history-3",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-3",
         "ordinal": 63,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 76707,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#5:history-4",
-        "delta": 45254,
+        "delta": -2689,
         "label": "history-4",
         "ordinal": 64,
         "referenceGas": 79396,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 54477,
+        "blancGas": 35703,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#6:history-5",
-        "delta": 15608,
+        "delta": -3166,
         "label": "history-5",
         "ordinal": 65,
         "referenceGas": 38869,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 11658,
+        "blancGas": 4614,
         "blancStatus": "success",
         "case": "role-enumeration-cross-role-order",
         "coordinate": "role-enumeration-cross-role-order#7:action",
-        "delta": 6817,
+        "delta": -227,
         "label": "action",
         "ordinal": 66,
         "referenceGas": 4841,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-flat-key-collision-refusal",
         "coordinate": "role-flat-key-collision-refusal#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 67,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "role-flat-key-collision-refusal",
         "coordinate": "role-flat-key-collision-refusal#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 68,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 13480,
-        "blancStatus": "revert",
+        "blancGas": 93807,
+        "blancStatus": "success",
         "case": "role-flat-key-collision-refusal",
         "coordinate": "role-flat-key-collision-refusal#2:history-1",
-        "delta": -83016,
+        "delta": -2689,
         "label": "history-1",
         "ordinal": 69,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6953,
+        "blancGas": 2450,
         "blancStatus": "success",
         "case": "role-flat-key-collision-refusal",
         "coordinate": "role-flat-key-collision-refusal#3:action",
-        "delta": 4222,
+        "delta": -281,
         "label": "action",
         "ordinal": 70,
         "referenceGas": 2731,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-grant",
         "coordinate": "role-negative-grant#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 71,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2720,
+        "blancGas": 2887,
         "blancStatus": "revert",
         "case": "role-negative-grant",
         "coordinate": "role-negative-grant#1:action",
-        "delta": -31838,
+        "delta": -31671,
         "label": "action",
         "ordinal": 72,
         "referenceGas": 34558,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-revoke",
         "coordinate": "role-negative-revoke#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 73,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2742,
+        "blancGas": 2904,
         "blancStatus": "revert",
         "case": "role-negative-revoke",
         "coordinate": "role-negative-revoke#1:action",
-        "delta": -31881,
+        "delta": -31719,
         "label": "action",
         "ordinal": 74,
         "referenceGas": 34623,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-pause-for",
         "coordinate": "role-negative-pause-for#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 75,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2270,
+        "blancGas": 2393,
         "blancStatus": "revert",
         "case": "role-negative-pause-for",
         "coordinate": "role-negative-pause-for#1:action",
-        "delta": -30034,
+        "delta": -29911,
         "label": "action",
         "ordinal": 76,
         "referenceGas": 32304,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-pause-until",
         "coordinate": "role-negative-pause-until#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 77,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2490,
+        "blancGas": 2767,
         "blancStatus": "revert",
         "case": "role-negative-pause-until",
         "coordinate": "role-negative-pause-until#1:action",
-        "delta": -29837,
+        "delta": -29560,
         "label": "action",
         "ordinal": 78,
         "referenceGas": 32327,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-resume",
         "coordinate": "role-negative-resume#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 79,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2447,
+        "blancGas": 2504,
         "blancStatus": "revert",
         "case": "role-negative-resume",
         "coordinate": "role-negative-resume#1:action",
-        "delta": -29716,
+        "delta": -29659,
         "label": "action",
         "ordinal": 80,
         "referenceGas": 32163,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-set-limit",
         "coordinate": "role-negative-set-limit#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 81,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2512,
+        "blancGas": 2789,
         "blancStatus": "revert",
         "case": "role-negative-set-limit",
         "coordinate": "role-negative-set-limit#1:action",
-        "delta": -29817,
+        "delta": -29540,
         "label": "action",
         "ordinal": 82,
         "referenceGas": 32329,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "role-negative-trigger",
         "coordinate": "role-negative-trigger#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 83,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2639,
+        "blancGas": 2849,
         "blancStatus": "revert",
         "case": "role-negative-trigger",
         "coordinate": "role-negative-trigger#1:action",
-        "delta": -29888,
+        "delta": -29678,
         "label": "action",
         "ordinal": 84,
         "referenceGas": 32527,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-for-finite",
         "coordinate": "pause-for-finite#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 85,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-for-finite",
         "coordinate": "pause-for-finite#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 86,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "pause-for-finite",
         "coordinate": "pause-for-finite#2:action",
-        "delta": 3420,
+        "delta": -754,
         "label": "action",
         "ordinal": 87,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-for-sentinel",
         "coordinate": "pause-for-sentinel#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 88,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-for-sentinel",
         "coordinate": "pause-for-sentinel#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 89,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29741,
+        "blancGas": 25567,
         "blancStatus": "success",
         "case": "pause-for-sentinel",
         "coordinate": "pause-for-sentinel#2:action",
-        "delta": 3516,
+        "delta": -658,
         "label": "action",
         "ordinal": 90,
         "referenceGas": 26225,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-until-finite",
         "coordinate": "pause-until-finite#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 91,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-until-finite",
         "coordinate": "pause-until-finite#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 92,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 30019,
+        "blancGas": 25996,
         "blancStatus": "success",
         "case": "pause-until-finite",
         "coordinate": "pause-until-finite#2:action",
-        "delta": 3627,
+        "delta": -396,
         "label": "action",
         "ordinal": 93,
         "referenceGas": 26392,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-until-sentinel",
         "coordinate": "pause-until-sentinel#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 94,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-until-sentinel",
         "coordinate": "pause-until-sentinel#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 95,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29963,
+        "blancGas": 25943,
         "blancStatus": "success",
         "case": "pause-until-sentinel",
         "coordinate": "pause-until-sentinel#2:action",
-        "delta": 3720,
+        "delta": -300,
         "label": "action",
         "ordinal": 96,
         "referenceGas": 26243,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-for-when-paused",
         "coordinate": "pause-for-when-paused#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 97,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-for-when-paused",
         "coordinate": "pause-for-when-paused#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 98,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "pause-for-when-paused",
         "coordinate": "pause-for-when-paused#2:history-1",
-        "delta": 3420,
+        "delta": -754,
         "label": "history-1",
         "ordinal": 99,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 8690,
+        "blancGas": 4516,
         "blancStatus": "revert",
         "case": "pause-for-when-paused",
         "coordinate": "pause-for-when-paused#3:action",
-        "delta": 3690,
+        "delta": -484,
         "label": "action",
         "ordinal": 100,
         "referenceGas": 5000,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-until-when-paused",
         "coordinate": "pause-until-when-paused#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 101,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-until-when-paused",
         "coordinate": "pause-until-when-paused#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 102,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "pause-until-when-paused",
         "coordinate": "pause-until-when-paused#2:history-1",
-        "delta": 3420,
+        "delta": -754,
         "label": "history-1",
         "ordinal": 103,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 8910,
+        "blancGas": 4890,
         "blancStatus": "revert",
         "case": "pause-until-when-paused",
         "coordinate": "pause-until-when-paused#3:action",
-        "delta": 3887,
+        "delta": -133,
         "label": "action",
         "ordinal": 104,
         "referenceGas": 5023,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "view-is-paused-paused",
         "coordinate": "view-is-paused-paused#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 105,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "view-is-paused-paused",
         "coordinate": "view-is-paused-paused#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 106,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "view-is-paused-paused",
         "coordinate": "view-is-paused-paused#2:history-1",
-        "delta": 3420,
+        "delta": -754,
         "label": "history-1",
         "ordinal": 107,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 2220,
+        "blancGas": 2242,
         "blancStatus": "success",
         "case": "view-is-paused-paused",
         "coordinate": "view-is-paused-paused#3:action",
-        "delta": -165,
+        "delta": -143,
         "label": "action",
         "ordinal": 108,
         "referenceGas": 2385,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "resume-authorized",
         "coordinate": "resume-authorized#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 109,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "resume-authorized",
         "coordinate": "resume-authorized#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 110,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "resume-authorized",
         "coordinate": "resume-authorized#2:history-1",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-1",
         "ordinal": 111,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "resume-authorized",
         "coordinate": "resume-authorized#3:history-2",
-        "delta": 3420,
+        "delta": -754,
         "label": "history-2",
         "ordinal": 112,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 12498,
+        "blancGas": 8261,
         "blancStatus": "success",
         "case": "resume-authorized",
         "coordinate": "resume-authorized#4:action",
-        "delta": 3960,
+        "delta": -277,
         "label": "action",
         "ordinal": 113,
         "referenceGas": 8538,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-zero-duration",
         "coordinate": "pause-zero-duration#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 114,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-zero-duration",
         "coordinate": "pause-zero-duration#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 115,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 8714,
+        "blancGas": 4540,
         "blancStatus": "revert",
         "case": "pause-zero-duration",
         "coordinate": "pause-zero-duration#2:action",
-        "delta": 3688,
+        "delta": -486,
         "label": "action",
         "ordinal": 116,
         "referenceGas": 5026,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "pause-until-past",
         "coordinate": "pause-until-past#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 117,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "pause-until-past",
         "coordinate": "pause-until-past#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 118,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 8936,
+        "blancGas": 4916,
         "blancStatus": "revert",
         "case": "pause-until-past",
         "coordinate": "pause-until-past#2:action",
-        "delta": 3879,
+        "delta": -141,
         "label": "action",
         "ordinal": 119,
         "referenceGas": 5057,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "resume-when-resumed",
         "coordinate": "resume-when-resumed#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 120,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "resume-when-resumed",
         "coordinate": "resume-when-resumed#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 121,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 8864,
+        "blancGas": 4624,
         "blancStatus": "revert",
         "case": "resume-when-resumed",
         "coordinate": "resume-when-resumed#2:action",
-        "delta": 4011,
+        "delta": -229,
         "label": "action",
         "ordinal": 122,
         "referenceGas": 4853,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "set-limit-valid",
         "coordinate": "set-limit-valid#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 123,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "set-limit-valid",
         "coordinate": "set-limit-valid#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 124,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 31141,
+        "blancGas": 10091,
         "blancStatus": "success",
         "case": "set-limit-valid",
         "coordinate": "set-limit-valid#2:action",
-        "delta": 20027,
+        "delta": -1023,
         "label": "action",
         "ordinal": 125,
         "referenceGas": 11114,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "set-limit-max-too-large",
         "coordinate": "set-limit-max-too-large#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 126,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "set-limit-max-too-large",
         "coordinate": "set-limit-max-too-large#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 127,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6834,
+        "blancGas": 2814,
         "blancStatus": "revert",
         "case": "set-limit-max-too-large",
         "coordinate": "set-limit-max-too-large#2:action",
-        "delta": 1331,
+        "delta": -2689,
         "label": "action",
         "ordinal": 128,
         "referenceGas": 5503,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "set-limit-frame-too-large",
         "coordinate": "set-limit-frame-too-large#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 129,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "set-limit-frame-too-large",
         "coordinate": "set-limit-frame-too-large#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 130,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6859,
+        "blancGas": 2839,
         "blancStatus": "revert",
         "case": "set-limit-frame-too-large",
         "coordinate": "set-limit-frame-too-large#2:action",
-        "delta": 1330,
+        "delta": -2690,
         "label": "action",
         "ordinal": 131,
         "referenceGas": 5529,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "set-limit-exits-above-max",
         "coordinate": "set-limit-exits-above-max#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 132,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "set-limit-exits-above-max",
         "coordinate": "set-limit-exits-above-max#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 133,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6887,
+        "blancGas": 2867,
         "blancStatus": "revert",
         "case": "set-limit-exits-above-max",
         "coordinate": "set-limit-exits-above-max#2:action",
-        "delta": 1332,
+        "delta": -2688,
         "label": "action",
         "ordinal": 134,
         "referenceGas": 5555,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "set-limit-zero-frame",
         "coordinate": "set-limit-zero-frame#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 135,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "set-limit-zero-frame",
         "coordinate": "set-limit-zero-frame#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 136,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 6909,
+        "blancGas": 2889,
         "blancStatus": "revert",
         "case": "set-limit-zero-frame",
         "coordinate": "set-limit-zero-frame#2:action",
-        "delta": 1337,
+        "delta": -2683,
         "label": "action",
         "ordinal": 137,
         "referenceGas": 5572,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-empty",
         "coordinate": "trigger-empty#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 138,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-empty",
         "coordinate": "trigger-empty#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 139,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 9164,
+        "blancGas": 5074,
         "blancStatus": "revert",
         "case": "trigger-empty",
         "coordinate": "trigger-empty#2:action",
-        "delta": 3766,
+        "delta": -324,
         "label": "action",
         "ordinal": 140,
         "referenceGas": 5398,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-single-exact-fee",
         "coordinate": "trigger-single-exact-fee#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 141,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-single-exact-fee",
         "coordinate": "trigger-single-exact-fee#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 142,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 242996,
+        "blancGas": 230117,
         "blancStatus": "success",
         "case": "trigger-single-exact-fee",
         "coordinate": "trigger-single-exact-fee#2:action",
-        "delta": 9712,
+        "delta": -3167,
         "label": "action",
         "ordinal": 143,
         "referenceGas": 233284,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-explicit-refund",
         "coordinate": "trigger-explicit-refund#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 144,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-explicit-refund",
         "coordinate": "trigger-explicit-refund#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 145,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 277367,
+        "blancGas": 264488,
         "blancStatus": "success",
         "case": "trigger-explicit-refund",
         "coordinate": "trigger-explicit-refund#2:action",
-        "delta": 9613,
+        "delta": -3266,
         "label": "action",
         "ordinal": 146,
         "referenceGas": 267754,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-sender-refund",
         "coordinate": "trigger-sender-refund#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 147,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-sender-refund",
         "coordinate": "trigger-sender-refund#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 148,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 249876,
+        "blancGas": 236997,
         "blancStatus": "success",
         "case": "trigger-sender-refund",
         "coordinate": "trigger-sender-refund#2:action",
-        "delta": 9618,
+        "delta": -3261,
         "label": "action",
         "ordinal": 149,
         "referenceGas": 240258,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-multiple",
         "coordinate": "trigger-multiple#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 150,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-multiple",
         "coordinate": "trigger-multiple#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 151,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 244208,
+        "blancGas": 231329,
         "blancStatus": "success",
         "case": "trigger-multiple",
         "coordinate": "trigger-multiple#2:action",
-        "delta": 9075,
+        "delta": -3804,
         "label": "action",
         "ordinal": 152,
         "referenceGas": 235133,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-insufficient-fee",
         "coordinate": "trigger-insufficient-fee#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 153,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-insufficient-fee",
         "coordinate": "trigger-insufficient-fee#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 154,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29239,
+        "blancGas": 16440,
         "blancStatus": "revert",
         "case": "trigger-insufficient-fee",
         "coordinate": "trigger-insufficient-fee#2:action",
-        "delta": 10677,
+        "delta": -2122,
         "label": "action",
         "ordinal": 155,
         "referenceGas": 18562,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-limit-exceeded",
         "coordinate": "trigger-limit-exceeded#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 156,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-limit-exceeded",
         "coordinate": "trigger-limit-exceeded#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 157,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 19907,
+        "blancGas": 7457,
         "blancStatus": "revert",
         "case": "trigger-limit-exceeded",
         "coordinate": "trigger-limit-exceeded#2:action",
-        "delta": 11692,
+        "delta": -758,
         "label": "action",
         "ordinal": 158,
         "referenceGas": 8215,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "get-limit-refilled",
         "coordinate": "get-limit-refilled#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 159,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "get-limit-refilled",
         "coordinate": "get-limit-refilled#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 160,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 244208,
+        "blancGas": 231329,
         "blancStatus": "success",
         "case": "get-limit-refilled",
         "coordinate": "get-limit-refilled#2:history-1",
-        "delta": 9075,
+        "delta": -3804,
         "label": "history-1",
         "ordinal": 161,
         "referenceGas": 235133,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 11633,
+        "blancGas": 3207,
         "blancStatus": "success",
         "case": "get-limit-refilled",
         "coordinate": "get-limit-refilled#3:action",
-        "delta": 8066,
+        "delta": -360,
         "label": "action",
         "ordinal": 162,
         "referenceGas": 3567,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-paused",
         "coordinate": "trigger-paused#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 163,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-paused",
         "coordinate": "trigger-paused#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 164,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-paused",
         "coordinate": "trigger-paused#2:history-1",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-1",
         "ordinal": 165,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29772,
+        "blancGas": 25598,
         "blancStatus": "success",
         "case": "trigger-paused",
         "coordinate": "trigger-paused#3:history-2",
-        "delta": 3420,
+        "delta": -754,
         "label": "history-2",
         "ordinal": 166,
         "referenceGas": 26352,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 9099,
+        "blancGas": 5009,
         "blancStatus": "revert",
         "case": "trigger-paused",
         "coordinate": "trigger-paused#4:action",
-        "delta": 3818,
+        "delta": -272,
         "label": "action",
         "ordinal": 167,
         "referenceGas": 5281,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-zero-value",
         "coordinate": "trigger-zero-value#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 168,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-zero-value",
         "coordinate": "trigger-zero-value#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 169,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 9142,
+        "blancGas": 5052,
         "blancStatus": "revert",
         "case": "trigger-zero-value",
         "coordinate": "trigger-zero-value#2:action",
-        "delta": 3775,
+        "delta": -315,
         "label": "action",
         "ordinal": 170,
         "referenceGas": 5367,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-locator-revert",
         "coordinate": "trigger-locator-revert#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 171,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-locator-revert",
         "coordinate": "trigger-locator-revert#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 172,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 26190,
+        "blancGas": 13391,
         "blancStatus": "revert",
         "case": "trigger-locator-revert",
         "coordinate": "trigger-locator-revert#2:action",
-        "delta": 11109,
+        "delta": -1690,
         "label": "action",
         "ordinal": 173,
         "referenceGas": 15081,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-fee-query-revert",
         "coordinate": "trigger-fee-query-revert#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 174,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-fee-query-revert",
         "coordinate": "trigger-fee-query-revert#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 175,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 29089,
+        "blancGas": 16290,
         "blancStatus": "revert",
         "case": "trigger-fee-query-revert",
         "coordinate": "trigger-fee-query-revert#2:action",
-        "delta": 10898,
+        "delta": -1901,
         "label": "action",
         "ordinal": 176,
         "referenceGas": 18191,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-vault-revert",
         "coordinate": "trigger-vault-revert#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 177,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-vault-revert",
         "coordinate": "trigger-vault-revert#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 178,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 38232,
+        "blancGas": 25353,
         "blancStatus": "revert",
         "case": "trigger-vault-revert",
         "coordinate": "trigger-vault-revert#2:action",
-        "delta": 10751,
+        "delta": -2128,
         "label": "action",
         "ordinal": 179,
         "referenceGas": 27481,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-router-revert",
         "coordinate": "trigger-router-revert#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 180,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-router-revert",
         "coordinate": "trigger-router-revert#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 181,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 152163,
+        "blancGas": 139284,
         "blancStatus": "revert",
         "case": "trigger-router-revert",
         "coordinate": "trigger-router-revert#2:action",
-        "delta": 9800,
+        "delta": -3079,
         "label": "action",
         "ordinal": 182,
         "referenceGas": 142363,
         "referenceStatus": "revert"
       },
       {
-        "blancGas": 3400489,
+        "blancGas": 1735425,
         "blancStatus": "success",
         "case": "trigger-refund-revert",
         "coordinate": "trigger-refund-revert#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "label": "constructor",
         "ordinal": 183,
         "referenceGas": 1744364,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 124650,
+        "blancGas": 93807,
         "blancStatus": "success",
         "case": "trigger-refund-revert",
         "coordinate": "trigger-refund-revert#1:history-0",
-        "delta": 28154,
+        "delta": -2689,
         "label": "history-0",
         "ordinal": 184,
         "referenceGas": 96496,
         "referenceStatus": "success"
       },
       {
-        "blancGas": 252358,
+        "blancGas": 239479,
         "blancStatus": "revert",
         "case": "trigger-refund-revert",
         "coordinate": "trigger-refund-revert#2:action",
-        "delta": 9629,
+        "delta": -3250,
         "label": "action",
         "ordinal": 185,
         "referenceGas": 242729,
@@ -3249,415 +2950,415 @@
     "boundaryDefinition": "direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds",
     "namedGasRows": [
       {
-        "blanc": 3400489,
+        "blanc": 1735425,
         "coordinate": "constructor-success#0:constructor",
-        "delta": 1656125,
+        "delta": -8939,
         "gasKey": "CONSTRUCTOR_SUCCESS",
         "path": "constructor-success",
         "reference": 1744364
       },
       {
-        "blanc": 29772,
+        "blanc": 25598,
         "coordinate": "pause-for-finite#2:action",
-        "delta": 3420,
+        "delta": -754,
         "gasKey": "PAUSE_FOR_FINITE",
         "path": "pauseFor-finite",
         "reference": 26352
       },
       {
-        "blanc": 29741,
+        "blanc": 25567,
         "coordinate": "pause-for-sentinel#2:action",
-        "delta": 3516,
+        "delta": -658,
         "gasKey": "PAUSE_FOR_SENTINEL",
         "path": "pauseFor-sentinel",
         "reference": 26225
       },
       {
-        "blanc": 30019,
+        "blanc": 25996,
         "coordinate": "pause-until-finite#2:action",
-        "delta": 3627,
+        "delta": -396,
         "gasKey": "PAUSE_UNTIL_FINITE",
         "path": "pauseUntil-finite",
         "reference": 26392
       },
       {
-        "blanc": 29963,
+        "blanc": 25943,
         "coordinate": "pause-until-sentinel#2:action",
-        "delta": 3720,
+        "delta": -300,
         "gasKey": "PAUSE_UNTIL_SENTINEL",
         "path": "pauseUntil-sentinel",
         "reference": 26243
       },
       {
-        "blanc": 12498,
+        "blanc": 8261,
         "coordinate": "resume-authorized#4:action",
-        "delta": 3960,
+        "delta": -277,
         "gasKey": "RESUME",
         "path": "resume",
         "reference": 8538
       },
       {
-        "blanc": 2220,
+        "blanc": 2242,
         "coordinate": "view-is-paused-resumed#1:action",
-        "delta": -165,
+        "delta": -143,
         "gasKey": "IS_PAUSED_FALSE",
         "path": "isPaused-resumed",
         "reference": 2385
       },
       {
-        "blanc": 2220,
+        "blanc": 2242,
         "coordinate": "view-is-paused-paused#3:action",
-        "delta": -165,
+        "delta": -143,
         "gasKey": "IS_PAUSED_TRUE",
         "path": "isPaused-paused",
         "reference": 2385
       },
       {
-        "blanc": 124650,
+        "blanc": 93807,
         "coordinate": "grant-role-fresh#1:action",
-        "delta": 28154,
+        "delta": -2689,
         "gasKey": "GRANT_ROLE",
         "path": "grantRole-fresh",
         "reference": 96496
       },
       {
-        "blanc": 39316,
+        "blanc": 25482,
         "coordinate": "revoke-role-existing#2:action",
-        "delta": 10935,
+        "delta": -2899,
         "gasKey": "REVOKE_ROLE",
         "path": "revokeRole-existing",
         "reference": 28381
       },
       {
-        "blanc": 32928,
+        "blanc": 23009,
         "coordinate": "renounce-role-self#2:action",
-        "delta": 9174,
+        "delta": -745,
         "gasKey": "RENOUNCE_ROLE",
         "path": "renounceRole-self",
         "reference": 23754
       },
       {
-        "blanc": 9363,
+        "blanc": 4614,
         "coordinate": "get-role-member#2:action",
-        "delta": 4522,
+        "delta": -227,
         "gasKey": "GET_ROLE_MEMBER",
         "path": "getRoleMember",
         "reference": 4841
       },
       {
-        "blanc": 7400,
+        "blanc": 2391,
         "coordinate": "get-role-member-count#2:action",
-        "delta": 4786,
+        "delta": -223,
         "gasKey": "GET_ROLE_MEMBER_COUNT",
         "path": "getRoleMemberCount",
         "reference": 2614
       },
       {
-        "blanc": 31141,
+        "blanc": 10091,
         "coordinate": "set-limit-valid#2:action",
-        "delta": 20027,
+        "delta": -1023,
         "gasKey": "SET_LIMIT",
         "path": "setExitRequestLimit",
         "reference": 11114
       },
       {
-        "blanc": 11470,
+        "blanc": 3044,
         "coordinate": "get-limit-same-frame#1:action",
-        "delta": 8262,
+        "delta": -164,
         "gasKey": "GET_LIMIT_SAME_FRAME",
         "path": "getExitRequestLimitFullInfo-same-frame",
         "reference": 3208
       },
       {
-        "blanc": 11633,
+        "blanc": 3207,
         "coordinate": "get-limit-refilled#3:action",
-        "delta": 8066,
+        "delta": -360,
         "gasKey": "GET_LIMIT_REFILLED",
         "path": "getExitRequestLimitFullInfo-refilled",
         "reference": 3567
       },
       {
-        "blanc": 9164,
+        "blanc": 5074,
         "coordinate": "trigger-empty#2:action",
-        "delta": 3766,
+        "delta": -324,
         "gasKey": "TRIGGER_EMPTY",
         "path": "trigger-empty",
         "reference": 5398
       },
       {
-        "blanc": 242996,
+        "blanc": 230117,
         "coordinate": "trigger-single-exact-fee#2:action",
-        "delta": 9712,
+        "delta": -3167,
         "gasKey": "TRIGGER_SINGLE_EXACT",
         "path": "trigger-single-no-refund",
         "reference": 233284
       },
       {
-        "blanc": 277367,
+        "blanc": 264488,
         "coordinate": "trigger-explicit-refund#2:action",
-        "delta": 9613,
+        "delta": -3266,
         "gasKey": "TRIGGER_EXPLICIT_REFUND",
         "path": "trigger-single-explicit-refund",
         "reference": 267754
       },
       {
-        "blanc": 249876,
+        "blanc": 236997,
         "coordinate": "trigger-sender-refund#2:action",
-        "delta": 9618,
+        "delta": -3261,
         "gasKey": "TRIGGER_SENDER_REFUND",
         "path": "trigger-single-sender-refund",
         "reference": 240258
       },
       {
-        "blanc": 244208,
+        "blanc": 231329,
         "coordinate": "trigger-multiple#2:action",
-        "delta": 9075,
+        "delta": -3804,
         "gasKey": "TRIGGER_MULTIPLE",
         "path": "trigger-multiple",
         "reference": 235133
       },
       {
-        "blanc": 19907,
+        "blanc": 7457,
         "coordinate": "trigger-limit-exceeded#2:action",
-        "delta": 11692,
+        "delta": -758,
         "gasKey": "TRIGGER_LIMIT",
         "path": "trigger-limit-exceeded",
         "reference": 8215
       },
       {
-        "blanc": 2270,
+        "blanc": 2393,
         "coordinate": "role-negative-pause-for#1:action",
-        "delta": -30034,
+        "delta": -29911,
         "gasKey": "ROLE_UNAUTHORIZED",
         "path": "role-gate-unauthorized",
         "reference": 32304
       },
       {
-        "blanc": 422,
+        "blanc": 268,
         "coordinate": "view-default-admin-role#1:action",
-        "delta": 138,
+        "delta": -16,
         "gasKey": "DEFAULT_ADMIN_ROLE_VIEW",
         "path": "defaultAdminRole",
         "reference": 284
       },
       {
-        "blanc": 379,
+        "blanc": 291,
         "coordinate": "view-pause-infinitely#1:action",
-        "delta": 70,
+        "delta": -18,
         "gasKey": "PAUSE_INFINITELY_VIEW",
         "path": "pauseInfinitely",
         "reference": 309
       },
       {
-        "blanc": 560,
+        "blanc": 303,
         "coordinate": "view-supports-interface#1:action",
-        "delta": 148,
+        "delta": -109,
         "gasKey": "SUPPORTS_INTERFACE",
         "path": "supportsInterface",
         "reference": 412
       },
       {
-        "blanc": 6953,
+        "blanc": 2450,
         "coordinate": "view-has-role#1:action",
-        "delta": 4222,
+        "delta": -281,
         "gasKey": "HAS_ROLE",
         "path": "hasRole",
         "reference": 2731
       },
       {
-        "blanc": 2501,
+        "blanc": 2413,
         "coordinate": "view-resume-timestamp#1:action",
-        "delta": 27,
+        "delta": -61,
         "gasKey": "GET_RESUME_TIMESTAMP",
         "path": "getResumeSinceTimestamp",
         "reference": 2474
       },
       {
-        "blanc": 13465,
+        "blanc": 5342,
         "coordinate": "grant-role-duplicate#2:action",
-        "delta": 3655,
+        "delta": -4468,
         "gasKey": "GRANT_ROLE_DUPLICATE",
         "path": "grantRole-duplicate",
         "reference": 9810
       },
       {
-        "blanc": 11311,
+        "blanc": 5360,
         "coordinate": "revoke-role-missing#1:action",
-        "delta": 1422,
+        "delta": -4529,
         "gasKey": "REVOKE_ROLE_MISSING",
         "path": "revokeRole-missing",
         "reference": 9889
       },
       {
-        "blanc": 621,
+        "blanc": 401,
         "coordinate": "renounce-role-wrong-account#1:action",
-        "delta": 78,
+        "delta": -142,
         "gasKey": "RENOUNCE_ROLE_WRONG_ACCOUNT",
         "path": "renounceRole-wrong-account",
         "reference": 543
       },
       {
-        "blanc": 5069,
+        "blanc": 2385,
         "coordinate": "get-role-member-oob#1:action",
-        "delta": 2482,
+        "delta": -202,
         "gasKey": "GET_ROLE_MEMBER_OOB",
         "path": "getRoleMember-oob",
         "reference": 2587
       },
       {
-        "blanc": 11658,
+        "blanc": 4614,
         "coordinate": "role-enumeration-cross-role-order#7:action",
-        "delta": 6817,
+        "delta": -227,
         "gasKey": "ROLE_ENUMERATION_CROSS_ROLE",
         "path": "role-enumeration-cross-role-order",
         "reference": 4841
       },
       {
-        "blanc": 6953,
+        "blanc": 2450,
         "coordinate": "role-flat-key-collision-refusal#3:action",
-        "delta": 4222,
+        "delta": -281,
         "gasKey": "ROLE_COLLISION_REFUSAL",
         "path": "role-flat-key-collision-refusal",
         "reference": 2731
       },
       {
-        "blanc": 8690,
+        "blanc": 4516,
         "coordinate": "pause-for-when-paused#3:action",
-        "delta": 3690,
+        "delta": -484,
         "gasKey": "PAUSE_FOR_WHEN_PAUSED",
         "path": "pauseFor-when-paused",
         "reference": 5000
       },
       {
-        "blanc": 8910,
+        "blanc": 4890,
         "coordinate": "pause-until-when-paused#3:action",
-        "delta": 3887,
+        "delta": -133,
         "gasKey": "PAUSE_UNTIL_WHEN_PAUSED",
         "path": "pauseUntil-when-paused",
         "reference": 5023
       },
       {
-        "blanc": 8714,
+        "blanc": 4540,
         "coordinate": "pause-zero-duration#2:action",
-        "delta": 3688,
+        "delta": -486,
         "gasKey": "PAUSE_ZERO_DURATION",
         "path": "pauseFor-zero-duration",
         "reference": 5026
       },
       {
-        "blanc": 8936,
+        "blanc": 4916,
         "coordinate": "pause-until-past#2:action",
-        "delta": 3879,
+        "delta": -141,
         "gasKey": "PAUSE_UNTIL_PAST",
         "path": "pauseUntil-past",
         "reference": 5057
       },
       {
-        "blanc": 8864,
+        "blanc": 4624,
         "coordinate": "resume-when-resumed#2:action",
-        "delta": 4011,
+        "delta": -229,
         "gasKey": "RESUME_WHEN_RESUMED",
         "path": "resume-when-resumed",
         "reference": 4853
       },
       {
-        "blanc": 6834,
+        "blanc": 2814,
         "coordinate": "set-limit-max-too-large#2:action",
-        "delta": 1331,
+        "delta": -2689,
         "gasKey": "SET_LIMIT_MAX_TOO_LARGE",
         "path": "setExitRequestLimit-max-too-large",
         "reference": 5503
       },
       {
-        "blanc": 6859,
+        "blanc": 2839,
         "coordinate": "set-limit-frame-too-large#2:action",
-        "delta": 1330,
+        "delta": -2690,
         "gasKey": "SET_LIMIT_FRAME_TOO_LARGE",
         "path": "setExitRequestLimit-frame-too-large",
         "reference": 5529
       },
       {
-        "blanc": 6887,
+        "blanc": 2867,
         "coordinate": "set-limit-exits-above-max#2:action",
-        "delta": 1332,
+        "delta": -2688,
         "gasKey": "SET_LIMIT_EXITS_ABOVE_MAX",
         "path": "setExitRequestLimit-exits-above-max",
         "reference": 5555
       },
       {
-        "blanc": 6909,
+        "blanc": 2889,
         "coordinate": "set-limit-zero-frame#2:action",
-        "delta": 1337,
+        "delta": -2683,
         "gasKey": "SET_LIMIT_ZERO_FRAME",
         "path": "setExitRequestLimit-zero-frame",
         "reference": 5572
       },
       {
-        "blanc": 29239,
+        "blanc": 16440,
         "coordinate": "trigger-insufficient-fee#2:action",
-        "delta": 10677,
+        "delta": -2122,
         "gasKey": "TRIGGER_INSUFFICIENT_FEE",
         "path": "trigger-insufficient-fee",
         "reference": 18562
       },
       {
-        "blanc": 9099,
+        "blanc": 5009,
         "coordinate": "trigger-paused#4:action",
-        "delta": 3818,
+        "delta": -272,
         "gasKey": "TRIGGER_PAUSED",
         "path": "trigger-paused",
         "reference": 5281
       },
       {
-        "blanc": 9142,
+        "blanc": 5052,
         "coordinate": "trigger-zero-value#2:action",
-        "delta": 3775,
+        "delta": -315,
         "gasKey": "TRIGGER_ZERO_VALUE",
         "path": "trigger-zero-value",
         "reference": 5367
       },
       {
-        "blanc": 26190,
+        "blanc": 13391,
         "coordinate": "trigger-locator-revert#2:action",
-        "delta": 11109,
+        "delta": -1690,
         "gasKey": "TRIGGER_LOCATOR_REVERT",
         "path": "trigger-locator-revert",
         "reference": 15081
       },
       {
-        "blanc": 29089,
+        "blanc": 16290,
         "coordinate": "trigger-fee-query-revert#2:action",
-        "delta": 10898,
+        "delta": -1901,
         "gasKey": "TRIGGER_FEE_QUERY_REVERT",
         "path": "trigger-fee-query-revert",
         "reference": 18191
       },
       {
-        "blanc": 38232,
+        "blanc": 25353,
         "coordinate": "trigger-vault-revert#2:action",
-        "delta": 10751,
+        "delta": -2128,
         "gasKey": "TRIGGER_VAULT_REVERT",
         "path": "trigger-vault-revert",
         "reference": 27481
       },
       {
-        "blanc": 152163,
+        "blanc": 139284,
         "coordinate": "trigger-router-revert#2:action",
-        "delta": 9800,
+        "delta": -3079,
         "gasKey": "TRIGGER_ROUTER_REVERT",
         "path": "trigger-router-revert",
         "reference": 142363
       },
       {
-        "blanc": 252358,
+        "blanc": 239479,
         "coordinate": "trigger-refund-revert#2:action",
-        "delta": 9629,
+        "delta": -3250,
         "gasKey": "TRIGGER_REFUND_REVERT",
         "path": "trigger-refund-revert",
         "reference": 242729
       }
     ],
-    "vectorSha256": "59a1ba9b46850429033181a91bf4c12f5f63e32c3b3924e930d0b4910b4a5ad5"
+    "vectorSha256": "37d59c1da79dac97083a51db3c3407bf479f1679e19dca18506aff029f89fe5d"
   },
   "rows": [
     {
@@ -3666,11 +3367,11 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          3400489
+          1735425
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "5e26f4bac757ef0006def77039854165d732ef179266178fbbce61a0d612405d",
-        "returndataSha256": "6430abf47a3c8ac2c38e4e088cb5b3a0f166d178bfa6334617751d12aa851652",
+        "returndataSha256": "ae7cf7eb9a49db2701e4c2130f2f0786f33c532ccf16e1cb07f302557bcdd736",
         "status": [
           "success"
         ]
@@ -3714,7 +3415,7 @@
           ]
         }
       },
-      "semanticDigest": "853a01af199cd95bd750947217d6efd8df10b47c2c818a26b58a32f840b22b03",
+      "semanticDigest": "25943db19706fb3634f3e048d3946e348295cd401e8b8342bcc7ee92e05ece8a",
       "tags": [
         "constructor.complete-create",
         "events.constructor"
@@ -4111,7 +3812,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          203
+          401
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4155,7 +3856,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "f0708da8d23041233c2750fb703d6e772e27f8e4c553960b5af4172cf3394903",
+      "semanticDigest": "11bb93f85a2d55ad142fb05652019984408c575ebf028679700fc03174d11745",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4167,7 +3868,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          422
+          268
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4211,7 +3912,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "a01e57c81f60832439fa6c574ed1ea4cd69f01865cc442d64de74d22bc2fab0d",
+      "semanticDigest": "99ede4fe4a6ecab8bd9e54d96b588b1b1fcab552d532e469db52a928ac00129f",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4223,7 +3924,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          379
+          291
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4267,7 +3968,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "4a07d46b55cb76d86518548b791ca9228b6f8b0f7830d9ac2d54e52c7ea3dcd4",
+      "semanticDigest": "a2e04d6128b9387cb5d54218c9157deb7edf7eef0e69b199ac2ad6b35a2f64c2",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4279,7 +3980,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          159
+          357
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4323,7 +4024,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "9675258a893dcb02e51eeecb8fdf02002def6120626966186c5be7a915d6cf9a",
+      "semanticDigest": "b48ddcc4087d6d9be0c263c380405c20bd5f99932084a5d4ff2ba9cba227862d",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4335,7 +4036,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          181
+          379
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4379,7 +4080,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "b2705c81bc1351516f2f270c6f22b1b706d9b0b699fc4bf547af69d5e3ca7b7a",
+      "semanticDigest": "6d3d8c822a4f64e9b0ca6ff1bbadf0460413be780c12497f13ec416e16c5b0d0",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4391,7 +4092,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          247
+          445
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4435,7 +4136,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "94186eba60c22408a15ca7d66bcf6a04f0d6b30aa6a4998237bdd3d8dcbd0f52",
+      "semanticDigest": "d2008299c19735c9c4189fccae953190a623c366b7326300112b3eeb7f2b3835",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4447,7 +4148,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          225
+          423
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4491,7 +4192,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "6b720e03dc9ab8a9dc43c18afdd719428d718296b5530a0b7e0f1d1e654bf8cf",
+      "semanticDigest": "4e64763d42850756334fa7aa58904cfe9097ac94f0e94a79b332ac3787bad0e1",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4503,7 +4204,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          269
+          467
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4547,7 +4248,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "6c6e53cd2ce6a893de1db661ab87365e0450257db9bc3fa8d8ddcd1c59205975",
+      "semanticDigest": "73b6287a24cda9f8e952c4fdf8b9fe46839d3f076361535db44045bc4a66e3c4",
       "tags": [
         "selector-census",
         "constant-view"
@@ -4559,7 +4260,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          560
+          303
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4603,7 +4304,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "c25754ff252563caa926004ab98cb5236e08d8d2e994ed286ef1d0d7ad9210a2",
+      "semanticDigest": "16562e46a854a74c550fbe0012d221293f615fc19c441ba93933148e9de1f52d",
       "tags": [
         "selector-census",
         "erc165"
@@ -4615,7 +4316,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          509
+          575
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4663,7 +4364,7 @@
           "eventTopics": []
         }
       },
-      "semanticDigest": "4d0c1dddf4051c169a73db8b1d8ddf85900310c65fc463e93c8a1bd6982788af",
+      "semanticDigest": "f9e5241f149978c46df02e24590734aab61d4a17ce67793b65ae5abeaa8f67e4",
       "tags": [
         "selector-census",
         "role-admin",
@@ -4676,7 +4377,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          6953
+          2450
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4720,7 +4421,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "ec469e2d57099f6f9fd2221b8a3c886b112281f70cdf7102a66e09382e5538fc",
+      "semanticDigest": "c2c0c274aca24a71fde4a06fd3c7556b02f0106b2415b1bcb444de24e0c62345",
       "tags": [
         "selector-census",
         "role-membership"
@@ -4732,7 +4433,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          2220
+          2242
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4776,7 +4477,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "61a743db3b2553d21802c9e46c4829604e436db64ce0eea3b4918f1fbde7561a",
+      "semanticDigest": "4174cb2f951d089044379497054dabc552fb3f85985ed27040048449a33d1c0a",
       "tags": [
         "selector-census",
         "pause.resumed"
@@ -4788,7 +4489,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          2501
+          2413
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4832,7 +4533,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "31ac08801434bf358be25ef46714351883347d0c65a03aed62a9f33ae0e42e84",
+      "semanticDigest": "55ac4856d0e0125bc6f4ff0f265411add1bf592bf03bf11a525c9a081095963b",
       "tags": [
         "selector-census",
         "pause.projection"
@@ -4844,7 +4545,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          11470
+          3044
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -4888,7 +4589,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "e7a3e9f9433c338ab14f375ec7593b75b9c529942312a94f70a6c252cc617cf4",
+      "semanticDigest": "0b20a9d522da4acdcde3de4d1357fc2d0aa58f9469458fbcc2167ae2f59dd81a",
       "tags": [
         "selector-census",
         "limit.same-frame"
@@ -4900,7 +4601,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650
+          93807
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "6430f107ca4d5901e3596a0969a9f4728cb6edd1d94ab80a23ef356afcba60bc",
@@ -4949,7 +4650,7 @@
           ]
         }
       },
-      "semanticDigest": "22e61acfb506355ed853fd8718ec783fe890806c01b8f92b7f7809e8d905a442",
+      "semanticDigest": "f05756ddf6bbd72a7c7c599d0b7235c4105d9f2931b0e9708b2c368f815302d2",
       "tags": [
         "selector-census",
         "roles.grant",
@@ -4962,8 +4663,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          13465
+          93807,
+          5342
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "5ef2f9be0617e71c324663cd713bd9100f973c80e24d126fe3d69eac4aa7b539",
@@ -5009,7 +4710,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "70b7013e7521eaa662e5b9fc281f8239cc560864ca9c371fa44237d0beaf9978",
+      "semanticDigest": "d715e8fb92b2e8c317aa6eeedb1ac255be22557a1f87dd9f05ed36947ff2203c",
       "tags": [
         "roles.grant-idempotent"
       ]
@@ -5020,8 +4721,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          39316
+          93807,
+          25482
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "6e68f7f065b84b66a84c55481823d1f36b6e4b498965c4d0c70cf336bc3243f0",
@@ -5073,7 +4774,7 @@
           ]
         }
       },
-      "semanticDigest": "93af18e50cb6d55d589821a9437aae57d768cec2890ff0fbbece8846378045a3",
+      "semanticDigest": "87ff9fdb8882a54c2499fde274c381f757607a94c09d16562c7da07d785c578a",
       "tags": [
         "selector-census",
         "roles.revoke",
@@ -5086,7 +4787,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          11311
+          5360
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5129,7 +4830,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "6fe63b72b2c84f3cb1801c519191d7043875419db6753b64e47046f5499b2166",
+      "semanticDigest": "0a07295ae81e9b9596c51ae339bf6ab69e1e0718d061d1186b17656da82e4798",
       "tags": [
         "roles.revoke-idempotent"
       ]
@@ -5140,8 +4841,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          32928
+          93807,
+          23009
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "3a5ab85c54e4345ecbf3bd5b6791642dda64a468f1100166c2d3fb06bdd4ef74",
@@ -5193,7 +4894,7 @@
           ]
         }
       },
-      "semanticDigest": "947ef7568084278515ecaedb53af2d0e007ca704b587a838bdd24e6f95e8aa64",
+      "semanticDigest": "f27ba708cd84867748aa63d19607f7ef1af12baebcc4df4957b85483e183483b",
       "tags": [
         "selector-census",
         "roles.renounce",
@@ -5206,7 +4907,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          621
+          401
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5251,7 +4952,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "9799daca0bae4092bf09f4bf09c6493d5fc036dff076a09fd116c51887f38456",
+      "semanticDigest": "924c2dfd68df2eafd60dcca2ed064a951879e28a09edd504d25597c595e71d42",
       "tags": [
         "deviation.TWG-D02"
       ]
@@ -5262,8 +4963,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          9363
+          93807,
+          4614
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "5ef2f9be0617e71c324663cd713bd9100f973c80e24d126fe3d69eac4aa7b539",
@@ -5310,7 +5011,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "99b1ed63a9ca37076b871ca5275edd94c769858e4030127259eee0b73ba79686",
+      "semanticDigest": "745425ba17aef011d822734f866a7681f2c3b8f5527a2c94e64bc675c8ee1a52",
       "tags": [
         "selector-census",
         "roles.enumeration"
@@ -5322,8 +5023,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          7400
+          93807,
+          2391
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "5ef2f9be0617e71c324663cd713bd9100f973c80e24d126fe3d69eac4aa7b539",
@@ -5370,7 +5071,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "2da9ce123a4215c0254101c516fcaa9abf115083458b56227052bae126b7dce6",
+      "semanticDigest": "8f42d629fac9efc732e6f77ba609c3975885e7e41d091f91f02452c478a10db7",
       "tags": [
         "selector-census",
         "roles.enumeration"
@@ -5382,7 +5083,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          5069
+          2385
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5427,7 +5128,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "7b75b4ba20c16de309d45a73c97b19ef01800c0ceda524ead0310c5c217f6723",
+      "semanticDigest": "e3bd155fb8168a1c8ca40d35827c99450872709c11a265f57ffc42e5007aee57",
       "tags": [
         "deviation.TWG-D03"
       ]
@@ -5438,17 +5139,17 @@
         "callTraceSha256": "00e149988c6d9b583355eaac4ee9f9a95b1794b4e5b889f19d75312769656cb3",
         "ethSha256": "8328b4817b131a2a21e9d4eb2d4a94907913e2b5fe2929379d267d1db2a34861",
         "gasUsed": [
-          124650,
-          124650,
-          124650,
-          124650,
-          124650,
-          54477,
-          11658
+          93807,
+          76707,
+          76707,
+          93807,
+          76707,
+          35703,
+          4614
         ],
-        "logicalStateSha256": "373ac7ec903472eda4c89aa2cf2f149c1e17c82aa76cb75b6ce1299a870c58e0",
+        "logicalStateSha256": "48139d4981bd1e3946a4b7a72da73c2957b4aa56bb8ce6bb37e4e9fc7810e1c8",
         "logsSha256": "6992aab647beb032a4715a11fffa5be91cd98cc960a4222468dc15dbdc828a50",
-        "returndataSha256": "02e103c81b0ebfb98586abb6c1d11e49a185a5317312ceec2c37d77246058147",
+        "returndataSha256": "a2b4efe33ce0076a325babab106b34293cdab95c9be4271d46e9dd0c232170fd",
         "status": [
           "success",
           "success",
@@ -5467,11 +5168,8 @@
         "logs",
         "call-trace"
       ],
-      "deviation": "TWG-D04",
-      "expectedMismatchFields": [
-        "returndata",
-        "logicalState"
-      ],
+      "deviation": null,
+      "expectedMismatchFields": [],
       "family": "roles",
       "name": "role-enumeration-cross-role-order",
       "ordinal": 31,
@@ -5504,13 +5202,13 @@
       "selector": "getRoleMember(bytes32,uint256)",
       "semantic": {
         "assertions": [
-          "deviation.TWG-D04"
+          "roles.enumeration-order"
         ],
         "expected": {}
       },
-      "semanticDigest": "f669c2089a9cf6b258922ee93f6803c6d0f1aeb8ceba325a8ef7bd39ffb9b8a2",
+      "semanticDigest": "f7a996a812fd6bb9a6920933a1858ea472842de318a0796e12eca91c898a429f",
       "tags": [
-        "deviation.TWG-D04"
+        "roles.enumeration-order"
       ]
     },
     {
@@ -5519,16 +5217,16 @@
         "callTraceSha256": "5ae1625b488b3935122d8dd627fe575b388a5aa360378fa4407aad08baaed1e2",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          13480,
-          6953
+          93807,
+          93807,
+          2450
         ],
-        "logicalStateSha256": "4917c929c502d9f0f3e61b19643941c6a58a83b414fe78beebc4bb9367b1be0b",
-        "logsSha256": "2ce1240d5adf23544e02855a371959d146259d268d1fed5706acb6d2e516dd2e",
-        "returndataSha256": "28e0b801408d66d54a7fbabd3f854d9701d3ba2e84adfdc43dc264a8802a2690",
+        "logicalStateSha256": "cff5909e974bfdfedfe0fd2b83ba8e532e51c2cffb43e71dcc7c075035237e86",
+        "logsSha256": "05eefe9818c4dd4996b4b897d7cda8e268fea78cf215eb062cc5f5896c3f3909",
+        "returndataSha256": "80cc57a64d304d9e368be4a80e1abb842721f435efe51aaf4616e78e7d461857",
         "status": [
           "success",
-          "revert",
+          "success",
           "success"
         ]
       },
@@ -5540,13 +5238,8 @@
         "logs",
         "call-trace"
       ],
-      "deviation": "TWG-D05",
-      "expectedMismatchFields": [
-        "status",
-        "returndata",
-        "logicalState",
-        "logs"
-      ],
+      "deviation": null,
+      "expectedMismatchFields": [],
       "family": "roles",
       "name": "role-flat-key-collision-refusal",
       "ordinal": 32,
@@ -5571,13 +5264,13 @@
       "selector": "hasRole(bytes32,address)",
       "semantic": {
         "assertions": [
-          "deviation.TWG-D05"
+          "roles.keccak-collision-separation"
         ],
         "expected": {}
       },
-      "semanticDigest": "c6d358da3fc8cba2bc60ab0d8c39c9e0ccc3c990692473b63a9046df347f6300",
+      "semanticDigest": "970a2a6131693f1dd75a8359ec74c47eec465dee5d966cdc15a3a040c8c4f258",
       "tags": [
-        "deviation.TWG-D05"
+        "roles.keccak-collision-separation"
       ]
     },
     {
@@ -5586,7 +5279,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2720
+          2887
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5632,7 +5325,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "52741ba8a0780a22f6b74d698293246117a9d38d724285fad25262c8001b8e57",
+      "semanticDigest": "3e6f44aedb860272bf01cd9e05637d82b144f18b32f37791ab6b1d5886b9e6b2",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5644,7 +5337,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2742
+          2904
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5690,7 +5383,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "6dedb3cf09f2081c81e1d21bd9d935e316a8399f888f5e2ce6f707e858e99e02",
+      "semanticDigest": "8c549d63cad2cf25e29ea280d1530c48e9bbd442b86f22b637bd3c881952530c",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5702,7 +5395,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2270
+          2393
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5748,7 +5441,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "f88401562f1e9d9e1e60dfb5e783cb438d251a1e96392e3e4c06468a05ce9d9e",
+      "semanticDigest": "8e96ad27fac7df4aa4d31ac9798aa541965cb8a333bb01fe6ae7ccbebbf998ca",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5760,7 +5453,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2490
+          2767
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5806,7 +5499,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "43f2d601cd49410d73ba70ad62ac9b22c93743452f34896adf3771bbeefff108",
+      "semanticDigest": "7f4ab7c8b97bcf233c28fecd53963be91e1a8339ee6bafeecdf060b41f74abc3",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5818,7 +5511,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2447
+          2504
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5864,7 +5557,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "e18ea2f6a685cfde40bb83db3b7f8d95c31e952c359bfdbb3ad5d9689f274ee8",
+      "semanticDigest": "5be76629f26cb00ddd143c5b6fbb696f267e6664ad95de6d638034f04bd1be97",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5876,7 +5569,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "ac187385359a328941390b690e087ec249f3a7c1d4fd0b20cbd14f20abac0863",
         "gasUsed": [
-          2512
+          2789
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5922,7 +5615,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "d08bb86c39f32a97dae790f8321dbfa4883f0fa381046df6aa1b5d935873cf5a",
+      "semanticDigest": "86017672a7cc2eed1f9a9b4cba801c117da3313b4ee5cb5c15527ea55a86c8a3",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5934,7 +5627,7 @@
         "callTraceSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
         "ethSha256": "1c4bbe9332443c16726d31aa8ff3aadfdbc9cc1ea62186e2a9a3dbac92825d05",
         "gasUsed": [
-          2639
+          2849
         ],
         "logicalStateSha256": "f8cac564df23dbc1b7d130b2a8759e3259a90ef9982c32b46362e63cc8b92f9b",
         "logsSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
@@ -5980,7 +5673,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "632df46b606cb775ebbbe67dc201a311ce19603d413206131c22cd11b9d01bbf",
+      "semanticDigest": "4845474e5cf5345a159522adad33e1eab7dcfa40fcb39eae2a1fce82f063a51b",
       "tags": [
         "roles.negative",
         "deviation.TWG-D01"
@@ -5992,8 +5685,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29772
+          93807,
+          25598
         ],
         "logicalStateSha256": "bcaed80757de7c778d3215e9263daf7d1218211c86a93ba3a84fd83bf2550b05",
         "logsSha256": "493a3de783ed4a8262ba51da8325ac04aa9613b8819afce8baa0a0345d93fa0c",
@@ -6046,7 +5739,7 @@
           "resumeSince": 1700000010
         }
       },
-      "semanticDigest": "b9d1e296f5bf450f58e592d7cc407b39c936e6d61ede14b8b48d10eb98ff1119",
+      "semanticDigest": "db8f93e46b657f8f4a75bb1c6fe693eb9709157f7508e3ea71791c25becd18bc",
       "tags": [
         "selector-census",
         "pause.finite",
@@ -6059,8 +5752,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29741
+          93807,
+          25567
         ],
         "logicalStateSha256": "5fc274f7ffce3f9aa6dfacface917a05fa246d8cea514653f5f69f120ff40b60",
         "logsSha256": "751bc64f2bdc6831b40306a89c9ac6a75bf39d45adfa75a2929e87e3a11317ab",
@@ -6113,7 +5806,7 @@
           "resumeSince": 115792089237316195423570985008687907853269984665640564039457584007913129639935
         }
       },
-      "semanticDigest": "1a567275da912d22fe89e730a7b081936e549c1c36d20ed7e6643c78c3c3e659",
+      "semanticDigest": "0b01796db1864424532c3ff6236510814b68aca858c5437ccc6c2e5390c6c70f",
       "tags": [
         "pause.sentinel",
         "sentinel.pauseFor",
@@ -6126,8 +5819,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          30019
+          93807,
+          25996
         ],
         "logicalStateSha256": "5d48c319fe3958417c714d6de7f00334c82de01414debfdf13897a0acd82642c",
         "logsSha256": "c9d9217d856fd00e9380704a6e3d1c920e9280705d18c670ef254c73ed61557c",
@@ -6180,7 +5873,7 @@
           "resumeSince": 1700000011
         }
       },
-      "semanticDigest": "9f90ce32992b805e29d9151fb1eef63815f1840237e38159b70a1ec8e5332fcf",
+      "semanticDigest": "c233ca820c7f1a1cc0ca3213b582fbfdd5908326998c8ae444607e7fc6f608e5",
       "tags": [
         "selector-census",
         "pause.inclusive",
@@ -6193,8 +5886,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29963
+          93807,
+          25943
         ],
         "logicalStateSha256": "5fc274f7ffce3f9aa6dfacface917a05fa246d8cea514653f5f69f120ff40b60",
         "logsSha256": "751bc64f2bdc6831b40306a89c9ac6a75bf39d45adfa75a2929e87e3a11317ab",
@@ -6247,7 +5940,7 @@
           "resumeSince": 115792089237316195423570985008687907853269984665640564039457584007913129639935
         }
       },
-      "semanticDigest": "542c2cde86b901349773ef208ba7fa9c7ec7cd7740c143e1a5361b004f7e2ee7",
+      "semanticDigest": "ec7811bac994f3849cf124f0bf9aab0a5b17d1854e25afb3837a6c9c24a707d0",
       "tags": [
         "pause.sentinel",
         "sentinel.pauseUntil",
@@ -6260,9 +5953,9 @@
         "callTraceSha256": "5ae1625b488b3935122d8dd627fe575b388a5aa360378fa4407aad08baaed1e2",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29772,
-          8690
+          93807,
+          25598,
+          4516
         ],
         "logicalStateSha256": "bcaed80757de7c778d3215e9263daf7d1218211c86a93ba3a84fd83bf2550b05",
         "logsSha256": "474b916cfac262026c1d3651d9ea37951fa7ec127d95761674be2b6d987c4479",
@@ -6317,7 +6010,7 @@
           "actionStatus": "revert"
         }
       },
-      "semanticDigest": "68b7c635f70964bb373679b169ac54767b8a2935af93c12999c5f03b7c56a33b",
+      "semanticDigest": "ed90b38320562a5c13930e837f0e38eb021751aa49fe61915c909e8dedbcc8bb",
       "tags": [
         "pause.polarity",
         "errors.ResumedExpected",
@@ -6330,9 +6023,9 @@
         "callTraceSha256": "5ae1625b488b3935122d8dd627fe575b388a5aa360378fa4407aad08baaed1e2",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29772,
-          8910
+          93807,
+          25598,
+          4890
         ],
         "logicalStateSha256": "bcaed80757de7c778d3215e9263daf7d1218211c86a93ba3a84fd83bf2550b05",
         "logsSha256": "474b916cfac262026c1d3651d9ea37951fa7ec127d95761674be2b6d987c4479",
@@ -6387,7 +6080,7 @@
           "actionStatus": "revert"
         }
       },
-      "semanticDigest": "8db7d9ab9030696f6d693b5ad5afc61e24485715e8229ffb94efd00bcde34c8a",
+      "semanticDigest": "f4541c678e2cd1ef61a4666cd034fdcbd43fbdb84ffc7847be56a2c794003e6d",
       "tags": [
         "pause.polarity",
         "errors.ResumedExpected",
@@ -6400,9 +6093,9 @@
         "callTraceSha256": "5ae1625b488b3935122d8dd627fe575b388a5aa360378fa4407aad08baaed1e2",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          29772,
-          2220
+          93807,
+          25598,
+          2242
         ],
         "logicalStateSha256": "bcaed80757de7c778d3215e9263daf7d1218211c86a93ba3a84fd83bf2550b05",
         "logsSha256": "474b916cfac262026c1d3651d9ea37951fa7ec127d95761674be2b6d987c4479",
@@ -6451,7 +6144,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "ad7a5f5676e8a20dd1fb2ce28b886d74fc4c4e14306c58d243c9f7881722460a",
+      "semanticDigest": "0b97fce1e675cf7fb0662c20de617c9c9a624ca8c23a766cd4a2e089aad42545",
       "tags": [
         "pause.paused"
       ]
@@ -6462,10 +6155,10 @@
         "callTraceSha256": "210e130878aabaf46f1fe72749a263f9eb71c6a262b80f13882ed08d472c0ecd",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          124650,
-          29772,
-          12498
+          93807,
+          93807,
+          25598,
+          8261
         ],
         "logicalStateSha256": "18bc9aa2a00dd56eafec5c0ebc2114a30931668c8d919ab7822a4b3ef4e0d9f4",
         "logsSha256": "70930acd52496e647bc0dd04cce3679382f6d488c351d59be053c98dc97a2730",
@@ -6524,7 +6217,7 @@
           "resumeSince": 1700000001
         }
       },
-      "semanticDigest": "d07df8620c53b580768e123db90e3d49bd1b90ceb4e826edd4e9ef0b2bcca80f",
+      "semanticDigest": "65c2491a78e756c6c0114a24dd4f7537028918fb5c52ce002341befdf16de1cf",
       "tags": [
         "selector-census",
         "pause.resume",
@@ -6537,8 +6230,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          8714
+          93807,
+          4540
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "5ef2f9be0617e71c324663cd713bd9100f973c80e24d126fe3d69eac4aa7b539",
@@ -6584,7 +6277,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "4bcee0d3e85c448a043432ca867ddf72a117eeae48a695692fd16a43d2d42f57",
+      "semanticDigest": "085ca6bd151676d0ace9f6ec609d65bf664512bac857e0f01363ce8018ce760e",
       "tags": [
         "pause.validation"
       ]
@@ -6595,8 +6288,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          8936
+          93807,
+          4916
         ],
         "logicalStateSha256": "c69961b542259cf1e6f74225cac74fa6806d0a718948caeb38cae5811534d752",
         "logsSha256": "5ef2f9be0617e71c324663cd713bd9100f973c80e24d126fe3d69eac4aa7b539",
@@ -6642,7 +6335,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "88ce8043ec7be21fc232ddd1a959c662d4ff36428ce04905599f70ad2679f776",
+      "semanticDigest": "7ad5886d61e7f2c720bde73167c81ac9735e951b25640cb1eee08fd4bbacf532",
       "tags": [
         "pause.validation"
       ]
@@ -6653,8 +6346,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          8864
+          93807,
+          4624
         ],
         "logicalStateSha256": "2f34951a94d840444aa8076ace171b08587e3deee624e22b345d2c4f8f38af0b",
         "logsSha256": "5d1ddff5e796e3d8ba23119806f1e1e765746932b31675f5b7a6b3c7861a3d33",
@@ -6706,7 +6399,7 @@
           "actionStatus": "revert"
         }
       },
-      "semanticDigest": "09f5a424b77a8fece93997f0f3bbc57bfde37b7793b860b67fac90e13c1616b1",
+      "semanticDigest": "078d35d194b873846b7b2ba5f8e19cf7be557fdbd473b668c7681891867720c6",
       "tags": [
         "pause.polarity",
         "errors.PausedExpected",
@@ -6719,8 +6412,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          31141
+          93807,
+          10091
         ],
         "logicalStateSha256": "b9cd529bf1e443fe2969c46008c459e9a3dd0a7082c98d36023741dd3b9e7d25",
         "logsSha256": "e842f6df1074a5a2412667857f5dda47737cdf773a57ef6e3a3be8e4fe525f1f",
@@ -6772,7 +6465,7 @@
           ]
         }
       },
-      "semanticDigest": "13f7e172939b2321005bae84eb0e271d3fdef1d06db24f361fa03c0446da805f",
+      "semanticDigest": "3e300cdf7b067f3a3f203f5f0750b99a8fb2f21265e9c4fadb6af484752c2e26",
       "tags": [
         "selector-census",
         "limit.configure",
@@ -6785,8 +6478,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          6834
+          93807,
+          2814
         ],
         "logicalStateSha256": "c276fed3c1793434e8a3933a5b694b972df3b8b127122c7551f4341435ab8424",
         "logsSha256": "9a62f8b5374f6ffc1e8fc7dd7fa012da9816d3e236b8184492c996d34bcba39a",
@@ -6832,7 +6525,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "9c16e6f07f9e88e4b9cf48aff38b7981d0475660754530f5f85d280a00bbe62d",
+      "semanticDigest": "9e25160471a02d3ea53a1ee1700813cb5824e0ebb55ecc08029ce4495e9f9d5d",
       "tags": [
         "limit.validation"
       ]
@@ -6843,8 +6536,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          6859
+          93807,
+          2839
         ],
         "logicalStateSha256": "c276fed3c1793434e8a3933a5b694b972df3b8b127122c7551f4341435ab8424",
         "logsSha256": "9a62f8b5374f6ffc1e8fc7dd7fa012da9816d3e236b8184492c996d34bcba39a",
@@ -6890,7 +6583,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "71da2bb450ab7fe81753e07433250655967192a189339b8a2f376264a2342aef",
+      "semanticDigest": "324ac242720a427495dc29b9db4edd223ed9c002c7a10adbef1cee879a04c352",
       "tags": [
         "limit.validation"
       ]
@@ -6901,8 +6594,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          6887
+          93807,
+          2867
         ],
         "logicalStateSha256": "c276fed3c1793434e8a3933a5b694b972df3b8b127122c7551f4341435ab8424",
         "logsSha256": "9a62f8b5374f6ffc1e8fc7dd7fa012da9816d3e236b8184492c996d34bcba39a",
@@ -6948,7 +6641,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "32c4d43af500a508ea140d6f85e3c946b5dce17935e55d4f480bfe73643b769d",
+      "semanticDigest": "ecf569ba55cad18c515433108190d104e0bf9495d6df76d013d496f165694032",
       "tags": [
         "limit.validation"
       ]
@@ -6959,8 +6652,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "12fd423889baf867426e6f5fd09653d109b61a38ae0562a72332ccc6017e739e",
         "gasUsed": [
-          124650,
-          6909
+          93807,
+          2889
         ],
         "logicalStateSha256": "c276fed3c1793434e8a3933a5b694b972df3b8b127122c7551f4341435ab8424",
         "logsSha256": "9a62f8b5374f6ffc1e8fc7dd7fa012da9816d3e236b8184492c996d34bcba39a",
@@ -7006,7 +6699,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "0601ecb2ec8854ff5bcc6c413eb5d21544ff9004e4e94c7ab934d10d5db1cdaf",
+      "semanticDigest": "8ecbf0e84dfe3ef5da3c4e30e4512fd3e021413af721803ecdc05a20ad4ebe09",
       "tags": [
         "limit.validation"
       ]
@@ -7017,8 +6710,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "bc6c7fe70e0193c091eb68009adf58aa6270b82a2256b51c9ea187e84926674f",
         "gasUsed": [
-          124650,
-          9164
+          93807,
+          5074
         ],
         "logicalStateSha256": "e6b3ed5b739b199e74573566f0fa95e578000871ddc97d41369db5ee3624fea0",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7065,7 +6758,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "5d9688c69585234c57470c9e067f78d8682abc13f7272ca481520eec20b2bcaf",
+      "semanticDigest": "2e07bf8291ab71254032baafa96f5ab964d2360a8d879c8fa94c048f44917e72",
       "tags": [
         "selector-census",
         "trigger.zero-validators"
@@ -7077,8 +6770,8 @@
         "callTraceSha256": "c5b0c43e01258d88b52a141011e6c1925736bf8e7d30be78e5f83a744d779538",
         "ethSha256": "afca3eb46a3a7dd7fcaeb8fe0d0fb0716c0922f55fe0585b7a441de1096bbda2",
         "gasUsed": [
-          124650,
-          242996
+          93807,
+          230117
         ],
         "logicalStateSha256": "0b673ea02047aeac5ec751acf4ca92a57d6171746c357097ea81895bd9540acb",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7139,7 +6832,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "afb65ee5b72179ddcf4e8f6e399cbdf318252f567053b4a65d8c9be15e1de9f2",
+      "semanticDigest": "89e0d00004310a977eab2ad2ce88e8a0c6d56c3b7a89ef86b2f83657c70bf00a",
       "tags": [
         "trigger.fee",
         "trigger.value-forward",
@@ -7153,8 +6846,8 @@
         "callTraceSha256": "86b0e8f63ccaa1e150b9fcff24d70d8031d14f498c66966d12fa4436a0a2e27b",
         "ethSha256": "b45a02d9eab7e55829485571709d3a3d2aa207361698ecb9e66f547054cf927e",
         "gasUsed": [
-          124650,
-          277367
+          93807,
+          264488
         ],
         "logicalStateSha256": "0b673ea02047aeac5ec751acf4ca92a57d6171746c357097ea81895bd9540acb",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7217,7 +6910,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "8a020b3f892ae8fe4690f65e45e145d06f9420573f1c1ec6aef36652a36dd49b",
+      "semanticDigest": "a544a6f0a419550c4701fbe4e79cc06fe94c498ab14da31d65948edb31c121a6",
       "tags": [
         "trigger.fee",
         "trigger.value-forward",
@@ -7232,8 +6925,8 @@
         "callTraceSha256": "37c4b23ae5ecac655e971b380f995ce91e1a5b0a3e67f23ece3ef23e4e26f9d7",
         "ethSha256": "afca3eb46a3a7dd7fcaeb8fe0d0fb0716c0922f55fe0585b7a441de1096bbda2",
         "gasUsed": [
-          124650,
-          249876
+          93807,
+          236997
         ],
         "logicalStateSha256": "0b673ea02047aeac5ec751acf4ca92a57d6171746c357097ea81895bd9540acb",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7296,7 +6989,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "2f5673dad8bd4b8a1ae7d16e7eda29c88f365b0ba9b2fd2298e62bd80b444088",
+      "semanticDigest": "e4684b639ecf09a3ac0f1ab42830f2a7d788285b392b520dd44fdb0edad3b43e",
       "tags": [
         "trigger.fee",
         "trigger.value-forward",
@@ -7311,8 +7004,8 @@
         "callTraceSha256": "9373f4c50e5e035a524daea06f0d69d6a8bdee38ee842f3b8efff5380bdb690a",
         "ethSha256": "960c8ae93e0e130faf1ff06157f0b6be83f129dabc71ba4bd518b26e8f6ebf7c",
         "gasUsed": [
-          124650,
-          244208
+          93807,
+          231329
         ],
         "logicalStateSha256": "6cacbcb0c1729082fb2d824c2a9373f92974ce97dea1dc90d3a1968dba8a49c5",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7373,7 +7066,7 @@
           "vaultValue": 14
         }
       },
-      "semanticDigest": "4b51baefa417931c5212de9f85837d56e05db5719687f7c06706bcccc7076670",
+      "semanticDigest": "d56065c974c7b02ffde4a5a59ec131988f7abe660dca4d48829770b7bfd8e1a2",
       "tags": [
         "trigger.multi",
         "trigger.fee",
@@ -7387,8 +7080,8 @@
         "callTraceSha256": "a8be14d2f8b019b69ad54ed5a7cd84bda46a6da4fbcc6f8795f4cc46b0810057",
         "ethSha256": "bc6c7fe70e0193c091eb68009adf58aa6270b82a2256b51c9ea187e84926674f",
         "gasUsed": [
-          124650,
-          29239
+          93807,
+          16440
         ],
         "logicalStateSha256": "e6b3ed5b739b199e74573566f0fa95e578000871ddc97d41369db5ee3624fea0",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7435,7 +7128,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "4f01a7fffc9a5ddf499f2b2c0f986ee214ef57cfb629223ee94e38aa5f00833b",
+      "semanticDigest": "f5c5651201889bf1111edfdedc0dabba6aa644cc0a3f5fe0fa61142590293f40",
       "tags": [
         "trigger.insufficient-fee",
         "rollback"
@@ -7447,8 +7140,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "bc6c7fe70e0193c091eb68009adf58aa6270b82a2256b51c9ea187e84926674f",
         "gasUsed": [
-          124650,
-          19907
+          93807,
+          7457
         ],
         "logicalStateSha256": "e6b3ed5b739b199e74573566f0fa95e578000871ddc97d41369db5ee3624fea0",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7495,7 +7188,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "58d8999f81758283c65e6dcd910c199583e71d40658491a7920e64c253ad7ad6",
+      "semanticDigest": "0ab473736fe828b40017328c2fdcced6178390bd5dba0ba38f9993e3e0938210",
       "tags": [
         "limit.exceeded",
         "rollback"
@@ -7507,9 +7200,9 @@
         "callTraceSha256": "3ea676e94a863b8bfb63000d708646f2c0b750f270fcec14b97251dd88965089",
         "ethSha256": "37b88aff68c49f603343ad416862be36b547f88a496ae5870e55f47d049bdf9b",
         "gasUsed": [
-          124650,
-          244208,
-          11633
+          93807,
+          231329,
+          3207
         ],
         "logicalStateSha256": "5665e024c02400b36b61727e19aa1d512c40a56d3f1a61eb9324daddaabcc2f7",
         "logsSha256": "4f12e7ff125f960c38810bbed8cd40f77b42557b2c5c59b635a33681d1bc44cc",
@@ -7559,7 +7252,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "7e8960293f1507920413f61247213464aec8f705f543061fcabe8ca223a229a1",
+      "semanticDigest": "fba259b221e20ff074a93c5ff48f6c1b5d03c2a6cbafd6b66ad6c2d3473c1d55",
       "tags": [
         "limit.consume",
         "limit.frame-refill"
@@ -7571,10 +7264,10 @@
         "callTraceSha256": "210e130878aabaf46f1fe72749a263f9eb71c6a262b80f13882ed08d472c0ecd",
         "ethSha256": "bc6c7fe70e0193c091eb68009adf58aa6270b82a2256b51c9ea187e84926674f",
         "gasUsed": [
-          124650,
-          124650,
-          29772,
-          9099
+          93807,
+          93807,
+          25598,
+          5009
         ],
         "logicalStateSha256": "0fe60b3e36b255cdc08370f2fce7ac7a8f2aca9e7597b15095fb2939a4273852",
         "logsSha256": "18d0abe821567ce010e94e9d2d2e32142257caa072282bde1c4cf4728b0f2931",
@@ -7627,7 +7320,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "d1f419ebe9f820e370729115f276fa256caa4d5ec6aefa2919d849023faf5ff8",
+      "semanticDigest": "9419412567573abddd475e6eea429d8b2c660697609859874617f676437b6b9f",
       "tags": [
         "trigger.paused",
         "rollback"
@@ -7639,8 +7332,8 @@
         "callTraceSha256": "643d5437104296e21d906ecb15b2c96ad278f20cfc4af53b12bb6069bd853726",
         "ethSha256": "f74b97b27bd5c30a9b2e0bbd180d679dc61b8ab5937213809fc7c18d42db3fab",
         "gasUsed": [
-          124650,
-          9142
+          93807,
+          5052
         ],
         "logicalStateSha256": "e6b3ed5b739b199e74573566f0fa95e578000871ddc97d41369db5ee3624fea0",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7687,7 +7380,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "513aa88fa06b45b5e3b54be0b6bf7ea6e92daa8ecd893b10098573d7b0af737b",
+      "semanticDigest": "22ce486205368ba3f86e7fcebe5ae3e76e43771ff6a62f740dfe347e2344ea30",
       "tags": [
         "trigger.zero-value",
         "rollback"
@@ -7699,8 +7392,8 @@
         "callTraceSha256": "835a2a347e5f1f84d10f2dbd14aee64c9d0d22c562cfff742664410befaa00ec",
         "ethSha256": "8c8da532159943fc7ccdb407bd6ac0cf4fc5675f22a30f040e5988bc52d26973",
         "gasUsed": [
-          124650,
-          26190
+          93807,
+          13391
         ],
         "logicalStateSha256": "38c0c570e479253bb39576e955a5c1adfcd886668855140907fe7a07eb6965c3",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7747,7 +7440,7 @@
         ],
         "expected": {}
       },
-      "semanticDigest": "e3b49dd460658773db36e30ebcb958104dbf124688d49617a2f6b4f0f73a2f20",
+      "semanticDigest": "e2b44e6609f34c083668ffd9ec9387cc8009d8f22dd1f3dc1fd9f1ad9de96828",
       "tags": [
         "trigger.locator-revert",
         "rollback"
@@ -7759,8 +7452,8 @@
         "callTraceSha256": "83adb3709efa6b4dd44e05670f978f129aa4fc63c5deb207d946cc55dcf6e8fa",
         "ethSha256": "8c8da532159943fc7ccdb407bd6ac0cf4fc5675f22a30f040e5988bc52d26973",
         "gasUsed": [
-          124650,
-          29089
+          93807,
+          16290
         ],
         "logicalStateSha256": "38c0c570e479253bb39576e955a5c1adfcd886668855140907fe7a07eb6965c3",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7812,7 +7505,7 @@
           "feeQuerySelector": "0xc44e30dc"
         }
       },
-      "semanticDigest": "5f222719d35f30b4e9398ff990db74deba21564ce552ccd323f24054cbdcc307",
+      "semanticDigest": "c35ade288c012c04578f6df8c67cb15d8f512871a3de9ce60368b19172bff689",
       "tags": [
         "trigger.vault-fee-revert",
         "trigger.fee-query",
@@ -7825,8 +7518,8 @@
         "callTraceSha256": "1d620228a884734daff8398b86f08a7079775f0c4b3d6cc63cbcfafd09975353",
         "ethSha256": "8c8da532159943fc7ccdb407bd6ac0cf4fc5675f22a30f040e5988bc52d26973",
         "gasUsed": [
-          124650,
-          38232
+          93807,
+          25353
         ],
         "logicalStateSha256": "38c0c570e479253bb39576e955a5c1adfcd886668855140907fe7a07eb6965c3",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7883,7 +7576,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "a35ff1b13e2806b8b99d0ed3cffa86b54f99db1494c5339d8623ed9cf9c013cb",
+      "semanticDigest": "d1f2658e42d2dbe85eafe04e9ac835859d3bfa5bbd7ade99120607c61619ef0d",
       "tags": [
         "trigger.vault-revert",
         "trigger.fee",
@@ -7897,8 +7590,8 @@
         "callTraceSha256": "793a5a89c83efef55c94d042ef66a311a1939e2618c637b09d6b5f9b55e89f5b",
         "ethSha256": "8c8da532159943fc7ccdb407bd6ac0cf4fc5675f22a30f040e5988bc52d26973",
         "gasUsed": [
-          124650,
-          152163
+          93807,
+          139284
         ],
         "logicalStateSha256": "38c0c570e479253bb39576e955a5c1adfcd886668855140907fe7a07eb6965c3",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -7959,7 +7652,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "60098b844cc83e40b8931e734a3de3933ae98a307b835a065f44f0e5ccbb7b3c",
+      "semanticDigest": "de0920f11082ac889ed3c3767df8e303a72b2cb94c867cb4e51d8959a3124750",
       "tags": [
         "trigger.router-revert",
         "trigger.fee",
@@ -7974,8 +7667,8 @@
         "callTraceSha256": "d67623473456128f1be4419436fc454983764d359737b618986f6a682d1461db",
         "ethSha256": "646a8308ec211950b744dd52114037eba3be67bc5740e7504fabb4bd322311a8",
         "gasUsed": [
-          124650,
-          252358
+          93807,
+          239479
         ],
         "logicalStateSha256": "21c4dd40d5d52caa364a8eae702c892dcd358e0eec1e77e265b351d538b848a1",
         "logsSha256": "92a1113958cb334828aed15237a96d7a77e6c719b665a6206556a9d0f5448cc0",
@@ -8039,7 +7732,7 @@
           "vaultValue": 7
         }
       },
-      "semanticDigest": "260242fd557e6e807985b0f3dd57d55baa9008fadf2b35c9da6b965e464ca995",
+      "semanticDigest": "f69df57eca74f56b1efd15d2ac620d54290463c14bc499a191d2c0dc3771a6f0",
       "tags": [
         "trigger.refund-revert",
         "trigger.fee",
@@ -8052,13 +7745,13 @@
   ],
   "schema": 1,
   "sectionDigests": {
-    "artifacts": "f32db3dc135e6f350caacb8cb6766128b9fb8b1a1311fc2f5947405e2e6644fc",
-    "counts": "e4f63ea5111fbefde907c41e3ead639b3b2c40513ba8992d326dd6a5723a538d",
-    "coverage": "064f97b9979136800291a8d5917cb2e1aa665d6b80fd367d9ba30918e95f1695",
-    "documentFill": "265cd97398eb1d12412b35b81c53175f0cc681de6c142aa29dfb6ea103394e57",
+    "artifacts": "469a26f6be68511245ea30277bb6dd4f97230bc98d1a1de75c462056a35f3c5b",
+    "counts": "db1508511764751f1fb433fcbfeb5e615909fb10d09f37b17032eeaa7f327cbc",
+    "coverage": "9019d450947ae27fec1ae711180caafbbb3869bedba87492f5301cf25125b790",
+    "documentFill": "f16efa4768016df09a4c72fc89a4beb8b882c3ead67ee412843db61a70e4aa98",
     "oracle": "93bef5c99cce1b76cd347e3c0dbb1cd69f361189d2c9be2ccf03d5b277b15892",
-    "projection": "d44df671ee050ddbf29add52fb66feecb374479da348819ac5f5cc58e5da4300",
-    "resourceEvidence": "ce49bf74a6bb65314e0d78d30fc1adae561b339e2ed7def740f3b68f74af969b",
-    "rows": "bae00a44f2785e08c2dfbd7b80e842e3152c9a441c2eb9475634503cddbb31e2"
+    "projection": "2cf7a3070c01f541165e2252ad1c5df14cd0f49fab27a73198a2f91e6b7fe0b5",
+    "resourceEvidence": "8ec0cdf5a96e5600dfb180a42720b24a9424d4b5de55cc6e3bbb139e7b49d16f",
+    "rows": "5a5c7d9648e87f735491ed7c97d2f0570bbd90fe858826ea1a13e07dd053b761"
   }
 }

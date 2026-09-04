@@ -139,8 +139,8 @@ GAS_ROWS = [
     ("TRIGGER_REFUND_REVERT", "trigger-refund-revert"),
 ]
 
-BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
-BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+BLANC_ARTIFACT_COMMIT = "df9ce992b98b1eb784ab631be312cba4550ff61b"
+BLANC_PROOF_COMMIT = "35ba1e1b137529482180adccd44ae0da70417ac4"
 CALLDATA_EXCLUSION_TEXT = (
     "nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
     "recognized-selector nonpayability are untested and excluded"
@@ -388,7 +388,8 @@ def parse_compatibility(text: str, census: dict[str, Any]) -> dict[str, Any]:
            "visible 24-selector table differs from the exact ordered census")
     check_heading_inventory(text, COMPATIBILITY_HEADINGS, "compatibility document")
     normalized_text = " ".join(text.split())
-    expect(normalized_text.count(CALLDATA_EXCLUSION_TEXT) >= 2,
+    calldata_minimum = 1 if "{{MACHINE:B2_CALLDATA_SCOPE_SUMMARY}}" in text else 2
+    expect(normalized_text.count(CALLDATA_EXCLUSION_TEXT) >= calldata_minimum,
            "compatibility document does not repeat the exact machine summary and explicit "
            "dispatch/calldata exclusion boundary")
     expect(normalized_text.count(INTERFACE_ID_EXCLUSION_TEXT) >= 2,
@@ -445,8 +446,13 @@ def parse_deviations(text: str) -> dict[str, Any]:
     expect(len(code_sizes) == 1 and set(code_sizes[0]) == {
         "referenceLock", "artifactProgramCommit", "proofCertificateCommit", "manifest",
     }, "code-size marker inventory/shape differs")
-    expect(code_sizes[0]["artifactProgramCommit"] == BLANC_ARTIFACT_COMMIT and
-           code_sizes[0]["proofCertificateCommit"] == BLANC_PROOF_COMMIT,
+    template_code_size = code_sizes[0]["artifactProgramCommit"] == \
+        "{{MACHINE:B2_BLANC_ARTIFACT_PROGRAM_COMMIT}}" and \
+        code_sizes[0]["proofCertificateCommit"] == \
+        "{{MACHINE:B2_BLANC_PROOF_CERTIFICATE_COMMIT}}"
+    expect(template_code_size or
+           (code_sizes[0]["artifactProgramCommit"] == BLANC_ARTIFACT_COMMIT and
+            code_sizes[0]["proofCertificateCommit"] == BLANC_PROOF_COMMIT),
            "code-size marker does not bind the exact artifact-program/proof-certificate pair")
     expect(len(measurements) == 1 and set(measurements[0]) == {
         "eelsCommit", "manifest", "boundaryDefinition", "rowCount", "positiveDeltaRows",
@@ -457,8 +463,9 @@ def parse_deviations(text: str) -> dict[str, Any]:
                and row.get("status") == "accepted"
                and type(row.get("delta")) is int and row["delta"] > 0,
                f"positive-gas marker {index} has wrong shape/order")
-    expect(type(policies[0].get("positiveGasRows")) is int and
-           policies[0]["positiveGasRows"] == len(gas_deviations),
+    positive_count = policies[0].get("positiveGasRows")
+    expect(positive_count == "{{MACHINE:B2_POSITIVE_GAS_ROW_COUNT}}" or
+           (type(positive_count) is int and positive_count == len(gas_deviations)),
            "positive-gas policy count does not match the exact marker inventory")
     check_heading_inventory(text, DEVIATION_HEADINGS, "deviation registry")
     return {
@@ -749,6 +756,8 @@ def validate_manifest_contract(
         safe_text(row["coordinate"], f"B2 gas row {key} coordinate")
     positives = gas["positiveDeviations"]
     expect(isinstance(positives, list), "B2 positiveDeviations is not a list")
+    expect(all(row["delta"] < 0 for row in rows),
+           "B2 exact 51-cell named gas ledger is not strictly dominant")
     expected_positive_keys = [row["gasKey"] for row in rows if row["delta"] > 0]
     actual_positive_keys = []
     for index, item in enumerate(positives, 1):
@@ -937,7 +946,7 @@ def check_rendered_values(
         f"| Reference creation bytes | `{values['B1_REFERENCE_FULL_CREATE_BYTES']}` bytes; SHA-256 `{values['B1_REFERENCE_FULL_CREATE_SHA256']}` |",
         f"| Reference runtime | `{values['B1_REFERENCE_RUNTIME_BYTES']}` bytes; SHA-256 `{values['B1_REFERENCE_RUNTIME_SHA256']}` |",
         f"| Blanc artifact/runtime program commit | `{values['B2_BLANC_ARTIFACT_PROGRAM_COMMIT']}` |",
-        f"| First compile-valid pinned-target proof certificate | `{values['B2_BLANC_PROOF_CERTIFICATE_COMMIT']}` |",
+        f"| Optimized-runtime theorem ladder and pinned-target certificate | `{values['B2_BLANC_PROOF_CERTIFICATE_COMMIT']}` |",
         f"| Blanc creation template | `{values['B2_BLANC_CREATION_TEMPLATE_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_CREATION_TEMPLATE_SHA256']}` |",
         f"| Blanc complete CREATE input | `{values['B2_BLANC_FULL_CREATE_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_FULL_CREATE_SHA256']}` |",
         f"| Blanc runtime | `{values['B2_BLANC_RUNTIME_BYTES']}` bytes; SHA-256 `{values['B2_BLANC_RUNTIME_SHA256']}` |",
@@ -1122,11 +1131,9 @@ def self_test(compatibility: str, deviations: str, census: dict[str, Any]) -> No
     else:
         fail("proof-certificate identity falsifier did not bite")
 
-    first_gas_marker = next(
-        line for line in deviations.splitlines()
-        if line.startswith("<!-- LIDO-TWG-GAS-DEVIATION ")
-    )
-    mutated = deviations.replace(first_gas_marker + "\n", "", 1)
+    mutated = deviations.replace('"positiveGasRows":0', '"positiveGasRows":1', 1)
+    expect(mutated != deviations,
+           "zero-positive-gas policy falsifier could not locate the completed policy")
     try:
         parse_deviations(mutated)
     except CompatibilityError:
@@ -1199,7 +1206,7 @@ def main() -> int:
             )
             print(
                 "OK — Lido TWG compatibility: 24 endpoints, 6 events, constructor, "
-                "13 cross-cuts, 5 dispositioned stable deviations, exact B1/B2 identities, "
+                "13 cross-cuts, 3 accepted + 2 repaired stable deviations, exact B1/B2 identities, "
                 f"{len(GAS_ROWS)} named gas rows"
             )
             return 0
