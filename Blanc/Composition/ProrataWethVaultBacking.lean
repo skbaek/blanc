@@ -3,6 +3,7 @@ import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.ProrataAccounting
 import Blanc.ProrataWethVaultDust
 import Blanc.ProrataWethVaultShares
+import Blanc.ProrataWethVaultLedgerSpec
 
 /-!
 # The joint two-contract backing invariant
@@ -571,5 +572,187 @@ theorem approveEffect_accountingStep
   show (Devm.getStor post sevm.currentTarget).get _ = _
   rw [allowanceSet, Stor.get_set_ne _ keyNotSupply]
   rfl
+
+
+/-- The same conclusion from the *observation* rather than from `Stor` equality.
+
+A target that only reads storage — every view — preserves `Devm.storageView`
+and not the `Stor` tree, because entering interpreted code through a
+`STATICCALL` cannot promise the representation.  Both carrier coordinates are
+observations, so the weaker equality is enough. -/
+theorem silent_accountingStep_of_view
+    {sevm : Sevm} {pre post : Devm}
+    (view : ∀ account key,
+      (Devm.getStor post account).get key = (Devm.getStor pre account).get key) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  have shape : snapshotAt sevm post = snapshotAt sevm pre := by
+    refine congrArg₂ Blanc.Prorata.AccountingSnapshot.mk ?_ ?_
+    · show ((Devm.getStor post sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot).toNat = _
+      rw [view]
+      rfl
+    · show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat
+        = _
+      show ((Devm.getStor post wethAccount).get _).toNat = _
+      rw [view]
+      rfl
+  rw [shape]
+  exact Blanc.Prorata.ProrataAccountingEffect.silent _
+
+/-- A read-only endpoint is a `silent` accounting step.
+
+The certificate is `Func.SilentIn` at `Devm.storageView`, which is what the
+live-quoting views admit: they reach WETH through a `STATICCALL`, so what they
+preserve is the observation. -/
+theorem readOnlyEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm} {sig : B256} {words : Nat} {body : Func}
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = sig)
+    (memberAll : (sig, Blanc.ProrataWethVault.routed words body) ∈
+      Blanc.ProrataWethVault.vaultFuncs)
+    (memberRO : (sig, Blanc.ProrataWethVault.routed words body) ∈
+      Blanc.ProrataWethVault.readOnlyFuncs) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  obtain ⟨endpointPre, entryState, -, -, -, endpointRun⟩ :=
+    Blanc.ProrataWethVault.runCompiled_enters_endpoint_compiled_logs run
+      selectorEq memberAll
+  have entry : ∀ account key,
+      (Devm.getStor endpointPre account).get key =
+        (Devm.getStor pre account).get key := by
+    intro account key
+    rw [getStor_eq_of_state_eq entryState account]
+  have walk := Func.observe_eq_of_run_silentIn
+    Blanc.ProrataWethVault.readOnlySilentSlot_closed
+    (Func.WalkInv.toRun (R := Func.RunOk) endpointRun)
+    (Blanc.ProrataWethVault.readOnly_silent _ memberRO)
+  refine silent_accountingStep_of_view (fun account key => ?_)
+  exact (congrFun (congrFun walk account) key).trans (entry account key)
+
+
+/-- A delegated share transfer is a `silent` accounting step: the allowance
+write lands away from the supply word and WETH is untouched. -/
+theorem transferFromEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  obtain ⟨-, -, -, -, -, -, -, -, -, supplyKept, -, -, -, -, -, -, -, -, -, -,
+      -, -, foreign, -⟩ :=
+    Blanc.ProrataWethVault.transferFrom_compiled_effect memoryWf run selectorEq
+  exact silent_accountingStep config.distinct supplyKept foreign
+
+
+/-! ## Every non-flow message is a silent accounting step
+
+The twenty-one targets that make no external call move neither the vault's
+supply word nor its row in WETH's storage, so the carrier sees each as a no-op.
+Stated at the message level rather than per target, so that a caller composing
+an execution history need not case on the selector itself. -/
+
+/-- **A non-flow vault message is a `silent` accounting step.** -/
+theorem nonflow_message_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (notDeposit :
+      Sevm.selector sevm ≠ selector "deposit" [.uint256, .address])
+    (notMint : Sevm.selector sevm ≠ selector "mint" [.uint256, .address])
+    (notWithdraw : Sevm.selector sevm ≠
+      selector "withdraw" [.uint256, .address, .address])
+    (notRedeem : Sevm.selector sevm ≠
+      selector "redeem" [.uint256, .address, .address]) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post) := by
+  obtain ⟨body, member⟩ :=
+    Blanc.ProrataWethVault.selector_mem_vaultFuncs_of_ok run
+  simp only [Blanc.ProrataWethVault.vaultFuncs, List.mem_cons,
+    List.not_mem_nil, or_false, Prod.mk.injEq] at member
+  rcases member with ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.totalAssets) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.name) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.convertToAssets) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact approveEffect_accountingStep config memoryWf run sel
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.previewWithdraw) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.totalSupply) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact transferFromEffect_accountingStep config memoryWf run sel
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.decimals) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.asset) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.maxDeposit) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.previewRedeem) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact absurd sel notDeposit
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.balanceOf) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact absurd sel notMint
+  · exact readOnlyEffect_accountingStep (words := 0)
+      (body := Blanc.ProrataWethVault.symbol) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact transferEffect_accountingStep config memoryWf run sel
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.previewMint) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact absurd sel notWithdraw
+  · exact absurd sel notRedeem
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.maxMint) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.convertToShares) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.maxWithdraw) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.maxRedeem) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 2)
+      (body := Blanc.ProrataWethVault.allowance) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+  · exact readOnlyEffect_accountingStep (words := 1)
+      (body := Blanc.ProrataWethVault.previewDeposit) run sel
+      (by simp [Blanc.ProrataWethVault.vaultFuncs])
+      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
 
 end Blanc.Composition.ProrataWethVault
