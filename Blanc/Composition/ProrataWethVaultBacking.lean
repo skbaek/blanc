@@ -467,4 +467,45 @@ theorem inboundEffect_accountingStep
   exact Blanc.ProrataWethVault.depositStep assets.toNat
     (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply
 
+
+/-- **A successful outbound flow is a `withdraw` accounting step.**
+
+The mirror of the inbound bridge: the supply and the vault's WETH row each fall
+by exactly the burned and paid amounts, which is how the carrier's `withdraw`
+moves a snapshot.  `shares ≤ supply` is the carrier's own side condition and is
+the burn coverage the outbound effect already needs. -/
+theorem outboundEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    {receiver owner assets shares returned : B256}
+    (receiverNotVault : sevm.currentTarget ≠ receiver.toAdr)
+    (burnable : shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (covered : assets.toNat ≤ (snapshotAt sevm pre).balance)
+    (effect : OutboundEffect sevm receiver owner assets shares returned pre post)
+    (quote : assets.toNat =
+      Blanc.ProrataWethVault.convertToAssetsN shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre)
+      (.withdraw shares.toNat assets.toNat)
+      (snapshotAt sevm post) := by
+  obtain ⟨-, movement, -, supplyRow, -, -, -, -⟩ := effect
+  have supplyAfter : (snapshotAt sevm post).supply =
+      (snapshotAt sevm pre).supply - shares.toNat := by
+    show (Devm.getStorVal post sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot).toNat = _
+    rw [supplyRow]
+    exact B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat burnable)
+  have balanceAfter : (snapshotAt sevm post).balance =
+      (snapshotAt sevm pre).balance - assets.toNat := by
+    show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat = _
+    rw [debitedSub_of_transfer movement receiverNotVault]
+    exact B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat covered)
+  have shape : snapshotAt sevm post =
+      ⟨(snapshotAt sevm pre).supply - shares.toNat,
+        (snapshotAt sevm pre).balance - assets.toNat⟩ :=
+    congrArg₂ Blanc.Prorata.AccountingSnapshot.mk supplyAfter balanceAfter
+  rw [shape, quote]
+  exact Blanc.ProrataWethVault.redeemStep (snapshotAt sevm pre).balance
+    (snapshotAt sevm pre).supply burnable
+
 end Blanc.Composition.ProrataWethVault
