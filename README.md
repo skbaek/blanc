@@ -939,9 +939,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 1107 named results and
+   current source inventory pins the exact axiom set of 1108 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `1107/1107` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `1108/1108` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -969,7 +969,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **1107** top theorems. `scripts/check.sh`'s
+current source inventory contains **1108** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

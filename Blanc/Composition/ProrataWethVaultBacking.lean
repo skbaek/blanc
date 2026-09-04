@@ -1,5 +1,7 @@
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.ProrataAccounting
+import Blanc.ProrataWethVaultDust
 
 /-!
 # The joint two-contract backing invariant
@@ -405,5 +407,64 @@ theorem outboundEffect_preserves_backed
       rw [Nat.mul_sub]
     have coveredNat := B256.toNat_le_toNat wethCovered
     omega
+
+
+/-! ## The pair's own accounting snapshot
+
+The carrier in `Blanc/ProrataAccounting.lean` is a sequence of steps over
+`⟨supply, balance⟩`. For this port the supply is the vault's own supply word
+and the balance is the vault's *row in WETH's storage* — the two accounts the
+invariant spans. Reading that pair off a machine state is what lets a compiled
+vault execution be exhibited as an accounting step, and so lets the attack and
+dust results in `Blanc/ProrataWethVaultDust.lean` speak about histories the
+deployed pair can produce rather than histories the arithmetic merely admits. -/
+
+/-- The accounting snapshot the vault and WETH jointly present at a state. -/
+def snapshotAt (sevm : Sevm) (state : Devm) : Blanc.Prorata.AccountingSnapshot :=
+  ⟨(Devm.getStorVal state sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot).toNat,
+   (Stor.rest (Devm.getStor state wethAccount) sevm.currentTarget).toNat⟩
+
+/-- **A successful inbound flow is a `deposit` accounting step.**
+
+The two non-wrap premises are the ones the backing proof already establishes at
+this boundary, and they are stated rather than re-derived so that this theorem
+says only what it is for: the pair's snapshot moves exactly the way the carrier
+says a deposit moves it. -/
+theorem inboundEffect_accountingStep
+    {sevm : Sevm} {pre post : Devm}
+    {receiver assets shares returned : B256}
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) shares)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) assets)
+    (effect : InboundEffect sevm receiver assets shares returned pre post)
+    (quote : shares.toNat =
+      Blanc.ProrataWethVault.convertToSharesN assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply) :
+    Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre)
+      (.deposit assets.toNat shares.toNat)
+      (snapshotAt sevm post) := by
+  obtain ⟨-, movement, vaultStorage, -, -⟩ := effect
+  have supplyAfter : (snapshotAt sevm post).supply =
+      (snapshotAt sevm pre).supply + shares.toNat := by
+    show ((Devm.getStor post sevm.currentTarget).get
+      Blanc.ProrataWethVault.supplySlot).toNat = _
+    rw [vaultStorage, Stor.get_set_self]
+    exact B256.toNat_add_eq_of_nof _ _ supplyNof
+  have balanceAfter : (snapshotAt sevm post).balance =
+      (snapshotAt sevm pre).balance + assets.toNat := by
+    show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat = _
+    rw [credited_of_transfer movement depositorNotVault]
+    exact B256.toNat_add_eq_of_nof _ _ rowNof
+  have shape : snapshotAt sevm post =
+      ⟨(snapshotAt sevm pre).supply + shares.toNat,
+        (snapshotAt sevm pre).balance + assets.toNat⟩ :=
+    congrArg₂ Blanc.Prorata.AccountingSnapshot.mk supplyAfter balanceAfter
+  rw [shape, quote]
+  exact Blanc.ProrataWethVault.depositStep assets.toNat
+    (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply
 
 end Blanc.Composition.ProrataWethVault
