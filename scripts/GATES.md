@@ -28,7 +28,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | imported source or an import | `scripts/check-trust-surface.sh` | `lake build && scripts/check.sh --no-build` |
 | the PRORATA WETH vault's frozen arithmetic, capacity policy, or the independent oracle | `scripts/check-prorata-weth-vault-oracle.sh` | `lake build && scripts/check.sh --no-build` |
 | the PRORATA WETH vault's committed runtime, its oracle, or the vault's frozen behaviour | `scripts/check-prorata-weth-vault-differential.sh` | `lake build && scripts/check.sh --no-build` |
-| the PRORATA WETH vault's deviation register or its pinned reference closure | none yet — `PRORATA_WETH_VAULT_DEVIATIONS.md` is prose until the reference closure is vendored | `scripts/check-prorata-weth-vault-differential.sh` |
+| the PRORATA WETH vault's vendored reference closure, its lock, compiler input/output, the harness, or the deviation register's reference rows | `scripts/check-prorata-weth-vault-reference.sh` | `scripts/check-prorata-weth-vault-differential.sh` |
 | the proof-recipe registry, generator, generated documentation/Lean lookup, recipe tactic, or changed proof declarations | `scripts/check-proof-recipes.sh --base main` | the **full set**, in the order below |
 | a `maxHeartbeats` or `maxRecDepth` scope, its debt baseline, or a bounded debt exception | `scripts/check-proof-debt.sh` | the **full set**, in the order below |
 | a production Lean module, its size baseline, or a bounded module-size exception | `scripts/check-proof-module-size.sh` | the **full set**, in the order below |
@@ -81,6 +81,12 @@ Choose the gate by what you changed, cheapest falsifier first:
 | FMINT or WETH compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | PRORATA compiled bytes or conformance artifacts | `scripts/check-prorata.sh --no-build` | — |
 | the PRORATA vault/WETH exact-call composition, source staging, effect adapters, or G3 boundary checker | `scripts/check-prorata-weth-vault-boundary.sh` | the **full set**, in the order below |
+| `scripts/check-prorata-weth-vault-reference.sh` | verifies offline that the vendored OpenZeppelin v5.7.0 closure is exactly the 17-source closure frozen at G1 (per-file SHA-256 and Git blob, upstream MIT LICENSE, tree membership), that the committed standard-JSON input is built from those bytes under the frozen settings, that the committed `solc 0.8.36+commit.8a079791` output carries the frozen creation/runtime template identities and the creation input with the configured asset word, and that the reference's method identifiers are exactly the 25 signatures of `vaultFuncs` with no permit or ERC-165 on either side. `--recompile` additionally reproduces the artifacts with the `$SOLC` binary whose SHA-256 is the recorded native identity | 17 sources + LICENSE; 3 frozen artifact identities; 25 selectors; 1 optional recompilation | sub-second |
+| `scripts/check-prorata-weth-vault-oracle.sh` | runs the independent exact-integer oracle written from the frozen statement: the representability identity, both capacity bounds' tightness, the four rounding directions, round-trip non-profitability, ledger conservation over randomized transcripts and donation classification over 63 boundary states, regenerates the committed golden vectors byte-for-byte, and requires the offset-disabled control to bite | 11 property batteries; 63 boundary states; committed vectors; 1 biting control | sub-second |
+| `scripts/check-prorata-weth-vault-differential.sh` | executes the committed 17481-byte vault runtime and the 4347-byte constructor-patched OpenZeppelin reference (deployed on Jaune from the locked creation input against Blanc's WETH and identity-checked) through `jaune t8n` at BPO2, projects each side's storage through its own layout, and compares status, storage, event order and data against the independent oracle over the four flows, share transfer, zero-receiver, malformed and value-bearing calls; records both runtime sizes and per-case gas in `scripts/prorata-weth-vault-reference-measurements.json` and fails on drift | 11 cases × 2 runtimes; 1 reference deployment; 6 gas rows | ~2 s |
+| `scripts/check-prorata-weth-vault-oracle.sh --self-test` | perturbs the oracle (offset, each rounding direction, capacity and conservation formulas) in an isolated copy and requires every property battery to notice | 6 perturbations | sub-second |
+| `scripts/check-prorata-weth-vault-differential.sh --self-test` | perturbs the oracle's offset and all four rounding directions, presents a valid call as a revert, perturbs the committed measurements and the locked reference runtime identity, and requires the differential to fail every time | 5 oracle perturbations; 1 revert probe; 2 reference-half corruptions | ~13 s |
+| `scripts/check-prorata-weth-vault-reference.sh --self-test` | corrupts a vendored source byte, the lock, the committed output's bytecode, tree membership (extra and dropped source), the optimizer settings and the vault's own selector table in temporary copies and requires the reference gate to fail every time | 7 corruptions | sub-second |
 | a FMINT or WETH fixture, fixture generator, or borrower | the matching suite's `check-*.sh --no-build` | that suite's `check-*-coverage.sh` |
 | the pinned Jaune revision (`lakefile.lean` + `lake-manifest.json`) | `lake build` | the **full set**, in the order below |
 
@@ -121,10 +127,12 @@ scripts/check-lido-twg-census.sh
 scripts/check-lido-twg-reference.sh
 scripts/check-lido-ossifiable-proxy-reference.sh
 scripts/check-lido-ossifiable-proxy-performance.sh
+scripts/check-prorata-weth-vault-reference.sh
 scripts/check-prorata-weth-vault-oracle.sh
 scripts/check-prorata-weth-vault-differential.sh
 scripts/check-prorata-weth-vault-oracle.sh --self-test
 scripts/check-prorata-weth-vault-differential.sh --self-test
+scripts/check-prorata-weth-vault-reference.sh --self-test
 lake build
 scripts/check-lido-ossifiable-proxy-artifacts.sh
 scripts/check-lido-circuit-breaker-artifact-profile.sh

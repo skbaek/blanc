@@ -1,0 +1,34 @@
+{
+  "gas": {
+    "deposit_into_donated_vault": {
+      "blanc": 56662,
+      "reference": 58828
+    },
+    "deposit_into_empty_vault": {
+      "blanc": 107986,
+      "reference": 110152
+    },
+    "mint": {
+      "blanc": 56726,
+      "reference": 58926
+    },
+    "redeem": {
+      "blanc": 52276,
+      "reference": 54942
+    },
+    "share_transfer": {
+      "blanc": 50797,
+      "reference": 51587
+    },
+    "withdraw": {
+      "blanc": 52337,
+      "reference": 56969
+    }
+  },
+  "note": "gas is the receipt's cumulativeGasUsed of the single transaction per case on Jaune t8n at BPO2, both sides against the same Blanc WETH; sizes are the installed runtimes. Measured, never compared with the oracle.",
+  "runtimeBytes": {
+    "blanc": 17481,
+    "reference": 4347
+  },
+  "schema": 1
+}

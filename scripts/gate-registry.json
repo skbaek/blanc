@@ -678,13 +678,224 @@
     },
     {
       "command": [
+        "scripts/check-prorata-weth-vault-reference.sh"
+      ],
+      "id": "prorata-weth-vault-reference",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-reference.sh",
+          "scripts/check-prorata-weth-vault-reference.py",
+          "scripts/keccak.py",
+          "scripts/prorata-weth-vault-reference.json",
+          "Blanc/ProrataWethVault.lean"
+        ],
+        "tools": [
+          "python3"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.sol",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          },
+          {
+            "pattern": "**/*.json",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          },
+          {
+            "pattern": "**/LICENSE",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          }
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Offline identity of the vendored OpenZeppelin v5.7.0 closure, the committed compiler input/output and the reference ABI surface against the lock; the lock's constants are the SF's, embedded in the checker, so the vendored tree is the only mutable input besides the vault's own dispatch table.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — PRORATA WETH vault reference: "
+        ]
+      },
+      "order": 18
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-oracle.sh"
+      ],
+      "id": "prorata-weth-vault-oracle",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-oracle.sh",
+          "scripts/check-prorata-weth-vault-oracle.py",
+          "scripts/prorata_weth_vault_oracle.py",
+          "scripts/gen-prorata-weth-vault-vectors.py",
+          "scripts/prorata-weth-vault-oracle-vectors.json",
+          "scripts/prorata-oracle-vectors.json"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Independent exact-integer oracle written from the frozen statement; regenerates the committed golden vectors and cross-reads the ETH-era PRORATA vectors on the shared adversarial transcript.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — vault oracle: "
+        ]
+      },
+      "order": 19
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-differential.sh"
+      ],
+      "id": "prorata-weth-vault-differential",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-differential.sh",
+          "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_oracle.py",
+          "scripts/evm_tx.py",
+          "scripts/keccak.py",
+          "scripts/check-runtime-bytes.py",
+          "Blanc/ProrataWethVaultCode.lean",
+          "Blanc/WethCode.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          ".lake/packages/jaune/scripts/sources.json",
+          "scripts/prorata-weth-vault-reference.json",
+          "scripts/prorata-weth-vault-reference-measurements.json",
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Executes the committed vault literal and the locked reference creation input on the built Jaune runner; the runner binary, the frozen literals, the lock and the committed measurements are exact file inputs.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — vault differential: "
+        ]
+      },
+      "order": 20
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-oracle.sh",
+        "--self-test"
+      ],
+      "id": "prorata-weth-vault-oracle-self-test",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-oracle.sh",
+          "scripts/check-prorata-weth-vault-oracle.py",
+          "scripts/prorata_weth_vault_oracle.py",
+          "scripts/gen-prorata-weth-vault-vectors.py",
+          "scripts/prorata-weth-vault-oracle-vectors.json",
+          "scripts/prorata-oracle-vectors.json"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Harness self-test of the oracle gate: perturbs the model in an isolated copy and requires every battery to notice.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — vault oracle self-test: "
+        ]
+      },
+      "order": 21
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-differential.sh",
+        "--self-test"
+      ],
+      "id": "prorata-weth-vault-differential-self-test",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-differential.sh",
+          "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_oracle.py",
+          "scripts/evm_tx.py",
+          "scripts/keccak.py",
+          "scripts/check-runtime-bytes.py",
+          "Blanc/ProrataWethVaultCode.lean",
+          "Blanc/WethCode.lean",
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          ".lake/packages/jaune/scripts/sources.json",
+          "scripts/prorata-weth-vault-reference.json",
+          "scripts/prorata-weth-vault-reference-measurements.json",
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Harness self-test of the differential: oracle perturbations, a valid-call-as-revert probe, and corruptions of the committed measurements and the locked reference identity must all fail.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — vault differential self-test: "
+        ]
+      },
+      "order": 22
+    },
+    {
+      "command": [
+        "scripts/check-prorata-weth-vault-reference.sh",
+        "--self-test"
+      ],
+      "id": "prorata-weth-vault-reference-self-test",
+      "inputs": {
+        "files": [
+          "scripts/check-prorata-weth-vault-reference.sh",
+          "scripts/check-prorata-weth-vault-reference.py",
+          "scripts/keccak.py",
+          "scripts/prorata-weth-vault-reference.json",
+          "Blanc/ProrataWethVault.lean"
+        ],
+        "tools": [
+          "python3"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.sol",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          },
+          {
+            "pattern": "**/*.json",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          },
+          {
+            "pattern": "**/LICENSE",
+            "root": "scripts/reference/prorata-weth-vault/inputs"
+          }
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Harness self-test of the reference gate over temporary copies of the vendored tree, lock, output, settings and vault dispatch table.",
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — PRORATA WETH vault reference self-test: "
+        ]
+      },
+      "order": 23
+    },
+    {
+      "command": [
         "lake",
         "build"
       ],
       "id": "lake-build",
       "inputs": {},
       "kind": "composition",
-      "order": 18,
+      "order": 24,
       "prerequisite": true,
       "reason": "Lake's own incremental build is the authoritative refresh that makes every depHash current. It executes before dependent planning when the exact local build certificate is missing or stale, and always under --fresh; otherwise that certificate satisfies this composition row without verdict-record reuse.",
       "verdict": {
@@ -713,7 +924,7 @@
       },
       "kind": "cacheable",
       "note": "Network-free artifact ownership check. The independent falsifier copies the generator, generated manifest, Lean literal owner, evaluator source, and Keccak implementation into disposable trees, so each copied path is an explicit input. The gate never evaluates Lean; compiler evaluation belongs to the preceding build and the semantic consumers.",
-      "order": 19,
+      "order": 25,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -748,7 +959,7 @@
       },
       "kind": "cacheable",
       "note": "std-json-input.json is assembled inline from the repository root rather than from a module constant, so it is the easiest read in the profiler to miss. The baseline ledger is sha256-pinned inside the schema module and has no write mode.",
-      "order": 20,
+      "order": 26,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -777,7 +988,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 21,
+      "order": 27,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -806,7 +1017,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 22,
+      "order": 28,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -841,7 +1052,7 @@
       },
       "kind": "cacheable",
       "note": "The shadow scan indexes every .lean file under Blanc/ and scripts/, not merely the imports today's fixtures choose, so a new first-party Lean file anywhere in either tree can change the verdict.",
-      "order": 23,
+      "order": 29,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -870,7 +1081,7 @@
       },
       "kind": "cacheable",
       "note": "The gate refuses to start unless the owner's .olean is already built; the fixture entry's Lake depHash witnesses that artifact, so no build path is declared separately. The owner is also read as text for its header pins.",
-      "order": 24,
+      "order": 30,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -965,7 +1176,7 @@
       },
       "kind": "cacheable",
       "note": "The axiom probe imports all thirty-one owner modules, four of which (absent, unregister, unregisterWorld, unregisterAttainment) are outside the fixture's import closure, so the modules are declared alongside the fixture entry. The same thirty-one files are read as text for their header pins.",
-      "order": 25,
+      "order": 31,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1002,7 +1213,7 @@
       },
       "kind": "cacheable",
       "note": "With the Chain owner ACTIVE the gate reads the working Chain source and never shells out to git; git is reachable only on --chain-dry-run, which this command does not pass. Blanc/LidoCircuitBreaker.lean is read but never pinned — the dispatcher inventory is derived from it, so its bytes still decide the verdict. Blanc/CommonProofs.lean supplies the shared storage-silence vocabulary pinned by this family.",
-      "order": 26,
+      "order": 32,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1071,7 +1282,7 @@
       },
       "kind": "cacheable",
       "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. AxiomCheck.lean is elaborated by check.sh and separately read as text by both check.sh and the deployment checker, and the Lean entry already covers its bytes. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 27,
+      "order": 33,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1100,7 +1311,7 @@
       },
       "kind": "cacheable",
       "note": "check-extraction-ownership.py is importlib-loaded for its declaration parser alone, so editing that parser flips this verdict with nothing else moving. The gate pins exact Lean diagnostic text, which is why the toolchain is a declared input rather than only a build dependency; the raw-commit mutants are derived from the fixture at run time and are outputs.",
-      "order": 28,
+      "order": 34,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1139,7 +1350,7 @@
       },
       "kind": "cacheable",
       "note": "This gate runs check-execution-settlement.py and check-execution-raw-attribution-ownership.py as subprocesses and asserts on their verdict prefixes, so gate 21's whole closure is a subset of this one's; both nested OK lines are captured rather than printed, so only the occurrence verdict reaches stdout. Its sole-owner scan walks Blanc/**/*.lean and its manifest globs Blanc/Weth10*.lean and Blanc/Lido*.lean, so membership of the Blanc corpus is load-bearing and the recursive population covers all of it.",
-      "order": 29,
+      "order": 35,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1174,7 +1385,7 @@
       },
       "kind": "cacheable",
       "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits — gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. CycleWriteFreeRegression.lean is read as the source of the run-time mutant and deletion fixtures and is therefore declared directly.",
-      "order": 30,
+      "order": 36,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1229,7 +1440,7 @@
       },
       "kind": "cacheable",
       "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. ExecutionFrames.lean and ExecutionOccurrence.lean are both pinned because raw-attribution ownership is split across them. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate — the recursive Blanc population is what preserves that membership sensitivity.",
-      "order": 31,
+      "order": 37,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1294,7 +1505,7 @@
       },
       "kind": "cacheable",
       "note": "The oracle is the pinned EELS checkout's own Prague interpreter, run under that checkout's venv python rather than the system python3; the external pin covers the checkout and refuses a dirty one. Blanc/Weth10Code.lean is read as text for the committed-literal comparison, a claim no .olean can witness, so it is fingerprinted separately from the evaluator's import closure. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 32,
+      "order": 38,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1351,7 +1562,7 @@
       },
       "kind": "cacheable",
       "note": "The checker importlib-loads gen-lido-circuit-breaker-differential.py, so that generator and the AC5 shape schema it imports are this gate's implementation even though the wrapper never names them. LIDO_DISPATCHER_SELECTION_STAGE decides the mode and is cross-checked against the checker's own constant, so it is a verdict input. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 33,
+      "order": 39,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1409,7 +1620,7 @@
       },
       "kind": "cacheable",
       "note": "The generator importlib-loads check-lido-circuit-breaker-dispatchers.py for its completion-threshold cross-check, so the dispatcher gate's source is an input here as well — the two gates load each other. The wrapper's inline required-tag digest, the resource schema's canonical-JSON demand and the falsifier baseline all read the same manifest, so one byte moving there reddens four independent checks. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 34,
+      "order": 40,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1490,7 +1701,7 @@
       },
       "kind": "cacheable",
       "note": "The wrapper composes the independent B1 reference and census gates before evaluating the production Blanc artifacts, executing both complete CREATE inputs under the pinned Prague EELS venv, checking the exact committed manifest through an independent schema, synchronizing the compatibility/deviation documents, and running separate mutation falsifiers. The shared EELS helper, compatibility tool and documents, both composed prerequisite read sets, fixture policy, evaluator, interpreter and gitignored site-packages are therefore direct inputs here. EELS_ROOT and HOME resolve the external checkout; the reference overrides and JSC/NODE can alter the composed offline recompilation. The manifest records the frozen 35a196f artifact-program identity rather than live HEAD, so unrelated documentation or admission commits do not stale semantic evidence.",
-      "order": 35,
+      "order": 41,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1560,7 +1771,7 @@
       },
       "kind": "cacheable",
       "note": "The wrapper evaluates the compiler-owned artifacts, runs every frozen row in fresh pinned Prague worlds, and independently validates the clean-checkout result. The manifest, performance binding, reference lock, schema/runner/checker/falsifiers, Lean evaluator depHash, pinned EELS interpreter and complete site-packages are direct inputs.",
-      "order": 36,
+      "order": 42,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1620,7 +1831,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is what produces PASS/FAIL and is fingerprinted directly, and no Blanc module is elaborated at all. The EEST blockchain-test template under ~ supplies the Prague predeploy code and the genesis header, yet is hardcoded, unpinned and unguarded, so it is declared as an exact file outside the repository. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 37,
+      "order": 43,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1676,7 +1887,7 @@
       },
       "kind": "cacheable",
       "note": "check-weth10-deployment.py importlib-loads gen-weth10-redemption-fixtures.py, which loads gen-weth-fixtures.py and check-runtime-bytes.py at its own import time; the whole three-deep chain is declared, and through build_fixture it reaches the same unpinned ~/eest-… template as gate 28. Blanc/Weth10Code.lean is deliberately absent: the literal parse in the loaded module lives in a main() that never runs on this path. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 38,
+      "order": 44,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1707,7 +1918,7 @@
       },
       "kind": "cacheable",
       "note": "weth10-reference.py is importlib-loaded only for its Keccak and drags weth10_reference_schema.py in with it; the WETH10_REFERENCE_* overrides those two read at import cannot move this gate's lock, which comes from its own constant, so they are not declared here. The harness is run with `lake env lean --run`, unlike the #eval evaluators elsewhere in this family.",
-      "order": 39,
+      "order": 45,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1739,7 +1950,7 @@
       },
       "kind": "cacheable",
       "note": "Comparison gate for the BeaconDeposit pure model: oracle vectors regenerated via --check, Lean evaluator under the keccak-256 instantiation, fail-closed line comparison. --falsify is a mutation campaign (hard hold) and is not part of this cacheable default invocation.",
-      "order": 40,
+      "order": 46,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1803,7 +2014,7 @@
       },
       "kind": "cacheable",
       "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. A generated two-platform runtime lock owns exact native macOS arm64 and Linux x86_64 closures; cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
-      "order": 41,
+      "order": 47,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1905,7 +2116,7 @@
       },
       "kind": "cacheable",
       "note": "Additive WETH10 BPO2 consumer of the contract-neutral current-mainnet API. It evaluates the exact compiler-owned initcode and mainnet-family runtimes, authors and byte-compares one fresh type-2 creation block plus the preserved type-2 redemption and type-4 authorization-mutation profiles, replays all three blocks through Jaune at BPO2, and compares the canonical 27-selector-plus-receive matrix between the locked deployed runtime and evaluated Blanc runtime on status, receipt gas, logs, projected storage, and fee-normalized ETH. Exact returndata, live CALL traces, and malformed/precompile/OOG cases remain exclusively on the preserved Prague differential. The manifest binds the shared two-platform runtime lock, the reference lock, evaluator outputs, exact target, three blocks, 28-row matrix, and kernel-decided Lean timestamp pin.",
-      "order": 42,
+      "order": 48,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1990,7 +2201,7 @@
       },
       "kind": "cacheable",
       "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the generated two-platform runtime lock; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
-      "order": 43,
+      "order": 49,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2046,7 +2257,7 @@
       },
       "kind": "cacheable",
       "note": "The evaluator's direct Lean root supplies the compiler-owned runtime and creation artifacts through Lake depHash closure; the Python runner directly reads the three pinned reference inputs, exact manifest, and positive-gas deviation registry, and owns both the runtime matrix and separate constructor gas/poststate measurement. The clean external pin owns EELS source, while the ignored virtualenv interpreter and complete site-packages population are hashed separately through the same EELS_ROOT.",
-      "order": 44,
+      "order": 50,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2112,7 +2323,7 @@
       },
       "kind": "cacheable",
       "note": "The evaluator is a direct Lean entry whose Lake depHash closes over the exact D1 deployment root; it emits no theorem or golden. The Python generator independently pins both artifact SHA-256 identities and reconstructs all 31 constructor storage words with Python SHA-256 before authoring a temporary strict singleton Prague block. Pinned EELS executes the block, three isolated target/runtime/storage mutants must fail at their named boundaries, the unchanged control must return green, and the generated block is replayed through the exact Jaune binary. The generator importlib-loads gen-weth-fixtures.py only for EEST helpers. The EELS checkout gitignores its virtualenv, so its interpreter and complete site-packages population are fingerprinted separately through the same EELS_ROOT. The selective identity uses that evaluator's nonempty deterministic stdout plus the evaluator source as a material-output certificate, so proof-only movement with byte-identical deployment artifacts and projections reuses this EELS/Jaune verdict; checker, generator, oracle/runtime, tool, environment, Jaune binary, or one-byte emitted-output movement still executes it.",
-      "order": 45,
+      "order": 51,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2195,7 +2406,7 @@
       },
       "kind": "cacheable",
       "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen fixture scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. It also validates the locked exact-surface Solidity/Yul referents, runs ten independent signed-transaction scenarios against all three runtimes with zero projected semantic mismatches, and byte-compares canonical receipt gas. The ordinary fixture gate independently replays committed PRORATA blocks through Jaune and remains CI-safe without the external checkout.",
-      "order": 46,
+      "order": 52,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2273,7 +2484,7 @@
       },
       "kind": "cacheable",
       "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the selected native CPython standard library.",
-      "order": 47,
+      "order": 53,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2301,7 +2512,7 @@
       },
       "kind": "cacheable",
       "note": "The 988-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 48,
+      "order": 54,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2327,7 +2538,7 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 49,
+      "order": 55,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2374,7 +2585,7 @@
       },
       "kind": "cacheable",
       "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus including Main.lean, the shared Lean/Lake configuration, the Lake-recorded artifact identity of the default Blanc library root, its ignored host-local baseline (including absence before genesis), and its own implementation. Main is a non-default executable target and has no trace after the authoritative catalogue `lake build`; its source and complete local import population are already direct inputs here, while the Blanc trace binds the toolchain and imported artifacts. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 50,
+      "order": 56,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2413,7 +2624,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 51,
+      "order": 57,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2446,7 +2657,7 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 52,
+      "order": 58,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2483,7 +2694,7 @@
       },
       "kind": "cacheable",
       "note": "CI-safe replay of the committed BPO2 population through Jaune. The manifest is a bidirectional population guard, the independent integer oracle vectors are regenerated through a timing-free byte comparison, and every embedded PRORATA runtime is compared with the frozen literal. Exact-target regeneration belongs to the separate prorata-current-mainnet gate.",
-      "order": 53,
+      "order": 59,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2517,7 +2728,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 54,
+      "order": 60,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2551,7 +2762,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 55,
+      "order": 61,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2593,7 +2804,7 @@
       },
       "kind": "cacheable",
       "note": "The whole Blanc Lean population is an input because this gate composes the total layering check; the two evaluator entries additionally bind their complete transitive compiled dependency hashes.",
-      "order": 56,
+      "order": 62,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2623,7 +2834,7 @@
       },
       "kind": "cacheable",
       "note": "Compiled positive, mutant and axiom evidence is independent of the repository-wide ownership/shadow census in the static row.",
-      "order": 57,
+      "order": 63,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2659,7 +2870,7 @@
       },
       "kind": "cacheable",
       "note": "Compiled occurrence fixtures and mutants consume the independently registered settlement verdict instead of starting that body again.",
-      "order": 58,
+      "order": 64,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2690,7 +2901,7 @@
       },
       "kind": "cacheable",
       "note": "The concrete evaluator and diagnostic-pinned Lean mutants have their own transitive compiled identity.",
-      "order": 59,
+      "order": 65,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2720,7 +2931,7 @@
       },
       "kind": "cacheable",
       "note": "Evaluator vectors, compiled mutants and live positive-deletion controls are separated from the repository-wide owner and architecture census.",
-      "order": 60,
+      "order": 66,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2754,7 +2965,7 @@
       },
       "kind": "cacheable",
       "note": "The semantic row consumes the independently registered total-layering verdict and runs only axiom and executable-witness evidence.",
-      "order": 61,
+      "order": 67,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2783,7 +2994,7 @@
       },
       "kind": "cacheable",
       "note": "The focused Lean root supplies Lake's transitive depHash for the program, generated literal, artifact pins, toolchain, and Jaune dependency; the static checker independently binds the expected ABI, storage/configuration, literal shape, size, and digest.",
-      "order": 62,
+      "order": 68,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2816,7 +3027,7 @@
       },
       "kind": "cacheable",
       "note": "The focused Lean root supplies Lake's transitive depHash for the exact WETH boundary, effects and source-staging owners. The static checker directly reads the root import and COMPOSITION table, while the registered layering dependency supplies the independent total-architecture verdict. Optional --falsify mutants are a hard-hold campaign and are deliberately outside the cached default command.",
-      "order": 63,
+      "order": 69,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [

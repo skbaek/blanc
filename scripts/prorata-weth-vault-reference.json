@@ -1,0 +1,212 @@
+{
+  "abi": {
+    "methodIdentifiers": {
+      "allowance(address,address)": "dd62ed3e",
+      "approve(address,uint256)": "095ea7b3",
+      "asset()": "38d52e0f",
+      "balanceOf(address)": "70a08231",
+      "convertToAssets(uint256)": "07a2d13a",
+      "convertToShares(uint256)": "c6e6f592",
+      "decimals()": "313ce567",
+      "deposit(uint256,address)": "6e553f65",
+      "maxDeposit(address)": "402d267d",
+      "maxMint(address)": "c63d75b6",
+      "maxRedeem(address)": "d905777e",
+      "maxWithdraw(address)": "ce96cb77",
+      "mint(uint256,address)": "94bf804d",
+      "name()": "06fdde03",
+      "previewDeposit(uint256)": "ef8b30f7",
+      "previewMint(uint256)": "b3d7f6b9",
+      "previewRedeem(uint256)": "4cdad506",
+      "previewWithdraw(uint256)": "0a28a477",
+      "redeem(uint256,address,address)": "ba087652",
+      "symbol()": "95d89b41",
+      "totalAssets()": "01e1d114",
+      "totalSupply()": "18160ddd",
+      "transfer(address,uint256)": "a9059cbb",
+      "transferFrom(address,address,uint256)": "23b872dd",
+      "withdraw(uint256,address,address)": "b460af94"
+    },
+    "selectors": 25,
+    "signatures": [
+      "allowance(address,address)",
+      "approve(address,uint256)",
+      "asset()",
+      "balanceOf(address)",
+      "convertToAssets(uint256)",
+      "convertToShares(uint256)",
+      "decimals()",
+      "deposit(uint256,address)",
+      "maxDeposit(address)",
+      "maxMint(address)",
+      "maxRedeem(address)",
+      "maxWithdraw(address)",
+      "mint(uint256,address)",
+      "name()",
+      "previewDeposit(uint256)",
+      "previewMint(uint256)",
+      "previewRedeem(uint256)",
+      "previewWithdraw(uint256)",
+      "redeem(uint256,address,address)",
+      "symbol()",
+      "totalAssets()",
+      "totalSupply()",
+      "transfer(address,uint256)",
+      "transferFrom(address,address,uint256)",
+      "withdraw(uint256,address,address)"
+    ]
+  },
+  "artifacts": {
+    "configuredRuntime": {
+      "bytes": 4347,
+      "derivation": "creation input executed on Jaune t8n BPO2 against Blanc's WETH at 0x1000",
+      "sha256": "48af987c701a851cbfe0b4c95a2fc336689571a329dcc5f590a4ae24155ec9bc"
+    },
+    "creationInput": {
+      "assetWord": "0x0000000000000000000000000000000000000000000000000000000000001000",
+      "bytes": 5074,
+      "sha256": "4b812e908c7714a41205f9d8a3421890996454cabaf5a7f086624274d679a247"
+    },
+    "creationTemplate": {
+      "bytes": 5042,
+      "sha256": "e4ae363d9750ef6da4ec8a10c930e05664a554c24679aa37c2334c171399f34f"
+    },
+    "runtimeTemplate": {
+      "bytes": 4347,
+      "sha256": "192a07ade38aed922d5bf3b7dac7bd332acc62290a035c837e5b44bba8e27e91"
+    }
+  },
+  "authority": "reports/prorata-erc4626-port-sf.md section 10 (Plans goal store); constants embedded in scripts/check-prorata-weth-vault-reference.py",
+  "closure": {
+    "contracts/ProrataWethVaultReference.sol": {
+      "blob": null,
+      "bytes": 564,
+      "sha256": "db2d9df13d9c89b97a35f9e28b334a9dcee4565737779f6458a107494894d280"
+    },
+    "openzeppelin-contracts/contracts/interfaces/IERC1363.sol": {
+      "blob": "7bf3e1f7bbe9a20d1bef5468a55786556c6525aa",
+      "bytes": 4454,
+      "sha256": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b"
+    },
+    "openzeppelin-contracts/contracts/interfaces/IERC165.sol": {
+      "blob": "d2c99a5bdfe9611dcfc67e8f0c40164d64ab5dd3",
+      "bytes": 193,
+      "sha256": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368"
+    },
+    "openzeppelin-contracts/contracts/interfaces/IERC20.sol": {
+      "blob": "078e9ec9b403252bd480873adf10add00076eb0b",
+      "bytes": 182,
+      "sha256": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1"
+    },
+    "openzeppelin-contracts/contracts/interfaces/IERC20Metadata.sol": {
+      "blob": "adffeb5f8c6e4e2d4e45d072dc9f82d310714023",
+      "bytes": 216,
+      "sha256": "0ef8d844d8e066abd5c0d8cc1c550c89f2628a4ea9c9bb16c7593d4207800ca8"
+    },
+    "openzeppelin-contracts/contracts/interfaces/IERC4626.sol": {
+      "blob": "66e83390ec18f5b40d605ca6de6976e8fc526e85",
+      "bytes": 12210,
+      "sha256": "a43d346b74ce2cfa871ce3386aaaf6aec719e205e7c8148efc1c95612fc7b8eb"
+    },
+    "openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol": {
+      "blob": "e9d6249ef521e073253a8681aa8f022af7640850",
+      "bytes": 6540,
+      "sha256": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30"
+    },
+    "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol": {
+      "blob": "4d9d6b6d1c1f33e7cc3013d70e6c5af900bcbe9a",
+      "bytes": 10800,
+      "sha256": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d"
+    },
+    "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol": {
+      "blob": "b493743a10c4fba04d91014cbdb7f69b639480c1",
+      "bytes": 2781,
+      "sha256": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c"
+    },
+    "openzeppelin-contracts/contracts/token/ERC20/extensions/ERC4626.sol": {
+      "blob": "498ef28ddf1dadaafd681467b09adc85bdd5f4f5",
+      "bytes": 13451,
+      "sha256": "c3d57303bb40361934115b490514f3327ff88652cc2ac980bfd1b63a901ef7b4"
+    },
+    "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
+      "blob": "87bbafa84b834af1da027455bdc2e8a87beeb438",
+      "bytes": 684,
+      "sha256": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a"
+    },
+    "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol": {
+      "blob": "39f8df5d03133351cdac0f5f4c26f62f37fa83e5",
+      "bytes": 13961,
+      "sha256": "93685e4e976be584a5e6abfc37376fe17c99bee53e07610efcc1ce51868e90d1"
+    },
+    "openzeppelin-contracts/contracts/utils/Context.sol": {
+      "blob": "4e535fe03c243f864568b8f4430c17c25dbadb47",
+      "bytes": 963,
+      "sha256": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6"
+    },
+    "openzeppelin-contracts/contracts/utils/Panic.sol": {
+      "blob": "e168824d34b3f0ba0be33317fb34b9e74fc148b6",
+      "bytes": 1973,
+      "sha256": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec"
+    },
+    "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol": {
+      "blob": "be1932f267f9c794f21d934a6bc21a322c6d2709",
+      "bytes": 871,
+      "sha256": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca"
+    },
+    "openzeppelin-contracts/contracts/utils/math/Math.sol": {
+      "blob": "e7288595b6539e986aef1a7a524884d86fc2d643",
+      "bytes": 32664,
+      "sha256": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457"
+    },
+    "openzeppelin-contracts/contracts/utils/math/SafeCast.sol": {
+      "blob": "ccb979f61c9577e6338276cff49625d5a2191eb3",
+      "bytes": 34940,
+      "sha256": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134"
+    }
+  },
+  "compiler": {
+    "selectedArtifact": {
+      "note": "the SF-selected platform-independent artifact; not vendored and not executed for the committed output",
+      "platform": "emscripten-wasm32",
+      "sha256": "704877a592467d7de651ec5377ea6e3c676ae71d31f325401957d41bedfaa0d8",
+      "vendored": false
+    },
+    "settings": {
+      "evmVersion": "prague",
+      "metadata": {
+        "appendCBOR": false,
+        "bytecodeHash": "none"
+      },
+      "optimizer": {
+        "enabled": true,
+        "runs": 1
+      },
+      "viaIR": false
+    },
+    "usedForCommittedOutput": {
+      "platform": "Darwin arm64 appleclang native build of the same commit",
+      "sha256": "d4abcf0b3e24b7948ddfd64c374d26c3214648717777790ecb936979054a129d",
+      "versionString": "0.8.36+commit.8a079791.Darwin.appleclang"
+    },
+    "version": "0.8.36+commit.8a079791"
+  },
+  "reference": {
+    "commit": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3",
+    "license": {
+      "path": "openzeppelin-contracts/LICENSE",
+      "sha256": "20aebc68b11c063133aa2af0ef4bb29875477c6d16d715718f0daec563938b84",
+      "spdx": "MIT"
+    },
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "tag": "v5.7.0"
+  },
+  "schema": 1,
+  "standardJsonInput": {
+    "path": "scripts/reference/prorata-weth-vault/inputs/standard-json-input.json",
+    "sha256": "88109d1038302d55ee2b6bb05fdc626bffee328327d19bae0e13a5266b9e3f53"
+  },
+  "standardJsonOutput": {
+    "path": "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+    "sha256": "3ff0927f97203986026ade2d173e83a111072955e4ef989bd0e52549cfbc45bb"
+  }
+}
