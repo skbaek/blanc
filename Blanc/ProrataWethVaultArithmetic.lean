@@ -231,6 +231,43 @@ theorem previewWithdrawN_lt_add_assetFactor (amount assets supply : Nat) :
       amount * denominatorN supply + assetFactorN assets := by
   exact ceilDiv_mul_lt (assetFactorN_ne_zero assets) _
 
+/-- **`mint` never over-mints relative to the deposit price.**
+
+`mint(s)` charges `previewMintN s` assets for exactly `s` shares, while a
+`deposit` of those same assets would mint
+`convertToSharesN (previewMintN s)` — and this says the latter is never
+smaller. The two roundings compose in the pool's favour: the inverse quote
+rounds the charge up, the forward quote rounds the mint down, so a minter
+never receives more shares than the assets they paid would have bought.
+
+This is the quantitative content of the `mint`/`withdraw` carrier gap.
+`ProrataAccountingEffect.deposit` pins `minted = mintN o amount supply balance`
+by *equality*, so a `mint` step whose round trip is strict cannot be exhibited
+as one, and closing that needs either an inverse-quoted class or an explicit
+slack term — a change to a model `Blanc/ProrataAccounting.lean` shares with
+PRORATA, and so an owner's decision rather than a missing proof. What does not
+need deciding is the direction of the slack, which is what this records: it
+falls on the safe side, so the gap is a modelling incompleteness and not an
+unsoundness. -/
+theorem mint_never_overmints (shares assets supply : Nat) :
+    shares ≤ convertToSharesN (previewMintN shares assets supply) assets supply := by
+  unfold convertToSharesN
+  rw [Nat.le_div_iff_mul_le (assetFactorN_pos assets)]
+  exact previewMintN_covers shares assets supply
+
+/-- **`withdraw` never overpays relative to the redemption price.**
+
+The dual: `withdraw(a)` burns `previewWithdrawN a` shares to pay exactly `a`
+assets, and redeeming those same shares would pay
+`convertToAssetsN (previewWithdrawN a)`, which is never smaller. So the
+withdrawer never extracts more than their burnt shares were worth, and the
+`withdraw` half of the same carrier gap also falls on the safe side. -/
+theorem withdraw_never_overpays (amount assets supply : Nat) :
+    amount ≤ convertToAssetsN (previewWithdrawN amount assets supply) assets supply := by
+  unfold convertToAssetsN
+  rw [Nat.le_div_iff_mul_le (denominatorN_pos supply)]
+  exact previewWithdrawN_covers amount assets supply
+
 theorem previewDepositN_eq_convertToSharesN (amount assets supply : Nat) :
     previewDepositN amount assets supply = convertToSharesN amount assets supply :=
   rfl
