@@ -89,6 +89,39 @@ generated proof recipes already say as much — "drop to `preserves_lift_admitte
 or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is
 insufficient" — and this vault is exactly a case where it is.
 
+### What that route now has, and what it still needs
+
+Three of its pieces are built, generic, and live with their siblings in
+`Blanc/Semantics.lean` rather than here, because nothing about them is
+vault-specific:
+
+- `Msg.benvAfterTransfer_stat` — moving the call value preserves `BenvStat`.
+- `Frame.enter_run_benvStat` — entering a frame preserves it, the `enter_run_`
+  companion to `enter_run_depth`.
+- `RunFrame.benvStat_eq` — the same fact read off a filled slot, shaped like
+  `RunFrame.depth_eq`.
+
+They matter because the configuration's `nonprecompile` field reads
+`sevm.benvStat.rules`, and `σ` is applied at the *child's* `Sevm` in
+`nextSome`. Without them the configuration cannot cross a call boundary at all,
+and no amount of work on the other obligations would have helped.
+
+With those, the intended `σ` is `vaultSpec.PreWf vault ∧
+DirectWethConfiguration vault`, and `ρ` is `vaultSpec.Post vault` — whose
+`PostInv` unfolds to exactly `LedgerConserved` at the vault, which is the rely
+conclusion wanted. The `PreWf` half of every obligation is then discharged by
+the existing `Xinst.some_preserves_precond` and its `Rinst`/`Jinst`/`Linst`
+companions, unchanged; the configuration half needs `getCode wethAccount`
+preserved, which is `Rinst.preserves_getCode` for register steps and
+`lift_core.stepCode` for calls, the latter under the nonempty-code side
+condition that `Blanc.wethCode` satisfies.
+
+**`preserves_lift_admitted` is not a shortcut past this.** It looks like the
+admitted analogue that would do the work, but its `σ_of_ne` parameter has the
+same shape as `preserves_lift`'s — it rebuilds `σ` from `c.Pre` at every
+foreign frame — so a configuration-carrying `σ` fails there for the same
+reason. Checked, so that nobody re-checks it.
+
 ### The next obstruction on that route
 
 `lift_inv_admitted`'s `with_depth_ind` obligation is the vault's own-frame
