@@ -1257,4 +1257,31 @@ theorem redeem_preserves_conserved
   obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
     redeem_compiled_effect config memoryWf resources run selectorEq
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+
+/-- `redeem_compiled_effect` with the quoted asset amount *named*, for the same
+reason `deposit_compiled_effect_named` exists: a consumer that has to rewrite a
+supply equation cannot afford to see through the quote term. -/
+theorem redeem_compiled_effect_named
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (resources : OutboundCompiledResources sevm
+      Blanc.ProrataWethVault.quoteWord)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ supply assets : B256,
+      supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat
+        supply.toNat ∧
+      (Sevm.argWord sevm 0).toNat ≤ supply.toNat ∧
+      OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        assets (Sevm.argWord sevm 0) assets pre post := by
+  obtain ⟨-, supply, supplyEq, -, fits, -, -, -, -, -, -, burnable, effect⟩ :=
+    redeem_compiled_effect config memoryWf resources run selectorEq
+  exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, burnable, effect⟩
+
 end Blanc.Composition.ProrataWethVault

@@ -1079,6 +1079,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named
 #print axioms Blanc.Composition.ProrataWethVault.deposit_message_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named
+#print axioms Blanc.Composition.ProrataWethVault.redeem_message_accountingStep
 #print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
 #print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
