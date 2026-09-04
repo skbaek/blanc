@@ -648,6 +648,29 @@ theorem transferFromEffect_accountingStep
   exact silent_accountingStep config.distinct supplyKept foreign
 
 
+
+/-! ## The flows' message-level step
+
+Not written.  The bridge itself (`inboundEffect_accountingStep`) is proved; what
+is missing is the wrapper that derives its two non-wrap premises from
+`deposit_compiled_effect` instead of taking them.
+
+The obstruction is mechanical and worth recording so it is not rediscovered.
+That effect's conclusion binds the quoted share count under an existential and
+mentions it as a full `Nat.toB256 (convertToSharesN …)` term in several places.
+Rewriting the supply equation inside that term exceeds the elaborator's
+heartbeat budget, and substituting it instead exceeds the recursion depth.
+Neither ceiling may be raised to get past this: the proof-debt gate tracks both,
+and raising one to make a proof land is weakening a gate rather than doing the
+work.
+
+The fix belongs upstream: give `deposit_compiled_effect` a form that names the
+quoted amount once — an abbreviation or a separate equation — so the wrapper
+can reason about a variable rather than about the term.  With that, this
+wrapper is the same shape as the three silent ones below.
+-/
+
+
 /-! ## Every non-flow message is a silent accounting step
 
 The twenty-one targets that make no external call move neither the vault's
