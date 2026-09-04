@@ -317,8 +317,17 @@ below. `depositAfterQuote` and `mintAfterQuote` are not: the structural walk
 exhausts the elaborator's recursion depth before reaching their write, even
 with `StoresOrHalts.prepend` collapsing whole staging lines in one step. The
 ceiling is not raised — the proof-debt gate tracks `maxRecDepth` scopes — so
-those two want either a coarser combinator (one that skips a whole `Func` known
-to be write-free) or an explicit term proof.
+those two are open.
+
+The obstruction has been narrowed. It is not the flows' outer structure and it
+is not the literal staging lines: restating the shared tail over *variable*
+lines, so that `StoresOrHalts.prepend` can collapse each in one step, still
+exhausts the ceiling. What is left inside is `callWethTransferFrom`'s own
+staging — the fixed `pushList` window and the `pushB256 assetAddress` constant
+before the `CALL`. Whatever is expensive there is expensive during
+elaboration, not in the finished term, so the next thing to try is a lemma
+stated directly about `callWethTransferFrom body`, proved once with those
+constants opaque, rather than another tactic shape.
 
 Slots a flow may tail-jump into on its way to a write. -/
 def FlowStoreSlot (k : Nat) : Prop :=
