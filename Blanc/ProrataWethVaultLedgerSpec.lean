@@ -326,21 +326,33 @@ exhausts the ceiling. It is `callWethTransferFrom`: a lemma about that
 definition alone, with its asset line a variable and its body a hypothesis,
 exhausts the ceiling on its own.
 
-What has been *ruled out*, by trying it:
+**What the measurement says.** `set_option diagnostics true` on the smallest
+failing lemma reports `List.rec` unfolded 1902 times, `List.casesOn` 1869,
+`List.concat` 820, `List.get` 704 and `Fin.rec` 704. The cost is list
+reduction during elaboration, not depth in the finished term — which is only
+about twenty constructors.
 
-- the flows' outer structure, and the literal staging lines — restating the
-  shared tail over variable lines does not help;
-- `StoresOrHalts.store` being the expensive alternative. It is a plausible
-  suspect, since its conclusion `sstore ::: f` makes Lean decide whether a
-  staging head is `sstore` and those heads carry `B256` numeral arithmetic.
-  But removing it from the walk entirely — which is sound here, because every
-  write is inside the body the hypothesis covers — does not lift the ceiling.
+**What has been ruled out, each by trying it:**
 
-The finished term is only about twenty constructors deep, so the cost is in
-elaboration, not in the proof. Two readings of *where* have now been wrong, so
-the next attempt should measure rather than reason: `set_option diagnostics
-true` on this one lemma will say what is being reduced, and that is worth more
-than another hypothesis.
+- the flows' outer structure, and the literal staging lines: restating the
+  shared tail over *variable* lines does not help;
+- `StoresOrHalts.store` as the expensive alternative: removing it entirely —
+  sound here, since every write is inside the body the hypothesis covers —
+  does not help;
+- the concrete function context: `callWethTransferFrom` contains no
+  `Func.call`, and abstracting `fs` to a variable does not help, so the
+  `List.get` traffic is not context lookup;
+- `StoresOrHalts.prepend`'s higher-order unification: dropping it does not
+  help;
+- the position of `exact h` in the alternatives: trying it last rather than
+  first does not help.
+
+So the list traffic is inside the `Line` machinery the `Func` is built from —
+`++` on lines, `mstoreAt`, `pushList` — reduced afresh as the walk exposes each
+`next`. The next thing to try is a proof that never asks the elaborator to
+expose those heads at all: an explicit term, or a `Func`-level induction
+principle proved once. Four readings have been wrong; this one is a direction,
+not a diagnosis.
 
 Slots a flow may tail-jump into on its way to a write. -/
 def FlowStoreSlot (k : Nat) : Prop :=
