@@ -11,15 +11,15 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 
 WRAPPER_SCHEMA=2
 WRAPPER_ROWS="deposit-success,get-deposit-root,get-deposit-count,supports-erc165,supports-deposit,supports-invalid,no-match"
-WRAPPER_CHANNELS="status,gas,deposit-log,deposit-storage,deposit-eth"
-WRAPPER_ROW_CHANNEL_MAP="deposit-success=status+gas+deposit-log+deposit-storage+deposit-eth,get-deposit-root=status+gas,get-deposit-count=status+gas,supports-erc165=status+gas,supports-deposit=status+gas,supports-invalid=status+gas,no-match=status+gas"
+WRAPPER_CHANNELS="status,gas,returndata,deposit-log,deposit-storage,deposit-eth"
+WRAPPER_ROW_CHANNEL_MAP="deposit-success=status+gas+returndata+deposit-log+deposit-storage+deposit-eth,get-deposit-root=status+gas+returndata,get-deposit-count=status+gas+returndata,supports-erc165=status+gas+returndata,supports-deposit=status+gas+returndata,supports-invalid=status+gas+returndata,no-match=status+gas+returndata"
 WRAPPER_PROFILE_CLAIMS="executionFork=BPO2,executionModule=ethereum.forks.bpo2,chainId=1,reward=-1,logicalCompilerFork=Osaka,testingBackend=cancun,externalSolcInvoked=false"
 WRAPPER_DOMINANCE_KEYS="transactionGasUsed,netConstructorExecutionGasAfterRefund"
 WRAPPER_CREATION_ASSERTIONS="freshTopLevelTransaction,successfulReceipt,exactCreateTarget,exactInstalledOwnRuntime,exactOwnLayoutStorage,zeroLogs,exactTargetBalanceNonce,eip170RuntimeLimit,eip3860InitcodeLimit,eip7825TransactionGasLimit,refundCounterNotExposed,calldataFloorNotBinding"
-WRAPPER_HISTORICAL_BOUNDARY="BPO2 credits status/gas on every row and exact deposit log/storage/ETH; the preserved Prague differential exclusively owns exact returndata and its broader malformed/precompile/OOG corpus"
+WRAPPER_HISTORICAL_BOUNDARY="BPO2 credits status/gas and exact returndata on every row, plus exact deposit log/storage/ETH, reading returndata from the pinned target's own EIP-3155 trace rather than from a receipt, which carries none. The preserved Prague differential still owns the 37 rows outside this seven-row chain and its broader malformed/precompile/OOG corpus; that remainder is measured migration debt recorded in scripts/current-mainnet-parity.json, not a claim that those behaviours cannot have changed across the fork"
 WRAPPER_STATIC_FALSIFIERS=4
 WRAPPER_API_FALSIFIERS=3
-WRAPPER_RAW_CHANNEL_FALSIFIERS=5
+WRAPPER_RAW_CHANNEL_FALSIFIERS=6
 WRAPPER_MANIFEST_CHANNEL_FALSIFIERS=5
 WRAPPER_REGISTRY_FALSIFIERS=1
 WRAPPER_MANIFEST_FALSIFIERS=12

@@ -47,7 +47,7 @@ MANIFEST_PATH = (
 MANIFEST_SCHEMA = 2
 STATIC_INVENTORY_FALSIFIERS = 4
 API_BOUNDARY_FALSIFIERS = 3
-RAW_CHANNEL_FALSIFIERS = 5
+RAW_CHANNEL_FALSIFIERS = 6
 MANIFEST_CHANNEL_FALSIFIERS = 5
 REGISTRY_FALSIFIERS = 1
 MANIFEST_FALSIFIERS = 12
@@ -134,7 +134,8 @@ CURRENT_MAINNET_PUBLIC_API = (
     "load_profile", "resolve_root", "verify_target", "target_paths", "run_t8n",
 )
 REQUIRED_CHANNELS = (
-    "status", "gas", "deposit-log", "deposit-storage", "deposit-eth",
+    "status", "gas", "returndata", "deposit-log", "deposit-storage",
+    "deposit-eth",
 )
 CREATION_DOMINANCE_KEYS = (
     "transactionGasUsed", "netConstructorExecutionGasAfterRefund",
@@ -154,9 +155,14 @@ CREATION_ASSERTIONS = (
     "calldataFloorNotBinding",
 )
 HISTORICAL_BOUNDARY = (
-    "BPO2 credits status/gas on every row and exact deposit log/storage/ETH; "
-    "the preserved Prague differential exclusively owns exact returndata and "
-    "its broader malformed/precompile/OOG corpus"
+    "BPO2 credits status/gas and exact returndata on every row, plus exact "
+    "deposit log/storage/ETH, reading returndata from the pinned target's own "
+    "EIP-3155 trace rather than from a receipt, which carries none. The "
+    "preserved Prague differential still owns the 37 rows outside this "
+    "seven-row chain and its broader malformed/precompile/OOG corpus; that "
+    "remainder is measured migration debt recorded in "
+    "scripts/current-mainnet-parity.json, not a claim that those behaviours "
+    "cannot have changed across the fork"
 )
 DEVIATION_MARKER_VERSION = "beacon-deposit-current-mainnet-gas-v1"
 MANIFEST_CLASSES = (
@@ -448,7 +454,7 @@ class RuntimeRow:
 def runtime_rows() -> Tuple[RuntimeRow, ...]:
     pubkey, withdrawal, signature = sample_fields(0)
     node = deposit_node(pubkey, withdrawal, signature, ETHER // GWEI)
-    ordinary = ("status", "gas")
+    ordinary = ("status", "gas", "returndata")
     deposit_channels = ordinary + ("deposit-log", "deposit-storage", "deposit-eth")
     return (
         RuntimeRow(
@@ -488,9 +494,10 @@ def validate_runtime_inventory(rows: Sequence[RuntimeRow]) -> None:
     credited = {channel for row in rows for channel in row.credited_channels}
     if credited != set(REQUIRED_CHANNELS):
         die("current-mainnet channel inventory differs")
-    if any(row.name != "deposit-success" and row.credited_channels != ("status", "gas")
+    if any(row.name != "deposit-success"
+           and row.credited_channels != ("status", "gas", "returndata")
            for row in rows):
-        die("view/support/no-match row credits more than status and gas")
+        die("view/support/no-match row credits more than status, gas and returndata")
     if [row.endpoint for row in rows].count("supportsInterface(bytes4)") != 3:
         die("current-mainnet ERC-165 probe count differs")
     if tuple(row.succeeds for row in rows) != (True, True, True, True, True, True, False):
@@ -695,7 +702,7 @@ def validate_current_mainnet_api_source(source: str) -> None:
     calls = [node for node in ast.walk(tree)
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
              and node.func.id == "run_t8n"]
-    expected_keywords = ("root", "profile", "state_test", "timeout")
+    expected_keywords = ("root", "profile", "state_test", "timeout", "trace")
     if len(calls) != 2 or any(
         tuple(keyword.arg for keyword in call.keywords) != expected_keywords
         for call in calls
@@ -970,7 +977,7 @@ def run_creation(side: str, creation: bytes, runtime: bytes,
     tx = transaction(nonce=0, to="", value=0, data=creation)
     outputs = run_t8n(
         alloc, block_environment(), [tx], root=root, profile=profile,
-        state_test=True, timeout=120,
+        state_test=True, timeout=120, trace=False,
     )
     receipts = validate_result(outputs.result, 1, f"creation/{side}")
     receipt = receipts[0]
@@ -1077,9 +1084,33 @@ def run_creation(side: str, creation: bytes, runtime: bytes,
     }
 
 
+def row_returndata(traces: Sequence[object], where: str) -> str:
+    """One row's exact returndata, from the trace summary the target writes.
+
+    A receipt carries no returndata, which is why this channel was left to the
+    preserved Prague differential.  The pinned t8n carries it on the summary
+    record it emits once the traced top-level call returns.
+    """
+
+    if len(traces) != 1:
+        die(f"{where}: expected exactly one traced transaction, got {len(traces)}")
+    summary = getattr(traces[0], "summary", None)
+    if not isinstance(summary, Mapping):
+        die(f"{where}: traced transaction carries no summary record")
+    output = summary.get("output")
+    if not isinstance(output, str):
+        die(f"{where}: traced summary has no string output")
+    if output and not re.fullmatch(r"(?:[0-9a-f]{2})+", output):
+        die(f"{where}: traced summary output is not lowercase hex bytes")
+    return "0x" + output
+
+
 def project_runtime_outputs(side: str, runtime: bytes,
                             rows: Sequence[RuntimeRow], result: object,
-                            post_alloc: object) -> Mapping[str, object]:
+                            post_alloc: object,
+                            returndata: Sequence[str] = ()) -> Mapping[str, object]:
+    if returndata and len(returndata) != len(rows):
+        die(f"runtime/{side}: {len(returndata)} returndata values for {len(rows)} rows")
     receipts = validate_result(result, len(rows), f"runtime/{side}")
     gas_used = per_transaction_gas(receipts, f"runtime/{side}")
     statuses = tuple(receipt_status(receipt, f"runtime/{side}/{rows[index].name}")
@@ -1135,6 +1166,7 @@ def project_runtime_outputs(side: str, runtime: bytes,
             "receiptSucceeded": statuses[index],
             "gasUsed": gas_used[index],
             "receiptBloom": q(observed_blooms[index]),
+            "returndata": returndata[index] if returndata else None,
         } for index, row in enumerate(rows)],
         "depositEvidence": {
             "logCount": 1,
@@ -1174,6 +1206,7 @@ def run_runtime(side: str, runtime: bytes, rows: Sequence[RuntimeRow],
     post_alloc: object = alloc
     aggregate_receipts: List[Mapping[str, object]] = []
     aggregate_logs: List[Tuple[bytes, Tuple[bytes, ...], bytes]] = []
+    returndata: List[str] = []
     cumulative_gas = 0
     for index, row in enumerate(rows):
         tx = transaction(
@@ -1181,8 +1214,9 @@ def run_runtime(side: str, runtime: bytes, rows: Sequence[RuntimeRow],
         )
         outputs = run_t8n(
             post_alloc, block_environment(), [tx], root=root, profile=profile,
-            state_test=True, timeout=120,
+            state_test=True, timeout=120, trace=True,
         )
+        returndata.append(row_returndata(outputs.traces, f"runtime/{side}/{row.name}"))
         label = f"runtime/{side}/{row.name}"
         receipt = validate_result(outputs.result, 1, label)[0]
         transaction_gas = per_transaction_gas((receipt,), label)[0]
@@ -1207,7 +1241,20 @@ def run_runtime(side: str, runtime: bytes, rows: Sequence[RuntimeRow],
     }
     return project_runtime_outputs(
         side, runtime, rows, aggregate_result, post_alloc,
+        returndata=tuple(returndata),
     )
+
+
+def row_returndata_agreement(name: str, reference: Mapping[str, object],
+                             blanc: Mapping[str, object]) -> str:
+    """Both sides' exact returndata, or a failure naming the row that differs."""
+
+    left, right = reference.get("returndata"), blanc.get("returndata")
+    if not isinstance(left, str) or not isinstance(right, str):
+        die(f"runtime row {name}: a side credited no returndata")
+    if left != right:
+        die(f"runtime row {name}: exact returndata differs: {left} vs {right}")
+    return left
 
 
 def gas_registry_identity(name: str, reference_gas: int,
@@ -1360,14 +1407,17 @@ def compose_runtime(rows: Sequence[RuntimeRow], reference: Mapping[str, object],
             },
             "expectedReceiptSucceeded": expected_status,
             "creditedChannels": list(spec.credited_channels),
-            "returndataCredited": False,
+            "returndataCredited": True,
+            "returndata": row_returndata_agreement(spec.name, ref, bla),
             "reference": {
                 "receiptSucceeded": ref["receiptSucceeded"],
                 "gasUsed": reference_gas,
+                "returndata": ref["returndata"],
             },
             "blanc": {
                 "receiptSucceeded": bla["receiptSucceeded"],
                 "gasUsed": blanc_gas,
+                "returndata": bla["returndata"],
             },
             "blancMinusReferenceGas": delta,
         }
@@ -1425,9 +1475,10 @@ def compose_runtime(rows: Sequence[RuntimeRow], reference: Mapping[str, object],
             ),
         },
         "returndataBoundary": {
-            "creditedOnBpo2Rows": False,
-            "owner": "scripts/check-beacon-deposit-differential.sh",
-            "fork": "Prague",
+            "creditedOnBpo2Rows": True,
+            "source": "pinned target EIP-3155 trace summary",
+            "owner": "scripts/check-beacon-deposit-current-mainnet.sh",
+            "fork": "BPO2",
             "statement": HISTORICAL_BOUNDARY,
         },
     }
@@ -1546,7 +1597,8 @@ def assemble_manifest(profile: Mapping[str, object], cache: Mapping[str, object]
             "finite BPO2 transactions, not universal equivalence or liveness",
             "reference bytecode is an executed oracle, not a verified program",
             "view/support/no-match rows credit only receipt status and charged gas",
-            "exact returndata remains exclusively in the preserved Prague differential",
+            "exact returndata is credited here from the target's own trace; the "
+            "37 rows outside this seven-row chain remain with Prague",
             "raw storage equality is excluded; each layout is projected logically",
             "constructor remainder is net receipt-charged execution after any refund; the t8n result does not expose its refund counter",
         ],
@@ -1799,7 +1851,7 @@ def validate_manifest_semantics(document: Mapping[str, object]) -> None:
     for spec, row in zip(runtime_rows(), manifest_rows):
         if not isinstance(row, dict) or row.get("creditedChannels") \
                 != list(spec.credited_channels) \
-                or row.get("returndataCredited") is not False \
+                or row.get("returndataCredited") is not True \
                 or row.get("expectedReceiptSucceeded") is not spec.succeeds \
                 or row.get("reference", {}).get("receiptSucceeded") is not spec.succeeds \
                 or row.get("blanc", {}).get("receiptSucceeded") is not spec.succeeds \
@@ -1811,6 +1863,12 @@ def validate_manifest_semantics(document: Mapping[str, object]) -> None:
                     "sameInputBothSides": True,
                 }:
             die(f"current-mainnet manifest row {spec.name} status/channel differs")
+        row_returndata = row.get("returndata")
+        if not isinstance(row_returndata, str) \
+                or not re.fullmatch(r"0x(?:[0-9a-f]{2})*", row_returndata) \
+                or row.get("reference", {}).get("returndata") != row_returndata \
+                or row.get("blanc", {}).get("returndata") != row_returndata:
+            die(f"current-mainnet manifest row {spec.name} returndata differs")
         reference_gas = row.get("reference", {}).get("gasUsed")
         blanc_gas = row.get("blanc", {}).get("gasUsed")
         if type(reference_gas) is not int or type(blanc_gas) is not int \
@@ -1838,12 +1896,13 @@ def validate_manifest_semantics(document: Mapping[str, object]) -> None:
         die("current-mainnet manifest runtime gas policy differs")
     returndata = runtime.get("returndataBoundary")
     if returndata != {
-        "creditedOnBpo2Rows": False,
-        "owner": "scripts/check-beacon-deposit-differential.sh",
-        "fork": "Prague",
+        "creditedOnBpo2Rows": True,
+        "source": "pinned target EIP-3155 trace summary",
+        "owner": "scripts/check-beacon-deposit-current-mainnet.sh",
+        "fork": "BPO2",
         "statement": HISTORICAL_BOUNDARY,
     }:
-        die("current-mainnet manifest historical-Prague boundary differs")
+        die("current-mainnet manifest returndata boundary differs")
     deposit_projection = runtime.get("depositProjection")
     expected_event = expected_log()
     expected_event_doc = {
@@ -2010,6 +2069,19 @@ def synthetic_creation_side(label: str, residual: int) -> Mapping[str, object]:
     }
 
 
+# Both synthetic sides carry the same returndata, so the static campaign
+# exercises the agreement check rather than a coincidence of empty strings.
+SYNTHETIC_RETURNDATA = (
+    "0x",
+    "0x" + "11" * 32,
+    "0x" + "22" * 32,
+    "0x" + "00" * 31 + "01",
+    "0x" + "00" * 31 + "01",
+    "0x" + "00" * 32,
+    "0x",
+)
+
+
 def synthetic_runtime_side(label: str, gas: Sequence[int]) -> Mapping[str, object]:
     rows = runtime_rows()
     storage = expected_runtime_final_storage(label)
@@ -2023,6 +2095,7 @@ def synthetic_runtime_side(label: str, gas: Sequence[int]) -> Mapping[str, objec
         "side": label,
         "rows": [{
             "name": row.name, "receiptSucceeded": row.succeeds,
+            "returndata": SYNTHETIC_RETURNDATA[index],
             "gasUsed": gas[index],
             "receiptBloom": q(log_bloom((event,)) if index == 0 else 0),
         } for index, row in enumerate(rows)],
@@ -2102,8 +2175,20 @@ def raw_channel_falsifiers() -> int:
     rows = runtime_rows()
     gas = (90_000, 80_000, 29_000, 24_000, 24_100, 24_200, 21_000)
     result, post_alloc = synthetic_raw_runtime(side, runtime, gas)
-    baseline = project_runtime_outputs(side, runtime, rows, result, post_alloc)
+    baseline = project_runtime_outputs(
+        side, runtime, rows, result, post_alloc,
+        returndata=SYNTHETIC_RETURNDATA,
+    )
     mutants: List[Tuple[str, Mapping[str, object], Mapping[str, object]]] = []
+    # The new channel gets its own corruption rather than inheriting one: a
+    # projection that ignored the traced returndata would return the baseline
+    # here and be caught by the same loop as every other channel.
+    returndata_mutants: List[Tuple[str, Sequence[str]]] = [
+        (
+            "returndata",
+            ("0x" + "ff" * 32,) + tuple(SYNTHETIC_RETURNDATA[1:]),
+        ),
+    ]
     broken_result = copy.deepcopy(result)
     broken_alloc = copy.deepcopy(post_alloc)
     broken_result["receipts"][0]["status"] = "0x0"
@@ -2140,6 +2225,20 @@ def raw_channel_falsifiers() -> int:
         if observed != baseline:
             continue
         die(f"raw credited-channel falsifier was invisible: {label}")
+    for label, mutant_returndata in returndata_mutants:
+        try:
+            observed = project_runtime_outputs(
+                side, runtime, rows, result, post_alloc,
+                returndata=mutant_returndata,
+            )
+        except RuntimeError:
+            continue
+        if observed != baseline:
+            continue
+        die(f"raw credited-channel falsifier was invisible: {label}")
+    mutants.extend(
+        (label, result, post_alloc) for label, _ in returndata_mutants
+    )
     if len(mutants) != RAW_CHANNEL_FALSIFIERS:
         die("raw credited-channel falsifier count differs")
     return len(mutants)

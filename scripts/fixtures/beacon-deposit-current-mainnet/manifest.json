@@ -36,12 +36,12 @@
   "cacheInputs": {
     "repositoryFiles": {
       "BEACON_DEPOSIT_DEVIATIONS.md": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45",
-      "scripts/check-beacon-deposit-current-mainnet.sh": "0bffc871fc348700d7ebf4c2153886e9ce4a0f29fddc99f34cf43547da61b583",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "01912b3a138da1e7739c4f959ddad122935f3db8367dd4e80955402e7ee0ac94",
       "scripts/current-mainnet-runtime-lock.json": "692130abbe86e1fe40866c84d8ada8a2e3963640d827d6fc36365cab5d8c51fb",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
-      "scripts/current_mainnet.py": "9cdd56b050aa58a636393c488d2e498316eff3b7265f1b573849dc315573b866",
+      "scripts/current_mainnet.py": "ca0b2a3423e5e027150e5e89d88716834c26391d399e54dba92bc679ca93b15e",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
-      "scripts/gen-beacon-deposit-current-mainnet.py": "c3e68a3f3a6cf2e9f5bd4228d9c9fc7defb58d188157ebe0ba87e2ea0c94d023",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "87f48acf3e5ba3ce82bca3d45205c51fa4159ca80ef4974629631645f546086d",
       "scripts/gen-current-mainnet-runtime-lock.py": "e0213d2428fd4009980bbef1e396480ce32469d57449ee81e654365675478071",
       "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
@@ -61,10 +61,10 @@
   "counts": {
     "apiBoundaryFalsifiers": 3,
     "creationExecutions": 2,
-    "creditedChannels": 5,
+    "creditedChannels": 6,
     "manifestChannelFalsifiers": 5,
     "manifestFalsifiers": 12,
-    "rawChannelFalsifiers": 5,
+    "rawChannelFalsifiers": 6,
     "registryFalsifiers": 1,
     "runtimeRows": 7,
     "runtimeTransactionsPerSide": 7,
@@ -499,7 +499,7 @@
     "executionFork": "BPO2",
     "forkCallerOverrideAvailable": false,
     "glamsterdamBaseline": false,
-    "historicalPragueComplement": "BPO2 credits status/gas on every row and exact deposit log/storage/ETH; the preserved Prague differential exclusively owns exact returndata and its broader malformed/precompile/OOG corpus",
+    "historicalPragueComplement": "BPO2 credits status/gas and exact returndata on every row, plus exact deposit log/storage/ETH, reading returndata from the pinned target's own EIP-3155 trace rather than from a receipt, which carries none. The preserved Prague differential still owns the 37 rows outside this seven-row chain and its broader malformed/precompile/OOG corpus; that remainder is measured migration debt recorded in scripts/current-mainnet-parity.json, not a claim that those behaviours cannot have changed across the fork",
     "runtimeStateTestMode": true,
     "runtimeT8nExecutionsPerSide": 7,
     "runtimeWorlds": "same ordered seven-transition BPO2 state chain per side",
@@ -510,7 +510,7 @@
     "finite BPO2 transactions, not universal equivalence or liveness",
     "reference bytecode is an executed oracle, not a verified program",
     "view/support/no-match rows credit only receipt status and charged gas",
-    "exact returndata remains exclusively in the preserved Prague differential",
+    "exact returndata is credited here from the target's own trace; the 37 rows outside this seven-row chain remain with Prague",
     "raw storage equality is excluded; each layout is projected logically",
     "constructor remainder is net receipt-charged execution after any refund; the t8n result does not expose its refund counter"
   ],
@@ -519,6 +519,7 @@
     "channelClasses": [
       "status",
       "gas",
+      "returndata",
       "deposit-log",
       "deposit-storage",
       "deposit-eth"
@@ -539,7 +540,7 @@
       "gas-policy"
     ],
     "manifestOwnership": 12,
-    "rawChannelLiveness": 5,
+    "rawChannelLiveness": 6,
     "registryLiveness": 1,
     "staticInventory": 4
   },
@@ -888,22 +889,25 @@
       "registrySha256": "13643d8c2f33188cbd3a2f80a740c24d2b2caba0b2d753caace895fb7c65cb45"
     },
     "returndataBoundary": {
-      "creditedOnBpo2Rows": false,
-      "fork": "Prague",
-      "owner": "scripts/check-beacon-deposit-differential.sh",
-      "statement": "BPO2 credits status/gas on every row and exact deposit log/storage/ETH; the preserved Prague differential exclusively owns exact returndata and its broader malformed/precompile/OOG corpus"
+      "creditedOnBpo2Rows": true,
+      "fork": "BPO2",
+      "owner": "scripts/check-beacon-deposit-current-mainnet.sh",
+      "source": "pinned target EIP-3155 trace summary",
+      "statement": "BPO2 credits status/gas and exact returndata on every row, plus exact deposit log/storage/ETH, reading returndata from the pinned target's own EIP-3155 trace rather than from a receipt, which carries none. The preserved Prague differential still owns the 37 rows outside this seven-row chain and its broader malformed/precompile/OOG corpus; that remainder is measured migration debt recorded in scripts/current-mainnet-parity.json, not a claim that those behaviours cannot have changed across the fork"
     },
     "rows": [
       {
         "blanc": {
           "gasUsed": 78033,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x"
         },
         "blancMinusReferenceGas": -6801,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
           "gas",
+          "returndata",
           "deposit-log",
           "deposit-storage",
           "deposit-eth"
@@ -919,20 +923,24 @@
         "name": "deposit-success",
         "reference": {
           "gasUsed": 84834,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x"
         },
-        "returndataCredited": false
+        "returndata": "0x",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 102597,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x8224eef76edc647246cf9b5ec3c124d6260282c3dc11b25177551eb32ff32a08"
         },
         "blancMinusReferenceGas": -18072,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "get_deposit_root()",
         "expectedReceiptSucceeded": true,
@@ -945,20 +953,24 @@
         "name": "get-deposit-root",
         "reference": {
           "gasUsed": 120669,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x8224eef76edc647246cf9b5ec3c124d6260282c3dc11b25177551eb32ff32a08"
         },
-        "returndataCredited": false
+        "returndata": "0x8224eef76edc647246cf9b5ec3c124d6260282c3dc11b25177551eb32ff32a08",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 23447,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000080100000000000000000000000000000000000000000000000000000000000000"
         },
         "blancMinusReferenceGas": -1131,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "get_deposit_count()",
         "expectedReceiptSucceeded": true,
@@ -971,20 +983,24 @@
         "name": "get-deposit-count",
         "reference": {
           "gasUsed": 24578,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000080100000000000000000000000000000000000000000000000000000000000000"
         },
-        "returndataCredited": false
+        "returndata": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000080100000000000000000000000000000000000000000000000000000000000000",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001"
         },
         "blancMinusReferenceGas": 0,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "supportsInterface(bytes4)",
         "expectedReceiptSucceeded": true,
@@ -997,20 +1013,24 @@
         "name": "supports-erc165",
         "reference": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001"
         },
-        "returndataCredited": false
+        "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001"
         },
         "blancMinusReferenceGas": 0,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "supportsInterface(bytes4)",
         "expectedReceiptSucceeded": true,
@@ -1023,20 +1043,24 @@
         "name": "supports-deposit",
         "reference": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001"
         },
-        "returndataCredited": false
+        "returndata": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000000"
         },
         "blancMinusReferenceGas": 0,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "supportsInterface(bytes4)",
         "expectedReceiptSucceeded": true,
@@ -1049,20 +1073,24 @@
         "name": "supports-invalid",
         "reference": {
           "gasUsed": 21600,
-          "receiptSucceeded": true
+          "receiptSucceeded": true,
+          "returndata": "0x0000000000000000000000000000000000000000000000000000000000000000"
         },
-        "returndataCredited": false
+        "returndata": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "returndataCredited": true
       },
       {
         "blanc": {
           "gasUsed": 21020,
-          "receiptSucceeded": false
+          "receiptSucceeded": false,
+          "returndata": "0x"
         },
         "blancMinusReferenceGas": -26,
         "completedDeviation": null,
         "creditedChannels": [
           "status",
-          "gas"
+          "gas",
+          "returndata"
         ],
         "endpoint": "no-match",
         "expectedReceiptSucceeded": false,
@@ -1075,9 +1103,11 @@
         "name": "no-match",
         "reference": {
           "gasUsed": 21046,
-          "receiptSucceeded": false
+          "receiptSucceeded": false,
+          "returndata": "0x"
         },
-        "returndataCredited": false
+        "returndata": "0x",
+        "returndataCredited": true
       }
     ],
     "sameOrderedInputs": true,
