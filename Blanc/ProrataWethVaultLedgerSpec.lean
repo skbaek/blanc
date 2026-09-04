@@ -59,24 +59,34 @@ Recorded here rather than only in the goal's state brief because it is a
 standing assumption of the artifact: this vault is safe against its configured
 asset, and would not be safe against a re-entrant one.
 
-## Why the ladder cannot be made to carry it
+## Which ladder entry point can carry it
 
-`Blanc/Ladder.lean`'s `preserves_lift` is generic in the frame invariant `σ`,
-which invites the thought that `σ` could simply carry
-`DirectWethConfiguration` and hand it to the flows' obligation. It cannot, and
-the reason is one of `preserves_lift`'s own transport hypotheses:
+`ContractSpec.preserves_lift` cannot. It is generic in the frame invariant `σ`,
+which invites the thought that `σ` could carry `DirectWethConfiguration` and
+hand it to the flows' obligation, but one of its own transport hypotheses
+forbids that:
 
     σ_of_ne : e.currentTarget ≠ ca → c.Pre ca e d → σ e d
 
-At every *foreign* frame the induction must rebuild `σ` from `Pre` alone. So
-`σ` may not carry anything `Pre` does not, and `Pre` carries the contract's own
-code, `Side` on the balance map, and `PreInv` — no second account's code, and
-no room to put one. Strengthening `σ` makes `σ_of_ne` unprovable rather than
-making the flows provable.
+At every *foreign* frame that rebuilds `σ` from `Pre` alone, so `σ` may not
+carry anything `Pre` does not — and `Pre` carries the contract's own code,
+`Side` on the balance map, and `PreInv`. Strengthening `σ` makes `σ_of_ne`
+unprovable rather than making the flows provable.
 
-That is the precise obstruction, and it is why the remaining rely and history
-rungs need machinery rather than another instantiation. Anyone tempted by the
-generic ladder again should start here.
+**`Blanc/ExecutionAdmission.lean`'s `lift_inv_admitted` is the entry point that
+can.** It takes `σ` with *preservation* hypotheses rather than a re-derivation
+one — `nextNone`, `nextSome` and `jump` each read
+`… → sevm.currentTarget ≠ ca → σ sevm pre → σ sevm inter`, so a foreign step
+has to **carry** `σ` forward, not conjure it. A `σ` conjoining
+`LedgerConserved` with the configuration is admissible there: the configuration
+is a statement about installed code, which a foreign step that creates nothing
+preserves, and the ledger is preserved because a foreign frame does not write
+the vault's storage (`Ninst.foreignNone_getStor_eq`).
+
+So the rely and history rungs need that route rather than new machinery. The
+generated proof recipes already say as much — "drop to `preserves_lift_admitted`
+or `lift_inv_admitted` only when the standard `ContractSpec.PreWf` carrier is
+insufficient" — and this vault is exactly a case where it is.
 -/
 
 namespace Blanc
