@@ -1294,6 +1294,11 @@ Blanc.ProrataWethVault.mint_never_overmints|propext, Quot.sound
 Blanc.ProrataWethVault.withdraw_never_overpays|propext, Quot.sound
 Blanc.Frame.enter_run_benvStat|$STANDARD
 Blanc.RunFrame.benvStat_eq|$STANDARD
+Blanc.genericCall.step_spawn_benvStat|$STANDARD
+Blanc.genericCreate.step_spawn_benvStat|$STANDARD
+Blanc.Xinst.step_spawn_benvStat|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_rely_preserves|$STANDARD
 Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep|$STANDARD
 Blanc.Composition.ProrataWethVault.silent_accountingStep|$STANDARD

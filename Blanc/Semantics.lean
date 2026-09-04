@@ -964,6 +964,51 @@ lemma Xinst.step_spawn_depth {sevm : Sevm} {devm : Devm} {x : Xinst}
       | exact genericCreate.step_spawn_depth hs
       | exact genericCall.step_spawn_depth hs
 
+/-- A CALL-family spawn hands the parent's block statics to the child frame. -/
+lemma genericCall.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {f : Frame} {rsm : Resume}
+    (hs : genericCall.step sevm devm gas value caller target codeAddress
+      shouldTransferValue isStaticcall inputIndex inputSize outputIndex
+      outputSize code disablePrecompiles = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- A CREATE-family spawn hands the parent's block statics to the child frame. -/
+lemma genericCreate.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreate.step sevm devm endowment newAddress memoryIndex memorySize
+      = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- Every spawning instruction hands the parent's block statics to the child. -/
+lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  cases x <;>
+    simp only [Xinst.step, Bind.bind, Except.bind, Except.assert,
+      Pure.pure, Except.pure] at hs <;>
+    repeat' split at hs
+  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+  all_goals
+    first
+      | exact genericCreate.step_spawn_benvStat hs
+      | exact genericCall.step_spawn_benvStat hs
+
 lemma Ninst.step_spawn_depth {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}
     (h : Ninst.step evm n = .spawn f rsm pc') : f.inner.depth < evm.sta.depth := by

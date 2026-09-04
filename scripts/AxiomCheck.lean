@@ -81,6 +81,7 @@ import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultMessage
+import Blanc.Composition.ProrataWethVaultRely
 import Blanc.ProrataWethVaultShares
 import Blanc.ProrataWethVaultDust
 import Blanc.BeaconDepositCorrectness
@@ -1082,6 +1083,11 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.ProrataWethVault.withdraw_never_overpays
 #print axioms Blanc.Frame.enter_run_benvStat
 #print axioms Blanc.RunFrame.benvStat_eq
+#print axioms Blanc.genericCall.step_spawn_benvStat
+#print axioms Blanc.genericCreate.step_spawn_benvStat
+#print axioms Blanc.Xinst.step_spawn_benvStat
+#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves
 #print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
 #print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep

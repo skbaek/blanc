@@ -189,6 +189,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   resolved frames.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
+- When a frame invariant must retain block statics across a child spawn, use
+  `genericCall.step_spawn_benvStat`, `genericCreate.step_spawn_benvStat`, or
+  the instruction-neutral `Xinst.step_spawn_benvStat` in
+  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean), then combine it with
+  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry.
 
 For an exact `DELEGATECALL` boundary, use
 [`Blanc/DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean).
