@@ -498,7 +498,7 @@
           "uses": "actions/cache/save@v5",
           "with": {
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
-            "path": ".lake"
+            "path": "./.lake"
           }
         }
       ],
@@ -543,7 +543,7 @@
           "with": {
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
-            "path": ".lake"
+            "path": "./.lake"
           },
           "workflow_id": "restore_build"
         },
@@ -663,7 +663,7 @@
           "with": {
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
-            "path": ".lake"
+            "path": "./.lake"
           },
           "workflow_id": "restore_build"
         },
@@ -828,7 +828,7 @@
           "with": {
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
-            "path": ".lake"
+            "path": "./.lake"
           },
           "workflow_id": "restore_build"
         },

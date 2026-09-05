@@ -161,7 +161,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
-          path: .lake
+          path: ./.lake
 
   execution-semantic:
     name: Execution semantic regressions
@@ -179,7 +179,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
-          path: .lake
+          path: ./.lake
       - name: Require an exact build cache hit
         run: test "$BLANC_CACHE_HIT" = true
         env:
@@ -221,7 +221,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
-          path: .lake
+          path: ./.lake
       - name: Require an exact build cache hit
         run: test "$BLANC_CACHE_HIT" = true
         env:
@@ -273,7 +273,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
-          path: .lake
+          path: ./.lake
       - name: Require an exact build cache hit
         run: test "$BLANC_CACHE_HIT" = true
         env:

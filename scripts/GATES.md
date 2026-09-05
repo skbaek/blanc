@@ -425,6 +425,14 @@ before any gate lane starts. Four independent static lanes then precede one
 shared `Blanc Blanc.ProofRecipeTactic jaune/jaune` build. The trusted manual
 `cold_build` input disables the producer's GitHub build-cache restore and saves
 its successful output explicitly; upstream Mathlib cache remains available.
+The pinned producer action expands its default package directory and cache
+path to the literal `./.lake`. Explicit cold save and every consumer use that
+same spelling: `.lake` addresses the same directory but hashes to a different
+GitHub cache version. The policy binds all direct paths to the actual parent
+expansion, the default false cross-OS input and the same runner platform.
+Compression remains selected by the cache action at runtime; an incompatible
+version is a miss, never permission to rebuild or skip assurance. Cache identity
+is ref, key and version, not the visible key alone.
 Semantic lanes restore only that exact
 candidate cache with fail-on-miss behavior, then require the named restore's
 `cache-hit` output to equal the string `true` before any toolchain or gate

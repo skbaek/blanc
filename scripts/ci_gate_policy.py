@@ -27,6 +27,8 @@ CACHE_KEY = (
     "${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}"
 )
 LEAN_ACTION = "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596"
+# Cache versions hash literal paths, so .lake and ./.lake are not interchangeable.
+CACHE_PATH = "./.lake"
 
 
 # Reviewed against the exact parent action and Lake v4.32.1 source. This is a
@@ -506,14 +508,14 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
             "kind": "action",
             "if": "${{ github.event_name == 'workflow_dispatch' && inputs.cold_build }}",
             "uses": "actions/cache/save@v5",
-            "with": {"path": ".lake", "key": CACHE_KEY},
+            "with": {"path": CACHE_PATH, "key": CACHE_KEY},
         },
         "restore-build": {
             "name": "Restore exact build output",
             "kind": "action",
             "workflow_id": "restore_build",
             "uses": "actions/cache/restore@v5",
-            "with": {"path": ".lake", "key": CACHE_KEY, "fail-on-cache-miss": "true"},
+            "with": {"path": CACHE_PATH, "key": CACHE_KEY, "fail-on-cache-miss": "true"},
         },
         "require-exact-build": {
             "name": "Require an exact build cache hit",
@@ -781,7 +783,7 @@ def topology_problems(
             problems.append(f"semantic lane {identifier} does not enforce an exact restore before consuming")
         restore = next((step for step in job["steps"] if step.get("id") == "restore-build"), None)
         if not restore or restore.get("with") != {
-            "path": ".lake", "key": CACHE_KEY, "fail-on-cache-miss": "true"
+            "path": CACHE_PATH, "key": CACHE_KEY, "fail-on-cache-miss": "true"
         }:
             problems.append(f"semantic lane {identifier} has a permissive or non-exact cache restore")
         toolchain = next(
@@ -797,6 +799,38 @@ def topology_problems(
         }:
             problems.append(f"semantic lane {identifier} can rebuild or admit fallback cache state")
 
+    problems.extend(cache_version_problems(topology))
+    return problems
+
+
+def cache_version_problems(topology: dict[str, Any]) -> list[str]:
+    """Bind direct transfers to the pinned parent action's literal path expansion.
+
+    The reviewed action uses inputs.lake-package-directory + "/.lake" for
+    both nested restore and save. Its default directory is ".". Do not
+    normalize this string: actions/cache hashes it into its opaque version.
+    Compression selection remains runtime-dependent; mismatches fail closed.
+    """
+    jobs = {job["id"]: job for job in topology["jobs"]}
+    producer = next((step for step in jobs.get("build", {}).get("steps", [])
+                     if step.get("id") == "full-build"), None)
+    if producer is None:
+        return ["cache version inputs have no producer"]
+    inputs = LEAN_ACTION_DEFAULTS | producer.get("with", {})
+    parent_path = inputs["lake-package-directory"] + "/.lake"
+    problems = []
+    for job in jobs.values():
+        for step in job.get("steps", []):
+            if step.get("id") not in {"restore-build", "save-cold-build"}:
+                continue
+            transfer = step.get("with", {})
+            if transfer.get("path") != parent_path:
+                problems.append(f"cache version path differs at {job['id']}/{step['id']}: "
+                                f"{transfer.get('path')!r} != producer {parent_path!r}")
+            if transfer.get("enableCrossOsArchive", "false") != "false":
+                problems.append(f"cache version cross-OS input differs at {job['id']}/{step['id']}")
+            if job.get("runs_on") != jobs["build"].get("runs_on"):
+                problems.append(f"cache version runner platform differs at {job['id']}")
     return problems
 
 
@@ -1099,6 +1133,15 @@ def action_census(topology: dict[str, Any]) -> dict[str, Any]:
         "source_sha256": LEAN_ACTION_SOURCES,
         "source_base": "https://raw.githubusercontent.com/" + LEAN_ACTION.replace("@", "/") + "/",
         "reviewed_driver_inputs": DRIVER_CENSUS_INPUTS,
+        "cache_version_contract": {
+            "producer_path_template": "${{ inputs.lake-package-directory }}/.lake",
+            "producer_default_directory": LEAN_ACTION_DEFAULTS["lake-package-directory"],
+            "literal_transfer_path": CACHE_PATH,
+            "enableCrossOsArchive": "false (reviewed nested action default; direct transfers agree)",
+            "runner": "ubuntu-24.04 for producer and all consumers",
+            "compression": "actions/cache runtime selection on the same runner platform; mismatch is a miss, never a fallback consumer build",
+            "identity": "ref + key + literal-path/compression/platform cache version; key alone is insufficient",
+        },
         "root_selectors": {"testDriver": "", "lintDriver": "", "builtinLint?": None},
         "selection_basis": "Lake v4.32.1 checkTest/checkLint loadPackage: root only, no dependencies",
         "invocations": invocations,
@@ -1266,6 +1309,20 @@ def self_test() -> int:
     _, step = find_step(changed, "restore-build")
     step["with"]["path"] = ".lake/build"
     check_rejected("partial/corrupt cache surface", changed, "permissive or non-exact")
+
+    # Reintroduce the exact hosted defect at each direct transfer independently.
+    for job_id, step_id in [("build", "save-cold-build"),
+                            ("execution-semantic", "restore-build"),
+                            ("contract-semantic", "restore-build"),
+                            ("deployment-fixtures", "restore-build")]:
+        changed = copy.deepcopy(topology)
+        job = next(item for item in changed["jobs"] if item["id"] == job_id)
+        step = next(item for item in job["steps"] if item["id"] == step_id)
+        step["with"]["path"] = ".lake"
+        check_rejected("literal cache path/version mismatch", changed, "cache version path differs")
+        step["with"]["path"] = CACHE_PATH
+        step["with"]["enableCrossOsArchive"] = "true"
+        check_rejected("cross-OS cache version mismatch", changed, "cache version cross-OS input differs")
 
     changed = copy.deepcopy(topology)
     job = next(item for item in changed["jobs"] if item["id"] == "source-trust")
