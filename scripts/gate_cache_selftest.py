@@ -1310,6 +1310,330 @@ def control_worktree_seed_never_publishes_partial_or_racing_state() -> None:
                 "racing build state must never be published")
 
 
+def control_baseline_lock_protocol_serializes_and_releases() -> None:
+    # Exercise the actual shell protocol in a disposable fixture. Only its
+    # host-lock location constructor is replaced in the fixture helper; HOME
+    # and the production helper/path are never changed. A separate live probe
+    # covers the real canonical host-global path without making static suite
+    # success depend on unrelated running goals.
+    with seed_pair() as (_s, source, target):
+        source=source.resolve();target=target.resolve()
+        helper=(Path(ws.__file__).parent/'gate-lock.sh').read_text()
+        original='GATE_HEAVY_LOCK="${HOME}/.codex/locks/gate-heavy.lock"'
+        replacement='GATE_HEAVY_LOCK="'+str(source.parent/'fixture-heavy.lock')+'"'
+        require(helper.count(original)==1,'canonical host lock constructor moved')
+        helper=helper.replace(original,replacement).replace('  mkdir -p "${HOME}/.codex/locks"','  : # fixture parent already exists')
+        (target/'scripts').mkdir(exist_ok=True)
+        (target/'scripts/gate-lock.sh').write_text(helper)
+        with ws.baseline_locks(gc,source,target):
+            try:
+                with ws.baseline_locks(gc,source,target):
+                    raise ControlFailure('second host lock unexpectedly acquired')
+            except ws.SeedRefusal: pass
+            require(not gc.acquire_lock(gc.lock_path(target)),'runner must share the same held mutex')
+        require(not (source.parent/'fixture-heavy.lock').exists(),'host lock must release')
+        require(not (source/'scripts/report-elab.txt.lock').exists(),'source report lock must release')
+        require(not (target/'scripts/report-elab.txt.lock').exists(),'target report lock must release')
+        require(gc.acquire_lock(gc.lock_path(target)),'runner lock must release')
+        try:
+            try:
+                with ws.baseline_locks(gc,source,target):
+                    raise ControlFailure('held runner lock unexpectedly acquired')
+            except ws.SeedRefusal: pass
+        finally: gc.release_lock(gc.lock_path(target))
+        with ws.baseline_locks(gc,source,target): pass
+        require(not (source.parent/'fixture-heavy.lock').exists(),'sole holder removal restores acquisition and release')
+
+
+@contextmanager
+def nonloading_tool_fixture():
+    from contextlib import ExitStack
+    with tempfile.TemporaryDirectory(prefix='baseline-tools-control-') as directory:
+        base = Path(directory).resolve(); root = base/'root'; home = base/'elan'
+        root.mkdir(); (home/'bin').mkdir(parents=True)
+        (root/'lean-toolchain').write_text(ws.NONLOADING_TOOLCHAIN+'\n')
+        (home/'settings.toml').write_text('[overrides]\n')
+        for name in ('elan','lean','lake'):
+            path = home/'bin'/name; path.write_text('never executed proxy'); path.chmod(0o755)
+        (root/'lakefile.lean').write_text('reviewed configuration\n')
+        (root/'lake-manifest.json').write_text('{"packages": []}')
+        install = home/'toolchains'/ws.NONLOADING_TOOLCHAIN.replace('/', '--').replace(':', '---')
+        (install/'bin').mkdir(parents=True); (install/'lib').mkdir()
+        for name in ('lean','lake'):
+            path=install/'bin'/name; path.write_text('never executed tool '+name); path.chmod(0o755)
+        runtime=install/'lib/library.dylib'; runtime.write_text('runtime bytes')
+        with ExitStack() as stack:
+            for name, value in {
+                'NONLOADING_SETTINGS':ws.byte_sha(home/'settings.toml'),
+                'NONLOADING_PROXY':ws.byte_sha(home/'bin/elan'),
+                'NONLOADING_CONFIGS':{'lakefile.lean':ws.byte_sha(root/'lakefile.lean'),'lakefile.toml':'<absent>'},
+                'NONLOADING_BINARIES':{n:ws.byte_sha(install/'bin'/n) for n in ('lean','lake')},
+                'NONLOADING_RUNTIME':{'lib/library.dylib':ws.byte_sha(runtime)},
+            }.items(): stack.enter_context(patched(ws,name,value))
+            stack.enter_context(patched(ws.os,'environ',{'PATH':str(home/'bin'),'ELAN_HOME':str(home)}))
+            yield root, home, install
+
+
+def control_baseline_nonloading_resolution_refuses_every_selection_drift() -> None:
+    with nonloading_tool_fixture() as (root, home, install):
+        native_run = ws.subprocess.run
+        def forbidden(*args, **kwargs):
+            raise ControlFailure('resolver may not execute any subprocess')
+        with patched(ws.subprocess,'run',forbidden):
+            expected=ws.nonloading_tools(root)
+            def refused():
+                try: ws.nonloading_tools(root)
+                except ws.SeedRefusal: return
+                raise ControlFailure('selection drift was admitted')
+            for name in ('ELAN_TOOLCHAIN','LEAN','LEAN_SYSROOT','LAKE_OVERRIDE_LEAN','LAKE_HOME','DYLD_INSERT_LIBRARIES','LD_PRELOAD'):
+                ws.os.environ[name]='override';refused();del ws.os.environ[name]
+                require(ws.nonloading_tools(root)==expected,'sole environment restoration must pass')
+            path=ws.os.environ['PATH'];ws.os.environ['PATH']='.:'+path;refused();ws.os.environ['PATH']=path
+            for file in (home/'settings.toml',home/'bin/lean',root/'lean-toolchain',root/'lakefile.lean',install/'bin/lean',install/'lib/library.dylib'):
+                original=file.read_bytes();file.write_bytes(original+b'changed');refused();file.write_bytes(original)
+                require(ws.nonloading_tools(root)==expected,'sole byte restoration must pass')
+            for file in (root/'lakefile.toml',install/'lib/new.dylib'):
+                file.write_text('new input');refused();file.unlink()
+                require(ws.nonloading_tools(root)==expected,'sole population restoration must pass')
+            shadow=root/'.lake/build/bin/lean';shadow.parent.mkdir(parents=True)
+            for kind in ('file','dangling','tool-link'):
+                if kind=='file':shadow.write_text('shadow')
+                else:shadow.symlink_to(install/'bin/lean' if kind=='tool-link' else shadow.parent/'missing')
+                refused();shadow.unlink()
+                require(ws.nonloading_tools(root)==expected,'sole shadow restoration must pass')
+            original=(root/'lake-manifest.json').read_bytes()
+            (root/'lake-manifest.json').write_text('{"packages":[{"name":"unreviewed"}]}');refused()
+            (root/'lake-manifest.json').write_bytes(original)
+            require(ws.nonloading_tools(root)==expected,'sole package population restoration must pass')
+            file=root/'lakefile.lean';original=file.read_bytes();file.unlink();file.symlink_to(root/'missing');refused();file.unlink();file.write_bytes(original)
+            require(ws.nonloading_tools(root)==expected,'sole configuration link restoration must pass')
+
+
+def control_baseline_private_query_substitution_changes_only_two_argv() -> None:
+    from types import SimpleNamespace
+    from contextlib import ExitStack
+    originals={'lean':['lake','env','lean','--version'],'lake':['lake','--version'],'bash':['bash','--version']}
+    safe={'lean':['/reviewed/lean','--version'],'lake':['/reviewed/lake','--version']}
+    calls=[]
+    module=SimpleNamespace(TOOL_COMMANDS=dict(originals),forget_digests=lambda:calls.append('clear'))
+    with ExitStack() as stack:
+        stack.enter_context(patched(ws,'baseline_authority',lambda *args:{}))
+        stack.enter_context(patched(ws,'nonloading_tools',lambda root:{'commands':safe}))
+        stack.enter_context(patched(ws,'load_gate_cache',lambda path:module))
+        result=ws.baseline_private_authority(Path('/source'),Path('/target'))
+        require(result is module and result.TOOL_COMMANDS=={**originals,**safe},'only exact lean/lake queries may change')
+        require(calls==['clear'],'private instance must clear both memo families through authority')
+        module.TOOL_COMMANDS={**originals,'lean':['unsafe-loader']}
+        try:ws.baseline_private_authority(Path('/source'),Path('/target'))
+        except ws.SeedRefusal:pass
+        else:raise ControlFailure('changed authority command was accepted')
+
+
+def control_baseline_authority_pair_and_helpers_fail_closed() -> None:
+    from contextlib import ExitStack
+    with tempfile.TemporaryDirectory(prefix='baseline-authority-control-') as directory:
+        source=Path(directory)/'source';target=Path(directory)/'target'
+        for root in (source,target):
+            (root/'scripts').mkdir(parents=True)
+            (root/'scripts/gate-cache.py').write_text('source authority' if root==source else 'target authority')
+            (root/'scripts/helper.py').write_text('helper')
+        with ExitStack() as stack:
+            stack.enter_context(patched(ws,'BASELINE_AUTHORITY_SOURCE',ws.byte_sha(source/'scripts/gate-cache.py')))
+            stack.enter_context(patched(ws,'BASELINE_AUTHORITY_TARGET',ws.byte_sha(target/'scripts/gate-cache.py')))
+            stack.enter_context(patched(ws,'BASELINE_HELPERS',{'helper.py':ws.byte_sha(source/'scripts/helper.py')}))
+            expected=ws.baseline_authority(source,target)
+            for root in (source,target):
+                for name in ('gate-cache.py','helper.py'):
+                    path=root/'scripts'/name;original=path.read_bytes();path.write_bytes(original+b'changed')
+                    try:ws.baseline_authority(source,target)
+                    except ws.SeedRefusal:pass
+                    else:raise ControlFailure('changed authority was accepted')
+                    path.write_bytes(original)
+                    require(ws.baseline_authority(source,target)==expected,'sole authority restoration must pass')
+
+
+@contextmanager
+def baseline_pair():
+    """Disposable real Git/certificate fixture; no real tool query or host lock."""
+    from contextlib import ExitStack, nullcontext
+    with seed_pair() as (s, source, target):
+        source = source.resolve(); target = target.resolve()
+        for name in ws.BASELINE_METHODS:
+            s.write('scripts/' + name, 'reviewed timing method\n')
+        s.git('add', 'scripts')
+        s.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'timing methods')
+        subprocess.run(['git', 'reset', '--hard', s.git('rev-parse', 'HEAD')],
+                       cwd=target, check=True, capture_output=True)
+        shutil.copytree(source / '.lake', target / '.lake')
+        gc.build_certificate_path(source).unlink()  # this path must never be required here
+        proof = {'commands': {k: gc.TOOL_COMMANDS[k] for k in ('lean', 'lake')}}
+        with ExitStack() as patches:
+            patches.enter_context(patched(ws, 'BASELINE_METHODS', {name:ws.byte_sha(source/'scripts'/name) for name in ws.BASELINE_METHODS}))
+            patches.enter_context(patched(ws, 'baseline_private_authority', lambda *args: gc))
+            patches.enter_context(patched(ws, 'baseline_authority', lambda *args: {'fixture': 'reviewed'}))
+            patches.enter_context(patched(ws, 'nonloading_tools', lambda root: proof))
+            patches.enter_context(patched(ws, 'baseline_locks', lambda *args: nullcontext()))
+            yield s, source, target
+
+
+def baseline_refuses(source: Path, target: Path, execute: bool = True) -> str:
+    try:
+        ws.baseline_transfer(source, target, execute)
+    except ws.SeedRefusal as error:
+        return str(error)
+    raise ControlFailure('baseline precondition did not refuse')
+
+
+def control_baseline_only_keeps_full_certificate_and_transfers_only_bytes() -> None:
+    with baseline_pair() as (s, source, target):
+        s.write('unrelated.txt', 'different source commit\n')
+        s.git('add', 'unrelated.txt')
+        s.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'unrelated source change')
+        original = (source / ws.BASELINE_FILE).read_bytes()
+        before = {str(p.relative_to(target)):p.read_bytes() for p in (target/'.lake').rglob('*') if p.is_file() and '.git' not in p.relative_to(target).parts}
+        require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'preview should succeed')
+        require(not (target/ws.BASELINE_FILE).exists(), 'preview may not publish')
+        require(ws.baseline_transfer(source, target, True)['status'] == 'OK', 'valid transfer should pass')
+        require((target/ws.BASELINE_FILE).read_bytes() == original == (source/ws.BASELINE_FILE).read_bytes(), 'baseline bytes must be unchanged')
+        for relative, payload in before.items():
+            require((target/relative).read_bytes() == payload, 'compiled state must remain untouched')
+        require(ws.baseline_transfer(source, target, True)['status'] == 'NOOP', 'identical complete transfer is a checked no-op')
+        require(ws.baseline_transfer(source, target, verify=True)['status'] == 'VERIFIED', 'C9 needs completed live verification')
+        receipt = target / ws.BASELINE_RECEIPT
+        saved = receipt.read_bytes(); receipt.unlink()
+        baseline_refuses(source, target)
+        receipt.write_bytes(saved)
+        require(ws.baseline_transfer(source, target, verify=True)['status'] == 'VERIFIED', 'sole receipt restoration returns green')
+        gc.build_certificate_path(target).unlink()
+        baseline_refuses(source, target)
+        require(not gc.build_certificate_path(source).exists(), 'source certificate must never be manufactured')
+
+
+def control_baseline_only_rejects_invalid_rows_and_preexisting_states() -> None:
+    with baseline_pair() as (_s, source, target):
+        baseline = source / ws.BASELINE_FILE
+        original = baseline.read_bytes()
+        bad = [None, b'not a row\n', original + b'OK\t1\tBlanc.lean\n',
+               original.replace(b'1.0', b'nan', 1), original.replace(b'1.0', b'inf', 1),
+               original.replace(b'1.0', b'0', 1), original.replace(b'1.0', b'-1', 1),
+               b'OK\t1\tBlanc.lean\n']
+        for value in bad:
+            if value is None: baseline.unlink()
+            else: baseline.write_bytes(value)
+            baseline_refuses(source, target)
+            require(not (target/ws.BASELINE_FILE).exists(), 'invalid rows must not publish')
+            baseline.write_bytes(original)
+            require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole row restoration returns green')
+        for relative in (ws.BASELINE_FILE, ws.BASELINE_RECEIPT, ws.BASELINE_COMPLETE):
+            path = target / relative
+            for kind in ('file', 'dangling-link'):
+                if kind == 'file': path.write_bytes(original)
+                else: path.symlink_to(path.parent/'absent-control')
+                baseline_refuses(source, target)
+                path.unlink()
+                require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole destination restoration returns green')
+
+
+def control_baseline_only_rejects_identity_and_certificate_drift() -> None:
+    with baseline_pair() as (_s, source, target):
+        paths = ['Blanc/A.lean', 'lean-toolchain', 'lakefile.lean', 'scripts/check-elab.sh',
+                 '.lake/packages/jaune/Jaune.lean', '.lake/build/lib/lean/Blanc/A.trace']
+        for root in (source, target):
+            for relative in paths:
+                if root == source and relative.startswith('.lake/build/'):
+                    continue  # source compiled traces are intentionally not accepted
+                path = root / relative; original = path.read_bytes()
+                path.write_bytes(original + b'\nchanged\n')
+                # Show dirty refusal separately, then commit the deliberate
+                # mutation so actual identity/method/certificate controls bite.
+                if not relative.startswith('.lake/'):
+                    require('clean source and target' in baseline_refuses(source, target), 'dirty source/target must fail at cleanliness')
+                    subprocess.run(['git','add',relative],cwd=root,check=True,capture_output=True)
+                    subprocess.run(['git','-c','commit.gpgsign=false','commit','-qm','input mutation'],cwd=root,check=True,capture_output=True)
+                reason = baseline_refuses(source, target)
+                require('clean source and target' not in reason, 'committed/ignored mutation must reach intended identity control')
+                path.write_bytes(original)
+                if not relative.startswith('.lake/'):
+                    subprocess.run(['git','add',relative],cwd=root,check=True,capture_output=True)
+                    subprocess.run(['git','-c','commit.gpgsign=false','commit','-qm','sole input restoration'],cwd=root,check=True,capture_output=True)
+                require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole input restoration returns green')
+        certificate = gc.build_certificate_path(target); original = certificate.read_bytes()
+        data = json.loads(original); data['host'] = 'foreign-host'; certificate.write_text(json.dumps(data))
+        baseline_refuses(source, target)
+        certificate.write_bytes(original)
+        require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole host restoration returns green')
+        # Equal movement in BOTH clean roots still invalidates the reviewed
+        # runtime exclusion, even though pairwise method equality holds.
+        for name in ('check-elab.sh','check-elab-selection.py'):
+            originals={root:(root/'scripts'/name).read_bytes() for root in (source,target)}
+            for root in (source,target):
+                (root/'scripts'/name).write_text('new method that may invoke the fixture runner\n')
+                subprocess.run(['git','add','scripts/'+name],cwd=root,check=True,capture_output=True)
+                subprocess.run(['git','-c','commit.gpgsign=false','commit','-qm','matched method mutation'],cwd=root,check=True,capture_output=True)
+            require('reviewed timing method census' in baseline_refuses(source,target),'matched method movement must demand recensus')
+            for root,original in originals.items():
+                (root/'scripts'/name).write_bytes(original)
+                subprocess.run(['git','add','scripts/'+name],cwd=root,check=True,capture_output=True)
+                subprocess.run(['git','-c','commit.gpgsign=false','commit','-qm','sole method restoration'],cwd=root,check=True,capture_output=True)
+            require(ws.baseline_transfer(source,target)['status']=='PREVIEW','sole method restoration returns green')
+        native = gc.build_source_identity
+        def unknown(*args, **kwargs):
+            digest, categories = native(*args, **kwargs)
+            return digest, {**categories, 'new-category': {'digest': 'x', 'detail': {}}}
+        with patched(gc, 'build_source_identity', unknown): baseline_refuses(source, target)
+        require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole category restoration returns green')
+        facts = ws.worktree_facts
+        def foreign(root):
+            result = facts(root)
+            if root == source: result['common'] += '-foreign'
+            return result
+        with patched(ws, 'worktree_facts', foreign): baseline_refuses(source, target)
+        require(ws.baseline_transfer(source, target)['status'] == 'PREVIEW', 'sole repository restoration returns green')
+
+
+def control_baseline_only_refuses_races_and_partial_publication() -> None:
+    for boundary in (1, 2, 3, 4):
+        with baseline_pair() as (_s, source, target):
+            path = source/'Blanc/A.lean'; original = path.read_bytes()
+            native = ws.baseline_snapshot; calls = 0
+            def racing(*args):
+                nonlocal calls
+                calls += 1
+                if calls == boundary and boundary > 1: path.write_bytes(original + b'\n')
+                result = native(*args)
+                if boundary == 1 and calls == 1: path.write_bytes(original + b'\n')
+                return result
+            with patched(ws, 'baseline_snapshot', racing): baseline_refuses(source, target)
+            require(not any((target/p).exists() for p in (ws.BASELINE_FILE, ws.BASELINE_RECEIPT, ws.BASELINE_COMPLETE)), 'racing transaction must remove only its publication')
+            path.write_bytes(original)
+            require(ws.baseline_transfer(source, target, True)['status'] == 'OK', 'sole race restoration returns green')
+    for publication in (1, 2, 3):
+        with baseline_pair() as (_s, source, target):
+            link = ws.os.link; calls = 0
+            def fail_link(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == publication: raise OSError('injected link failure')
+                return link(*args, **kwargs)
+            with patched(ws.os, 'link', fail_link): baseline_refuses(source, target)
+            require(not any((target/p).exists() for p in (ws.BASELINE_FILE, ws.BASELINE_RECEIPT, ws.BASELINE_COMPLETE)), 'partial publication must clean its owned files')
+            require(ws.baseline_transfer(source, target, True)['status'] == 'OK', 'sole I/O failure restoration returns green')
+    with baseline_pair() as (_s, source, target):
+        native = ws.baseline_snapshot; calls = 0
+        def replace_baseline(*args):
+            nonlocal calls
+            result = native(*args); calls += 1
+            if calls == 3:
+                replacement = target/'.lake/other-writer'
+                replacement.write_text('another writer\n')
+                replacement.replace(target/ws.BASELINE_FILE)
+            return result
+        with patched(ws, 'baseline_snapshot', replace_baseline): baseline_refuses(source, target)
+        require((target/ws.BASELINE_FILE).read_text() == 'another writer\n', 'cleanup must preserve another inode')
+        (target/ws.BASELINE_FILE).unlink()
+        require(ws.baseline_transfer(source, target, True)['status'] == 'OK', 'sole competing file removal restores green')
+
+
 def control_dependency_evidence_is_consumed_without_rerunning_its_body() -> None:
     with scratch() as s:
         s.write("dep.txt", "one\n")
@@ -2368,6 +2692,14 @@ CONTROLS = (
     control_worktree_seed_previews_then_publishes_isolated_exact_state,
     control_worktree_seed_refuses_missing_stale_or_different_state,
     control_worktree_seed_never_publishes_partial_or_racing_state,
+    control_baseline_lock_protocol_serializes_and_releases,
+    control_baseline_nonloading_resolution_refuses_every_selection_drift,
+    control_baseline_private_query_substitution_changes_only_two_argv,
+    control_baseline_authority_pair_and_helpers_fail_closed,
+    control_baseline_only_keeps_full_certificate_and_transfers_only_bytes,
+    control_baseline_only_rejects_invalid_rows_and_preexisting_states,
+    control_baseline_only_rejects_identity_and_certificate_drift,
+    control_baseline_only_refuses_races_and_partial_publication,
     control_dependency_evidence_is_consumed_without_rerunning_its_body,
     control_missing_or_failing_dependency_never_yields_a_green_consumer,
     control_failed_run_is_never_cached,

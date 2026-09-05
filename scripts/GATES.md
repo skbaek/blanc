@@ -338,6 +338,53 @@ baseline or an already-certified candidate state. It is not required merely to
 reuse immutable Lake artifacts: a fresh worktree can restore those through the
 identity-keyed local cache while keeping all worktree-local state isolated.
 
+A separate, deliberately bounded baseline-only mode transfers historical timing
+bytes into an already independently certified target without copying `.lake`,
+compiled artifacts or gate verdicts:
+
+```
+scripts/seed-worktree-state.py --baseline-only --source /path/to/peer --target "$PWD"
+scripts/seed-worktree-state.py --baseline-only --source /path/to/peer --target "$PWD" --execute
+scripts/seed-worktree-state.py --baseline-only --source /path/to/peer --target "$PWD" --verify-baseline
+```
+
+This mode leaves all full-Lake seeding requirements above unchanged. Both roots
+must be clean, in the same physical repository and on the same current host;
+the complete positive unique baseline population, timing source/configuration,
+ten pinned package identities and fixed reviewed timing-method/identity-authority
+census must agree. Overall commits may differ only with these identities intact;
+the receipt records both commits and exact differences. The reviewed exclusion
+of the compiled Jaune fixture runner applies only to baseline comparison and
+records both digests; the target's unchanged full certificate still requires
+its runtime runner and complete trace population.
+
+The fixed Elan 4.2.3 / Lean 4.32.1 resolver accepts only reviewed settings,
+configuration, proxies, binaries and dynamic-library identities, with no
+unreviewed overrides, symlinks or package-bin shadows. It queries the selected
+absolute binaries with `--version`, never `lake env` or Elan, and substitutes
+only those two equivalent version argv in a private authority instance. Both
+memo families are cleared between roots and revalidations. Drift requires a
+new census; refreshing hashes alone is not acceptance.
+
+Preview performs read-only repeated validation. Execution and receipt verification
+acquire the unchanged canonical host-global heavy gate lock, both timing report
+locks and the common-repository selective-run mutex. Execution stages exact bytes,
+then uses no-clobber atomic hard links for a receipt and baseline; a separate
+completion marker is published only after post-transfer validation. Every
+accepted operation revalidates source, target, baseline and target certificate.
+No overwrite or silent partial recovery is allowed. Matching complete state
+returns a checked no-op. A failure removes only this transaction's owned inodes;
+a crash may leave partial state, which the capability refuses.
+
+The receipt inherits the existing same-host baseline's historical trust; it
+cannot attest when/how the old measurement was made. Baseline-only success is
+not a timing or gate verdict. When a goal relies on this transferred baseline,
+its acceptance adapter must successfully run `--verify-baseline` and bind that
+receipt/baseline to the measured candidate; path existence alone is insufficient.
+The timing script itself continues to support ordinary historical baselines
+without transfer receipts. The registered gate-cache self-test covers this
+mode's identity, method drift, negative, race, publication and lock controls.
+
 One consequence is worth knowing, because it is measured rather than assumed: a
 comment-only edit to a Lean module moves that module's own `depHash`, since its
 source is one of Lake's recorded inputs — but it leaves the module's `.olean`
