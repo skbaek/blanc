@@ -10,6 +10,8 @@ from ethereum_types.numeric import U64, U256, Uint
 from ethereum.crypto.hash import keccak256
 from ethereum.merkle_patricia_trie import Trie, root as trie_root, trie_set
 from ethereum.forks.bpo2.blocks import Header
+from ethereum.forks.bpo2.transactions import LegacyTransaction, calculate_intrinsic_cost
+from ethereum.forks.bpo2.vm.precompiled_contracts.mapping import PRE_COMPILED_CONTRACTS
 from ethereum.state import Account, Address
 from ethereum.state_mpt import (  # noqa: E402
     State,
@@ -388,6 +390,7 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
     history = {0: genesis_hash}
     blocks = []
     receipts = []
+    measurements = []
     groups = group_by_timestamp(
         scheduled_transactions,
         genesis_timestamp=int(genesis["timestamp"], 16),
@@ -420,6 +423,7 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
                 previous = cumulative
             return copied
         full_receipts = receipts_with_gas(result)
+        signed_transactions = legacy_transactions(output.body)
         # A prefix replay catches an intermediate state that a later
         # transaction could overwrite before the block's final post-state.
         prefix_alloc = current_alloc
@@ -428,13 +432,39 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
                                     transactions[:tx_index + 1])
             if prefix.result.get("rejected") != []:
                 raise AssertionError(f"prefix {tx_index} rejected unexpectedly")
+            prefix_receipts = receipts_with_gas(prefix.result)
+            if len(prefix_receipts) != tx_index + 1:
+                raise AssertionError("prefix receipt count differs from transaction count")
+            if prefix_receipts[-1] != full_receipts[tx_index]:
+                raise AssertionError("full-block receipt differs from authenticated prefix receipt")
             if prefix_checker is not None:
                 prefix_result = dict(prefix.result)
-                prefix_result["receipts"] = receipts_with_gas(prefix.result)
+                prefix_result["receipts"] = prefix_receipts
                 prefix_checker(
                     len(blocks), group["offset"] + tx_index, prefix_alloc, prefix.alloc,
                     prefix_result,
                 )
+            # Retain reporting context separately from the fixture/manifest.
+            # The target's own intrinsic calculator consumes the authenticated
+            # signed body; these are derived costs, not EVM trace observations.
+            signed_rlp = rlp.encode(signed_transactions[tx_index])
+            signed = rlp.decode_to(LegacyTransaction, signed_rlp)
+            intrinsic = calculate_intrinsic_cost(signed)
+            measurements.append({
+                "blockIndex": len(blocks), "transactionIndex": tx_index,
+                "stepIndex": group["offset"] + tx_index,
+                "environment": environment_value,
+                "transaction": {key: value for key, value in transactions[tx_index].items()
+                                if key != "secretKey"},
+                "sender": derive_address(int(transactions[tx_index]["secretKey"], 16)),
+                "signedTransactionRlp": "0x" + signed_rlp.hex(),
+                "initialPrecompileAddresses": sorted("0x" + address.hex()
+                                                     for address in PRE_COMPILED_CONTRACTS),
+                "before": prefix_alloc, "after": prefix.alloc,
+                "receipt": full_receipts[tx_index],
+                "intrinsicRegularGas": int(intrinsic.regular),
+                "calldataFloorGas": int(intrinsic.calldata_floor),
+            })
             if tx_index + 1 == len(transactions):
                 if prefix.alloc != output.alloc:
                     raise AssertionError("final transaction prefix differs from block post-state")
@@ -456,4 +486,5 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
         "genesisRLP": "0x" + bytes(rlp.encode([genesis_value, [], [], []])).hex(),
         "blocks": blocks, "post": current_alloc, "lastblockhash": parent_hash,
         "receipts": receipts,
+        "measurements": measurements,
     }
