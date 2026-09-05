@@ -1283,6 +1283,7 @@
         "files": [
           "scripts/check-eels-prague-closure.sh",
           "scripts/gen-eels-prague-closure.py",
+          "scripts/run-isolated-python.py",
           "scripts/eels_semantic_closure.py",
           "scripts/eels-prague-closure.json",
           "scripts/eels-prague-constraints.txt",

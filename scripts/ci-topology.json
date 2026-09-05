@@ -912,7 +912,7 @@
           "kind": "command",
           "name": "Install pinned execution-specs environment",
           "purpose": "offline-fixture-replay",
-          "run": "execution-specs/venv/bin/python -m pip install --disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs"
+          "run": "execution-specs/venv/bin/python -m pip install --disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs && execution-specs/venv/bin/python -m pip uninstall --yes setuptools"
         },
         {
           "cost_authority": "scripts/GATES.md",

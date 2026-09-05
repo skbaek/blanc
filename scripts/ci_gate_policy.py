@@ -565,6 +565,7 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
             "run": (
                 "execution-specs/venv/bin/python -m pip install "
                 "--disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs"
+                " && execution-specs/venv/bin/python -m pip uninstall --yes setuptools"
             ),
         },
     }
@@ -1289,6 +1290,13 @@ def self_test() -> int:
     _, step = find_step(changed, "eels-install")
     step["run"] = step["run"].replace("-c scripts/eels-prague-constraints.txt ", "")
     check_rejected("unconstrained pip", changed, "infrastructure step deployment-fixtures/eels-install moved")
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "eels-install")
+    step["run"] = step["run"].replace(
+        " && execution-specs/venv/bin/python -m pip uninstall --yes setuptools", ""
+    )
+    check_rejected("runtime installer startup hook retained", changed,
+                   "infrastructure step deployment-fixtures/eels-install moved")
     changed = copy.deepcopy(topology)
     _, step = find_step(changed, "eels-prague-closure")
     step["env"] = {"EELS_ROOT": "unreviewed-checkout"}

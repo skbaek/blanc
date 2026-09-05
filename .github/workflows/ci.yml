@@ -304,7 +304,9 @@ jobs:
       - name: Create pinned EELS virtual environment
         run: python -m venv execution-specs/venv
       - name: Install pinned execution-specs environment
-        run: execution-specs/venv/bin/python -m pip install --disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs
+        # setuptools is a build-isolation dependency, not a pinned runtime
+        # dependency. Its venv startup hook must not execute in the oracle.
+        run: execution-specs/venv/bin/python -m pip install --disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs && execution-specs/venv/bin/python -m pip uninstall --yes setuptools
       - name: Pinned EELS Prague semantic closure
         env:
           EELS_ROOT: ${{ github.workspace }}/execution-specs

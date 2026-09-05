@@ -557,7 +557,60 @@ def self_check() -> int:
     if not refusals:
         fail("prague closure self-check accepted an absent pinned distribution")
 
-    return len(mutants) + len(refusals) + closure.self_check()
+    return len(mutants) + len(refusals) + closure.self_check() + bootstrap_self_check()
+
+
+def bootstrap_self_check() -> int:
+    """Exercise the real bootstrap's shared admission boundary in fresh processes.
+
+    The synthetic guard records calls and refuses on demand. This checks routing
+    and entrypoint grammar; the shared closure tests separately falsify real
+    loader policy, and the provisioning control exercises the installed oracle.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="blanc-prague-bootstrap-") as raw:
+        root = Path(raw)
+        bootstrap = root / "run-isolated-python.py"
+        bootstrap.write_bytes((SCRIPTS / bootstrap.name).read_bytes())
+        guard = root / "eels_semantic_closure.py"
+        target = root / "target.py"
+        target.write_text("print('TARGET_EXECUTED')\n", encoding="utf-8")
+        def run(arguments: list[str]) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, *closure.PYTHON_ISOLATION_ARGS, str(bootstrap),
+                 str(root), *arguments], capture_output=True, text=True,
+            )
+        guard.write_text(
+            "def assert_prague_environment(fail_with, *, checkout_root):\n"
+            "    print('GUARD_CALLED')\n"
+            "    return 'synthetic admission'\n", encoding="utf-8",
+        )
+        checked = run(["--check"])
+        if checked.returncode or "GUARD_CALLED" not in checked.stdout \
+                or "TARGET_EXECUTED" in checked.stdout:
+            fail("admission-only bootstrap bypassed guard or executed a target")
+        executed = run(["target.py"])
+        if executed.returncode or executed.stdout.splitlines() != [
+            "GUARD_CALLED", "TARGET_EXECUTED"
+        ]:
+            fail("consumer bootstrap did not guard before target execution")
+        for arguments in (["--check", "target.py"], ["../target.py"],
+                          [str(target)], ["absent.py"]):
+            refused = run(arguments)
+            if refused.returncode == 0 or "GUARD_CALLED" in refused.stdout:
+                fail(f"bootstrap admitted malformed entrypoint {arguments}")
+        guard.write_text(
+            "def assert_prague_environment(fail_with, *, checkout_root):\n"
+            "    fail_with('synthetic startup pollution')\n", encoding="utf-8",
+        )
+        for arguments in (["--check"], ["target.py"]):
+            refused = run(arguments)
+            if refused.returncode == 0 \
+                    or "synthetic startup pollution" not in refused.stderr \
+                    or "TARGET_EXECUTED" in refused.stdout:
+                fail("bootstrap ignored failed admission or executed refused target")
+    return 6  # Four malformed entrypoints and two refused guard paths.
 
 
 def parser() -> argparse.ArgumentParser:
@@ -623,6 +676,21 @@ def main() -> int:
             )
     except OSError as exc:
         fail(f"cannot read the committed prague constraints file: {exc}")
+
+    # Derivation discovers imports with every installed RECORD provisionally
+    # admitted. It cannot establish that interpreter-startup code belongs to
+    # the committed closure. Exercise the consumer's exact bootstrap in a new
+    # interpreter before either content-policy branch can report success.
+    admission = subprocess.run(
+        [str(target_python(root)), *closure.PYTHON_ISOLATION_ARGS,
+         str(SCRIPTS / "run-isolated-python.py"), str(root), "--check"],
+        cwd=str(root), capture_output=True, text=True,
+    )
+    if admission.returncode != 0:
+        fail(
+            "fresh-interpreter consumer admission failed: "
+            + admission.stderr.strip()
+        )
 
     native = native_key()
     row = committed["platforms"].get(native)
