@@ -4,7 +4,9 @@
 This checker deliberately does not execute an EVM.  It authenticates only
 relationships visible in the committed JSON: schema-2 ownership, the frozen
 38-obligation map, exact DRIP literals, target placement, case/file inventory,
-and nonempty receipt/observer references.  Jaune replay, prefix execution,
+and a block-ordered transaction/receipt bijection with observer recipe bindings.
+Receipt values remain structural declarations, not authenticated execution.
+Jaune replay, prefix execution,
 returndata, child traces, and the SF arithmetic evaluator remain separate.
 """
 from __future__ import annotations
@@ -90,6 +92,33 @@ SPECIAL_OBSERVERS = (
     ("exit-rejecting-recipient-rollback-observer", "exit-rejecting-recipient-rollback", "reject-after-reentry", 1, 2),
 )
 HEX = re.compile(r"^0x(?:[0-9a-fA-F]{2})*$")
+HELPERS = ["0x000000000000000000000000000000000000d220",
+           "0x000000000000000000000000000000000000d221"]
+BLOCK_COUNTS = {
+    "view-units-fresh-consistency": [2], "view-assets-fresh-consistency": [2],
+    "short-and-trailing-calldata-revert": [13],
+    "value-bearing-nonpayable-revert": [4],
+    "multi-participant-conservation": [3, 3], "segmentation-split": [1, 1],
+}
+# Frozen generation-time observation channels; these labels do not prove them.
+ASSERTIONS = ["complete target pre/post account and storage",
+              "receipt status and cumulative-gas differences"]
+
+
+def case_policy(name):
+    primary = dict(PRIMARY_CASES)
+    if name == "deployment-genesis":
+        return name, [1], [], None
+    if name in primary:
+        return primary[name], BLOCK_COUNTS.get(name, [1]), [], None
+    if name.startswith("observer-") and name[9:] in primary:
+        base = name[9:]
+        return primary[base], BLOCK_COUNTS.get(base, [1]), HELPERS, None
+    for special, obligation, mode, units, value in SPECIAL_OBSERVERS:
+        if name == special:
+            return obligation, [1], [], observer_expectations(
+                CREATE_TARGET, mode, nested_units=units, callback_value=value)
+    raise VerificationError(f"manifest: unknown frozen case {name}")
 
 
 class VerificationError(Exception):
@@ -216,7 +245,8 @@ def observer_account(alloc, address, expected_code, label):
     quantity(value["nonce"], label + " nonce"); quantity(value["balance"], label + " balance")
 
 
-def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers, observer):
+def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers, observer,
+                 counts, receipts):
     doc = read_json(path)
     expected_key = f"blanc/drip::{expected_name}[fork_BPO2-blockchain_test]"
     require(set(doc) == {expected_key}, f"{path.name}: exact case key differs")
@@ -229,13 +259,28 @@ def fixture_case(path, expected_name, runtime, creation, deployment, target, hel
     require(HEX.fullmatch(case["lastblockhash"] or "") and len(case["lastblockhash"]) == 66, f"{path.name}: tip hash malformed")
     blocks = case["blocks"]
     require(isinstance(blocks, list) and blocks, f"{path.name}: no checked blocks")
-    numbers = []; timestamps = []; bodies = []
+    numbers = []; timestamps = []; bodies = []; actual_counts = []
     for index, block in enumerate(blocks):
         require(isinstance(block, dict) and set(block) == {"rlp", "blocknumber"}, f"{path.name}: block {index} shape differs")
         timestamp, txs = decode_block(block["rlp"], f"{path.name}: block {index}")
         require(isinstance(block["blocknumber"], str) and block["blocknumber"].isdigit(), f"{path.name}: block number malformed")
         numbers.append(int(block["blocknumber"]))
         timestamps.append(timestamp); bodies.extend(txs)
+        actual_counts.append(len(txs))
+        previous = 0
+        offset = len(bodies) - len(txs)
+        require(offset + len(txs) <= len(receipts), f"{path.name}: transaction/receipt count differs")
+        for tx_index, (tx, receipt) in enumerate(zip(txs, receipts[offset:])):
+            require(isinstance(tx, list) and len(tx) == 9 and all(isinstance(x, bytes) for x in tx),
+                    f"{path.name}: transaction {offset + tx_index} is not legacy signed RLP")
+            cumulative = quantity(receipt["cumulativeGasUsed"], path.name + " cumulative gas")
+            used = quantity(receipt["gasUsed"], path.name + " gas")
+            require(cumulative > previous and cumulative - previous == used,
+                    f"{path.name}: receipt cumulative gas delta differs")
+            require(used < int.from_bytes(tx[2], "big"), f"{path.name}: receipt gas exceeds finite transaction bound")
+            previous = cumulative
+    require(actual_counts == counts and len(bodies) == len(receipts),
+            f"{path.name}: frozen block transaction/receipt count differs")
     require(numbers == sorted(numbers) and len(numbers) == len(set(numbers)), f"{path.name}: linked block numbers do not strictly increase")
     require(timestamps == sorted(timestamps) and len(timestamps) == len(set(timestamps)), f"{path.name}: linked timestamps do not strictly increase")
     require(bodies, f"{path.name}: no serialized transactions")
@@ -295,28 +340,56 @@ def verify(directory: Path):
         name = row["name"]
         require(isinstance(name, str) and name not in by_obligation, "manifest: duplicate obligation")
         require(isinstance(row["fixtures"], list) and row["fixtures"] and all(isinstance(x, str) and x.endswith(".json") for x in row["fixtures"]), f"manifest: {name} has no fixture references")
-        require(isinstance(row["requiredAssertions"], list) and row["requiredAssertions"] and all(isinstance(x, str) and x for x in row["requiredAssertions"]), f"manifest: {name} has no observation channels")
+        expected_assertions = ASSERTIONS + (["returndata bytes/size and ordered observer logs"]
+                                            if name == MATRIX_OBLIGATION else [])
+        require(row["requiredAssertions"] == expected_assertions, f"manifest: {name} observation channels differ")
+        require(len(row["fixtures"]) == len(set(row["fixtures"])), f"manifest: {name} duplicate fixture reference")
         by_obligation[name] = row
     require(tuple(by_obligation) == OBLIGATIONS, "manifest: frozen obligation names/order differ")
     cases = manifest["cases"]
     require(isinstance(cases, list) and cases, "manifest: empty case map")
     case_by_file = {}
     observer_obligations = set()
+    seen_names = set()
     for row in cases:
         require(isinstance(row, dict), "manifest: case row is not object")
         required_case = {"name", "obligation", "steps", "executionEvidence", "fixture", "receiptGas"}
         require(required_case <= set(row) <= required_case | {"target", "creationCodeSha256", "observer", "observerHelpers"}, "manifest: unsupported case fields")
         name, obligation, filename = row["name"], row["obligation"], row["fixture"]
         require(isinstance(name, str) and name and isinstance(filename, str) and filename.endswith(".json"), "manifest: case name/fixture malformed")
+        require(name not in seen_names, "manifest: duplicate case name")
+        seen_names.add(name)
+        require(filename == name + ".json", f"manifest: {name} filename differs")
+        expected_obligation, counts, expected_helpers, expected_observer = case_policy(name)
+        require(obligation == expected_obligation, f"manifest: {name} frozen primary obligation differs")
+        require(row.get("observerHelpers", []) == expected_helpers
+                and ("observerHelpers" in row) == bool(expected_helpers),
+                f"manifest: {name} frozen observer helpers differ")
+        require(row.get("observer") == expected_observer
+                and ("observer" in row) == (expected_observer is not None),
+                f"manifest: {name} frozen observer metadata differs")
+        require(("creationCodeSha256" in row) == (name == "deployment-genesis"),
+                f"manifest: {name} creation metadata ownership differs")
         require(obligation in by_obligation and filename not in case_by_file, "manifest: unknown obligation or duplicate fixture")
-        require(row["executionEvidence"] is True and isinstance(row["steps"], int) and row["steps"] > 0, f"manifest: {name} has unexecuted/zero steps")
+        require(row["executionEvidence"] is True and type(row["steps"]) is int
+                and row["steps"] == sum(counts), f"manifest: {name} frozen step count differs")
         receipts = row["receiptGas"]
         require(isinstance(receipts, list) and len(receipts) == row["steps"], f"manifest: {name} receipt observations unbound")
         for receipt in receipts:
             require(isinstance(receipt, dict) and set(receipt) == {"status", "cumulativeGasUsed", "gasUsed", "logs"}, f"manifest: {name} receipt shape differs")
             require(quantity(receipt["gasUsed"], name + " gas") > 0 and isinstance(receipt["logs"], list), f"manifest: {name} has zero/malformed receipt observation")
+            require(quantity(receipt["status"], name + " status") in (0, 1), f"manifest: {name} receipt status differs")
+            quantity(receipt["cumulativeGasUsed"], name + " cumulative gas")
+            for log in receipt["logs"]:
+                require(isinstance(log, dict) and set(log) == {"address", "topics", "data"}, f"manifest: {name} log shape differs")
+                require(isinstance(log["address"], str) and re.fullmatch(r"0x[0-9a-fA-F]{40}", log["address"]), f"manifest: {name} log address differs")
+                require(isinstance(log["topics"], list) and len(log["topics"]) <= 4
+                        and all(isinstance(x, str) and re.fullmatch(r"0x[0-9a-fA-F]{64}", x) for x in log["topics"]),
+                        f"manifest: {name} log topics differ")
+                require(isinstance(log["data"], str) and HEX.fullmatch(log["data"]), f"manifest: {name} log data differs")
         deployment = name == "deployment-genesis"
         expected_target = CREATE_TARGET if deployment or name.endswith("-observer") else TARGET
+        require(isinstance(row.get("target", TARGET), str), f"manifest: {name} target malformed")
         target = row.get("target", TARGET).lower()
         if deployment:
             require(row.get("creationCodeSha256") == hashlib.sha256(creation).hexdigest() and isinstance(row.get("target"), str), "manifest: CREATE binding absent")
@@ -345,8 +418,10 @@ def verify(directory: Path):
         require(name in observer_obligations, f"manifest: {name} lacks observer evidence")
     disk = {path.name for path in directory.glob("*.json") if path.name != "manifest.json"}
     require(disk == set(case_by_file), f"fixture population mismatch: missing={sorted(set(case_by_file)-disk)}, orphaned={sorted(disk-set(case_by_file))}")
+    rows_by_file = {row["fixture"]: row for row in cases}
     for filename, (name, deployment, target, helpers, observer) in case_by_file.items():
-        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers, observer)
+        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers, observer,
+                     case_policy(name)[1], rows_by_file[filename]["receiptGas"])
     return len(case_by_file), sum(row["steps"] for row in cases)
 
 
