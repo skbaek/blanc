@@ -368,7 +368,9 @@ new census; refreshing hashes alone is not acceptance.
 
 Preview performs read-only repeated validation. Execution and receipt verification
 acquire the unchanged canonical host-global heavy gate lock, both timing report
-locks and the common-repository selective-run mutex. Execution stages exact bytes,
+locks and the common-repository selective-run mutex. Use the host-guidance
+approved command context with full process visibility; a sandbox-limited PID
+lookup is not evidence that another owner exited. Execution stages exact bytes,
 then uses no-clobber atomic hard links for a receipt and baseline; a separate
 completion marker is published only after post-transfer validation. Every
 accepted operation revalidates source, target, baseline and target certificate.

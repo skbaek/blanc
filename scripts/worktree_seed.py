@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 
 class SeedRefusal(RuntimeError):
-    """A precondition or post-copy validation failed; no state was published."""
+    """A precondition or operation validation failed; publication is not accepted."""
 
 
 def load_gate_cache(script_dir: Path):
