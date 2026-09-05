@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import importlib.util
 import json
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,189 @@ CACHE_KEY = (
     "${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}"
 )
 LEAN_ACTION = "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596"
+
+
+# Reviewed against the exact parent action and Lake v4.32.1 source. This is a
+# finite source census, not a parser for arbitrary executable Lake configuration.
+# A new config/toolchain must recensus all three selectors and their command
+# closure; never refresh these identities solely to silence this check.
+# Semantics: lean4 f054605aea4b840552cca2e725580bffd1e1b704,
+# Lake/CLI/Main.lean checkTest/checkLint and Lake/Load/Package.lean loadPackage.
+DRIVER_CENSUS_INPUTS = {
+    "lakefile.lean": "d63db64fc08c056576255d189b301a87f5370f43eb411e358a73a00dc4d188de",
+    "lean-toolchain": "8e3538e0ab5f81a3ee04927d8838c8c674e0e112838b4b3ce87ec218143276af",
+}
+LEAN_ACTION_DEFAULTS = {
+    "auto-config": "true",
+    "build": "default",
+    "test": "default",
+    "lint": "default",
+    "mk_all-check": "false",
+    "mk_all-args": "",
+    "build-args": "",
+    "test-args": "",
+    "lint-args": "",
+    "use-mathlib-cache": "auto",
+    "check-reservoir-eligibility": "false",
+    "leanchecker": "false",
+    "leanchecker-args": "",
+    "lean4checker": "false",
+    "nanoda": "false",
+    "nanoda-allow-sorry": "true",
+    "axiom-audit": "false",
+    "axiom-audit-allow": "propext,Classical.choice,Quot.sound",
+    "axiom-audit-root": "",
+    "use-github-cache": "true",
+    "lake-package-directory": ".",
+    "reinstall-transient-toolchain": "false"
+}
+LEAN_ACTION_SOURCES = {
+    "action.yml": "fc84f80c727491fc3ef2944c7d6a1992b50c0ed807b979e431c42f48c60365f0",
+    "scripts/check_reservoir_eligibility.sh": "5455fd8c5308ef129e1cf1ee550d584b3c6615bc423da825c90d649d029234d6",
+    "scripts/config.sh": "22fe5bc8c381f61c2730c3a98c88c4ca2169aee6f31d2ae2efc956c803140b2e",
+    "scripts/detect_mathlib.sh": "dc1df2f489b5ee93bcecc74744a8109c4b6c5e49a5f8b8a4d1df7da4ce4ee82b",
+    "scripts/install_elan.sh": "e59f4e4b7f719ee16e1ceb49d06fbcc200cc75e6928d050f3eccf4e4341c63a5",
+    "scripts/lake_build.sh": "953107e7e493fcf8052a55d2132a9f469b7ea884fbd30ca0ef3a1c962c32c03c",
+    "scripts/lake_lint.sh": "e8063db794e83a18955d03b77fcff5d6e2fae8249273617b9ff83a483ed8ca8a",
+    "scripts/lake_test.sh": "761fa5ad4f9de4a918d6783ce08a5491124ed3a6d6526cd63fd417e2edcf6372",
+    "scripts/mk_all_check.sh": "e79d6636df9371ba57eb5b4acbb60e730f8f665bf2978f1e906936f58bacf0ee",
+    "scripts/run_axiom_audit.sh": "d1198185bf9171bf311cd88581a05050e69a63ae36474a2a652a05b407120748",
+    "scripts/run_leanchecker.sh": "90f634a5913b0e33b8547e90770f031f9f78bdd4167b3032689b62e3456d476f",
+    "scripts/run_nanoda.sh": "eaec1d9520d322cc77f762e063ec301f5cd61e90af54b67a85b1ff66ae09c616",
+    "scripts/set_output_parameters.sh": "363cfe7a5eb0d7aa2cc26633cf661dfb3b483cab80ef41323fd630542525156d",
+    "scripts/step_summaries/lake_check_error.md": "060795d02bb12be8b479e76b431c5b95c7f079db176ceccb8384b800451320bf"
+}
+LEAN_ACTION_STEPS = [
+    {
+        "ordinal": 1,
+        "label": "name: install elan",
+        "condition": "default success()",
+        "action_owned_scripts": [
+            "scripts/install_elan.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 2,
+        "label": "name: configure `lean-action`",
+        "condition": "default success()",
+        "action_owned_scripts": [
+            "scripts/config.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 3,
+        "label": "name: reinstall transient toolchain",
+        "condition": "${{ inputs.reinstall-transient-toolchain == 'true' }}",
+        "action_owned_scripts": [],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 4,
+        "label": "name: ensure all files are imported",
+        "condition": "${{ inputs.mk_all-check == 'true'}}",
+        "action_owned_scripts": [
+            "scripts/mk_all_check.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 5,
+        "label": "uses: actions/cache/restore@v5",
+        "condition": "${{ inputs.use-github-cache == 'true' }}",
+        "action_owned_scripts": [],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 6,
+        "label": "name: detect mathlib",
+        "condition": "${{ inputs.use-mathlib-cache == 'auto' }}",
+        "action_owned_scripts": [
+            "scripts/detect_mathlib.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 7,
+        "label": "name: get mathlib cache",
+        "condition": "${{ steps.detect-mathlib.outputs.detected-mathlib == 'true' || inputs.use-mathlib-cache == 'true' }}",
+        "action_owned_scripts": [],
+        "direct_lake_lines": [
+            "lake exe cache get"
+        ]
+    },
+    {
+        "ordinal": 8,
+        "label": "name: build ${{ github.repository }}",
+        "condition": "${{ steps.config.outputs.run-lake-build == 'true'}}",
+        "action_owned_scripts": [
+            "scripts/lake_build.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 9,
+        "label": "uses: actions/cache/save@v5",
+        "condition": "${{ inputs.use-github-cache == 'true' }}",
+        "action_owned_scripts": [],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 10,
+        "label": "name: test ${{ github.repository }}",
+        "condition": "${{ steps.config.outputs.run-lake-test == 'true'}}",
+        "action_owned_scripts": [
+            "scripts/lake_test.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 11,
+        "label": "name: lint ${{ github.repository }}",
+        "condition": "${{ steps.config.outputs.run-lake-lint == 'true'}}",
+        "action_owned_scripts": [
+            "scripts/lake_lint.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 12,
+        "label": "name: check reservoir eligibility",
+        "condition": "${{ inputs.check-reservoir-eligibility == 'true' }}",
+        "action_owned_scripts": [
+            "scripts/check_reservoir_eligibility.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 13,
+        "label": "name: check environment with leanchecker",
+        "condition": "${{ inputs.leanchecker == 'true' || inputs.lean4checker == 'true' }}",
+        "action_owned_scripts": [
+            "scripts/run_leanchecker.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 14,
+        "label": "name: check environment with nanoda",
+        "condition": "${{ inputs.nanoda == 'true' }}",
+        "action_owned_scripts": [
+            "scripts/run_nanoda.sh"
+        ],
+        "direct_lake_lines": []
+    },
+    {
+        "ordinal": 15,
+        "label": "name: audit axioms with axiom-audit",
+        "condition": "${{ inputs.axiom-audit == 'true' }}",
+        "action_owned_scripts": [
+            "scripts/run_axiom_audit.sh"
+        ],
+        "direct_lake_lines": []
+    }
+]
 
 REQUIRED_GATE_IDS = [
     "doc-counts",
@@ -312,7 +497,8 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
             "name": "Build Blanc and the Jaune fixture runner once",
             "kind": "action",
             "uses": LEAN_ACTION,
-            "with": {"build": "true", "build-args": "Blanc Blanc.ProofRecipeTactic jaune/jaune",
+            "with": {"auto-config": "true", "test": "default", "lint": "default",
+                     "build": "true", "build-args": "Blanc Blanc.ProofRecipeTactic jaune/jaune",
                      "use-github-cache": "${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_build) }}"},
         },
         "save-cold-build": {
@@ -333,7 +519,10 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
             "kind": "action",
             "uses": LEAN_ACTION,
             "with": {
+                "auto-config": "true",
                 "build": "false",
+                "test": "false",
+                "lint": "false",
                 "use-github-cache": "false",
                 "use-mathlib-cache": "false",
             },
@@ -592,7 +781,10 @@ def topology_problems(
             (step for step in job["steps"] if step.get("id") == "install-toolchain"), None
         )
         if not toolchain or toolchain.get("with") != {
+            "auto-config": "true",
             "build": "false",
+            "test": "false",
+            "lint": "false",
             "use-github-cache": "false",
             "use-mathlib-cache": "false",
         }:
@@ -797,6 +989,9 @@ def validate() -> tuple[
     except Exception as error:  # registry parser already supplies exact failure text
         raise PolicyError(f"cannot load gate registry: {error}") from error
     problems = topology_problems(topology, registry, policy)
+    problems.extend(driver_census_problems(ROOT))
+    problems.extend(action_source_census_problems(
+        LEAN_ACTION_DEFAULTS, LEAN_ACTION_SOURCES, LEAN_ACTION_STEPS))
     try:
         actual = parse_workflow()
     except PolicyError as error:
@@ -804,6 +999,108 @@ def validate() -> tuple[
     else:
         problems.extend(workflow_problems(expected_workflow(topology, registry), actual))
     return policy, topology, registry, problems
+
+
+def driver_census_problems(root: Path) -> list[str]:
+    """Fail before setup if the reviewed root-only driver proof no longer applies."""
+    problems = []
+    for path, expected in DRIVER_CENSUS_INPUTS.items():
+        try:
+            actual = hashlib.sha256((root / path).read_bytes()).hexdigest()
+        except OSError as error:
+            problems.append(f"action driver census cannot read {path}: {error}")
+            continue
+        if actual != expected:
+            problems.append(
+                f"action driver census stale for {path}; review testDriver/test_driver, "
+                "lintDriver/lint_driver and builtinLint with the selected Lake implementation; "
+                "classify every new command and retain its producer assurance owner"
+            )
+    if (root / "lakefile.toml").exists():
+        problems.append("action driver census has an unreviewed alternate lakefile.toml")
+    return problems
+
+
+def action_source_census_problems(defaults, sources, steps) -> list[str]:
+    """Hold the normalized extraction against the independently verified action bytes."""
+    problems = []
+    for label, data, expected in [
+        ("defaults", defaults, "206feb72ec15a70dfbb22521c8c69be3b891cfa426e97040df1c9084ba3dd85b"),
+        ("sources", sources, "cf49d40c99793a349522d0e8b4fabfa068912014ada79925d6232661c1fc9207"),
+        ("steps", steps, "71a71879c93dffdafec8a693000ddfe6be8bf070ca22e9dc9ef34eb5ff8bf69f"),
+    ]:
+        actual = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if actual != expected:
+            problems.append(f"pinned action {label} census moved; re-extract and review upstream command ownership")
+    return problems
+
+
+def action_census(topology: dict[str, Any]) -> dict[str, Any]:
+    """Expand the reviewed parent action; external implementations remain explicit."""
+    invocations = []
+    for job in topology["jobs"]:
+        for step in job["steps"]:
+            if step.get("uses") != LEAN_ACTION:
+                continue
+            producer = step["id"] == "full-build"
+            inputs = LEAN_ACTION_DEFAULTS | step.get("with", {})
+            # This classification is valid only after validate has accepted the
+            # exact topology, Lake config and toolchain. No unknown-driver fallback.
+            selection = {
+                1: "selected: install Elan, lean --version, lake --version",
+                2: ("selected: lake check-test and lake check-lint (both absent)"
+                    if producer else "selected: configuration only; no Lake driver probes"),
+                3: "disabled: reinstall-transient-toolchain=false",
+                4: "disabled: mk_all-check=false",
+                5: ("ordinary only: GitHub restore with same-toolchain/manifest fallback"
+                    if producer else "disabled: use-github-cache=false"),
+                6: ("selected: inspect lake-manifest.json for Mathlib URL"
+                    if producer else "disabled: use-mathlib-cache=false"),
+                7: ("conditional: lake exe cache get when the manifest detector matches; "
+                    "also enabled in cold_build" if producer else "disabled: use-mathlib-cache=false"),
+                8: ("selected: lake build Blanc Blanc.ProofRecipeTactic jaune/jaune"
+                    if producer else "disabled: build=false"),
+                9: ("ordinary only: save successful exact GitHub build cache"
+                    if producer else "disabled: use-github-cache=false"),
+                10: ("absent on reviewed root; automatic producer owner for future reviewed driver"
+                     if producer else "disabled: test=false; assurance owner is producer"),
+                11: ("absent on reviewed root, including built-in lint; automatic producer owner"
+                     if producer else "disabled: lint=false; assurance owner is producer"),
+                12: "disabled: check-reservoir-eligibility=false",
+                13: "disabled: leanchecker=false and lean4checker=false",
+                14: "disabled: nanoda=false",
+                15: "disabled: axiom-audit=false; registered Blanc axiom audit is unchanged",
+            }
+            invocations.append({
+                "job": job["id"], "step": step["id"], "effective_inputs": inputs,
+                "driver_owner": "build/full-build",
+                "steps": [dict(row, selection=selection[row["ordinal"]],
+                               execution_surface=job["surface"],
+                               purpose=("build-proof" if row["ordinal"] in (7, 8) else
+                                        "compiled-semantic-regression" if row["ordinal"] == 10 else
+                                        "required-per-change-trust" if row["ordinal"] in (4, 11, 13, 14, 15) else
+                                        "release-eligibility" if row["ordinal"] == 12 else "infrastructure"),
+                               input_authority="effective_inputs, reviewed root selectors, pinned action sources",
+                               prerequisite="previous selected steps succeeded",
+                               expected_cost="hosted measurement required")
+                          for row in LEAN_ACTION_STEPS],
+            })
+    return {
+        "parent_action": LEAN_ACTION,
+        "source_sha256": LEAN_ACTION_SOURCES,
+        "source_base": "https://raw.githubusercontent.com/" + LEAN_ACTION.replace("@", "/") + "/",
+        "reviewed_driver_inputs": DRIVER_CENSUS_INPUTS,
+        "root_selectors": {"testDriver": "", "lintDriver": "", "builtinLint?": None},
+        "selection_basis": "Lake v4.32.1 checkTest/checkLint loadPackage: root only, no dependencies",
+        "invocations": invocations,
+        "boundaries": [
+            "Source census, not hosted runtime or a general shell call graph.",
+            "Elan master installer and nested actions/cache@v5 implementations are mutable external inputs.",
+            "Mathlib cache get can build its cache executable, download and unpack artifacts; it is producer work, not a gate verdict.",
+            "cold_build excludes GitHub build-cache restore, not Mathlib downloads or every Lake artifact cache.",
+            "New root config, toolchain, drivers or optional action inputs require a new command/cost census before acceptance.",
+        ],
+    }
 
 
 def audit(arguments: argparse.Namespace) -> int:
@@ -852,6 +1149,7 @@ def audit(arguments: argparse.Namespace) -> int:
         "topology": "scripts/ci-topology.json",
         "full_build_count": 1,
         "artifact_transfer": "exact-commit-cache-fail-closed",
+        "action_census": action_census(topology),
         "reasons": reasons,
         "selected": selected,
     }
@@ -875,6 +1173,9 @@ def self_test() -> int:
     gate_cache = load_gate_cache()
     registry = gate_cache.load_registry(gate_cache.registry_path(ROOT))
     baseline = topology_problems(topology, registry, policy)
+    baseline.extend(driver_census_problems(ROOT))
+    baseline.extend(action_source_census_problems(
+        LEAN_ACTION_DEFAULTS, LEAN_ACTION_SOURCES, LEAN_ACTION_STEPS))
     if baseline:
         raise PolicyError("production topology baseline is invalid: " + "; ".join(baseline))
     expected = expected_workflow(topology, registry)
@@ -898,6 +1199,17 @@ def self_test() -> int:
                 if step["id"] == identifier:
                     return job, step
         raise PolicyError(f"self-test cannot find step {identifier}")
+
+    changed_defaults = dict(LEAN_ACTION_DEFAULTS, nanoda="true")
+    changed_sources = dict(LEAN_ACTION_SOURCES)
+    del changed_sources["scripts/config.sh"]
+    changed_steps = [row for row in LEAN_ACTION_STEPS if row["ordinal"] != 10]
+    for values in [(changed_defaults, LEAN_ACTION_SOURCES, LEAN_ACTION_STEPS),
+                   (LEAN_ACTION_DEFAULTS, changed_sources, LEAN_ACTION_STEPS),
+                   (LEAN_ACTION_DEFAULTS, LEAN_ACTION_SOURCES, changed_steps)]:
+        if not action_source_census_problems(*values):
+            raise PolicyError("transitive default/source/step omission escaped its census")
+        controls += 1
 
     changed = copy.deepcopy(topology)
     _, step = find_step(changed, "doc-counts")
@@ -960,6 +1272,64 @@ def self_test() -> int:
     _, step = find_step(changed, "install-toolchain")
     step["with"]["build"] = "true"
     check_rejected("downstream rebuild", changed, "can rebuild or admit fallback")
+
+    # Test every consumer, not only the first matching infrastructure id. An
+    # omitted explicit-off input reactivates independent upstream discovery.
+    for consumer in ("execution-semantic", "contract-semantic", "deployment-fixtures"):
+        for driver in ("test", "lint"):
+            for value in (None, "true"):
+                changed = copy.deepcopy(topology)
+                job = next(item for item in changed["jobs"] if item["id"] == consumer)
+                step = next(item for item in job["steps"] if item["id"] == "install-toolchain")
+                if value is None:
+                    del step["with"][driver]
+                else:
+                    step["with"][driver] = value
+                check_rejected(f"{consumer} automatic {driver}", changed, "infrastructure step")
+
+    for field in ("auto-config", "test", "lint"):
+        changed = copy.deepcopy(topology)
+        _, step = find_step(changed, "full-build")
+        step["with"][field] = "false"
+        check_rejected(f"missing producer {field} assurance owner", changed, "infrastructure step")
+
+    for field in ("mk_all-check", "check-reservoir-eligibility", "leanchecker", "lean4checker",
+                  "nanoda", "axiom-audit", "reinstall-transient-toolchain"):
+        changed = copy.deepcopy(topology)
+        _, step = find_step(changed, "install-toolchain")
+        step["with"][field] = "true"
+        check_rejected(f"unowned transitive action work: {field}", changed, "infrastructure step")
+
+    with tempfile.TemporaryDirectory(prefix="blanc-ci-driver-census-") as temporary:
+        root = Path(temporary)
+        original = {path: (ROOT / path).read_bytes() for path in DRIVER_CENSUS_INPUTS}
+        for path, data in original.items():
+            (root / path).write_bytes(data)
+        for label, path, data in [
+            ("test driver", "lakefile.lean", original["lakefile.lean"].replace(
+                b"package \xc2\xabblanc\xc2\xbb where", b"package \xc2\xabblanc\xc2\xbb where\n  testDriver := \"blanc\"")),
+            ("lint driver", "lakefile.lean", original["lakefile.lean"].replace(
+                b"package \xc2\xabblanc\xc2\xbb where", b"package \xc2\xabblanc\xc2\xbb where\n  lintDriver := \"blanc\"")),
+            ("built-in lint", "lakefile.lean", original["lakefile.lean"].replace(
+                b"package \xc2\xabblanc\xc2\xbb where", b"package \xc2\xabblanc\xc2\xbb where\n  builtinLint := some true")),
+            ("imported configuration", "lakefile.lean", b"import DriverConfig\n" + original["lakefile.lean"]),
+            ("toolchain semantics", "lean-toolchain", b"leanprover/lean4:v4.33.0\n"),
+            ("missing config", "lakefile.lean", None),
+            ("alternate config", "lakefile.toml", b'name = "blanc"\n'),
+        ]:
+            if data is None:
+                (root / path).unlink()
+            else:
+                (root / path).write_bytes(data)
+            if not driver_census_problems(root):
+                raise PolicyError(f"{label} escaped the source census")
+            if path in original:
+                (root / path).write_bytes(original[path])
+            else:
+                (root / path).unlink()
+            if driver_census_problems(root):
+                raise PolicyError(f"{label} did not restore green after removing only the mutation")
+            controls += 1
 
     changed = copy.deepcopy(topology)
     job, step = find_step(changed, "recipe-base")

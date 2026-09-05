@@ -378,8 +378,20 @@ shared `Blanc Blanc.ProofRecipeTactic jaune/jaune` build. The trusted manual
 its successful output explicitly; upstream Mathlib cache remains available.
 Semantic lanes restore only that exact
 candidate cache with fail-on-miss behavior and configure their Lean action with
-building and fallback caches disabled. The policy pins one full build and
-rejects a duplicate, partial, permissive, or previous-commit restore.
+building, test/lint discovery and fallback caches disabled. Automatic test/lint
+discovery belongs to the producer alone. On the reviewed Lake v4.32.1 root,
+`testDriver` and `lintDriver` are empty and `builtinLint?` is `none`; the two
+driver probes load only the root package, so dependency drivers do not run.
+The policy fails before setup if the reviewed root configuration or toolchain
+moves. A legitimate new driver requires a fresh census of its commands,
+prerequisites, costs and assurance owner; never refresh the census identities
+merely to silence drift. The producer keeps automatic discovery for that future
+reviewed driver. The audit output expands all 15 pinned parent-action steps,
+22 input defaults and four invocations, including disabled optional tools and
+the Mathlib cache executable/download path. This source census does not freeze
+the external Elan installer or nested cache-action implementation, and does not
+replace hosted cache/timing evidence. The policy pins one explicit full build
+and rejects a duplicate, partial, permissive, or previous-commit restore.
 `scripts/ci_gate_policy.py` audits every named action/command as well as every
 gate, and this catalogue audit repeats its trust/dependency controls. CI
 therefore gains an explicit, complete selection record without treating local

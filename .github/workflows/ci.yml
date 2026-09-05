@@ -150,6 +150,9 @@ jobs:
       - name: Build Blanc and the Jaune fixture runner once
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
+          auto-config: true
+          test: default
+          lint: default
           build: true
           build-args: Blanc Blanc.ProofRecipeTactic jaune/jaune
           use-github-cache: ${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_build) }}
@@ -179,6 +182,9 @@ jobs:
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
+          auto-config: true
+          test: false
+          lint: false
           build: false
           use-github-cache: false
           use-mathlib-cache: false
@@ -212,6 +218,9 @@ jobs:
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
+          auto-config: true
+          test: false
+          lint: false
           build: false
           use-github-cache: false
           use-mathlib-cache: false
@@ -255,6 +264,9 @@ jobs:
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
+          auto-config: true
+          test: false
+          lint: false
           build: false
           use-github-cache: false
           use-mathlib-cache: false
