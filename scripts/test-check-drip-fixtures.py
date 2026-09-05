@@ -9,6 +9,8 @@ import json
 import tempfile
 from pathlib import Path
 
+from drip_fixture_observers import observer_code
+
 HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("drip_fixture_verifier", HERE / "check-drip-fixtures.py")
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -26,6 +28,12 @@ def enc(x):
     if len(payload) < 56: return bytes([base + len(payload)]) + payload
     size = len(payload).to_bytes((len(payload).bit_length()+7)//8, "big")
     return bytes([base + 55 + len(size)]) + size + payload
+
+
+def block_rlp(destination, calldata):
+    return "0x" + enc([[b""] * 11 + [b"\x01"],
+                        [[b"", b"\x01", b"\x01", destination, b"", calldata,
+                          b"%", b"\x01", b"\x01"]], [], []]).hex()
 
 
 def population(root):
@@ -46,15 +54,15 @@ def population(root):
         helpers = ["0x000000000000000000000000000000000000d220"] if name.startswith("observer-") else []
         pre = {} if deployment else {MODULE.TARGET: copy.deepcopy(account)}
         for helper in helpers:
-            pre[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x" + MODULE.TARGET[2:], "storage": {}}
+            pre[helper] = {"nonce": "0x00", "balance": "0x00", "code": observer_code(MODULE.TARGET), "storage": {}}
         post = {MODULE.TARGET: copy.deepcopy(account)}
         for helper in helpers:
-            post[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x" + MODULE.TARGET[2:], "storage": {}}
+            post[helper] = {"nonce": "0x00", "balance": "0x00", "code": observer_code(MODULE.TARGET), "storage": {}}
         doc = {f"blanc/drip::{name}[fork_BPO2-blockchain_test]": {
             "network": "BPO2", "genesisBlockHeader": {}, "pre": pre,
             "postState": post, "lastblockhash": "0x" + "11" * 32,
             "config": {"network": "BPO2"}, "genesisRLP": "0x01",
-            "blocks": [{"rlp": "0x" + enc([[b""]*11+[b"\x01"], [[b"", b"\x01", b"\x01", b"" if deployment else bytes.fromhex(MODULE.TARGET[2:]), b"", creation if deployment else b"\x01", b"%", b"\x01", b"\x01"]], [], []]).hex(), "blocknumber": "1"}], "sealEngine": "NoProof",
+            "blocks": [{"rlp": block_rlp(b"" if deployment else bytes.fromhex((helpers[0] if helpers else MODULE.TARGET)[2:]), creation if deployment else b"\x01"), "blocknumber": "1"}], "sealEngine": "NoProof",
         }}
         write(root / filename, doc)
         row = {"name": name, "obligation": obligation, "steps": 1, "executionEvidence": True,
@@ -103,8 +111,23 @@ def main():
         def corrupt_observation(p):
             path = p / "manifest.json"; value = json.loads(path.read_text()); value["cases"][1]["receiptGas"] = []; write(path, value)
         population(root); must_reject(root, "observation", "receipt observations unbound", corrupt_observation)
+        def wrong_observer_recipe(p):
+            path = p / "observer-exit-zero-unit-call.json"; value = json.loads(path.read_text()); case = next(iter(value.values()))
+            case["pre"]["0x000000000000000000000000000000000000d220"]["code"] = "0x" + MODULE.TARGET[2:]
+            write(path, value)
+        population(root); must_reject(root, "observer recipe", "observer code/target binding differs", wrong_observer_recipe)
+        def observer_bypass(p):
+            path = p / "observer-exit-zero-unit-call.json"; value = json.loads(path.read_text()); case = next(iter(value.values()))
+            case["blocks"][0]["rlp"] = block_rlp(bytes.fromhex(MODULE.TARGET[2:]), b"\x01")
+            write(path, value)
+        population(root); must_reject(root, "observer bypass", "destination differs", observer_bypass)
+        def wrong_create_literal(p):
+            path = p / "deployment-genesis.json"; value = json.loads(path.read_text()); case = next(iter(value.values()))
+            case["blocks"][0]["rlp"] = block_rlp(b"", b"\x02")
+            write(path, value)
+        population(root); must_reject(root, "CREATE literal", "CREATE transaction binding", wrong_create_literal)
         population(root); MODULE.verify(root)
-    print("OK — DRIP fixture verifier controls: valid shape plus runtime, missing, orphan, obligation, target, and observation corruptions rejected")
+    print("OK — DRIP fixture verifier controls: exact observer recipe/destination and CREATE literal plus schema corruptions rejected")
 
 
 if __name__ == "__main__":

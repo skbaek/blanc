@@ -17,6 +17,8 @@ import re
 import sys
 from pathlib import Path
 
+from drip_fixture_observers import observer_code, observer_expectations
+
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "0x000000000000000000000000000000000000d219"
 OBLIGATIONS = (
@@ -133,7 +135,34 @@ def account(alloc, address, runtime, label):
     return value
 
 
-def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers):
+def observer_metadata(value, target, label):
+    """Validate metadata separately from the bytecode it describes."""
+    if value is None:
+        return "ordinary", 1
+    require(isinstance(value, dict), f"{label}: observer metadata malformed")
+    mode = value.get("mode")
+    units = value.get("nestedUnits")
+    callback = value.get("callback")
+    require(mode in ("ordinary", "reenter", "reject-after-reentry"), f"{label}: observer mode differs")
+    require(type(units) is int and units > 0, f"{label}: observer nested units differ")
+    require(isinstance(callback, dict) and type(callback.get("value")) is int, f"{label}: observer callback differs")
+    expected = observer_expectations(target, mode, nested_units=units, callback_value=callback["value"])
+    require(value == expected, f"{label}: observer metadata differs")
+    return mode, units
+
+
+def observer_account(alloc, address, expected_code, label):
+    require(isinstance(address, str) and re.fullmatch(r"0x[0-9a-f]{40}", address), f"{label}: observer helper malformed")
+    matches = [(key, value) for key, value in alloc.items() if key.lower() == address]
+    require(len(matches) == 1 and isinstance(matches[0][1], dict), f"{label}: observer helper absent or duplicated")
+    value = matches[0][1]
+    require(set(value) == {"nonce", "balance", "code", "storage"}, f"{label}: observer helper keys differ")
+    require(value["code"] == expected_code, f"{label}: observer code/target binding differs")
+    require(isinstance(value["storage"], dict), f"{label}: observer helper storage malformed")
+    quantity(value["nonce"], label + " nonce"); quantity(value["balance"], label + " balance")
+
+
+def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers, observer):
     doc = read_json(path)
     expected_key = f"blanc/drip::{expected_name}[fork_BPO2-blockchain_test]"
     require(set(doc) == {expected_key}, f"{path.name}: exact case key differs")
@@ -156,6 +185,21 @@ def fixture_case(path, expected_name, runtime, creation, deployment, target, hel
     require(numbers == sorted(numbers) and len(numbers) == len(set(numbers)), f"{path.name}: linked block numbers do not strictly increase")
     require(timestamps == sorted(timestamps) and len(timestamps) == len(set(timestamps)), f"{path.name}: linked timestamps do not strictly increase")
     require(bodies, f"{path.name}: no serialized transactions")
+    mode, nested_units = observer_metadata(observer, target, path.name)
+    expected_observer_code = observer_code(target, mode, nested_units=nested_units)
+    require(isinstance(helpers, list) and all(isinstance(x, str) and re.fullmatch(r"0x[0-9a-f]{40}", x)
+                                                for x in helpers), f"{path.name}: observer helpers malformed")
+    helper_addresses = {x.lower() for x in helpers}
+    require(len(helper_addresses) == len(helpers), f"{path.name}: duplicate observer helper")
+    if observer is not None and not helper_addresses:
+        # The special observer case records its recipe metadata but its schema
+        # predates observerHelpers. Bind its transaction to the sole account
+        # carrying that exact recipe rather than accepting a target call.
+        helper_addresses = {key.lower() for key, value in case["pre"].items()
+                            if isinstance(value, dict) and value.get("code") == expected_observer_code}
+        require(len(helper_addresses) == 1, f"{path.name}: observer helper cannot be bound")
+    allowed_destinations = ({bytes.fromhex(x[2:]) for x in helper_addresses}
+                            if helper_addresses else {bytes.fromhex(target[2:])})
     for index, tx in enumerate(bodies):
         require(isinstance(tx, list) and len(tx) == 9 and all(isinstance(field, bytes) for field in tx), f"{path.name}: transaction {index} is not legacy signed RLP")
         nonce, gas_price, gas, destination, value, calldata, v, r, s = tx
@@ -165,19 +209,15 @@ def fixture_case(path, expected_name, runtime, creation, deployment, target, hel
         if deployment:
             require(index == 0 and destination == b"" and calldata == creation, f"{path.name}: CREATE transaction binding")
         else:
-            allowed = {bytes.fromhex(target[2:])} | {bytes.fromhex(x[2:]) for x in helpers}
-            require(destination in allowed, f"{path.name}: transaction {index} destination differs")
+            require(destination in allowed_destinations, f"{path.name}: transaction {index} destination differs")
     if deployment:
         require(not any(key.lower() == target for key in case["pre"]), f"{path.name}: CREATE target preallocated")
     else:
         account(case["pre"], target, runtime, f"{path.name} pre")
     account(case["postState"], target, runtime, f"{path.name} post")
-    for helper in helpers:
-        require(isinstance(helper, str) and re.fullmatch(r"0x[0-9a-f]{40}", helper), f"{path.name}: observer helper malformed")
-        before = next((v for k, v in case["pre"].items() if k.lower() == helper), None)
-        after = next((v for k, v in case["postState"].items() if k.lower() == helper), None)
-        code = before.get("code") if isinstance(before, dict) else None
-        require(isinstance(after, dict) and code == after.get("code") and isinstance(code, str) and HEX.fullmatch(code) and code != "0x" and target[2:] in code.lower(), f"{path.name}: observer code/target binding differs")
+    for helper in helper_addresses:
+        observer_account(case["pre"], helper, expected_observer_code, f"{path.name} pre")
+        observer_account(case["postState"], helper, expected_observer_code, f"{path.name} post")
 
 
 def verify(directory: Path):
@@ -228,7 +268,7 @@ def verify(directory: Path):
             require(row.get("target", TARGET).lower() == TARGET, f"manifest: {name} target binding differs")
         if "observer" in row or "observerHelpers" in row or name.startswith("observer-") or name.endswith("-observer"):
             observer_obligations.add(obligation)
-        case_by_file[filename] = (name, deployment, row.get("target", TARGET).lower(), row.get("observerHelpers", []))
+        case_by_file[filename] = (name, deployment, row.get("target", TARGET).lower(), row.get("observerHelpers", []), row.get("observer"))
     for name, row in by_obligation.items():
         require(set(row["fixtures"]) <= set(case_by_file), f"manifest: {name} references unknown case file")
         require(all(next(case["obligation"] for case in cases if case["fixture"] == item) == name for item in row["fixtures"]), f"manifest: {name} fixture maps another obligation")
@@ -237,8 +277,8 @@ def verify(directory: Path):
         require(name in observer_obligations, f"manifest: {name} lacks observer evidence")
     disk = {path.name for path in directory.glob("*.json") if path.name != "manifest.json"}
     require(disk == set(case_by_file), f"fixture population mismatch: missing={sorted(set(case_by_file)-disk)}, orphaned={sorted(disk-set(case_by_file))}")
-    for filename, (name, deployment, target, helpers) in case_by_file.items():
-        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers)
+    for filename, (name, deployment, target, helpers, observer) in case_by_file.items():
+        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers, observer)
     return len(case_by_file), sum(row["steps"] for row in cases)
 
 
