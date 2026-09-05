@@ -84,6 +84,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
             "drip-evidence",
+            "drip-current-mainnet",
         ],
     }
     for key, expected in expected_meta.items():
@@ -201,10 +202,11 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Four gates landed after the launch inventory: BeaconDeposit assurance runs early;",
+        "- Five gates landed after the launch inventory: BeaconDeposit assurance runs early;",
         "  BeaconDeposit deployment and WETH10 current-mainnet retain their reviewed output-aware",
-        "  boundaries; and the target-independent DRIP evidence row enters at position 62.",
-        "  The final population is therefore 53 + 5 + 4 = 62; no required content was dropped.",
+        "  boundaries; target-independent DRIP evidence enters at position 62; and the",
+        "  isolated DRIP current-mainnet consumer follows it at position 63.",
+        "  The final population is therefore 53 + 5 + 5 = 63; no required content was dropped.",
         "- CI makes the same five splits and adds the assurance, WETH10 current-mainnet, and DRIP",
         "  rows, so its registered command population moves from 34 to 41. Deployment remains a local",
         "  merge-candidate row. The prerequisite column also records nested launch composition",
