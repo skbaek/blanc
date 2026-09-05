@@ -107,14 +107,16 @@
       holds while a deposit is still in the air, not merely between frames.</p>
 
     <div class="listing tight" style="margin:26px 0 0">
-      <div class="bar"><span>Blanc/Solvent.lean</span><span class="tag">the ladder — all seven in the axiom audit</span></div>
+      <div class="bar"><span>Blanc/Solvent.lean</span><span class="tag">the ladder — all nine in the axiom audit</span></div>
 <pre>weth_preserves_solvent                 <span class="c">-- one message frame, reentrancy included</span>
-stateTransition_preserves_solvent      <span class="c">-- one transaction</span>
-addBlockToChain_preserves_solvent      <span class="c">-- one block, from raw RLP</span>
-chain_preserves_solvent                <span class="c">-- every reachable state</span>
-stateTransitionUsing_preserves_solvent <span class="c">-- …and the same three again on a</span>
-addBlockToChainUsing_preserves_solvent <span class="c">   *configured* chain, whose schedule</span>
-chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka, BPO1, BPO2</span></pre>
+stateTransitionUsing_preserves_solvent <span class="c">-- one transaction, on a configured chain</span>
+addBlockToChainUsing_preserves_solvent <span class="c">-- one block, from raw RLP</span>
+chainUsing_preserves_solvent           <span class="c">-- every reachable state, whatever schedule</span>
+chainUsing_preserves_solvent_mainnet   <span class="c">   the chain follows</span>
+chainUsing_preserves_solvent_prague    <span class="c">-- the published mainnet instance and the</span>
+stateTransition_preserves_solvent      <span class="c">   retained Prague-only one</span>
+addBlockToChain_preserves_solvent      <span class="c">-- Jaune's fixed-Prague entry points,</span>
+chain_preserves_solvent                <span class="c">   retained as audited corollaries</span></pre>
     </div>
 
     <div class="dev" style="margin-top:26px">
@@ -132,12 +134,19 @@ chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka,
     </div>
     <div class="dev">
       <div class="devhead"><h3>Does a scheduled hard fork void the claim?</h3><span class="devtag">pushback</span></div>
-      <p>No, in two senses. The <span class="mono">Using</span> rungs are proved over a configured
-        chain whose schedule crosses Prague, Osaka, BPO1, and BPO2 — an activation is one more step
-        of the induction, not a new proof. Beneath them, fork-parametric parents are stated for an
+      <p>No, in two senses. The <span class="mono">Using</span> rungs are proved over an arbitrary
+        valid <span class="mono">ChainConfig</span> — an activation is one more step of the
+        induction, not a new proof. Beneath them, fork-parametric parents are stated for an
         <em>arbitrary</em> <span class="mono">ForkRules</span>, because solvency is a statement about
-        how value moves and no fork rule moves value. The unqualified rungs are Prague; nothing on
-        this page implies deployability on earlier forks.</p>
+        how value moves and no fork rule moves value.
+        <span class="mono">chainUsing_preserves_solvent_mainnet</span> is the published
+        specialization at Jaune's configured mainnet schedule — Prague through BPO2 — and
+        <span class="mono">chainUsing_preserves_solvent_prague</span> and the unqualified rungs are
+        the retained Prague-only corollaries, kept as history. That is a statement over a schedule,
+        not executable evidence: WETH has no BPO2 lane of its own. Nothing on this page implies
+        deployability on earlier forks, and nothing here survives a future fork that changes
+        execution semantics rather than the rule data Jaune already models — that is a Jaune change
+        and a re-proof, not a premise.</p>
     </div>
     <div class="dev">
       <div class="devhead"><h3>Safety is the cheap half. Can anyone actually get ether out?</h3><span class="devtag">pushback</span></div>

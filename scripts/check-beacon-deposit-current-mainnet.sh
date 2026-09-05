@@ -28,10 +28,10 @@ WRAPPER_DEVIATION_MARKER="beacon-deposit-current-mainnet-gas-v1"
 WRAPPER_CREATE_TARGET="0x6295ee1b4f6dd65047762f924ecd367c17eabf8f"
 WRAPPER_TX_GAS_LIMIT=16777216
 WRAPPER_GAS_CONSTANTS="txBase=21000,txCreate=32000,standardToken=4,floorToken=10,initcodeWord=2,codeDepositPerByte=200,eip170Limit=24576,eip3860Limit=49152"
-WRAPPER_CACHE_REPOSITORY_FILES="scripts/current-mainnet-target.json,scripts/current-mainnet-runtime-lock.json,scripts/current_mainnet.py,scripts/gen-current-mainnet-runtime-lock.py,scripts/gen-beacon-deposit-current-mainnet.py,scripts/check-beacon-deposit-current-mainnet.sh,scripts/eval-beacon-deposit-differential-code.lean,scripts/reference/beacon-deposit/inputs/deposit_contract.sol,scripts/reference/beacon-deposit/inputs/deposit_contract.json,scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex,BEACON_DEPOSIT_DEVIATIONS.md"
+WRAPPER_CACHE_REPOSITORY_FILES="scripts/current-mainnet-target.json,scripts/current-mainnet-runtime-lock.json,scripts/current_mainnet.py,scripts/eels_semantic_closure.py,scripts/run-current-mainnet-isolated.py,scripts/gen-current-mainnet-runtime-lock.py,scripts/gen-beacon-deposit-current-mainnet.py,scripts/check-beacon-deposit-current-mainnet.sh,scripts/eval-beacon-deposit-differential-code.lean,scripts/reference/beacon-deposit/inputs/deposit_contract.sol,scripts/reference/beacon-deposit/inputs/deposit_contract.json,scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex,BEACON_DEPOSIT_DEVIATIONS.md"
 WRAPPER_CACHE_RUNTIME_LOCK="scripts/current-mainnet-runtime-lock.json"
 WRAPPER_CACHE_RUNTIME_PLATFORMS="macos-arm64,linux-x86_64"
-WRAPPER_CACHE_OWNERSHIP="the shared runtime lock owns exact macOS arm64 and Linux x86_64 native closures; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and CPython 3.11.9 standard library"
+WRAPPER_CACHE_OWNERSHIP="the shared runtime lock owns the reference environment's semantic closure: exact versions on every platform and exact distribution plus complete executable-standard-library bytes on each generated row; the Linux row is explicitly ungenerated and fail-closed; the gate registry additionally fingerprints the selected exact checkout, site-packages population, and selected CPython 3.11.9 standard library"
 WRAPPER_BLANC_ARTIFACTS="runtimeBytes=2891,runtimeSha256=8f2474c60f85dce94e97403369d64d94d7cce4bbb44e620175bd43a5990f0c48,creationBytes=3037,creationSha256=3f3af51d0674c1afb7679dbcc60720bbd3f3d61adc9bd319da025064c0521c59,constructorPrefixBytes=146,constructorSstoreSites=137,constructorStaticcallSites=98,constructorCodecopySites=57"
 WRAPPER_ARGS=(
   --wrapper-schema "$WRAPPER_SCHEMA"
@@ -136,7 +136,9 @@ if [[ -n "${TMPDIR:-}" ]]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-exec /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
-  "$SCRIPT_DIR/gen-beacon-deposit-current-mainnet.py" \
+exec /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" \
+  -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-current-mainnet-isolated.py" "$TARGET_ROOT" \
+  "gen-beacon-deposit-current-mainnet.py" \
   --root "$TARGET_ROOT" --blanc-artifacts "$ARTIFACTS" \
   "${WRAPPER_ARGS[@]}" "$@"

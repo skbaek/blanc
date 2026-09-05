@@ -83,6 +83,7 @@ from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
     T8nPythonBaseError,
+    resolve_eels_python_base,
     resolve_t8n_python_base,
 )
 
@@ -531,6 +532,7 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
             "eels" in external_ids
             or "EELS_ROOT" in strings
             or any(value.startswith("@eels/") for value in strings)
+            or any(value.startswith("@eels_python_base/") for value in strings)
         )
         current = (
             "t8n_target" in external_ids
@@ -569,6 +571,12 @@ def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
             ):
                 raise GateCacheError(
                     f"legacy EELS gate {identifier} reads the current-mainnet root"
+                )
+            if any(value.startswith("@eels_python_base/") for value in strings) \
+                    and not any(value.startswith("@eels/") for value in strings):
+                raise GateCacheError(
+                    f"legacy EELS gate {identifier} names a Python base without "
+                    "its selecting checkout"
                 )
             continue
 
@@ -643,6 +651,7 @@ def gate_uses_t8n_resolver(gate: dict[str, Any]) -> bool:
         value in {"t8n_target", "JAUNE_T8N_TARGET"}
         or value.startswith("@t8n_target/")
         or value.startswith("@t8n_python_base/")
+        or value.startswith("@eels_python_base/")
         for value in strings
     )
 
@@ -651,9 +660,10 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     """Soundness code relevant to this gate, excluding pure serialization.
 
     The common engine owns fingerprint construction, verdict validation,
-    drift checks, and cache admission. The native t8n resolver is relevant
-    only to current-mainnet consumers. `gate_cache_lock.py` is intentionally
-    absent: it serializes writes but cannot make evidence reusable.
+    drift checks, and cache admission. The native Python-base resolver is
+    relevant only to Prague/current-mainnet EELS consumers.
+    `gate_cache_lock.py` is intentionally absent: it serializes writes but
+    cannot make evidence reusable.
     """
 
     sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness"]
@@ -748,6 +758,12 @@ def resolve_path(root: Path, given: str) -> Path:
         if name == "t8n_python_base":
             try:
                 base = resolve_t8n_python_base(root)
+            except T8nPythonBaseError as error:
+                raise Unresolvable(str(error)) from error
+            return base / rest if rest else base
+        if name == "eels_python_base":
+            try:
+                base = resolve_eels_python_base(root)
             except T8nPythonBaseError as error:
                 raise Unresolvable(str(error)) from error
             return base / rest if rest else base

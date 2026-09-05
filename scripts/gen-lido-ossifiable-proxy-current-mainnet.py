@@ -27,6 +27,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+import eels_semantic_closure
+
+eels_semantic_closure.assert_loader_guard_installed(
+    eels_semantic_closure.fail,
+    label="OssifiableProxy current-mainnet generator",
+)
+
 from ethereum.crypto.hash import keccak256
 from execution_testing.forks import BPO2 as TestingBPO2
 from spec256k1 import PrivateKey

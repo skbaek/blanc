@@ -33,6 +33,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 BLANC_ARTIFACTS="$(mktemp)"
 DISPATCH_ARTIFACTS="$(mktemp)"
 PROFILE="$(mktemp)"
@@ -55,8 +57,7 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-dispatchers.
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src:$SCRIPT_DIR" \
-    "$EELS_PY" "$SCRIPT_DIR/check-lido-circuit-breaker-dispatchers.py" \
+if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" -I -s -B -X pycache_prefix=/dev/null "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "check-lido-circuit-breaker-dispatchers.py" \
     --eels-root "$EELS_ROOT" \
     --blanc-artifacts "$BLANC_ARTIFACTS" \
     --dispatcher-artifacts "$DISPATCH_ARTIFACTS" \

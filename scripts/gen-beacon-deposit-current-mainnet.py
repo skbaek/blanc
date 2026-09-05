@@ -169,6 +169,8 @@ CACHE_REPOSITORY_FILES = (
     "scripts/current-mainnet-target.json",
     "scripts/current-mainnet-runtime-lock.json",
     "scripts/current_mainnet.py",
+    "scripts/eels_semantic_closure.py",
+    "scripts/run-current-mainnet-isolated.py",
     "scripts/gen-current-mainnet-runtime-lock.py",
     "scripts/gen-beacon-deposit-current-mainnet.py",
     "scripts/check-beacon-deposit-current-mainnet.sh",
@@ -181,9 +183,13 @@ CACHE_REPOSITORY_FILES = (
 CACHE_RUNTIME_LOCK = "scripts/current-mainnet-runtime-lock.json"
 CACHE_RUNTIME_PLATFORMS = ("macos-arm64", "linux-x86_64")
 CACHE_OWNERSHIP = (
-    "the shared runtime lock owns exact macOS arm64 and Linux x86_64 native "
-    "closures; the gate registry additionally fingerprints the selected exact "
-    "checkout, site-packages population, and CPython 3.11.9 standard library"
+    "the shared runtime lock owns the reference environment's semantic "
+    "closure: exact versions on every platform and exact distribution plus "
+    "complete executable-standard-library bytes on each generated row; the "
+    "Linux row is "
+    "explicitly ungenerated and fail-closed; the gate registry "
+    "additionally fingerprints the selected exact checkout, site-packages "
+    "population, and selected CPython 3.11.9 standard library"
 )
 
 

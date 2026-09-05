@@ -5,7 +5,7 @@ import Blanc.ProxyPairOssifiableForwarding
 /-!
 # Exact proxy upgrade and post-upgrade executions
 
-Closed Prague fixtures execute the exact compiled 2,188-byte OssifiableProxy
+Configured fixtures execute the exact compiled 2,188-byte OssifiableProxy
 runtime and the exact goal-local implementation artifacts.  The primary route
 performs a real nonempty setup delegatecall.  The identity routes execute the
 public proxy entries without changing application storage.
@@ -31,17 +31,17 @@ def fixturePrestate : State :=
   State.set withV2 upgradeProxy
     { Acct.nil with stor := fixtureProxyStorage, code := runtimeBaselineCode }
 
-def fixtureBenv : Benv :=
+def fixtureBenv (rules : ForkRules) : Benv :=
   { (default : Benv) with
     state := fixturePrestate
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        rules := rules
         origState := fixturePrestate } }
 
-def upgradeMessage (data : Bytes) : Msg :=
+def upgradeMessage (rules : ForkRules) (data : Bytes) : Msg :=
   { (default : Msg) with
-    benv := fixtureBenv
+    benv := fixtureBenv rules
     caller := upgradeAdmin
     target := some upgradeProxy
     currentTarget := upgradeProxy
@@ -57,15 +57,16 @@ def upgradeMessage (data : Bytes) : Msg :=
     accessedStorageKeys := .emptyWithCapacity
     disablePrecompiles := true }
 
-def primaryMessage : Msg :=
-  upgradeMessage (proxyUpgradeToAndCallCalldata v2Implementation
+def primaryMessage (rules : ForkRules) : Msg :=
+  upgradeMessage rules (proxyUpgradeToAndCallCalldata v2Implementation
     initializeV2Calldata false)
 
-def upgradeToMessage : Msg :=
-  upgradeMessage (proxyUpgradeToCalldata v2Implementation)
+def upgradeToMessage (rules : ForkRules) : Msg :=
+  upgradeMessage rules (proxyUpgradeToCalldata v2Implementation)
 
-def skippedEmptyMessage : Msg :=
-  upgradeMessage (proxyUpgradeToAndCallCalldata v2Implementation [] false)
+def skippedEmptyMessage (rules : ForkRules) : Msg :=
+  upgradeMessage rules
+    (proxyUpgradeToAndCallCalldata v2Implementation [] false)
 
 /-! ## Shared implementation bodies -/
 

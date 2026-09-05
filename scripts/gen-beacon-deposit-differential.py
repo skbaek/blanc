@@ -43,6 +43,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Dict, List, Mapping, NoReturn, Sequence, Tuple
 
+import eels_semantic_closure
+
 
 REPO = Path(__file__).resolve().parents[1]
 REF = REPO / "scripts" / "reference" / "beacon-deposit"
@@ -1172,6 +1174,12 @@ def verify_eels_pin(root: Path) -> None:
         die(f"EELS pin mismatch: expected {EELS_PIN}, got {head}")
     if dirty:
         die(f"EELS checkout at {root} is dirty; refusing an unpinned oracle")
+
+    # The commit pins the specification's source; this pins what that source
+    # imports.  Both must hold before an oracle comparison means anything.
+    eels_semantic_closure.assert_prague_environment(
+        die, checkout_root=root
+    )
 
 
 def environments(state, gas: int):

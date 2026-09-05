@@ -28,8 +28,11 @@ import argparse
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
+
+import eels_semantic_closure
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -47,6 +50,36 @@ def load_script(name: str, path: Path):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _closure_refusal(message: str):
+    """Route a semantic-closure refusal into this script's own failure path."""
+
+    raise RuntimeError(message)
+
+
+def verify_eels_pin() -> None:
+    actual = subprocess.check_output(
+        ["git", "-C", str(EELS), "rev-parse", "HEAD"], text=True
+    ).strip()
+    dirty = subprocess.check_output(
+        ["git", "-C", str(EELS), "status", "--porcelain"], text=True
+    ).strip()
+    if actual != EELS_PIN or dirty:
+        raise RuntimeError(
+            f"EELS checkout must be clean at {EELS_PIN}; got {actual}, "
+            f"dirty={bool(dirty)}"
+        )
+
+    # Install the executable-loader guard before the support module imports
+    # any EELS package. The commit establishes the trusted checkout root; the
+    # closure pin establishes every executable dependency beneath it.
+    eels_semantic_closure.assert_prague_environment(
+        _closure_refusal, checkout_root=EELS
+    )
+
+
+verify_eels_pin()
 
 
 support = load_script(
@@ -718,20 +751,6 @@ def case_authorization(runtime: str):
     return build_fixture("02-authorization-mutation", alloc, [tx], expect), [tx]
 
 
-def verify_eels_pin():
-    actual = support.subprocess.check_output(
-        ["git", "-C", str(EELS), "rev-parse", "HEAD"], text=True
-    ).strip()
-    dirty = support.subprocess.check_output(
-        ["git", "-C", str(EELS), "status", "--porcelain"], text=True
-    ).strip()
-    if actual != EELS_PIN or dirty:
-        raise RuntimeError(
-            f"EELS checkout must be clean at {EELS_PIN}; got {actual}, "
-            f"dirty={bool(dirty)}"
-        )
-
-
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -740,7 +759,6 @@ def main(argv=None) -> int:
         help="rerun assertions and require byte-identical committed artifacts",
     )
     args = parser.parse_args(argv)
-    verify_eels_pin()
     runtime = "0x" + literal_parser.parse_lean_literal(
         REPO / "Blanc" / "Weth10Code.lean", "weth10MainnetCode"
     ).hex()

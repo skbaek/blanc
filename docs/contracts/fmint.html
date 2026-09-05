@@ -122,14 +122,16 @@
       hostile callee’s execution is supplied by totality, never assumed.</p>
 
     <div class="listing tight" style="margin:26px 0 0">
-      <div class="bar"><span>Blanc/Conserved.lean</span><span class="tag">conservation — the same ladder as WETH’s solvency</span></div>
+      <div class="bar"><span>Blanc/Conserved.lean</span><span class="tag">conservation — the same configured ladder as WETH’s solvency</span></div>
 <pre>fmint_preserves_conserved                <span class="c">-- one message frame, reentrancy included</span>
-stateTransition_preserves_conserved      <span class="c">-- one transaction</span>
-addBlockToChain_preserves_conserved      <span class="c">-- one block, from raw RLP</span>
-chain_preserves_conserved                <span class="c">-- every reachable state</span>
-stateTransitionUsing_preserves_conserved <span class="c">-- …and the same three again on a</span>
-addBlockToChainUsing_preserves_conserved <span class="c">   *configured* chain, across scheduled</span>
-chainUsing_preserves_conserved           <span class="c">   fork activations</span>
+stateTransitionUsing_preserves_conserved <span class="c">-- one transaction, on a configured chain</span>
+addBlockToChainUsing_preserves_conserved <span class="c">-- one block, from raw RLP</span>
+chainUsing_preserves_conserved           <span class="c">-- every reachable state, whatever schedule</span>
+chainUsing_preserves_conserved_mainnet   <span class="c">   the chain follows, and the published</span>
+chainUsing_preserves_conserved_prague    <span class="c">   mainnet and retained Prague instances</span>
+stateTransition_preserves_conserved      <span class="c">-- Jaune's fixed-Prague entry points,</span>
+addBlockToChain_preserves_conserved      <span class="c">   retained as audited corollaries</span>
+chain_preserves_conserved                <span class="c">   — history, not the published claim</span>
 Stor.Conserved.of_empty                  <span class="c">-- the base case: all-zero storage conserved</span></pre>
     </div>
 

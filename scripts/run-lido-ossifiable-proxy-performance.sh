@@ -12,6 +12,9 @@ fi
 
 export EELS_ROOT=$EELS
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
+# Retain the frozen campaign's environment identity. Isolated mode ignores it;
+# the bootstrap derives the executable source root from the clean checkout.
 export PYTHONPATH=$EELS/src
-exec "$PYTHON" -B "$ROOT/scripts/run-lido-ossifiable-proxy-performance.py" \
+exec "$PYTHON" -I -s -B -X pycache_prefix=/dev/null "$ROOT/scripts/run-isolated-python.py" "$EELS" "run-lido-ossifiable-proxy-performance.py" \
   --repo-root "$ROOT" --eels-root "$EELS" "$@"

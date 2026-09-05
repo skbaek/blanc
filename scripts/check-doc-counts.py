@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Documentation-count gate for Blanc: every published number is produced, not
-transcribed.
+"""Documentation-count gate for Blanc: every published audit count is produced.
 
-The audited-theorem count is computed by the axiom audit and then quoted in
-prose on four public surfaces -- README.md, scripts/GATES.md, docs/index.html
-and, outside this repository, Jaune's site. Prose does not recompute itself, so
-the count drifts silently every time the audit grows. It has: on 2026-08-12 the
-Jaune site published 315 while this repository's gate produced 333.
+The audited-theorem count is computed from the axiom inventory, and the
+statement-pin count is computed from the claim inventory. Both are quoted on
+public surfaces that do not recompute themselves, so they drift silently when
+either inventory grows. The axiom count also appears outside this repository
+on Jaune's site.
 
 This gate closes that class. It computes the count from the one place that owns
 it, finds every place a public surface quotes it, and fails on any
@@ -44,6 +43,10 @@ import sys
 # audited theorem is the definition of the count, and scripts/check.sh's N/N
 # summary is derived from the same file.
 PRODUCER = ("scripts/AxiomCheck.lean", re.compile(r"^#print axioms\b", re.M))
+CLAIM_PRODUCER = (
+    "scripts/ClaimCheck.lean",
+    re.compile(r"^[ \t]*(?:example|#check)(?:[ \t]|$)", re.M),
+)
 
 # The consumers. Each pattern captures one or more integers that MUST equal the
 # produced count. Every group in the match is checked, so an "N/N" spelling is
@@ -90,6 +93,24 @@ CONSUMERS = [
     ),
 ]
 
+CLAIM_CONSUMERS = [
+    (
+        "scripts/GATES.md",
+        [re.compile(r"exactly\s+(\d{2,5})\s+definitions/statements")],
+    ),
+    (
+        "docs/index.html",
+        [
+            re.compile(r"protected claims\s+—\s+(\d{2,5})"),
+            re.compile(r"claim statements:\s*(\d{2,5})\s+definitions/statements"),
+        ],
+    ),
+    (
+        "docs/contracts/weth10.html",
+        [re.compile(r"claim statements:\s*(\d{2,5})\s+definitions/statements")],
+    ),
+]
+
 # Surfaces outside this repository that quote the same number. No gate can
 # check these from here; a passing run names them so the human can.
 FOREIGN_SURFACES = [
@@ -115,43 +136,27 @@ def line_of(text: str, index: int) -> int:
     return text.count("\n", 0, index) + 1
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--root",
-        default=None,
-        help="repository root override; exists so a negative control can point "
-        "the gate at a mutated copy of the tree",
-    )
-    args = ap.parse_args()
-
-    root = (
-        pathlib.Path(args.root)
-        if args.root
-        else pathlib.Path(__file__).resolve().parent.parent
-    )
-
-    producer_path, producer_re = PRODUCER
+def produced_count(root: pathlib.Path, producer: tuple[str, re.Pattern[str]]) -> int:
+    producer_path, producer_re = producer
     src = root / producer_path
     if not src.is_file():
-        print(f"REGRESSION — doc-counts: missing producer {producer_path}", file=sys.stderr)
-        return 2
-
+        raise RuntimeError(f"missing producer {producer_path}")
     expected = len(producer_re.findall(src.read_text(encoding="utf-8")))
     if expected == 0:
-        print(
-            f"REGRESSION — doc-counts: {producer_path} produced a count of 0; "
-            "the producer pattern no longer matches",
-            file=sys.stderr,
+        raise RuntimeError(
+            f"{producer_path} produced a count of 0; the producer pattern no longer matches"
         )
-        return 2
+    return expected
 
-    print(f"produced: {expected} audited theorems ({producer_path})")
 
-    failures: list[str] = []
+def check_consumers(
+    root: pathlib.Path,
+    consumers: list[tuple[str, list[re.Pattern[str]]]],
+    expected: int,
+    failures: list[str],
+) -> int:
     total_checked = 0
-
-    for rel, patterns in CONSUMERS:
+    for rel, patterns in consumers:
         path = root / rel
         if not path.is_file():
             failures.append(f"{rel}: missing consumer file")
@@ -168,17 +173,52 @@ def main() -> int:
                     "if that surface no longer states the count."
                 )
                 continue
-            for m in matches:
-                for g in m.groups():
+            for match in matches:
+                for group in match.groups():
                     total_checked += 1
-                    got = int(g)
+                    got = int(group)
                     mark = "ok " if got == expected else "BAD"
-                    print(f"  {mark} {rel}:{line_of(text, m.start())}  {got}")
+                    print(f"  {mark} {rel}:{line_of(text, match.start())}  {got}")
                     if got != expected:
                         failures.append(
-                            f"{rel}:{line_of(text, m.start())} says {got}, "
+                            f"{rel}:{line_of(text, match.start())} says {got}, "
                             f"gate produces {expected}"
                         )
+    return total_checked
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--root",
+        default=None,
+        help="repository root override; exists so a negative control can point "
+        "the gate at a mutated copy of the tree",
+    )
+    args = ap.parse_args()
+
+    root = (
+        pathlib.Path(args.root)
+        if args.root
+        else pathlib.Path(__file__).resolve().parent.parent
+    )
+
+    try:
+        expected = produced_count(root, PRODUCER)
+        claim_expected = produced_count(root, CLAIM_PRODUCER)
+    except RuntimeError as exc:
+        print(f"REGRESSION — doc-counts: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"produced: {expected} audited theorems ({PRODUCER[0]})")
+
+    failures: list[str] = []
+    theorem_checked = check_consumers(root, CONSUMERS, expected, failures)
+    print(f"produced: {claim_expected} statement pins ({CLAIM_PRODUCER[0]})")
+    claim_checked = check_consumers(
+        root, CLAIM_CONSUMERS, claim_expected, failures
+    )
+    total_checked = theorem_checked + claim_checked
 
     print()
     if failures:
@@ -198,7 +238,10 @@ def main() -> int:
         "boundary; sync the surfaces above by hand when this count moves."
     )
     print()
-    print(f"OK — doc-counts: {total_checked}/{total_checked} quotations agree at {expected}")
+    print(
+        f"OK — doc-counts: {total_checked}/{total_checked} quotations agree "
+        f"({theorem_checked} at {expected}; {claim_checked} at {claim_expected})"
+    )
     return 0
 
 

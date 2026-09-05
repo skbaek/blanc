@@ -275,7 +275,13 @@ This repo contains the following files:
   [LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean),
   [DeploymentCompiled.lean](Blanc/DeploymentCompiled.lean), and
   [DeploymentMessage.lean](Blanc/DeploymentMessage.lean): the exact official
-  direct-deployment ladder. From a valid base world and a strict singleton
+  direct-deployment ladder. The shared deployment shell in `DeploymentMessage`
+  — `CanonicalDeploymentBase`, `DeploymentSystemPrefix`, and
+  `canonicalDeploymentSystemPrefix` — is stated over an arbitrary valid
+  `ChainConfig` and the block's selected `ForkRules`, with every rule-sensitive
+  fact an explicit premise; the Lido ladder instantiates it at the fixed
+  Prague-only schedule, which is where the Lido deployment root stays until its
+  own successor goal. From a valid base world and a strict singleton
   type-2 Prague block envelope, its only named-chain premise is the configured
   `stateTransitionUsing` equation. Under the envelope's explicit recovered-
   sender and computed-address premises, the ladder derives the prepared message
@@ -343,7 +349,11 @@ This repo contains the following files:
   the witness that Blanc's compiler emits it. Generated in full by
   [`scripts/gen-weth-code.lean`](scripts/gen-weth-code.lean) — do not edit by
   hand.
-- [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
+- [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH
+  implementation, stated over an arbitrary valid `ChainConfig` at the
+  transaction, block-import and chain rungs, with Ethereum mainnet's configured
+  schedule published as the specialization and the fixed-Prague rungs retained
+  as audited corollaries.
 - [Fmint.lean](Blanc/Fmint.lean): implementation of an ERC-3156 flash-mint
   token (FMINT) in Blanc — the second contract, and the one that makes the
   hierarchy rule below load-bearing.
@@ -939,9 +949,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 1070 named results and
+   current source inventory pins the exact axiom set of 1116 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `1070/1070` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `1116/1116` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -969,35 +979,48 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **1070** top theorems. `scripts/check.sh`'s
+current source inventory contains **1116** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
-exact statements of the WETH10 flagship set and the protected Lido Registry
+exact statements of the WETH10 flagship set, the protected Lido Registry
 mutation, enumeration, view-coherence, observability, exact official
 constructor/message/transaction/block, direct-root, and rooted-future
-boundaries; the axiom audit itself pins dependency closures, not theorem
-statements. The families follow. Seven are WETH's
-headline solvency theorems:
+boundaries, and BeaconDeposit's configured deployment root and history
+headlines together with their mainnet and retained Prague instances; the axiom
+audit itself pins dependency closures, not theorem statements. The families
+follow. Nine are WETH's headline solvency theorems. The configured rungs are
+the claim; the mainnet rung is its published specialization, and the
+fixed-Prague rungs are retained audited corollaries:
 
 - `Blanc.weth_preserves_solvent`
-- `Blanc.stateTransition_preserves_solvent`
-- `Blanc.chain_preserves_solvent`
-- `Blanc.addBlockToChain_preserves_solvent`
 - `Blanc.stateTransitionUsing_preserves_solvent`
-- `Blanc.chainUsing_preserves_solvent`
 - `Blanc.addBlockToChainUsing_preserves_solvent`
+- `Blanc.chainUsing_preserves_solvent`
+- `Blanc.chainUsing_preserves_solvent_mainnet`
+- `Blanc.chainUsing_preserves_solvent_prague`
+- `Blanc.stateTransition_preserves_solvent`
+- `Blanc.addBlockToChain_preserves_solvent`
+- `Blanc.chain_preserves_solvent`
 
-Seven are FMINT's headline conservation theorems, the same family at the same
+Nine are FMINT's headline conservation theorems, the same family at the same
 rungs:
 
 - `Blanc.fmint_preserves_conserved`
-- `Blanc.stateTransition_preserves_conserved`
-- `Blanc.chain_preserves_conserved`
-- `Blanc.addBlockToChain_preserves_conserved`
 - `Blanc.stateTransitionUsing_preserves_conserved`
-- `Blanc.chainUsing_preserves_conserved`
 - `Blanc.addBlockToChainUsing_preserves_conserved`
+- `Blanc.chainUsing_preserves_conserved`
+- `Blanc.chainUsing_preserves_conserved_mainnet`
+- `Blanc.chainUsing_preserves_conserved_prague`
+- `Blanc.stateTransition_preserves_conserved`
+- `Blanc.addBlockToChain_preserves_conserved`
+- `Blanc.chain_preserves_conserved`
+
+`chainUsing_preserves_solvent_mainnet` and
+`chainUsing_preserves_conserved_mainnet` are statements over Jaune's configured
+mainnet schedule, not executable evidence: neither WETH nor FMINT has a
+current-mainnet lane, and no surface here should be read as saying a mainnet
+block was executed against them.
 
 They are a different *kind* of claim, not a stronger version of the same one:
 solvency is an inequality relating a contract's bookkeeping to the ETH it

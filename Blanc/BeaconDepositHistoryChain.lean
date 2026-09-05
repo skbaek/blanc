@@ -60,12 +60,13 @@ theorem reachUsing_history_extends
   rcases native with ⟨trace, _projection, admitted⟩
   exact configuredHistory_extends trace admitted installed artifact
 
-/-- The exact Prague-only schedule required by the deployment closure. -/
+/-- Historical headline, now stated over the configured schedule.  The name is
+retained for API compatibility; named-network instances live in the mainnet
+and Prague compatibility modules. -/
 theorem pragueOnly_history_extends
-    (chainId : UInt64) {baseline : List B256}
+    {baseline : List B256} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {ca : Adr}
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      checkpoint future)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
     (native : ReachNativeShaAdmitted reach ca)
     (installed :
       some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
@@ -74,17 +75,16 @@ theorem pragueOnly_history_extends
       ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
   reachUsing_history_extends reach native installed artifact
 
-/-- Deployment-root specialization: the constructor's empty history can only
-grow by a suffix along the exact Prague-only continuation. -/
+/-- Deployment-root rung: the constructor's empty history can only grow by a
+suffix along any continuation of the root's own configured schedule. -/
 theorem DeploymentRoot.future_history_extends
-    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot chainId base deployed ca)
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future)
+    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future)
     (native : ReachNativeShaAdmitted reach ca) :
     ∃ suffix, ArtifactInv (future.state.getStor ca) suffix := by
   simpa only [List.nil_append] using
-    pragueOnly_history_extends chainId reach native root.installed_compile
+    reachUsing_history_extends reach native root.installed_compile
       root.artifact
 
 /-- Reader-facing content of a baseline-relative history witness: concrete
@@ -151,10 +151,9 @@ theorem reachUsing_future_count_root
 is positive exactly when that suffix is nonempty, and the concrete projection's
 root is the model mixed root of the same suffix. -/
 theorem DeploymentRoot.future_count_root
-    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot chainId base deployed ca)
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future)
+    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future)
     (native : ReachNativeShaAdmitted reach ca) :
     ∃ suffix,
       ArtifactInv (future.state.getStor ca) suffix ∧

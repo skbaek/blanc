@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
 GENERATOR_OUT="$(mktemp)"
@@ -32,8 +34,8 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-twg-artifacts.lean >"$ARTIFA
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-  "$SCRIPT_DIR/gen-lido-twg-differential.py" \
+if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-lido-twg-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@" >"$GENERATOR_OUT"; then
   exit 1
 fi

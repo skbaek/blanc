@@ -253,41 +253,52 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
   exact Blanc.processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
 
-/-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
-canonical pre-state; neither call is smuggled into the input record. -/
+/-- Historical qualified WETH10 entry point for the common configured
+deployment-system prefix theorem.  Its statement and structure-generated API
+remain exact while the proof delegates to the shared shell owner. -/
 theorem canonicalDeploymentSystemPrefix
     (cfg : ChainConfig) (rules : ForkRules)
     (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)
     (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
     Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) := by
-  let initial := initBenv rules base cb.block.header
-  obtain ⟨outBeacon, hbeacon, _⟩ :=
-    processUncheckedSystemTransaction_deploymentSystemProgram
-      initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
-      (by simpa [initial, initBenv] using hbase.beaconCode)
-      hbase.beacon_not_precompile
-  obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
-  obtain ⟨outHistory, hhistory, _⟩ :=
-    processUncheckedSystemTransaction_deploymentSystemProgram
-      (initial.withState base.state) historyStorageAddress lastHash.toBytes
-      (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
-      hbase.history_not_precompile
-  refine ⟨⟨initial, {
-    stBeacon := base.state
-    outBeacon := outBeacon
-    lastHash := lastHash
-    stHistory := base.state
-    outHistory := outHistory
-    beaconRun := hbeacon
-    lastHashEq := ?_
-    historyRun := ?_
-    txInput_eq := by rfl
-    environment_eq := by rfl
-    state_eq := by rfl
-    createdAccounts_eq := by rfl }⟩⟩
-  · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
-  · simpa [initial, Benv.withState] using hhistory
+  let sharedBase : Blanc.CanonicalDeploymentBase cfg rules base sender ca := {
+    configValid := hbase.configValid
+    chainId_eq := hbase.chainId_eq
+    validContext := hbase.validContext
+    sumNof := hbase.sumNof
+    target_eq := hbase.target_eq
+    target_ne_zero := hbase.target_ne_zero
+    target_not_precompile := hbase.target_not_precompile
+    beacon_not_precompile := hbase.beacon_not_precompile
+    history_not_precompile := hbase.history_not_precompile
+    withdrawalRequest_not_precompile := hbase.withdrawalRequest_not_precompile
+    consolidationRequest_not_precompile := hbase.consolidationRequest_not_precompile
+    sender_ne_target := hbase.sender_ne_target
+    withdrawalRequest_ne_target := hbase.withdrawalRequest_ne_target
+    consolidationRequest_ne_target := hbase.consolidationRequest_ne_target
+    target_noCodeOrNonce := hbase.target_noCodeOrNonce
+    target_noStorage := hbase.target_noStorage
+    lastBlockHash := hbase.lastBlockHash
+    beaconCode := hbase.beaconCode
+    historyCode := hbase.historyCode
+    withdrawalRequestCode := hbase.withdrawalRequestCode
+    consolidationRequestCode := hbase.consolidationRequestCode }
+  rcases Blanc.canonicalDeploymentSystemPrefix
+      cfg rules base cb sender ca sharedBase with ⟨txInput, sharedPrefix⟩
+  exact ⟨txInput, {
+    stBeacon := sharedPrefix.stBeacon
+    outBeacon := sharedPrefix.outBeacon
+    lastHash := sharedPrefix.lastHash
+    stHistory := sharedPrefix.stHistory
+    outHistory := sharedPrefix.outHistory
+    beaconRun := sharedPrefix.beaconRun
+    lastHashEq := sharedPrefix.lastHashEq
+    historyRun := sharedPrefix.historyRun
+    txInput_eq := sharedPrefix.txInput_eq
+    environment_eq := sharedPrefix.environment_eq
+    state_eq := sharedPrefix.state_eq
+    createdAccounts_eq := sharedPrefix.createdAccounts_eq }⟩
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.

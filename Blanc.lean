@@ -210,6 +210,8 @@ import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistory
 import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
+import Blanc.BeaconDepositMainnet
+import Blanc.BeaconDepositPragueCompat
 import Blanc.ProxyPairSlots
 import Blanc.ProxyPairProgram
 import Blanc.ProxyPairOssifiableSurface

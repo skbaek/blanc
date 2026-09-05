@@ -56,16 +56,20 @@ if [ -n "${TMPDIR:-}" ]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
-  "$SCRIPT_DIR/gen-prorata-fixtures.py" --root "$TARGET_ROOT" 2>&1)" || {
+GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" \
+  -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-current-mainnet-isolated.py" "$TARGET_ROOT" \
+  "gen-prorata-fixtures.py" --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$GENERATOR_OUT" >&2
   echo "REGRESSION — prorata current-mainnet: BPO2 regeneration check failed" >&2
   exit 1
 }
 printf '%s\n' "$GENERATOR_OUT"
 
-BENCHMARK_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
-  "$SCRIPT_DIR/gen-prorata-benchmark.py" --root "$TARGET_ROOT" 2>&1)" || {
+BENCHMARK_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" \
+  -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-current-mainnet-isolated.py" "$TARGET_ROOT" \
+  "gen-prorata-benchmark.py" --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$BENCHMARK_OUT" >&2
   echo "REGRESSION — prorata current-mainnet: BPO2 benchmark check failed" >&2
   exit 1

@@ -12,8 +12,8 @@ namespace BeaconDeposit
 through transaction checking, fee/refund settlement, account cleanup, and
 receipt insertion. -/
 structure DeploymentTransactionResult
-    (chainId : UInt64) (ca : Adr)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+    (cfg : ChainConfig) (rules : ForkRules) (ca : Adr)
+    (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca)
     (post : State) (bout : BlockOutput) : Prop where
   run : processTransaction ctx.txInput .init tx 0 = .ok (post, bout)
   message : ∃ messagePost out,
@@ -47,13 +47,14 @@ structure DeploymentTransactionResult
 checking, upfront debit, refund/tip settlement, account cleanup, and receipt
 insertion. -/
 theorem canonicalDeploymentTransaction_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalBeaconDepositDeploymentBlock cfg rules base cb
       txBytes tx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
-    ∃ post bout, DeploymentTransactionResult chainId ca ctx post bout := by
+    (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca) :
+    ∃ post bout, DeploymentTransactionResult cfg rules ca ctx post bout := by
   obtain ⟨messagePost, messageOut, hmessage⟩ :=
     processMessageCall_establishes_artifact ca ctx.msg
       ctx.target_eq ctx.msg_target_eq ctx.noCodeOrNonce ctx.noStorage
@@ -78,11 +79,11 @@ theorem canonicalDeploymentTransaction_succeeds
     apply List.isEmpty_iff.mp
     rw [Std.HashSet.isEmpty_toList, hmessage.accountsToDelete]
   obtain ⟨maxPriorityFee, maxFee, htype⟩ := henv.type_eq
-  have hrules : ctx.txInput.beginTransaction.stat.rules = pragueRules := by
+  have hrules : ctx.txInput.beginTransaction.stat.rules = rules := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
   have hprice : deploymentEffectiveGasPrice
-      (initBenv pragueRules base cb.block.header) tx =
+      (initBenv rules base cb.block.header) tx =
       deploymentEffectiveGasPrice ctx.txInput tx := by
     rw [ctx.systemPrefix.environment_eq]
   have hchecked :

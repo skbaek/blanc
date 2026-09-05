@@ -32,7 +32,11 @@ import Blanc.BeaconDepositSelectorMiss
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositEffects
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
+import Blanc.Solvent
+import Blanc.Conserved
 import Blanc.BeaconDepositHistoryChain
+import Blanc.BeaconDepositMainnet
+import Blanc.BeaconDepositPragueCompat
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -46,6 +50,39 @@ not.  `Stor.Weth10Inv` is pinned separately by definitional unfolding.
 namespace Blanc
 
 open Jaune
+
+/-! The shared delegatecall descriptor owns the reusable child-state
+projection used by proxy-pair and any later delegatecall consumer. -/
+
+example {sevm : Sevm} {callPre : Devm}
+    (spawn : DelegatecallSpawnDescriptor sevm callPre) :
+    (initDevm spawn.child).state = spawn.afterAccess.state :=
+  spawn.child_state
+
+/-! ## Chain-level WETH solvency and FMINT conservation — the configured rungs'
+published mainnet specializations and their retained Prague corollaries.  The
+generic parents are audited; these pin that the published instances are the
+instances they claim to be, at the schedule they name. -/
+
+example (wa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent_mainnet wa ch ch' h_reach h_inv
+
+example (wa : Adr) (chainId : UInt64) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+  chainUsing_preserves_solvent_prague wa chainId ch ch' h_reach h_inv
+
+example (fa : Adr) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved_mainnet fa ch ch' h_reach h_inv
+
+example (fa : Adr) (chainId : UInt64) (ch ch' : BlockChain)
+    (h_reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId) ch ch')
+    (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
+  chainUsing_preserves_conserved_prague fa chainId ch ch' h_reach h_inv
 
 example {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
@@ -747,6 +784,49 @@ example {cfg : ChainConfig} {rules : ForkRules}
     historyCode := historyCode
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
+
+/-! The historical WETH10-qualified deployment-shell API remains available
+with its original statement after the shell's common-library hoist. -/
+
+#check Blanc.Weth10.CanonicalDeploymentBase.configValid
+#check Blanc.Weth10.CanonicalDeploymentBase.chainId_eq
+#check Blanc.Weth10.CanonicalDeploymentBase.validContext
+#check Blanc.Weth10.CanonicalDeploymentBase.sumNof
+#check Blanc.Weth10.CanonicalDeploymentBase.target_eq
+#check Blanc.Weth10.CanonicalDeploymentBase.target_ne_zero
+#check Blanc.Weth10.CanonicalDeploymentBase.target_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.beacon_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.history_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.sender_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.target_noCodeOrNonce
+#check Blanc.Weth10.CanonicalDeploymentBase.target_noStorage
+#check Blanc.Weth10.CanonicalDeploymentBase.lastBlockHash
+#check Blanc.Weth10.CanonicalDeploymentBase.beaconCode
+#check Blanc.Weth10.CanonicalDeploymentBase.historyCode
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequestCode
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequestCode
+#check Blanc.Weth10.DeploymentSystemPrefix.mk.inj
+#check Blanc.Weth10.DeploymentSystemPrefix.mk.injEq
+#check Blanc.Weth10.DeploymentSystemPrefix.beaconRun
+#check Blanc.Weth10.DeploymentSystemPrefix.lastHashEq
+#check Blanc.Weth10.DeploymentSystemPrefix.historyRun
+#check Blanc.Weth10.DeploymentSystemPrefix.txInput_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.environment_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.state_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.createdAccounts_eq
+
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
+    (sender ca : Adr)
+    (hbase : Blanc.Weth10.CanonicalDeploymentBase cfg rules base sender ca) :
+    Nonempty (Σ txInput,
+      Blanc.Weth10.DeploymentSystemPrefix rules base cb.block txInput) :=
+  Blanc.Weth10.canonicalDeploymentSystemPrefix
+    cfg rules base cb sender ca hbase
 
 example {cfg : ChainConfig} {rules : ForkRules}
     {base : BlockChain} {cb : CanonicalBlock}
@@ -4215,13 +4295,21 @@ example {ca : Adr} {sevm : Sevm} {base post : Devm} {G : Nat}
     h.errorArmLayout, h.effectCheckpoints, h.exec⟩
 
 example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
-    (h : CanonicalDeploymentBase chainId base sender ca) :
-    base.ValidContext ∧
+    (h : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId) pragueRules
+      base sender ca) :
+    (ChainConfig.pragueOnly chainId).Valid ∧
+      base.ValidContext ∧
       chainId = base.chainId ∧
       SumNof base.state.bal ∧
       ca = computeContractAddress sender (base.state.getNonce sender) ∧
       ca ≠ 0 ∧
-      (¬ pragueRules.isPrecomp ca) ∧
+      (∀ {timestamp : Nat} {selected : ForkRules},
+        (ChainConfig.pragueOnly chainId).rulesAt timestamp = .ok selected →
+          ¬ selected.isPrecomp ca) ∧
+      (¬ pragueRules.isPrecomp beaconRootsAddress) ∧
+      (¬ pragueRules.isPrecomp historyStorageAddress) ∧
+      (¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress) ∧
+      (¬ pragueRules.isPrecomp consolidationRequestPredeployAddress) ∧
       sender ≠ ca ∧
       withdrawalRequestPredeployAddress ≠ ca ∧
       consolidationRequestPredeployAddress ≠ ca ∧
@@ -4237,8 +4325,10 @@ example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
         Prog.compile deploymentSystemProgram ∧
       some (base.state.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram :=
-  ⟨h.validContext, h.chainId_eq, h.sumNof, h.target_eq, h.target_ne_zero,
-    h.target_not_precompile, h.sender_ne_target,
+  ⟨h.configValid, h.validContext, h.chainId_eq, h.sumNof, h.target_eq,
+    h.target_ne_zero, h.target_not_precompile, h.beacon_not_precompile,
+    h.history_not_precompile, h.withdrawalRequest_not_precompile,
+    h.consolidationRequest_not_precompile, h.sender_ne_target,
     h.withdrawalRequest_ne_target, h.consolidationRequest_ne_target,
     h.target_noCodeOrNonce, h.target_noStorage, h.lastBlockHash, h.beaconCode,
     h.historyCode, h.withdrawalRequestCode, h.consolidationRequestCode⟩
@@ -4489,7 +4579,8 @@ example (ca : Adr) (msg : Msg)
 
 example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
@@ -4530,7 +4621,8 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
         (sender : Adr)
         (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase chainId base sender ca ∧
+      CanonicalDeploymentBase (ChainConfig.pragueOnly chainId) pragueRules
+        base sender ca ∧
       CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca ∧
       OfficialDeploymentTransactionResult chainId ca ctx post bout ∧
       Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) ∧
@@ -4568,7 +4660,8 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
 example (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -4775,13 +4868,14 @@ example {msg : Msg} {post : Devm}
 
 example :
     ∃ post, OssifiableEmptySetupCreateResult
-      OssifiableCreateFixture.message OssifiableCreateFixture.implementation
+      (OssifiableCreateFixture.message pragueRules)
+      OssifiableCreateFixture.implementation
       OssifiableCreateFixture.admin post :=
-  OssifiableCreateFixture.message_success
+  OssifiableCreateFixture.message_success pragueRules (by decide)
 
 example :
     ∃ post,
-      processMessage OssifiableBothSlotFixture.message = .ok post ∧
+      processMessage (OssifiableBothSlotFixture.message pragueRules) = .ok post ∧
       post.error = .none ∧
       post.output = [] ∧
       post.getStorVal OssifiableBothSlotFixture.target implementationSlotLit =
@@ -4789,7 +4883,7 @@ example :
       post.getStorVal OssifiableBothSlotFixture.target adminSlotLit =
         OssifiableBothSlotFixture.postSetupAdmin.toB256 ∧
       post.logs = [] :=
-  OssifiableBothSlotFixture.message_success
+  OssifiableBothSlotFixture.message_success pragueRules
 
 example {sevm : Sevm} {base : Devm}
     (hvalue : sevm.value = 0)
@@ -4846,7 +4940,8 @@ example {sevm : Sevm} {base : Devm}
 example :
     ∃ post,
       processCreateMessage
-          OssifiableBothSlotCreateFixture.creationMessage = .ok post ∧
+          (OssifiableBothSlotCreateFixture.creationMessage pragueRules) =
+            .ok post ∧
       post.getCode OssifiableBothSlotFixture.target =
         ⟨⟨runtimeBaselineBytes⟩⟩ ∧
       post.getStorVal OssifiableBothSlotFixture.target
@@ -4863,11 +4958,12 @@ example :
           OssifiableBothSlotFixture.requestedAdmin] ∧
       post.output = runtimeBaselineBytes ∧
       post.gasLeft =
-        OssifiableBothSlotCreateFixture.creationMessage.gas -
+        (OssifiableBothSlotCreateFixture.creationMessage pragueRules).gas -
           OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas ∧
       post.error = .none := by
   obtain ⟨post, result⟩ :=
-    OssifiableBothSlotCreateFixture.creationMessage_success
+    OssifiableBothSlotCreateFixture.creationMessage_success pragueRules
+      (by decide) (by decide)
   exact ⟨post, result.run, result.installed, result.implementationSlot,
     result.adminSlot, result.logs, result.output, result.gasLeft,
     result.error⟩
@@ -5546,32 +5642,35 @@ example (sevm : Sevm) (base : Devm)
     hdec hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
     hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
 
-/-! ## Beacon deposit — P7/P8 deployment and open-history closure. -/
+/-! ## Beacon deposit — P7/P8 deployment and open-history closure.
+
+The deployment root and its history rungs are stated over an arbitrary valid
+`ChainConfig`.  Mainnet's configured schedule and the retained Prague-only
+schedule are pinned separately below, as the specializations they are. -/
 
 example
-    (chainId : UInt64) (base deployed : BlockChain)
+    (cfg : ChainConfig) (rules : ForkRules) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
-    (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
+    (henv : CanonicalBeaconDepositDeploymentBlock cfg rules base cb
       txBytes tx sender ca)
-    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
-      base cb.block = .ok deployed) :
-    DeploymentRoot chainId base deployed ca :=
-  canonicalDeploymentStep_establishes_root chainId base deployed cb txBytes
+    (hstep : stateTransitionUsing cfg base cb.block = .ok deployed) :
+    DeploymentRoot cfg base deployed ca :=
+  canonicalDeploymentStep_establishes_root cfg rules base deployed cb txBytes
     tx sender ca hbase henv hstep
 
-example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
-    (hroot : DeploymentRoot chainId base deployed ca) :
-    ∃ (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx) (sender : Adr)
-      (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
+example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
+    (hroot : DeploymentRoot cfg base deployed ca) :
+    ∃ (rules : ForkRules) (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+      (sender : Adr)
+      (ctx : PreparedDeploymentContext cfg rules base cb tx sender ca)
       (post : State) (bout : BlockOutput) (messagePost : State)
       (out : MsgCallOutput) (createPost : Devm),
-      CanonicalBeaconDepositDeploymentBlock chainId base cb
+      CanonicalBeaconDepositDeploymentBlock cfg rules base cb
         txBytes tx sender ca ∧
-      stateTransitionUsing (ChainConfig.pragueOnly chainId)
-        base cb.block = .ok deployed ∧
-      DeploymentTransactionResult chainId ca ctx post bout ∧
+      stateTransitionUsing cfg base cb.block = .ok deployed ∧
+      DeploymentTransactionResult cfg rules ca ctx post bout ∧
       DirectConstructorMessageResult ca ctx.msg messagePost out ∧
       DirectCreateMessageResult ca ctx.msg createPost ∧
       DirectCreateMessageExecution ca ctx.msg createPost :=
@@ -5586,6 +5685,158 @@ example (baseline : List B256) (ca : Adr) :
   historySpec_preserves baseline ca
 
 example
+    {cfg : ChainConfig} {baseline : List B256}
+    {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends reach native installed artifact
+
+example
+    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
+  root.future_history_extends reach native
+
+example
+    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) suffix ∧
+      ((future.state.getStor ca).get depositCountSlot).toNat =
+        suffix.length ∧
+      (0 < ((future.state.getStor ca).get depositCountSlot).toNat ↔
+        suffix ≠ []) ∧
+      Acc.root Bytes.sha256 (accOfStor (future.state.getStor ca)) =
+        mixedRootOf Bytes.sha256 suffix :=
+  root.future_count_root reach native
+
+/-! ### Beacon deposit — the published current-mainnet specializations. -/
+
+example
+    (rules : ForkRules) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase mainnetChainConfig rules base sender ca)
+    (henv : CanonicalBeaconDepositDeploymentBlock mainnetChainConfig rules
+      base cb txBytes tx sender ca)
+    (hstep : stateTransitionUsing mainnetChainConfig
+      base cb.block = .ok deployed) :
+    MainnetDeploymentRoot base deployed ca :=
+  canonicalDeploymentStep_establishes_root_mainnet rules base deployed cb
+    txBytes tx sender ca hbase henv hstep
+
+example {base deployed : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca) :
+    ∃ (rules : ForkRules) (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+      (sender : Adr)
+      (ctx : PreparedDeploymentContext mainnetChainConfig rules base cb tx
+        sender ca)
+      (post : State) (bout : BlockOutput) (messagePost : State)
+      (out : MsgCallOutput) (createPost : Devm),
+      CanonicalBeaconDepositDeploymentBlock mainnetChainConfig rules base cb
+        txBytes tx sender ca ∧
+      stateTransitionUsing mainnetChainConfig base cb.block = .ok deployed ∧
+      DeploymentTransactionResult mainnetChainConfig rules ca ctx post bout ∧
+      DirectConstructorMessageResult ca ctx.msg messagePost out ∧
+      DirectCreateMessageResult ca ctx.msg createPost ∧
+      DirectCreateMessageExecution ca ctx.msg createPost :=
+  DeploymentRoot.constructorOccurrence_mainnet hroot
+
+example
+    {base deployed future : BlockChain} {ca : Adr}
+    (root : MainnetDeploymentRoot base deployed ca)
+    (reach : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
+  DeploymentRoot.future_history_extends_mainnet root reach native
+
+example
+    {baseline : List B256} {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing mainnetChainConfig checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends_mainnet reach native installed artifact
+
+example
+    {base deployed future : BlockChain} {ca : Adr}
+    (root : MainnetDeploymentRoot base deployed ca)
+    (reach : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) suffix ∧
+      ((future.state.getStor ca).get depositCountSlot).toNat =
+        suffix.length ∧
+      (0 < ((future.state.getStor ca).get depositCountSlot).toNat ↔
+        suffix ≠ []) ∧
+      Acc.root Bytes.sha256 (accOfStor (future.state.getStor ca)) =
+        mixedRootOf Bytes.sha256 suffix :=
+  DeploymentRoot.future_count_root_mainnet root reach native
+
+/-! ### Beacon deposit — the retained Prague-only corollaries.  These are the
+`ChainConfig.pragueOnly` instances of the configured statements above.  Their
+conclusions are what this contract published before its configured migration;
+their premises are strictly larger, because the migration made the selected
+rules, the code-size bound and the address-`0x2` precompile membership explicit
+instead of discharging them by `decide` against a named fork.  Each addition is
+provable outright at Prague, so applicability is unchanged. -/
+
+example
+    (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase (ChainConfig.pragueOnly chainId)
+      pragueRules base sender ca)
+    (henv : CanonicalBeaconDepositDeploymentBlock
+      (ChainConfig.pragueOnly chainId) pragueRules base cb
+      txBytes tx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    PragueDeploymentRoot chainId base deployed ca :=
+  canonicalDeploymentStep_establishes_root_prague chainId base deployed cb
+    txBytes tx sender ca hbase henv hstep
+
+example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
+    (hroot : PragueDeploymentRoot chainId base deployed ca) :
+    ∃ (rules : ForkRules) (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+      (sender : Adr)
+      (ctx : PreparedDeploymentContext (ChainConfig.pragueOnly chainId) rules
+        base cb tx sender ca)
+      (post : State) (bout : BlockOutput) (messagePost : State)
+      (out : MsgCallOutput) (createPost : Devm),
+      CanonicalBeaconDepositDeploymentBlock (ChainConfig.pragueOnly chainId)
+        rules base cb txBytes tx sender ca ∧
+      stateTransitionUsing (ChainConfig.pragueOnly chainId)
+        base cb.block = .ok deployed ∧
+      DeploymentTransactionResult (ChainConfig.pragueOnly chainId) rules ca
+        ctx post bout ∧
+      DirectConstructorMessageResult ca ctx.msg messagePost out ∧
+      DirectCreateMessageResult ca ctx.msg createPost ∧
+      DirectCreateMessageExecution ca ctx.msg createPost :=
+  DeploymentRoot.constructorOccurrence_prague hroot
+
+example
+    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
+    (root : PragueDeploymentRoot chainId base deployed ca)
+    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      deployed future)
+    (native : ReachNativeShaAdmitted reach ca) :
+    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
+  DeploymentRoot.future_history_extends_prague root reach native
+
+example
     (chainId : UInt64) {baseline : List B256}
     {checkpoint future : BlockChain} {ca : Adr}
     (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
@@ -5596,20 +5847,11 @@ example
     (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
     ∃ suffix,
       ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
-  pragueOnly_history_extends chainId reach native installed artifact
+  pragueOnly_history_extends_prague chainId reach native installed artifact
 
 example
     {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot chainId base deployed ca)
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future)
-    (native : ReachNativeShaAdmitted reach ca) :
-    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
-  root.future_history_extends reach native
-
-example
-    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot chainId base deployed ca)
+    (root : PragueDeploymentRoot chainId base deployed ca)
     (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
       deployed future)
     (native : ReachNativeShaAdmitted reach ca) :
@@ -5621,7 +5863,7 @@ example
         suffix ≠ []) ∧
       Acc.root Bytes.sha256 (accOfStor (future.state.getStor ca)) =
         mixedRootOf Bytes.sha256 suffix :=
-  root.future_count_root reach native
+  DeploymentRoot.future_count_root_prague root reach native
 
 end BeaconDeposit
 

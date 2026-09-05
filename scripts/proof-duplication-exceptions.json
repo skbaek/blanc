@@ -1,5 +1,16 @@
 {
   "_comment": "Bounded, family-scoped K1 duplication exceptions. Every row names exactly one concrete 16-hex-digit family id, states the exact current site count it allows, expires, and carries a rationale, byte-level evidence, a kebab-slug owner and a removal condition. Wildcards, file-wide selectors and orphans are rejected; an exception is a dated reason to carry a rise, never a way to raise the baseline.",
   "schema_version": 1,
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "weth10-canonical-deployment-base-frozen-api",
+      "family_id": "ed8ffdcba9598f97",
+      "allowed_sites": 2,
+      "rationale": "Blanc.Weth10.CanonicalDeploymentBase (Blanc/Weth10DeploymentRoot.lean) is the historical WETH10 public API structure that the 2026-09-05 review-repair decision preserves byte-for-byte against main b834378: its 46 structure-generated constants, ordinary projection notation and the original canonicalDeploymentSystemPrefix statement must remain exact, and re-exporting the common generated names (alias/abbrev) was tested and discarded because it breaks projection notation. Blanc.CanonicalDeploymentBase (Blanc/DeploymentMessage.lean) is the contract-neutral configured shell owner that the deployment-spine goal generalized from main's Prague-fixed (chainId : UInt64) form to the same (cfg : ChainConfig) (rules : ForkRules) field list, so the WETH10 theorem proof can delegate to the shared owner. The two structure bodies are therefore deliberately identical: one shared owner and one frozen historical instance.",
+      "evidence": "Gate finding on Blanc 7513d1d798b1a0dafa098d49b2446fabf7c7b39e: 'FINDING new-family: ed8ffdcba9598f97 - 2 byte-identical site(s) with no baseline family: Blanc/DeploymentMessage.lean:217:Blanc.CanonicalDeploymentBase, Blanc/Weth10DeploymentRoot.lean:66:Blanc.Weth10.CanonicalDeploymentBase' (sites 110 -> 112, restated lines 60 -> 61). git diff b834378..7513d1d -- Blanc/Weth10DeploymentRoot.lean touches only the theorem proof, so the WETH10 structure is byte-identical to main; git diff b834378..7513d1d -- Blanc/DeploymentMessage.lean generalizes the common structure to that body. Main b834378's own ratchet is green at 50 families / 110 sites / 60 restated lines.",
+      "owner": "blanc-configured-deployment-spine-v1",
+      "expires": "2026-12-05",
+      "removal_condition": "Remove when the WETH10 historical-API preservation decision is retired so that Blanc.Weth10.CanonicalDeploymentBase can become an alias of (or extend) Blanc.CanonicalDeploymentBase, or when the common owner's field list diverges from the frozen WETH10 structure; never by rewriting the baseline."
+    }
+  ]
 }

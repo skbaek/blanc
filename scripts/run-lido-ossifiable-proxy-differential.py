@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, NoReturn, Sequence
 
+import eels_semantic_closure
+
 from lido_ossifiable_proxy_differential_schema import (
     CASE_COUNT,
     EELS_COMMIT,
@@ -136,6 +138,9 @@ def verify_eels(root: Path) -> None:
     if os.environ.get("PYTHONDONTWRITEBYTECODE") != "1" or \
             Path(os.environ.get("PYTHONPATH", "")).resolve() != expected_source:
         die("EELS requires PYTHONDONTWRITEBYTECODE=1 and exact PYTHONPATH=<EELS_ROOT>/src")
+    eels_semantic_closure.assert_prague_environment(
+        die, checkout_root=root
+    )
     import ethereum
     module_path = Path(ethereum.__file__).resolve()
     if not module_path.is_relative_to(expected_source):

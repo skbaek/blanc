@@ -8,6 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 EELS_PIN="4198b9c5996713b268aed602739d5aa40e277694"
 TMP_DIR="$(mktemp -d)"
@@ -43,8 +45,9 @@ if ! (cd "$ROOT" && lake env lean \
     >"$ARTIFACTS" 2>"$LOG"); then
   fail "production deployment evaluation failed"
 fi
-if ! PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-    "$SCRIPT_DIR/gen-beacon-deposit-deployment-fixture.py" \
+if ! "$EELS_PY" \
+    -I -s -B -X pycache_prefix=/dev/null \
+    "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-beacon-deposit-deployment-fixture.py" \
     --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" \
     --fixture "$FIXTURE" --metadata "$METADATA" >"$LOG" 2>&1; then
   fail "pinned-EELS fixture generation or mandatory mutants failed"

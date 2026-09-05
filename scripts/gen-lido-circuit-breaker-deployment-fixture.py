@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
+import eels_semantic_closure
+
 
 REPO = Path(__file__).resolve().parents[1]
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
@@ -238,6 +240,12 @@ def expected_logs(artifacts: Artifacts, target: str, env: SimpleNamespace):
     )
 
 
+def _closure_refusal(message: str):
+    """Route a semantic-closure refusal into this script's own failure path."""
+
+    raise RuntimeError(message)
+
+
 def verify_eels_pin(root: Path) -> None:
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True,
@@ -252,6 +260,12 @@ def verify_eels_pin(root: Path) -> None:
             f"pinned EELS checkout must be clean at {EELS_PIN}; "
             f"found {head} dirty={bool(dirty)}"
         )
+
+    # The commit pins the specification's source; this pins what that source
+    # imports.  Both must hold before an oracle comparison means anything.
+    eels_semantic_closure.assert_prague_environment(
+        _closure_refusal, checkout_root=root
+    )
 
 
 def make_expectations_class(env: SimpleNamespace):

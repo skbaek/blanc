@@ -38,7 +38,7 @@ CACHE_PATH = "./.lake"
 # Semantics: lean4 f054605aea4b840552cca2e725580bffd1e1b704,
 # Lake/CLI/Main.lean checkTest/checkLint and Lake/Load/Package.lean loadPackage.
 DRIVER_CENSUS_INPUTS = {
-    "lakefile.lean": "d63db64fc08c056576255d189b301a87f5370f43eb411e358a73a00dc4d188de",
+    "lakefile.lean": "092b1d5c4fabe421ae327e15c7b774a25fcffc9efdb6a3885ea514847f367f54",
     "lean-toolchain": "8e3538e0ab5f81a3ee04927d8838c8c674e0e112838b4b3ce87ec218143276af",
 }
 LEAN_ACTION_DEFAULTS = {
@@ -223,6 +223,7 @@ REQUIRED_GATE_IDS = [
     "proof-duplication",
     "proof-residue",
     "layering",
+    "fork-containment",
     "extraction-ownership",
     "trust-surface",
     "weth10-reference",
@@ -254,8 +255,8 @@ REQUIRED_GATE_IDS = [
     "error-data",
     "axiom-audit",
     "claims",
-    "lido-deployment",
-    "weth-fixtures",
+    "eels-prague-closure",
+    "lido-deployment",    "weth-fixtures",
     "prorata-fixtures",
     "fmint-fixtures",
 ]
@@ -563,7 +564,7 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
             "kind": "command",
             "run": (
                 "execution-specs/venv/bin/python -m pip install "
-                "--disable-pip-version-check -e execution-specs"
+                "--disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs"
             ),
         },
     }
@@ -741,6 +742,22 @@ def topology_problems(
     source_ids = [step.get("id") for step in jobs.get("source-trust", {}).get("steps", [])]
     if source_ids[:2] != ["checkout", "recipe-base"]:
         problems.append("recipe comparison base is not bound before source gates")
+
+    deployment_steps = jobs.get("deployment-fixtures", {}).get("steps", [])
+    deployment_ids = [step.get("id") for step in deployment_steps]
+    closure = next((step for step in deployment_steps
+                    if step.get("id") == "eels-prague-closure"), None)
+    if closure is None or closure.get("env") != {
+        "EELS_ROOT": "${{ github.workspace }}/execution-specs"
+    }:
+        problems.append("Prague closure must bind the exact provisioned EELS root")
+    required_deployment_order = ["eels-install", "eels-prague-closure", "lido-deployment"]
+    if ([identifier for identifier in deployment_ids
+         if identifier in required_deployment_order] != required_deployment_order):
+        problems.append("Prague closure must follow constrained installation before deployment replay")
+    if ([identifier for identifier in source_ids
+         if identifier in {"layering", "fork-containment"}] != ["layering", "fork-containment"]):
+        problems.append("fork containment must follow layering in the source lane")
 
     ancestors, dag_problems = job_ancestors(jobs)
     problems.extend(dag_problems)
@@ -1251,6 +1268,31 @@ def self_test() -> int:
                 if step["id"] == identifier:
                     return job, step
         raise PolicyError(f"self-test cannot find step {identifier}")
+
+    for gate_id in ["fork-containment", "eels-prague-closure"]:
+        changed = copy.deepcopy(topology)
+        job, step = find_step(changed, gate_id)
+        job["steps"].remove(step)
+        check_rejected(f"missing {gate_id}", changed, f"missing=['{gate_id}']")
+    for first_id, second_id, fragment in [
+        ("eels-install", "eels-prague-closure", "follow constrained installation"),
+        ("eels-prague-closure", "lido-deployment", "before deployment replay"),
+        ("layering", "fork-containment", "fork containment must follow layering"),
+    ]:
+        changed = copy.deepcopy(topology)
+        job, first = find_step(changed, first_id)
+        _, second = find_step(changed, second_id)
+        a, b = job["steps"].index(first), job["steps"].index(second)
+        job["steps"][a], job["steps"][b] = second, first
+        check_rejected(f"reversed {first_id}/{second_id}", changed, fragment)
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "eels-install")
+    step["run"] = step["run"].replace("-c scripts/eels-prague-constraints.txt ", "")
+    check_rejected("unconstrained pip", changed, "infrastructure step deployment-fixtures/eels-install moved")
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "eels-prague-closure")
+    step["env"] = {"EELS_ROOT": "unreviewed-checkout"}
+    check_rejected("wrong closure root", changed, "exact provisioned EELS root")
 
     changed_defaults = dict(LEAN_ACTION_DEFAULTS, nanoda="true")
     changed_sources = dict(LEAN_ACTION_SOURCES)

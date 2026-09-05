@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 ARTIFACTS="$(mktemp)"
 trap 'rm -f "$ARTIFACTS"' EXIT
@@ -30,5 +32,5 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
   exit 1
 fi
 
-PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \
+"$EELS_PY" -I -s -B -X pycache_prefix=/dev/null "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "check-weth10-deployment.py" \
   --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" --jaune-bin "$JAUNE_BIN"

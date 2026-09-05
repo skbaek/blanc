@@ -182,17 +182,17 @@ def currentState : State :=
 def warmKeys : Std.HashSet (Adr × B256) :=
   Std.HashSet.emptyWithCapacity.insert (target, implementationSlotLit)
 
-def benv : Benv :=
+def benv (rules : ForkRules) : Benv :=
   { (default : Benv) with
     state := currentState
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        rules := rules
         origState := originalState } }
 
-def message : Msg :=
+def message (rules : ForkRules) : Msg :=
   { (default : Msg) with
-    benv := benv
+    benv := benv rules
     caller := target
     target := some target
     currentTarget := target
@@ -240,15 +240,16 @@ private theorem currentState_target_admin_zero :
 /-- Closed execution of the exact frozen setup child in proxy storage
 context.  Both ERC-1967 slots are changed and the child returns cleanly with
 empty returndata and no log. -/
-theorem message_success :
+theorem message_success (rules : ForkRules) :
     ∃ post,
-      processMessage message = .ok post ∧
+      processMessage (message rules) = .ok post ∧
       post.error = .none ∧
       post.output = [] ∧
       post.getStorVal target implementationSlotLit =
         postSetupImplementation.toB256 ∧
       post.getStorVal target adminSlotLit = postSetupAdmin.toB256 ∧
       post.logs = [] := by
+  let message := message rules
   obtain ⟨post, walk, error, output, gas, implementationSlot,
       adminSlot, logs, _keys⟩ :=
     setupMain_runCompiledTo [] (initSevm message) (initDevm message) 1000
@@ -283,8 +284,8 @@ theorem message_success :
     · exact setupMain_noCalls
     · simpa only [implementationCode, ByteArray.toList_eq_toList_data]
         using setupMain_compile
-    · simp only [initSevm, message, implementationCode,
-        ByteArray.toList_eq_toList_data, List.append_nil]
+    · change implementationCode.toList = implementationBytes
+      simp only [implementationCode, ByteArray.toList_eq_toList_data]
   have settled : processMessage message = .ok post := by
     apply MessageExecution.processMessage_clean_of_exec
     · rfl

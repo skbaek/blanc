@@ -71,6 +71,8 @@ jobs:
         run: scripts/check-proof-residue.sh
       - name: Import hierarchy (contracts are siblings)
         run: scripts/check-layering.sh
+      - name: Named-fork containment
+        run: scripts/check-fork-containment.sh
       - name: Execution-settlement extraction ownership
         run: scripts/check-extraction-ownership.sh
       - name: Imported source trust surface
@@ -302,7 +304,11 @@ jobs:
       - name: Create pinned EELS virtual environment
         run: python -m venv execution-specs/venv
       - name: Install pinned execution-specs environment
-        run: execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
+        run: execution-specs/venv/bin/python -m pip install --disable-pip-version-check -c scripts/eels-prague-constraints.txt -e execution-specs
+      - name: Pinned EELS Prague semantic closure
+        env:
+          EELS_ROOT: ${{ github.workspace }}/execution-specs
+        run: scripts/check-eels-prague-closure.sh
       - name: Lido CircuitBreaker direct deployment-root assurance
         env:
           EELS_ROOT: ${{ github.workspace }}/execution-specs

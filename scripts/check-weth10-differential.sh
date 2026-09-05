@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 RUNTIMES="$(mktemp)"
 trap 'rm -f "$RUNTIMES"' EXIT
 
@@ -22,5 +24,5 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-differential-code.lean >"$
   exit 1
 fi
 
-PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/gen-weth10-differential.py" \
+"$EELS_PY" -I -s -B -X pycache_prefix=/dev/null "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-weth10-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-runtimes "$RUNTIMES" "$@"

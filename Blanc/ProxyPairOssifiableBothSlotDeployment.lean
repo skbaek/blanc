@@ -25,13 +25,13 @@ def creationState : State :=
   State.set withImplementation creationCreator
     { Acct.nil with bal := 1000000000000000000 }
 
-/-- Prague block environment for the both-slot deployment fixture. -/
-def creationBenv : Benv :=
+/-- Selected-rule block environment for the both-slot deployment fixture. -/
+def creationBenv (rules : ForkRules) : Benv :=
   { (default : Benv) with
     state := creationState
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        rules := rules
         origState := creationState } }
 
 /-- Complete creation input with the frozen nonempty setup payload. -/
@@ -43,9 +43,9 @@ def creationCode : ByteArray :=
   ByteArray.mk creationInput.toArray
 
 /-- Exact direct-CREATE message with one full call-depth budget. -/
-def creationMessage : Msg :=
+def creationMessage (rules : ForkRules) : Msg :=
   { (default : Msg) with
-    benv := creationBenv
+    benv := creationBenv rules
     caller := creationCreator
     target := none
     currentTarget := target
@@ -62,8 +62,8 @@ def creationMessage : Msg :=
     disablePrecompiles := false }
 
 /-- The fixture message carries the exact complete creation input. -/
-@[simp] theorem creationMessage_code :
-    creationMessage.code.toList =
+@[simp] theorem creationMessage_code (rules : ForkRules) :
+    (creationMessage rules).code.toList =
       ossifiableFullCreateInput implementation requestedAdmin setupData := by
   change creationCode.toList = _
   simp only [creationCode, creationInput, ByteArray.toList_eq_toList_data]
@@ -91,8 +91,8 @@ theorem bothSlotCreateMessageGas_eq :
   rfl
 
 /-- Settled observations retained by the concrete both-slot CREATE. -/
-structure CreateResult (post : Devm) : Prop where
-  run : processCreateMessage creationMessage = .ok post
+structure CreateResult (rules : ForkRules) (post : Devm) : Prop where
+  run : processCreateMessage (creationMessage rules) = .ok post
   installed : post.getCode target = ⟨⟨runtimeBaselineBytes⟩⟩
   implementationSlot :
     post.getStorVal target Blanc.ProxyPair.implementationSlotLit =
@@ -104,13 +104,19 @@ structure CreateResult (post : Devm) : Prop where
       [ossifiableConstructorAdminChangedLog target
         postSetupAdmin.toB256 requestedAdmin]
   output : post.output = runtimeBaselineBytes
-  gasLeft : post.gasLeft = creationMessage.gas - bothSlotCreateMessageGas
+  gasLeft : post.gasLeft =
+    (creationMessage rules).gas - bothSlotCreateMessageGas
   error : post.error = .none
 
 /-- The concrete nonempty setup deployment succeeds, retains the child's
 implementation write, rereads the child's admin for the event, installs the
 requested final admin, and deposits the exact runtime. -/
-theorem creationMessage_success : ∃ post, CreateResult post := by
+theorem creationMessage_success (rules : ForkRules)
+    (himplementationNotPrecompile :
+      rules.isPrecomp implementation = false)
+    (hmax : 2188 ≤ rules.code.maxCodeSize) :
+    ∃ post, CreateResult rules post := by
+  let creationMessage := creationMessage rules
   let prepared := processCreateMessage.msg creationMessage
   obtain ⟨benv, htransfer⟩ :=
     benvAfterTransfer_exists_zero (msg := prepared) (by rfl)
@@ -134,7 +140,7 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
       _ = prepared.code.toList := rfl
       _ = creationMessage.code.toList := rfl
       _ = ossifiableFullCreateInput implementation requestedAdmin setupData :=
-        creationMessage_code
+        creationMessage_code rules
   have hseedStatic : sevm.isStatic = false := by
     rfl
   have hpreparedCodeAddress : prepared.codeAddress = .none := by
@@ -205,12 +211,12 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     rw [htarget, hbaseKeys]
     exact Std.HashSet.not_mem_emptyWithCapacity
   have hdepth : sevm.depth ≠ 0 := by
-    change creationMessage.depth ≠ 0
+    change (1024 : Nat) ≠ 0
     decide
   have hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false := by
     rw [hstat]
-    decide +kernel
+    exact himplementationNotPrecompile
   obtain ⟨raw, hrun, hrawImplementation, hrawAdmin, hrawLogs,
       hrawOutput, hrawGas, hrawError⟩ :=
     program_success hseedValue hseedCode (by decide)
@@ -265,7 +271,7 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
   have hcharge : processCreateMessage.chargeCodeGas
       creationMessage.benv.stat.rules raw = .ok charged := by
     apply chargeCodeGas_runtimeBaseline hrawOutput hdeposit
-    decide
+    exact hmax
   have hchargedImplementation :
       charged.getStorVal target implementationSlotLit =
         postSetupImplementation.toB256 := by
@@ -334,7 +340,8 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
   · dsimp only [post]
     rw [Devm.setCode_output]
     exact hchargedOutput
-  · dsimp only [post, creationMessage, bothSlotCreateMessageGas]
+  · change post.gasLeft = 526248 - bothSlotCreateMessageGas
+    dsimp only [post, bothSlotCreateMessageGas]
     rw [Devm.setCode_gasLeft]
     exact hchargedGas
   · dsimp only [post]

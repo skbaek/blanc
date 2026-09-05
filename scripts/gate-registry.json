@@ -11,16 +11,18 @@
           "scripts/check-doc-counts.sh",
           "scripts/check-doc-counts.py",
           "scripts/AxiomCheck.lean",
+          "scripts/ClaimCheck.lean",
           "README.md",
           "scripts/GATES.md",
-          "docs/index.html"
+          "docs/index.html",
+          "docs/contracts/weth10.html"
         ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "The catalogue is one of this gate's own consumers, so editing scripts/GATES.md reddens the gate that documents it.",
+      "note": "The catalogue is one of this gate's own consumers. The gate derives both repository-wide proof counts from their Lean inventories and checks every registered local publication, including the contract WETH10 page that previously drifted out of sight.",
       "order": 1,
       "verdict": {
         "expect_exit": 0,
@@ -651,6 +653,13 @@
           "scripts/lido_ossifiable_proxy_performance_schema.py",
           "scripts/check-lido-ossifiable-proxy-performance.py",
           "scripts/test-lido-ossifiable-proxy-performance-falsifiers.py",
+          "scripts/test-lido-ossifiable-proxy-performance-runner-static.py",
+          "scripts/run-lido-ossifiable-proxy-performance.py",
+          "scripts/run-lido-ossifiable-proxy-performance.sh",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
+          "scripts/check-lido-ossifiable-proxy-performance-results.py",
           "@ossifiableperfmanifest",
           "@ossifiableperfroot/scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
           "@ossifiableperfroot/scripts/lido-ossifiable-proxy-reference.json"
@@ -667,7 +676,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Static, result-free campaign validation. PERFORMANCE_ROOT and PERFORMANCE_MANIFEST can redirect the external-identity root and manifest independently; both resolved paths are fingerprinted. The complete vendored input population is conservative but intentional because the schema binds the compiler/list/source closure and the falsifier constructs coherent ledgers from it.",
+      "note": "Static, result-free campaign and runner validation. PERFORMANCE_ROOT and PERFORMANCE_MANIFEST can redirect the external-identity root and manifest independently; both resolved paths are fingerprinted. Five additional runner mutations cover evidence construction without EELS or measurement. The registered source set includes the isolated launcher/bootstrap, executed-loader guard and Prague loader lock, runner and evidence checker because every new evidence record binds their exact hashes. The complete vendored input population is conservative but intentional because the schema binds the compiler/list/source closure and the falsifier constructs coherent ledgers from it.",
       "order": 17,
       "verdict": {
         "expect_exit": 0,
@@ -1047,7 +1056,12 @@
           "Blanc/LidoCircuitBreakerDeploymentRoot.lean",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "scripts/run-isolated-python.py",
+          "scripts/run-eels-t8n.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-lido-circuit-breaker-deployment.lean",
@@ -1060,6 +1074,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1239,6 +1264,74 @@
     },
     {
       "command": [
+        "scripts/check-eels-prague-closure.sh"
+      ],
+      "id": "eels-prague-closure",
+      "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
+        "files": [
+          "scripts/check-eels-prague-closure.sh",
+          "scripts/gen-eels-prague-closure.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
+          "scripts/eels-prague-constraints.txt",
+          "@eels/.git/config",
+          "@eels/venv/pyvenv.cfg",
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11",
+          "@eels/setup.cfg",
+          "/bin/bash",
+          "/usr/bin/git"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
+          }
+        ],
+        "tools": [
+          "python3",
+          "git",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Owns the Prague differential lane's full executed Python closure. The isolated bootstrap audits startup modules, derives the clean pinned checkout source root, installs a live pre-execution loader guard, then imports the transition and every mandatory runtime package. The schema-4 pin binds exact versions everywhere and, on generated rows, exact distribution, complete executable-standard-library, native interpreter, launcher, and unowned site-packages source bytes. Built-in/frozen code, non-executing namespaces, trusted checkout source, measured stdlib, exact RECORD owners, and exact platform file records are admitted; sourceless bytecode, custom loaders, missing specs, duplicate distribution owners, external source, and newly unowned source fail before execution. Runtime-created extension side effects are admitted only after their importing spec passed the guard. Every Prague consumer launcher uses the same isolated bootstrap before its target import. The generated constraints file cannot drift from the pin.",
+      "order": 32,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — prague closure pin matches: "
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check-weth10-differential.sh"
       ],
       "id": "weth10-differential",
@@ -1261,8 +1354,12 @@
           "scripts/check-runtime-bytes.py",
           "scripts/weth10-reference.json",
           "scripts/fixtures/weth10/manifest.json",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "material_output": [
           {
@@ -1285,6 +1382,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1294,7 +1402,7 @@
       },
       "kind": "cacheable",
       "note": "The oracle is the pinned EELS checkout's own Prague interpreter, run under that checkout's venv python rather than the system python3; the external pin covers the checkout and refuses a dirty one. Blanc/Weth10Code.lean is read as text for the committed-literal comparison, a claim no .olean can witness, so it is fingerprinted separately from the evaluator's import closure. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 32,
+      "order": 33,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1328,8 +1436,12 @@
           "scripts/eels_differential_common.py",
           "scripts/lido_circuit_breaker_ac5_shape_schema.py",
           "scripts/lido-circuit-breaker-reference.json",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-lido-circuit-breaker-artifacts.lean",
@@ -1342,6 +1454,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1351,7 +1474,7 @@
       },
       "kind": "cacheable",
       "note": "The checker importlib-loads gen-lido-circuit-breaker-differential.py, so that generator and the AC5 shape schema it imports are this gate's implementation even though the wrapper never names them. LIDO_DISPATCHER_SELECTION_STAGE decides the mode and is cross-checked against the checker's own constant, so it is a verdict input. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 33,
+      "order": 34,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1387,8 +1510,12 @@
           "scripts/check-lido-circuit-breaker-dispatchers.py",
           "scripts/lido-circuit-breaker-reference.json",
           "scripts/fixtures/lido-circuit-breaker/manifest.json",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-lido-circuit-breaker-artifacts.lean"
@@ -1400,6 +1527,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1409,7 +1547,7 @@
       },
       "kind": "cacheable",
       "note": "The generator importlib-loads check-lido-circuit-breaker-dispatchers.py for its completion-threshold cross-check, so the dispatcher gate's source is an input here as well — the two gates load each other. The wrapper's inline required-tag digest, the resource schema's canonical-JSON demand and the falsifier baseline all read the same manifest, so one byte moving there reddens four independent checks. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 34,
+      "order": 35,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1463,8 +1601,12 @@
           "scripts/lido-twg-compatibility.py",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-lido-twg-artifacts.lean"
@@ -1476,6 +1618,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           },
           {
             "pattern": "**/*",
@@ -1490,7 +1643,7 @@
       },
       "kind": "cacheable",
       "note": "The wrapper composes the independent B1 reference and census gates before evaluating the production Blanc artifacts, executing both complete CREATE inputs under the pinned Prague EELS venv, checking the exact committed manifest through an independent schema, synchronizing the compatibility/deviation documents, and running separate mutation falsifiers. The shared EELS helper, compatibility tool and documents, both composed prerequisite read sets, fixture policy, evaluator, interpreter and gitignored site-packages are therefore direct inputs here. EELS_ROOT and HOME resolve the external checkout; the reference overrides and JSC/NODE can alter the composed offline recompilation. The manifest records the frozen 35a196f artifact-program identity rather than live HEAD, so unrelated documentation or admission commits do not stale semantic evidence.",
-      "order": 35,
+      "order": 36,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1526,8 +1679,12 @@
           "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
           "scripts/lido-ossifiable-proxy-reference.json",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "material_output": [
           {
@@ -1550,6 +1707,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1560,7 +1728,7 @@
       },
       "kind": "cacheable",
       "note": "The wrapper evaluates the compiler-owned artifacts, runs every frozen row in fresh pinned Prague worlds, and independently validates the clean-checkout result. The manifest, performance binding, reference lock, schema/runner/checker/falsifiers, Lean evaluator depHash, pinned EELS interpreter and complete site-packages are direct inputs.",
-      "order": 36,
+      "order": 37,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1594,10 +1762,15 @@
           "scripts/check-runtime-bytes.py",
           "scripts/fixtures/weth10-redemption/manifest.json",
           "Blanc/Weth10Code.lean",
+          "scripts/run-isolated-python.py",
+          "scripts/run-eels-t8n.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "populations": [
           {
@@ -1610,6 +1783,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1620,7 +1804,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is what produces PASS/FAIL and is fingerprinted directly, and no Blanc module is elaborated at all. The EEST blockchain-test template under ~ supplies the Prague predeploy code and the genesis header, yet is hardcoded, unpinned and unguarded, so it is declared as an exact file outside the repository. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 37,
+      "order": 38,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1652,10 +1836,15 @@
           "scripts/gen-weth10-redemption-fixtures.py",
           "scripts/gen-weth-fixtures.py",
           "scripts/check-runtime-bytes.py",
+          "scripts/run-isolated-python.py",
+          "scripts/run-eels-t8n.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "~/eest-mainnet-v20.0.1/fixtures/blockchain_tests/for_prague/constantinople/eip1052_extcodehash/extcodehash/extcodehash_of_empty.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-weth10-deployment-code.lean"
@@ -1667,6 +1856,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -1676,7 +1876,7 @@
       },
       "kind": "cacheable",
       "note": "check-weth10-deployment.py importlib-loads gen-weth10-redemption-fixtures.py, which loads gen-weth-fixtures.py and check-runtime-bytes.py at its own import time; the whole three-deep chain is declared, and through build_fixture it reaches the same unpinned ~/eest-… template as gate 28. Blanc/Weth10Code.lean is deliberately absent: the literal parse in the loaded module lives in a main() that never runs on this path. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly — package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
-      "order": 38,
+      "order": 39,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1707,7 +1907,7 @@
       },
       "kind": "cacheable",
       "note": "weth10-reference.py is importlib-loaded only for its Keccak and drags weth10_reference_schema.py in with it; the WETH10_REFERENCE_* overrides those two read at import cannot move this gate's lock, which comes from its own constant, so they are not declared here. The harness is run with `lake env lean --run`, unlike the #eval evaluators elsewhere in this family.",
-      "order": 39,
+      "order": 40,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1739,7 +1939,7 @@
       },
       "kind": "cacheable",
       "note": "Comparison gate for the BeaconDeposit pure model: oracle vectors regenerated via --check, Lean evaluator under the keccak-256 instantiation, fail-closed line comparison. --falsify is a mutation campaign (hard hold) and is not part of this cacheable default invocation.",
-      "order": 40,
+      "order": 41,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1771,6 +1971,7 @@
           "scripts/current-mainnet-runtime-lock.json",
           "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
+          "scripts/eels_semantic_closure.py",
           "@t8n_target/.git/config",
           "@t8n_target/.venv/pyvenv.cfg",
           "@t8n_target/.venv/bin/python",
@@ -1794,6 +1995,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -1802,8 +2007,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Contract-neutral current-mainnet execution lane. The wrapper and importable helper own a literal BPO2 target with no caller fork override; exact checkout, upstream parent, four-file overlay digest, selected module, BPO2 blob schedule and BLOBBASEFEE canary are independently checked. The target checkout has its own root and pin rather than repointing the frozen Prague EELS lane. A generated two-platform runtime lock owns exact native macOS arm64 and Linux x86_64 closures; cache identity derives the selected CPython 3.11.9 standard library from the venv instead of naming one OS path.",
-      "order": 41,
+      "note": "Contract-neutral current-mainnet execution lane with a literal BPO2 target and no caller fork override. Exact checkout, upstream parent, overlay, compiler/fork selection, blob schedule, and BLOBBASEFEE canary are independently checked. The schema-5 runtime lock binds the complete transition and mandatory runtime-tool distribution population plus executed-loader policy and, on generated rows, exact distribution, complete executable-standard-library, native interpreter, launcher, and unowned site-packages source bytes. The helper audits startup modules and installs the live loader guard before target imports; every target execution and signer path uses the isolated guarded interpreter. macOS arm64 is measured; Linux x86_64 is explicitly ungenerated and fails closed.",
+      "order": 42,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1838,6 +2043,8 @@
           "scripts/current-mainnet-runtime-lock.json",
           "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/run-current-mainnet-isolated.py",
           "scripts/weth10-reference.json",
           "scripts/gen-weth10-differential.py",
           "scripts/fixtures/weth10-current-mainnet/01-creation-block.json",
@@ -1895,6 +2102,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -1905,7 +2116,7 @@
       },
       "kind": "cacheable",
       "note": "Additive WETH10 BPO2 consumer of the contract-neutral current-mainnet API. It evaluates the exact compiler-owned initcode and mainnet-family runtimes, authors and byte-compares one fresh type-2 creation block plus the preserved type-2 redemption and type-4 authorization-mutation profiles, replays all three blocks through Jaune at BPO2, and compares the canonical 27-selector-plus-receive matrix between the locked deployed runtime and evaluated Blanc runtime on status, receipt gas, logs, projected storage, and fee-normalized ETH. Exact returndata, live CALL traces, and malformed/precompile/OOG cases remain exclusively on the preserved Prague differential. The manifest binds the shared two-platform runtime lock, the reference lock, evaluator outputs, exact target, three blocks, 28-row matrix, and kernel-decided Lean timestamp pin.",
-      "order": 42,
+      "order": 43,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -1938,6 +2149,8 @@
           "scripts/current-mainnet-runtime-lock.json",
           "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/run-current-mainnet-isolated.py",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
           "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
@@ -1980,6 +2193,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -1989,8 +2206,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the generated two-platform runtime lock; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
-      "order": 43,
+      "note": "BPO2 BeaconDeposit consumer of the contract-neutral current-mainnet API. Two fresh top-level CREATE transactions and the same ordered seven-transition state chain per side check artifact limits and strict size dominance, exact side-owned deployed runtime/storage/account state, exact raw deposit log/storage/ETH commitments, canonical receipt status and cumulative gas on every row, and EIP-7623/EIP-7825/EIP-3860 constructor accounting. Because this target does not expose the transaction refund counter, the constructor remainder is explicitly net receipt-charged execution after any refund; total and net-after-refund deltas must be non-positive. Returndata and the broader malformed/precompile/OOG matrix remain owned by the preserved Prague gate. The portable manifest binds the two-row runtime lock, whose Linux row is explicitly ungenerated; this registry additionally owns the exact selected native checkout, venv/site-packages, and CPython closure.",
+      "order": 44,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2024,8 +2241,12 @@
           "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
           "scripts/fixtures/beacon-deposit/manifest.json",
           "BEACON_DEPOSIT_DEVIATIONS.md",
+          "scripts/run-isolated-python.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
         ],
         "lean_entries": [
           "scripts/eval-beacon-deposit-differential-code.lean"
@@ -2037,6 +2258,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -2046,7 +2278,7 @@
       },
       "kind": "cacheable",
       "note": "The evaluator's direct Lean root supplies the compiler-owned runtime and creation artifacts through Lake depHash closure; the Python runner directly reads the three pinned reference inputs, exact manifest, and positive-gas deviation registry, and owns both the runtime matrix and separate constructor gas/poststate measurement. The clean external pin owns EELS source, while the ignored virtualenv interpreter and complete site-packages population are hashed separately through the same EELS_ROOT.",
-      "order": 44,
+      "order": 45,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2076,9 +2308,28 @@
           "scripts/check-beacon-deposit-deployment.sh",
           "scripts/gen-beacon-deposit-deployment-fixture.py",
           "scripts/gen-weth-fixtures.py",
+          "scripts/run-isolated-python.py",
+          "scripts/run-eels-t8n.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/eels-prague-closure.json",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "@eels/venv/pyvenv.cfg",
-          "@eels/venv/bin/python"
+          "@eels/venv/bin/python",
+          "@eels_python_base/bin/python3.11"
+        ],
+        "material_output": [
+          {
+            "authority": [
+              "scripts/eval-beacon-deposit-deployment.lean"
+            ],
+            "command": [
+              "lake",
+              "env",
+              "lean",
+              "scripts/eval-beacon-deposit-deployment.lean"
+            ],
+            "id": "beacon-deposit-deployment-artifacts"
+          }
         ],
         "populations": [
           {
@@ -2087,6 +2338,17 @@
             ],
             "pattern": "python*/site-packages/**/*",
             "root": "@eels/venv/lib"
+          },
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "**/*",
+            "root": "@eels_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@eels_python_base/lib"
           }
         ],
         "tools": [
@@ -2094,25 +2356,11 @@
           "python3",
           "git",
           "bash"
-        ],
-        "material_output": [
-          {
-            "id": "beacon-deposit-deployment-artifacts",
-            "command": [
-              "lake",
-              "env",
-              "lean",
-              "scripts/eval-beacon-deposit-deployment.lean"
-            ],
-            "authority": [
-              "scripts/eval-beacon-deposit-deployment.lean"
-            ]
-          }
         ]
       },
       "kind": "cacheable",
       "note": "The evaluator is a direct Lean entry whose Lake depHash closes over the exact D1 deployment root; it emits no theorem or golden. The Python generator independently pins both artifact SHA-256 identities and reconstructs all 31 constructor storage words with Python SHA-256 before authoring a temporary strict singleton Prague block. Pinned EELS executes the block, three isolated target/runtime/storage mutants must fail at their named boundaries, the unchanged control must return green, and the generated block is replayed through the exact Jaune binary. The generator importlib-loads gen-weth-fixtures.py only for EEST helpers. The EELS checkout gitignores its virtualenv, so its interpreter and complete site-packages population are fingerprinted separately through the same EELS_ROOT. The selective identity uses that evaluator's nonempty deterministic stdout plus the evaluator source as a material-output certificate, so proof-only movement with byte-identical deployment artifacts and projections reuses this EELS/Jaune verdict; checker, generator, oracle/runtime, tool, environment, Jaune binary, or one-byte emitted-output movement still executes it.",
-      "order": 45,
+      "order": 46,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2151,6 +2399,8 @@
           "scripts/current-mainnet-runtime-lock.json",
           "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/run-current-mainnet-isolated.py",
           "scripts/check-runtime-bytes.py",
           "scripts/prorata_oracle.py",
           "scripts/fixtures/prorata/manifest.json",
@@ -2186,6 +2436,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2195,7 +2449,7 @@
       },
       "kind": "cacheable",
       "note": "PRORATA's read-only BPO2 consumer of the contract-neutral current-mainnet API. It reconstructs canonical system preallocation and block envelopes from the pinned target, executes all fourteen fixture scenarios with explicit block semantics, checks receipt/no-log and exact integer-model postconditions, and byte-compares the complete generated fixture population. It also validates the locked exact-surface Solidity/Yul referents, runs ten independent signed-transaction scenarios against all three runtimes with zero projected semantic mismatches, and byte-compares canonical receipt gas. The ordinary fixture gate independently replays committed PRORATA blocks through Jaune and remains CI-safe without the external checkout.",
-      "order": 46,
+      "order": 47,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2233,6 +2487,8 @@
           "scripts/current-mainnet-runtime-lock.json",
           "scripts/gen-current-mainnet-runtime-lock.py",
           "scripts/current_mainnet.py",
+          "scripts/eels_semantic_closure.py",
+          "scripts/run-current-mainnet-isolated.py",
           "scripts/lido_ossifiable_proxy_performance_schema.py",
           "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
           "scripts/lido-ossifiable-proxy-reference.json",
@@ -2264,6 +2520,10 @@
             ],
             "pattern": "**/*",
             "root": "@t8n_python_base/lib/python3.11"
+          },
+          {
+            "pattern": "libpython3.11.*",
+            "root": "@t8n_python_base/lib"
           }
         ],
         "tools": [
@@ -2272,8 +2532,8 @@
         ]
       },
       "kind": "cacheable",
-      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages and the selected native CPython standard library.",
-      "order": 47,
+      "note": "OssifiableProxy's read-only BPO2 consumer of the contract-neutral current-mainnet API. Cache identity includes the exact wrapper/generator/result, frozen performance/reference bindings, compiler-owned artifact owners, shared profile/helper and two-platform runtime lock, target checkout configuration, venv selector/interpreter/entrypoint, complete site-packages, the selected native CPython standard library, and the loaded libpython image.",
+      "order": 48,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2301,7 +2561,7 @@
       },
       "kind": "cacheable",
       "note": "The 988-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
-      "order": 48,
+      "order": 49,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2327,7 +2587,7 @@
       },
       "kind": "cacheable",
       "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
-      "order": 49,
+      "order": 50,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2374,7 +2634,7 @@
       },
       "kind": "cacheable",
       "note": "Composed specialist: its own module-level selector decides what to measure, and this outer fingerprint is the union of what that selector consumes — the whole Lean corpus including Main.lean, the shared Lean/Lake configuration, the Lake-recorded artifact identity of the default Blanc library root, its ignored host-local baseline (including absence before genesis), and its own implementation. Main is a non-default executable target and has no trace after the authoritative catalogue `lake build`; its source and complete local import population are already direct inputs here, while the Blanc trace binds the toolchain and imported artifacts. A reused row therefore means the selector would itself have measured nothing. Its own state file is declared membership-only: the content churns with every measurement, but its *absence* is the transition this fingerprint could not otherwise see — a deleted state file makes the next fresh run measure the whole tree, and a timing gate re-measured cold is not guaranteed to reproduce the pass being credited.",
-      "order": 50,
+      "order": 51,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2413,7 +2673,7 @@
       },
       "kind": "cacheable",
       "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
-      "order": 51,
+      "order": 52,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2446,7 +2706,7 @@
       },
       "kind": "cacheable",
       "note": "This suite has no manifest, so its fixture-directory membership is its only population guard; declaring the population here restores that guard for reuse decisions.",
-      "order": 52,
+      "order": 53,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2483,7 +2743,7 @@
       },
       "kind": "cacheable",
       "note": "CI-safe replay of the committed BPO2 population through Jaune. The manifest is a bidirectional population guard, the independent integer oracle vectors are regenerated through a timing-free byte comparison, and every embedded PRORATA runtime is compared with the frozen literal. Exact-target regeneration belongs to the separate prorata-current-mainnet gate.",
-      "order": 53,
+      "order": 54,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2517,7 +2777,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 54,
+      "order": 55,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2551,7 +2811,7 @@
         ]
       },
       "kind": "cacheable",
-      "order": 55,
+      "order": 56,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2593,7 +2853,7 @@
       },
       "kind": "cacheable",
       "note": "The whole Blanc Lean population is an input because this gate composes the total layering check; the two evaluator entries additionally bind their complete transitive compiled dependency hashes.",
-      "order": 56,
+      "order": 57,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2623,7 +2883,7 @@
       },
       "kind": "cacheable",
       "note": "Compiled positive, mutant and axiom evidence is independent of the repository-wide ownership/shadow census in the static row.",
-      "order": 57,
+      "order": 58,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2659,7 +2919,7 @@
       },
       "kind": "cacheable",
       "note": "Compiled occurrence fixtures and mutants consume the independently registered settlement verdict instead of starting that body again.",
-      "order": 58,
+      "order": 59,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2690,7 +2950,7 @@
       },
       "kind": "cacheable",
       "note": "The concrete evaluator and diagnostic-pinned Lean mutants have their own transitive compiled identity.",
-      "order": 59,
+      "order": 60,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2720,7 +2980,7 @@
       },
       "kind": "cacheable",
       "note": "Evaluator vectors, compiled mutants and live positive-deletion controls are separated from the repository-wide owner and architecture census.",
-      "order": 60,
+      "order": 61,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -2754,11 +3014,41 @@
       },
       "kind": "cacheable",
       "note": "The semantic row consumes the independently registered total-layering verdict and runs only axiom and executable-witness evidence.",
-      "order": 61,
+      "order": 62,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
           "^OK — proxy-pair-upgrade semantic: "
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check-fork-containment.sh"
+      ],
+      "id": "fork-containment",
+      "inputs": {
+        "files": [
+          "scripts/check-fork-containment.sh",
+          "scripts/check-fork-containment.py"
+        ],
+        "populations": [
+          {
+            "pattern": "**/*.lean",
+            "root": "Blanc"
+          }
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The verdict depends on the complete content of every Lean module under Blanc/: a renamed module changes which declarations exist and a moved literal changes which allowance covers it, so the population is path-and-content over Blanc/**/*.lean rather than a file list. The allowances and their exact counts live in the checker's own source, which is why the checker identifies the gate.",
+      "order": 63,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — fork-containment: "
         ]
       }
     }

@@ -91,6 +91,8 @@ import Blanc.BeaconDepositWriteSites
 import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
+import Blanc.BeaconDepositMainnet
+import Blanc.BeaconDepositPragueCompat
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -98,6 +100,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.addBlockToChain_preserves_solvent
 #print axioms Blanc.stateTransitionUsing_preserves_solvent
 #print axioms Blanc.chainUsing_preserves_solvent
+#print axioms Blanc.chainUsing_preserves_solvent_mainnet
+#print axioms Blanc.chainUsing_preserves_solvent_prague
 #print axioms Blanc.addBlockToChainUsing_preserves_solvent
 #print axioms Blanc.fmint_preserves_conserved
 #print axioms Blanc.stateTransition_preserves_conserved
@@ -105,6 +109,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.addBlockToChain_preserves_conserved
 #print axioms Blanc.stateTransitionUsing_preserves_conserved
 #print axioms Blanc.chainUsing_preserves_conserved
+#print axioms Blanc.chainUsing_preserves_conserved_mainnet
+#print axioms Blanc.chainUsing_preserves_conserved_prague
 #print axioms Blanc.addBlockToChainUsing_preserves_conserved
 #print axioms Blanc.Fmint.fmint_flashLoan_spec
 #print axioms Blanc.Fmint.no_success_of_callback_never_magic
@@ -632,6 +638,37 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.canonicalDeploymentSystemPrefix
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.configValid
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.chainId_eq
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.validContext
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.sumNof
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.target_eq
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.target_ne_zero
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.target_not_precompile
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.beacon_not_precompile
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.history_not_precompile
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_not_precompile
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_not_precompile
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.sender_ne_target
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_ne_target
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_ne_target
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.target_noCodeOrNonce
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.target_noStorage
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.lastBlockHash
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.beaconCode
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.historyCode
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequestCode
+#print axioms Blanc.Weth10.CanonicalDeploymentBase.consolidationRequestCode
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.mk.inj
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.mk.injEq
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.beaconRun
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.lastHashEq
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.historyRun
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.txInput_eq
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.environment_eq
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.state_eq
+#print axioms Blanc.Weth10.DeploymentSystemPrefix.createdAccounts_eq
+#print axioms Blanc.Weth10.canonicalDeploymentSystemPrefix
 #print axioms Blanc.LidoCircuitBreaker.runtimeTemplateCode_length_exact
 #print axioms Blanc.LidoCircuitBreaker.constructor_immutable_word_offsets_exact
 #print axioms Blanc.LidoCircuitBreaker.provisionalConstructorPrefix_length_exact
@@ -1132,8 +1169,19 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.BeaconDeposit.historySpec_sound
 #print axioms Blanc.BeaconDeposit.historySpec_preserves
 #print axioms Blanc.BeaconDeposit.pragueOnly_history_extends
+#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet
+#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends_prague
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
+#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root_mainnet
+#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague
+#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague
+#print axioms Blanc.DelegatecallSpawnDescriptor.child_state
 #print axioms Blanc.compact_pause_word_eq_projection
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
 #print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok

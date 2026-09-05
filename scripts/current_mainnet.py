@@ -23,6 +23,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
+# The lane runs this module under `-I`, which since 3.11 also implies `-P` and
+# therefore keeps the script's own directory off sys.path.  That isolation is
+# wanted — it is what keeps an ambient PYTHONPATH out — so the one sibling this
+# module needs is admitted by its own resolved location and nothing else.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import eels_semantic_closure as closure  # noqa: E402
 
 PROFILE_PATH = Path(__file__).with_name("current-mainnet-target.json")
 
@@ -526,7 +533,6 @@ def verify_target(
     }
 
 
-_RUNTIME_EXCLUDES = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
 _PYVENV_KEYS = {
     "home",
     "implementation",
@@ -536,50 +542,40 @@ _PYVENV_KEYS = {
     "prompt",
 }
 
+# The lane's reference environment is pinned by its *semantic closure* — the
+# installed distributions that provide a module the pinned transition code
+# actually imports — and not by a digest over the whole installed tree.  See
+# eels_semantic_closure for why, and for the derivation.  The policy below names
+# the entry points the closure is derived from; it is data the lock records and
+# the checker re-derives against, so a revision that reaches for a new library
+# reddens the lock rather than passing unnoticed.
+_CLOSURE_POLICY = {
+    # The tool the lane executes: `bin/ethereum-spec-evm t8n`.
+    "transitionModules": ["ethereum_spec_tools.evm_tools"],
+    # The specification itself, walked whole: every fork, every precompile,
+    # every cryptographic helper a transition can reach.
+    "transitionPackages": ["ethereum"],
+    # Imported as a separately attributed second tier.  Whatever the tool's
+    # test-support package loads remains labelled outside the transition path,
+    # but its executed distributions and bytes stay inside the full lock.
+    "runtimePackages": ["execution_testing.forks"],
+}
+
+# How the reference environment is provisioned.  Recorded so that a future
+# tester has a recipe rather than a digest to reverse-engineer; not a
+# constraint, because any provisioning that lands the pinned closure passes.
+_PROVISIONING = {
+    "tool": "uv",
+    "command": "uv sync --all-packages --frozen",
+    "lockfile": "uv.lock",
+}
+
 
 def _sha256_file(path: Path) -> str:
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError as exc:
         _fail(f"cannot fingerprint runtime file {path}: {exc}")
-
-
-def _canonical_json_sha256(value: Any) -> str:
-    encoded = json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _site_packages_fingerprint(paths: TargetPaths) -> dict[str, Any]:
-    series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
-    root = paths.venv / "lib" / f"python{series}" / "site-packages"
-    if not root.is_dir():
-        _fail(f"selected target site-packages tree is absent: {root}")
-    records: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
-        if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
-            continue
-        relative = path.relative_to(root).as_posix()
-        if path.is_symlink():
-            record: dict[str, Any] = {
-                "path": relative,
-                "kind": "symlink",
-                "target": os.readlink(path),
-            }
-            if path.is_file():
-                record["targetSha256"] = _sha256_file(path)
-            records.append(record)
-        elif path.is_file():
-            records.append(
-                {"path": relative, "kind": "file", "sha256": _sha256_file(path)}
-            )
-    return {
-        "relativeRoot": root.relative_to(paths.root).as_posix(),
-        "fileRecords": len(records),
-        "sha256": _canonical_json_sha256(records),
-        "excludes": list(_RUNTIME_EXCLUDES),
-    }
 
 
 def _entrypoint_body_sha256(path: Path) -> str:
@@ -593,11 +589,89 @@ def _entrypoint_body_sha256(path: Path) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
-def _runtime_entry(paths: TargetPaths) -> dict[str, Any]:
+def _site_packages_root(paths: TargetPaths) -> Path:
+    series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
+    root = paths.venv / "lib" / f"python{series}" / "site-packages"
+    if not root.is_dir():
+        _fail(f"selected target site-packages tree is absent: {root}")
+    return root
+
+
+def _derive_closure(paths: TargetPaths) -> dict[str, Any]:
+    try:
+        return closure.derive(
+            paths.python,
+            _site_packages_root(paths),
+            _CLOSURE_POLICY,
+            cwd=paths.root,
+            env=_sanitized_child_env(paths),
+            source_paths=[paths.root],
+        )
+    except closure.ClosureError as exc:
+        _fail(str(exc))
+
+
+def _closure_document(observed: dict[str, Any]) -> dict[str, Any]:
+    """The platform-independent half: what to install, and where it came from.
+
+    Test-support packages loaded by the oracle tool remain labelled separately
+    in the generator report, but their versions and bytes are included here:
+    the loader policy cannot exempt code merely because a present call-graph
+    analysis believes it does not reach a transition.
+    """
+
     return {
-        "pythonExecutableSha256": _sha256_file(paths.python),
-        "targetSitePackages": _site_packages_fingerprint(paths),
+        "policy": observed["policy"],
+        "contentExcludes": list(closure.CONTENT_EXCLUDES),
+        "bytecodePolicy": dict(closure.BYTECODE_POLICY),
+        "executedLoaderPolicy": dict(closure.EXECUTED_LOADER_POLICY),
+        "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
+        "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
+        "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
+        "distributions": [
+            {
+                "name": entry["name"],
+                "version": entry["version"],
+                "modules": entry["modules"],
+            }
+            for entry in observed["distributions"]
+        ],
+        "count": observed["count"],
+        "versionsSha256": observed["versionsSha256"],
     }
+
+
+def _runtime_entry(paths: TargetPaths, observed: dict[str, Any]) -> dict[str, Any]:
+    """The platform-specific half: the exact bytes behind those versions."""
+
+    return {
+        "generated": True,
+        "pythonExecutableSha256": _sha256_file(paths.python),
+        "fileRecords": observed["fileRecords"],
+        "contentSha256": observed["contentSha256"],
+        "standardLibrary": observed["standardLibrary"],
+        "interpreterRuntime": observed["interpreterRuntime"],
+        "unownedSitePackages": observed["unownedSitePackages"],
+        "distributions": [
+            {
+                "name": entry["name"],
+                "files": entry["files"],
+                "contentSha256": entry["contentSha256"],
+            }
+            for entry in observed["distributions"]
+        ],
+    }
+
+
+def _ungenerated_entry() -> dict[str, Any]:
+    """A platform whose bytes have never been measured, recorded honestly.
+
+    The version manifest still binds here — it is platform-independent — so this
+    row weakens nothing.  It fails closed with an instruction rather than an
+    unexplainable digest mismatch.
+    """
+
+    return {"generated": False}
 
 
 def _runtime_target_document(paths: TargetPaths) -> dict[str, Any]:
@@ -606,7 +680,7 @@ def _runtime_target_document(paths: TargetPaths) -> dict[str, Any]:
         "pythonImplementation": _EXPECTED["pythonImplementation"],
         "pythonVersion": _EXPECTED["pythonVersion"],
         "entrypointBodySha256": _entrypoint_body_sha256(paths.t8n),
-        "sitePackagesExcludes": list(_RUNTIME_EXCLUDES),
+        "provisioning": dict(_PROVISIONING),
     }
 
 
@@ -614,11 +688,85 @@ def _is_sha256(value: Any) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def _validate_closure_document(document: Any) -> dict[str, Any]:
+    section = _exact_keys(
+        document,
+        {
+            "policy",
+            "contentExcludes",
+            "bytecodePolicy",
+            "executedLoaderPolicy",
+            "installerMetadataExcludes",
+            "standardLibraryPolicy",
+            "interpreterRuntimePolicy",
+            "distributions",
+            "count",
+            "versionsSha256",
+        },
+        "runtime lock.semanticClosure",
+    )
+    _literal(section["policy"], _CLOSURE_POLICY, "runtime lock closure policy")
+    _literal(
+        section["contentExcludes"],
+        list(closure.CONTENT_EXCLUDES),
+        "runtime lock closure content excludes",
+    )
+    _literal(
+        section["bytecodePolicy"],
+        dict(closure.BYTECODE_POLICY),
+        "runtime lock bytecode policy",
+    )
+    _literal(
+        section["executedLoaderPolicy"],
+        dict(closure.EXECUTED_LOADER_POLICY),
+        "runtime lock executed-loader policy",
+    )
+    _literal(
+        section["installerMetadataExcludes"],
+        list(closure.INSTALLER_METADATA),
+        "runtime lock closure installer-metadata excludes",
+    )
+    _literal(
+        section["standardLibraryPolicy"],
+        dict(closure.STANDARD_LIBRARY_POLICY),
+        "runtime lock standard-library policy",
+    )
+    _literal(
+        section["interpreterRuntimePolicy"],
+        dict(closure.INTERPRETER_RUNTIME_POLICY),
+        "runtime lock interpreter-runtime policy",
+    )
+    entries = section["distributions"]
+    if not isinstance(entries, list) or not entries:
+        _fail("runtime lock semantic closure names no distribution")
+    seen: set[str] = set()
+    for entry in entries:
+        row = _exact_keys(entry, {"name", "version", "modules"}, "closure distribution")
+        for key in ("name", "version"):
+            if not isinstance(row[key], str) or not row[key]:
+                _fail(f"runtime lock closure distribution {key} is malformed")
+        if row["name"] in seen:
+            _fail(f"runtime lock closure names {row['name']} twice")
+        seen.add(row["name"])
+        if not isinstance(row["modules"], list) or not row["modules"] \
+                or any(not isinstance(item, str) or not item for item in row["modules"]):
+            _fail(f"runtime lock closure {row['name']} names no loaded module")
+    if type(section["count"]) is not int or section["count"] != len(entries):
+        _fail("runtime lock closure count does not match its distribution list")
+    if section["versionsSha256"] != closure.versions_digest(entries):
+        _fail("runtime lock closure version digest does not match its own list")
+    return section
+
+
 def _validate_runtime_lock_document(
     profile: dict[str, Any], document: Any
 ) -> dict[str, Any]:
-    top = _exact_keys(document, {"schema", "target", "platforms"}, "runtime lock")
-    _literal(top["schema"], 1, "runtime lock.schema")
+    top = _exact_keys(
+        document,
+        {"schema", "target", "semanticClosure", "platforms"},
+        "runtime lock",
+    )
+    _literal(top["schema"], 5, "runtime lock.schema")
     target = _exact_keys(
         top["target"],
         {
@@ -626,7 +774,7 @@ def _validate_runtime_lock_document(
             "pythonImplementation",
             "pythonVersion",
             "entrypointBodySha256",
-            "sitePackagesExcludes",
+            "provisioning",
         },
         "runtime lock.target",
     )
@@ -634,36 +782,100 @@ def _validate_runtime_lock_document(
         ("checkoutCommit", _EXPECTED["checkoutCommit"]),
         ("pythonImplementation", _EXPECTED["pythonImplementation"]),
         ("pythonVersion", _EXPECTED["pythonVersion"]),
-        ("sitePackagesExcludes", list(_RUNTIME_EXCLUDES)),
+        ("provisioning", dict(_PROVISIONING)),
     ):
         _literal(target[key], expected, f"runtime lock.target.{key}")
     if not _is_sha256(target["entrypointBodySha256"]):
         _fail("runtime lock target entrypoint body digest is malformed")
 
+    section = _validate_closure_document(top["semanticClosure"])
+    pinned = {entry["name"] for entry in section["distributions"]}
+
     expected_platforms = set(profile["target"]["pythonIdentity"]["platforms"])
     platforms = _exact_keys(
         top["platforms"], expected_platforms, "runtime lock.platforms"
     )
+    generated = 0
     for key in sorted(expected_platforms):
-        entry = _exact_keys(
-            platforms[key],
-            {"pythonExecutableSha256", "targetSitePackages"},
+        entry = platforms[key]
+        if not isinstance(entry, dict) or "generated" not in entry:
+            _fail(f"runtime lock.platforms.{key} declares no generation state")
+        if entry["generated"] is False:
+            _exact_keys(entry, {"generated"}, f"runtime lock.platforms.{key}")
+            continue
+        if entry["generated"] is not True:
+            _fail(f"runtime lock.platforms.{key} generation state is not a boolean")
+        generated += 1
+        row = _exact_keys(
+            entry,
+            {
+                "generated",
+                "pythonExecutableSha256",
+                "fileRecords",
+                "contentSha256",
+                "standardLibrary",
+                "interpreterRuntime",
+                "unownedSitePackages",
+                "distributions",
+            },
             f"runtime lock.platforms.{key}",
         )
-        if not _is_sha256(entry["pythonExecutableSha256"]):
-            _fail(f"runtime lock {key} executable digest is malformed")
-        site = _exact_keys(
-            entry["targetSitePackages"],
-            {"relativeRoot", "fileRecords", "sha256", "excludes"},
-            f"runtime lock.platforms.{key}.targetSitePackages",
+        for field in ("pythonExecutableSha256", "contentSha256"):
+            if not _is_sha256(row[field]):
+                _fail(f"runtime lock {key} {field} is malformed")
+        standard_library = closure.validate_standard_library(
+            row["standardLibrary"], _fail,
+            label=f"runtime lock.platforms.{key}.standardLibrary",
         )
-        expected_root = ".venv/lib/python3.11/site-packages"
-        if site["relativeRoot"] != expected_root \
-                or type(site["fileRecords"]) is not int \
-                or site["fileRecords"] <= 0 \
-                or not _is_sha256(site["sha256"]) \
-                or site["excludes"] != list(_RUNTIME_EXCLUDES):
-            _fail(f"runtime lock {key} site-packages fingerprint is malformed")
+        interpreter_runtime = closure.validate_interpreter_runtime(
+            row["interpreterRuntime"], _fail,
+            label=f"runtime lock.platforms.{key}.interpreterRuntime",
+        )
+        unowned_site_packages = closure.validate_unowned_site_packages(
+            row["unownedSitePackages"], _fail,
+            label=f"runtime lock.platforms.{key}.unownedSitePackages",
+        )
+        _literal(
+            standard_library["implementation"],
+            target["pythonImplementation"].lower(),
+            f"runtime lock {key} standard-library implementation",
+        )
+        _literal(
+            standard_library["version"],
+            target["pythonVersion"],
+            f"runtime lock {key} standard-library version",
+        )
+        measured = row["distributions"]
+        if not isinstance(measured, list):
+            _fail(f"runtime lock {key} measures no distribution")
+        names: set[str] = set()
+        total = 0
+        for item in measured:
+            cell = _exact_keys(
+                item, {"name", "files", "contentSha256"}, f"runtime lock {key} row"
+            )
+            if not _is_sha256(cell["contentSha256"]):
+                _fail(f"runtime lock {key} {cell['name']} content digest is malformed")
+            if type(cell["files"]) is not int or cell["files"] <= 0:
+                _fail(f"runtime lock {key} {cell['name']} file count is malformed")
+            names.add(cell["name"])
+            total += cell["files"]
+        # A platform row that measured a different set than the lock pins would
+        # let a distribution be named without ever being weighed.
+        if names != pinned:
+            _fail(
+                f"runtime lock {key} measures {sorted(names)}, but the semantic "
+                f"closure pins {sorted(pinned)}"
+            )
+        if type(row["fileRecords"]) is not int or row["fileRecords"] != total:
+            _fail(f"runtime lock {key} file-record total does not match its rows")
+        if row["contentSha256"] != closure.environment_content_digest(
+            measured, standard_library, interpreter_runtime,
+            unowned_site_packages,
+        ):
+            _fail(f"runtime lock {key} content digest does not match its own rows")
+    if generated == 0:
+        _fail("runtime lock measures no platform's installed bytes")
     return top
 
 
@@ -769,10 +981,63 @@ def _verify_runtime_lock(
         target["entrypointBodySha256"],
         "runtime-lock t8n entrypoint body",
     )
+
+    # Derive the closure from the live target and hold it against the lock.  The
+    # version comparison is platform-independent and always binds; the content
+    # comparison binds once this platform's bytes have been measured here.
+    observed = _derive_closure(paths)
+    recorded = runtime_lock["semanticClosure"]
+    problems = closure.compare_versions(
+        {"policy": recorded["policy"],
+         "distributions": recorded["distributions"],
+         "versionsSha256": recorded["versionsSha256"]},
+        {"policy": observed["policy"],
+         "distributions": observed["distributions"],
+         "versionsSha256": observed["versionsSha256"]},
+    )
+    if problems:
+        _fail(
+            "target semantic closure differs from the pinned reference: "
+            + "; ".join(problems)
+        )
+
+    row = runtime_lock["platforms"][key]
+    if row["generated"] is not True:
+        _fail(
+            f"the runtime lock pins the semantic closure for {key} by version but "
+            "has never measured this platform's installed bytes; regenerate the "
+            f"{key} row on this platform with gen-current-mainnet-runtime-lock.py "
+            "--write"
+        )
     _literal(
-        _runtime_entry(paths),
-        runtime_lock["platforms"][key],
-        f"runtime-lock native closure {key}",
+        _sha256_file(paths.python),
+        row["pythonExecutableSha256"],
+        f"runtime-lock {key} Python executable",
+    )
+    content = closure.compare_content(
+        {
+            "distributions": row["distributions"],
+            "standardLibrary": row["standardLibrary"],
+            "interpreterRuntime": row["interpreterRuntime"],
+            "unownedSitePackages": row["unownedSitePackages"],
+        },
+        {
+            "distributions": observed["distributions"],
+            "standardLibrary": observed["standardLibrary"],
+            "interpreterRuntime": observed["interpreterRuntime"],
+            "unownedSitePackages": observed["unownedSitePackages"],
+        },
+    )
+    if content:
+        _fail(
+            f"target semantic closure bytes differ from the pinned {key} "
+            "reference: " + "; ".join(content)
+        )
+    _literal(
+        observed["contentSha256"], row["contentSha256"], f"runtime-lock {key} closure"
+    )
+    _literal(
+        observed["fileRecords"], row["fileRecords"], f"runtime-lock {key} file records"
     )
     return key
 
@@ -790,6 +1055,13 @@ venv = pathlib.Path(sys.argv[2]).resolve()
 expected_python = pathlib.Path(sys.argv[3]).absolute()
 entrypoint = pathlib.Path(sys.argv[4]).absolute()
 module_name = sys.argv[5]
+
+if not sys.dont_write_bytecode:
+    raise RuntimeError("selected Python can write bytecode")
+if sys.pycache_prefix != "/dev/null":
+    raise RuntimeError(
+        f"selected Python pycache prefix is {sys.pycache_prefix!r}, expected '/dev/null'"
+    )
 
 actual_python = pathlib.Path(sys.executable).absolute()
 if actual_python != expected_python:
@@ -857,6 +1129,8 @@ evidence = {
     "pythonVersion": platform.python_version(),
     "pythonExecutable": str(actual_python),
     "pythonExecutableTarget": str(actual_python.resolve()),
+    "dontWriteBytecode": sys.dont_write_bytecode,
+    "pycachePrefix": sys.pycache_prefix,
     "sysPrefix": str(actual_prefix),
     "sysBasePrefix": str(pathlib.Path(sys.base_prefix).resolve()),
     "t8nEntrypoint": str(entrypoint),
@@ -883,13 +1157,23 @@ def _python_preflight(
     *,
     verify_runtime: bool = True,
 ) -> dict[str, Any]:
+    program = _PREFLIGHT
+    guard_arguments: list[str] = []
+    if verify_runtime:
+        program = _guarded_target_program(program)
+        guard_arguments = [
+            str(_site_packages_root(paths)),
+            json.dumps(
+                _native_loader_contract(profile, paths), sort_keys=True
+            ),
+        ]
     result = _run(
         [
             str(paths.python),
-            "-I",
-            "-s",
+            *closure.PYTHON_ISOLATION_ARGS,
             "-c",
-            _PREFLIGHT,
+            program,
+            *guard_arguments,
             str(paths.root),
             str(paths.venv),
             str(paths.python),
@@ -926,6 +1210,12 @@ def _python_preflight(
         "preflight Python version",
     )
     _literal(evidence.get("pythonExecutable"), str(paths.python), "preflight sys.executable")
+    _literal(evidence.get("dontWriteBytecode"), True, "preflight bytecode writes")
+    _literal(
+        evidence.get("pycachePrefix"),
+        closure.BYTECODE_POLICY["pycachePrefix"],
+        "preflight pycache prefix",
+    )
     _literal(
         evidence.get("pythonExecutableTarget"),
         str(paths.python.resolve()),
@@ -979,6 +1269,73 @@ def _read_output(path: Path, label: str) -> Any:
         _fail(f"t8n {label} output is not readable JSON: {exc}")
 
 
+def _guarded_target_program(body: str) -> str:
+    """Load the repository guard, then execute target code under that guard."""
+
+    closure_path = Path(closure.__file__).resolve()
+    return f'''\
+import importlib.util
+import json
+import pathlib
+import sys
+
+guard_path = pathlib.Path({str(closure_path)!r})
+guard_spec = importlib.util.spec_from_file_location(
+    "_blanc_eels_semantic_closure_guard", guard_path
+)
+if guard_spec is None or guard_spec.loader is None:
+    raise RuntimeError(f"cannot load executed-loader guard from {{guard_path}}")
+guard_module = importlib.util.module_from_spec(guard_spec)
+sys.modules[guard_spec.name] = guard_module
+guard_spec.loader.exec_module(guard_module)
+site_root = pathlib.Path(sys.argv.pop(1)).resolve()
+loader_contract = json.loads(sys.argv.pop(1))
+guard_module.assert_bytecode_policy(
+    lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+    label="current-mainnet oracle",
+)
+guard_module.assert_executed_loader_policy(
+    lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+    label="current-mainnet oracle",
+    site_packages=[site_root],
+    allowed_distributions=loader_contract["allowedDistributions"],
+    source_roots=loader_contract["sourceRoots"],
+    trusted_source_roots=loader_contract["trustedSourceRoots"],
+    standard_library=loader_contract["standardLibrary"],
+    unowned_site_packages=loader_contract["unownedSitePackages"],
+)
+''' + body
+
+
+def _native_loader_contract(
+    profile: dict[str, Any], paths: TargetPaths
+) -> dict[str, Any]:
+    lock = _load_runtime_lock(profile)
+    key = closure.platform_key(platform.system(), platform.machine())
+    row = lock["platforms"].get(key)
+    if not isinstance(row, dict) or row.get("generated") is not True:
+        _fail(f"runtime lock has no generated native row for {key}")
+    return {
+        "allowedDistributions": [
+            entry["name"] for entry in lock["semanticClosure"]["distributions"]
+        ],
+        "sourceRoots": [str(paths.root)],
+        "trustedSourceRoots": [str(Path(closure.__file__).resolve().parent)],
+        "standardLibrary": row["standardLibrary"],
+        "unownedSitePackages": row["unownedSitePackages"],
+    }
+
+
+_T8N_RUNNER = r'''
+import runpy
+import sys
+
+entrypoint = sys.argv.pop(1)
+sys.argv[0] = entrypoint
+runpy.run_path(entrypoint, run_name="__main__")
+'''
+
+
 def _t8n_process(
     paths: TargetPaths,
     alloc: Any,
@@ -990,6 +1347,7 @@ def _t8n_process(
     falsifier_fork: str | None = None,
     omit_fork: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], T8nOutputs | None]:
+    loader_contract = _native_loader_contract(load_profile(), paths)
     with tempfile.TemporaryDirectory(prefix="blanc-current-mainnet-") as temporary:
         work = Path(temporary)
         alloc_in = work / "alloc-in.json"
@@ -1002,6 +1360,12 @@ def _t8n_process(
         _json_write(env_in, environment)
         _json_write(txs_in, txs)
         args = [
+            str(paths.python),
+            *closure.PYTHON_ISOLATION_ARGS,
+            "-c",
+            _guarded_target_program(_T8N_RUNNER),
+            str(_site_packages_root(paths)),
+            json.dumps(loader_contract, sort_keys=True),
             str(paths.t8n),
             "t8n",
             f"--input.alloc={alloc_in}",
@@ -1099,8 +1463,16 @@ def _sign_canary_transaction(paths: TargetPaths) -> dict[str, Any]:
         "input": "0x",
         "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
     }
+    loader_contract = _native_loader_contract(load_profile(), paths)
     result = _run(
-        [str(paths.python), "-I", "-s", "-c", _SIGN],
+        [
+            str(paths.python),
+            *closure.PYTHON_ISOLATION_ARGS,
+            "-c",
+            _guarded_target_program(_SIGN),
+            str(_site_packages_root(paths)),
+            json.dumps(loader_contract, sort_keys=True),
+        ],
         cwd=paths.root,
         env=_sanitized_child_env(paths),
         input_text=json.dumps(raw),

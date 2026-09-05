@@ -172,6 +172,7 @@ symbols = [
   "declaration:DelegatecallSpawnDescriptor.afterAccess_memory",
   "declaration:DelegatecallSpawnDescriptor.step",
   "declaration:DelegatecallSpawnDescriptor.child_data",
+  "declaration:DelegatecallSpawnDescriptor.child_state",
   "declaration:DelegatecallSpawnDescriptor.crossing",
   "declaration:DelegatecallSpawnDescriptor.runCompiled_of_certificate",
   "declaration:DelegatecallSettledBoundary",

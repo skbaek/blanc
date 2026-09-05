@@ -67,17 +67,17 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 1070/1070 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 1116/1116 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (exact-candidate run 2026-09-03 UTC): the
+        <p class="cap"><b>Fig. 1</b> — two current gate summaries: the
           axiom audit that pins every audited theorem to its exact axiom set, and the differential
           gate executing Blanc’s WETH10 beside the deployed original’s runtime, byte for byte, in a
           pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1070-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>1116-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -107,7 +107,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1070<span class="dimmer" style="font-size:1.05rem">/1070</span></span>
+      <div class="fact"><span class="n">1116<span class="dimmer" style="font-size:1.05rem">/1116</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">8</span>
         <span class="l">contracts in — six ports, two études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
@@ -225,7 +225,7 @@
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           <strong>A weakened conclusion fails as loudly as a broken proof.</strong> Proving
           <em>something</em> is cheap; the discipline is keeping the something fixed. A
-          statement-pin gate Lean-checks the exact wording of the protected claims — 382
+          statement-pin gate Lean-checks the exact wording of the protected claims — 428
           definitions, statements, and record constructors across the shared layer and the
           protected contract families — so the theorem quoted on this page is
           character-for-character the theorem CI checks, and a quiet regression in what is
@@ -484,9 +484,13 @@
         <h3>Invariants that survive hard forks</h3>
         <p class="dim" style="font-size:.93rem">
           WETH solvency and FMINT conservation are preserved over <em>every</em> state reachable
-          along a valid configured chain — induction over whole blocks, withdrawals and system
-          operations included, across scheduled fork activations from Prague through BPO2. A protocol
-          upgrade is a step in the induction, not a threat to the claim.
+          along <em>any</em> valid configured chain — induction over whole blocks, withdrawals and
+          system operations included, whatever schedule the chain follows and whichever activations
+          it crosses. Mainnet’s Prague → BPO2 schedule is the published specialization; the
+          fixed-Prague rungs are retained corollaries. A protocol upgrade that changes rule data is
+          a step in the induction, not a threat to the claim — and neither contract has a
+          current-mainnet execution lane, so the mainnet rung is a statement about a schedule, not
+          evidence that a mainnet block was run.
         </p>
       </div>
       <div class="panel">
@@ -556,8 +560,11 @@
           <span class="mono">0x2</span> at twelve source-shaped sites; the proofs name the fork’s
           precompile selection, prove the 64-byte input, and instantiate the answer as exactly
           <span class="mono">Bytes.sha256</span> — environment facts, not a hash axiom. From a
-          derived Prague deployment, <span class="mono">DeploymentRoot.future_count_root</span>
-          reads the exact count and mixed root off every admitted future.
+          derived deployment under a valid chain configuration,
+          <span class="mono">DeploymentRoot.future_count_root</span> reads the exact count and
+          mixed root off every admitted future of that same schedule. The mainnet specialization
+          is published and the Prague form retained; the executable deployment-root control
+          remains Prague, while the BPO2 artifact lane does not witness the mainnet root.
         </p>
       </div>
       <div class="panel">
@@ -668,11 +675,13 @@
         </span>
         <p class="carddesc">The incremental Merkle accumulator proved from a hash-parametric model
           down to the exact bytes — across twelve SHA-256 precompile crossings — rooted in a derived
-          Prague deployment, with the exact count and mixed root read off every admitted future.</p>
+          configured deployment, with the exact count and mixed root read off every admitted future
+          of the same schedule. The mainnet specialization is published and the Prague form
+          retained; the executable deployment-root control remains Prague.</p>
         <span class="cardfacts">
           <span class="chip"><b>2,891 B</b> vs 6,358 deployed</span>
           <span class="chip">44/44 rows · 0 dearer paths</span>
-          <span class="chip">30-declaration register</span>
+          <span class="chip">40-declaration register</span>
         </span>
         <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
       </a>
@@ -810,14 +819,14 @@
         </div>
       <div>
         <div class="term"><span class="p">$</span> scripts/check-layering.sh
-<span class="ok">OK — layering: 8 contract(s) are siblings; 357 module(s) classified, 355 non-root checked, 2 composition module(s) downstream, no cross-contract, inverted or composition-inverted import</span>
+<span class="ok">OK — layering: 8 contract(s) are siblings; 359 module(s) classified, 357 non-root checked, 2 composition module(s) downstream, no cross-contract, inverted or composition-inverted import</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — claim statements: 382 definitions/statements and exact
+<span class="ok">OK — claim statements: 428 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
 <span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (exact-candidate run 2026-09-03 UTC). The
+        <p class="cap"><b>Fig. 2</b> — selected summaries from the fast half of the gate battery. The
           full ordered set — layering, trust surface, reference lock, differential, redemption,
           deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
           catalogued with scales and pass criteria in
@@ -1426,7 +1435,7 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 1070 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 1116 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
@@ -1470,11 +1479,11 @@
           over, pinned by immutable commit — see <a href="https://skbaek.github.io/jaune/">the Jaune
           page</a> for its conformance evidence.</li>
         <li id="fn3">Every figure about this repository on this page is drawn from a committed
-          report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-09-03. §&nbsp;11’s landscape table is the one deliberate exception — it
-          describes other people’s projects, on the terms its own disclaimer states. Gate
-          lines shown are verbatim output of the exact-candidate 2026-09-03 UTC run — except
-          that one long line is wrapped and ellipses mark elision; the
+          report, registry, gate summary, or theorem in the repository. The proof and claim
+          totals are derived from the current Lean inventories and checked against every registered
+          publication. §&nbsp;11’s landscape table is the one deliberate exception — it
+          describes other people’s projects, on the terms its own disclaimer states. In the gate
+          summaries, one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
         <li id="fn4">Spelled out, because the boundary rewards precision: when a Blanc contract

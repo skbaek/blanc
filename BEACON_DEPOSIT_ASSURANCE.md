@@ -97,15 +97,15 @@ inventing an observation that does not exist.
 
 ## Pillar — Deployment and open history
 
-#### P7 — One exact configured Prague-only transition over the strict direct deployment envelope establishes the installed artifact, empty-history invariant, receipt, settlement, and constructor occurrence witnesses
+#### P7 — One exact configured transition over the strict direct deployment envelope establishes the installed artifact, empty-history invariant, receipt, settlement, and constructor occurrence witnesses
 
-- **Declarations:** `Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root`, `Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence`
-- **Premises:** an explicit `CanonicalDeploymentBase`, exact strict singleton zero-value type-2 transaction/block envelope, derived sender/nonce target with collision freedom, state-neutral Prague system calls, direct CREATE gas/access/receipt conditions, and the actual `stateTransitionUsing (ChainConfig.pragueOnly chainId) ... = .ok deployed`; no deployed poststate or artifact invariant is assumed.
+- **Declarations:** `Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root`, `Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence`, `Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet`, `Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_mainnet`, `Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague`, `Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague`
+- **Premises:** an arbitrary valid `ChainConfig`, an explicit `CanonicalDeploymentBase` over that schedule and the block's selected `rules`, exact strict singleton zero-value type-2 transaction/block envelope carrying its own `cfg.rulesAt` witness, derived sender/nonce target with collision freedom, state-neutral protocol system calls at the selected rules, direct CREATE gas/access/receipt/code-size and address-`0x2` precompile conditions as explicit premises, and the actual `stateTransitionUsing cfg ... = .ok deployed`; no deployed poststate or artifact invariant is assumed.  The `_mainnet` and `_prague` declarations are the Ethereum-mainnet and retained Prague-only instances of exactly that statement and assume nothing further.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-deployment.sh`
 - **Differential channel:** the independent deployment control authors one exact-gas singleton Prague block, checks 15 projections including installed runtime and all 31 storage words, replays it through Jaune, and requires wrong-target, wrong-runtime, and wrong-storage mutants to fail before green reversion.
-- **Non-claims:** this is a direct singleton zero-value type-2 CREATE result.  There is no CREATE2, factory, proxy, or nonzero-endowment deployment; no co-block interaction, historical inclusion, signing, propagation, or other-fork result.
-- **Source:** `Blanc/BeaconDepositDeploymentRoot.lean`, `Blanc/BeaconDepositDeploymentTransaction.lean`, `Blanc/BeaconDepositDeploymentBlock.lean`, `scripts/gen-beacon-deposit-deployment-fixture.py`
+- **Non-claims:** this is a direct singleton zero-value type-2 CREATE result.  There is no CREATE2, factory, proxy, or nonzero-endowment deployment; no co-block interaction, historical inclusion, signing, or propagation.  The `_mainnet` instance is a statement over Jaune's configured mainnet schedule and carries **no executable lane witness of its own**: the differential channel below is the Prague deployment control, and the BPO2 consumer witnesses the artifact rows of P1, not this root.  Nothing here claims a result under a fork whose execution semantics Jaune does not yet model.
+- **Source:** `Blanc/BeaconDepositDeploymentRoot.lean`, `Blanc/BeaconDepositDeploymentTransaction.lean`, `Blanc/BeaconDepositDeploymentBlock.lean`, `Blanc/BeaconDepositMainnet.lean`, `Blanc/BeaconDepositPragueCompat.lean`, `scripts/gen-beacon-deposit-deployment-fixture.py`
 
 #### P8-FRAME — The exact compiled four-selector dispatcher preserves a baseline-relative history witness under trace-local fresh-frame and native-SHA admission
 
@@ -117,22 +117,22 @@ inventing an observation that does not exist.
 - **Non-claims:** native SHA admission is positive entry evidence, not a poststate or result-equivalent preservation premise.  The theorem does not quantify over delegated address-`0x2` code and introduces no blanket callback axiom.
 - **Source:** `Blanc/BeaconDepositHistory.lean`, `Blanc/BeaconDepositSuccessSource.lean`, `Blanc/BeaconDepositHistorySound.lean`
 
-#### P8-HISTORY — Every admitted Prague-only future extends the same baseline by one existential suffix, with an empty-baseline specialization rooted at deployment
+#### P8-HISTORY — Every admitted future of the root's own configured schedule extends the same baseline by one existential suffix, with an empty-baseline specialization rooted at deployment
 
-- **Declarations:** `Blanc.BeaconDeposit.pragueOnly_history_extends`, `Blanc.BeaconDeposit.DeploymentRoot.future_history_extends`
-- **Premises:** actual `BlockChain.ReachUsing` under the exact Prague-only schedule, a retained `ConfiguredHistoryTrace` projecting to that same reach witness, pointwise fresh/native-SHA frame admission, installed compiled runtime at the checkpoint, and its `ArtifactInv stor baseline`; the deployment specialization supplies installed code and `ArtifactInv _ []` from P7.
+- **Declarations:** `Blanc.BeaconDeposit.pragueOnly_history_extends`, `Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet`, `Blanc.BeaconDeposit.pragueOnly_history_extends_prague`, `Blanc.BeaconDeposit.DeploymentRoot.future_history_extends`, `Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet`, `Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague`
+- **Premises:** actual `BlockChain.ReachUsing` under the root's own arbitrary valid schedule, a retained `ConfiguredHistoryTrace` projecting to that same reach witness, pointwise fresh/native-SHA frame admission, installed compiled runtime at the checkpoint, and its `ArtifactInv stor baseline`; the deployment specialization supplies installed code and `ArtifactInv _ []` from P7.  The historical name `pragueOnly_history_extends` is now the schedule-parametric row over `ReachUsing cfg`; `pragueOnly_history_extends_mainnet` and `pragueOnly_history_extends_prague` pin its named-network instances, while the three `DeploymentRoot.future_history_extends*` declarations specialize the empty deployment baseline.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`
 - **Differential channel:** no direct finite channel — arbitrary finite configured reachability and hostile outer frames are theorem scope, not extrapolated from the bounded Prague/BPO2 matrices.
 - **Non-claims:** the suffix is existential and not transaction-indexed or unique.  Reachability does not say a deposit occurs, any strict increase eventually happens, or every environment admits native SHA evidence.
-- **Source:** `Blanc/BeaconDepositHistoryChain.lean`, `Blanc/ExecutionHistoryAdmission.lean`, `Blanc/ExecutionTraceFresh.lean`
+- **Source:** `Blanc/BeaconDepositHistoryChain.lean`, `Blanc/BeaconDepositMainnet.lean`, `Blanc/BeaconDepositPragueCompat.lean`, `Blanc/ExecutionHistoryAdmission.lean`, `Blanc/ExecutionTraceFresh.lean`
 
 #### P8-READ — The deployment-rooted future witness simultaneously exposes exact concrete count, strictness iff its suffix is nonempty, and the mixed-root equation for that same suffix
 
-- **Declarations:** `Blanc.BeaconDeposit.DeploymentRoot.future_count_root`
-- **Premises:** the same deployment root, exact Prague-only reach witness, and retained native-SHA admission as P8-HISTORY.  Count and root are read from `future.state.getStor ca` through the single `ArtifactInv` carried by the one existential suffix.
+- **Declarations:** `Blanc.BeaconDeposit.DeploymentRoot.future_count_root`, `Blanc.BeaconDeposit.DeploymentRoot.future_count_root_mainnet`, `Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague`
+- **Premises:** the same deployment root, a reach witness on that root's own configured schedule, and retained native-SHA admission as P8-HISTORY.  Count and root are read from `future.state.getStor ca` through the single `ArtifactInv` carried by the one existential suffix.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`
 - **Differential channel:** no direct finite channel — `chained-deposits-1-through-8` corroborates finite count/root readbacks, but the arbitrary-history conclusion and strictness equivalence are Lean-only.
 - **Non-claims:** strictness is an equivalence about the witnessed suffix, not liveness or a transaction census.  The root equation does not assert inclusion, collision resistance, historical mainnet state, or a unique committed history.
-- **Source:** `Blanc/BeaconDepositHistoryChain.lean`, `Blanc/BeaconDepositBridge.lean`
+- **Source:** `Blanc/BeaconDepositHistoryChain.lean`, `Blanc/BeaconDepositMainnet.lean`, `Blanc/BeaconDepositPragueCompat.lean`, `Blanc/BeaconDepositBridge.lean`

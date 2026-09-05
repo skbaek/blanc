@@ -14,6 +14,8 @@ BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 NETWORK="Prague"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 
 BUILD=1
 while [ $# -gt 0 ]; do
@@ -47,8 +49,8 @@ fi
 # byte-compare every prospective artifact with the committed fixture/manifest.
 # A coherent golden rewrite therefore cannot preserve a green Jaune replay by
 # merely updating consensus roots and manifest metadata.
-SEMANTIC_OUT="$(PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-  "$SCRIPT_DIR/gen-weth10-redemption-fixtures.py" --check 2>&1)"
+SEMANTIC_OUT="$("$EELS_PY" -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-weth10-redemption-fixtures.py" --check 2>&1)"
 SEMANTIC_STATUS=$?
 printf '%s\n' "$SEMANTIC_OUT"
 if [ "$SEMANTIC_STATUS" -ne 0 ]; then

@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 EELS_PIN="4198b9c5996713b268aed602739d5aa40e277694"
 TMP_DIR="$(mktemp -d)"
@@ -44,8 +46,8 @@ if ! (cd "$ROOT" && lake env lean \
     >"$ARTIFACTS" 2>"$LOG"); then
   fail "production artifact evaluation failed"
 fi
-if ! PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-    "$SCRIPT_DIR/gen-lido-circuit-breaker-deployment-fixture.py" \
+if ! "$EELS_PY" -I -s -B -X pycache_prefix=/dev/null \
+    "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-lido-circuit-breaker-deployment-fixture.py" \
     --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" \
     --fixture "$FIXTURE" --metadata "$METADATA" >"$LOG" 2>&1; then
   fail "strict pinned-EELS fixture generation or live projection controls failed"
@@ -78,4 +80,4 @@ if ! "$JAUNE_BIN" "$FIXTURE" --network Prague >"$LOG" 2>&1; then
   fail "strict Jaune replay of the pinned-EELS fixture failed"
 fi
 
-echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 164 exact axiom probes; 64 source mutants + 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
+echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 214 fragments; 164 exact axiom probes; 64 source mutants + 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"

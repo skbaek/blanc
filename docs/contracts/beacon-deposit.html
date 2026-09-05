@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BeaconDeposit — a Blanc port of the eth2 deposit contract</title>
-<meta name="description" content="Blanc’s BeaconDeposit: a 2,891-byte port of the eth2 deposit contract — the incremental Merkle accumulator proved from a hash-parametric model down to the exact compiled bytes across twelve SHA-256 precompile crossings, a derived Prague deployment root, an open-history theorem giving the exact count and mixed root at every admitted future, a 44-row / 69-transaction differential beside the deployed runtime with no dearer path, and a 30-declaration assurance register.">
+<meta name="description" content="Blanc’s BeaconDeposit: a 2,891-byte port of the eth2 deposit contract — the incremental Merkle accumulator proved from a hash-parametric model down to the exact compiled bytes across twelve SHA-256 precompile crossings, a deployment root derived over an arbitrary valid chain configuration, an open-history theorem giving the exact count and mixed root at every admitted future, a 44-row / 69-transaction differential beside the deployed runtime with no dearer path, and a 40-declaration assurance register.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -60,8 +60,8 @@
         <div class="term"><span class="p">$</span> scripts/check-beacon-deposit-differential.sh
 <span class="ok">OK — beacon-deposit differential: 44/44 rows, 69 runtime transactions, 2 creation executions, 4/4 selectors + no-match, 8/8 guards, 463 oracle SHA STATICCALLs …</span>
 <span class="p">$</span> scripts/check-beacon-deposit-assurance.sh
-<span class="ok">OK — beacon-deposit-assurance: 11 protected rows across 3 pillars; 30 fully qualified declarations with exact axiom/gate ownership; 8 non-claim pins; 2 mutation controls</span></div>
-        <p class="cap"><b>Fig. 1</b> — two BeaconDeposit gates, verbatim (exact-candidate run 2026-09-03 UTC), ellipses
+<span class="ok">OK — beacon-deposit-assurance: 11 protected rows across 3 pillars; 40 fully qualified declarations with exact axiom/gate ownership; 8 non-claim pins; 2 mutation controls</span></div>
+        <p class="cap"><b>Fig. 1</b> — two BeaconDeposit gates, verbatim (exact-candidate verification 31b35d9, 2026-09-05 UTC), ellipses
           marking elision: the differential matrix beside the vendored deployed runtime in a pinned
           Prague oracle, and the register verifier that fails if any cited declaration, axiom set,
           or non-claim phrase drifts from the tree. The differential line continues “… 6
@@ -70,7 +70,7 @@
           SHA calls per side and Blanc-minus-reference total/execution gas -719572/-26172.”</p>
         <div class="pills">
           <span class="pill"><span class="d"></span>2,891 B runtime — vs 6,358 deployed</span>
-          <span class="pill"><span class="d"></span>30-declaration assurance register</span>
+          <span class="pill"><span class="d"></span>40-declaration assurance register</span>
           <span class="pill"><span class="d"></span>0 dearer paths in 69 transactions</span>
         </div>
       </div>
@@ -91,18 +91,24 @@
       abstraction, <span class="mono">ArtifactInv</span>, ties the concrete branch, count, and
       zero-hash words of the compiled artifact to that model with <span class="mono">H</span>
       instantiated at Jaune’s <span class="mono">Bytes.sha256</span>. And a deployment root plus an
-      open-history theorem carry the abstraction from one derived Prague creation block to every
-      admitted future — where the exact count and mixed root can simply be read off.
+      open-history theorem carry the abstraction from one derived creation block — under whatever
+      schedule that block’s own <span class="mono">cfg.rulesAt</span> selects — to every
+      admitted future of that same schedule — where the exact count and mixed root can simply be read off.
     </p>
 
     <div class="thm" style="margin-top:26px">
       <span class="stamp">machine-checked</span>
-      <div class="head">Theorem (<span class="mono">pragueOnly_history_extends</span>, Blanc/BeaconDepositHistoryChain.lean).</div>
+      <div class="head">Theorem (<span class="mono">pragueOnly_history_extends_prague</span>, Blanc/BeaconDepositPragueCompat.lean).</div>
       <p class="stmt">From a checkpoint holding the exact compiled runtime at <span class="mono">ca</span>
         and the storage abstraction for some history <span class="mono">baseline</span>, every state
         reachable along the Prague-only schedule — under the one admission below — still carries the
-        abstraction, for the same baseline extended by some suffix.</p>
-<pre><span class="k">theorem</span> <span class="d">pragueOnly_history_extends</span>
+        abstraction, for the same baseline extended by some suffix. This is the <em>retained
+        fixed-Prague instance</em>: the claim proper is
+        <span class="mono">reachUsing_history_extends</span>, which says the same thing along any
+        valid <span class="mono">ChainConfig</span>, and
+        <span class="mono">pragueOnly_history_extends_mainnet</span> publishes the Ethereum-mainnet specialization. The
+        Prague form is kept because it is what this contract published before the migration.</p>
+<pre><span class="k">theorem</span> <span class="d">pragueOnly_history_extends_prague</span>
     (chainId : <span class="t">UInt64</span>) {baseline : <span class="t">List</span> <span class="t">B256</span>}
     {checkpoint future : <span class="t">BlockChain</span>} {ca : <span class="t">Adr</span>}
     (reach : <span class="t">BlockChain.ReachUsing</span> (<span class="t">ChainConfig</span>.pragueOnly chainId)
@@ -141,7 +147,7 @@ deposit_error_runCompiledTo           <span class="c">-- all eight guards, sourc
                                       <span class="c">   no raw SSTORE on the way out</span>
 ArtifactInv.root_eq_mixedRootOf       <span class="c">-- concrete words project the model root</span>
 canonicalDeploymentStep_
-  establishes_root                    <span class="c">-- one strict Prague CREATE block → DeploymentRoot,</span>
+  establishes_root                    <span class="c">-- one strict configured CREATE block → DeploymentRoot,</span>
                                       <span class="c">   installed bytes, empty history</span>
 historySpec_preserves                 <span class="c">-- open frame: the four-selector dispatcher preserves</span>
                                       <span class="c">   the baseline-relative witness</span>
@@ -220,13 +226,19 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
         witnessed list: no collision resistance, no unique-history commitment, no inclusion proof,
         no consensus-layer claim of any kind. Strictness is an equivalence about the witnessed
         suffix, not liveness — nothing promises a deposit, or that the count ever increases. And
-        the deployment root is one exact shape: a direct, zero-endowment, singleton type-2 Prague
-        block, under the Prague-only schedule; no CREATE2, factory, or co-block path, and no claim
-        about the historical mainnet creation.</p>
+        the deployment root is one exact shape: a direct, zero-endowment, singleton type-2
+        creation block, under whatever valid <span class="mono">ChainConfig</span> the caller
+        supplies; no CREATE2, factory, or co-block path, and no claim about the historical mainnet
+        creation. Mainnet’s configured schedule is published as a specialization
+        (<span class="mono">canonicalDeploymentStep_establishes_root_mainnet</span>) and the
+        fixed-Prague form is retained as a corollary
+        (<span class="mono">…_prague</span>), but <em>no executable lane witnesses the mainnet
+        root</em> — the block that is actually executed below is the Prague control, and the BPO2
+        lane witnesses the artifact rows, not this root.</p>
     </div>
 
     <p class="note" style="margin-top:26px">
-      The 11-row assurance register maps OPEN-1 and P1–P8 onto 30 fully qualified declarations
+      The 11-row assurance register maps OPEN-1 and P1–P8 onto 40 fully qualified declarations
       in seven frozen fields — declarations, premises, axioms, owning gates, differential channel,
       non-claims, source. Its eight load-bearing non-claim phrases are pinned by the gate that
       verifies it, and that gate runs two mutants on every invocation — a misspelled declaration
@@ -419,8 +431,9 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
           Declared exclusions, load-bearing: no verification of the deployed reference, which is
           executed only as the finite oracle; no universal equivalence, gas parity, or liveness;
           no raw identity of source, dispatcher, bytes, code hash, slots, or storage root. The
-          deployment root and open history are proved for one direct singleton shape and the
-          Prague-only schedule, under the admission the results section states — nothing wider.
+          deployment root and open history are proved for one direct singleton shape over an
+          arbitrary valid chain configuration, under the admission the results section states —
+          nothing wider, and nothing about a fork whose execution semantics Jaune does not model.
         </p>
       </div>
     </div>
@@ -507,9 +520,11 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
       <span class="mono">0x0000…05Fa</span> — its address is a provenance identifier only, and
       Runtime Verification’s campaign on the r1 artifact is neither reproduced nor judged. The
       count and root results are partial correctness for Blanc’s own compiled artifact under the
-      stated admission, the Prague-only schedule, and Jaune reachability’s own world bound; the
-      suffix is existential; and no collision resistance, historical inclusion, or liveness is
-      claimed. The full boundary — eight pinned non-claim phrases — lives in the
+      stated admission, an arbitrary valid chain configuration, and Jaune reachability’s own
+      world bound. The Ethereum-mainnet specialization is published, and the fixed-Prague
+      corollary is retained. The executable deployment-root control remains Prague; the BPO2
+      artifact lane does not witness the mainnet root. The suffix is existential; and no
+      collision resistance, historical inclusion, or liveness is claimed. The full boundary — eight pinned non-claim phrases — lives in the
       <a href="https://github.com/skbaek/blanc/blob/main/BEACON_DEPOSIT_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
       in the honest register.
     </p>

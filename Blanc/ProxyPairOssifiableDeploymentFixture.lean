@@ -3,8 +3,8 @@ import Blanc.ProxyPairOssifiableDeploymentMessage
 /-!
 # OssifiableProxy concrete empty-setup CREATE fixture
 
-This module instantiates the direct CREATE theorem in an explicit Prague
-world.  The implementation contains `PUSH0; PUSH0; REVERT`, so the empty setup
+This module instantiates the direct CREATE theorem at explicit selected rules.
+The implementation contains `PUSH0; PUSH0; REVERT`, so the empty setup
 path is biting: an accidental delegatecall would fail the deployment.
 -/
 
@@ -33,12 +33,12 @@ def state : State :=
   State.set withImplementation creator
     { Acct.nil with bal := 1000000000000000000 }
 
-def benv : Benv :=
+def benv (rules : ForkRules) : Benv :=
   { (default : Benv) with
     state := state
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        rules := rules
         origState := state } }
 
 def createCode : ByteArray :=
@@ -49,9 +49,9 @@ private theorem byteArrayMk_toList (bytes : Bytes) :
     (ByteArray.mk bytes.toArray).toList = bytes := by
   rw [ByteArray.toList_eq_toList_data]
 
-def message : Msg :=
+def message (rules : ForkRules) : Msg :=
   { (default : Msg) with
-    benv := benv
+    benv := benv rules
     caller := creator
     target := none
     currentTarget := target
@@ -67,8 +67,9 @@ def message : Msg :=
     accessedStorageKeys := .emptyWithCapacity
     disablePrecompiles := false }
 
-@[simp] theorem message_code :
-    message.code.toList = ossifiableEmptyDataCreateInput implementation admin := by
+@[simp] theorem message_code (rules : ForkRules) :
+    (message rules).code.toList =
+      ossifiableEmptyDataCreateInput implementation admin := by
   change createCode.toList = _
   exact byteArrayMk_toList _
 
@@ -86,17 +87,19 @@ private theorem target_fresh : state.get target = Acct.nil := by
   rfl
 
 /-- Closed concrete CREATE certificate for the frozen implementation/admin
-tuple and explicit one-million-gas Prague message. -/
-theorem message_success :
-    ∃ post, OssifiableEmptySetupCreateResult message implementation admin post := by
+tuple and explicit one-million-gas selected-rule message. -/
+theorem message_success (rules : ForkRules)
+    (hmax : 2188 ≤ rules.code.maxCodeSize) :
+    ∃ post, OssifiableEmptySetupCreateResult
+      (message rules) implementation admin post := by
   apply processCreateMessage_ossifiable_emptySetup_success
-      message implementation admin
+      (message rules) implementation admin
   · rfl
   · rfl
-  · exact message_code
+  · exact message_code rules
   · decide
   · decide
-  · rw [show message.benv.state = state by rfl, implementation_code]
+  · rw [show (message rules).benv.state = state by rfl, implementation_code]
     decide
   · change implementation ∉ Std.HashSet.emptyWithCapacity
     exact Std.HashSet.not_mem_emptyWithCapacity
@@ -113,7 +116,6 @@ theorem message_success :
     exact Std.HashSet.not_mem_emptyWithCapacity
   · rfl
   · norm_num [ossifiableCreateMessageGas, message]
-  · change 2188 ≤ pragueRules.code.maxCodeSize
-    decide
+  · exact hmax
 
 end Blanc.ProxyPair.OssifiableCreateFixture

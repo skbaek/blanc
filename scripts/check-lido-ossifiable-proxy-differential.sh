@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX=/dev/null
 EVALUATOR="$SCRIPT_DIR/eval-lido-ossifiable-proxy-artifacts.lean"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lido-ossifiable-proxy-differential.XXXXXX")"
 ARTIFACTS="$WORK_DIR/blanc-artifacts.txt"
@@ -32,8 +34,12 @@ PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
 (cd "$REPO_ROOT" && lake env lean \
   scripts/eval-lido-ossifiable-proxy-artifacts.lean >"$ARTIFACTS")
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-  "$SCRIPT_DIR/run-lido-ossifiable-proxy-differential.py" \
+# The frozen campaign records this environment value. CPython -I ignores it;
+# run-isolated-python.py derives and installs the executable source root from
+# the clean pinned checkout before any EELS import.
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" \
+  "$EELS_PY" -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "run-lido-ossifiable-proxy-differential.py" \
   --repo-root "$REPO_ROOT" \
   --eels-root "$EELS_ROOT" \
   --blanc-artifacts "$ARTIFACTS" \
