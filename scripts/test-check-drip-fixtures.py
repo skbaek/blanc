@@ -9,7 +9,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from drip_fixture_observers import observer_code
+from drip_fixture_observers import observer_code, observer_expectations
 
 HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("drip_fixture_verifier", HERE / "check-drip-fixtures.py")
@@ -40,39 +40,57 @@ def population(root):
     for path in root.glob("*.json"):
         path.unlink()
     runtime, creation = MODULE.literals()
-    fixture_names = {}
     cases = []
     obligations = []
     account = {"nonce": "0x01", "balance": "0x00", "code": "0x" + runtime.hex(), "storage": {}}
-    for obligation in MODULE.OBLIGATIONS:
-        name = ("observer-" + obligation if obligation in {
-            "receipt-returndata-log-matrix", "exit-zero-unit-call", "exit-successful-reentry", "exit-rejecting-recipient-rollback"
-        } else obligation)
-        filename = name + ".json"
-        fixture_names[obligation] = filename
-        deployment = obligation == "deployment-genesis"
-        helpers = ["0x000000000000000000000000000000000000d220"] if name.startswith("observer-") else []
-        pre = {} if deployment else {MODULE.TARGET: copy.deepcopy(account)}
-        for helper in helpers:
-            pre[helper] = {"nonce": "0x00", "balance": "0x00", "code": observer_code(MODULE.TARGET), "storage": {}}
-        post = {MODULE.TARGET: copy.deepcopy(account)}
-        for helper in helpers:
-            post[helper] = {"nonce": "0x00", "balance": "0x00", "code": observer_code(MODULE.TARGET), "storage": {}}
+    helper = "0x000000000000000000000000000000000000d220"
+
+    def add_case(name, obligation, *, target=MODULE.TARGET, deployment=False,
+                 ordinary=False, observer=None):
+        mode = observer["mode"] if observer else "ordinary"
+        units = observer["nestedUnits"] if observer else 1
+        needs_helper = ordinary or observer is not None
+        pre = {} if deployment else {target: copy.deepcopy(account)}
+        post = {target: copy.deepcopy(account)}
+        if needs_helper:
+            helper_account = {"nonce": "0x00", "balance": "0x00",
+                              "code": observer_code(target, mode, nested_units=units), "storage": {}}
+            pre[helper] = copy.deepcopy(helper_account)
+            post[helper] = helper_account
+        destination = b"" if deployment else bytes.fromhex((helper if needs_helper else target)[2:])
         doc = {f"blanc/drip::{name}[fork_BPO2-blockchain_test]": {
             "network": "BPO2", "genesisBlockHeader": {}, "pre": pre,
             "postState": post, "lastblockhash": "0x" + "11" * 32,
             "config": {"network": "BPO2"}, "genesisRLP": "0x01",
-            "blocks": [{"rlp": block_rlp(b"" if deployment else bytes.fromhex((helpers[0] if helpers else MODULE.TARGET)[2:]), creation if deployment else b"\x01"), "blocknumber": "1"}], "sealEngine": "NoProof",
+            "blocks": [{"rlp": block_rlp(destination, creation if deployment else b"\x01"), "blocknumber": "1"}], "sealEngine": "NoProof",
         }}
-        write(root / filename, doc)
+        write(root / (name + ".json"), doc)
         row = {"name": name, "obligation": obligation, "steps": 1, "executionEvidence": True,
-               "fixture": filename, "receiptGas": [{"status": "0x01", "cumulativeGasUsed": "0x01", "gasUsed": "0x01", "logs": []}]}
+               "fixture": name + ".json", "receiptGas": [{"status": "0x01", "cumulativeGasUsed": "0x01", "gasUsed": "0x01", "logs": []}]}
         if deployment:
-            row.update({"target": MODULE.TARGET, "creationCodeSha256": hashlib.sha256(creation).hexdigest()})
-        elif name.startswith("observer-"):
-            row["observerHelpers"] = ["0x000000000000000000000000000000000000d220"]
+            row.update({"target": target, "creationCodeSha256": hashlib.sha256(creation).hexdigest()})
+        elif target != MODULE.TARGET:
+            row["target"] = target
+        if ordinary:
+            row["observerHelpers"] = [helper]
+        if observer is not None:
+            row["observer"] = observer
         cases.append(row)
-        obligations.append({"name": obligation, "fixtures": [filename], "requiredAssertions": ["fixture transaction reference"]})
+
+    add_case("deployment-genesis", "deployment-genesis", target=MODULE.CREATE_TARGET, deployment=True)
+    for name, obligation in MODULE.PRIMARY_CASES:
+        add_case(name, obligation)
+        add_case("observer-" + name, obligation, ordinary=True)
+    for name, obligation, mode, units, value in MODULE.SPECIAL_OBSERVERS:
+        observer = observer_expectations(MODULE.CREATE_TARGET, mode, nested_units=units, callback_value=value)
+        add_case(name, obligation, target=MODULE.CREATE_TARGET, observer=observer)
+    for obligation in MODULE.OBLIGATIONS:
+        fixtures = [row["fixture"] for row in cases if row["obligation"] == obligation]
+        if obligation == MODULE.MATRIX_OBLIGATION:
+            fixtures = [row["fixture"] for row in cases if row["name"].startswith("observer-")
+                        or row["name"].endswith("-observer")]
+        obligations.append({"name": obligation, "fixtures": fixtures,
+                            "requiredAssertions": ["fixture transaction reference"]})
     manifest = {"schema": 2, "kind": "drip-bpo2-runtime-fixtures", "executionEvidence": True,
                 "runtimeSha256": hashlib.sha256(runtime).hexdigest(), "creationSha256": hashlib.sha256(creation).hexdigest(),
                 "artifactSizes": {"runtime": len(runtime), "creation": len(creation)}, "targetProfile": "synthetic",
@@ -126,8 +144,30 @@ def main():
             case["blocks"][0]["rlp"] = block_rlp(b"", b"\x02")
             write(path, value)
         population(root); must_reject(root, "CREATE literal", "CREATE transaction binding", wrong_create_literal)
+        def omitted_ordinary_twin(p):
+            filename = "observer-exit-zero-unit-call.json"
+            (p / filename).unlink()
+            path = p / "manifest.json"; value = json.loads(path.read_text())
+            value["cases"] = [row for row in value["cases"] if row["fixture"] != filename]
+            for row in value["obligations"]:
+                row["fixtures"] = [item for item in row["fixtures"] if item != filename]
+            write(path, value)
+        population(root); must_reject(root, "omitted ordinary twin", "frozen case population differs", omitted_ordinary_twin)
+        def direct_matrix_substitution(p):
+            path = p / "manifest.json"; value = json.loads(path.read_text())
+            matrix = next(row for row in value["obligations"] if row["name"] == MODULE.MATRIX_OBLIGATION)
+            matrix["fixtures"].remove("observer-exit-zero-unit-call.json")
+            matrix["fixtures"].append("exit-zero-unit-call.json")
+            write(path, value)
+        population(root); must_reject(root, "direct matrix substitution", "observer population differs", direct_matrix_substitution)
+        def special_observer_target(p):
+            path = p / "manifest.json"; value = json.loads(path.read_text())
+            row = next(row for row in value["cases"] if row["name"] == "exit-zero-unit-call-observer")
+            row["target"] = MODULE.TARGET
+            write(path, value)
+        population(root); must_reject(root, "special observer target", "target binding differs", special_observer_target)
         population(root); MODULE.verify(root)
-    print("OK — DRIP fixture verifier controls: exact observer recipe/destination and CREATE literal plus schema corruptions rejected")
+    print("OK — DRIP fixture verifier controls: cross-cut observer matrix and exact transaction/schema corruptions rejected")
 
 
 if __name__ == "__main__":
