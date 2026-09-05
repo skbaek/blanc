@@ -800,14 +800,17 @@ def execute_and_check(root_arg, *, write, validate_only=False):
                     if row.get("obligation") == obligation]
         if obligation == "receipt-returndata-log-matrix":
             fixtures = [row["fixture"] for row in manifest
-                        if row["name"].endswith("-observer")]
+                        if row["name"].startswith("observer-")
+                        or row["name"].endswith("-observer")]
         require(fixtures, f"runtime population has no fixture for {obligation}")
+        required_assertions = [
+            "complete target pre/post account and storage",
+            "receipt status and cumulative-gas differences",
+        ]
+        if obligation == "receipt-returndata-log-matrix":
+            required_assertions.append("returndata bytes/size and ordered observer logs")
         obligation_map.append({"name": obligation, "fixtures": sorted(set(fixtures)),
-                               "requiredAssertions": [
-                                   "complete target pre/post account and storage",
-                                   "receipt status and cumulative-gas differences",
-                                   "returndata bytes/size and ordered observer logs",
-                               ]})
+                               "requiredAssertions": required_assertions})
     files["manifest.json"] = json.dumps({
         "schema": 2, "kind": "drip-bpo2-runtime-fixtures",
         "executionEvidence": True, "runtimeSha256": hashlib.sha256(runtime).hexdigest(),
