@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Prepare DRIP's deterministic transaction/model inputs; never forge fixtures.
+"""Generate DRIP's deterministic BPO2 transaction fixtures.
 
-This preparation checkpoint deliberately has no --write or EVM execution mode.
---plan prints inputs and independent expected observations, with missing runtime
-observations explicitly pending. --self-test exercises the pure input/model and
-projection controls. Neither command is compiled execution evidence.
-
-The next integration packet must add pinned current_mainnet.run_t8n execution,
-returndata/recipient observers and blockchain serialization before enabling the
-sole writer of scripts/fixtures/drip/. Do not feed this plan to Jaune as a fixture.
+``--plan`` and ``--self-test`` remain pure and never invoke the target. Runtime
+mode is explicit ``--root TARGET_ROOT``; it reconstructs every case in memory,
+executes linked BPO2 blocks and per-transaction prefixes, and only ``--write``
+may commit the resulting population after all observations pass. Do not feed
+plan output to Jaune as a fixture.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import copy
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
+
+from current_mainnet import (  # noqa: E402
+    load_profile, resolve_root, run_t8n, target_paths, verify_target,
+)
 
 from drip_oracle import (
     CHI_SLOT, RHO_SLOT, PIE_SLOT, SCALE, MAX_CHI, MAX_ELAPSED, MAX_ASSET,
@@ -71,6 +74,42 @@ PENDING = {
 def require(condition, message):
     if not condition:
         raise AssertionError(message)
+
+
+CURRENT_MAINNET_PUBLIC_API = {
+    "load_profile", "resolve_root", "verify_target", "target_paths", "run_t8n",
+}
+
+
+def validate_current_mainnet_boundary():
+    """Keep this consumer on the shared, fork-locked public API."""
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    imports = [node for node in ast.walk(tree)
+               if isinstance(node, ast.ImportFrom) and node.module == "current_mainnet"]
+    imported = {alias.name for node in imports for alias in node.names
+                if alias.asname is None}
+    require(len(imports) == 1 and imported == CURRENT_MAINNET_PUBLIC_API
+            and all(alias.asname is None for node in imports for alias in node.names),
+            "generator must import exactly the five current-mainnet API names")
+    calls = [node for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+             and node.func.id in CURRENT_MAINNET_PUBLIC_API]
+    counts = {name: 0 for name in CURRENT_MAINNET_PUBLIC_API}
+    for call in calls:
+        counts[call.func.id] += 1
+    require(counts == {name: 1 for name in CURRENT_MAINNET_PUBLIC_API},
+            f"current-mainnet API call inventory differs: {counts}")
+    transition = next(call for call in calls if call.func.id == "run_t8n")
+    keywords = {keyword.arg: keyword.value for keyword in transition.keywords}
+    require(len(transition.args) == 3 and set(keywords) == {
+        "root", "profile", "state_test", "timeout",
+    }, "run_t8n call must use the explicit block API")
+    require(isinstance(keywords["state_test"], ast.Constant)
+            and keywords["state_test"].value is False,
+            "DRIP block generation must disable state-test mode")
+    require(isinstance(keywords["timeout"], ast.Constant)
+            and keywords["timeout"].value == 120,
+            "DRIP t8n timeout must remain 120 seconds")
 
 
 def q(n):
@@ -240,6 +279,367 @@ def cases(runtime):
     return population
 
 
+def account_from_alloc(alloc, address):
+    value = alloc.get(address.lower()) or alloc.get(address)
+    require(value is not None, f"missing account {address}")
+    return value
+
+
+def target_at(alloc, address):
+    value = alloc.get(address.lower()) or alloc.get(address)
+    return value
+
+
+def sender_prefix_check(before, after, operation, receipt):
+    """Check nonce/fee/value deltas at one actual transaction prefix."""
+    caller = operation["caller"].lower()
+    before_sender = account_from_alloc(before, caller)
+    after_sender = account_from_alloc(after, caller)
+    used = int(receipt["gasUsed"], 16)
+    require(0 < used < int(operation["transaction"]["gas"], 16), "invalid finite gas")
+    expected_nonce = int(operation["transaction"]["nonce"], 16)
+    require(int(before_sender["nonce"], 16) == expected_nonce, "sender nonce pre-state differs")
+    require(int(after_sender["nonce"], 16) == expected_nonce + 1, "sender nonce did not advance")
+    expected_balance = int(before_sender["balance"], 16) \
+        + operation["callerTransferDelta"] - used * GAS_PRICE
+    require(int(after_sender["balance"], 16) == expected_balance,
+            "sender value transfer or fee differs")
+    require(after_sender.get("code", "0x") == before_sender.get("code", "0x"),
+            "sender code changed")
+    require(normalized_storage(after_sender.get("storage", {}))
+            == normalized_storage(before_sender.get("storage", {})),
+            "sender storage changed")
+
+
+def render_fixture(name, initial_alloc, linked, profile):
+    from drip_fixture_blocks import fixture
+    return fixture(name, initial_alloc, linked["genesis"], linked["genesis"]["hash"],
+                   linked["blocks"], linked["post"], linked["lastblockhash"], profile)
+
+
+def runtime_transaction_population(root, profile, runtime, creation, paths):
+    """Execute all cases and return JSON-ready fixtures plus manifest rows."""
+    from drip_fixture_blocks import (
+        account, create_address, creation_transaction, execute_linked_blocks,
+        derive_address, system_alloc,
+    )
+    from drip_fixture_observers import (
+        log_entry, nested_overdraw, observer_code, observer_expectations,
+    )
+
+    require(Path(sys.executable).resolve() == paths.python.resolve(),
+            f"generator must run under isolated target Python {paths.python}")
+    alice = derive_address(1)
+    bob = derive_address(2)
+    require(alice == ALICE and bob == BOB, "signer derivation does not match frozen identities")
+
+    def transition(alloc, environment_value, transactions):
+        return run_t8n(alloc, environment_value, transactions, root=root, profile=profile,
+                        state_test=False, timeout=120)
+
+    files = {}
+    manifest = []
+    for case in cases(runtime):
+        initial = system_alloc()
+        first = case["steps"][0]
+        initial[TARGET] = first["preTarget"]
+        initial[ALICE] = account(FUNDS)
+        initial[BOB] = account(FUNDS)
+
+        def prefix_checker(_block, index, before, after, result, *, case=case):
+            operation = case["steps"][index]
+            actual_pre = target_at(before, TARGET)
+            actual_post = target_at(after, TARGET)
+            require(actual_pre is not None, f"{case['name']}/{index}: target pre-state absent")
+            check_target(actual_pre, operation["preTarget"])
+            require(actual_post is not None, f"{case['name']}/{index}: target post-state absent")
+            check_target(actual_post, operation["expectedTarget"])
+            receipts = result.get("receipts", [])
+            require(receipts, f"{case['name']}/{index}: missing prefix receipt")
+            receipt = receipts[-1]
+            require(int(receipt.get("status", "0x"), 16) == operation["expectedOutcome"]["status"],
+                    f"{case['name']}/{index}: receipt status differs")
+            require(receipt.get("logs", []) == operation["expectedOutcome"].get("logs", []),
+                    f"{case['name']}/{index}: direct DRIP logs differ")
+            sender_prefix_check(before, after, operation, receipt)
+
+        scheduled = [{"timestamp": operation["timestamp"], "transaction": operation["transaction"]}
+                     for operation in case["steps"]]
+        linked = execute_linked_blocks(initial, scheduled, run_transition=transition,
+                                       prefix_checker=prefix_checker)
+        files[f"{case['name']}.json"] = json.dumps(
+            render_fixture(case["name"], initial, linked, profile), indent=2) + "\n"
+        manifest.append({"name": case["name"], "obligation": case["obligation"],
+                         "steps": len(case["steps"]), "executionEvidence": True,
+                         "fixture": f"{case['name']}.json"})
+
+    # Every direct case gets an observer twin for returndata.  t8n exposes
+    # receipts and state but not transaction returndata, so the twin forwards
+    # the exact calldata/value through a deterministic helper and records the
+    # inner status, return size and return word in independently checked
+    # storage/logs.  The EOA still signs and pays the outer transaction.
+    observer_helpers = {ALICE: "0x000000000000000000000000000000000000d220",
+                        BOB: "0x000000000000000000000000000000000000d221"}
+    observer_runtime = {
+        address: observer_code(TARGET, "ordinary")
+        for address in observer_helpers.values()
+    }
+    for case in cases(runtime):
+        mapping = observer_helpers
+
+        def remap_target(account_value):
+            storage_value = {}
+            for key, value in account_value["storage"].items():
+                slot = int(key, 16)
+                for source, destination in mapping.items():
+                    if slot == int(source, 16):
+                        slot = int(destination, 16)
+                        break
+                storage_value[q(slot)] = value
+            return {**account_value, "storage": storage_value}
+
+        initial = system_alloc()
+        initial[TARGET] = remap_target(case["steps"][0]["preTarget"])
+        for caller, helper in observer_helpers.items():
+            initial[helper] = account(0, observer_runtime[helper])
+            initial[caller] = account(FUNDS)
+        helper_balances = {helper: 0 for helper in observer_helpers.values()}
+        helper_storages = {helper: {} for helper in observer_helpers.values()}
+
+        def observer_prefix_checker(_block, index, before, after, result,
+                                    *, case=case, helper_balances=helper_balances,
+                                    helper_storages=helper_storages):
+            operation = case["steps"][index]
+            helper = observer_helpers[operation["caller"]]
+            expected_target = remap_target(operation["expectedTarget"])
+            actual_pre = target_at(before, TARGET)
+            actual_post = target_at(after, TARGET)
+            require(actual_pre is not None and actual_post is not None,
+                    f"observer/{case['name']}/{index}: target account missing")
+            check_target(actual_pre, remap_target(operation["preTarget"]))
+            check_target(actual_post, expected_target)
+            receipt = result["receipts"][-1]
+            require(int(receipt["status"], 16) == 1,
+                    f"observer/{case['name']}/{index}: outer receipt reverted")
+            inner_status = operation["expectedOutcome"]["status"]
+            raw_return = operation["expectedOutcome"]["returndata"]
+            return_word = int(raw_return, 16) if raw_return != "0x" else 0
+            return_size = 32 if raw_return != "0x" else 0
+            helper_balances[helper] += operation["value"]
+            if inner_status:
+                helper_balances[helper] -= operation["value"]
+                if operation["data"][2:10].lower() == SELECTORS["exit"]:
+                    helper_balances[helper] += return_word
+            expected_slots = {0: inner_status, 1: return_size, 2: return_word}
+            helper_storages[helper].update(expected_slots)
+            expected_logs = [log_entry(helper, 0xD21902,
+                                       [inner_status, return_size, return_word])]
+            if (inner_status and operation["data"][2:10].lower() == SELECTORS["exit"]):
+                expected_slots.update({3: 1, 4: return_word, 5: 0, 6: int(TARGET, 16)})
+                helper_storages[helper].update(expected_slots)
+                expected_logs.insert(0, log_entry(helper, 0xD21901,
+                                                  [1, return_word, 0, int(TARGET, 16)]))
+            expected_observer = {
+                "balance": q(helper_balances[helper]), "nonce": "0x0",
+                "code": observer_runtime[helper],
+                "storage": {q(key): q(value) for key, value in helper_storages[helper].items() if value},
+            }
+            check_target(account_from_alloc(after, helper), expected_observer)
+            require(receipt.get("logs", []) == expected_logs,
+                    f"observer/{case['name']}/{index}: exact return logs differ")
+            sender_prefix_check(before, after, {
+                "caller": operation["caller"], "callerTransferDelta": -operation["value"],
+                "transaction": {**operation["transaction"], "to": helper},
+            }, receipt)
+
+        scheduled = []
+        for operation in case["steps"]:
+            helper = observer_helpers[operation["caller"]]
+            scheduled.append({"timestamp": operation["timestamp"],
+                              "transaction": {**operation["transaction"], "to": helper}})
+        linked = execute_linked_blocks(initial, scheduled, run_transition=transition,
+                                       prefix_checker=observer_prefix_checker)
+        observer_name = f"observer-{case['name']}"
+        files[f"{observer_name}.json"] = json.dumps(
+            render_fixture(observer_name, initial, linked, profile), indent=2) + "\n"
+        manifest.append({"name": observer_name, "obligation": case["obligation"],
+                         "steps": len(case["steps"]), "executionEvidence": True,
+                         "fixture": f"{observer_name}.json",
+                         "observerHelpers": sorted(observer_helpers.values())})
+
+    # A real constructor transaction is a separate fixture.  The target is
+    # absent in the genesis allocation and is checked at the CREATE-derived
+    # address, so a decoy account with equal-length runtime cannot pass.
+    create_target = create_address(alice, 0)
+    initial = system_alloc()
+    initial[ALICE] = account(FUNDS)
+    create_tx = creation_transaction(1, 0, creation)
+    require("to" not in create_tx and create_tx["input"] == "0x" + creation.hex(),
+            "deployment transaction is not the exact CREATE artifact")
+    expected_create = {
+        "balance": "0x0", "nonce": "0x01", "code": "0x" + runtime.hex(),
+        "storage": {q(CHI_SLOT): q(SCALE), q(RHO_SLOT): q(START)},
+    }
+
+    def create_prefix_checker(_block, index, before, after, result):
+        require(index == 0, "deployment must contain exactly one CREATE transaction")
+        require(target_at(before, create_target) is None, "CREATE target was preallocated")
+        created = target_at(after, create_target)
+        require(created is not None, "CREATE did not install an account")
+        check_target(created, expected_create)
+        require(result["receipts"][-1].get("status") == "0x1", "CREATE receipt failed")
+        sender_prefix_check(before, after, {
+            "caller": ALICE, "callerTransferDelta": 0,
+            "transaction": create_tx,
+        }, result["receipts"][-1])
+
+    linked = execute_linked_blocks(initial, [{"timestamp": START, "transaction": create_tx}],
+                                   run_transition=transition,
+                                   prefix_checker=create_prefix_checker)
+    name = "deployment-genesis"
+    files[f"{name}.json"] = json.dumps(render_fixture(name, initial, linked, profile), indent=2) + "\n"
+    manifest.append({"name": name, "obligation": name, "steps": 1,
+                     "executionEvidence": True, "fixture": f"{name}.json",
+                     "target": create_target, "creationCodeSha256": hashlib.sha256(creation).hexdigest()})
+
+    # Observer twins exercise the real target CALL boundary.  The ordinary
+    # twin covers zero-value CALLs; one reentry settles nested units, another
+    # records a calibrated nested overdraw, and the rejecting twin performs a
+    # successful nested settlement before it writes/emits and reverts.
+    observer_address = "0x000000000000000000000000000000000000d220"
+    observer_cases = (
+        ("exit-zero-unit-call-observer", "ordinary", 0, 0, 0),
+        ("exit-successful-reentry-observer", "reenter", 3, 2, 1),
+        ("exit-nested-overdraw-observer", "reenter", 3, 2, nested_overdraw(3, 2)),
+        ("exit-rejecting-recipient-rollback-observer", "reject-after-reentry", 3, 2,
+         1),
+    )
+    for name, mode, original_units, outer_units, nested_units in observer_cases:
+        observer = observer_code(create_target, mode, nested_units=max(1, nested_units))
+        initial = system_alloc()
+        initial[create_target] = account(
+            original_units, "0x" + runtime.hex(), {
+                CHI_SLOT: SCALE, RHO_SLOT: START, PIE_SLOT: original_units,
+                int(observer_address, 16): original_units,
+            }, nonce=1)
+        initial_target = initial[create_target]
+        initial[observer_address] = account(0, observer)
+        initial[ALICE] = account(FUNDS)
+        outer_data = abi("exit", outer_units)
+        transaction = {
+            "type": "0x0", "chainId": "0x1", "nonce": "0x00",
+            "gasPrice": q(GAS_PRICE), "gas": q(GAS), "to": observer_address,
+            "value": "0x0", "input": outer_data,
+            "secretKey": "0x" + f"{KEYS[ALICE]:064x}",
+        }
+        observer_int = int(observer_address, 16)
+        model = Drip(START)
+        model.chi, model.rho, model.Pie = SCALE, START, original_units
+        model.rows[observer_int] = original_units
+        model.balance = original_units
+        pre_snapshot = model.snapshot()
+        outer_payout = model.exit(observer_int, outer_units, START)
+        nested_succeeds = False
+        nested_payout = 0
+        try:
+            if mode == "reenter":
+                nested_payout = model.exit(observer_int, nested_units, START)
+                nested_succeeds = True
+        except Revert:
+            nested_succeeds = False
+        if mode == "reject-after-reentry":
+            model.exit(observer_int, nested_units, START)
+            expected_snapshot = pre_snapshot
+            outer_payout = nested_payout = 0
+        else:
+            expected_snapshot = model.snapshot()
+        inner_status = 1 if mode != "reject-after-reentry" else 0
+        expected_observer_balance = outer_payout + nested_payout
+
+        def observer_prefix_checker(_block, index, before, after, result,
+                                    *, name=name, mode=mode,
+                                    expected_snapshot=expected_snapshot,
+                                    observer=observer, initial_target=initial_target):
+            require(index == 0, f"{name}: observer transaction count drift")
+            receipt = result["receipts"][-1]
+            require(int(receipt["status"], 16) == 1, f"{name}: outer receipt must succeed")
+            check_target(target_at(before, create_target), initial_target)
+            target = target_at(after, create_target)
+            require(target is not None, f"{name}: target disappeared")
+            target_expected = {
+                "balance": q(expected_snapshot["balance"]), "nonce": "0x01",
+                "code": "0x" + runtime.hex(),
+                "storage": {q(CHI_SLOT): q(expected_snapshot["chi"]),
+                             q(RHO_SLOT): q(expected_snapshot["rho"]),
+                             q(PIE_SLOT): q(expected_snapshot["Pie"]),
+                             **{q(int(address, 16)): q(value)
+                                for address, value in expected_snapshot["rows"].items()}},
+            }
+            check_target(target, target_expected)
+            observer_state = account_from_alloc(after, observer_address)
+            slots = normalized_storage(observer_state.get("storage", {}))
+            require(slots.get(0, 0) == inner_status,
+                    f"{name}: inner DRIP status differs")
+            result_size = 32 if inner_status else 0
+            result_word = outer_units if inner_status else 0
+            expected_slots = {0: inner_status, 1: result_size, 2: result_word}
+            if mode != "reject-after-reentry":
+                expected_slots.update({3: 1 + int(nested_succeeds),
+                    4: nested_units if nested_succeeds else outer_units,
+                    5: 0, 6: int(create_target, 16)})
+                expected_slots.update({7: 1 if nested_succeeds else 0,
+                                       8: 32 if nested_succeeds else 0,
+                                       9: nested_units if nested_succeeds else 0})
+            expected_observer = {
+                "balance": q(expected_observer_balance), "nonce": "0x0",
+                "code": observer,
+                "storage": {q(key): q(value) for key, value in expected_slots.items() if value},
+            }
+            check_target(observer_state, expected_observer)
+            label = ("ordinary" if mode == "ordinary" else
+                     "reject-after-reentry" if mode == "reject-after-reentry" else
+                     "reenter-success" if nested_succeeds else "reenter-overdraw")
+            expected_words = {
+                "ordinary": [[1, 0, 0, int(create_target, 16)], [1, 32, 0]],
+                "reenter-success": [[1, outer_units, 0, int(create_target, 16)],
+                                     [2, nested_units, 0, int(create_target, 16)],
+                                     [1, 32, nested_units], [1, 32, outer_units]],
+                "reenter-overdraw": [[1, outer_units, 0, int(create_target, 16)],
+                                      [0, 0, 0], [1, 32, outer_units]],
+                "reject-after-reentry": [[0, 0, 0]],
+            }[label]
+            logs = result["receipts"][-1].get("logs", [])
+            expected_topics = {
+                "ordinary": [0xD21901, 0xD21902],
+                "reenter-success": [0xD21901, 0xD21901, 0xD21903, 0xD21902],
+                "reenter-overdraw": [0xD21901, 0xD21903, 0xD21902],
+                "reject-after-reentry": [0xD21902],
+            }[label]
+            expected_logs = [log_entry(observer_address, topic, words)
+                             for topic, words in zip(expected_topics, expected_words)]
+            require(logs == expected_logs, f"{name}: exact nested log chronology/data differs")
+            sender_prefix_check(before, after, {
+                "caller": ALICE, "callerTransferDelta": 0,
+                "transaction": transaction,
+            }, receipt)
+
+        linked = execute_linked_blocks(initial, [{"timestamp": START,
+                                                   "transaction": transaction}],
+                                       run_transition=transition,
+                                       prefix_checker=observer_prefix_checker)
+        files[f"{name}.json"] = json.dumps(render_fixture(name, initial, linked, profile), indent=2) + "\n"
+        obligation = name.removesuffix("-observer")
+        if obligation == "exit-nested-overdraw":
+            obligation = "exit-successful-reentry"
+        manifest.append({"name": name, "obligation": obligation, "steps": 1,
+                         "executionEvidence": True,
+                         "fixture": f"{name}.json",
+                         "observer": observer_expectations(create_target, mode,
+                                                            nested_units=max(1, nested_units),
+                                                            callback_value=outer_units)})
+    return files, manifest
+
+
 def model_balance(account):
     return int(account["balance"], 16)
 
@@ -347,12 +747,82 @@ def self_test(document):
     print(f"OK — DRIP input preparation: {len(document['cases'])} cases, {sum(len(c['steps']) for c in document['cases'])} model steps, 38 obligations explicitly dispositioned; {len(controls)} pure projection controls; EVM executions=0")
 
 
+def write_or_compare(files, *, write):
+    output = ROOT / "scripts" / "fixtures" / "drip"
+    expected_names = set(files)
+    actual_names = {path.name for path in output.glob("*.json")} if output.exists() else set()
+    missing = sorted(expected_names - actual_names)
+    orphaned = sorted(actual_names - expected_names)
+    if not write:
+        if missing or orphaned:
+            raise RuntimeError(f"fixture population differs: missing={missing}, orphaned={orphaned}")
+        for name, expected in sorted(files.items()):
+            actual = (output / name).read_text(encoding="utf-8")
+            if actual != expected:
+                raise RuntimeError(f"generated fixture differs: {output / name}; run with --write")
+        return
+    output.mkdir(parents=True, exist_ok=True)
+    for name, content in sorted(files.items()):
+        temporary = output / f".{name}.tmp"
+        temporary.write_text(content, encoding="utf-8")
+        temporary.replace(output / name)
+    for stale in output.glob("*.json"):
+        if stale.name not in expected_names:
+            stale.unlink()
+
+
+def execute_and_check(root_arg, *, write):
+    validate_current_mainnet_boundary()
+    profile = load_profile()
+    root = resolve_root(profile, root_arg)
+    verify_target(root, profile)
+    paths = target_paths(root, profile)
+    require(Path(sys.executable).resolve() == paths.python.resolve(),
+            f"generator must run under isolated target Python {paths.python}")
+    runtime, creation = artifacts()
+    files, manifest = runtime_transaction_population(root, profile, runtime, creation, paths)
+    obligation_map = []
+    for obligation in OBLIGATIONS:
+        fixtures = [row["fixture"] for row in manifest
+                    if row.get("obligation") == obligation]
+        if obligation == "receipt-returndata-log-matrix":
+            fixtures = [row["fixture"] for row in manifest
+                        if row["name"].endswith("-observer")]
+        require(fixtures, f"runtime population has no fixture for {obligation}")
+        obligation_map.append({"name": obligation, "fixtures": sorted(set(fixtures)),
+                               "requiredAssertions": [
+                                   "complete target pre/post account and storage",
+                                   "receipt status and cumulative-gas differences",
+                                   "returndata bytes/size and ordered observer logs",
+                               ]})
+    files["manifest.json"] = json.dumps({
+        "schema": 2, "kind": "drip-bpo2-runtime-fixtures",
+        "executionEvidence": True, "runtimeSha256": hashlib.sha256(runtime).hexdigest(),
+        "creationSha256": hashlib.sha256(creation).hexdigest(),
+        "targetProfile": profile["target"]["checkoutCommit"],
+        "obligations": obligation_map, "cases": manifest,
+    }, indent=2) + "\n"
+    write_or_compare(files, write=write)
+    verb = "wrote" if write else "checked"
+    print(f"OK — {verb} DRIP BPO2 fixtures: {len(manifest)} scenarios, per-transaction prefixes verified")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--plan", action="store_true")
     mode.add_argument("--self-test", action="store_true")
+    mode.add_argument("--write", action="store_true",
+                      help="execute the pinned BPO2 target and atomically write verified fixtures")
+    mode.add_argument("--check-runtime", action="store_true",
+                      help="execute the pinned BPO2 target and compare existing fixtures")
+    parser.add_argument("--root", help="explicit current-mainnet target root (required for runtime modes)")
     args = parser.parse_args()
+    if args.write or args.check_runtime:
+        if not args.root:
+            parser.error("--root is required for runtime modes")
+        execute_and_check(args.root, write=args.write)
+        return
     document = plan()
     if args.self_test: self_test(document)
     else: print(json.dumps(document, indent=2, sort_keys=True))
