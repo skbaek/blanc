@@ -283,6 +283,16 @@ scripts/check-lake-artifact-cache.sh
 scripts/check-gates.sh --certify-build
 ```
 
+`scripts/certify-checked-build.sh` is the zero-argument procedural wrapper for
+this same adjacent sequence after the exact authoritative build and
+`jaune/jaune` have completed through the compilation owner. It requires an
+explicit absolute `LAKE_CACHE_DIR` with nonempty regular artifact entries,
+reports that precheck as presence only, and then preserves the integrity
+checker's actual counts and verdict. It refuses certification on an absent or
+empty cache, a non-regular entry, or checker failure. It never selects another
+cache, rebuilds, repairs artifacts, or bypasses the certificate writer. This
+helper is not an additional full-set gate or an integrated certificate property.
+
 The first command runs a small checker against the active toolchain's own
 `Lake.computeBinFileHash`. It recomputes every cache artifact's hash and
 compares it with the cache filename, then recomputes every materialized output
@@ -636,6 +646,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/check-drip-oracle.py` | `check-drip.sh` | independent strict schema and exact-value pins plus arithmetic, state/rollback, coalition-accounting, and in-memory corruption controls |
 | `scripts/gen-drip-code.lean` | explicit repository-prescribed Lean regeneration plus byte-for-byte cleanliness check | sole writer of `Blanc/DripCode.lean`; evaluates `Prog.compile Drip.runtime`, emits the complete runtime literal and kernel witness, and touches no other artifact |
 | `scripts/gen-drip-creation-code.lean` | explicit repository-prescribed Lean regeneration plus byte-for-byte cleanliness check | sole writer of `Blanc/DripCreationCode.lean`; evaluates the two-pass `Drip.creationCode`, emits the complete creation literal and kernel identity, and touches no other artifact |
+| `scripts/drip-artifact-writer.sh` | explicit contained regeneration, `runtime` or `creation` | fixed dispatch to the two registered DRIP Lean writers above; owns no generated output and never builds imports. Build the selected evaluator's imports at the exact source state through the compilation owner before invocation; runtime regeneration may require an intervening owned build before creation regeneration. Repeat generation and compare complete output bytes for cleanliness |
 | `scripts/check-runtime-bytes.py` | `check-fmint.sh`, `check-weth.sh`, `check-prorata.sh`, `check-weth10-redemption.sh` | parses the committed Lean literal and compares it byte-for-byte against every fixture's pre-state code for that contract |
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
