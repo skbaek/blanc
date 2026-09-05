@@ -433,16 +433,18 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
             raw_return = operation["expectedOutcome"]["returndata"]
             return_word = int(raw_return, 16) if raw_return != "0x" else 0
             return_size = 32 if raw_return != "0x" else 0
-            helper_balances[helper] += operation["value"]
+            value = int(operation["transaction"]["value"], 16)
+            data = operation["transaction"]["input"]
+            helper_balances[helper] += value
             if inner_status:
-                helper_balances[helper] -= operation["value"]
-                if operation["data"][2:10].lower() == SELECTORS["exit"]:
+                helper_balances[helper] -= value
+                if data[2:10].lower() == SELECTORS["exit"]:
                     helper_balances[helper] += return_word
             expected_slots = {0: inner_status, 1: return_size, 2: return_word}
             helper_storages[helper].update(expected_slots)
             expected_logs = [log_entry(helper, 0xD21902,
                                        [inner_status, return_size, return_word])]
-            if (inner_status and operation["data"][2:10].lower() == SELECTORS["exit"]):
+            if (inner_status and data[2:10].lower() == SELECTORS["exit"]):
                 expected_slots.update({3: 1, 4: return_word, 5: 0, 6: int(TARGET, 16)})
                 helper_storages[helper].update(expected_slots)
                 expected_logs.insert(0, log_entry(helper, 0xD21901,
@@ -456,7 +458,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
             require(receipt.get("logs", []) == expected_logs,
                     f"observer/{case['name']}/{index}: exact return logs differ")
             sender_prefix_check(before, after, {
-                "caller": operation["caller"], "callerTransferDelta": -operation["value"],
+                "caller": operation["caller"], "callerTransferDelta": -value,
                 "transaction": {**operation["transaction"], "to": helper},
             }, receipt)
 
