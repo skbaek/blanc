@@ -133,7 +133,7 @@ def account(alloc, address, runtime, label):
     return value
 
 
-def fixture_case(path, expected_name, runtime, deployment, target, helpers):
+def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers):
     doc = read_json(path)
     expected_key = f"blanc/drip::{expected_name}[fork_BPO2-blockchain_test]"
     require(set(doc) == {expected_key}, f"{path.name}: exact case key differs")
@@ -161,10 +161,12 @@ def fixture_case(path, expected_name, runtime, deployment, target, helpers):
         nonce, gas_price, gas, destination, value, calldata, v, r, s = tx
         require(len(destination) in (0, 20) and int.from_bytes(gas, "big") > 0 and int.from_bytes(gas_price, "big") > 0, f"{path.name}: transaction {index} envelope")
         require(int.from_bytes(v, "big") >= 37 and int.from_bytes(r, "big") > 0 and int.from_bytes(s, "big") > 0, f"{path.name}: transaction {index} EIP-155 signature")
+        require((int.from_bytes(v, "big") - 35) // 2 == 1, f"{path.name}: transaction {index} chain id differs")
         if deployment:
-            require(index == 0 and destination == b"" and calldata, f"{path.name}: CREATE transaction binding")
+            require(index == 0 and destination == b"" and calldata == creation, f"{path.name}: CREATE transaction binding")
         else:
-            require(destination != b"", f"{path.name}: direct/observer transaction lacks destination")
+            allowed = {bytes.fromhex(target[2:])} | {bytes.fromhex(x[2:]) for x in helpers}
+            require(destination in allowed, f"{path.name}: transaction {index} destination differs")
     if deployment:
         require(not any(key.lower() == target for key in case["pre"]), f"{path.name}: CREATE target preallocated")
     else:
@@ -172,9 +174,10 @@ def fixture_case(path, expected_name, runtime, deployment, target, helpers):
     account(case["postState"], target, runtime, f"{path.name} post")
     for helper in helpers:
         require(isinstance(helper, str) and re.fullmatch(r"0x[0-9a-f]{40}", helper), f"{path.name}: observer helper malformed")
-        before = account(case["pre"], helper, b"\x01", f"{path.name} observer pre")
-        after = account(case["postState"], helper, b"\x01", f"{path.name} observer post")
-        require(before["code"] == after["code"] and before["code"] != "0x", f"{path.name}: observer code binding differs")
+        before = next((v for k, v in case["pre"].items() if k.lower() == helper), None)
+        after = next((v for k, v in case["postState"].items() if k.lower() == helper), None)
+        code = before.get("code") if isinstance(before, dict) else None
+        require(isinstance(after, dict) and code == after.get("code") and isinstance(code, str) and HEX.fullmatch(code) and code != "0x" and target[2:] in code.lower(), f"{path.name}: observer code/target binding differs")
 
 
 def verify(directory: Path):
@@ -235,7 +238,7 @@ def verify(directory: Path):
     disk = {path.name for path in directory.glob("*.json") if path.name != "manifest.json"}
     require(disk == set(case_by_file), f"fixture population mismatch: missing={sorted(set(case_by_file)-disk)}, orphaned={sorted(disk-set(case_by_file))}")
     for filename, (name, deployment, target, helpers) in case_by_file.items():
-        fixture_case(directory / filename, name, runtime, deployment, target, helpers)
+        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers)
     return len(case_by_file), sum(row["steps"] for row in cases)
 
 
