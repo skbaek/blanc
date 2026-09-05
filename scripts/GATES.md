@@ -377,7 +377,11 @@ shared `Blanc Blanc.ProofRecipeTactic jaune/jaune` build. The trusted manual
 `cold_build` input disables the producer's GitHub build-cache restore and saves
 its successful output explicitly; upstream Mathlib cache remains available.
 Semantic lanes restore only that exact
-candidate cache with fail-on-miss behavior and configure their Lean action with
+candidate cache with fail-on-miss behavior, then require the named restore's
+`cache-hit` output to equal the string `true` before any toolchain or gate
+consumer. A successful nonexact restore or unavailable-service early return
+therefore fails at this assertion; absence of a fallback key alone is not an
+exact-hit guarantee. They configure their Lean action with
 building, test/lint discovery and fallback caches disabled. Automatic test/lint
 discovery belongs to the producer alone. On the reviewed Lake v4.32.1 root,
 `testDriver` and `lintDriver` are empty and `builtinLint?` is `none`; the two

@@ -511,8 +511,15 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
         "restore-build": {
             "name": "Restore exact build output",
             "kind": "action",
+            "workflow_id": "restore_build",
             "uses": "actions/cache/restore@v5",
             "with": {"path": ".lake", "key": CACHE_KEY, "fail-on-cache-miss": "true"},
+        },
+        "require-exact-build": {
+            "name": "Require an exact build cache hit",
+            "kind": "command",
+            "run": 'test "$BLANC_CACHE_HIT" = true',
+            "env": {"BLANC_CACHE_HIT": "${{ steps.restore_build.outputs.cache-hit }}"},
         },
         "install-toolchain": {
             "name": "Install Lean toolchain without rebuilding",
@@ -565,7 +572,7 @@ def semantic_step(step: dict[str, Any]) -> dict[str, Any]:
     """Fields that can change execution, excluding census prose."""
     return {
         key: step[key]
-        for key in ("name", "kind", "uses", "with", "run", "env", "if")
+        for key in ("name", "kind", "workflow_id", "uses", "with", "run", "env", "if")
         if key in step
     }
 
@@ -719,9 +726,9 @@ def topology_problems(
         "execution-static": ["checkout"],
         "cycle-static": ["checkout"],
         "build": ["checkout", "full-build", "save-cold-build"],
-        "execution-semantic": ["checkout", "restore-build", "install-toolchain"],
-        "contract-semantic": ["checkout", "restore-build", "install-toolchain"],
-        "deployment-fixtures": ["checkout", "restore-build", "install-toolchain", "python-runtime",
+        "execution-semantic": ["checkout", "restore-build", "require-exact-build", "install-toolchain"],
+        "contract-semantic": ["checkout", "restore-build", "require-exact-build", "install-toolchain"],
+        "deployment-fixtures": ["checkout", "restore-build", "require-exact-build", "install-toolchain", "python-runtime",
                                 "eels-checkout", "eels-venv", "eels-install"],
     }
     for job_id, required in infrastructure_ids.items():
@@ -770,8 +777,8 @@ def topology_problems(
         if job.get("needs") != ["build"]:
             problems.append(f"semantic lane {identifier} can run without the single build")
         ids = [step.get("id") for step in job.get("steps", [])]
-        if ids[:3] != ["checkout", "restore-build", "install-toolchain"]:
-            problems.append(f"semantic lane {identifier} does not restore before consuming")
+        if ids[:4] != ["checkout", "restore-build", "require-exact-build", "install-toolchain"]:
+            problems.append(f"semantic lane {identifier} does not enforce an exact restore before consuming")
         restore = next((step for step in job["steps"] if step.get("id") == "restore-build"), None)
         if not restore or restore.get("with") != {
             "path": ".lake", "key": CACHE_KEY, "fail-on-cache-miss": "true"
@@ -887,7 +894,7 @@ def parse_workflow(source: str | None = None) -> list[dict[str, Any]]:
                     raise PolicyError(f"{key} must be a block at line {lineno}")
                 nested = key
                 step[key] = {}
-            elif key in {"uses", "run", "if"}:
+            elif key in {"id", "uses", "run", "if"}:
                 nested = None
                 step[key] = parse_scalar(value)
             else:
@@ -940,6 +947,8 @@ def expected_workflow(
                     value["env"] = step["env"]
             if "if" in step:
                 value["if"] = step["if"]
+            if "workflow_id" in step:
+                value["id"] = step["workflow_id"]
             rendered["steps"].append(value)
         result.append(rendered)
     return result
@@ -1276,6 +1285,32 @@ def self_test() -> int:
     # Test every consumer, not only the first matching infrastructure id. An
     # omitted explicit-off input reactivates independent upstream discovery.
     for consumer in ("execution-semantic", "contract-semantic", "deployment-fixtures"):
+        for mutation in ("missing-id", "wrong-id", "omitted-guard", "guard-before-restore",
+                         "guard-after-setup", "bypass", "wrong-output", "skip-guard"):
+            changed = copy.deepcopy(topology)
+            job = next(item for item in changed["jobs"] if item["id"] == consumer)
+            restore = next(item for item in job["steps"] if item["id"] == "restore-build")
+            guard = next(item for item in job["steps"] if item["id"] == "require-exact-build")
+            if mutation == "missing-id":
+                del restore["workflow_id"]
+            elif mutation == "wrong-id":
+                restore["workflow_id"] = "another_restore"
+            elif mutation == "omitted-guard":
+                job["steps"].remove(guard)
+            elif mutation in ("guard-before-restore", "guard-after-setup"):
+                index = job["steps"].index(guard)
+                other = index - 1 if mutation == "guard-before-restore" else index + 1
+                job["steps"][index], job["steps"][other] = job["steps"][other], guard
+            elif mutation == "bypass":
+                guard["run"] = "true"
+            elif mutation == "wrong-output":
+                guard["env"]["BLANC_CACHE_HIT"] = "${{ steps.another_restore.outputs.cache-hit }}"
+            else:
+                guard["if"] = "${{ false }}"
+            fragment = ("infrastructure population/order" if mutation in
+                        ("omitted-guard", "guard-before-restore", "guard-after-setup")
+                        else "infrastructure step")
+            check_rejected(f"{consumer} exact cache {mutation}", changed, fragment)
         for driver in ("test", "lint"):
             for value in (None, "true"):
                 changed = copy.deepcopy(topology)
@@ -1286,6 +1321,17 @@ def self_test() -> int:
                 else:
                     step["with"][driver] = value
                 check_rejected(f"{consumer} automatic {driver}", changed, "infrastructure step")
+
+    guard = expected_infrastructure("require-exact-build")
+    for value in (None, "", "false", "TRUE", "true\n", "true"):
+        result = subprocess.run(
+            ["bash", "-c", guard["run"]],
+            env={} if value is None else {"BLANC_CACHE_HIT": value},
+            capture_output=True, check=False,
+        )
+        if (result.returncode == 0) != (value == "true"):
+            raise PolicyError(f"exact cache assertion accepted the wrong output: {value!r}")
+        controls += 1
 
     for field in ("auto-config", "test", "lint"):
         changed = copy.deepcopy(topology)

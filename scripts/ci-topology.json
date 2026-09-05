@@ -544,6 +544,17 @@
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
             "path": ".lake"
+          },
+          "workflow_id": "restore_build"
+        },
+        {
+          "id": "require-exact-build",
+          "name": "Require an exact build cache hit",
+          "kind": "command",
+          "purpose": "infrastructure",
+          "run": "test \"$BLANC_CACHE_HIT\" = true",
+          "env": {
+            "BLANC_CACHE_HIT": "${{ steps.restore_build.outputs.cache-hit }}"
           }
         },
         {
@@ -653,6 +664,17 @@
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
             "path": ".lake"
+          },
+          "workflow_id": "restore_build"
+        },
+        {
+          "id": "require-exact-build",
+          "name": "Require an exact build cache hit",
+          "kind": "command",
+          "purpose": "infrastructure",
+          "run": "test \"$BLANC_CACHE_HIT\" = true",
+          "env": {
+            "BLANC_CACHE_HIT": "${{ steps.restore_build.outputs.cache-hit }}"
           }
         },
         {
@@ -807,6 +829,17 @@
             "fail-on-cache-miss": "true",
             "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
             "path": ".lake"
+          },
+          "workflow_id": "restore_build"
+        },
+        {
+          "id": "require-exact-build",
+          "name": "Require an exact build cache hit",
+          "kind": "command",
+          "purpose": "infrastructure",
+          "run": "test \"$BLANC_CACHE_HIT\" = true",
+          "env": {
+            "BLANC_CACHE_HIT": "${{ steps.restore_build.outputs.cache-hit }}"
           }
         },
         {

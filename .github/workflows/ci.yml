@@ -174,11 +174,17 @@ jobs:
         with:
           fetch-depth: 0
       - name: Restore exact build output
+        id: restore_build
         uses: actions/cache/restore@v5
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
           path: .lake
+      - name: Require an exact build cache hit
+        run: test "$BLANC_CACHE_HIT" = true
+        env:
+          BLANC_CACHE_HIT: ${{ steps.restore_build.outputs.cache-hit }}
+
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
@@ -210,11 +216,17 @@ jobs:
         with:
           fetch-depth: 0
       - name: Restore exact build output
+        id: restore_build
         uses: actions/cache/restore@v5
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
           path: .lake
+      - name: Require an exact build cache hit
+        run: test "$BLANC_CACHE_HIT" = true
+        env:
+          BLANC_CACHE_HIT: ${{ steps.restore_build.outputs.cache-hit }}
+
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
@@ -256,11 +268,17 @@ jobs:
         with:
           fetch-depth: 0
       - name: Restore exact build output
+        id: restore_build
         uses: actions/cache/restore@v5
         with:
           fail-on-cache-miss: true
           key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
           path: .lake
+      - name: Require an exact build cache hit
+        run: test "$BLANC_CACHE_HIT" = true
+        env:
+          BLANC_CACHE_HIT: ${{ steps.restore_build.outputs.cache-hit }}
+
       - name: Install Lean toolchain without rebuilding
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
