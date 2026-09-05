@@ -8,6 +8,7 @@ from ethereum_rlp import rlp
 from ethereum_types.bytes import Bytes, Bytes8, Bytes32, Bytes256
 from ethereum_types.numeric import U64, U256, Uint
 from ethereum.crypto.hash import keccak256
+from ethereum.merkle_patricia_trie import Trie, root as trie_root, trie_set
 from ethereum.forks.bpo2.blocks import Header
 from ethereum.state import Account, Address
 from ethereum.state_mpt import (  # noqa: E402
@@ -189,6 +190,19 @@ def validate_serialized_transactions(body, scheduled_transactions):
         actual_s = int.from_bytes(fields[8], "big")
         if (actual_v, actual_r, actual_s) != (expected_v, expected_r, expected_s):
             raise AssertionError(f"serialized transaction {index} signature/sender differs from schedule {expected_sender}")
+
+
+def transactions_trie_root(body):
+    """Compute the pinned target's un-secured trie root for a signed body."""
+    encoded = rlp.decode(hex_to_bytes(body))
+    if not isinstance(encoded, list):
+        raise RuntimeError("BPO2 t8n body is not an RLP transaction list")
+    trie = Trie(secured=False, default=None)
+    for index, raw in enumerate(encoded):
+        if not isinstance(raw, bytes):
+            raise RuntimeError(f"BPO2 t8n body entry {index} is not opaque bytes")
+        trie_set(trie, rlp.encode(Uint(index)), raw)
+    return "0x" + bytes(trie_root(trie)).hex()
 
 def genesis_header(alloc):
     return {
@@ -381,6 +395,8 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
         if len(result.get("receipts", [])) != len(transactions):
             raise AssertionError("receipt count differs from transaction count")
         validate_serialized_transactions(output.body, transactions)
+        if transactions_trie_root(output.body) != result.get("txRoot"):
+            raise AssertionError("serialized transaction trie root differs from t8n txRoot")
         def receipts_with_gas(value):
             previous = 0
             copied = []
