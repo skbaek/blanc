@@ -162,7 +162,8 @@ def validate_serialized_transactions(body, scheduled_transactions):
         gas = int(transaction["gas"], 16)
         value = int(transaction.get("value", "0x0"), 16)
         data = hex_to_bytes(transaction.get("input", "0x"))
-        destination = hex_to_bytes(transaction.get("to", "0x"))
+        destination_value = transaction.get("to")
+        destination = hex_to_bytes(destination_value) if destination_value else b""
         if destination and len(destination) != 20:
             raise AssertionError(f"transaction {index} destination is not 20 bytes")
         expected = (nonce, gas_price, gas, destination, value, data)
@@ -302,16 +303,17 @@ def creation_transaction(secret_key, nonce, creation_code, *, value=0, gas=1_000
                          gas_price=10):
     """Return a signed legacy CREATE transaction input.
 
-    Omitting ``to`` is material: a transaction aimed at an account containing
-    the same bytes exercises a normal call and never tests constructor
-    semantics.  The caller separately derives and checks the CREATE address.
+    Explicit ``None`` is material: the pinned target's transaction model has a
+    non-creation default address when ``to`` is omitted.  Passing JSON null
+    selects constructor semantics; the caller separately derives and checks
+    the CREATE address.
     """
     if isinstance(creation_code, bytes):
         creation_code = "0x" + creation_code.hex()
     if not isinstance(creation_code, str) or not creation_code.startswith("0x"):
         raise ValueError("creation code must be a 0x-prefixed byte string")
     return {
-        "type": "0x0", "chainId": "0x1", "nonce": q(nonce),
+        "type": "0x0", "chainId": "0x1", "nonce": q(nonce), "to": None,
         "gasPrice": q(gas_price), "gas": q(gas), "value": q(value),
         "input": creation_code,
         "secretKey": "0x" + int(secret_key).to_bytes(32, "big").hex(),
