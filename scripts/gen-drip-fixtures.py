@@ -485,7 +485,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
     initial = system_alloc()
     initial[ALICE] = account(FUNDS)
     create_tx = creation_transaction(1, 0, creation)
-    require("to" not in create_tx and create_tx["input"] == "0x" + creation.hex(),
+    require(create_tx.get("to") is None and create_tx["input"] == "0x" + creation.hex(),
             "deployment transaction is not the exact CREATE artifact")
     expected_create = {
         "balance": "0x0", "nonce": "0x01", "code": "0x" + runtime.hex(),
