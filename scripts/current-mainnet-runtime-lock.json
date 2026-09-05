@@ -4,7 +4,7 @@
       "generated": false
     },
     "macos-arm64": {
-      "contentSha256": "37f868f812c966960ba6f56d50469a9644052bf17d4fd9fc278519495ef27f8d",
+      "contentSha256": "ea0407d3580813595033a1b2b9514334348ac7aa6049d931f6b8bfe8ddbf0b9e",
       "distributions": [
         {
           "contentSha256": "648cd23d81b5241c0a19f85d8f7b94d7c177c5b58ec0906c025da1f44ca03e49",
@@ -104,10 +104,20 @@
       ],
       "fileRecords": 854,
       "generated": true,
+      "interpreterRuntime": {
+        "contentSha256": "35ef9ae2949030ff29b8e925a562cef98c3095b259ab4d0eb68e40f30f882b56",
+        "fileRecords": 1,
+        "files": [
+          {
+            "path": "basePrefix/lib/libpython3.11.dylib",
+            "sha256": "5de477e428a806f24119eba2b456815aa36703a42ffe895584662d0c5fb21958"
+          }
+        ]
+      },
       "pythonExecutableSha256": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884",
       "standardLibrary": {
-        "contentSha256": "691a6d0a6867358d89a3bc5b7e7bf240b989b35069c5b6262b15a80e08c621ce",
-        "fileRecords": 199,
+        "contentSha256": "a47ceba8d45e49303084b6df34fca16dcbda744dbfbf52972eef4a94effdba4a",
+        "fileRecords": 201,
         "files": [
           {
             "path": "stdlib/__future__.py",
@@ -336,6 +346,14 @@
           {
             "path": "stdlib/csv.py",
             "sha256": "6c68a5186e3b85e6e267a7ef96479327a45ae2b40bf5e9f2017e4b2282b3f5b1"
+          },
+          {
+            "path": "stdlib/ctypes/__init__.py",
+            "sha256": "a31058a86719567745b80200dcc40218663e7516026a79ac0911d97c67574f71"
+          },
+          {
+            "path": "stdlib/ctypes/_endian.py",
+            "sha256": "38dc998ee2d180a64d4fe561b79287b19850df405f48fe72dede7a65d71de844"
           },
           {
             "path": "stdlib/dataclasses.py",
@@ -911,8 +929,12 @@
       }
     }
   },
-  "schema": 3,
+  "schema": 4,
   "semanticClosure": {
+    "bytecodePolicy": {
+      "dontWriteBytecode": true,
+      "pycachePrefix": "/dev/null"
+    },
     "contentExcludes": [
       "**/__pycache__/**",
       "**/*.pyc",
@@ -1063,6 +1085,10 @@
       "uv_cache.json",
       "uv_build.json"
     ],
+    "interpreterRuntimePolicy": {
+      "root": "basePrefix",
+      "selection": "loadedNativeImagesOutsideStandardLibraryAndExecutable"
+    },
     "policy": {
       "runtimePackages": [
         "execution_testing.forks"
