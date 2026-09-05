@@ -324,6 +324,81 @@ def receipt_evidence(linked):
             for receipt in linked["receipts"]]
 
 
+def measurement_rows(name, linked, target, *, kind, expected_outcomes=None):
+    """Report authenticated prefix observations without changing fixture bytes.
+
+    Receipt charges include refunds and the calldata floor. Subtracting regular
+    intrinsic gas gives a charged remainder, never an observed gross frame cost.
+    Observer receipts include the helper and every nested frame.
+    """
+    def account_projection(alloc, address):
+        value = target_at(alloc, address)
+        if value is None:
+            return None
+        code = bytes.fromhex(value.get("code", "0x")[2:])
+        return {**{key: value.get(key, "0x0") for key in ("balance", "nonce")},
+                "storage": value.get("storage", {}),
+                "codeBytes": len(code), "codeSha256": hashlib.sha256(code).hexdigest()}
+
+    rows = []
+    for measurement in linked["measurements"]:
+        before, after = measurement["before"], measurement["after"]
+        transaction = measurement["transaction"]
+        pre = account_projection(before, target)
+        post = account_projection(after, target)
+        timestamp = int(measurement["environment"]["currentTimestamp"], 16)
+        rho = normalized_storage(pre["storage"]).get(RHO_SLOT, 0) if pre else None
+        elapsed = timestamp - rho if rho is not None else None
+        data = bytes.fromhex(transaction["input"][2:])
+        charged = int(measurement["receipt"]["gasUsed"], 16)
+        intrinsic = measurement["intrinsicRegularGas"]
+        receipt_status = int(measurement["receipt"]["status"], 16)
+        deposit = 200 * post["codeBytes"] if kind == "creation" and receipt_status else 0
+        recipient = transaction.get("to") or target
+        row = {key: value for key, value in measurement.items() if key not in ("before", "after")}
+        row.update({
+            "scenario": name, "kind": kind, "target": target,
+            "targetPre": pre, "targetPost": post,
+            "senderPre": account_projection(before, measurement["sender"]),
+            "senderPost": account_projection(after, measurement["sender"]),
+            "recipientPre": account_projection(before, recipient),
+            "recipientPost": account_projection(after, recipient),
+            "timestamp": timestamp, "preRho": rho, "elapsedFromPreRho": elapsed,
+            "elapsedBitLength": elapsed.bit_length() if elapsed is not None and elapsed >= 0 else None,
+            "elapsedPopcount": elapsed.bit_count() if elapsed is not None and elapsed >= 0 else None,
+            "calldataBytes": len(data), "calldataZeroBytes": data.count(0),
+            "calldataNonzeroBytes": len(data) - data.count(0),
+            "receiptChargedGas": charged,
+            "receiptMinusRegularIntrinsicGas": charged - intrinsic,
+            "derivedCodeDepositGas": deposit,
+            "receiptMinusRegularIntrinsicAndDepositGas": charged - intrinsic - deposit,
+            "grossExecutionGas": None, "refundCounter": None,
+            "directFrameEntryGas": None, "directFrameExitGas": None,
+            "observedTransactionReturndata": None,
+            "expectedModelOutcome": (expected_outcomes[measurement["stepIndex"]]
+                                     if expected_outcomes is not None else None),
+            "warmth": {
+                "transactionType": "legacy", "accessList": [],
+                "initialStorageKeys": [],
+                "initialAddresses": sorted(set([measurement["sender"], recipient,
+                    measurement["environment"]["currentCoinbase"]] +
+                    measurement["initialPrecompileAddresses"])),
+                "targetInitiallyWarm": kind in ("direct", "creation"),
+                "targetStorage": "initially cold; accesses warm within this transaction only",
+                "nestedFrameWarmth": "not traced",
+            },
+        })
+        rows.append(row)
+    return rows
+
+
+def validate_measurement_population(manifest, measurements):
+    expected = {(case["name"], index) for case in manifest for index in range(case["steps"])}
+    actual = [(row["scenario"], row["stepIndex"]) for row in measurements]
+    require(len(actual) == len(expected) and set(actual) == expected,
+            "measurement rows are not a bijection with manifest transaction steps")
+
+
 def runtime_transaction_population(root, profile, runtime, creation, paths):
     """Execute all cases and return JSON-ready fixtures plus manifest rows."""
     from drip_fixture_blocks import (
@@ -346,6 +421,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
 
     files = {}
     manifest = []
+    measurements = []
     for case in cases(runtime):
         initial = system_alloc()
         first = case["steps"][0]
@@ -374,6 +450,8 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
                      for operation in case["steps"]]
         linked = execute_linked_blocks(initial, scheduled, run_transition=transition,
                                        prefix_checker=prefix_checker)
+        measurements.extend(measurement_rows(case["name"], linked, TARGET, kind="direct",
+                            expected_outcomes=[op["expectedOutcome"] for op in case["steps"]]))
         files[f"{case['name']}.json"] = json.dumps(
             render_fixture(case["name"], initial, linked, profile), indent=2) + "\n"
         manifest.append({"name": case["name"], "obligation": case["obligation"],
@@ -470,6 +548,8 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
         linked = execute_linked_blocks(initial, scheduled, run_transition=transition,
                                        prefix_checker=observer_prefix_checker)
         observer_name = f"observer-{case['name']}"
+        measurements.extend(measurement_rows(observer_name, linked, TARGET, kind="observer-twin",
+                            expected_outcomes=[op["expectedOutcome"] for op in case["steps"]]))
         files[f"{observer_name}.json"] = json.dumps(
             render_fixture(observer_name, initial, linked, profile), indent=2) + "\n"
         manifest.append({"name": observer_name, "obligation": case["obligation"],
@@ -508,6 +588,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
                                    run_transition=transition,
                                    prefix_checker=create_prefix_checker)
     name = "deployment-genesis"
+    measurements.extend(measurement_rows(name, linked, create_target, kind="creation"))
     files[f"{name}.json"] = json.dumps(render_fixture(name, initial, linked, profile), indent=2) + "\n"
     manifest.append({"name": name, "obligation": name, "steps": 1,
                      "executionEvidence": True, "fixture": f"{name}.json",
@@ -639,6 +720,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
                                                    "transaction": transaction}],
                                        run_transition=transition,
                                        prefix_checker=observer_prefix_checker)
+        measurements.extend(measurement_rows(name, linked, create_target, kind="observer-nested"))
         files[f"{name}.json"] = json.dumps(render_fixture(name, initial, linked, profile), indent=2) + "\n"
         obligation = name.removesuffix("-observer")
         if obligation == "exit-nested-overdraw":
@@ -651,7 +733,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
                          "observer": observer_expectations(create_target, mode,
                                                             nested_units=max(1, nested_units),
                                                             callback_value=outer_units)})
-    return files, manifest
+    return files, manifest, measurements
 
 
 def model_balance(account):
@@ -758,7 +840,47 @@ def self_test(document):
         except AssertionError: pass
         else: raise AssertionError(f"projection control did not bite: {name}")
     check_receipt_accounting(before, after, operation, receipt, expected)
-    print(f"OK — DRIP input preparation: {len(document['cases'])} cases, {sum(len(c['steps']) for c in document['cases'])} model steps, 38 obligations explicitly dispositioned; {len(controls)} pure projection controls; EVM executions=0")
+    # Synthetic reporting checks are never presented as gas observations.
+    synthetic = {
+        "blockIndex": 0, "transactionIndex": 0, "stepIndex": 0,
+        "environment": {"currentTimestamp": q(START)},
+        "transaction": {"input": "0x0001", "to": None}, "sender": ALICE,
+        "before": {ALICE: before}, "after": {ALICE: after, TARGET: expected},
+        "receipt": receipt, "intrinsicRegularGas": 21_000, "calldataFloorGas": 21_050,
+        "initialPrecompileAddresses": [],
+    }
+    synthetic["environment"]["currentCoinbase"] = BOB
+    created = measurement_rows("synthetic", {"measurements": [synthetic]}, TARGET,
+                               kind="creation")[0]
+    require(created["targetPre"] is None and created["elapsedFromPreRho"] is None,
+            "creation measurement fabricated a pre-account or elapsed")
+    require(created["receiptMinusRegularIntrinsicGas"] == 29_000 and
+            created["receiptMinusRegularIntrinsicAndDepositGas"] ==
+            29_000 - 200 * created["targetPost"]["codeBytes"], "charged remainder drift")
+    require(created["calldataZeroBytes"] == 1 and created["calldataNonzeroBytes"] == 1,
+            "calldata count drift")
+    regressed = copy.deepcopy(synthetic)
+    regressed["before"][TARGET] = {**expected, "storage": {q(RHO_SLOT): q(START + 1)}}
+    regressed["transaction"]["to"] = TARGET
+    direct = measurement_rows("synthetic", {"measurements": [regressed]}, TARGET,
+                              kind="direct", expected_outcomes=[{"returndata": "0x"}])[0]
+    require(direct["elapsedFromPreRho"] == -1 and direct["elapsedBitLength"] is None
+            and direct["elapsedPopcount"] is None, "negative elapsed misclassified")
+    require(direct["observedTransactionReturndata"] is None and
+            direct["expectedModelOutcome"] == {"returndata": "0x"}, "model mislabeled as observation")
+    observer = measurement_rows("synthetic", {"measurements": [regressed]}, TARGET,
+                                kind="observer-twin")[0]
+    require(direct["warmth"]["targetInitiallyWarm"] and
+            not observer["warmth"]["targetInitiallyWarm"] and
+            observer["grossExecutionGas"] is None, "helper/direct cost boundary drift")
+    tiny_manifest = [{"name": "synthetic", "steps": 1}]
+    validate_measurement_population(tiny_manifest, [direct])
+    for mutated_rows in ([], [direct, direct], [{**direct, "stepIndex": 1}]):
+        try: validate_measurement_population(tiny_manifest, mutated_rows)
+        except AssertionError: pass
+        else: raise AssertionError("measurement population control did not bite")
+    validate_measurement_population(tiny_manifest, [direct])
+    print(f"OK — DRIP input preparation: {len(document['cases'])} cases, {sum(len(c['steps']) for c in document['cases'])} model steps, 38 obligations explicitly dispositioned; {len(controls)} pure projection controls; 6 synthetic measurement checks; 3 measurement population controls; EVM executions=0")
 
 
 def write_or_compare(files, *, write):
@@ -786,6 +908,14 @@ def write_or_compare(files, *, write):
 
 
 def execute_and_check(root_arg, *, write, validate_only=False):
+    def source_identity():
+        return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                for name in ("scripts/gen-drip-fixtures.py", "scripts/drip_fixture_blocks.py",
+                             "scripts/drip_fixture_observers.py", "scripts/drip_oracle.py",
+                             "scripts/current_mainnet.py", "scripts/current-mainnet-runtime-lock.json",
+                             "scripts/current-mainnet-target.json", "Blanc/DripCode.lean",
+                             "Blanc/DripCreationCode.lean", "scripts/check-runtime-bytes.py")}
+    source_hashes = source_identity()
     validate_current_mainnet_boundary()
     profile = load_profile()
     root = resolve_root(profile, root_arg)
@@ -794,7 +924,11 @@ def execute_and_check(root_arg, *, write, validate_only=False):
     require(Path(sys.executable).resolve() == paths.python.resolve(),
             f"generator must run under isolated target Python {paths.python}")
     runtime, creation = artifacts()
-    files, manifest = runtime_transaction_population(root, profile, runtime, creation, paths)
+    files, manifest, measurements = runtime_transaction_population(root, profile, runtime, creation, paths)
+    require(source_identity() == source_hashes, "source identity changed during runtime measurement")
+    validate_measurement_population(manifest, measurements)
+    require(len(manifest) == 91 and len(measurements) == 137,
+            "cost reporting population must cover 91 scenarios and 137 transactions")
     obligation_map = []
     for obligation in OBLIGATIONS:
         fixtures = [row["fixture"] for row in manifest
@@ -822,6 +956,24 @@ def execute_and_check(root_arg, *, write, validate_only=False):
     }, indent=2) + "\n"
     if validate_only:
         verb = "validated in memory"
+        report = {
+            "schema": 1, "kind": "drip-bpo2-cost-observations",
+            "runtimeSha256": hashlib.sha256(runtime).hexdigest(),
+            "creationSha256": hashlib.sha256(creation).hexdigest(),
+            "artifactSizes": {"runtime": len(runtime), "creation": len(creation)},
+            "targetProfile": profile,
+            "sourceSha256": source_hashes,
+            "scenarioCount": len(manifest), "transactionCount": len(measurements),
+            "generatedDocumentSha256": {name: hashlib.sha256(content.encode()).hexdigest()
+                                        for name, content in files.items()},
+            "costBoundary": "receipt charge after refund and calldata floor; remainders are not gross execution gas",
+            "returndataBoundary": "t8n omits transaction returndata; expectedModelOutcome is not an observation; observer recipient post-storage/logs independently witness child returndata",
+            "prefixBoundary": "full receipt object equals prefix-checked last receipt; roots are not independently reconstructed",
+            "coverageGaps": ["explicitly prewarmed storage variants", "direct frame gas and refund counter",
+                             "nested frame gas/warmth traces", "new matched executable referent"],
+            "transactions": measurements,
+        }
+        print("DRIP_MEASUREMENTS " + json.dumps(report, sort_keys=True))
     else:
         write_or_compare(files, write=write)
         verb = "wrote" if write else "checked"
