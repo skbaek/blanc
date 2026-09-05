@@ -1008,14 +1008,14 @@ remain WETH10-local because no second contract has needed them, and a
 contract-local copy of either would be the duplication this note exists to
 prevent — lift them to a shared owner instead.
 
-WETH10 retains reducible aliases for `CanonicalDeploymentBase` and
-`DeploymentSystemPrefix`, plus the historical qualified theorem
-`Blanc.Weth10.canonicalDeploymentSystemPrefix`, in
+WETH10 retains its original `CanonicalDeploymentBase` and
+`DeploymentSystemPrefix` structures, their structure-generated theorem API,
+and the historical qualified theorem
+`Blanc.Weth10.canonicalDeploymentSystemPrefix` in
 [`Blanc/Weth10DeploymentRoot.lean`](../Blanc/Weth10DeploymentRoot.lean).
-Those three names preserve the historical statement boundary while all
-behavior stays in the common owner.  Structure-generated constructor,
-recursor, and projection constants live only under `Blanc`; ordinary field
-notation on the WETH10 aliases continues to resolve to those projections.
+The theorem adapts those exact compatibility structures to the shared shell,
+so its proof behavior stays in the common owner without changing the WETH10
+name, statement, generated declarations, or field notation.
 
 The shared current-mainnet executable lane deliberately exposes no fork
 override, so it cannot supply a cross-activation witness. Consumers deployed

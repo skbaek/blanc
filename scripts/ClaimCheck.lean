@@ -788,6 +788,37 @@ example {cfg : ChainConfig} {rules : ForkRules}
 /-! The historical WETH10-qualified deployment-shell API remains available
 with its original statement after the shell's common-library hoist. -/
 
+#check Blanc.Weth10.CanonicalDeploymentBase.configValid
+#check Blanc.Weth10.CanonicalDeploymentBase.chainId_eq
+#check Blanc.Weth10.CanonicalDeploymentBase.validContext
+#check Blanc.Weth10.CanonicalDeploymentBase.sumNof
+#check Blanc.Weth10.CanonicalDeploymentBase.target_eq
+#check Blanc.Weth10.CanonicalDeploymentBase.target_ne_zero
+#check Blanc.Weth10.CanonicalDeploymentBase.target_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.beacon_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.history_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_not_precompile
+#check Blanc.Weth10.CanonicalDeploymentBase.sender_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequest_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequest_ne_target
+#check Blanc.Weth10.CanonicalDeploymentBase.target_noCodeOrNonce
+#check Blanc.Weth10.CanonicalDeploymentBase.target_noStorage
+#check Blanc.Weth10.CanonicalDeploymentBase.lastBlockHash
+#check Blanc.Weth10.CanonicalDeploymentBase.beaconCode
+#check Blanc.Weth10.CanonicalDeploymentBase.historyCode
+#check Blanc.Weth10.CanonicalDeploymentBase.withdrawalRequestCode
+#check Blanc.Weth10.CanonicalDeploymentBase.consolidationRequestCode
+#check Blanc.Weth10.DeploymentSystemPrefix.mk.inj
+#check Blanc.Weth10.DeploymentSystemPrefix.mk.injEq
+#check Blanc.Weth10.DeploymentSystemPrefix.beaconRun
+#check Blanc.Weth10.DeploymentSystemPrefix.lastHashEq
+#check Blanc.Weth10.DeploymentSystemPrefix.historyRun
+#check Blanc.Weth10.DeploymentSystemPrefix.txInput_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.environment_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.state_eq
+#check Blanc.Weth10.DeploymentSystemPrefix.createdAccounts_eq
+
 example (cfg : ChainConfig) (rules : ForkRules)
     (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)

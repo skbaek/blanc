@@ -60,13 +60,45 @@ def deploymentFinalBout
     (out : MsgCallOutput) (usedGas : Nat) : BlockOutput :=
   Blanc.deploymentFinalBout bout tx index out usedGas
 
-/-- Historical WETH10 spelling of the configured deployment-base shell.
-The shell itself is owned once by `Blanc.DeploymentMessage`; this reducible
-alias preserves the qualified public WETH10 type without copying its fields. -/
-abbrev CanonicalDeploymentBase := Blanc.CanonicalDeploymentBase
-
-/-- Historical WETH10 spelling of the recovered system-prefix carrier. -/
-abbrev DeploymentSystemPrefix := Blanc.DeploymentSystemPrefix
+/-- Valid configured base state and collision-free target facts.  The four
+system-address fields describe only pre-state code; no system-call result or
+post-state is admitted here. -/
+structure CanonicalDeploymentBase
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (sender ca : Adr) : Prop where
+  configValid : cfg.Valid
+  chainId_eq : cfg.chainId = base.chainId
+  validContext : base.ValidContext
+  sumNof : SumNof base.state.bal
+  target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
+  target_ne_zero : ca ≠ 0
+  target_not_precompile : ∀ {timestamp selected},
+    cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca
+  beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress
+  history_not_precompile : ¬ rules.isPrecomp historyStorageAddress
+  withdrawalRequest_not_precompile :
+    ¬ rules.isPrecomp withdrawalRequestPredeployAddress
+  consolidationRequest_not_precompile :
+    ¬ rules.isPrecomp consolidationRequestPredeployAddress
+  sender_ne_target : sender ≠ ca
+  withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
+  consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
+  target_noCodeOrNonce : accountHasCodeOrNonce base.state ca = false
+  target_noStorage : accountHasStorage base.state ca = false
+  lastBlockHash : ∃ lastHash,
+    List.getLast? (getLast256BlockHashes base) = some lastHash
+  beaconCode :
+    some (base.state.getCode beaconRootsAddress).toList =
+      Prog.compile deploymentSystemProgram
+  historyCode :
+    some (base.state.getCode historyStorageAddress).toList =
+      Prog.compile deploymentSystemProgram
+  withdrawalRequestCode :
+    some (base.state.getCode withdrawalRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
+  consolidationRequestCode :
+    some (base.state.getCode consolidationRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
 
 /-- A strict configured block and type-2 creation transaction profile.  The
 `CanonicalBlock` parameter itself retains the original bytes, strict
@@ -112,6 +144,37 @@ structure CanonicalWeth10DeploymentBlock
   target_eq : ca = computeContractAddress sender deploymentTx.nonce
 
 /-! ## Proof-produced pipeline contexts -/
+
+/-- The mandatory beacon-roots and history-storage calls recovered from the
+real block prefix. This structure is conclusion evidence, never input data. -/
+structure DeploymentSystemPrefix
+    (rules : ForkRules)
+    (base : BlockChain) (block : Block) (txInput : Benv) : Type where
+  stBeacon : State
+  outBeacon : MsgCallOutput
+  lastHash : B256
+  stHistory : State
+  outHistory : MsgCallOutput
+  beaconRun :
+    processUncheckedSystemTransaction
+      (initBenv rules base block.header)
+      beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
+      .ok (stBeacon, outBeacon)
+  lastHashEq :
+    List.getLast?
+      ((initBenv rules base block.header).withState stBeacon).stat.blockHashes =
+        some lastHash
+  historyRun :
+      processUncheckedSystemTransaction
+      ((initBenv rules base block.header).withState stBeacon)
+      historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
+  txInput_eq :
+    txInput =
+      ((initBenv rules base block.header).withState stBeacon).withState
+        stHistory
+  environment_eq : txInput = initBenv rules base block.header
+  state_eq : txInput.state = base.state
+  createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
 /-- The transaction contexts are kept distinct: recovered prefix input,
 `beginTransaction`, nonce/fee-updated state, and the actual prepared message.
@@ -191,15 +254,51 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
 
 /-- Historical qualified WETH10 entry point for the common configured
-deployment-system prefix theorem.  Its statement is retained verbatim while
-the implementation delegates to the single shared shell owner. -/
+deployment-system prefix theorem.  Its statement and structure-generated API
+remain exact while the proof delegates to the shared shell owner. -/
 theorem canonicalDeploymentSystemPrefix
     (cfg : ChainConfig) (rules : ForkRules)
     (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)
     (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
-    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) :=
-  Blanc.canonicalDeploymentSystemPrefix cfg rules base cb sender ca hbase
+    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) := by
+  let sharedBase : Blanc.CanonicalDeploymentBase cfg rules base sender ca := {
+    configValid := hbase.configValid
+    chainId_eq := hbase.chainId_eq
+    validContext := hbase.validContext
+    sumNof := hbase.sumNof
+    target_eq := hbase.target_eq
+    target_ne_zero := hbase.target_ne_zero
+    target_not_precompile := hbase.target_not_precompile
+    beacon_not_precompile := hbase.beacon_not_precompile
+    history_not_precompile := hbase.history_not_precompile
+    withdrawalRequest_not_precompile := hbase.withdrawalRequest_not_precompile
+    consolidationRequest_not_precompile := hbase.consolidationRequest_not_precompile
+    sender_ne_target := hbase.sender_ne_target
+    withdrawalRequest_ne_target := hbase.withdrawalRequest_ne_target
+    consolidationRequest_ne_target := hbase.consolidationRequest_ne_target
+    target_noCodeOrNonce := hbase.target_noCodeOrNonce
+    target_noStorage := hbase.target_noStorage
+    lastBlockHash := hbase.lastBlockHash
+    beaconCode := hbase.beaconCode
+    historyCode := hbase.historyCode
+    withdrawalRequestCode := hbase.withdrawalRequestCode
+    consolidationRequestCode := hbase.consolidationRequestCode }
+  rcases Blanc.canonicalDeploymentSystemPrefix
+      cfg rules base cb sender ca sharedBase with ⟨txInput, sharedPrefix⟩
+  exact ⟨txInput, {
+    stBeacon := sharedPrefix.stBeacon
+    outBeacon := sharedPrefix.outBeacon
+    lastHash := sharedPrefix.lastHash
+    stHistory := sharedPrefix.stHistory
+    outHistory := sharedPrefix.outHistory
+    beaconRun := sharedPrefix.beaconRun
+    lastHashEq := sharedPrefix.lastHashEq
+    historyRun := sharedPrefix.historyRun
+    txInput_eq := sharedPrefix.txInput_eq
+    environment_eq := sharedPrefix.environment_eq
+    state_eq := sharedPrefix.state_eq
+    createdAccounts_eq := sharedPrefix.createdAccounts_eq }⟩
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.
