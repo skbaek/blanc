@@ -117,20 +117,145 @@ def without_comments(text: str) -> str:
     return "".join(out)
 
 
-def declarations(text: str) -> dict[str, tuple[str, str]]:
+def command_text(text: str) -> str:
+    """Mask comments and strings without changing offsets or line boundaries.
+
+    This scanner is for command identity only. Frozen signature digests retain
+    their historical block-comment-only normalization in without_comments.
+    """
+    out = list(text)
+    i = 0
+    while i < len(text):
+        start = i
+        if text.startswith("--", i):
+            end = text.find("\n", i)
+            i = len(text) if end < 0 else end
+        elif text.startswith("/-", i):
+            depth = 1
+            i += 2
+            while i < len(text) and depth:
+                if text.startswith("/-", i):
+                    depth += 1
+                    i += 2
+                elif text.startswith("-/", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            if depth:
+                fail("unterminated Lean block comment")
+        elif text[i] == "'" and (char := re.match(r"'(?:\\.|[^'\\\n])'", text[i:])):
+            i += len(char.group())
+        elif text[i] == '"':
+            # Raw strings require delimiter-aware scanning; reject rather than
+            # misinterpret an embedded namespace command.
+            if i and (text[i - 1] == "#" or
+                      (text[i - 1] == "r" and
+                       (i < 2 or not text[i - 2].isalnum()))):
+                fail("unsupported Lean raw string")
+            i += 1
+            while i < len(text) and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+            if i >= len(text):
+                fail("unterminated Lean string")
+            i += 1
+        else:
+            i += 1
+            continue
+        for j in range(start, i):
+            if out[j] != "\n":
+                out[j] = " "
+    return "".join(out)
+
+
+NAME = r"[A-Za-z_][A-Za-z0-9_'?!]*(?:\.[A-Za-z_][A-Za-z0-9_'?!]*)*"
+SCOPE_RE = re.compile(r"(?m)^[ \t]*(namespace|section|end)\b([^\n]*)$")
+
+
+def declaration_names(text: str, matches: list[re.Match]) -> dict[int, str]:
+    """Resolve declaration identities with a balanced namespace/section stack.
+
+    Only standalone scope commands and ordinary identifiers are supported.
+    Unsupported spellings fail closed rather than silently losing ownership.
+    """
+    scopes: list[tuple[str, str, str]] = []
+    namespace = ""
+    names: dict[int, str] = {}
+    events = [(m.start(), "scope", m) for m in SCOPE_RE.finditer(text)]
+    events += [(m.start(), "declaration", m) for m in matches]
+    for _, event, match in sorted(events):
+        if event == "declaration":
+            name = match.group(3)
+            if re.fullmatch(NAME, name) is None:
+                fail(f"unsupported Lean declaration name {name}")
+            if name.startswith("_root_."):
+                full_name = name[len("_root_."):]
+            else:
+                full_name = ".".join(part for part in (namespace, name) if part)
+            names[match.start()] = full_name
+            continue
+        command, argument = match.groups()
+        argument = argument.strip()
+        if argument and re.fullmatch(NAME, argument) is None:
+            fail(f"unsupported Lean scope command: {command} {argument}")
+        if command == "end":
+            if not scopes:
+                fail("unmatched Lean end command")
+            _, opened, previous = scopes.pop()
+            if argument and argument != opened:
+                fail(f"mismatched Lean end {argument}, expected {opened}")
+            namespace = previous
+        else:
+            if command == "namespace" and not argument:
+                fail("unnamed Lean namespace")
+            scopes.append((command, argument, namespace))
+            if command == "namespace":
+                if argument.startswith("_root_."):
+                    fail("unsupported root-qualified Lean namespace command")
+                namespace = ".".join(part for part in (namespace, argument) if part)
+    if scopes:
+        fail("unclosed Lean namespace or section")
+    return names
+
+
+def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, str]]:
     result: dict[str, tuple[str, str]] = {}
+    # The manifest and WETH aggregate predate full-name keys. Keep their
+    # source-spelled projection explicit and reject ambiguous projections;
+    # corpus ownership/shadow scans use qualified identities instead.
+    commands = command_text(text)
+    matches = list(DECL_RE.finditer(commands))
+    full_names = declaration_names(commands, matches)
+    declaration_heads = re.finditer(
+        r"(?m)^[ \t]*(?:@\[[^]]+\]\s*)*"
+        r"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
+        r"(?:theorem|lemma|structure|def|inductive|abbrev|opaque|axiom|class)\b", commands)
+    for head in declaration_heads:
+        if not any(m.start() <= head.start() and m.end() > head.end() for m in matches):
+            fail("unsupported Lean declaration spelling")
     text = without_comments(text)
-    matches = list(DECL_RE.finditer(text))
+    # Keep exact historic header boundaries for the immutable schema-1 hashes.
+    header_matches = {m.start(3): m for m in DECL_RE.finditer(text)}
+    seen: set[str] = set()
     for i, match in enumerate(matches):
         modifiers, kind, name = match.groups()
         if "private" in modifiers.split():
             continue
-        end_bound = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        chunk = text[match.start():end_bound]
+        full_name = full_names[match.start()]
+        if full_name in seen:
+            fail(f"duplicate public declaration {full_name}")
+        seen.add(full_name)
+        name = full_name if qualified else name
+        header_match = header_matches.get(match.start(3))
+        if header_match is None:
+            fail(f"unsupported declaration header for {full_name}")
+        following = header_matches.get(matches[i + 1].start(3)) if i + 1 < len(matches) else None
+        end_bound = following.start() if following is not None else len(text)
+        chunk = text[header_match.start():end_bound]
         if kind in {"structure", "class", "inductive"}:
             header = normalize_header(chunk)
             if name in result:
-                fail(f"duplicate public declaration {name}")
+                fail(f"ambiguous legacy declaration name {name}")
             result[name] = (kind, header)
             continue
         if kind in {"theorem", "lemma"}:
@@ -145,9 +270,67 @@ def declarations(text: str) -> dict[str, tuple[str, str]]:
             fail(f"cannot find header terminator for {name}")
         header = normalize_header(chunk[:stop.start()])
         if name in result:
-            fail(f"duplicate public declaration {name}")
+            fail(f"ambiguous legacy declaration name {name}")
         result[name] = (kind, header)
     return result
+
+
+def legacy_declarations(text: str) -> dict[str, tuple[str, str]]:
+    """Frozen schema-1 source-spelled keys, never for contract shadow scans."""
+    return declarations(text, qualified=False)
+
+
+def parser_controls() -> None:
+    """In-memory falsifiers: no Lean process or source mutation is involved."""
+    valid = {
+        "nested": ("namespace Drip\nnamespace Step\ntheorem accounting_exact : True := by trivial\nend Step\nnamespace Chain\ntheorem accounting_exact : True := by trivial\nend Chain\nend Drip\n",
+                   {"Drip.Step.accounting_exact", "Drip.Chain.accounting_exact"}),
+        "dotted/reopened/section": ("namespace A.B\nsection S\ntheorem x : True := by trivial\nend S\nend A.B\nnamespace A.B\nsection\ntheorem y : True := by trivial\nend\nend A.B\n",
+                                   {"A.B.x", "A.B.y"}),
+        "qualified/root/private": ("namespace A\ntheorem B.x : True := by trivial\ntheorem _root_.C.x : True := by trivial\nprivate theorem hidden : True := by trivial\nend A\n",
+                                   {"A.B.x", "C.x"}),
+        "lexical": ('-- namespace Fake\n/- namespace Outer /- end -/ -/\nnamespace Real -- namespace Fake\nprivate def text := "namespace Bogus\nend\ntheorem spoof : True := by trivial"\ntheorem x : True := by trivial\nend Real\n',
+                    {"Real.x"}),
+    }
+    for label, (text, expected) in valid.items():
+        if set(declarations(text)) != expected:
+            fail(f"parser positive control failed: {label}")
+    invalid = {
+        "reopened duplicate": ("namespace A\ntheorem x : True := by trivial\nend A\nnamespace A\ntheorem x : True := by trivial\nend A\n", "duplicate public declaration A.x"),
+        "dotted duplicate": ("namespace A\ntheorem B.x : True := by trivial\nnamespace B\ntheorem x : True := by trivial\nend B\nend A\n", "duplicate public declaration A.B.x"),
+        "root duplicate": ("namespace A\ntheorem _root_.x : True := by trivial\nend A\ntheorem x : True := by trivial\n", "duplicate public declaration x"),
+        "section duplicate": ("namespace A\nsection S\ntheorem x : True := by trivial\nend S\ntheorem x : True := by trivial\nend A\n", "duplicate public declaration A.x"),
+        "unclosed": ("namespace A\n", "unclosed Lean"),
+        "unmatched": ("end A\n", "unmatched Lean"),
+        "mismatched": ("namespace A\nend B\n", "mismatched Lean"),
+        "malformed": ("namespace A; namespace B\n", "unsupported Lean scope"),
+        "quoted namespace": ("namespace «A»\n", "unsupported Lean scope"),
+        "quoted declaration": ("theorem «x» : True := by trivial\n", "unsupported Lean declaration"),
+        "raw string": ('private def s := r#"namespace A"#\n', "unsupported Lean raw string"),
+        "comment": ("/- unterminated", "unterminated Lean block comment"),
+        "string": ('private def s := "unterminated', "unterminated Lean string"),
+    }
+    for label, (text, reason) in invalid.items():
+        try:
+            declarations(text)
+        except SystemExit as exc:
+            if reason not in str(exc):
+                fail(f"parser falsifier failed at wrong boundary: {label}: {exc}")
+        else:
+            fail(f"parser falsifier did not bite: {label}")
+    try:
+        legacy_declarations(valid["nested"][0])
+    except SystemExit as exc:
+        if "ambiguous legacy declaration" not in str(exc):
+            raise
+    else:
+        fail("legacy projection silently lost a declaration")
+    for spelling in ("cell", "Nested.cell", "_root_.cell"):
+        text = f"namespace Contract\ntheorem {spelling} : True := by trivial\nend Contract\n"
+        if not any(shadows(name, "Owner.cell") for name in declarations(text)):
+            fail(f"namespace shadow falsifier did not bite: {spelling}")
+    if shadows("Contract.innocent", "Owner.cell"):
+        fail("unrelated declaration incorrectly classified as a shadow")
 
 
 def load_manifest() -> dict:
@@ -184,7 +367,10 @@ def audit_source(data: dict, common_text: str | None = None) -> None:
     root_imports = IMPORT_RE.findall(read(ROOT / data["rootModule"]))
     if root_imports.count(data["requiredRootImport"]) != 1:
         fail("root import is absent or duplicated")
-    actual = declarations(text)
+    actual = legacy_declarations(text)
+    full_owned = {name: kind for name, (kind, _) in declarations(text).items()}
+    if full_owned != {f"Blanc.{name}": kind for name, kind in data["owners"]}:
+        fail("public owner set mismatch: namespace-qualified identities drifted")
     expected = {name: kind for name, kind in data["owners"]}
     actual_owned = {name: kind for name, (kind, _) in actual.items()}
     if actual_owned != expected:
@@ -201,6 +387,11 @@ def audit_source(data: dict, common_text: str | None = None) -> None:
             fail(f"forbidden WETH trace-family name appears: {forbidden}")
 
 
+def shadows(candidate: str, protected: str) -> bool:
+    """Retain the contract-wide short-name ban across every namespace."""
+    return candidate.rsplit(".", 1)[-1] == protected.rsplit(".", 1)[-1]
+
+
 def audit_moves(data: dict) -> None:
     donor_text = read(ROOT / data["donorSource"])
     layering = read(ROOT / "scripts/check-layering.py")
@@ -212,38 +403,34 @@ def audit_moves(data: dict) -> None:
     if not contract_modules or any(not path.is_file() for path in contract_modules):
         fail("layering contract classification contains an absent module")
     protected_names = {name for name, _ in data["owners"]}
+    contract_inventory: dict[pathlib.Path, dict[str, tuple[str, str]]] = {}
     for contract_path in contract_modules:
-        contract_text = without_comments(read(contract_path))
-        if re.search(r"(?m)^\s*(?:export|alias)\b", contract_text):
+        contract_text = read(contract_path)
+        if re.search(r"(?m)^\s*(?:export|alias)\b", command_text(contract_text)):
             fail(f"contract alias/export command is forbidden: {contract_path.relative_to(ROOT)}")
         contract_decls = declarations(contract_text)
+        contract_inventory[contract_path] = contract_decls
         for name in protected_names:
-            if name in contract_decls or name.split(".")[-1] in contract_decls:
+            if any(shadows(candidate, name) for candidate in contract_decls):
                 fail(f"new-owner contract shadow survives for {name} in {contract_path.relative_to(ROOT)}")
     moved_hashes = data["movedSignatureHashes"]
     moved_names = {name for _, name, _ in data["movedDonors"]}
     if set(moved_hashes) != moved_names:
         fail("moved-signature hash keys do not exactly match moved donors")
     for owner_file, name, kind in data["movedDonors"]:
-        owner_decls = declarations(read(ROOT / owner_file))
+        owner_text = read(ROOT / owner_file)
+        owner_decls = legacy_declarations(owner_text)
+        if declarations(owner_text).get(f"Blanc.{name}", (None,))[0] != kind:
+            fail(f"moved donor {name} absent from {owner_file} at its qualified owner")
         if name not in owner_decls or owner_decls[name][0] != kind:
             fail(f"moved donor {name} absent from {owner_file}")
         got = hashlib.sha256(owner_decls[name][1].encode()).hexdigest()
         if got != moved_hashes[name]:
             fail(f"moved donor signature drift for {name}: {got}")
         for contract_path in contract_modules:
-            contract_text = without_comments(read(contract_path))
-            if re.search(
-                rf"(?m)^\s*(?:@\[[^]]+\]\s*)*(?:(?:protected|noncomputable|unsafe)\s+)*"
-                rf"(?:theorem|lemma|def|abbrev|opaque|axiom)\s+{re.escape(name)}\b",
-                contract_text,
-            ):
+            if any(shadows(candidate, name) for candidate in
+                   contract_inventory[contract_path]):
                 fail(f"contract shadow survives for {name} in {contract_path.relative_to(ROOT)}")
-            if re.search(
-                rf"(?m)^\s*(?:export|alias)\b[^\n]*\b{re.escape(name.split('.')[-1])}\b",
-                contract_text,
-            ):
-                fail(f"contract alias/export survives for {name} in {contract_path.relative_to(ROOT)}")
     if set(data["touchedConsumerHashes"]) != set(data["touchedConsumers"]):
         fail("touched-consumer hash keys do not exactly match touched consumers")
     for consumer in data["touchedConsumers"]:
@@ -275,7 +462,7 @@ def audit_architecture(data: dict) -> None:
     # pinned byte-for-byte above.
     headers: list[str] = []
     for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(declarations(read(path)).items()):
+        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
             headers.append(f"{path.name}:{kind}:{name}:{header}")
     aggregate = hashlib.sha256("\n".join(headers).encode()).hexdigest()
     if aggregate != data["wethPublicHeaderAggregate"]:
@@ -354,7 +541,7 @@ def deletion_controls(data: dict, *, static: bool, semantic: bool) -> None:
                 rf"(?m)^(\s*(?:theorem|lemma)\s+){re.escape(name)}\b",
                 rf"\1deleted_{name.replace('.', '_')}", owner_text, count=1,
             )
-            if count != 1 or name in declarations(changed):
+            if count != 1 or name in legacy_declarations(changed):
                 fail(f"moved-donor deletion was not detected: {name}")
 
     if semantic:
@@ -389,14 +576,14 @@ def write_manifest(data: dict) -> None:
     data["jaunePinFiles"] = {
         relative: sha256(ROOT / relative) for relative in data["jaunePinFiles"]
     }
-    actual = declarations(read(ROOT / data["commonModule"]))
+    actual = legacy_declarations(read(ROOT / data["commonModule"]))
     data["signatureHashes"] = {
         name: hashlib.sha256(actual[name][1].encode()).hexdigest()
         for name, _ in data["owners"]
     }
     data["movedSignatureHashes"] = {
         name: hashlib.sha256(
-            declarations(read(ROOT / owner_file))[name][1].encode()
+            legacy_declarations(read(ROOT / owner_file))[name][1].encode()
         ).hexdigest()
         for owner_file, name, _ in data["movedDonors"]
     }
@@ -405,7 +592,7 @@ def write_manifest(data: dict) -> None:
     }
     headers = []
     for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(declarations(read(path)).items()):
+        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
             headers.append(f"{path.name}:{kind}:{name}:{header}")
     data["wethPublicHeaderAggregate"] = hashlib.sha256(
         "\n".join(headers).encode()
@@ -435,7 +622,7 @@ def main() -> None:
         write_manifest(data)
         return
     if arguments.print_signatures:
-        actual = declarations(read(ROOT / data["commonModule"]))
+        actual = legacy_declarations(read(ROOT / data["commonModule"]))
         print(json.dumps({name: hashlib.sha256(header.encode()).hexdigest()
                           for name, (_, header) in actual.items()}, indent=2))
         return
@@ -443,11 +630,11 @@ def main() -> None:
         moved = {}
         for owner_file, name, _ in data["movedDonors"]:
             moved[name] = hashlib.sha256(
-                declarations(read(ROOT / owner_file))[name][1].encode()
+                legacy_declarations(read(ROOT / owner_file))[name][1].encode()
             ).hexdigest()
         headers = []
         for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-            for name, (kind, header) in sorted(declarations(read(path)).items()):
+            for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
                 headers.append(f"{path.name}:{kind}:{name}:{header}")
         print(json.dumps({
             "movedSignatureHashes": moved,
@@ -460,6 +647,7 @@ def main() -> None:
         }, indent=2))
         return
     if not arguments.semantic_only:
+        parser_controls()
         audit_source(data)
         audit_moves(data)
         audit_architecture(data)
