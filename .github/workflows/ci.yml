@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      cold_build:
+        description: Rebuild Blanc and Jaune without the GitHub build cache
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -45,6 +51,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Bind recipe comparison base
+        run: git show-ref --verify --quiet refs/heads/main || git branch main refs/remotes/origin/main
       - name: Published audited-theorem count
         run: scripts/check-doc-counts.sh
       - name: Lido CircuitBreaker assurance register
@@ -143,7 +151,14 @@ jobs:
         uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596
         with:
           build: true
-          build-args: Blanc jaune/jaune
+          build-args: Blanc Blanc.ProofRecipeTactic jaune/jaune
+          use-github-cache: ${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_build) }}
+      - name: Save exact cold build output
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_build }}
+        uses: actions/cache/save@v5
+        with:
+          key: lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
+          path: .lake
 
   execution-semantic:
     name: Execution semantic regressions

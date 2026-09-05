@@ -108,6 +108,17 @@
           }
         },
         {
+          "dynamic_inputs": [
+            "fetched refs/remotes/origin/main; local refs/heads/main"
+          ],
+          "expected_cost": "sub-second",
+          "id": "recipe-base",
+          "kind": "command",
+          "name": "Bind recipe comparison base",
+          "purpose": "infrastructure",
+          "run": "git show-ref --verify --quiet refs/heads/main || git branch main refs/remotes/origin/main"
+        },
+        {
           "cost_authority": "scripts/GATES.md",
           "gate_id": "doc-counts",
           "id": "doc-counts",
@@ -456,7 +467,8 @@
             "lean-toolchain",
             "lakefile.lean",
             "lake-manifest.json",
-            "GitHub exact/fallback build cache"
+            "GitHub exact/fallback build cache",
+            "trusted workflow_dispatch cold_build boolean"
           ],
           "expected_cost": "98\u2013165 s warm; 1,965 s observed cold",
           "id": "full-build",
@@ -466,7 +478,24 @@
           "uses": "leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596",
           "with": {
             "build": "true",
-            "build-args": "Blanc jaune/jaune"
+            "build-args": "Blanc Blanc.ProofRecipeTactic jaune/jaune",
+            "use-github-cache": "${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_build) }}"
+          }
+        },
+        {
+          "dynamic_inputs": [
+            "successful current candidate build; trusted workflow_dispatch cold_build boolean"
+          ],
+          "expected_cost": "remote rehearsal required",
+          "id": "save-cold-build",
+          "if": "${{ github.event_name == 'workflow_dispatch' && inputs.cold_build }}",
+          "kind": "action",
+          "name": "Save exact cold build output",
+          "purpose": "infrastructure",
+          "uses": "actions/cache/save@v5",
+          "with": {
+            "key": "lake-${{ runner.os }}-${{ runner.arch}}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}",
+            "path": ".lake"
           }
         }
       ],

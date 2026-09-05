@@ -373,7 +373,10 @@ verdict evidence. Pull requests and forks cannot admit evidence; an unavailable,
 moved, or non-ancestor comparison base selects the entire CI population; and
 workflow, registry, topology, or undeclared-input uncertainty fails the audit
 before any gate lane starts. Four independent static lanes then precede one
-shared `Blanc jaune/jaune` build. Semantic lanes restore only that exact
+shared `Blanc Blanc.ProofRecipeTactic jaune/jaune` build. The trusted manual
+`cold_build` input disables the producer's GitHub build-cache restore and saves
+its successful output explicitly; upstream Mathlib cache remains available.
+Semantic lanes restore only that exact
 candidate cache with fail-on-miss behavior and configure their Lean action with
 building and fallback caches disabled. The policy pins one full build and
 rejects a duplicate, partial, permissive, or previous-commit restore.

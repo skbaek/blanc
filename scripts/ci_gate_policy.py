@@ -134,6 +134,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      cold_build:
+        description: Rebuild Blanc and Jaune without the GitHub build cache
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -297,11 +303,24 @@ def expected_infrastructure(identifier: str) -> dict[str, Any] | None:
                 ),
             },
         },
+        "recipe-base": {
+            "name": "Bind recipe comparison base",
+            "kind": "command",
+            "run": "git show-ref --verify --quiet refs/heads/main || git branch main refs/remotes/origin/main",
+        },
         "full-build": {
             "name": "Build Blanc and the Jaune fixture runner once",
             "kind": "action",
             "uses": LEAN_ACTION,
-            "with": {"build": "true", "build-args": "Blanc jaune/jaune"},
+            "with": {"build": "true", "build-args": "Blanc Blanc.ProofRecipeTactic jaune/jaune",
+                     "use-github-cache": "${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_build) }}"},
+        },
+        "save-cold-build": {
+            "name": "Save exact cold build output",
+            "kind": "action",
+            "if": "${{ github.event_name == 'workflow_dispatch' && inputs.cold_build }}",
+            "uses": "actions/cache/save@v5",
+            "with": {"path": ".lake", "key": CACHE_KEY},
         },
         "restore-build": {
             "name": "Restore exact build output",
@@ -357,7 +376,7 @@ def semantic_step(step: dict[str, Any]) -> dict[str, Any]:
     """Fields that can change execution, excluding census prose."""
     return {
         key: step[key]
-        for key in ("name", "kind", "uses", "with", "run", "env")
+        for key in ("name", "kind", "uses", "with", "run", "env", "if")
         if key in step
     }
 
@@ -501,6 +520,29 @@ def topology_problems(
         problems.append("topology gate population does not match its pinned count")
     if full_builds != policy["full_build_count"]:
         problems.append(f"topology performs {full_builds} full builds, expected one")
+
+    # Infrastructure is load-bearing too: coordinated workflow/inventory deletion
+    # cannot erase a prerequisite while leaving every gate row present.
+    infrastructure_ids = {
+        "policy": ["checkout", "policy-self-test", "policy-audit"],
+        "source-trust": ["checkout", "recipe-base"],
+        "reference-locks": ["checkout"],
+        "execution-static": ["checkout"],
+        "cycle-static": ["checkout"],
+        "build": ["checkout", "full-build", "save-cold-build"],
+        "execution-semantic": ["checkout", "restore-build", "install-toolchain"],
+        "contract-semantic": ["checkout", "restore-build", "install-toolchain"],
+        "deployment-fixtures": ["checkout", "restore-build", "install-toolchain", "python-runtime",
+                                "eels-checkout", "eels-venv", "eels-install"],
+    }
+    for job_id, required in infrastructure_ids.items():
+        steps = jobs.get(job_id, {}).get("steps", [])
+        actual_ids = [step.get("id") for step in steps if step.get("kind") != "gate"]
+        if actual_ids != required:
+            problems.append(f"job {job_id} infrastructure population/order moved")
+    source_ids = [step.get("id") for step in jobs.get("source-trust", {}).get("steps", [])]
+    if source_ids[:2] != ["checkout", "recipe-base"]:
+        problems.append("recipe comparison base is not bound before source gates")
 
     ancestors, dag_problems = job_ancestors(jobs)
     problems.extend(dag_problems)
@@ -653,7 +695,7 @@ def parse_workflow(source: str | None = None) -> list[dict[str, Any]]:
                     raise PolicyError(f"{key} must be a block at line {lineno}")
                 nested = key
                 step[key] = {}
-            elif key in {"uses", "run"}:
+            elif key in {"uses", "run", "if"}:
                 nested = None
                 step[key] = parse_scalar(value)
             else:
@@ -704,6 +746,8 @@ def expected_workflow(
                 value["run"] = step["run"]
                 if step.get("env"):
                     value["env"] = step["env"]
+            if "if" in step:
+                value["if"] = step["if"]
             rendered["steps"].append(value)
         result.append(rendered)
     return result
@@ -916,6 +960,37 @@ def self_test() -> int:
     _, step = find_step(changed, "install-toolchain")
     step["with"]["build"] = "true"
     check_rejected("downstream rebuild", changed, "can rebuild or admit fallback")
+
+    changed = copy.deepcopy(topology)
+    job, step = find_step(changed, "recipe-base")
+    job["steps"].remove(step)
+    check_rejected("missing recipe base setup", changed, "infrastructure population/order")
+
+    changed = copy.deepcopy(topology)
+    job, step = find_step(changed, "recipe-base")
+    job["steps"].remove(step)
+    job["steps"].append(step)
+    check_rejected("late recipe base setup", changed, "not bound before")
+
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "full-build")
+    step["with"]["build-args"] = "Blanc jaune/jaune"
+    check_rejected("omitted unimported proof recipe leaf", changed, "infrastructure step")
+
+    changed = copy.deepcopy(topology)
+    job, step = find_step(changed, "save-cold-build")
+    job["steps"].remove(step)
+    check_rejected("missing cold build save", changed, "infrastructure population/order")
+
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "full-build")
+    step["with"]["use-github-cache"] = "true"
+    check_rejected("cold build silently restores", changed, "infrastructure step")
+
+    changed = copy.deepcopy(topology)
+    _, step = find_step(changed, "save-cold-build")
+    step["if"] = "always()"
+    check_rejected("failed or untrusted cold save", changed, "infrastructure step")
 
     changed_actual = copy.deepcopy(actual)
     changed_actual[0]["steps"][0]["name"] = "Renamed checkout"
