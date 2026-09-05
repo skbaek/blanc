@@ -20,7 +20,7 @@ EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, t
 
 DECL_RE = re.compile(
     r"(?m)^\s*(?:@\[[^]]+\]\s*)*"
-    r"((?:(?:private|protected|noncomputable|unsafe)\s+)*)"
+    r"((?:(?:private|public|protected|noncomputable|unsafe)\s+)*)"
     r"(theorem|lemma|structure|def|inductive|abbrev|opaque|axiom|class)\s+"
     r"([A-Za-z_][A-Za-z0-9_'.?!]*(?:\.[A-Za-z_][A-Za-z0-9_'.?!]*)*)"
 )
@@ -144,7 +144,7 @@ def command_text(text: str) -> str:
                     i += 1
             if depth:
                 fail("unterminated Lean block comment")
-        elif text[i] == "'" and (char := re.match(r"'(?:\\.|[^'\\\n])'", text[i:])):
+        elif text[i] == "'" and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] in "_'?!")) and (char := re.match(r"'(?:\\.|[^'\\\n])'", text[i:])):
             i += len(char.group())
         elif text[i] == '"':
             # Raw strings require delimiter-aware scanning; reject rather than
@@ -185,7 +185,15 @@ def declaration_names(text: str, matches: list[re.Match]) -> dict[int, str]:
     events += [(m.start(), "declaration", m) for m in matches]
     for _, event, match in sorted(events):
         if event == "declaration":
+            # Private declarations delimit frozen public headers but do not
+            # participate in the public ownership inventory.
+            if "private" in match.group(1).split():
+                continue
             name = match.group(3)
+            if match.end() < len(text) and not (
+                text[match.end()].isspace() or text[match.end()] in "({[:"
+            ):
+                fail(f"unsupported Lean declaration spelling after {name}")
             if re.fullmatch(NAME, name) is None:
                 fail(f"unsupported Lean declaration name {name}")
             if name.startswith("_root_."):
@@ -228,10 +236,11 @@ def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, s
     full_names = declaration_names(commands, matches)
     declaration_heads = re.finditer(
         r"(?m)^[ \t]*(?:@\[[^]]+\]\s*)*"
-        r"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
+        r"(?:(?:private|public|protected|noncomputable|unsafe)\s+)*"
         r"(?:theorem|lemma|structure|def|inductive|abbrev|opaque|axiom|class)\b", commands)
+    matched_keyword_ends = {m.end(2) for m in matches}
     for head in declaration_heads:
-        if not any(m.start() <= head.start() and m.end() > head.end() for m in matches):
+        if head.end() not in matched_keyword_ends:
             fail("unsupported Lean declaration spelling")
     text = without_comments(text)
     # Keep exact historic header boundaries for the immutable schema-1 hashes.
@@ -283,11 +292,13 @@ def legacy_declarations(text: str) -> dict[str, tuple[str, str]]:
 def parser_controls() -> None:
     """In-memory falsifiers: no Lean process or source mutation is involved."""
     valid = {
+        "private Unicode delimiter": ("private lemma word₀ : True := by trivial\n", set()),
+        "apostrophe identifier": ("theorem cell'x' : True := by trivial\n", {"cell'x'"}),
         "nested": ("namespace Drip\nnamespace Step\ntheorem accounting_exact : True := by trivial\nend Step\nnamespace Chain\ntheorem accounting_exact : True := by trivial\nend Chain\nend Drip\n",
                    {"Drip.Step.accounting_exact", "Drip.Chain.accounting_exact"}),
         "dotted/reopened/section": ("namespace A.B\nsection S\ntheorem x : True := by trivial\nend S\nend A.B\nnamespace A.B\nsection\ntheorem y : True := by trivial\nend\nend A.B\n",
                                    {"A.B.x", "A.B.y"}),
-        "qualified/root/private": ("namespace A\ntheorem B.x : True := by trivial\ntheorem _root_.C.x : True := by trivial\nprivate theorem hidden : True := by trivial\nend A\n",
+        "qualified/root/private": ("namespace A\npublic theorem B.x : True := by trivial\ntheorem _root_.C.x : True := by trivial\nprivate theorem hidden : True := by trivial\nend A\n",
                                    {"A.B.x", "C.x"}),
         "lexical": ('-- namespace Fake\n/- namespace Outer /- end -/ -/\nnamespace Real -- namespace Fake\nprivate def text := "namespace Bogus\nend\ntheorem spoof : True := by trivial"\ntheorem x : True := by trivial\nend Real\n',
                     {"Real.x"}),
@@ -305,6 +316,7 @@ def parser_controls() -> None:
         "mismatched": ("namespace A\nend B\n", "mismatched Lean"),
         "malformed": ("namespace A; namespace B\n", "unsupported Lean scope"),
         "quoted namespace": ("namespace «A»\n", "unsupported Lean scope"),
+        "unicode suffix": ("theorem cell₁ : True := by trivial\n", "unsupported Lean declaration spelling"),
         "quoted declaration": ("theorem «x» : True := by trivial\n", "unsupported Lean declaration"),
         "raw string": ('private def s := r#"namespace A"#\n', "unsupported Lean raw string"),
         "comment": ("/- unterminated", "unterminated Lean block comment"),
