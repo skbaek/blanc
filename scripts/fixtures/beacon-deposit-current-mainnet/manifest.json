@@ -40,7 +40,7 @@
       "scripts/current-mainnet-runtime-lock.json": "1b274d7f4ea06d516e488e965a62e292256e2983f5b2a51638707ce6589d0946",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
       "scripts/current_mainnet.py": "fae50d39a69f51b45cd13f79fd6aea01f14424e74d09b8f5c82e33d56cf88cde",
-      "scripts/eels_semantic_closure.py": "2a4fc1ade1c07886b6c1272ad3892bf5db956668ed6bf4a3898733741c6d4bac",
+      "scripts/eels_semantic_closure.py": "c5fbfb6eb6b75c991cb20dc393733a2ca0a6980cff36223bb4381a4776631842",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
       "scripts/gen-beacon-deposit-current-mainnet.py": "ff3c28e69e5bb9e30b01fd0dbf0559504860e019910cb52349c63a0077e8256b",
       "scripts/gen-current-mainnet-runtime-lock.py": "cab3782249a7369c3511c11d9fdb315db16cbb35c49e91ba72aae2eba7249e60",

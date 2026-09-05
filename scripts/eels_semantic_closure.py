@@ -580,6 +580,23 @@ def assert_executed_loader_policy(
     checked_trusted_roots = [
         Path(path).resolve() for path in trusted_source_roots
     ]
+    # A repeated assertion in one interpreter may find this module's live
+    # guard already installed with this exact contract. Every import after
+    # that guard's boundary passed its `find_spec` validation, so an admitted
+    # extension may since have registered runtime-created registry objects
+    # that own no import spec of their own (`_cython_<version>` and
+    # `cython_runtime` from a Cython-built extension, a CFFI `<name>.lib`
+    # object). Those are attributed to the validated extension that created
+    # them (`EXECUTED_LOADER_POLICY["runtimeCreated"]`); objects that predate
+    # the guard, or that claim a file or loader, keep the pre-guard rule.
+    live_guard = None
+    for candidate in _loader_guards(fail_with, label=label):
+        if candidate.matches_contract(
+            roots, owners, unowned, checked_source_roots,
+            checked_trusted_roots, list(configured_standard_roots.values()),
+            standard_records, standard_library is None,
+        ):
+            live_guard = candidate
     for name, module in sorted(sys.modules.items()):
         if module is None:
             continue
@@ -602,6 +619,13 @@ def assert_executed_loader_policy(
                         continue
                 fail_with(f"{label} __main__ entrypoint is outside trusted source")
             if _is_interpreter_registry_proxy(name, module):
+                continue
+            if (
+                live_guard is not None
+                and name not in live_guard.installed_modules
+                and getattr(module, "__file__", None) is None
+                and getattr(module, "__loader__", None) is None
+            ):
                 continue
             if not isinstance(module, types.ModuleType):
                 fail_with(f"{label} registry object {name} has no attributable owner")
@@ -2394,4 +2418,124 @@ print(semdep.codec.VALUE)
         else:
             fail("loader ownership accepted a duplicate allowed distribution name")
 
-    return len(mutants) + 12
+    # Runtime-created registry objects.  An admitted extension may register
+    # module objects that own no import spec (`_cython_<version>`,
+    # `cython_runtime`, a CFFI `<name>.lib`).  A repeated assertion behind the
+    # live guard attributes them to the validated import that created them;
+    # the same objects registered before any guard, or a spec-less object
+    # that claims a file, are still refused at the loader-policy boundary.
+    with tempfile.TemporaryDirectory(prefix="blanc-runtime-registry-") as raw:
+        root = Path(raw)
+        package = root / "regdep"
+        package.mkdir()
+        (package / "__init__.py").write_text(
+            "import sys\n"
+            "import types\n"
+            "sys.modules['_cython_0_0_0'] = types.ModuleType('_cython_0_0_0')\n"
+            "class _Lib:\n"
+            "    pass\n"
+            "sys.modules['regdep.lib'] = _Lib()\n"
+            "VALUE = 'registered'\n",
+            encoding="utf-8",
+        )
+        info = root / "regdep-1.0.dist-info"
+        info.mkdir()
+        (info / "METADATA").write_text(
+            "Metadata-Version: 2.1\nName: regdep\nVersion: 1.0\n",
+            encoding="utf-8",
+        )
+        (info / "RECORD").write_text(
+            "regdep/__init__.py,,\nregdep-1.0.dist-info/RECORD,,\n",
+            encoding="utf-8",
+        )
+        guard_path = Path(__file__).resolve()
+        prologue = r'''
+import importlib.util
+import pathlib
+import sys
+import types
+
+guard_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("loader_guard", guard_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+
+def assert_policy(label):
+    module.assert_executed_loader_policy(
+        lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        label=label,
+        site_packages=[root],
+        allowed_distributions=["regdep"],
+        source_roots=[],
+        trusted_source_roots=[guard_path.parent],
+        standard_library=None,
+        unowned_site_packages={
+            "fileRecords": 0,
+            "contentSha256": module.unowned_site_packages_digest([]),
+            "files": [],
+        },
+    )
+'''
+        admitted_program = prologue + r'''
+assert_policy("runtime-registry control: guard")
+sys.path.insert(0, str(root))
+import regdep
+assert_policy("runtime-registry control: repeated")
+print(regdep.VALUE)
+'''
+        admitted = subprocess.run(
+            [sys.executable, *PYTHON_ISOLATION_ARGS, "-c", admitted_program,
+             str(guard_path), str(root)],
+            capture_output=True, text=True,
+        )
+        if admitted.returncode != 0 or admitted.stdout.strip() != "registered":
+            fail(
+                "repeated loader audit refused guarded runtime-created registry "
+                f"objects: exit={admitted.returncode}; "
+                f"stderr={admitted.stderr.strip()}"
+            )
+        pre_guard_program = prologue + r'''
+sys.path.insert(0, str(root))
+import regdep
+assert_policy("runtime-registry control: pre-guard")
+print(regdep.VALUE)
+'''
+        pre_guard = subprocess.run(
+            [sys.executable, *PYTHON_ISOLATION_ARGS, "-c", pre_guard_program,
+             str(guard_path), str(root)],
+            capture_output=True, text=True,
+        )
+        if pre_guard.returncode == 0 \
+                or "_cython_0_0_0 has no attributable loader spec" \
+                not in pre_guard.stderr:
+            fail(
+                "loader audit accepted a runtime-created registry object that "
+                f"predates the guard: exit={pre_guard.returncode}; "
+                f"stderr={pre_guard.stderr.strip()}"
+            )
+        file_claim_program = prologue + r'''
+assert_policy("runtime-registry control: guard")
+ghost = types.ModuleType("ghost_mod")
+ghost.__file__ = str(root / "ghost_mod.py")
+sys.modules["ghost_mod"] = ghost
+assert_policy("runtime-registry control: file claim")
+print("accepted")
+'''
+        file_claim = subprocess.run(
+            [sys.executable, *PYTHON_ISOLATION_ARGS, "-c", file_claim_program,
+             str(guard_path), str(root)],
+            capture_output=True, text=True,
+        )
+        if file_claim.returncode == 0 \
+                or "ghost_mod has no attributable loader spec" \
+                not in file_claim.stderr:
+            fail(
+                "loader audit accepted a spec-less post-guard module that "
+                f"claims a file: exit={file_claim.returncode}; "
+                f"stderr={file_claim.stderr.strip()}"
+            )
+
+    return len(mutants) + 14
