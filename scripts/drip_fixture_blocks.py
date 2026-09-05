@@ -170,7 +170,13 @@ def validate_serialized_transactions(body, scheduled_transactions):
                   int.from_bytes(fields[2], "big"), fields[3],
                   int.from_bytes(fields[4], "big"), fields[5])
         if actual != expected:
-            raise AssertionError(f"serialized transaction {index} differs from schedule")
+            def display(value):
+                return "0x" + value.hex() if isinstance(value, bytes) else value
+            raise AssertionError(
+                f"serialized transaction {index} differs from schedule: "
+                f"actual={[display(value) for value in actual]!r} "
+                f"expected={[display(value) for value in expected]!r}"
+            )
 
         chain_id = int(transaction.get("chainId", "0x1"), 16)
         unsigned = list(fields[:6]) + [_minimal_bytes(chain_id), b"", b""]
