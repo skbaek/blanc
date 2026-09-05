@@ -71,6 +71,18 @@ theorem DeploymentRoot.future_history_extends_mainnet
     ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
   root.future_history_extends reach native
 
+/-- Current-mainnet instance of the retained historical history headline. -/
+theorem pragueOnly_history_extends_mainnet
+    {baseline : List B256} {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing mainnetChainConfig checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends reach native installed artifact
+
 /-- Current-mainnet instance of the deployment-rooted count/root headline. -/
 theorem DeploymentRoot.future_count_root_mainnet
     {base deployed future : BlockChain} {ca : Adr}

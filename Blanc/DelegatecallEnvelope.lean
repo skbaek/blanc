@@ -182,6 +182,14 @@ def DelegatecallSpawnDescriptor.resume
         d.inputSizeWord.toNat).1 :=
   rfl
 
+/-- The delegated child starts from the world selected by delegation and
+access resolution. -/
+@[simp] theorem DelegatecallSpawnDescriptor.child_state
+    {sevm : Sevm} {callPre : Devm}
+    (d : DelegatecallSpawnDescriptor sevm callPre) :
+    (initDevm d.child).state = d.afterAccess.state :=
+  rfl
+
 /-- The exact `.delegatecall` step that spawns the descriptor's child frame and
 resume continuation. -/
 theorem DelegatecallSpawnDescriptor.step

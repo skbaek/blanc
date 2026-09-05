@@ -179,7 +179,8 @@ delegation-resolution, access-charge, EIP-150 split, depth, and precompile
 equations; its `parent`, `child`, and `resume` are the actual Jaune constructors,
 `.afterAccess_memory` records that delegation resolution preserves the call
 memory, `.step` recovers the exact `.delegatecall` spawn, `.child_data` exposes the
-exact input-memory window, and `.crossing` discharges the entered child frame.  A
+exact input-memory window, `.child_state` identifies the delegated child's
+initial world with the resolved parent world, and `.crossing` discharges the entered child frame.  A
 `DelegatedChildCertificate` retains the recursive child trace without assuming
 an outer result; `.process` recovers its relational `ProcessMessage` witness and
 `.result` recovers the exact total `processMessage` equation.  When the proof
@@ -1006,6 +1007,15 @@ classification: `mainnet_rulesAt_eq_named` and `mainnet_rulesAt_eq_bpo2_of_ge`
 remain WETH10-local because no second contract has needed them, and a
 contract-local copy of either would be the duplication this note exists to
 prevent — lift them to a shared owner instead.
+
+WETH10 retains reducible aliases for `CanonicalDeploymentBase` and
+`DeploymentSystemPrefix`, plus the historical qualified theorem
+`Blanc.Weth10.canonicalDeploymentSystemPrefix`, in
+[`Blanc/Weth10DeploymentRoot.lean`](../Blanc/Weth10DeploymentRoot.lean).
+Those three names preserve the historical statement boundary while all
+behavior stays in the common owner.  Structure-generated constructor,
+recursor, and projection constants live only under `Blanc`; ordinary field
+notation on the WETH10 aliases continues to resolve to those projections.
 
 The shared current-mainnet executable lane deliberately exposes no fork
 override, so it cannot supply a cross-activation witness. Consumers deployed

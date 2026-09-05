@@ -60,6 +60,14 @@ def deploymentFinalBout
     (out : MsgCallOutput) (usedGas : Nat) : BlockOutput :=
   Blanc.deploymentFinalBout bout tx index out usedGas
 
+/-- Historical WETH10 spelling of the configured deployment-base shell.
+The shell itself is owned once by `Blanc.DeploymentMessage`; this reducible
+alias preserves the qualified public WETH10 type without copying its fields. -/
+abbrev CanonicalDeploymentBase := Blanc.CanonicalDeploymentBase
+
+/-- Historical WETH10 spelling of the recovered system-prefix carrier. -/
+abbrev DeploymentSystemPrefix := Blanc.DeploymentSystemPrefix
+
 /-- A strict configured block and type-2 creation transaction profile.  The
 `CanonicalBlock` parameter itself retains the original bytes, strict
 `rlpToBlock` equation, and exact re-encoding equation.  Every field below is
@@ -181,6 +189,17 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
       out.returnData = [] := by
   exact Blanc.processCheckedSystemTransaction_deploymentSystemProgram
     benv target data hcode hnp
+
+/-- Historical qualified WETH10 entry point for the common configured
+deployment-system prefix theorem.  Its statement is retained verbatim while
+the implementation delegates to the single shared shell owner. -/
+theorem canonicalDeploymentSystemPrefix
+    (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
+    (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase cfg rules base sender ca) :
+    Nonempty (Σ txInput, DeploymentSystemPrefix rules base cb.block txInput) :=
+  Blanc.canonicalDeploymentSystemPrefix cfg rules base cb sender ca hbase
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.

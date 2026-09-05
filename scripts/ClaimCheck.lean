@@ -51,6 +51,14 @@ namespace Blanc
 
 open Jaune
 
+/-! The shared delegatecall descriptor owns the reusable child-state
+projection used by proxy-pair and any later delegatecall consumer. -/
+
+example {sevm : Sevm} {callPre : Devm}
+    (spawn : DelegatecallSpawnDescriptor sevm callPre) :
+    (initDevm spawn.child).state = spawn.afterAccess.state :=
+  spawn.child_state
+
 /-! ## Chain-level WETH solvency and FMINT conservation — the configured rungs'
 published mainnet specializations and their retained Prague corollaries.  The
 generic parents are audited; these pin that the published instances are the
@@ -776,6 +784,18 @@ example {cfg : ChainConfig} {rules : ForkRules}
     historyCode := historyCode
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
+
+/-! The historical WETH10-qualified deployment-shell API remains available
+with its original statement after the shell's common-library hoist. -/
+
+example (cfg : ChainConfig) (rules : ForkRules)
+    (base : BlockChain) (cb : CanonicalBlock)
+    (sender ca : Adr)
+    (hbase : Blanc.Weth10.CanonicalDeploymentBase cfg rules base sender ca) :
+    Nonempty (Σ txInput,
+      Blanc.Weth10.DeploymentSystemPrefix rules base cb.block txInput) :=
+  Blanc.Weth10.canonicalDeploymentSystemPrefix
+    cfg rules base cb sender ca hbase
 
 example {cfg : ChainConfig} {rules : ForkRules}
     {base : BlockChain} {cb : CanonicalBlock}
@@ -5634,17 +5654,16 @@ example (baseline : List B256) (ca : Adr) :
   historySpec_preserves baseline ca
 
 example
-    (chainId : UInt64) {baseline : List B256}
+    {cfg : ChainConfig} {baseline : List B256}
     {checkpoint future : BlockChain} {ca : Adr}
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      checkpoint future)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
     (native : ReachNativeShaAdmitted reach ca)
     (installed :
       some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
     (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
     ∃ suffix,
       ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
-  pragueOnly_history_extends chainId reach native installed artifact
+  pragueOnly_history_extends reach native installed artifact
 
 example
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
@@ -5708,6 +5727,17 @@ example
     (native : ReachNativeShaAdmitted reach ca) :
     ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
   DeploymentRoot.future_history_extends_mainnet root reach native
+
+example
+    {baseline : List B256} {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing mainnetChainConfig checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends_mainnet reach native installed artifact
 
 example
     {base deployed future : BlockChain} {ca : Adr}
@@ -5774,6 +5804,19 @@ example
     (native : ReachNativeShaAdmitted reach ca) :
     ∃ suffix, ArtifactInv (future.state.getStor ca) suffix :=
   DeploymentRoot.future_history_extends_prague root reach native
+
+example
+    (chainId : UInt64) {baseline : List B256}
+    {checkpoint future : BlockChain} {ca : Adr}
+    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
+      checkpoint future)
+    (native : ReachNativeShaAdmitted reach ca)
+    (installed :
+      some (checkpoint.state.getCode ca).toList = Prog.compile runtime)
+    (artifact : ArtifactInv (checkpoint.state.getStor ca) baseline) :
+    ∃ suffix,
+      ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
+  pragueOnly_history_extends_prague chainId reach native installed artifact
 
 example
     {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}

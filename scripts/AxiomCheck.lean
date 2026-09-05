@@ -638,6 +638,7 @@ import Blanc.BeaconDepositPragueCompat
 #print axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.canonicalDeploymentSystemPrefix
+#print axioms Blanc.Weth10.canonicalDeploymentSystemPrefix
 #print axioms Blanc.LidoCircuitBreaker.runtimeTemplateCode_length_exact
 #print axioms Blanc.LidoCircuitBreaker.constructor_immutable_word_offsets_exact
 #print axioms Blanc.LidoCircuitBreaker.provisionalConstructorPrefix_length_exact
@@ -1138,6 +1139,8 @@ import Blanc.BeaconDepositPragueCompat
 #print axioms Blanc.BeaconDeposit.historySpec_sound
 #print axioms Blanc.BeaconDeposit.historySpec_preserves
 #print axioms Blanc.BeaconDeposit.pragueOnly_history_extends
+#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet
+#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends_prague
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
 #print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet
@@ -1148,6 +1151,7 @@ import Blanc.BeaconDepositPragueCompat
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague
 #print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague
+#print axioms Blanc.DelegatecallSpawnDescriptor.child_state
 #print axioms Blanc.compact_pause_word_eq_projection
 #print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
 #print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok

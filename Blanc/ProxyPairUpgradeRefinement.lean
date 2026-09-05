@@ -1030,16 +1030,11 @@ private theorem fixtureV2ValueChild_initialKeys (cfg : SharedValueFixtureConfig)
   change (sharedValueCallPre cfg fixtureMigratedState).accessedStorageKeys = _
   exact sharedValueCallPre_keys cfg fixtureMigratedState
 
-private theorem delegatecallChild_state
-    {sevm : Sevm} {callPre : Devm}
-    (spawn : DelegatecallSpawnDescriptor sevm callPre) :
-    (initDevm spawn.child).state = spawn.afterAccess.state := by
-  rfl
-
 private theorem fixtureV1ValueChild_state (cfg : SharedValueFixtureConfig) :
     (initDevm (fixtureV1ValueChildMessage cfg)).state =
       (sharedValueAfterTransfer cfg fixturePrestate).state := by
-  rw [fixtureV1ValueChildMessage, delegatecallChild_state]
+  rw [fixtureV1ValueChildMessage,
+    DelegatecallSpawnDescriptor.child_state]
   change (sharedValueAfterAccess cfg fixturePrestate v1Implementation).state = _
   unfold sharedValueAfterAccess
   change (sharedValueCallPre cfg fixturePrestate).state = _
@@ -1048,7 +1043,8 @@ private theorem fixtureV1ValueChild_state (cfg : SharedValueFixtureConfig) :
 private theorem fixtureV2ValueChild_state (cfg : SharedValueFixtureConfig) :
     (initDevm (fixtureV2ValueChildMessage cfg)).state =
       (sharedValueAfterTransfer cfg fixtureMigratedState).state := by
-  rw [fixtureV2ValueChildMessage, delegatecallChild_state]
+  rw [fixtureV2ValueChildMessage,
+    DelegatecallSpawnDescriptor.child_state]
   change (sharedValueAfterAccess cfg fixtureMigratedState v2Implementation).state = _
   unfold sharedValueAfterAccess
   change (sharedValueCallPre cfg fixtureMigratedState).state = _

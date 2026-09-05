@@ -150,7 +150,7 @@ MODULE_ALLOWANCE: dict[str, tuple[str, int]] = {
     "Blanc/Weth10PragueCompat.lean": (
         "compatibility: WETH10's retained fixed-Prague API", 49),
     "Blanc/BeaconDepositPragueCompat.lean": (
-        "compatibility: BeaconDeposit's retained fixed-Prague API", 14),
+        "compatibility: BeaconDeposit's retained fixed-Prague API", 17),
     "Blanc/LidoCircuitBreakerDeploymentRoot.lean": (
         "specialization: the Lido CircuitBreaker deployment root stays stated "
         "at the fixed Prague schedule until its own successor goal", 24),
@@ -178,7 +178,11 @@ DECLARATION_ALLOWANCE: dict[tuple[str, str], tuple[str, int]] = {
         "parent", 2),
     ("Blanc/BeaconDepositHistoryChain.lean",
      "Blanc.BeaconDeposit.pragueOnly_history_extends"): (
-        "compatibility: the retained fixed-Prague history headline", 2),
+        "compatibility: the retained historical history-headline spelling", 1),
+    ("Blanc/BeaconDepositMainnet.lean",
+     "Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet"): (
+        "specialization: the published mainnet instance of the configured "
+        "history headline", 2),
     # Recorded debt, not a blessing. These two constants bind EIP-170 and
     # EIP-3860 limits to `pragueCodeLimits` inside otherwise-generic modules,
     # and `check-beacon-deposit-current-mainnet.sh` asserts both by name at

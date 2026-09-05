@@ -854,6 +854,7 @@ Blanc.processCreateMessage_ok_of_processMessage_error|$STANDARD
 Blanc.processUncheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.processCheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.canonicalDeploymentSystemPrefix|$STANDARD
+Blanc.Weth10.canonicalDeploymentSystemPrefix|$STANDARD
 Blanc.LidoCircuitBreaker.runtimeTemplateCode_length_exact|$STANDARD
 Blanc.LidoCircuitBreaker.constructor_immutable_word_offsets_exact|$STANDARD
 Blanc.LidoCircuitBreaker.provisionalConstructorPrefix_length_exact|$STANDARD
@@ -1354,6 +1355,8 @@ Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence|$STANDARD
 Blanc.BeaconDeposit.historySpec_sound|$STANDARD
 Blanc.BeaconDeposit.historySpec_preserves|$STANDARD
 Blanc.BeaconDeposit.pragueOnly_history_extends|$STANDARD
+Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet|$STANDARD
+Blanc.BeaconDeposit.pragueOnly_history_extends_prague|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_history_extends|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_count_root|$STANDARD
 Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_mainnet|$STANDARD
@@ -1364,6 +1367,7 @@ Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root_prague|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence_prague|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague|$STANDARD
 Blanc.BeaconDeposit.DeploymentRoot.future_count_root_prague|$STANDARD
+Blanc.DelegatecallSpawnDescriptor.child_state|$STANDARD
 Blanc.compact_pause_word_eq_projection|$STANDARD
 Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution|$STANDARD
 Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok|$STANDARD

@@ -60,12 +60,13 @@ theorem reachUsing_history_extends
   rcases native with ⟨trace, _projection, admitted⟩
   exact configuredHistory_extends trace admitted installed artifact
 
-/-- The exact Prague-only schedule required by the deployment closure. -/
+/-- Historical headline, now stated over the configured schedule.  The name is
+retained for API compatibility; named-network instances live in the mainnet
+and Prague compatibility modules. -/
 theorem pragueOnly_history_extends
-    (chainId : UInt64) {baseline : List B256}
+    {baseline : List B256} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {ca : Adr}
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      checkpoint future)
+    (reach : BlockChain.ReachUsing cfg checkpoint future)
     (native : ReachNativeShaAdmitted reach ca)
     (installed :
       some (checkpoint.state.getCode ca).toList = Prog.compile runtime)

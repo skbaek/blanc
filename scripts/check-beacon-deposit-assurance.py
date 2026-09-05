@@ -95,6 +95,8 @@ EXPECTED_DECLARATIONS = {
     ],
     "P8-HISTORY": [
         "Blanc.BeaconDeposit.pragueOnly_history_extends",
+        "Blanc.BeaconDeposit.pragueOnly_history_extends_mainnet",
+        "Blanc.BeaconDeposit.pragueOnly_history_extends_prague",
         "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends",
         "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_mainnet",
         "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends_prague",
@@ -155,7 +157,7 @@ EXPECTED_GATES = {
 
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 EXPECTED_TOTAL_ROWS = 11
-EXPECTED_TOTAL_DECLARATIONS = 38
+EXPECTED_TOTAL_DECLARATIONS = 40
 
 NONCLAIM_PHRASES = [
     "different artifacts and independent proof developments",
