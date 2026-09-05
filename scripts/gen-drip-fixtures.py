@@ -317,6 +317,13 @@ def render_fixture(name, initial_alloc, linked, profile):
                    linked["blocks"], linked["post"], linked["lastblockhash"], profile)
 
 
+def receipt_evidence(linked):
+    """Portable per-transaction gas/status evidence for later optimization review."""
+    return [{key: receipt[key] for key in
+             ("status", "cumulativeGasUsed", "gasUsed", "logs")}
+            for receipt in linked["receipts"]]
+
+
 def runtime_transaction_population(root, profile, runtime, creation, paths):
     """Execute all cases and return JSON-ready fixtures plus manifest rows."""
     from drip_fixture_blocks import (
@@ -371,7 +378,8 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
             render_fixture(case["name"], initial, linked, profile), indent=2) + "\n"
         manifest.append({"name": case["name"], "obligation": case["obligation"],
                          "steps": len(case["steps"]), "executionEvidence": True,
-                         "fixture": f"{case['name']}.json"})
+                         "fixture": f"{case['name']}.json",
+                         "receiptGas": receipt_evidence(linked)})
 
     # Every direct case gets an observer twin for returndata.  t8n exposes
     # receipts and state but not transaction returndata, so the twin forwards
@@ -465,7 +473,8 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
         manifest.append({"name": observer_name, "obligation": case["obligation"],
                          "steps": len(case["steps"]), "executionEvidence": True,
                          "fixture": f"{observer_name}.json",
-                         "observerHelpers": sorted(observer_helpers.values())})
+                         "observerHelpers": sorted(observer_helpers.values()),
+                         "receiptGas": receipt_evidence(linked)})
 
     # A real constructor transaction is a separate fixture.  The target is
     # absent in the genesis allocation and is checked at the CREATE-derived
@@ -500,7 +509,8 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
     files[f"{name}.json"] = json.dumps(render_fixture(name, initial, linked, profile), indent=2) + "\n"
     manifest.append({"name": name, "obligation": name, "steps": 1,
                      "executionEvidence": True, "fixture": f"{name}.json",
-                     "target": create_target, "creationCodeSha256": hashlib.sha256(creation).hexdigest()})
+                     "target": create_target, "creationCodeSha256": hashlib.sha256(creation).hexdigest(),
+                     "receiptGas": receipt_evidence(linked)})
 
     # Observer twins exercise the real target CALL boundary.  The ordinary
     # twin covers zero-value CALLs; one reentry settles nested units, another
@@ -634,6 +644,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
         manifest.append({"name": name, "obligation": obligation, "steps": 1,
                          "executionEvidence": True,
                          "fixture": f"{name}.json",
+                         "receiptGas": receipt_evidence(linked),
                          "observer": observer_expectations(create_target, mode,
                                                             nested_units=max(1, nested_units),
                                                             callback_value=outer_units)})
@@ -799,6 +810,7 @@ def execute_and_check(root_arg, *, write):
         "schema": 2, "kind": "drip-bpo2-runtime-fixtures",
         "executionEvidence": True, "runtimeSha256": hashlib.sha256(runtime).hexdigest(),
         "creationSha256": hashlib.sha256(creation).hexdigest(),
+        "artifactSizes": {"runtime": len(runtime), "creation": len(creation)},
         "targetProfile": profile["target"]["checkoutCommit"],
         "obligations": obligation_map, "cases": manifest,
     }, indent=2) + "\n"
