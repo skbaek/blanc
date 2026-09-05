@@ -100,17 +100,17 @@ def die(message: str) -> "NoReturn":
 
 
 def load_generator(eels_root: Path):
-    from ethereum.crypto.hash import keccak256
-
     spec = importlib.util.spec_from_file_location("lido_dispatch_generator", GENERATOR)
     if spec is None or spec.loader is None:
         die("cannot load Lido differential generator")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    module.verify_eels_pin(eels_root)
+    from ethereum.crypto.hash import keccak256
+
     module._KECCAK = keccak256
     module._LOCK = json.loads(LOCK.read_text())
-    module.verify_eels_pin(eels_root)
     return module
 
 

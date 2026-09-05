@@ -24,8 +24,8 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.le
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
-  "$SCRIPT_DIR/gen-lido-circuit-breaker-differential.py" \
+if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-lido-circuit-breaker-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@" >"$GENERATOR_OUT"; then
   exit 1
 fi

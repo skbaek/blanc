@@ -67,17 +67,17 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 1082/1082 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 1116/1116 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (exact-candidate run 2026-09-03 UTC): the
+        <p class="cap"><b>Fig. 1</b> — two current gate summaries: the
           axiom audit that pins every audited theorem to its exact axiom set, and the differential
           gate executing Blanc’s WETH10 beside the deployed original’s runtime, byte for byte, in a
           pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1082-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>1116-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -107,7 +107,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1082<span class="dimmer" style="font-size:1.05rem">/1082</span></span>
+      <div class="fact"><span class="n">1116<span class="dimmer" style="font-size:1.05rem">/1116</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">8</span>
         <span class="l">contracts in — six ports, two études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
@@ -225,7 +225,7 @@
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           <strong>A weakened conclusion fails as loudly as a broken proof.</strong> Proving
           <em>something</em> is cheap; the discipline is keeping the something fixed. A
-          statement-pin gate Lean-checks the exact wording of the protected claims — 390
+          statement-pin gate Lean-checks the exact wording of the protected claims — 428
           definitions, statements, and record constructors across the shared layer and the
           protected contract families — so the theorem quoted on this page is
           character-for-character the theorem CI checks, and a quiet regression in what is
@@ -816,12 +816,12 @@
         <div class="term"><span class="p">$</span> scripts/check-layering.sh
 <span class="ok">OK — layering: 8 contract(s) are siblings; 359 module(s) classified, 357 non-root checked, 2 composition module(s) downstream, no cross-contract, inverted or composition-inverted import</span>
 <span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — claim statements: 394 definitions/statements and exact
+<span class="ok">OK — claim statements: 428 definitions/statements and exact
      record constructors pinned by Lean</span>
 <span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
 <span class="ok">OK — weth fixtures: 11/11 PASS</span>
 <span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery, verbatim (exact-candidate run 2026-09-03 UTC). The
+        <p class="cap"><b>Fig. 2</b> — selected summaries from the fast half of the gate battery. The
           full ordered set — layering, trust surface, reference lock, differential, redemption,
           deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
           catalogued with scales and pass criteria in
@@ -1430,7 +1430,7 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 1082 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 1116 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
@@ -1474,11 +1474,11 @@
           over, pinned by immutable commit — see <a href="https://skbaek.github.io/jaune/">the Jaune
           page</a> for its conformance evidence.</li>
         <li id="fn3">Every figure about this repository on this page is drawn from a committed
-          report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-09-03. §&nbsp;11’s landscape table is the one deliberate exception — it
-          describes other people’s projects, on the terms its own disclaimer states. Gate
-          lines shown are verbatim output of the exact-candidate 2026-09-03 UTC run — except
-          that one long line is wrapped and ellipses mark elision; the
+          report, registry, gate summary, or theorem in the repository. The proof and claim
+          totals are derived from the current Lean inventories and checked against every registered
+          publication. §&nbsp;11’s landscape table is the one deliberate exception — it
+          describes other people’s projects, on the terms its own disclaimer states. In the gate
+          summaries, one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
         <li id="fn4">Spelled out, because the boundary rewards precision: when a Blanc contract

@@ -8,7 +8,7 @@ and at which versions — is platform-independent, because a wheel's version is.
 It is rewritten whenever this generator runs, and it binds on every platform.
 
 The *platform rows* record the exact installed bytes behind those versions,
-the loaded standard-library files, and the native images actually mapped from
+the complete executable standard-library tree, and the native images actually mapped from
 the interpreter's base prefix.  Every accepted process also uses an unreachable
 bytecode-cache prefix.  Only the executing platform's row can be measured.  The
 other platform's row is carried forward when the pinned semantic closure did
@@ -104,7 +104,7 @@ def generate(profile: dict[str, Any], root: str | None) -> tuple[dict[str, Any],
     platforms[key] = lane._runtime_entry(paths, observed)
 
     document = {
-        "schema": 4,
+        "schema": 5,
         "target": lane._runtime_target_document(paths),
         "semanticClosure": section,
         "platforms": platforms,
@@ -143,10 +143,19 @@ def self_check(profile: dict[str, Any]) -> int:
         "contentSha256": closure.interpreter_runtime_digest(runtime_files),
         "files": runtime_files,
     }
+    unowned_site_packages = {
+        "fileRecords": 1,
+        "contentSha256": closure.unowned_site_packages_digest([
+            {"path": "sitePackages/_virtualenv.py", "sha256": "8" * 64}
+        ]),
+        "files": [
+            {"path": "sitePackages/_virtualenv.py", "sha256": "8" * 64}
+        ],
+    }
     platform_keys = sorted(profile["target"]["pythonIdentity"]["platforms"])
     native = platform_keys[0]
     document = {
-        "schema": 4,
+        "schema": 5,
         "target": {
             "checkoutCommit": lane._EXPECTED["checkoutCommit"],
             "pythonImplementation": lane._EXPECTED["pythonImplementation"],
@@ -158,6 +167,7 @@ def self_check(profile: dict[str, Any]) -> int:
             "policy": copy.deepcopy(lane._CLOSURE_POLICY),
             "contentExcludes": list(closure.CONTENT_EXCLUDES),
             "bytecodePolicy": dict(closure.BYTECODE_POLICY),
+            "executedLoaderPolicy": dict(closure.EXECUTED_LOADER_POLICY),
             "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
             "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
             "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
@@ -172,10 +182,12 @@ def self_check(profile: dict[str, Any]) -> int:
                     "pythonExecutableSha256": "3" * 64,
                     "fileRecords": 33,
                     "contentSha256": closure.environment_content_digest(
-                        measured, standard_library, interpreter_runtime
+                        measured, standard_library, interpreter_runtime,
+                        unowned_site_packages,
                     ),
                     "standardLibrary": copy.deepcopy(standard_library),
                     "interpreterRuntime": copy.deepcopy(interpreter_runtime),
+                    "unownedSitePackages": copy.deepcopy(unowned_site_packages),
                     "distributions": copy.deepcopy(measured),
                 }
                 if key == native
@@ -209,6 +221,10 @@ def self_check(profile: dict[str, Any]) -> int:
     bytecode_readable = copy.deepcopy(document)
     bytecode_readable["semanticClosure"]["bytecodePolicy"]["pycachePrefix"] = None
     mutants.append(("bytecode-cache-made-readable", bytecode_readable))
+
+    loader_unbound = copy.deepcopy(document)
+    del loader_unbound["semanticClosure"]["executedLoaderPolicy"]
+    mutants.append(("executed-loader-policy-dropped", loader_unbound))
 
     unbound_runtime = copy.deepcopy(document)
     del unbound_runtime["semanticClosure"]["interpreterRuntimePolicy"]
@@ -248,6 +264,12 @@ def self_check(profile: dict[str, Any]) -> int:
     ] = "7" * 64
     mutants.append(("changed-interpreter-runtime-byte", changed_runtime))
 
+    changed_unowned = copy.deepcopy(document)
+    changed_unowned["platforms"][native]["unownedSitePackages"]["files"][0][
+        "sha256"
+    ] = "9" * 64
+    mutants.append(("changed-unowned-site-packages-byte", changed_unowned))
+
     ungenerated = copy.deepcopy(document)
     for key in platform_keys:
         ungenerated["platforms"][key] = {"generated": False}
@@ -264,7 +286,7 @@ def self_check(profile: dict[str, Any]) -> int:
     mutants.append(("duplicated-distribution", duplicated))
 
     legacy = copy.deepcopy(document)
-    legacy["schema"] = 3
+    legacy["schema"] = 4
     mutants.append(("legacy-schema", legacy))
 
     for label, mutant in mutants:
@@ -316,7 +338,7 @@ def main() -> int:
         "OK — current-mainnet runtime lock matches the native platform: "
         f"{document['semanticClosure']['count']} pinned distributions, "
         f"{observed['fileRecords']} distribution files and "
-        f"{observed['standardLibrary']['fileRecords']} loaded standard-library files, "
+        f"{observed['standardLibrary']['fileRecords']} pinned executable standard-library files, "
         f"plus {observed['interpreterRuntime']['fileRecords']} loaded interpreter runtime "
         f"image record(s)"
     )

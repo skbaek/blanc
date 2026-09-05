@@ -29,11 +29,15 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 import lido_ossifiable_proxy_performance_schema as schema
+import eels_semantic_closure
 
 
 EVALUATOR_RELATIVE = Path("scripts/eval-lido-ossifiable-proxy-artifacts.lean")
 RUNNER_RELATIVE = Path("scripts/run-lido-ossifiable-proxy-performance.py")
 LAUNCHER_RELATIVE = Path("scripts/run-lido-ossifiable-proxy-performance.sh")
+BOOTSTRAP_RELATIVE = Path("scripts/run-isolated-python.py")
+LOADER_GUARD_RELATIVE = Path("scripts/eels_semantic_closure.py")
+LOADER_LOCK_RELATIVE = Path("scripts/eels-prague-closure.json")
 EVIDENCE_CHECKER_RELATIVE = Path("scripts/check-lido-ossifiable-proxy-performance-results.py")
 SCHEMA_RELATIVE = Path("scripts/lido_ossifiable_proxy_performance_schema.py")
 REFERENCE_RUNTIME_POINTER = "/artifacts/runtime"
@@ -141,6 +145,9 @@ def verify_eels(root: Path) -> None:
     if os.environ.get("PYTHONDONTWRITEBYTECODE") != "1" or \
             Path(os.environ.get("PYTHONPATH", "")).resolve() != expected_source:
         die("EELS requires PYTHONDONTWRITEBYTECODE=1 and exact PYTHONPATH=<EELS_ROOT>/src")
+    eels_semantic_closure.assert_prague_environment(
+        die, checkout_root=root
+    )
     import ethereum
     module_path = Path(ethereum.__file__).resolve()
     if not module_path.is_relative_to(expected_source):
@@ -1017,9 +1024,12 @@ def _reference_artifacts(lock: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 def _implementation_identity(root: Path) -> dict[str, str]:
     paths = {
+        "bootstrapSha256": root / BOOTSTRAP_RELATIVE,
         "evidenceCheckerSha256": root / EVIDENCE_CHECKER_RELATIVE,
         "evaluatorSha256": root / EVALUATOR_RELATIVE,
         "launcherSha256": root / LAUNCHER_RELATIVE,
+        "loaderGuardSha256": root / LOADER_GUARD_RELATIVE,
+        "loaderLockSha256": root / LOADER_LOCK_RELATIVE,
         "runnerSha256": root / RUNNER_RELATIVE,
         "schemaSha256": root / SCHEMA_RELATIVE,
     }
@@ -1385,8 +1395,9 @@ def validate_evidence_record(
         die("cell evidence envelope/reference digest malformed")
     implementation = identities["implementation"]
     if not isinstance(implementation, dict) or set(implementation) != {
-        "evaluatorSha256", "evidenceCheckerSha256", "launcherSha256", "runnerSha256",
-        "schemaSha256",
+        "bootstrapSha256", "evaluatorSha256", "evidenceCheckerSha256",
+        "launcherSha256", "loaderGuardSha256", "loaderLockSha256",
+        "runnerSha256", "schemaSha256",
     } or any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in implementation.values()):
         die("cell evidence implementation identity malformed")
     measurement = record["measurement"]

@@ -2,10 +2,10 @@
 # Documentation-count gate for Blanc: every published number is produced, not
 # transcribed.
 #
-# The audited-theorem count is computed by the axiom audit and then quoted in
-# prose on README.md, scripts/GATES.md and docs/index.html. Prose does not
-# recompute itself, so the count drifts silently every time the audit grows --
-# and it did: on 2026-08-12 Jaune's site published 315 against this gate's 333.
+# The audited-theorem count and statement-pin count are computed from their
+# source inventories and then checked wherever this repository publishes them.
+# Prose does not recompute itself, so these counts drift silently as the
+# inventories grow.
 #
 # This gate computes the count from scripts/AxiomCheck.lean, finds every place a
 # public surface quotes it, and fails on disagreement. It is anti-vacuous: it

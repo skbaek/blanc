@@ -69,8 +69,10 @@ fi
 
 # Reject widened APIs, stale inventories, a pre-BPO2 timestamp, or a changed
 # historical-channel boundary before any shared t8n, Lean evaluator, or build.
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s \
-  "$SCRIPT_DIR/gen-weth10-current-mainnet.py" \
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" \
+  -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-current-mainnet-isolated.py" "$TARGET_ROOT" \
+  "gen-weth10-current-mainnet.py" \
   --static-self-check \
   --wrapper-historical-boundary "$HISTORICAL_BOUNDARY" \
   --wrapper-evidence-falsifiers "$EVIDENCE_BOUNDARY_FALSIFIERS"
@@ -115,8 +117,10 @@ if [ "$WRITE" -eq 1 ]; then
   GENERATOR_ARGS+=(--write)
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -X pycache_prefix=/dev/null -s \
-  "$SCRIPT_DIR/gen-weth10-current-mainnet.py" "${GENERATOR_ARGS[@]}"
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" \
+  -I -s -B -X pycache_prefix=/dev/null \
+  "$SCRIPT_DIR/run-current-mainnet-isolated.py" "$TARGET_ROOT" \
+  "gen-weth10-current-mainnet.py" "${GENERATOR_ARGS[@]}"
 
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
 if ! (cd "$ROOT" && lake build jaune/jaune); then

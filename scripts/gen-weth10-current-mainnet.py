@@ -27,6 +27,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, NoReturn, Sequence
 
+import eels_semantic_closure
+
+eels_semantic_closure.assert_loader_guard_installed(
+    eels_semantic_closure.fail, label="WETH10 current-mainnet generator"
+)
+
 from ethereum.crypto.hash import keccak256
 from ethereum.forks.bpo2.blocks import Header
 from ethereum.state import Account, Address
@@ -1612,7 +1618,7 @@ def load_runtime_lock(profile: Mapping[str, object]) -> dict[str, object]:
         lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         die(f"cannot read current-mainnet runtime lock: {exc}")
-    if not isinstance(lock, dict) or lock.get("schema") != 4:
+    if not isinstance(lock, dict) or lock.get("schema") != 5:
         die("current-mainnet runtime lock schema differs")
     target = lock.get("target")
     platforms = lock.get("platforms")

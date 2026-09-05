@@ -21,7 +21,7 @@ specification package actually imports, with exact versions — and renders it a
 a pip constraints file that provisioning consumes.  See eels_semantic_closure
 for how the closure is derived and why it is narrow.
 
-Distribution, loaded-standard-library, and loaded native-interpreter content
+Distribution, complete executable-standard-library, and loaded native-interpreter content
 digests are recorded per platform, and enforced on a platform once its row has
 been generated there.  Every accepted process also uses an unreachable
 bytecode-cache prefix, so excluded ``pyc`` files cannot become executable input.
@@ -161,6 +161,7 @@ def closure_section(observed: dict[str, Any]) -> dict[str, Any]:
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
         "bytecodePolicy": dict(closure.BYTECODE_POLICY),
+        "executedLoaderPolicy": dict(closure.EXECUTED_LOADER_POLICY),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
         "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
         "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
@@ -185,6 +186,7 @@ def platform_row(observed: dict[str, Any]) -> dict[str, Any]:
         "contentSha256": observed["contentSha256"],
         "standardLibrary": observed["standardLibrary"],
         "interpreterRuntime": observed["interpreterRuntime"],
+        "unownedSitePackages": observed["unownedSitePackages"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -221,7 +223,7 @@ def build(root: Path, observed: dict[str, Any]) -> dict[str, Any]:
         platforms = copy.deepcopy(previous["platforms"])
     platforms[native_key()] = platform_row(observed)
     document = {
-        "schema": 3,
+        "schema": 4,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY,
@@ -261,7 +263,7 @@ def validate(document: Any) -> dict[str, Any]:
         },
         "prague closure pin",
     )
-    if top["schema"] != 3 or top["lane"] != LANE:
+    if top["schema"] != 4 or top["lane"] != LANE:
         fail("prague closure pin identity differs")
     checkout = keys(
         top["checkout"], {"repository", "commit", "sourceRoot"}, "pin.checkout"
@@ -283,7 +285,7 @@ def validate(document: Any) -> dict[str, Any]:
     section = keys(
         top["semanticClosure"],
         {
-            "policy", "contentExcludes", "bytecodePolicy",
+            "policy", "contentExcludes", "bytecodePolicy", "executedLoaderPolicy",
             "installerMetadataExcludes", "standardLibraryPolicy",
             "interpreterRuntimePolicy",
             "distributions", "count", "versionsSha256",
@@ -297,6 +299,8 @@ def validate(document: Any) -> dict[str, Any]:
         fail("prague closure exclusion policy differs")
     if section["bytecodePolicy"] != dict(closure.BYTECODE_POLICY):
         fail("prague closure bytecode policy differs")
+    if section["executedLoaderPolicy"] != dict(closure.EXECUTED_LOADER_POLICY):
+        fail("prague closure executed-loader policy differs")
     if section["standardLibraryPolicy"] != dict(closure.STANDARD_LIBRARY_POLICY):
         fail("prague closure standard-library policy differs")
     if section["interpreterRuntimePolicy"] != \
@@ -329,7 +333,8 @@ def validate(document: Any) -> dict[str, Any]:
             platforms[key],
             {
                 "generated", "pythonExecutableSha256", "fileRecords", "contentSha256",
-                "standardLibrary", "interpreterRuntime", "distributions",
+                "standardLibrary", "interpreterRuntime", "unownedSitePackages",
+                "distributions",
             },
             f"pin.platforms.{key}",
         )
@@ -345,6 +350,10 @@ def validate(document: Any) -> dict[str, Any]:
             row["interpreterRuntime"], fail,
             label=f"pin.platforms.{key}.interpreterRuntime",
         )
+        unowned_site_packages = closure.validate_unowned_site_packages(
+            row["unownedSitePackages"], fail,
+            label=f"pin.platforms.{key}.unownedSitePackages",
+        )
         if standard_library["implementation"] != PYTHON_IMPLEMENTATION.lower() \
                 or ".".join(standard_library["version"].split(".")[:2]) != PYTHON_SERIES:
             fail(f"pin.platforms.{key} standard library is not pinned CPython 3.11")
@@ -358,7 +367,8 @@ def validate(document: Any) -> dict[str, Any]:
         if row["fileRecords"] != total:
             fail(f"pin.platforms.{key} file-record total does not match its rows")
         if row["contentSha256"] != closure.environment_content_digest(
-            row["distributions"], standard_library, interpreter_runtime
+            row["distributions"], standard_library, interpreter_runtime,
+            unowned_site_packages,
         ):
             fail(f"pin.platforms.{key} content digest does not match its own rows")
     return top
@@ -398,8 +408,17 @@ def self_check() -> int:
         "contentSha256": closure.interpreter_runtime_digest(runtime_files),
         "files": runtime_files,
     }
+    unowned_site_packages = {
+        "fileRecords": 1,
+        "contentSha256": closure.unowned_site_packages_digest([
+            {"path": "sitePackages/_virtualenv.py", "sha256": "8" * 64}
+        ]),
+        "files": [
+            {"path": "sitePackages/_virtualenv.py", "sha256": "8" * 64}
+        ],
+    }
     document = {
-        "schema": 3,
+        "schema": 4,
         "lane": LANE,
         "checkout": {
             "repository": REPOSITORY, "commit": EELS_PIN, "sourceRoot": SOURCE_ROOT,
@@ -413,6 +432,7 @@ def self_check() -> int:
             "policy": copy.deepcopy(CLOSURE_POLICY),
             "contentExcludes": list(closure.CONTENT_EXCLUDES),
             "bytecodePolicy": dict(closure.BYTECODE_POLICY),
+            "executedLoaderPolicy": dict(closure.EXECUTED_LOADER_POLICY),
             "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
             "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
             "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
@@ -426,10 +446,12 @@ def self_check() -> int:
                 "pythonExecutableSha256": "3" * 64,
                 "fileRecords": 25,
                 "contentSha256": closure.environment_content_digest(
-                    measured, standard_library, interpreter_runtime
+                    measured, standard_library, interpreter_runtime,
+                    unowned_site_packages,
                 ),
                 "standardLibrary": copy.deepcopy(standard_library),
                 "interpreterRuntime": copy.deepcopy(interpreter_runtime),
+                "unownedSitePackages": copy.deepcopy(unowned_site_packages),
                 "distributions": copy.deepcopy(measured),
             }
         },
@@ -453,6 +475,10 @@ def self_check() -> int:
     bytecode_readable = copy.deepcopy(document)
     bytecode_readable["semanticClosure"]["bytecodePolicy"]["pycachePrefix"] = None
     mutants.append(("bytecode-cache-made-readable", bytecode_readable))
+
+    loader_unbound = copy.deepcopy(document)
+    del loader_unbound["semanticClosure"]["executedLoaderPolicy"]
+    mutants.append(("executed-loader-policy-dropped", loader_unbound))
 
     unbound_runtime = copy.deepcopy(document)
     del unbound_runtime["semanticClosure"]["interpreterRuntimePolicy"]
@@ -491,6 +517,12 @@ def self_check() -> int:
         "sha256"
     ] = "0" * 64
     mutants.append(("changed-interpreter-runtime-byte", changed_runtime))
+
+    changed_unowned = copy.deepcopy(document)
+    changed_unowned["platforms"]["macos-arm64"]["unownedSitePackages"]["files"][0][
+        "sha256"
+    ] = "9" * 64
+    mutants.append(("changed-unowned-site-packages-byte", changed_unowned))
 
     changed_python = copy.deepcopy(document)
     changed_python["platforms"]["macos-arm64"]["pythonExecutableSha256"] = "z" * 64
@@ -599,7 +631,7 @@ def main() -> int:
             f"OK — prague closure pin matches: {section['count']} pinned "
             f"distributions at their exact versions, {observed['fileRecords']} files; "
             f"content digests (including {observed['standardLibrary']['fileRecords']} "
-            f"loaded standard-library files and "
+            f"pinned executable standard-library files and "
             f"{observed['interpreterRuntime']['fileRecords']} loaded interpreter runtime "
             f"image record(s)) are not recorded for {native}, so bytes are "
             f"unverified here (run --write on {native} to record them)"
@@ -617,7 +649,7 @@ def main() -> int:
     print(
         f"OK — prague closure pin matches: {section['count']} pinned "
         f"distributions, {observed['fileRecords']} distribution files and "
-        f"{observed['standardLibrary']['fileRecords']} loaded standard-library files, "
+        f"{observed['standardLibrary']['fileRecords']} pinned executable standard-library files, "
         f"plus {observed['interpreterRuntime']['fileRecords']} loaded interpreter runtime "
         f"image record(s), "
         f"content verified on {native}"

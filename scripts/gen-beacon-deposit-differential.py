@@ -1177,7 +1177,9 @@ def verify_eels_pin(root: Path) -> None:
 
     # The commit pins the specification's source; this pins what that source
     # imports.  Both must hold before an oracle comparison means anything.
-    eels_semantic_closure.assert_prague_environment(die)
+    eels_semantic_closure.assert_prague_environment(
+        die, checkout_root=root
+    )
 
 
 def environments(state, gas: int):

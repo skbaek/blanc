@@ -24,5 +24,5 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-differential-code.lean >"$
   exit 1
 fi
 
-PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/gen-weth10-differential.py" \
+"$EELS_PY" -I -s -B -X pycache_prefix=/dev/null "$SCRIPT_DIR/run-isolated-python.py" "$EELS_ROOT" "gen-weth10-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-runtimes "$RUNTIMES" "$@"

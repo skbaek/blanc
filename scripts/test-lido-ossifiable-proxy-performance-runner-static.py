@@ -73,11 +73,14 @@ def main() -> int:
     blanc = runner.ArtifactSide("blanc", b"\x60\x00\x00", b"\x00")
     candidate_commit = runner.git_output(root, "rev-parse", "HEAD")
     implementation = {
-        "evaluatorSha256": "1" * 64,
-        "evidenceCheckerSha256": "2" * 64,
-        "launcherSha256": "3" * 64,
-        "runnerSha256": "4" * 64,
-        "schemaSha256": "5" * 64,
+        "bootstrapSha256": "1" * 64,
+        "evaluatorSha256": "2" * 64,
+        "evidenceCheckerSha256": "3" * 64,
+        "launcherSha256": "4" * 64,
+        "loaderGuardSha256": "5" * 64,
+        "loaderLockSha256": "6" * 64,
+        "runnerSha256": "7" * 64,
+        "schemaSha256": "8" * 64,
     }
     identities = {
         "candidateArtifacts": {

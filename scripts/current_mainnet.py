@@ -555,8 +555,9 @@ _CLOSURE_POLICY = {
     # The specification itself, walked whole: every fork, every precompile,
     # every cryptographic helper a transition can reach.
     "transitionPackages": ["ethereum"],
-    # Imported after the closure is taken, so that whatever a test-support
-    # package's __init__ chain drags in is attributed but never pinned.
+    # Imported as a separately attributed second tier.  Whatever the tool's
+    # test-support package loads remains labelled outside the transition path,
+    # but its executed distributions and bytes stay inside the full lock.
     "runtimePackages": ["execution_testing.forks"],
 }
 
@@ -604,6 +605,7 @@ def _derive_closure(paths: TargetPaths) -> dict[str, Any]:
             _CLOSURE_POLICY,
             cwd=paths.root,
             env=_sanitized_child_env(paths),
+            source_paths=[paths.root],
         )
     except closure.ClosureError as exc:
         _fail(str(exc))
@@ -612,16 +614,17 @@ def _derive_closure(paths: TargetPaths) -> dict[str, Any]:
 def _closure_document(observed: dict[str, Any]) -> dict[str, Any]:
     """The platform-independent half: what to install, and where it came from.
 
-    Deliberately absent: the distributions a test-support package's __init__
-    chain loads.  They cannot reach a transition, they churn on every tooling
-    release, and pinning them is what made the previous lock unreproducible.
-    The gate prints them; the lock does not bind them.
+    Test-support packages loaded by the oracle tool remain labelled separately
+    in the generator report, but their versions and bytes are included here:
+    the loader policy cannot exempt code merely because a present call-graph
+    analysis believes it does not reach a transition.
     """
 
     return {
         "policy": observed["policy"],
         "contentExcludes": list(closure.CONTENT_EXCLUDES),
         "bytecodePolicy": dict(closure.BYTECODE_POLICY),
+        "executedLoaderPolicy": dict(closure.EXECUTED_LOADER_POLICY),
         "installerMetadataExcludes": list(closure.INSTALLER_METADATA),
         "standardLibraryPolicy": dict(closure.STANDARD_LIBRARY_POLICY),
         "interpreterRuntimePolicy": dict(closure.INTERPRETER_RUNTIME_POLICY),
@@ -648,6 +651,7 @@ def _runtime_entry(paths: TargetPaths, observed: dict[str, Any]) -> dict[str, An
         "contentSha256": observed["contentSha256"],
         "standardLibrary": observed["standardLibrary"],
         "interpreterRuntime": observed["interpreterRuntime"],
+        "unownedSitePackages": observed["unownedSitePackages"],
         "distributions": [
             {
                 "name": entry["name"],
@@ -691,6 +695,7 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
             "policy",
             "contentExcludes",
             "bytecodePolicy",
+            "executedLoaderPolicy",
             "installerMetadataExcludes",
             "standardLibraryPolicy",
             "interpreterRuntimePolicy",
@@ -710,6 +715,11 @@ def _validate_closure_document(document: Any) -> dict[str, Any]:
         section["bytecodePolicy"],
         dict(closure.BYTECODE_POLICY),
         "runtime lock bytecode policy",
+    )
+    _literal(
+        section["executedLoaderPolicy"],
+        dict(closure.EXECUTED_LOADER_POLICY),
+        "runtime lock executed-loader policy",
     )
     _literal(
         section["installerMetadataExcludes"],
@@ -756,7 +766,7 @@ def _validate_runtime_lock_document(
         {"schema", "target", "semanticClosure", "platforms"},
         "runtime lock",
     )
-    _literal(top["schema"], 4, "runtime lock.schema")
+    _literal(top["schema"], 5, "runtime lock.schema")
     target = _exact_keys(
         top["target"],
         {
@@ -805,6 +815,7 @@ def _validate_runtime_lock_document(
                 "contentSha256",
                 "standardLibrary",
                 "interpreterRuntime",
+                "unownedSitePackages",
                 "distributions",
             },
             f"runtime lock.platforms.{key}",
@@ -819,6 +830,10 @@ def _validate_runtime_lock_document(
         interpreter_runtime = closure.validate_interpreter_runtime(
             row["interpreterRuntime"], _fail,
             label=f"runtime lock.platforms.{key}.interpreterRuntime",
+        )
+        unowned_site_packages = closure.validate_unowned_site_packages(
+            row["unownedSitePackages"], _fail,
+            label=f"runtime lock.platforms.{key}.unownedSitePackages",
         )
         _literal(
             standard_library["implementation"],
@@ -855,7 +870,8 @@ def _validate_runtime_lock_document(
         if type(row["fileRecords"]) is not int or row["fileRecords"] != total:
             _fail(f"runtime lock {key} file-record total does not match its rows")
         if row["contentSha256"] != closure.environment_content_digest(
-            measured, standard_library, interpreter_runtime
+            measured, standard_library, interpreter_runtime,
+            unowned_site_packages,
         ):
             _fail(f"runtime lock {key} content digest does not match its own rows")
     if generated == 0:
@@ -1003,11 +1019,13 @@ def _verify_runtime_lock(
             "distributions": row["distributions"],
             "standardLibrary": row["standardLibrary"],
             "interpreterRuntime": row["interpreterRuntime"],
+            "unownedSitePackages": row["unownedSitePackages"],
         },
         {
             "distributions": observed["distributions"],
             "standardLibrary": observed["standardLibrary"],
             "interpreterRuntime": observed["interpreterRuntime"],
+            "unownedSitePackages": observed["unownedSitePackages"],
         },
     )
     if content:
@@ -1139,12 +1157,23 @@ def _python_preflight(
     *,
     verify_runtime: bool = True,
 ) -> dict[str, Any]:
+    program = _PREFLIGHT
+    guard_arguments: list[str] = []
+    if verify_runtime:
+        program = _guarded_target_program(program)
+        guard_arguments = [
+            str(_site_packages_root(paths)),
+            json.dumps(
+                _native_loader_contract(profile, paths), sort_keys=True
+            ),
+        ]
     result = _run(
         [
             str(paths.python),
             *closure.PYTHON_ISOLATION_ARGS,
             "-c",
-            _PREFLIGHT,
+            program,
+            *guard_arguments,
             str(paths.root),
             str(paths.venv),
             str(paths.python),
@@ -1240,6 +1269,73 @@ def _read_output(path: Path, label: str) -> Any:
         _fail(f"t8n {label} output is not readable JSON: {exc}")
 
 
+def _guarded_target_program(body: str) -> str:
+    """Load the repository guard, then execute target code under that guard."""
+
+    closure_path = Path(closure.__file__).resolve()
+    return f'''\
+import importlib.util
+import json
+import pathlib
+import sys
+
+guard_path = pathlib.Path({str(closure_path)!r})
+guard_spec = importlib.util.spec_from_file_location(
+    "_blanc_eels_semantic_closure_guard", guard_path
+)
+if guard_spec is None or guard_spec.loader is None:
+    raise RuntimeError(f"cannot load executed-loader guard from {{guard_path}}")
+guard_module = importlib.util.module_from_spec(guard_spec)
+sys.modules[guard_spec.name] = guard_module
+guard_spec.loader.exec_module(guard_module)
+site_root = pathlib.Path(sys.argv.pop(1)).resolve()
+loader_contract = json.loads(sys.argv.pop(1))
+guard_module.assert_bytecode_policy(
+    lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+    label="current-mainnet oracle",
+)
+guard_module.assert_executed_loader_policy(
+    lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+    label="current-mainnet oracle",
+    site_packages=[site_root],
+    allowed_distributions=loader_contract["allowedDistributions"],
+    source_roots=loader_contract["sourceRoots"],
+    trusted_source_roots=loader_contract["trustedSourceRoots"],
+    standard_library=loader_contract["standardLibrary"],
+    unowned_site_packages=loader_contract["unownedSitePackages"],
+)
+''' + body
+
+
+def _native_loader_contract(
+    profile: dict[str, Any], paths: TargetPaths
+) -> dict[str, Any]:
+    lock = _load_runtime_lock(profile)
+    key = closure.platform_key(platform.system(), platform.machine())
+    row = lock["platforms"].get(key)
+    if not isinstance(row, dict) or row.get("generated") is not True:
+        _fail(f"runtime lock has no generated native row for {key}")
+    return {
+        "allowedDistributions": [
+            entry["name"] for entry in lock["semanticClosure"]["distributions"]
+        ],
+        "sourceRoots": [str(paths.root)],
+        "trustedSourceRoots": [str(Path(closure.__file__).resolve().parent)],
+        "standardLibrary": row["standardLibrary"],
+        "unownedSitePackages": row["unownedSitePackages"],
+    }
+
+
+_T8N_RUNNER = r'''
+import runpy
+import sys
+
+entrypoint = sys.argv.pop(1)
+sys.argv[0] = entrypoint
+runpy.run_path(entrypoint, run_name="__main__")
+'''
+
+
 def _t8n_process(
     paths: TargetPaths,
     alloc: Any,
@@ -1251,6 +1347,7 @@ def _t8n_process(
     falsifier_fork: str | None = None,
     omit_fork: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], T8nOutputs | None]:
+    loader_contract = _native_loader_contract(load_profile(), paths)
     with tempfile.TemporaryDirectory(prefix="blanc-current-mainnet-") as temporary:
         work = Path(temporary)
         alloc_in = work / "alloc-in.json"
@@ -1265,6 +1362,10 @@ def _t8n_process(
         args = [
             str(paths.python),
             *closure.PYTHON_ISOLATION_ARGS,
+            "-c",
+            _guarded_target_program(_T8N_RUNNER),
+            str(_site_packages_root(paths)),
+            json.dumps(loader_contract, sort_keys=True),
             str(paths.t8n),
             "t8n",
             f"--input.alloc={alloc_in}",
@@ -1362,8 +1463,16 @@ def _sign_canary_transaction(paths: TargetPaths) -> dict[str, Any]:
         "input": "0x",
         "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
     }
+    loader_contract = _native_loader_contract(load_profile(), paths)
     result = _run(
-        [str(paths.python), "-I", "-s", "-c", _SIGN],
+        [
+            str(paths.python),
+            *closure.PYTHON_ISOLATION_ARGS,
+            "-c",
+            _guarded_target_program(_SIGN),
+            str(_site_packages_root(paths)),
+            json.dumps(loader_contract, sort_keys=True),
+        ],
         cwd=paths.root,
         env=_sanitized_child_env(paths),
         input_text=json.dumps(raw),

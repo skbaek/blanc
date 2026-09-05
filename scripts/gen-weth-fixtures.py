@@ -14,8 +14,10 @@ writes nothing.
 
 Run from the Blanc repository root with the frozen oracle venv:
 
-    PYTHONPATH="$HOME/execution-specs/src" \\
-      "$HOME/execution-specs/venv/bin/python" scripts/gen-weth-fixtures.py
+    EELS_ROOT="$HOME/execution-specs" \\
+      "$HOME/execution-specs/venv/bin/python" -I -s -B \\
+      -X pycache_prefix=/dev/null scripts/run-isolated-python.py \\
+      "$HOME/execution-specs" gen-weth-fixtures.py
 
 Never hand-edit the JSON files this script writes -- rerun it.
 """
@@ -24,6 +26,12 @@ import os
 import subprocess
 import sys
 import tempfile
+
+import eels_semantic_closure
+
+eels_semantic_closure.assert_loader_guard_installed(
+    eels_semantic_closure.fail, label="WETH Prague fixture writer"
+)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EELS = os.environ.get("EELS_ROOT", os.path.expanduser("~/execution-specs"))
@@ -818,7 +826,10 @@ def run_t8n(env, alloc, txs):
         json.dump(env, open(p("env.json"), "w"))
         json.dump(alloc, open(p("alloc.json"), "w"))
         json.dump(txs, open(p("txs.json"), "w"))
-        cmd = [sys.executable, "-m", "ethereum_spec_tools.evm_tools", "t8n",
+        cmd = [
+               sys.executable, "-I", "-s", "-B", "-X", "pycache_prefix=/dev/null",
+               os.path.join(REPO_ROOT, "scripts", "run-isolated-python.py"),
+               EELS, "run-eels-t8n.py", "t8n",
                "--input.env", p("env.json"), "--input.alloc", p("alloc.json"),
                "--input.txs", p("txs.json"), "--output.basedir", td,
                "--output.alloc", "out-alloc.json",
@@ -826,9 +837,7 @@ def run_t8n(env, alloc, txs):
                "--output.body", "out-body.txt",
                "--state.fork", "Prague", "--state.chainid", "1",
                "--state.reward", "0"]
-        subprocess.run(cmd, check=True, capture_output=True, text=True,
-                        env={**os.environ,
-                             "PYTHONPATH": os.path.join(EELS, "src")})
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
         post = json.load(open(p("out-alloc.json")))
         res = json.load(open(p("out-result.json")))
         body = json.load(open(p("out-body.txt")))

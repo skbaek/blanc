@@ -263,7 +263,9 @@ def verify_eels_pin(root: Path) -> None:
 
     # The commit pins the specification's source; this pins what that source
     # imports.  Both must hold before an oracle comparison means anything.
-    eels_semantic_closure.assert_prague_environment(_closure_refusal)
+    eels_semantic_closure.assert_prague_environment(
+        _closure_refusal, checkout_root=root
+    )
 
 
 def make_expectations_class(env: SimpleNamespace):

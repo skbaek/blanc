@@ -138,11 +138,13 @@ def verify_eels(root: Path) -> None:
     if os.environ.get("PYTHONDONTWRITEBYTECODE") != "1" or \
             Path(os.environ.get("PYTHONPATH", "")).resolve() != expected_source:
         die("EELS requires PYTHONDONTWRITEBYTECODE=1 and exact PYTHONPATH=<EELS_ROOT>/src")
+    eels_semantic_closure.assert_prague_environment(
+        die, checkout_root=root
+    )
     import ethereum
     module_path = Path(ethereum.__file__).resolve()
     if not module_path.is_relative_to(expected_source):
         die(f"ethereum package was not imported from pinned EELS root: {module_path}")
-    eels_semantic_closure.assert_prague_environment(die)
 
 
 def parse_blanc_artifacts(path: Path) -> Dict[str, Any]:

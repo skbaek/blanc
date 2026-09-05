@@ -16,6 +16,12 @@ import json
 import sys
 from pathlib import Path
 
+import eels_semantic_closure
+
+eels_semantic_closure.assert_loader_guard_installed(
+    eels_semantic_closure.fail, label="PRORATA current-mainnet generator"
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "scripts" / "fixtures" / "prorata"
 RUNTIME_SOURCE = ROOT / "Blanc" / "ProrataCode.lean"

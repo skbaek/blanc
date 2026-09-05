@@ -17,5 +17,7 @@ export PYTHONDONTWRITEBYTECODE=1
 "$PYTHON" -B "$SCRIPT_DIR/test-lido-ossifiable-proxy-performance-falsifiers.py" \
   --root "$REPO_ROOT" \
   --manifest "$MANIFEST" >/dev/null
+"$PYTHON" -B "$SCRIPT_DIR/test-lido-ossifiable-proxy-performance-runner-static.py" \
+  --root "$REPO_ROOT" >/dev/null
 
 echo "OK — OssifiableProxy performance static gate; no measurements run"
