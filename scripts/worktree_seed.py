@@ -312,7 +312,7 @@ NONLOADING_CONFIGS = {'.lake/packages/Cli/lakefile.lean': '<absent>',
  '.lake/packages/plausible/lakefile.toml': '4147957012320a3afe8f041662202b7a3453c8a0df4311c1698da029a3b4834f',
  '.lake/packages/proofwidgets/lakefile.lean': '0a319fffbf511dab4c3307dc105f8e8fdb4f6160020995cef5f442061cc0abca',
  '.lake/packages/proofwidgets/lakefile.toml': '<absent>',
- 'lakefile.lean': 'd63db64fc08c056576255d189b301a87f5370f43eb411e358a73a00dc4d188de',
+ 'lakefile.lean': '092b1d5c4fabe421ae327e15c7b774a25fcffc9efdb6a3885ea514847f367f54',
  'lakefile.toml': '<absent>'}
 NONLOADING_BINARIES = {'lake': '58261a1a2fa1a362376c71e02ca854a093e71cc5e6ea64b287a931cb2565273d',
  'lean': '1b370cfcbf44e80d1b004ab1b1ab9a4c73951f9f7c242140bcff9bc577576554'}
@@ -431,11 +431,11 @@ def nonloading_tools(root: Path) -> dict[str, Any]:
             'runtime': runtime, 'commands': commands}
 
 
-BASELINE_AUTHORITY_SOURCE = '49e294d56c9b3d0b4996098130258d13badb524afd2d022a4f76d68e14011938'
-BASELINE_AUTHORITY_TARGET = '162ff3251bea314e61710361b2f163b558fb8029cb9c64bcb21c31e57582cde9'
+BASELINE_AUTHORITY_SOURCE = '30c1bec7e30c013cc601845da301eff6c7ae40471ce4de040cd0be3279031b00'
+BASELINE_AUTHORITY_TARGET = '4eac48466e5ac5b2d2f15d84e085ae0eacbd44e152cf2a24d42ce21da6283ad8'
 BASELINE_HELPERS = {
     'gate_cache_lock.py': '8ebd8ab2b6f5490e42e280194c8220429fc5a1c6b97e7c4448dbac3ced0e4156',
-    'gate_cache_t8n_root.py': '80e29e04a16937785c3fe54f025ae9ac0216f1f3f6fa6760f3afdfeccc582fe9',
+    'gate_cache_t8n_root.py': 'ab7e693eaf5ab1fbe8d89aacc64334d04d65149d5f7c2f810cf17fc87c60c4d2',
     'gate-lock.sh': '4c82af1edc548e086b4eafb73eb8961c4fa92617e6c9743bb96605151954293d',
 }
 BASELINE_METHODS = {'check-elab-selection.py': '77b19b4f10ac1d016cb1a24865e15650ca6c33bca3b268973aa6fa37fcf45115',
