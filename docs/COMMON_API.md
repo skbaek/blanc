@@ -751,6 +751,10 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 - `Devm.addAccessedStorageKey_setMach_setMach` cancels an obsolete machine
   component across an access-key update followed by the final `setMach`.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
+- `Devm.getStorVal_of_state` transports a persistent-storage word across
+  account-state equality, without requiring equality of the whole machine or
+  world. For the entire storage map at one address, the corresponding adapter
+  is `getStor_eq_of_state_eq` in `Blanc/Ladder.lean`.
 - `Devm.setStorVal_getCode` carries account code across a persistent storage
   write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
   `Devm.setCode_output`, `Devm.setCode_error`,
@@ -837,9 +841,13 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
 
 Use the word/arithmetic declarations in
 [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a
-`B256`. In particular, `B256.and_comm` and `B256.xor_comm` provide the shared
-commutativity facts for bitwise conjunction and exclusive-or, while
-`B256.and_idem_right` removes a repeated identical mask.
+`B256`. In particular, `B256.mul_comm`, `B256.and_comm`, and `B256.xor_comm`
+provide the shared commutativity facts for word multiplication (including
+wrapping products), bitwise conjunction, and exclusive-or, while
+`B256.and_idem_right` removes a repeated identical mask. A zero unsigned
+comparison flag yields the negated strict comparison through
+`B256.not_lt_of_ltCheck_eq_zero`; this fact does not assert that arithmetic
+producing either operand was overflow-free.
 
 For the halving and low-bit steps a compiled loop performs, use
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean): `div_two_div_pow`
