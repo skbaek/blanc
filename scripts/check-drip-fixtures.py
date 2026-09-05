@@ -70,6 +70,44 @@ def quantity(value, label):
     return int(value, 16)
 
 
+def rlp(raw, at=0):
+    """Strict canonical RLP decoder for fixture headers and legacy bodies."""
+    require(at < len(raw), "RLP truncated")
+    first = raw[at]
+    if first < 0x80: return bytes([first]), at + 1
+    if first <= 0xb7:
+        size = first - 0x80; start = at + 1; end = start + size
+        require(end <= len(raw) and not (size == 1 and raw[start] < 0x80), "RLP noncanonical string")
+        return raw[start:end], end
+    if first <= 0xbf:
+        width = first - 0xb7; start = at + 1; end = start + width
+        require(end <= len(raw) and raw[start] != 0, "RLP long string length")
+        size = int.from_bytes(raw[start:end], "big"); body = end + size
+        require(size >= 56 and body <= len(raw), "RLP long string noncanonical")
+        return raw[end:body], body
+    list_mode = first <= 0xf7
+    if list_mode: size, start = first - 0xc0, at + 1
+    else:
+        width = first - 0xf7; start = at + 1; end = start + width
+        require(end <= len(raw) and raw[start] != 0, "RLP long list length")
+        size, start = int.from_bytes(raw[start:end], "big"), end
+        require(size >= 56, "RLP long list noncanonical")
+    end = start + size; require(end <= len(raw), "RLP list truncated")
+    values = []; cursor = start
+    while cursor < end:
+        item, cursor = rlp(raw, cursor); values.append(item)
+    require(cursor == end, "RLP list boundary")
+    return values, end
+
+
+def decode_block(encoded, label):
+    require(HEX.fullmatch(encoded or "") and encoded != "0x", f"{label}: block RLP absent")
+    value, end = rlp(bytes.fromhex(encoded[2:])); require(end == (len(encoded)-2)//2 and isinstance(value, list) and len(value) == 4, f"{label}: block RLP shape")
+    header, transactions, uncles, withdrawals = value
+    require(isinstance(header, list) and len(header) >= 12 and isinstance(transactions, list) and uncles == [] and withdrawals == [], f"{label}: block body shape")
+    return int.from_bytes(header[11], "big"), transactions
+
+
 def literals():
     spec = importlib.util.spec_from_file_location("drip_literal_parser", ROOT / "scripts/check-runtime-bytes.py")
     require(spec is not None and spec.loader is not None, "literal parser cannot load")
@@ -108,13 +146,25 @@ def fixture_case(path, expected_name, runtime, deployment, target, helpers):
     require(HEX.fullmatch(case["lastblockhash"] or "") and len(case["lastblockhash"]) == 66, f"{path.name}: tip hash malformed")
     blocks = case["blocks"]
     require(isinstance(blocks, list) and blocks, f"{path.name}: no checked blocks")
-    numbers = []
+    numbers = []; timestamps = []; bodies = []
     for index, block in enumerate(blocks):
         require(isinstance(block, dict) and set(block) == {"rlp", "blocknumber"}, f"{path.name}: block {index} shape differs")
-        require(HEX.fullmatch(block["rlp"] or "") and block["rlp"] != "0x", f"{path.name}: block {index} RLP absent")
+        timestamp, txs = decode_block(block["rlp"], f"{path.name}: block {index}")
         require(isinstance(block["blocknumber"], str) and block["blocknumber"].isdigit(), f"{path.name}: block number malformed")
         numbers.append(int(block["blocknumber"]))
+        timestamps.append(timestamp); bodies.extend(txs)
     require(numbers == sorted(numbers) and len(numbers) == len(set(numbers)), f"{path.name}: linked block numbers do not strictly increase")
+    require(timestamps == sorted(timestamps) and len(timestamps) == len(set(timestamps)), f"{path.name}: linked timestamps do not strictly increase")
+    require(bodies, f"{path.name}: no serialized transactions")
+    for index, tx in enumerate(bodies):
+        require(isinstance(tx, list) and len(tx) == 9 and all(isinstance(field, bytes) for field in tx), f"{path.name}: transaction {index} is not legacy signed RLP")
+        nonce, gas_price, gas, destination, value, calldata, v, r, s = tx
+        require(len(destination) in (0, 20) and int.from_bytes(gas, "big") > 0 and int.from_bytes(gas_price, "big") > 0, f"{path.name}: transaction {index} envelope")
+        require(int.from_bytes(v, "big") >= 37 and int.from_bytes(r, "big") > 0 and int.from_bytes(s, "big") > 0, f"{path.name}: transaction {index} EIP-155 signature")
+        if deployment:
+            require(index == 0 and destination == b"" and calldata, f"{path.name}: CREATE transaction binding")
+        else:
+            require(destination != b"", f"{path.name}: direct/observer transaction lacks destination")
     if deployment:
         require(not any(key.lower() == target for key in case["pre"]), f"{path.name}: CREATE target preallocated")
     else:

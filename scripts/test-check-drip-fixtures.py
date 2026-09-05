@@ -19,6 +19,14 @@ SPEC.loader.exec_module(MODULE)
 def write(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
+def enc(x):
+    if not isinstance(x, list) and len(x) == 1 and x[0] < 0x80: return x
+    if isinstance(x, list): payload = b"".join(enc(v) for v in x); base = 0xc0
+    else: payload = x; base = 0x80
+    if len(payload) < 56: return bytes([base + len(payload)]) + payload
+    size = len(payload).to_bytes((len(payload).bit_length()+7)//8, "big")
+    return bytes([base + 55 + len(size)]) + size + payload
+
 
 def population(root):
     for path in root.glob("*.json"):
@@ -46,7 +54,7 @@ def population(root):
             "network": "BPO2", "genesisBlockHeader": {}, "pre": pre,
             "postState": post, "lastblockhash": "0x" + "11" * 32,
             "config": {"network": "BPO2"}, "genesisRLP": "0x01",
-            "blocks": [{"rlp": "0x01", "blocknumber": "1"}], "sealEngine": "NoProof",
+            "blocks": [{"rlp": "0x" + enc([[b""]*11+[b"\x01"], [[b"", b"\x01", b"\x01", b"" if deployment else bytes.fromhex(MODULE.TARGET[2:]), b"", b"\x01", b"%", b"\x01", b"\x01"]], [], []]).hex(), "blocknumber": "1"}], "sealEngine": "NoProof",
         }}
         write(root / filename, doc)
         row = {"name": name, "obligation": obligation, "steps": 1, "executionEvidence": True,
