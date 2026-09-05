@@ -128,6 +128,68 @@ def legacy_transactions(body):
         transactions.append(decoded)
     return transactions
 
+
+def _minimal_bytes(value):
+    """Return the canonical RLP integer payload used by legacy fields."""
+    value = int(value)
+    return b"" if value == 0 else value.to_bytes((value.bit_length() + 7) // 8, "big")
+
+
+def validate_serialized_transactions(body, scheduled_transactions):
+    """Bind an opaque t8n body to the exact scheduled, signed transactions.
+
+    Decoding a body and checking only that it is a list of nine-field RLP
+    entries leaves room for a self-consistent but unrelated transaction list.
+    Compare every signed legacy field with the schedule and reproduce each
+    EIP-155 signature from its pinned private key.  This authenticates order,
+    count, sender, destination, value, calldata, nonce, gas and chain ID
+    before the body is put into a block RLP.
+    """
+    decoded = legacy_transactions(body)
+    if len(decoded) != len(scheduled_transactions):
+        raise AssertionError("serialized transaction count differs from schedule")
+    from spec256k1 import PrivateKey
+
+    for index, (fields, transaction) in enumerate(zip(decoded, scheduled_transactions)):
+        if not isinstance(transaction, dict) or transaction.get("type", "0x0") not in ("0x0", "0x00"):
+            raise AssertionError(f"transaction {index} is not a legacy scheduled transaction")
+        if len(fields) != 9:
+            raise AssertionError(f"transaction {index} has unexpected legacy field count")
+
+        nonce = int(transaction["nonce"], 16)
+        gas_price = int(transaction["gasPrice"], 16)
+        gas = int(transaction["gas"], 16)
+        value = int(transaction.get("value", "0x0"), 16)
+        data = hex_to_bytes(transaction.get("input", "0x"))
+        destination = hex_to_bytes(transaction.get("to", "0x"))
+        if destination and len(destination) != 20:
+            raise AssertionError(f"transaction {index} destination is not 20 bytes")
+        expected = (nonce, gas_price, gas, destination, value, data)
+        actual = (int.from_bytes(fields[0], "big"), int.from_bytes(fields[1], "big"),
+                  int.from_bytes(fields[2], "big"), fields[3],
+                  int.from_bytes(fields[4], "big"), fields[5])
+        if actual != expected:
+            raise AssertionError(f"serialized transaction {index} differs from schedule")
+
+        chain_id = int(transaction.get("chainId", "0x1"), 16)
+        unsigned = list(fields[:6]) + [_minimal_bytes(chain_id), b"", b""]
+        digest = bytes(keccak256(rlp.encode(unsigned)))
+        secret_key = int(transaction["secretKey"], 16)
+        signer = PrivateKey(secret_key.to_bytes(32, "big"))
+        expected_sender = derive_address(secret_key)
+        signature = signer.sign_recoverable(digest)
+        if len(signature) != 65:
+            raise AssertionError(f"transaction {index} signer returned malformed signature")
+        expected_r = int.from_bytes(signature[:32], "big")
+        expected_s = int.from_bytes(signature[32:64], "big")
+        recovery_id = int(signature[64])
+        expected_v = 35 + 2 * chain_id + recovery_id
+        actual_v = int.from_bytes(fields[6], "big")
+        actual_r = int.from_bytes(fields[7], "big")
+        actual_s = int.from_bytes(fields[8], "big")
+        if (actual_v, actual_r, actual_s) != (expected_v, expected_r, expected_s):
+            raise AssertionError(f"serialized transaction {index} signature/sender differs from schedule {expected_sender}")
+
 def genesis_header(alloc):
     return {
         "parentHash": ZERO_HASH,
@@ -318,6 +380,7 @@ def execute_linked_blocks(alloc, scheduled_transactions, *, run_transition,
             raise AssertionError(f"transition rejected transactions: {result['rejected']!r}")
         if len(result.get("receipts", [])) != len(transactions):
             raise AssertionError("receipt count differs from transaction count")
+        validate_serialized_transactions(output.body, transactions)
         def receipts_with_gas(value):
             previous = 0
             copied = []

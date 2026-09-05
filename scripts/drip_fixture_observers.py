@@ -87,6 +87,10 @@ def observer_code(target, mode="ordinary", *, nested_units=1):
     for slot in range(3):
         a.push(slot).op(0x54).push(32*slot).op(0x52)
     a.push(RESULT_TOPIC).push(96).push(0).op(0xa1, 0x00)
+    # The external forwarding frame must halt after recording its result.
+    # Falling through would enter the child-callback recorder and fabricate a
+    # second invocation before the outer observer transaction returns.
+    a.op(0x00)
 
     a.label("callback")
     a.push(3).op(0x54).push(1).op(0x01).push(3).op(0x55)
