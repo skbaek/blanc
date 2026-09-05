@@ -46,15 +46,15 @@ def population(root):
         helpers = ["0x000000000000000000000000000000000000d220"] if name.startswith("observer-") else []
         pre = {} if deployment else {MODULE.TARGET: copy.deepcopy(account)}
         for helper in helpers:
-            pre[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x01", "storage": {}}
+            pre[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x" + MODULE.TARGET[2:], "storage": {}}
         post = {MODULE.TARGET: copy.deepcopy(account)}
         for helper in helpers:
-            post[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x01", "storage": {}}
+            post[helper] = {"nonce": "0x00", "balance": "0x00", "code": "0x" + MODULE.TARGET[2:], "storage": {}}
         doc = {f"blanc/drip::{name}[fork_BPO2-blockchain_test]": {
             "network": "BPO2", "genesisBlockHeader": {}, "pre": pre,
             "postState": post, "lastblockhash": "0x" + "11" * 32,
             "config": {"network": "BPO2"}, "genesisRLP": "0x01",
-            "blocks": [{"rlp": "0x" + enc([[b""]*11+[b"\x01"], [[b"", b"\x01", b"\x01", b"" if deployment else bytes.fromhex(MODULE.TARGET[2:]), b"", b"\x01", b"%", b"\x01", b"\x01"]], [], []]).hex(), "blocknumber": "1"}], "sealEngine": "NoProof",
+            "blocks": [{"rlp": "0x" + enc([[b""]*11+[b"\x01"], [[b"", b"\x01", b"\x01", b"" if deployment else bytes.fromhex(MODULE.TARGET[2:]), b"", creation if deployment else b"\x01", b"%", b"\x01", b"\x01"]], [], []]).hex(), "blocknumber": "1"}], "sealEngine": "NoProof",
         }}
         write(root / filename, doc)
         row = {"name": name, "obligation": obligation, "steps": 1, "executionEvidence": True,
