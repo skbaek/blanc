@@ -782,7 +782,7 @@ def write_or_compare(files, *, write):
             stale.unlink()
 
 
-def execute_and_check(root_arg, *, write):
+def execute_and_check(root_arg, *, write, validate_only=False):
     validate_current_mainnet_boundary()
     profile = load_profile()
     root = resolve_root(profile, root_arg)
@@ -814,8 +814,11 @@ def execute_and_check(root_arg, *, write):
         "targetProfile": profile["target"]["checkoutCommit"],
         "obligations": obligation_map, "cases": manifest,
     }, indent=2) + "\n"
-    write_or_compare(files, write=write)
-    verb = "wrote" if write else "checked"
+    if validate_only:
+        verb = "validated in memory"
+    else:
+        write_or_compare(files, write=write)
+        verb = "wrote" if write else "checked"
     print(f"OK — {verb} DRIP BPO2 fixtures: {len(manifest)} scenarios, per-transaction prefixes verified")
 
 
@@ -828,12 +831,14 @@ def main():
                       help="execute the pinned BPO2 target and atomically write verified fixtures")
     mode.add_argument("--check-runtime", action="store_true",
                       help="execute the pinned BPO2 target and compare existing fixtures")
+    mode.add_argument("--validate-runtime", action="store_true",
+                      help="execute and validate all runtime observations without reading or writing fixtures")
     parser.add_argument("--root", help="explicit current-mainnet target root (required for runtime modes)")
     args = parser.parse_args()
-    if args.write or args.check_runtime:
+    if args.write or args.check_runtime or args.validate_runtime:
         if not args.root:
             parser.error("--root is required for runtime modes")
-        execute_and_check(args.root, write=args.write)
+        execute_and_check(args.root, write=args.write, validate_only=args.validate_runtime)
         return
     document = plan()
     if args.self_test: self_test(document)
