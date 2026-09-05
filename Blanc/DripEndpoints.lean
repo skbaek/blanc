@@ -4,6 +4,7 @@
 -- commits, return words, and exit's settlement-before-callback boundary.
 
 import Blanc.DripMachine
+import Blanc.MachineDataFacts
 
 namespace Blanc
 

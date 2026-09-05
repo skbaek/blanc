@@ -14,6 +14,7 @@
 
 import Blanc.Drip
 import Blanc.Ladder
+import Blanc.MachineDataFacts
 import Jaune.RPow
 
 namespace Blanc

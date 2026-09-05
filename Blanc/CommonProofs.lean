@@ -5268,18 +5268,6 @@ lemma prefix_of_or {e} {x y xs} {s s' : Devm} :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.diffBurn_of_applyBinary run
 
-/-- Multiplication on EVM words is commutative, including wrapping products. -/
-theorem B256.mul_comm (x y : B256) : x * y = y * x := by
-  apply B256.toNat_inj
-  rw [B256.toNat_mul, B256.toNat_mul, Nat.mul_comm]
-
-/-- A zero unsigned comparison flag rules out the corresponding strict order. -/
-theorem B256.not_lt_of_ltCheck_eq_zero {x y : B256} (h : (x <? y) = 0) :
-    ¬ x < y := by
-  intro hlt
-  rw [B256.ltCheck, if_pos hlt] at h
-  exact absurd h (by decide +kernel)
-
 /-- Bitwise conjunction on EVM words is commutative. -/
 theorem B256.and_comm (x y : B256) : x &&& y = y &&& x := by
   rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
@@ -10273,13 +10261,6 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
   simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
     Devm.setWorld, State.setStorVal]
   simp only [Devm.state, State.get_set_self]
-
-/-- Equality of account states preserves a persistent-storage word at any key. -/
-theorem Devm.getStorVal_of_state {s t : Devm} (h : s.state = t.state)
-    (a : Adr) (k : B256) :
-    Devm.getStorVal s a k = Devm.getStorVal t a k := by
-  unfold Devm.getStorVal Devm.getAcct
-  rw [h]
 
 /-- Persistent storage read-after-write at the same address and key. -/
 @[simp] theorem Devm.getStorVal_setStorVal_self
