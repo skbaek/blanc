@@ -646,6 +646,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
         manifest.append({"name": name, "obligation": obligation, "steps": 1,
                          "executionEvidence": True,
                          "fixture": f"{name}.json",
+                         "target": create_target,
                          "receiptGas": receipt_evidence(linked),
                          "observer": observer_expectations(create_target, mode,
                                                             nested_units=max(1, nested_units),
