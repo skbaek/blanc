@@ -1612,7 +1612,7 @@ def load_runtime_lock(profile: Mapping[str, object]) -> dict[str, object]:
         lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         die(f"cannot read current-mainnet runtime lock: {exc}")
-    if not isinstance(lock, dict) or lock.get("schema") != 3:
+    if not isinstance(lock, dict) or lock.get("schema") != 4:
         die("current-mainnet runtime lock schema differs")
     target = lock.get("target")
     platforms = lock.get("platforms")

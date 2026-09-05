@@ -2329,14 +2329,14 @@
     "artifactGeneratorSha256": "a7772cc49f9aaa437b8590dbc490c59ba17c66518e4c4b57d928f60af29293d3",
     "artifactLeanSha256": "350790dbcca7fa49beb2379a2ac67647cc3e5dc59f5b6ff76832449b0b14cf6d",
     "artifactManifestSha256": "5dc2d5aac806580978388efba9439e174411b0760a616def2b225b395e8966ed",
-    "currentMainnetHelperSha256": "85f08606fc36f536076993da2d5e880dedbd39f49f2bcf8c02212b172caeea16",
+    "currentMainnetHelperSha256": "ccbef2d3c5152318c78b8da6b7a49401fe653d0b703e2d4016ecffa15989b0ec",
     "generatorSha256": "8938490da1cc65e3ada6d6651a090a05d999fe2f703dc30af01fae5648810176",
     "performanceManifestSha256": "a394a57ac6181cc8723afab6dddeb83c271839da568aa3e23f5848a13b7630b7",
     "performanceRunnerSha256": "e3aeacfb886e43c35aca00bcb64d37be5dc3a6f2ef50301766da49e5070c98c3",
     "performanceSchemaSha256": "c8d385093fe42e7d366274d3c073fc021de55da323f4c5b2eb0672d0b2f00a7a",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "referenceLockSha256": "1c9f380f2475e5a54eb870e4f41ceeb09a0f9c227271ad14900fe82b0df1b688",
-    "wrapperSha256": "53a4c0c548979c1bd85e70f34ee6ccac04b82d829e2ed22ff9dbf26f78b8bae4"
+    "wrapperSha256": "d7672b6b3646d2f8563bae982819fb47741c32f3336c09a36e03e234068463e8"
   },
   "schema": 1,
   "scope": {

@@ -240,8 +240,8 @@
       "linux-x86_64",
       "macos-arm64"
     ],
-    "schema": 3,
-    "sha256": "1dcd4604187f3c82b7787e615d7e4b4ed84667abd1aff22f51842c15371cc2f9",
+    "schema": 4,
+    "sha256": "d7efd7fe6998f2817e86c6bfbba56c95b50d03da0c0e8cde5901deebf3089370",
     "targetCheckoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
   },
   "timestampPin": {
