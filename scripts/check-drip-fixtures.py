@@ -21,6 +21,10 @@ from drip_fixture_observers import observer_code, observer_expectations
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "0x000000000000000000000000000000000000d219"
+MATRIX_OBLIGATION = "receipt-returndata-log-matrix"
+# last20(keccak256(rlp([0x7e5f4552091a69125d5dfcb7b8c2659029395bdf, 0]))).
+# This is frozen independently of the runtime fixture generator.
+CREATE_TARGET = "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
 OBLIGATIONS = (
     "deployment-genesis", "drip-same-timestamp", "drip-local-under-k2",
     "drip-local-over-k3", "drip-one-year", "drip-max-elapsed",
@@ -38,6 +42,52 @@ OBLIGATIONS = (
     "short-and-trailing-calldata-revert", "value-bearing-nonpayable-revert",
     "multi-participant-conservation", "segmentation-k3-versus-k1-k2",
     "receipt-returndata-log-matrix",
+)
+PRIMARY_CASES = (
+    ("drip-same-timestamp", "drip-same-timestamp"),
+    ("drip-local-under-k2", "drip-local-under-k2"),
+    ("drip-local-over-k3", "drip-local-over-k3"),
+    ("drip-one-year", "drip-one-year"),
+    ("drip-max-elapsed", "drip-max-elapsed"),
+    ("drip-elapsed-overflow-revert", "drip-elapsed-overflow-revert"),
+    ("drip-timestamp-regression-revert", "drip-timestamp-regression-revert"),
+    ("drip-chi-below-scale-revert", "drip-chi-below-scale-revert"),
+    ("drip-chi-above-cap-revert", "drip-chi-above-cap-revert"),
+    ("drip-post-chi-cap-boundary", "drip-post-chi-cap-boundary"),
+    ("drip-post-chi-cap-revert", "drip-post-chi-cap-revert"),
+    ("join-zero-value", "join-zero-value"), ("join-genesis-first", "join-genesis-first"),
+    ("join-future-auto-drip", "join-future-auto-drip"), ("join-max-asset", "join-max-asset"),
+    ("join-over-max-asset-revert", "join-over-max-asset-revert"),
+    ("join-zero-unit-credit", "join-zero-unit-credit"),
+    ("join-cap-total-result", "join-total-or-row-cap-revert"),
+    ("join-cap-row-result", "join-total-or-row-cap-revert"),
+    ("join-cap-total-pre", "join-total-or-row-cap-revert"),
+    ("join-cap-row-pre", "join-total-or-row-cap-revert"),
+    ("exit-zero-unit-call", "exit-zero-unit-call"), ("exit-partial", "exit-partial"),
+    ("exit-full", "exit-full"), ("exit-future-auto-drip", "exit-future-auto-drip"),
+    ("exit-insufficient-units-revert", "exit-insufficient-units-revert"),
+    ("exit-underfunded-call-rollback", "exit-underfunded-call-rollback"),
+    ("view-units-fresh-consistency", "view-units-fresh-consistency"),
+    ("view-assets-fresh-consistency", "view-assets-fresh-consistency"),
+    ("view-cap-convertToUnits-0", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToUnits-340282366920938463463374607431768211455", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToUnits-340282366920938463463374607431768211456", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-0", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-340282366920938463463374607431768211455", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-340282366920938463463374607431768211456", "view-arithmetic-cap-boundaries"),
+    ("receive-zero-value", "receive-zero-value"), ("receive-value-donation", "receive-value-donation"),
+    ("unknown-selector-revert", "unknown-selector-revert"),
+    ("short-and-trailing-calldata-revert", "short-and-trailing-calldata-revert"),
+    ("value-bearing-nonpayable-revert", "value-bearing-nonpayable-revert"),
+    ("multi-participant-conservation", "multi-participant-conservation"),
+    ("segmentation-one", "segmentation-k3-versus-k1-k2"),
+    ("segmentation-split", "segmentation-k3-versus-k1-k2"),
+)
+SPECIAL_OBSERVERS = (
+    ("exit-zero-unit-call-observer", "exit-zero-unit-call", "ordinary", 1, 0),
+    ("exit-successful-reentry-observer", "exit-successful-reentry", "reenter", 1, 2),
+    ("exit-nested-overdraw-observer", "exit-successful-reentry", "reenter", 2, 2),
+    ("exit-rejecting-recipient-rollback-observer", "exit-rejecting-recipient-rollback", "reject-after-reentry", 1, 2),
 )
 HEX = re.compile(r"^0x(?:[0-9a-fA-F]{2})*$")
 
@@ -65,6 +115,10 @@ def read_json(path: Path):
 def require(condition, message):
     if not condition:
         raise VerificationError(message)
+
+
+def observer_name(name):
+    return name.startswith("observer-") or name.endswith("-observer")
 
 
 def quantity(value, label):
@@ -261,19 +315,33 @@ def verify(directory: Path):
         for receipt in receipts:
             require(isinstance(receipt, dict) and set(receipt) == {"status", "cumulativeGasUsed", "gasUsed", "logs"}, f"manifest: {name} receipt shape differs")
             require(quantity(receipt["gasUsed"], name + " gas") > 0 and isinstance(receipt["logs"], list), f"manifest: {name} has zero/malformed receipt observation")
-        deployment = obligation == "deployment-genesis"
+        deployment = name == "deployment-genesis"
+        expected_target = CREATE_TARGET if deployment or name.endswith("-observer") else TARGET
+        target = row.get("target", TARGET).lower()
         if deployment:
             require(row.get("creationCodeSha256") == hashlib.sha256(creation).hexdigest() and isinstance(row.get("target"), str), "manifest: CREATE binding absent")
-        else:
-            require(row.get("target", TARGET).lower() == TARGET, f"manifest: {name} target binding differs")
+        require(target == expected_target, f"manifest: {name} target binding differs")
         if "observer" in row or "observerHelpers" in row or name.startswith("observer-") or name.endswith("-observer"):
             observer_obligations.add(obligation)
-        case_by_file[filename] = (name, deployment, row.get("target", TARGET).lower(), row.get("observerHelpers", []), row.get("observer"))
+        case_by_file[filename] = (name, deployment, target, row.get("observerHelpers", []), row.get("observer"))
     for name, row in by_obligation.items():
-        require(set(row["fixtures"]) <= set(case_by_file), f"manifest: {name} references unknown case file")
-        require(all(next(case["obligation"] for case in cases if case["fixture"] == item) == name for item in row["fixtures"]), f"manifest: {name} fixture maps another obligation")
+        declared = set(row["fixtures"])
+        require(declared <= set(case_by_file), f"manifest: {name} references unknown case file")
+        if name == MATRIX_OBLIGATION:
+            required_observers = {filename for filename, (case_name, _, _, _, _) in case_by_file.items()
+                                  if observer_name(case_name)}
+            require(declared == required_observers,
+                    "manifest: receipt-returndata-log-matrix observer population differs")
+            continue
+        primary = {case["fixture"] for case in cases if case["obligation"] == name}
+        require(declared == primary, f"manifest: {name} primary fixture membership differs")
+    names = {name for name, _, _, _, _ in case_by_file.values()}
+    frozen = {"deployment-genesis"} | {case_name for case_name, _ in PRIMARY_CASES}
+    frozen |= {"observer-" + case_name for case_name, _ in PRIMARY_CASES}
+    frozen |= {case_name for case_name, _, _, _, _ in SPECIAL_OBSERVERS}
+    require(names == frozen, "manifest: frozen case population differs")
     # Returndata/log and exit callback requirements must have concrete observer cases.
-    for name in ("receipt-returndata-log-matrix", "exit-zero-unit-call", "exit-successful-reentry", "exit-rejecting-recipient-rollback"):
+    for name in ("exit-zero-unit-call", "exit-successful-reentry", "exit-rejecting-recipient-rollback"):
         require(name in observer_obligations, f"manifest: {name} lacks observer evidence")
     disk = {path.name for path in directory.glob("*.json") if path.name != "manifest.json"}
     require(disk == set(case_by_file), f"fixture population mismatch: missing={sorted(set(case_by_file)-disk)}, orphaned={sorted(disk-set(case_by_file))}")
