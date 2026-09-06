@@ -311,6 +311,31 @@ def sender_prefix_check(before, after, operation, receipt):
             "sender storage changed")
 
 
+def check_direct_prefix(operation, before, after, result):
+    """Shared frozen/supplemental direct-call assertions at an actual prefix."""
+    actual_pre = target_at(before, TARGET)
+    actual_post = target_at(after, TARGET)
+    require(actual_pre is not None, "target pre-state absent")
+    check_target(actual_pre, operation["preTarget"])
+    require(actual_post is not None, "target post-state absent")
+    check_target(actual_post, operation["expectedTarget"])
+    receipts = result.get("receipts", [])
+    require(receipts, "missing prefix receipt")
+    receipt = receipts[-1]
+    require(int(receipt.get("status", "0x"), 16) == operation["expectedOutcome"]["status"],
+            "receipt status differs")
+    require(receipt.get("logs", []) == operation["expectedOutcome"].get("logs", []),
+            "direct DRIP logs differ")
+    sender_prefix_check(before, after, operation, receipt)
+
+
+def transition_for(root, profile):
+    def transition(alloc, environment_value, transactions):
+        return run_t8n(alloc, environment_value, transactions, root=root, profile=profile,
+                        state_test=False, timeout=120)
+    return transition
+
+
 def render_fixture(name, initial_alloc, linked, profile):
     from drip_fixture_blocks import fixture
     return fixture(name, initial_alloc, linked["genesis"], linked["genesis"]["hash"],
@@ -415,9 +440,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
     bob = derive_address(2)
     require(alice == ALICE and bob == BOB, "signer derivation does not match frozen identities")
 
-    def transition(alloc, environment_value, transactions):
-        return run_t8n(alloc, environment_value, transactions, root=root, profile=profile,
-                        state_test=False, timeout=120)
+    transition = transition_for(root, profile)
 
     files = {}
     manifest = []
@@ -431,20 +454,7 @@ def runtime_transaction_population(root, profile, runtime, creation, paths):
 
         def prefix_checker(_block, index, before, after, result, *, case=case):
             operation = case["steps"][index]
-            actual_pre = target_at(before, TARGET)
-            actual_post = target_at(after, TARGET)
-            require(actual_pre is not None, f"{case['name']}/{index}: target pre-state absent")
-            check_target(actual_pre, operation["preTarget"])
-            require(actual_post is not None, f"{case['name']}/{index}: target post-state absent")
-            check_target(actual_post, operation["expectedTarget"])
-            receipts = result.get("receipts", [])
-            require(receipts, f"{case['name']}/{index}: missing prefix receipt")
-            receipt = receipts[-1]
-            require(int(receipt.get("status", "0x"), 16) == operation["expectedOutcome"]["status"],
-                    f"{case['name']}/{index}: receipt status differs")
-            require(receipt.get("logs", []) == operation["expectedOutcome"].get("logs", []),
-                    f"{case['name']}/{index}: direct DRIP logs differ")
-            sender_prefix_check(before, after, operation, receipt)
+            check_direct_prefix(operation, before, after, result)
 
         scheduled = [{"timestamp": operation["timestamp"], "transaction": operation["transaction"]}
                      for operation in case["steps"]]
@@ -907,14 +917,15 @@ def write_or_compare(files, *, write):
             stale.unlink()
 
 
-def execute_and_check(root_arg, *, write, validate_only=False):
+def execute_and_check(root_arg, *, write, validate_only=False, measure_costs=False):
     def source_identity():
         return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                 for name in ("scripts/gen-drip-fixtures.py", "scripts/drip_fixture_blocks.py",
                              "scripts/drip_fixture_observers.py", "scripts/drip_oracle.py",
                              "scripts/current_mainnet.py", "scripts/current-mainnet-runtime-lock.json",
                              "scripts/current-mainnet-target.json", "Blanc/DripCode.lean",
-                             "Blanc/DripCreationCode.lean", "scripts/check-runtime-bytes.py")}
+                             "Blanc/DripCreationCode.lean", "scripts/check-runtime-bytes.py") +
+                (("scripts/drip_cost_measurements.py",) if measure_costs else ())}
     source_hashes = source_identity()
     validate_current_mainnet_boundary()
     profile = load_profile()
@@ -924,6 +935,14 @@ def execute_and_check(root_arg, *, write, validate_only=False):
     require(Path(sys.executable).resolve() == paths.python.resolve(),
             f"generator must run under isolated target Python {paths.python}")
     runtime, creation = artifacts()
+    if measure_costs:
+        from drip_cost_measurements import measure
+        report = measure(sys.modules[__name__], profile, runtime, creation,
+                         transition_for(root, profile), source_identity)
+        require(source_identity() == source_hashes, "source identity changed during supplemental measurement")
+        print("DRIP_WARM_MEASUREMENTS " + json.dumps(report, sort_keys=True))
+        print("OK — measured supplemental DRIP BPO2 costs: 60 isolated transactions, 30 artifact pairs, 28 warmth pairs; full/prefix and typed receipt roots verified")
+        return
     files, manifest, measurements = runtime_transaction_population(root, profile, runtime, creation, paths)
     require(source_identity() == source_hashes, "source identity changed during runtime measurement")
     validate_measurement_population(manifest, measurements)
@@ -991,12 +1010,15 @@ def main():
                       help="execute the pinned BPO2 target and compare existing fixtures")
     mode.add_argument("--validate-runtime", action="store_true",
                       help="execute and validate all runtime observations without reading or writing fixtures")
+    mode.add_argument("--measure-costs", action="store_true",
+                      help="report 60 supplemental paired cost observations without reading or writing fixtures")
     parser.add_argument("--root", help="explicit current-mainnet target root (required for runtime modes)")
     args = parser.parse_args()
-    if args.write or args.check_runtime or args.validate_runtime:
+    if args.write or args.check_runtime or args.validate_runtime or args.measure_costs:
         if not args.root:
             parser.error("--root is required for runtime modes")
-        execute_and_check(args.root, write=args.write, validate_only=args.validate_runtime)
+        execute_and_check(args.root, write=args.write, validate_only=args.validate_runtime,
+                          measure_costs=args.measure_costs)
         return
     document = plan()
     if args.self_test: self_test(document)
