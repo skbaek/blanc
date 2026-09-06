@@ -27,7 +27,8 @@ ReceiptError = VERIFIER.VerificationError
 require = VERIFIER.require
 EVALUATOR = "scripts/eval-drip-receipts.lean"
 SOURCE_FILES = (
-    "scripts/check-drip-receipts.py", "scripts/check-drip-fixtures.py",
+    "scripts/check-drip-receipts.py", "scripts/check-drip-replay.py",
+    "scripts/check-drip-fixtures.py",
     "scripts/drip_fixture_observers.py", "scripts/check-runtime-bytes.py",
     "scripts/current-mainnet-target.json", "Blanc/DripCode.lean",
     "Blanc/DripCreationCode.lean", "lake-manifest.json", "lakefile.lean",
