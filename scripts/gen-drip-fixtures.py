@@ -917,7 +917,10 @@ def write_or_compare(files, *, write):
             stale.unlink()
 
 
-def execute_and_check(root_arg, *, write, validate_only=False, measure_costs=False):
+def execute_and_check(root_arg, *, write, validate_only=False, measure_costs=False,
+                      measure_supplemental_costs=False):
+    require(sum(map(bool, (write, validate_only, measure_costs, measure_supplemental_costs))) <= 1,
+            "runtime output modes are mutually exclusive")
     def source_identity():
         return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
                 for name in ("scripts/gen-drip-fixtures.py", "scripts/drip_fixture_blocks.py",
@@ -925,7 +928,7 @@ def execute_and_check(root_arg, *, write, validate_only=False, measure_costs=Fal
                              "scripts/current_mainnet.py", "scripts/current-mainnet-runtime-lock.json",
                              "scripts/current-mainnet-target.json", "Blanc/DripCode.lean",
                              "Blanc/DripCreationCode.lean", "scripts/check-runtime-bytes.py") +
-                (("scripts/drip_cost_measurements.py",) if measure_costs else ())}
+                (("scripts/drip_cost_measurements.py",) if measure_costs or measure_supplemental_costs else ())}
     source_hashes = source_identity()
     validate_current_mainnet_boundary()
     profile = load_profile()
@@ -935,6 +938,15 @@ def execute_and_check(root_arg, *, write, validate_only=False, measure_costs=Fal
     require(Path(sys.executable).resolve() == paths.python.resolve(),
             f"generator must run under isolated target Python {paths.python}")
     runtime, creation = artifacts()
+    if measure_supplemental_costs:
+        from drip_cost_measurements import measure_supplemental
+        report = measure_supplemental(sys.modules[__name__], profile, runtime, creation,
+                                      transition_for(root, profile), source_identity)
+        require(source_identity() == source_hashes,
+                "source identity changed during supplemental warmth/guard measurement")
+        print("DRIP_SUPPLEMENTAL_MEASUREMENTS " + json.dumps(report, sort_keys=True))
+        print("OK — measured supplemental DRIP BPO2 warmth/guard costs: 88 isolated transactions, 44 artifact pairs, 54 warmth pairs; full/prefix and typed receipt roots verified")
+        return
     if measure_costs:
         from drip_cost_measurements import measure
         report = measure(sys.modules[__name__], profile, runtime, creation,
@@ -1012,13 +1024,17 @@ def main():
                       help="execute and validate all runtime observations without reading or writing fixtures")
     mode.add_argument("--measure-costs", action="store_true",
                       help="report 60 supplemental paired cost observations without reading or writing fixtures")
+    mode.add_argument("--measure-supplemental-costs", action="store_true",
+                      help="report 88 paired warmth/guard observations without reading or writing fixtures")
     parser.add_argument("--root", help="explicit current-mainnet target root (required for runtime modes)")
     args = parser.parse_args()
-    if args.write or args.check_runtime or args.validate_runtime or args.measure_costs:
+    if (args.write or args.check_runtime or args.validate_runtime or args.measure_costs
+            or args.measure_supplemental_costs):
         if not args.root:
             parser.error("--root is required for runtime modes")
         execute_and_check(args.root, write=args.write, validate_only=args.validate_runtime,
-                          measure_costs=args.measure_costs)
+                          measure_costs=args.measure_costs,
+                          measure_supplemental_costs=args.measure_supplemental_costs)
         return
     document = plan()
     if args.self_test: self_test(document)

@@ -57,6 +57,9 @@ fi
 /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/test-drip-cost-measurements.py"
 
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+  "$SCRIPT_DIR/test-drip-supplemental-costs.py"
+
 GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-drip-fixtures.py" --check-runtime --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$GENERATOR_OUT" >&2
