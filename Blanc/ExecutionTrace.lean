@@ -632,17 +632,33 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
     historyStorageAddress lastHash.toBytes historyState historyOut
   decodedTxs : List Tx
   decodeRun : txs.mapM decodeTx = .ok decodedTxs
+  /-- The block output the transaction fold starts from. Under EIP-7928 this is
+  `BlockOutput.init` seeded with the builder the two pre-execution system calls
+  incorporated at index 0; under `bal = none` the builder is inert. Named rather
+  than spelled out because Blanc has no `BalBuilder` vocabulary and this trace
+  claims nothing about one. -/
+  initialBout : BlockOutput
   transactionBenv : Benv
   transactionBout : BlockOutput
   transactions : ApplyTransactionsTrace decodedTxs.putIndex
-    ((benv.withState beaconState).withState historyState) .init
+    ((benv.withState beaconState).withState historyState) initialBout
     transactionBenv transactionBout
+  /-- The block output handed to the request pass: the withdrawals-trie update,
+  plus the withdrawals batch's own EIP-7928 incorporation. Named for the same
+  reason as `initialBout`. -/
+  requestsBoutIn : BlockOutput
+  /-- `applyBody` no longer ends at the request pass: it builds the block access
+  list, checks the item rule against the block gas limit, and returns
+  `{boutReq with blockAccessList := list}`. So the request pass's own outputs
+  are one step before the body's, and the trace names both. `run` below still
+  pins the whole run, and the built list is left unconstrained -- it is
+  observation metadata Blanc has no theory of (DP-E3d). -/
+  requestsState : State
+  requestsBout : BlockOutput
   requests : RequestsTrace
     (transactionBenv.withState
       (processWithdrawalsState transactionBenv.state wds))
-    (transactionBout.withWithdrawalsTrie
-      (processWithdrawalsTrie transactionBout.withdrawalsTrie wds))
-    state bout
+    requestsBoutIn requestsState requestsBout
 /-- **The transaction fold carries the block's static environment.**
 
 `applyTransactions` only ever rebuilds its environment with `Benv.withState`,
@@ -690,6 +706,10 @@ theorem exists_appliedBodyTrace
   rcases exists_applyTransactionsTrace htransactions with
     ⟨transactionsTrace⟩
   dsimp [processWithdrawals] at hrequests
+  -- `applyBody`'s tail: the request pass, then the access-list build and its
+  -- gas-limit check.
+  rcases Except.bind_eq_ok hrequests with
+    ⟨⟨requestsState, requestsBout⟩, hrequests, _⟩
   have hreq' : (transactionBenv.withState
       (processWithdrawalsState transactionBenv.state wds)).stat.rules.requests =
       [(1, withdrawalRequestPredeployAddress),
@@ -700,8 +720,8 @@ theorem exists_appliedBodyTrace
   rcases exists_requestsTrace hreq' hrequests with ⟨requestsTrace⟩
   exact ⟨⟨h_result, beaconState, beaconOut, beaconTrace,
     lastHash, hlastHash, historyState, historyOut, historyTrace,
-    decodedTxs, hdecoded, transactionBenv, transactionBout,
-    transactionsTrace, requestsTrace⟩⟩
+    decodedTxs, hdecoded, _, transactionBenv, transactionBout,
+    transactionsTrace, _, requestsState, requestsBout, requestsTrace⟩⟩
 
 end ExecutionTrace
 
