@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay every structurally verified DRIP fixture with the pinned Jaune runner.
+"""Authenticate one immutable receipt batch and replay its pinned Jaune fixtures.
 
 No build, external runtime, command override, or fixture-writing mode exists.
 Run under the host's registered contained workflow. The preceding build owns
@@ -22,6 +22,20 @@ assert SPEC and SPEC.loader
 VERIFIER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFIER)
 ReplayError = VERIFIER.VerificationError
+RECEIPT_SPEC = importlib.util.spec_from_file_location(
+    "drip_replay_receipts", ROOT / "scripts/check-drip-receipts.py")
+assert RECEIPT_SPEC and RECEIPT_SPEC.loader
+RECEIPTS = importlib.util.module_from_spec(RECEIPT_SPEC)
+RECEIPT_SPEC.loader.exec_module(RECEIPTS)
+
+
+def receipt_hook(function, *args):
+    # The receipt driver loads its own verifier class; preserve a coherent
+    # replay error boundary without relying on those class objects being equal.
+    try:
+        return function(*args)
+    except RECEIPTS.ReceiptError as exc:
+        raise ReplayError(f"receipt binding: {exc}") from exc
 
 
 def require(value, message):
@@ -74,28 +88,48 @@ def replay(directory):
             "replay: duplicate or incomplete verified population")
     require(set(initial) == {"manifest.json", *names}, "replay: discovery mismatch")
     require(population(directory) == initial, "replay: fixture drift during verification")
-    runner, pin, runner_hash = pinned_runner()
-    print(f"DRIP replay identity: jaune={pin} binary-sha256={runner_hash}", flush=True)
-    print(f"DRIP replay population: {count} fixtures, {steps} declared transactions", flush=True)
-    for filename in names:
-        require(population(directory) == initial, "replay: fixture drift before dispatch")
-        path = directory / filename
-        result = subprocess.run([str(runner), str(path), "--network", "BPO2"],
-                                cwd=ROOT, capture_output=True, text=True, check=False)
-        # Preserve complete runner diagnostics for each fixture in the gate log.
-        print(result.stdout, end="", flush=True)
-        print(result.stderr, end="", file=sys.stderr, flush=True)
-        require(result.returncode == 0, f"{filename}: Jaune exit {result.returncode}")
-        lines = result.stdout.splitlines()
-        name = filename.removesuffix(".json")
-        expected = f"TEST NAME : blanc/drip::{name}[fork_BPO2-blockchain_test]"
-        require([x for x in lines if x.startswith("SELECTED CASES :")] == ["SELECTED CASES : 1"]
-                and [x for x in lines if x.startswith("SKIPPED CASES :")] == ["SKIPPED CASES : 0"]
-                and [x for x in lines if x.startswith("TEST NAME :")] == [expected],
-                f"{filename}: Jaune case selection/verdict coverage differs")
-        print(f"PASS — DRIP replay: {filename}; exit=0", flush=True)
-    require(population(directory) == initial, "replay: fixture drift during execution")
-    require(digest(runner) == runner_hash, "replay: runner binary drift during execution")
+    batch = receipt_hook(RECEIPTS.prepare_batch, directory)
+    runner = None
+    try:
+        require(batch.directory == directory and batch.files == tuple(sorted(initial.items())),
+                "replay: receipt batch population differs from verified replay")
+        receipt_response = receipt_hook(RECEIPTS.authenticate_batch, batch)
+        receipt_hook(RECEIPTS.assert_unchanged, batch)
+        runner, pin, runner_hash = pinned_runner()
+        print("DRIP_RECEIPTS " + RECEIPTS.canonical(receipt_response), flush=True)
+        print("DRIP receipt binding identity: " + RECEIPTS.canonical(
+            dict(sources=dict(batch.source_hashes), files=dict(batch.files))), flush=True)
+        print(f"DRIP replay identity: jaune={pin} binary-sha256={runner_hash}", flush=True)
+        print(f"DRIP replay population: {count} fixtures, {steps} declared transactions", flush=True)
+        for filename in names:
+            require(population(directory) == initial, "replay: fixture drift before dispatch")
+            receipt_hook(RECEIPTS.assert_unchanged, batch)
+            path = directory / filename
+            try:
+                result = subprocess.run([str(runner), str(path), "--network", "BPO2"],
+                                        cwd=ROOT, capture_output=True, text=True, check=False)
+                # Retain completed-child diagnostics even if the following
+                # immutable-batch check refuses this execution.
+                print(result.stdout, end="", flush=True)
+                print(result.stderr, end="", file=sys.stderr, flush=True)
+            finally:
+                receipt_hook(RECEIPTS.assert_unchanged, batch)
+            require(result.returncode == 0, f"{filename}: Jaune exit {result.returncode}")
+            lines = result.stdout.splitlines()
+            name = filename.removesuffix(".json")
+            expected = f"TEST NAME : blanc/drip::{name}[fork_BPO2-blockchain_test]"
+            require([x for x in lines if x.startswith("SELECTED CASES :")] == ["SELECTED CASES : 1"]
+                    and [x for x in lines if x.startswith("SKIPPED CASES :")] == ["SKIPPED CASES : 0"]
+                    and [x for x in lines if x.startswith("TEST NAME :")] == [expected],
+                    f"{filename}: Jaune case selection/verdict coverage differs")
+            print(f"PASS — DRIP replay: {filename}; exit=0", flush=True)
+    finally:
+        try:
+            if runner is not None:
+                require(digest(runner) == runner_hash, "replay: runner binary drift during execution")
+        finally:
+            receipt_hook(RECEIPTS.assert_unchanged, batch)
+            require(population(directory) == initial, "replay: fixture drift during execution")
     print(f"OK — DRIP replay: {count}/{count} fixtures PASS, network BPO2", flush=True)
     return count, steps
 

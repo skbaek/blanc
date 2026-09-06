@@ -23,6 +23,7 @@ def load(name, path):
 
 REPLAY = load("drip_replay_test_target", HERE / "check-drip-replay.py")
 FIXTURES = load("drip_replay_synthetic", HERE / "test-check-drip-fixtures.py")
+PROTOCOL = load("drip_replay_receipt_protocol", HERE / "test-drip-receipts.py")
 
 
 class ReplayControls(unittest.TestCase):
@@ -57,7 +58,13 @@ class ReplayControls(unittest.TestCase):
                                            stdout, "")
 
     def run_mocked(self):
-        with patch.object(REPLAY, "pinned_runner", return_value=self.identity), \
+        # Existing native/structural controls isolate the new receipt boundary.
+        batch = REPLAY.RECEIPTS.ReceiptBatch(self.directory, "{}",
+                    tuple(sorted(REPLAY.population(self.directory).items())), ())
+        with patch.object(REPLAY.RECEIPTS, "prepare_batch", return_value=batch), \
+             patch.object(REPLAY.RECEIPTS, "authenticate_batch", return_value={}), \
+             patch.object(REPLAY.RECEIPTS, "assert_unchanged"), \
+             patch.object(REPLAY, "pinned_runner", return_value=self.identity), \
              patch.object(REPLAY.subprocess, "run", side_effect=self.child), \
              contextlib.redirect_stdout(io.StringIO()), \
              contextlib.redirect_stderr(io.StringIO()):
@@ -203,7 +210,7 @@ class ReplayControls(unittest.TestCase):
             return result
 
         with patch.object(self, "child", side_effect=drifting):
-            with self.assertRaisesRegex(REPLAY.ReplayError, "fixture drift before dispatch"):
+            with self.assertRaisesRegex(REPLAY.ReplayError, "fixture drift during execution"):
                 self.run_mocked()
         self.restore()
         self.assert_green()
@@ -228,6 +235,188 @@ class ReplayControls(unittest.TestCase):
              contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(REPLAY.main(["--runner", "/tmp/other"]), 2)
             replay.assert_not_called()
+
+
+class ReceiptBindingControls(unittest.TestCase):
+    """Real receipt prepare/validate/snapshot hooks; both child kinds are mocked."""
+    def setUp(self):
+        PROTOCOL.ReceiptProtocolControls.setUp(self)
+        self.enterContext(patch.object(REPLAY, "ROOT", self.root))
+        self.enterContext(patch.object(REPLAY, "RECEIPTS", PROTOCOL.DRIVER))
+        self.enterContext(patch.object(REPLAY.VERIFIER, "literals",
+                                      return_value=(b"\x00", b"\x60\x01\x00")))
+        self.runner = self.root / "mock-native-runner"
+        self.runner.write_bytes(b"mock native bytes; never execute")
+        self.runner_identity = (self.runner, "0"*40, REPLAY.digest(self.runner))
+        self.native_calls = []
+        self.events = []
+        self.mutate_native = lambda: None
+        self.native_exception = False
+        self.native_returncode = 0
+        self.eval_returncode = 0
+        self.native_diagnostic = ""
+
+    def child(self, argv, **kwargs):
+        # This single mocked boundary intercepts helper and native subprocesses.
+        if argv[0] == str(self.compiler):
+            self.assertEqual(argv, [str(self.compiler), "env", str(self.lean),
+                                   "--run", PROTOCOL.DRIVER.EVALUATOR])
+            self.events.append("authenticate")
+            response = PROTOCOL.mock_response(json.loads(kwargs["input"]))
+            return subprocess.CompletedProcess(argv, self.eval_returncode,
+                                               json.dumps(response), "")
+        self.assertEqual(argv[0], str(self.runner))
+        self.assertEqual(argv[2:], ["--network", "BPO2"])
+        self.assertEqual(kwargs, dict(cwd=self.root, capture_output=True, text=True, check=False))
+        self.assertIn("authenticate", self.events)
+        path = Path(argv[1])
+        self.assertEqual(path.parent, self.directory)
+        self.native_calls.append(path.name)
+        self.events.append("native")
+        self.mutate_native()
+        if self.native_exception:
+            raise OSError("mock native launch exception")
+        out = ("SELECTED CASES : 1\nSKIPPED CASES : 0\n"
+               f"TEST NAME : blanc/drip::{path.stem}[fork_BPO2-blockchain_test]\n")
+        return subprocess.CompletedProcess(argv, self.native_returncode,
+                                           out+self.native_diagnostic, self.native_diagnostic)
+
+    def invoke(self):
+        self.native_calls.clear(); self.events.clear()
+        driver = REPLAY.RECEIPTS
+        real_prepare, real_check = driver.prepare_batch, driver.assert_unchanged
+        prepared, checked = [], []
+        def prepare(directory):
+            batch = real_prepare(directory)
+            prepared.append(batch)
+            return batch
+        def unchanged(batch):
+            if prepared:
+                self.assertIs(batch, prepared[0], "authenticated batch replaced")
+            checked.append(batch)
+            self.events.append("check")
+            return real_check(batch)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.object(driver, "prepare_batch", side_effect=prepare) as preparation, \
+             patch.object(driver, "assert_unchanged", side_effect=unchanged), \
+             patch.object(driver, "authenticate_batch", wraps=driver.authenticate_batch) as authentication, \
+             patch.object(REPLAY, "pinned_runner", return_value=self.runner_identity), \
+             patch.object(REPLAY.subprocess, "run", side_effect=self.child), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = REPLAY.main([])
+        self.assertEqual(preparation.call_count, 1)
+        if authentication.call_count:
+            self.assertEqual(authentication.call_count, 1)
+            self.assertIs(authentication.call_args.args[0], prepared[0])
+            self.assertTrue(all(batch is prepared[0] for batch in checked))
+        self.output, self.error = stdout.getvalue(), stderr.getvalue()
+        if code:
+            self.assertNotIn("OK — DRIP replay:", self.output)
+        return code
+
+    def green(self):
+        self.assertEqual(self.invoke(), 0, self.error)
+        self.assertEqual(self.native_calls, sorted(p.name for p in self.directory.glob("*.json")
+                                                 if p.name != "manifest.json"))
+        self.assertEqual(len(self.native_calls), 91)
+        self.assertEqual(self.events.count("authenticate"), 1)
+        self.assertEqual(self.events[-1], "check")
+        self.assertEqual(self.output.count("OK — DRIP replay:"), 1)
+        receipts = [line.removeprefix("DRIP_RECEIPTS ") for line in self.output.splitlines()
+                    if line.startswith("DRIP_RECEIPTS ")]
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(json.loads(receipts[0])["done"], "drip-receipts-v1-complete")
+
+    def test_one_batch_authenticates_before_all_native_calls(self):
+        self.green()
+
+    def test_missing_evaluator_blocks_all_dispatch_then_restore(self):
+        path = self.root / PROTOCOL.DRIVER.EVALUATOR
+        old = path.read_bytes(); path.unlink()
+        self.assertEqual(self.invoke(), 1)
+        self.assertIn("receipt binding: receipt evaluator missing", self.error)
+        self.assertNotIn("authenticate", self.events)
+        self.assertEqual(self.native_calls, [])
+        path.write_bytes(old)
+        self.green()
+
+    def test_authentication_failure_blocks_native_then_restore(self):
+        self.eval_returncode = 7
+        self.assertEqual(self.invoke(), 1)
+        self.assertIn("evaluator exit 7", self.error)
+        self.assertEqual(self.native_calls, [])
+        self.assertEqual(self.events[-1], "check")
+        self.eval_returncode = 0
+        self.green()
+
+    def test_after_authentication_fixture_and_caller_drift_restore(self):
+        driver = REPLAY.RECEIPTS
+        real = driver.authenticate_batch
+        for path in (self.directory / "drip-one-year.json",
+                     self.root / "scripts/check-drip-replay.py"):
+            old = path.read_bytes()
+            def changed(batch, path=path, old=old):
+                result = real(batch)
+                path.write_bytes(old+b" ")
+                return result
+            with patch.object(driver, "authenticate_batch", side_effect=changed):
+                self.assertEqual(self.invoke(), 1)
+            self.assertIn("snapshot drift", self.error)
+            self.assertEqual(self.native_calls, [])
+            path.write_bytes(old)
+            self.green()
+
+    def test_during_first_and_last_native_drift_restore(self):
+        for index, path in ((1, self.directory / "drip-one-year.json"),
+                            (1, self.root / "scripts/check-drip-replay.py"),
+                            (91, self.lean)):
+            old = path.read_bytes()
+            def changed(index=index, path=path, old=old):
+                if len(self.native_calls) == index:
+                    path.write_bytes(old+b" ")
+            self.mutate_native = changed
+            self.assertEqual(self.invoke(), 1)
+            self.assertIn("snapshot drift", self.error)
+            self.assertEqual(len(self.native_calls), index)
+            self.mutate_native = lambda: None
+            path.write_bytes(old)
+            self.green()
+
+    def test_native_exception_and_nonzero_exit_final_check_restore(self):
+        for attribute in ("native_exception", "native_returncode"):
+            setattr(self, attribute, True if attribute == "native_exception" else 7)
+            self.assertEqual(self.invoke(), 1)
+            self.assertEqual(len(self.native_calls), 1)
+            self.assertEqual(self.events[-1], "check")
+            setattr(self, attribute, False if attribute == "native_exception" else 0)
+            self.green()
+
+    def test_completed_native_diagnostics_survive_drift_refusal(self):
+        path = self.root / "scripts/check-drip-replay.py"
+        original = path.read_bytes()
+        self.native_diagnostic = "mock native diagnostic retained\n"
+        self.mutate_native = lambda: path.write_bytes(original+b" ")
+        self.assertEqual(self.invoke(), 1)
+        self.assertIn(self.native_diagnostic, self.output)
+        self.assertIn(self.native_diagnostic, self.error)
+        self.assertNotIn("PASS — DRIP replay:", self.output)
+        self.assertIn("snapshot drift", self.error)
+        path.write_bytes(original)
+        self.mutate_native = lambda: None
+        self.native_diagnostic = ""
+        self.green()
+
+    def test_population_mismatch_prevents_authentication(self):
+        driver = REPLAY.RECEIPTS
+        real = driver.prepare_batch
+        def changed(directory):
+            batch = real(directory)
+            return batch._replace(files=batch.files[:-1])
+        with patch.object(driver, "prepare_batch", side_effect=changed):
+            self.assertEqual(self.invoke(), 1)
+        self.assertEqual(self.native_calls, [])
+        self.assertNotIn("authenticate", self.events)
+        self.green()
 
 
 if __name__ == "__main__":
