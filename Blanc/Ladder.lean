@@ -5649,7 +5649,6 @@ def Sound (c : ContractSpec) (ca : Adr) : Prop :=
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
-        sevm'.benvStat.rules.stateGas = none →
         Prog.At c.prog ca pc' sevm' pre' →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
@@ -5676,7 +5675,6 @@ def SoundNoMem (c : ContractSpec) (ca : Adr) : Prop :=
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
-        sevm'.benvStat.rules.stateGas = none →
         Prog.At c.prog ca pc' sevm' pre' →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
@@ -5700,7 +5698,6 @@ def SoundWith (c : ContractSpec) (ca : Adr) (mw : Mem → Prop) : Prop :=
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
-        sevm'.benvStat.rules.stateGas = none →
         Prog.At c.prog ca pc' sevm' pre' →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
@@ -5775,7 +5772,6 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
         ( ∀ pc' sevm' pre' post',
             Exec pc' sevm' pre' (.ok post') →
             sevm'.depth < sevm.depth →
-            sevm'.benvStat.rules.stateGas = none →
             Prog.At c.prog ca pc' sevm' pre' →
             σ sevm' pre' →
             c.Post ca sevm' post' ) →
@@ -5783,20 +5779,15 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
         c.Post ca sevm post ) :
     ∀ sevm pre post,
       Exec 0 sevm pre (.ok post) →
-      sevm.benvStat.rules.stateGas = none →
       (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
       σ sevm pre →
       c.Post ca sevm post := by
-  intro sevm devm exn exc hleg h_code h_pc
-  apply lift_inv ca c.prog
-    (fun e d => e.benvStat.rules.stateGas = none ∧ σ e d) (c.Post ca)
-  · intro sevm' pre' post' h_run h_eq h_ih hσ
-    refine body h_run h_eq ?_ hσ.2
-    intro pc' sevm'' pre'' post'' h_sub h_depth hleg' h_at hσ'
-    exact h_ih pc' sevm'' pre'' post'' h_sub h_depth hleg' h_at ⟨hleg', hσ'⟩
+  intro sevm devm exn exc h_code h_pc
+  apply lift_inv_any ca c.prog σ (c.Post ca)
+  · exact body
   · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' hσ'
-    exact ⟨hσ'.1, σ_of_ne h_ne'
-      (Ninst.none_preserves_precond hσ'.1 h_run' h_ne' (σ_pre hσ'.2))⟩
+    exact σ_of_ne h_ne'
+      (Ninst.none_preserves_precond_any h_run' h_ne' (σ_pre hσ'))
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' hσ'
     cases n' with
     | push xs le =>
@@ -5809,13 +5800,10 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
       have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', exn''⟩) (.ok inter') := by
         simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
           using h_run'
-      obtain ⟨h_child, h_back⟩ := Xinst.some_preserves_precond
-        (x := x) hσ'.1 hx ex_sub' h_ne' (σ_pre hσ'.2)
-      have hchildleg : evm''.sta.benvStat.rules.stateGas = none := by
-        rw [Ninst.stepRun_slot_benvStat h_run' hσ'.1]
-        exact hσ'.1
-      exact ⟨⟨hchildleg, σ_of_wf (Xinst.some_child_wf hx) h_child⟩,
-        fun h_if => ⟨hσ'.1, σ_of_ne h_ne' (h_back h_if)⟩⟩
+      obtain ⟨h_child, h_back⟩ := Xinst.some_preserves_precond_any
+        (x := x) hx ex_sub' h_ne' (σ_pre hσ')
+      exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,
+        fun h_if => σ_of_ne h_ne' (h_back h_if)⟩
     | dupn imm =>
       obtain ⟨out, step_eq⟩ := Ninst.step_dupn
         (evm := ⟨pc', sevm', pre'⟩) (d := imm)
@@ -5832,14 +5820,13 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
       simp only [Ninst.StepRun, step_eq, Step.run_ofExecution] at h_run'
       cases h_run'.1
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' hσ'
-    exact ⟨hσ'.1, σ_of_ne h_ne'
-      (Pre.state_eq (σ_pre hσ'.2) (Jinst.preserves_state h_run'))⟩
+    exact σ_of_ne h_ne'
+      (Pre.state_eq (σ_pre hσ') (Jinst.preserves_state h_run'))
   · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' hσ'
-    exact Linst.inv_postcond hσ'.1 h_run' h_ne' (σ_pre hσ'.2)
+    exact Linst.inv_postcond_any h_run' h_ne' (σ_pre hσ')
   · exact exc
-  · exact hleg
   · exact ⟨(σ_pre h_pc).1, λ h => ⟨h_code h, rfl⟩⟩
-  · exact ⟨hleg, h_pc⟩
+  · exact h_pc
 
 /-- The memory-carrying frame-level ladder: `lift_inv` at `σ := c.PreWf ca`,
 which is what a contract obligation that reasons about memory needs. -/
@@ -5848,7 +5835,7 @@ theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
   intro sevm devm exn exc h_code h_wf h_pc
   refine preserves_lift c ca (c.PreWf ca) (fun h => h.pre)
     (fun h_ne h => ⟨h, fun hc => absurd hc h_ne⟩)
-    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_ sevm devm exn exc ?_ h_code
+    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_ sevm devm exn exc h_code
       ⟨h_pc, h_wf⟩
   intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
   exact body h_run' h_eq' h_ih' (h_pre'.wf h_eq') h_pre'.pre
@@ -5862,11 +5849,11 @@ theorem preserves_noMem (c : ContractSpec) (ca : Adr) (body : c.SoundNoMem ca) :
     c.PreservesNoMem ca := by
   intro sevm devm exn exc h_code h_pc
   refine preserves_lift c ca (c.Pre ca) (fun h => h) (fun _ h => h)
-    (fun _ h => h) ?_ sevm devm exn exc ?_ h_code h_pc
+    (fun _ h => h) ?_ sevm devm exn exc h_code h_pc
   intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
   exact body h_run' h_eq'
-    (fun pc'' sevm'' pre'' post'' hex hd hleg' hat hpw =>
-      h_ih' pc'' sevm'' pre'' post'' hex hd hleg' hat hpw.pre)
+    (fun pc'' sevm'' pre'' post'' hex hd hat hpw =>
+      h_ih' pc'' sevm'' pre'' post'' hex hd hat hpw.pre)
     h_pre'
 
 /-- The `exec` counterpart: with sufficiency proved in Jaune there is no fuel
@@ -6109,7 +6096,8 @@ theorem sound_of_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
     intro pc' sevm' devm' exn'
     cases exn'
     · simp only [ifOk, implies_true]
-    · apply ih
+    · intro ex hdepth _hleg hat hpre
+      exact ih pc' sevm' devm' _ ex hdepth hat hpre
   clear ih
   -- unwrap the initial `call 0` into a run of the program's own `main`
   dsimp only [Prog.Run] at run
@@ -6202,7 +6190,8 @@ theorem sound_of_receive_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
     intro pc' sevm' devm' exn'
     cases exn'
     · simp only [ifOk, implies_true]
-    · apply ih
+    · intro ex hdepth _hleg hat hpre
+      exact ih pc' sevm' devm' _ ex hdepth hat hpre
   clear ih
   dsimp only [Prog.Run] at run
   rw [h_aux] at run
@@ -6886,12 +6875,30 @@ lemma Devm.NoDel.of_instructionFrame {wa : Adr} {d d' : Devm}
     (hf : Devm.InstructionFrame d d') (h : Devm.NoDel wa d) : Devm.NoDel wa d' :=
   Devm.NoDel.of_eqs hf.delSets (hf.getCode wa) h
 
+lemma Devm.NoDel.incrNonce {wa adr : Adr} {d : Devm}
+    (h : Devm.NoDel wa d) : Devm.NoDel wa (d.incrNonce adr) := by
+  refine ⟨h.atd, h.ca, ?_⟩
+  rw [Devm.incrNonce_getCode]
+  exact h.code
+
 lemma Execution.NoDel.of_instructionFrame {wa : Adr} {d : Devm} {ex : Execution}
     (hf : Execution.Rel Devm.InstructionFrame d ex) (h : Devm.NoDel wa d) :
     Execution.NoDel wa ex := by
   cases ex with
   | error e => exact Devm.NoDel.of_instructionFrame hf h
   | ok d' => exact Devm.NoDel.of_instructionFrame hf h
+
+lemma incorporateChildAmsterdamOnError_noDel {wa : Adr}
+    {parent child : Devm} {rd : Bytes}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildAmsterdamOnError parent child rd) :=
+  ⟨hp_atd, hc.ca, hc.code⟩
+
+lemma incorporateChildAmsterdamOnSuccess_noDel {wa : Adr}
+    {parent child : Devm} {rd : Bytes}
+    (hp_atd : wa ∉ parent.accountsToDelete) (hc : Devm.NoDel wa child) :
+    Devm.NoDel wa (incorporateChildAmsterdamOnSuccess parent child rd) :=
+  ⟨AdrSet.not_mem_union hp_atd hc.atd, hc.ca, hc.code⟩
 
 /-- The CALL-family return path preserves the no-deletion invariant. -/
 lemma Resume.call_noDel {wa : Adr} {parent : Devm} {oi os : Nat}
@@ -6928,6 +6935,283 @@ lemma Resume.create_noDel {wa : Adr} {parent : Devm} {newAddress : Adr}
     split
     · exact Devm.push_noDel rfl (incorporateChildOnError_noDel hnd.atd h_child)
     · exact Devm.push_noDel rfl (incorporateChildOnSuccess_noDel hnd.atd h_child)
+
+/-- The Amsterdam CALL-family return path preserves the no-deletion invariant.
+The child-settlement guards either return that same child as an error payload
+or permit world incorporation; refund credit, status push, and output copying
+then remain instruction-frame operations. -/
+lemma Resume.callAmsterdam_noDel {wa : Adr} {state : StateGasRules}
+    {parent : Devm} {oi os : Nat} {charged : Bool}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
+    (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
+    Execution.NoDel wa ((Resume.callAmsterdam state parent oi os charged).run r) := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨e_str, e_st, e_ca, e_tra⟩ | child <;>
+      dsimp only [bind, Except.bind]
+  · rcases h with ⟨h_ca, h_code⟩
+    exact ⟨hnd.atd, h_ca, h_code⟩
+  · have h_child : Devm.NoDel wa child := h
+    by_cases herr : child.error.isSome = true
+    · rw [if_pos herr]
+      rcases ha : Except.assert child.AmsterdamFailedChildSettled _ with e | u
+      · unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h_child
+      · have hinc := incorporateChildAmsterdamOnError_noDel
+          (rd := child.output) hnd.atd h_child
+        have hbase : Devm.NoDel wa
+            (if charged = true then
+              (incorporateChildAmsterdamOnError parent child child.output).creditStateGasRefund
+                state.newAccount
+            else incorporateChildAmsterdamOnError parent child child.output) := by
+          split
+          · exact Devm.NoDel.of_instructionFrame
+              (Devm.creditStateGasRefund_instructionFrame _ _) hinc
+          · exact hinc
+        rcases hp : (if charged = true then
+              (incorporateChildAmsterdamOnError parent child child.output).creditStateGasRefund
+                state.newAccount
+            else incorporateChildAmsterdamOnError parent child child.output).push 0 with e | d
+        · exact Devm.push_noDel hp hbase
+        · exact Devm.NoDel.of_instructionFrame
+            (Devm.memWrite_instructionFrame d oi (child.output.take os))
+            (Devm.push_noDel hp hbase)
+    · rw [if_neg herr]
+      rcases ha : Except.assert child.AmsterdamChildUncommitted _ with e | u
+      · unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h_child
+      · have hinc := incorporateChildAmsterdamOnSuccess_noDel
+          (rd := child.output) hnd.atd h_child
+        rcases hp : (incorporateChildAmsterdamOnSuccess parent child child.output).push 1 with e | d
+        · exact Devm.push_noDel hp hinc
+        · exact Devm.NoDel.of_instructionFrame
+            (Devm.memWrite_instructionFrame d oi (child.output.take os))
+            (Devm.push_noDel hp hinc)
+
+/-- The Amsterdam CREATE-family return path preserves the no-deletion
+invariant under the same settlement guards. -/
+lemma Resume.createAmsterdam_noDel {wa : Adr} {state : StateGasRules}
+    {parent : Devm} {newAddress : Adr} {charged : Bool}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
+    (hnd : Devm.NoDel wa parent) (h : MsgResult.NoDel wa r) :
+    Execution.NoDel wa
+      ((Resume.createAmsterdam state parent newAddress charged).run r) := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨e_str, e_st, e_ca, e_tra⟩ | child <;>
+      dsimp only [bind, Except.bind]
+  · rcases h with ⟨h_ca, h_code⟩
+    exact ⟨hnd.atd, h_ca, h_code⟩
+  · have h_child : Devm.NoDel wa child := h
+    by_cases herr : child.error.isSome = true
+    · rw [if_pos herr]
+      rcases ha : Except.assert child.AmsterdamFailedChildSettled _ with e | u
+      · unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h_child
+      · have hinc := incorporateChildAmsterdamOnError_noDel
+          (rd := child.output) hnd.atd h_child
+        have hbase : Devm.NoDel wa
+            (if charged = true then
+              (incorporateChildAmsterdamOnError parent child child.output).creditStateGasRefund
+                state.newAccount
+            else incorporateChildAmsterdamOnError parent child child.output) := by
+          split
+          · exact Devm.NoDel.of_instructionFrame
+              (Devm.creditStateGasRefund_instructionFrame _ _) hinc
+          · exact hinc
+        exact Devm.push_noDel rfl hbase
+    · rw [if_neg herr]
+      rcases ha : Except.assert child.AmsterdamChildUncommitted _ with e | u
+      · unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h_child
+      · exact Devm.push_noDel rfl
+          (incorporateChildAmsterdamOnSuccess_noDel hnd.atd h_child)
+
+lemma GenericCallAmsterdam.inv_noDel {wa : Adr} {sevm : Sevm}
+    {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {stv istat : Bool}
+    {ii is oi os : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {xl : Xlot} {exn : Execution}
+    (inv : Xlot.InvNoDel wa xl)
+    (h : XStep.Run
+      (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+        target codeAddress stv istat ii is oi os code dp nac ib) xl exn)
+    (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at h
+  repeat' split at h
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h
+  · obtain ⟨-, rfl⟩ := h
+    rename_i hp
+    apply Devm.push_noDel hp
+    split
+    · exact Devm.NoDel.of_instructionFrame
+        (Devm.creditStateGasRefund_instructionFrame _ _)
+        (Devm.NoDel.of_eqs (d := devm) rfl rfl hnd)
+    · exact Devm.NoDel.of_eqs (d := devm) rfl rfl hnd
+  · obtain ⟨-, rfl⟩ := h
+    rename_i hp
+    apply Devm.push_noDel hp
+    split
+    · exact Devm.NoDel.of_instructionFrame
+        (Devm.creditStateGasRefund_instructionFrame _ _)
+        (Devm.NoDel.of_eqs (d := devm) rfl rfl hnd)
+    · exact Devm.NoDel.of_eqs (d := devm) rfl rfl hnd
+  · obtain ⟨r, hframe, hres⟩ := h
+    rw [hres]
+    exact Resume.callAmsterdam_noDel
+      (Devm.NoDel.of_eqs (d := devm) rfl rfl hnd)
+      (ProcessMessage.inv_noDel inv hframe ⟨hnd.ca, hnd.code⟩)
+
+lemma GenericCreateAmsterdam.spawn_inv_noDel {wa : Adr} {sevm : Sevm}
+    {state : StateGasRules} {parent : Devm} {createGas reservoir : Nat}
+    {endowment : B256} {newAddress : Adr} {calldata : Bytes}
+    {charged : Bool} {xl : Xlot}
+    {r : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
+    (inv : Xlot.InvNoDel wa xl)
+    (hparent : Devm.NoDel wa parent)
+    (hfresh : parent.getCode newAddress = .empty)
+    (hframe : RunFrame
+      (Frame.ofCreate
+        { createMsg sevm parent createGas endowment newAddress calldata with
+          stateGasGrant := reservoir }) xl r) :
+    Execution.NoDel wa
+      ((Resume.createAmsterdam state parent newAddress charged).run r) := by
+  have hne : newAddress ≠ wa := by
+    intro heq
+    subst heq
+    have hc := hparent.code
+    rw [hfresh] at hc
+    exact hc (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
+  apply Resume.createAmsterdam_noDel hparent
+  exact ProcessCreateMessage.inv_noDel inv hframe hne
+    ⟨hparent.ca, hparent.code⟩
+
+lemma GenericCreateAmsterdam.inv_noDel {wa : Adr} {sevm : Sevm}
+    {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {xl : Xlot} {exn : Execution}
+    (inv : Xlot.InvNoDel wa xl)
+    (h : XStep.Run
+      (genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms)
+      xl exn)
+    (hnd : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  have hpre : Devm.NoDel wa
+      (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress
+          (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (devm.withReturnData [])) newAddress)) := by
+    have h0 : Devm.NoDel wa (devm.withReturnData []) :=
+      Devm.NoDel.of_eqs (d := devm) rfl rfl hnd
+    have h1 := Devm.NoDel.of_instructionFrame
+      (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
+        sevm.currentTarget (devm.withReturnData [])) h0
+    have h2 := Devm.NoDel.of_instructionFrame
+      (addAccessedAddress_instructionFrame
+        (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+          (devm.withReturnData [])) newAddress) h1
+    exact Devm.NoDel.of_instructionFrame
+      (Devm.balReadAccount_instructionFrame sevm.benvStat.rules newAddress _) h2
+  have hentry : Devm.NoDel wa
+      (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+        (devm.withReturnData [])) := by
+    exact Devm.NoDel.of_instructionFrame
+      (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
+        sevm.currentTarget (devm.withReturnData []))
+      (Devm.NoDel.of_eqs (d := devm) rfl rfl hnd)
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at h
+  repeat' split at h
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h
+  · obtain ⟨-, rfl⟩ := h
+    rename_i heq
+    exact Devm.push_noDel heq hentry
+  · obtain ⟨-, rfl⟩ := h
+    rename_i heq
+    exact Devm.push_noDel heq hentry
+  · obtain ⟨-, rfl⟩ := h
+    have hc := Execution.NoDel.of_instructionFrame
+      (chargeStateGas_instructionFrame state.newAccount _) hpre
+    rw [‹chargeStateGas state.newAccount _ = .error _›] at hc
+    exact hc
+  · obtain ⟨-, rfl⟩ := h
+    have hc := Execution.NoDel.of_instructionFrame
+      (chargeStateGas_instructionFrame state.newAccount _) hpre
+    rw [‹chargeStateGas state.newAccount _ = .ok _›] at hc
+    change Devm.NoDel wa _ at hc
+    apply Devm.push_noDel ‹Devm.push 0 _ = _›
+    exact (Devm.NoDel.of_instructionFrame
+      (Devm.withholdCreateGas_instructionFrame _ ) hc).incrNonce
+  · obtain ⟨-, rfl⟩ := h
+    have hc := Execution.NoDel.of_instructionFrame
+      (chargeStateGas_instructionFrame state.newAccount _) hpre
+    rw [‹chargeStateGas state.newAccount _ = .ok _›] at hc
+    change Devm.NoDel wa _ at hc
+    apply Devm.push_noDel ‹Devm.push 0 _ = _›
+    exact (Devm.NoDel.of_instructionFrame
+      (Devm.withholdCreateGas_instructionFrame _ ) hc).incrNonce
+  · obtain ⟨r, hframe, rfl⟩ := h
+    rename_i _ _ _ charged hcharge hcollision
+    have hc := Execution.NoDel.of_instructionFrame
+      (chargeStateGas_instructionFrame state.newAccount _) hpre
+    rw [hcharge] at hc
+    change Devm.NoDel wa charged at hc
+    have hparent : Devm.NoDel wa
+        ((charged.withholdCreateGas.2.drainStateGasReservoir.2).incrNonce
+          sevm.currentTarget) :=
+      (Devm.NoDel.of_instructionFrame
+        (Devm.drainStateGasReservoir_instructionFrame _)
+        (Devm.NoDel.of_instructionFrame
+          (Devm.withholdCreateGas_instructionFrame _) hc)).incrNonce
+    apply GenericCreateAmsterdam.spawn_inv_noDel
+      (sevm := sevm) (state := state)
+      (createGas := charged.withholdCreateGas.1)
+      (reservoir := charged.withholdCreateGas.2.drainStateGasReservoir.1)
+      (endowment := endowment) (newAddress := newAddress)
+      (calldata := devm.memory.data.sliceD mi ms 0) inv hparent
+    push Not at hcollision
+    apply ByteArray.eq_empty_of_size_eq_zero
+    rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode]
+    exact hcollision.2.1
+    exact hframe
+  · obtain ⟨-, rfl⟩ := h
+    apply Devm.push_noDel ‹Devm.push 0 _ = _›
+    exact (Devm.NoDel.of_instructionFrame
+      (Devm.withholdCreateGas_instructionFrame _) hpre).incrNonce
+  · obtain ⟨-, rfl⟩ := h
+    apply Devm.push_noDel ‹Devm.push 0 _ = _›
+    exact (Devm.NoDel.of_instructionFrame
+      (Devm.withholdCreateGas_instructionFrame _) hpre).incrNonce
+  · obtain ⟨r, hframe, rfl⟩ := h
+    rename_i _ _ hcollision
+    have hparent : Devm.NoDel wa
+        (((Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress
+            (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+              (devm.withReturnData [])) newAddress)).withholdCreateGas.2.drainStateGasReservoir.2
+          ).incrNonce sevm.currentTarget) :=
+      (Devm.NoDel.of_instructionFrame
+        (Devm.drainStateGasReservoir_instructionFrame _)
+        (Devm.NoDel.of_instructionFrame
+          (Devm.withholdCreateGas_instructionFrame _) hpre)).incrNonce
+    apply GenericCreateAmsterdam.spawn_inv_noDel
+      (sevm := sevm) (state := state)
+      (createGas := (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress
+          (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (devm.withReturnData [])) newAddress)).withholdCreateGas.1)
+      (reservoir := (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress
+          (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (devm.withReturnData [])) newAddress)).withholdCreateGas.2.drainStateGasReservoir.1)
+      (endowment := endowment) (newAddress := newAddress)
+      (calldata := devm.memory.data.sliceD mi ms 0) inv hparent
+    push Not at hcollision
+    apply ByteArray.eq_empty_of_size_eq_zero
+    rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode]
+    exact hcollision.2.1
+    exact hframe
 
 lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
@@ -7023,6 +7307,28 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
   · exact GenericCreate.inv_noDel inv h (Devm.NoDel.of_instructionFrame hf hnd)
   · exact GenericCall.inv_noDel inv h (Devm.NoDel.of_instructionFrame hf hnd)
 
+lemma Xinst.inv_noDel_gen_any {wa : Adr} {sevm : Sevm} {s : Devm}
+    {x : Xinst} {xl : Xlot} {exn : Execution}
+    (inv : Xlot.InvNoDel wa xl)
+    (h : Xinst.Run sevm s x xl exn)
+    (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn := by
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Xinst.inv_noDel_gen inv h hsg hnd
+  | some state =>
+    unfold Xinst.Run at h
+    rcases Xinst.step_shapeAmsterdam sevm state s x hsg with
+      ⟨ex, hs, hframe⟩ |
+      ⟨d, e, na, mi, ms, hf, hs⟩ |
+      ⟨d, d₀, g, reservoir, v, caller, target, cadr, stv, isSt, ii,
+        isz, oi, osz, code, dp, nac, ib, hf, -, -, -, hs⟩ <;>
+      rw [hs] at h
+    · obtain ⟨-, rfl⟩ := h
+      exact Execution.NoDel.of_instructionFrame hframe hnd
+    · exact GenericCreateAmsterdam.inv_noDel inv h
+        (Devm.NoDel.of_instructionFrame hf hnd)
+    · exact GenericCallAmsterdam.inv_noDel inv h
+        (Devm.NoDel.of_instructionFrame hf hnd)
+
 
 lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {n : Ninst} {xl : Xlot} {exn : Execution}
@@ -7090,6 +7396,75 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
         (xl := .none) hleg trivial run0
     exact Execution.NoDel.of_instructionFrame frame h
 
+lemma Ninst.inv_noDel_gen_any {wa : Adr} {pc : Nat} {sevm : Sevm}
+    {devm : Devm} {n : Ninst} {xl : Xlot} {exn : Execution}
+    (inv : Xlot.InvNoDel wa xl)
+    (run : Ninst.StepRun pc sevm devm n xl exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  cases n with
+  | push xs le =>
+    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at run
+    obtain ⟨-, rfl⟩ := run
+    cases h_charge : chargeGas (if xs = [] then gBase else gVerylow) devm
+    case error err =>
+      exact Devm.NoDel.of_eqs (chargeGas_delSets_err h_charge).symm
+        (chargeGas_getCode_err h_charge wa).symm h
+    case ok d1 =>
+      have h1 : Devm.NoDel wa d1 := Devm.NoDel.of_eqs
+        (chargeGas_delSets_eq h_charge).symm
+        (chargeGas_getCode_eq h_charge wa).symm h
+      dsimp only [bind, Except.bind]
+      cases h_push : Devm.push xs.toB256 d1
+      case error err2 =>
+        exact Devm.NoDel.of_eqs (Devm.push_delSets_err h_push).symm
+          (Devm.push_getCode_err h_push wa).symm h1
+      case ok d2 =>
+        exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_push).symm
+          (Devm.push_getCode_eq h_push wa).symm h1
+  | reg rg =>
+    simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
+    obtain ⟨-, rfl⟩ := run
+    cases h_run : Rinst.run { pc := pc, sta := sevm, dyna := devm } rg
+    case error err =>
+      exact Devm.NoDel.of_eqs (Rinst.inv_delSets_err h_run).symm
+        (Rinst.preserves_getCode_err h_run wa).symm h
+    case ok d1 =>
+      exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run)
+        (Rinst.preserves_getCode h_run wa).symm h
+  | exec xinst =>
+    simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
+    exact Xinst.inv_noDel_gen_any (x := xinst) inv run h
+  | dupn imm =>
+    obtain ⟨out, step_eq⟩ := Ninst.step_dupn
+      (evm := ⟨pc, sevm, devm⟩) (d := imm)
+    have run0 := run
+    simp only [Ninst.StepRun, step_eq, Step.run_ofExecution] at run
+    have hxl : xl = .none := run.1
+    subst xl
+    have frame := (Ninst.stackAccess_instructionFrame_effectRec_any
+      (imm := imm)).1 (xl := .none) trivial run0
+    exact Execution.NoDel.of_instructionFrame frame h
+  | swapn imm =>
+    obtain ⟨out, step_eq⟩ := Ninst.step_swapn
+      (evm := ⟨pc, sevm, devm⟩) (d := imm)
+    have run0 := run
+    simp only [Ninst.StepRun, step_eq, Step.run_ofExecution] at run
+    have hxl : xl = .none := run.1
+    subst xl
+    have frame := (Ninst.stackAccess_instructionFrame_effectRec_any
+      (imm := imm)).2.1 (xl := .none) trivial run0
+    exact Execution.NoDel.of_instructionFrame frame h
+  | exchange imm =>
+    obtain ⟨out, step_eq⟩ := Ninst.step_exchange
+      (evm := ⟨pc, sevm, devm⟩) (d := imm)
+    have run0 := run
+    simp only [Ninst.StepRun, step_eq, Step.run_ofExecution] at run
+    have hxl : xl = .none := run.1
+    subst xl
+    have frame := (Ninst.stackAccess_instructionFrame_effectRec_any
+      (imm := imm)).2.2 (xl := .none) trivial run0
+    exact Execution.NoDel.of_instructionFrame frame h
+
 -- The composite relation carried through `Exec.effect` for the NoDel invariant.
 def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
   Devm.NoDel wa pre → Devm.NoDel wa post
@@ -7119,6 +7494,158 @@ lemma Ninst.noDelCode_effectRec (wa : Adr) (n : Ninst) :
   | error e => exact hnd
   | ok d => exact hnd
 
+lemma Ninst.noDelCode_effectRec_any (wa : Adr) (n : Ninst) :
+    Ninst.EffectRecAny (Devm.NoDelCode wa) n := by
+  intro pc sevm pre xl out hxl hrun
+  have hnd := fun h =>
+    Ninst.inv_noDel_gen_any (Xlot.invNoDel_of_rel hxl) hrun h
+  cases out with
+  | error e => exact hnd
+  | ok d => exact hnd
+
+lemma Devm.instructionFrame_refines_noDelCode {wa : Adr} {before after : Devm}
+    (h : Devm.InstructionFrame before after) :
+    Devm.NoDelCode wa before after :=
+  fun hnd => Devm.NoDel.of_instructionFrame h hnd
+
+lemma Devm.subBal_toExcept_noDelCode (wa : Adr) (d : Devm)
+    (account : Adr) (amount : B256) :
+    Execution.Rel (Devm.NoDelCode wa) d
+      ((d.subBal account amount).toExcept
+        ⟨.internal (.invariant (.text "InsufficientBalanceError")), d⟩) := by
+  cases hs : d.subBal account amount with
+  | none =>
+      simp only [hs, Option.toExcept, Execution.Rel, Outcome.Rel]
+      exact id
+  | some d' =>
+      simp only [hs, Option.toExcept, Execution.Rel, Outcome.Rel, id_eq]
+      intro hnd
+      dsimp [Devm.subBal, Option.bind] at hs
+      cases hst : d.state.subBal account amount with
+      | none =>
+          rw [hst] at hs
+          contradiction
+      | some st =>
+          rw [hst] at hs
+          injection hs with heq
+          subst heq
+          refine ⟨hnd.atd, hnd.ca, ?_⟩
+          change (st.getCode wa).toList ≠ []
+          rw [State.subBal_getCode hst]
+          exact hnd.code
+
+lemma Except.assert_bindExecution_noDelCode {wa : Adr}
+    {p : Prop} [Decidable p] {pre : Devm} {err : EvmError × Devm}
+    {next : Unit → Execution}
+    (herr : Devm.NoDelCode wa pre err.2)
+    (hnext : ∀ u, Execution.Rel (Devm.NoDelCode wa) pre (next u)) :
+    Execution.Rel (Devm.NoDelCode wa) pre
+      (Except.assert p err >>= next) := by
+  unfold Except.assert
+  split
+  · exact hnext ()
+  · exact herr
+
+lemma Linst.selfdestructAmsterdam_finish_noDelCode (wa : Adr)
+    (d : Devm) (donor donee : Adr) (amount : B256) :
+    Execution.Rel (Devm.NoDelCode wa) d
+      (let moved := d.addBal donee amount
+       let logged := moved.emitTransferLog donor donee amount
+       if donor ∈ logged.createdAccounts then
+         .ok (addAccountToDelete logged donor)
+       else .ok logged) := by
+  let moved := d.addBal donee amount
+  let logged := moved.emitTransferLog donor donee amount
+  change Execution.Rel (Devm.NoDelCode wa) d
+    (if donor ∈ logged.createdAccounts then
+      .ok (addAccountToDelete logged donor)
+    else .ok logged)
+  have hmoved : Devm.NoDelCode wa d moved := fun hnd =>
+    Devm.NoDel.of_eqs (d := d) (d' := moved) rfl
+      (Devm.addBal_codeFrame d donee amount wa).symm hnd
+  have hlogged : Devm.NoDelCode wa moved logged := by
+    intro hnd
+    apply Devm.NoDel.of_eqs (d := moved) (d' := logged)
+    · dsimp [logged]
+      unfold Devm.emitTransferLog
+      split <;> rfl
+    · exact (Devm.emitTransferLog_codeFrame moved donor donee amount wa).symm
+    · exact hnd
+  by_cases hdel : donor ∈ logged.createdAccounts
+  · simp only [hdel, if_pos, Execution.Rel, Outcome.Rel, id_eq]
+    intro hnd
+    have hlog := hlogged (hmoved hnd)
+    have hne : donor ≠ wa := by
+      intro heq
+      subst heq
+      exact hlog.ca hdel
+    exact ⟨AdrSet.not_mem_insert (Ne.symm hne) hlog.atd,
+      hlog.ca, hlog.code⟩
+  · simp only [hdel, Execution.Rel, Outcome.Rel, id_eq]
+    exact fun hnd => hlogged (hmoved hnd)
+
+lemma Linst.selfdestructAmsterdam_noDelCode (wa : Adr)
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Execution.Rel (Devm.NoDelCode wa) devm
+      (Linst.run sevm devm .selfdestruct) := by
+  rw [Linst.run, hsg]
+  unfold assertDynamic
+  refine Except.assert_bindExecution_noDelCode (fun hnd => hnd) ?_
+  intro _
+  dsimp only
+  refine Outcome.Rel.bindExecutionPair (noDelCode_refl_trans wa).2
+    (Outcome.Rel.mono
+      (fun _ _ hf => Devm.instructionFrame_refines_noDelCode (wa := wa) hf)
+      (Devm.popToAdr_instructionFrame devm)) ?_
+  intro pair
+  rcases pair with ⟨donee, d⟩
+  dsimp only
+  let cold := donee ∉ d.accessedAddresses
+  let gasCost := gasSelfDestruct +
+    (if cold then sevm.benvStat.rules.gas.coldAccountAccess else 0)
+  refine Except.assert_bindExecution_noDelCode (fun hnd => hnd) ?_
+  intro _
+  let warm : Devm := if cold then addAccessedAddress d donee else d
+  let read : Devm :=
+    (warm.balReadAccount sevm.benvStat.rules donee).balReadAccount
+      sevm.benvStat.rules sevm.currentTarget
+  have hwarm : Devm.NoDelCode wa d warm := by
+    dsimp only [warm]
+    split
+    · exact Devm.instructionFrame_refines_noDelCode
+        (addAccessedAddress_instructionFrame d donee)
+    · exact id
+  have hread : Devm.NoDelCode wa warm read :=
+    Devm.instructionFrame_refines_noDelCode
+      (Devm.instructionFrame_trans
+        (Devm.balReadAccount_instructionFrame sevm.benvStat.rules donee warm)
+        (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
+          sevm.currentTarget
+          (warm.balReadAccount sevm.benvStat.rules donee)))
+  let donorBal := (read.getAcct sevm.currentTarget).bal
+  let creating := (read.getAcct donee).Empty ∧ donorBal ≠ 0
+  refine Execution.Rel.trans_left (noDelCode_refl_trans wa).2
+    ((noDelCode_refl_trans wa).2 hwarm hread) ?_
+  apply Execution.Rel.bind (noDelCode_refl_trans wa).2
+    (Outcome.Rel.mono
+      (fun _ _ hf => Devm.instructionFrame_refines_noDelCode (wa := wa) hf)
+      (chargeGas_instructionFrame
+        (gasCost + if creating then state.accountWrite else 0) read))
+  intro charged
+  apply Execution.Rel.bind (noDelCode_refl_trans wa).2
+    (Outcome.Rel.mono
+      (fun _ _ hf => Devm.instructionFrame_refines_noDelCode (wa := wa) hf)
+      (chargeStateGas_instructionFrame
+        (if creating then state.newAccount else 0) charged))
+  intro stateCharged
+  apply Execution.Rel.bind (noDelCode_refl_trans wa).2
+    (Devm.subBal_toExcept_noDelCode wa stateCharged
+      sevm.currentTarget donorBal)
+  intro debited
+  exact Linst.selfdestructAmsterdam_finish_noDelCode wa debited
+    sevm.currentTarget donee donorBal
+
 lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     Jinst.Effect (Devm.NoDelCode wa) j := by
   intro evm out hrun
@@ -7134,10 +7661,35 @@ lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     refine fun h => ?_
     exact Devm.NoDel.of_eqs (Jinst.inv_delSets hrun).symm (hcode wa).symm h
 
+lemma Linst.inv_noDel_any {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {l : Linst} {exn : Execution}
+    (run : Linst.Run sevm devm l exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · cases hsg : sevm.benvStat.rules.stateGas with
+    | none => exact Linst.inv_noDel hsg run h
+    | some state =>
+        have heff := Linst.selfdestructAmsterdam_noDelCode wa
+          (devm := devm) hsg
+        rw [run] at heff
+        cases exn <;> exact heff h
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
+    rw [run] at hf
+    cases exn <;>
+      exact Devm.NoDel.of_instructionFrame hf h
+
 lemma Linst.noDelCode_effect (wa : Adr) (l : Linst) :
     Linst.Effect (Devm.NoDelCode wa) l := by
   intro sevm pre out hleg hrun
   have hnd := Linst.inv_noDel (wa := wa) hleg hrun
+  cases out with
+  | error e => exact hnd
+  | ok d => exact hnd
+
+lemma Linst.noDelCode_effect_any (wa : Adr) (l : Linst) :
+    Linst.EffectAny (Devm.NoDelCode wa) l := by
+  intro sevm pre out hrun
+  have hnd := Linst.inv_noDel_any (wa := wa) hrun
   cases out with
   | error e => exact hnd
   | ok d => exact hnd
@@ -7154,70 +7706,41 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   | error e => exact heff h
   | ok d => exact heff h
 
+lemma Exec.inv_noDel_any {wa : Adr} {pc : Nat} {sevm : Sevm}
+    {devm : Devm} {exn : Execution}
+    (run : Exec pc sevm devm exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  have heff := Exec.effect_any (noDelCode_refl_trans wa).1
+    (noDelCode_refl_trans wa).2 (Ninst.noDelCode_effectRec_any wa)
+    (Jinst.noDelCode_effect wa) (Linst.noDelCode_effect_any wa) run
+  cases exn with
+  | error e => exact heff h
+  | ok d => exact heff h
+
 theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processMessage msg = .ok evm)
-    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
   obtain ⟨xl, hfill, hrel⟩ := of_processMessage msg (.ok evm) h_run
-  have hxleg : xl.Legacy := RunFrame.slot_legacy hrel hleg
   have hinv : Xlot.InvNoDel wa xl := by
     rcases xl with _ | ⟨cevm, cexn⟩
     · trivial
     · intro hnd
       obtain ⟨exc⟩ := hfill
-      exact Exec.inv_noDel exc hxleg hnd
+      exact Exec.inv_noDel_any exc hnd
   exact ProcessMessage.inv_noDel hinv hrel h
 
 theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (h_run : processCreateMessage msg = .ok evm)
-    (hleg : msg.benv.stat.rules.stateGas = none)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
-  rw [processCreateMessage_eq] at h_run
-  have h_inv_cm : Msg.NoDel wa (processCreateMessage.msg msg) :=
-    Msg.NoDel.processCreateMessage_msg h_ct h
-  rcases hpm0 : processMessage (processCreateMessage.msg msg) with x | evm2
-  · rw [hpm0, processCreateMessage.settle_error] at h_run
-    cases h_run
-  rw [hpm0] at h_run
-  have h_rest := h_run
-  have h_pm : Devm.NoDel wa evm2 := processMessage_preserves_noDel hpm0 hleg h_inv_cm
-  unfold processCreateMessage.settle at h_rest
-  dsimp only [bind, Except.bind] at h_rest
-  · by_cases herr : evm2.error.isNone = true
-    · rw [if_pos herr] at h_rest
-      rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
-        with ⟨err, evm3⟩ | evm3
-      · rw [hcg] at h_rest
-        cases err
-        case halt reason =>
-          rw [hleg] at h_rest
-          rw [← Except.ok.inj h_rest]
-          have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_err hcg
-          have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
-          have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
-          have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
-          have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
-          unfold processCreateMessage.exceptionalHalt
-          exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl (Devm.NoDel.rollback h_atd h_ca h.code)
-        all_goals cases h_rest
-      · rw [hcg] at h_rest; dsimp only at h_rest
-        rw [← Except.ok.inj h_rest]
-        have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_ok hcg
-        have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
-        have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
-        have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
-        have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
-        have h_gc : evm3.getCode wa = evm2.getCode wa := by
-          have hh := processCreateMessage.chargeCodeGas_getCode_gen hcg wa
-          simpa only [Execution.getCode] using hh
-        refine ⟨h_atd, h_ca, ?_⟩
-        show ((evm3.setCode msg.currentTarget ⟨⟨evm3.output⟩⟩).getCode wa).toList ≠ []
-        rw [setCode_getCode h_ct, h_gc]
-        exact h_pm.code
-    · rw [if_neg herr] at h_rest
-      rw [← Except.ok.inj h_rest]
-      exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
+  obtain ⟨xl, hfill, hrel⟩ := of_processCreateMessage msg (.ok evm) h_run
+  have hinv : Xlot.InvNoDel wa xl := by
+    rcases xl with _ | ⟨cevm, cexn⟩
+    · trivial
+    · intro hnd
+      obtain ⟨exc⟩ := hfill
+      exact Exec.inv_noDel_any exc hnd
+  exact ProcessCreateMessage.inv_noDel hinv hrel h_ct h
 
 lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
     (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
@@ -7411,7 +7934,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_preserves_noDel h_evm hleg h_ct h
+        have h_nodel := processCreateMessage_preserves_noDel h_evm h_ct h
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
@@ -7444,9 +7967,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
             split
             · exact h
             · exact ⟨h.ca, h.code⟩
-          have hpcleg : (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msg.stateGasGrant }).benv.stat.rules.stateGas = none := by
-            split <;> exact hleg
-          have h_nodel_evm := processMessage_preserves_noDel h_pm hpcleg h_pc
+          have h_nodel_evm := processMessage_preserves_noDel h_pm h_pc
           split at h_run
           · split at h_run
             · injection h_run
@@ -7462,9 +7983,6 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
         injection h_run
       · simp only [h_del, bind, Except.bind] at h_run
         have h_del_nodel := setDelegation_msg_noDel h_del h h_not_del
-        have hleg_del : msgDelegation.benv.stat.rules.stateGas = none := by
-          rw [setDelegation_benvStat_eq h_del]
-          exact hleg
         unfold Except.bimap at h_run
         split at h_run
         · injection h_run
@@ -7478,9 +7996,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
               split
               · exact h_del_nodel
               · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
-            have hpcleg : (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msgDelegation.stateGasGrant }).benv.stat.rules.stateGas = none := by
-              split <;> exact hleg_del
-            have h_nodel_evm := processMessage_preserves_noDel h_pm hpcleg h_pc
+            have h_nodel_evm := processMessage_preserves_noDel h_pm h_pc
             split at h_run
             · split at h_run
               · injection h_run
@@ -8030,7 +8546,6 @@ variable {c : ContractSpec}
 
 lemma StateInv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
     (hp : c.Preserves wa)
-    (hleg : sevm.benvStat.rules.stateGas = none)
     (h_pc : c.Pre wa sevm pre)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile c.prog)
     (h_wf : sevm.currentTarget = wa → Mem.Wf pre.memory)
@@ -8038,7 +8553,8 @@ lemma StateInv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
     c.StateInv wa post.state := by
   have h_post : c.Post wa sevm post := hp sevm pre post exc h_code h_wf h_pc
   apply StateInv.of_postcond h_post
-  have h_ce : post.getCode wa = pre.getCode wa := code_eq_of_exec hleg exc h_pc.code
+  have h_ce : post.getCode wa = pre.getCode wa :=
+    code_eq_of_exec_any exc h_pc.code
   show some (post.state.getCode wa).toList = Prog.compile c.prog
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
   exact h_pc.code
@@ -8056,7 +8572,6 @@ lemma StateInv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
 theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (hp : c.Preserves wa)
     (h_run : processMessage msg = .ok evm)
-    (hleg : msg.benv.stat.rules.stateGas = none)
     (h_code : msg.currentTarget = wa → some msg.code.toList = Prog.compile c.prog)
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
     (h_val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
@@ -8094,11 +8609,7 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
       subst h_xl
       obtain ⟨exc⟩ := hfill
       rw [exec_ok_of_handleError h_he herr] at exc
-      have hleg' : (initSevm (msg.withBenv benv)).benvStat.rules.stateGas = none := by
-        show benv.stat.rules.stateGas = none
-        rw [benvAfterTransfer_ok_stat h_bt]
-        exact hleg
-      exact StateInv.of_exec_precond hp hleg' h_pc h_code'
+      exact StateInv.of_exec_precond hp h_pc h_code'
         (fun _ => Mem.wf_empty) exc
 
 
@@ -8116,7 +8627,6 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
 theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (hp : c.Preserves wa)
     (h_run : processCreateMessage msg = .ok evm)
-    (hleg : msg.benv.stat.rules.stateGas = none)
     (h_ct_ne : msg.currentTarget ≠ wa)
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
     (h_inv : c.StateInv wa msg.benv.state) :
@@ -8133,7 +8643,7 @@ theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
   rw [hpm] at h_run
   have h_rest := h_run
   have h_pm : c.StateInv wa evm2.state :=
-    processMessage_preserves_inv hp hpm hleg (fun h => absurd h h_ct_ne) h_ne
+    processMessage_preserves_inv hp hpm (fun h => absurd h h_ct_ne) h_ne
       (fun _ h => absurd h h_ct_ne) h_inv_cm
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
@@ -8146,8 +8656,9 @@ theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
       cases err
       case halt reason =>
         -- exceptional halt : state rolled back to `msg.benv.state`
-        rw [hleg] at h_rest
-        rw [← Except.ok.inj h_rest]; exact h_inv
+        cases hsg : msg.benv.stat.rules.stateGas <;> rw [hsg] at h_rest
+        · rw [← Except.ok.inj h_rest]; exact h_inv
+        · rw [← Except.ok.inj h_rest]; exact h_inv
       all_goals cases h_rest
     · -- clean success : install the returned code at `currentTarget ≠ wa`
       rw [hcg] at h_rest; dsimp only at h_rest
@@ -8407,7 +8918,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_pm := processCreateMessage_preserves_inv hp h_evm hleg h_ct
+        have h_pm := processCreateMessage_preserves_inv hp h_evm h_ct
           h_inv.ne h_inv.state
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
@@ -8456,18 +8967,8 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                   code := msg.benv.state.getCode dca,
                   codeAddress := some dca }).target.isNone = false := by
             split <;> simpa using h_target_false
-          have hpcleg :
-              (match getDelegatedCodeAddress msg.code with
-              | none => msg
-              | some dca =>
-                { msg with
-                  disablePrecompiles := true,
-                  accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,
-                  codeAddress := some dca }).benv.stat.rules.stateGas = none := by
-            split <;> exact hleg
           have h_evm_inv :=
-            processMessage_preserves_inv hp h_pm hpcleg
+            processMessage_preserves_inv hp h_pm
               (fun hct => h_pc.code h_tgt_pc hct)
               h_pc.ne h_pc.val0 h_pc.state
           split at h_run
@@ -8485,9 +8986,6 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
         injection h_run
       · simp only [h_del, bind, Except.bind] at h_run
         have h_del_inv := setDelegation_preserves_msgInv h_del h_inv
-        have hleg_del : msgDelegation.benv.stat.rules.stateGas = none := by
-          rw [setDelegation_benvStat_eq h_del]
-          exact hleg
         unfold Except.bimap at h_run
         split at h_run
         · injection h_run
@@ -8521,18 +9019,8 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                     code := msgDelegation.benv.state.getCode dca,
                     codeAddress := some dca }).target.isNone = false := by
               split <;> simpa using h_msgDelegation_target_false
-            have hpcleg :
-                (match getDelegatedCodeAddress msgDelegation.code with
-                | none => msgDelegation
-                | some dca =>
-                  { msgDelegation with
-                    disablePrecompiles := true,
-                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,
-                    codeAddress := some dca }).benv.stat.rules.stateGas = none := by
-              split <;> exact hleg_del
             have h_evm_inv :=
-              processMessage_preserves_inv hp h_pm hpcleg
+              processMessage_preserves_inv hp h_pm
                 (fun hct => h_pc.code h_tgt_pc hct)
                 h_pc.ne h_pc.val0 h_pc.state
             split at h_run
