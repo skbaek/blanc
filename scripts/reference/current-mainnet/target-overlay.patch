@@ -1,0 +1,374 @@
+diff --git a/packages/testing/src/execution_testing/client_clis/__init__.py b/packages/testing/src/execution_testing/client_clis/__init__.py
+index 2a9e603a118c60d080aef60ef243af03429e42ef..011341511b5b26a1934e20a712f3959ef9ce93c1 100644
+--- a/packages/testing/src/execution_testing/client_clis/__init__.py
++++ b/packages/testing/src/execution_testing/client_clis/__init__.py
+@@ -32,6 +32,7 @@ from .clis.evmone import (
+ )
+ from .clis.execution_specs import ExecutionSpecsTransitionTool
+ from .clis.geth import GethFixtureConsumer, GethTransitionTool
++from .clis.jaune import JauneExceptionMapper, JauneTransitionTool
+ from .clis.nethermind import Nethtest, NethtestFixtureConsumer
+ from .clis.nimbus import NimbusTransitionTool
+ from .ethereum_cli import CLINotFoundInPathError, UnknownCLIError
+@@ -73,6 +74,8 @@ __all__ = (
+     "GasExhaustionTraceComparator",
+     "GethFixtureConsumer",
+     "GethTransitionTool",
++    "JauneExceptionMapper",
++    "JauneTransitionTool",
+     "LazyAlloc",
+     "Nethtest",
+     "NethtestFixtureConsumer",
+diff --git a/packages/testing/src/execution_testing/client_clis/clis/jaune.py b/packages/testing/src/execution_testing/client_clis/clis/jaune.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a0f759397d0af0ac6e7ba141e978414eec1d101
+--- /dev/null
++++ b/packages/testing/src/execution_testing/client_clis/clis/jaune.py
+@@ -0,0 +1,185 @@
++"""Jaune transition tool interface.
++
++Jaune is a formally verified Ethereum execution-layer implementation written
++in Lean 4 (https://github.com/skbaek/jaune). Its `jaune t8n` subcommand
++implements the transition-tool protocol over the Prague-BPO2 lane.
++
++Two things about it differ from the wrappers next to this one, and both are
++deliberate on Jaune's side.
++
++**Its rejection reasons are already canonical identities.** `rejected[].error`
++and `blockException` carry free text with no normative content, so every tool
++writes its own and this framework maps rather than compares. Jaune writes the
++official EEST identity itself -- `TransactionException.NONCE_MISMATCH_TOO_HIGH`,
++`BlockException.SYSTEM_CONTRACT_CALL_FAILED` -- because it already assigns one
++to each of its typed rejection reasons internally. The mapper below is
++therefore a *coverage declaration*: it names the identities Jaune can emit,
++and matches each against its own spelling. Anything Jaune cannot classify it
++emits as a `JauneT8n.UNMAPPED_*` or `JauneT8n.TX_PARSE_*` token, which matches
++nothing here and surfaces as an `UndefinedException` -- loudly unmapped, never
++quietly validated.
++
++**It advertises its forks on a dedicated flag.** `jaune t8n --forks` prints the
++supported lane on one line and answers from any working directory;
++`jaune t8n --info` additionally prints the version, the Lean toolchain and the
++corpus pins, and needs the repository's `scripts/sources.json`.
++
++Not claimed, and refused rather than ignored if requested: EIP-3155 tracing,
++opcode counting, blob-schedule overrides (`--input.blobParams`; name the BPO
++fork instead), and any daemon or streaming mode.
++"""
++
++import re
++import subprocess
++from pathlib import Path
++from typing import ClassVar, Dict, List, Optional
++
++from execution_testing.exceptions import (
++    BlockException,
++    ExceptionBase,
++    ExceptionMapper,
++    TransactionException,
++)
++from execution_testing.forks import Fork
++
++from ..transition_tool import TransitionTool
++
++JAUNE_IDENTITIES: List[ExceptionBase] = [
++    TransactionException.GASLIMIT_PRICE_PRODUCT_OVERFLOW,
++    TransactionException.GAS_ALLOWANCE_EXCEEDED,
++    TransactionException.GAS_LIMIT_EXCEEDS_MAXIMUM,
++    TransactionException.INITCODE_SIZE_EXCEEDED,
++    TransactionException.INSUFFICIENT_ACCOUNT_FUNDS,
++    TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS,
++    TransactionException.INTRINSIC_GAS_TOO_LOW,
++    TransactionException.INVALID_CHAINID,
++    TransactionException.NONCE_IS_MAX,
++    TransactionException.NONCE_MISMATCH_TOO_HIGH,
++    TransactionException.NONCE_MISMATCH_TOO_LOW,
++    TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS,
++    TransactionException.SENDER_NOT_EOA,
++    TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED,
++    TransactionException.TYPE_3_TX_CONTRACT_CREATION,
++    TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH,
++    TransactionException.TYPE_3_TX_ZERO_BLOBS,
++    TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST,
++    TransactionException.TYPE_4_TX_CONTRACT_CREATION,
++    BlockException.EXTRA_DATA_TOO_BIG,
++    BlockException.GASLIMIT_TOO_BIG,
++    BlockException.GAS_USED_OVERFLOW,
++    BlockException.IMPORT_IMPOSSIBLE_DIFFICULTY_OVER_PARIS,
++    BlockException.IMPORT_IMPOSSIBLE_UNCLES_OVER_PARIS,
++    BlockException.INVALID_BASEFEE_PER_GAS,
++    BlockException.INVALID_BLOCK_NUMBER,
++    BlockException.INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT,
++    BlockException.INVALID_DEPOSIT_EVENT_LAYOUT,
++    BlockException.INVALID_GASLIMIT,
++    BlockException.INVALID_GAS_USED,
++    BlockException.INVALID_LOG_BLOOM,
++    BlockException.INVALID_RECEIPTS_ROOT,
++    BlockException.INVALID_REQUESTS,
++    BlockException.INVALID_STATE_ROOT,
++    BlockException.INVALID_TRANSACTIONS_ROOT,
++    BlockException.INVALID_WITHDRAWALS_ROOT,
++    BlockException.RLP_BLOCK_LIMIT_EXCEEDED,
++    BlockException.RLP_INVALID_FIELD_OVERFLOW_64,
++    BlockException.RLP_STRUCTURES_ENCODING,
++    BlockException.RLP_WITHDRAWALS_NOT_READ,
++    BlockException.SYSTEM_CONTRACT_CALL_FAILED,
++    BlockException.UNKNOWN_PARENT,
++    BlockException.UNKNOWN_PARENT_ZERO,
++]
++"""
++The exact set of official identities `jaune t8n` can write, one per typed
++rejection reason it can classify. It is Jaune's own
++`Jaune/FixtureException.lean` vocabulary; adding a reason there without adding
++it here would make that reason undefined to this framework rather than
++silently mapped to a neighbour.
++"""
++
++
++class JauneExceptionMapper(ExceptionMapper):
++    """Translate between EEST exceptions and the identities Jaune writes.
++
++    Each identity matches its own spelling, because that spelling is exactly
++    what Jaune emits. See the module docstring for why this is a coverage
++    declaration rather than a translation table.
++
++    The match is *anchored*, not a substring: Jaune's whole message is the
++    identity, and two of these identities nest --
++    `BlockException.UNKNOWN_PARENT` inside
++    `BlockException.UNKNOWN_PARENT_ZERO` -- so substring matching would return
++    both for the longer one and turn a precise rejection into an ambiguous
++    pair.
++    """
++
++    mapping_substring: ClassVar[Dict[ExceptionBase, str]] = {}
++
++    mapping_regex: ClassVar[Dict[ExceptionBase, str]] = {
++        identity: r"\A" + re.escape(str(identity)) + r"\Z"
++        for identity in JAUNE_IDENTITIES
++    }
++
++
++class JauneTransitionTool(TransitionTool):
++    """Jaune `jaune t8n` transition tool interface wrapper class."""
++
++    default_binary = Path("jaune")
++    detect_binary_pattern = re.compile(r"^jaune version\b")
++    version_flag: str = "-v"
++    subcommand: Optional[str] = "t8n"
++    t8n_use_stream = False
++    supports_opcode_count: ClassVar[bool] = False
++    supports_blob_params: ClassVar[bool] = False
++    supports_state_test: ClassVar[bool] = True
++
++    supported_forks: frozenset
++
++    def __init__(
++        self,
++        *,
++        exception_mapper: Optional[ExceptionMapper] = None,
++        binary: Optional[Path] = None,
++        trace: bool = False,
++    ):
++        """Initialize the JauneTransitionTool class."""
++        if exception_mapper is None:
++            exception_mapper = JauneExceptionMapper()
++        super().__init__(
++            exception_mapper=exception_mapper, binary=binary, trace=trace
++        )
++        if trace:
++            raise Exception(
++                "jaune t8n does not implement EIP-3155 tracing and refuses "
++                "--trace rather than ignoring it"
++            )
++        self.supported_forks = self._read_fork_lane()
++
++    def _read_fork_lane(self) -> frozenset:
++        """Ask the binary which forks it serves.
++
++        `jaune t8n --forks` prints the lane on one line and depends on nothing
++        outside the binary, which is what makes it usable from the temporary
++        directory a fill runs in.
++        """
++        result = subprocess.run(
++            [str(self.binary), "t8n", "--forks"],
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++            text=True,
++        )
++        if result.returncode != 0:
++            raise Exception(
++                f"`{self.binary} t8n --forks` exited {result.returncode}: "
++                f"{result.stderr.strip()}"
++            )
++        lane = result.stdout.split()
++        if not lane:
++            raise Exception(
++                f"`{self.binary} t8n --forks` printed no fork lane"
++            )
++        return frozenset(lane)
++
++    def is_fork_supported(self, fork: Fork) -> bool:
++        """Return True if the fork is supported by the tool."""
++        return fork.transition_tool_name() in self.supported_forks
+diff --git a/packages/testing/src/execution_testing/client_clis/tests/test_jaune.py b/packages/testing/src/execution_testing/client_clis/tests/test_jaune.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..186e85bebd9f53b6f21d269729c913818d9e873b
+--- /dev/null
++++ b/packages/testing/src/execution_testing/client_clis/tests/test_jaune.py
+@@ -0,0 +1,122 @@
++"""Tests for the Jaune transition-tool wrapper and its exception mapper."""
++
++from pathlib import Path
++
++import pytest
++
++from execution_testing.client_clis import (
++    JauneExceptionMapper,
++    JauneTransitionTool,
++)
++from execution_testing.client_clis.clis.jaune import JAUNE_IDENTITIES
++from execution_testing.client_clis.transition_tool import TransitionTool
++from execution_testing.exceptions import (
++    BlockException,
++    TransactionException,
++    UndefinedException,
++)
++
++
++def test_registered_as_a_transition_tool() -> None:
++    """The wrapper must be registered, or `--evm-bin` never reaches it."""
++    assert JauneTransitionTool in TransitionTool.registered_tools
++
++
++@pytest.mark.parametrize(
++    "banner,expected",
++    [
++        ("jaune version 0.1.0", True),
++        ("jaune version 1.2.3-rc1", True),
++        ("jaune", False),
++        ("jaunet version 0.1.0", False),
++        ("evm version 1.16.0-stable", False),
++        ("ethereum-spec-evm 0.1.0", False),
++        ("", False),
++    ],
++)
++def test_detect_binary(banner: str, expected: bool) -> None:
++    """Detection keys on the banner `jaune -v` prints and nothing else."""
++    assert (
++        JauneTransitionTool.detect_binary(banner, Path("jaune")) is expected
++    )
++
++
++def test_every_declared_identity_maps_to_itself() -> None:
++    """
++    Jaune writes the official identity verbatim, so every declared identity
++    must map to exactly itself -- not to a neighbour, and not to two.
++    """
++    mapper = JauneExceptionMapper()
++    for identity in JAUNE_IDENTITIES:
++        matched = mapper.message_to_exception(str(identity))
++        assert not isinstance(matched, UndefinedException), (
++            f"{identity} is declared but does not map"
++        )
++        assert matched == [identity], f"{identity} mapped to {matched}"
++
++
++def test_nested_identities_do_not_both_match() -> None:
++    """
++    Two declared identities nest: `BlockException.UNKNOWN_PARENT` inside
++    `BlockException.UNKNOWN_PARENT_ZERO`. Substring matching would return both
++    for the longer message, so the mapper anchors and this pins that.
++    """
++    mapper = JauneExceptionMapper()
++    assert mapper.message_to_exception(
++        "BlockException.UNKNOWN_PARENT_ZERO"
++    ) == [BlockException.UNKNOWN_PARENT_ZERO]
++    assert mapper.message_to_exception("BlockException.UNKNOWN_PARENT") == [
++        BlockException.UNKNOWN_PARENT
++    ]
++
++
++def test_a_message_merely_containing_an_identity_does_not_match() -> None:
++    """
++    The whole message is the identity. A message that only quotes one is not
++    a classification and must stay undefined.
++    """
++    matched = JauneExceptionMapper().message_to_exception(
++        "Failed transaction: TransactionException.NONCE_MISMATCH_TOO_HIGH "
++        "(and something else)"
++    )
++    assert isinstance(matched, UndefinedException)
++
++
++def test_a_representative_rejection_maps() -> None:
++    """The rejection the acceptance corpus produces, end to end."""
++    mapper = JauneExceptionMapper()
++    assert mapper.message_to_exception(
++        "TransactionException.NONCE_MISMATCH_TOO_HIGH"
++    ) == [TransactionException.NONCE_MISMATCH_TOO_HIGH]
++    assert mapper.message_to_exception(
++        "BlockException.SYSTEM_CONTRACT_CALL_FAILED"
++    ) == [BlockException.SYSTEM_CONTRACT_CALL_FAILED]
++
++
++@pytest.mark.parametrize(
++    "message",
++    [
++        # What Jaune writes when it cannot classify a typed reason: the
++        # `headerNonce` block rule, which the fixture vocabulary has no
++        # identity for, and every VM or internal failure.
++        "JauneT8n.UNMAPPED_BLOCK: HeaderNonceError : nonce is not zero",
++        "JauneT8n.UNMAPPED_VM: some vm failure",
++        # What it writes when a `txs` entry never becomes a transaction.
++        "JauneT8n.TX_PARSE_UNKNOWN_FIELD: nonsense",
++        "JauneT8n.TX_PARSE_UNSUPPORTED_TYPE: 9",
++        # And a plausible near-miss, to show the mapper is not fuzzy.
++        "TransactionException.NOT_A_REAL_IDENTITY",
++        "nonce too high",
++    ],
++)
++def test_an_unmapped_reason_fails_loudly(message: str) -> None:
++    """
++    An unmapped reason must surface as `UndefinedException`, never as a
++    silently accepted match. This is the property that stops a rejection Jaune
++    could not classify from validating a test that expected a specific one.
++    """
++    matched = JauneExceptionMapper().message_to_exception(message)
++    assert isinstance(matched, UndefinedException), (
++        f"{message!r} was mapped to {matched} instead of being undefined"
++    )
++    assert matched.mapper_name == "JauneExceptionMapper"
+diff --git a/packages/testing/src/execution_testing/client_clis/transition_tool.py b/packages/testing/src/execution_testing/client_clis/transition_tool.py
+index 4417d8f7682d4d9eed84a0b7be10bce7e8e06919..d0714734c06890a58d3cbc71fbb297fba0e16d63 100644
+--- a/packages/testing/src/execution_testing/client_clis/transition_tool.py
++++ b/packages/testing/src/execution_testing/client_clis/transition_tool.py
+@@ -207,6 +207,20 @@ class TransitionTool(EthereumCLI):
+     supports_opcode_count: ClassVar[bool] = False
+     supports_xdist: ClassVar[bool] = True
+     supports_blob_params: ClassVar[bool] = False
++    supports_state_test: ClassVar[bool] = False
++    """
++    Whether the tool accepts a ``--state-test`` flag, meaning "apply exactly
++    one transaction with no system operations".
++
++    ``TransitionToolData.state_test`` reaches the in-process tool but has never
++    reached an external binary: neither ``_evaluate_filesystem`` nor
++    ``construct_args_stream`` passes it on. A state test's pre-allocation is
++    ``fork.pre_allocation()``, which carries no system contracts, so an
++    external tool told to run a *block* over it performs the fork's checked
++    system transactions against addresses that hold no code -- and reports an
++    invalid block for a test that is not about blocks at all. Default False,
++    so nothing changes for a tool that has not opted in.
++    """
+     fork_name_map: ClassVar[Dict[str, str]] = {}
+ 
+     @abstractmethod
+@@ -443,6 +457,8 @@ class TransitionTool(EthereumCLI):
+             "--state.chainid",
+             str(t8n_data.chain_id),
+         ]
++        if self.supports_state_test and t8n_data.state_test:
++            args.append("--state-test")
+         if self.supports_opcode_count and self.opcode_count is not None:
+             args.extend(
+                 [

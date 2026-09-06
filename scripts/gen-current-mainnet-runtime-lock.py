@@ -168,7 +168,11 @@ def existing_platforms(
     document = lane._validate_runtime_lock_document(
         profile, read_json(path, "current-mainnet runtime lock")
     )
-    return copy.deepcopy(document["platforms"])
+    platforms = copy.deepcopy(document["platforms"])
+    if document["schema"] == 1:
+        for entry in platforms.values():
+            entry["targetSitePackages"]["representation"] = 1
+    return platforms
 
 
 def generate(
@@ -191,11 +195,12 @@ def generate(
         platforms[legacy_platform] = legacy_platform_entry(
             legacy_manifest, legacy_platform, profile, paths
         )
+        platforms[legacy_platform]["targetSitePackages"]["representation"] = 1
     elif legacy_platform is not None:
         fail("--import-legacy-platform requires --import-legacy-manifest")
     platforms[key] = lane._runtime_entry(paths)
     document = {
-        "schema": 1,
+        "schema": 2,
         "target": lane._runtime_target_document(paths),
         "platforms": platforms,
     }
@@ -265,6 +270,9 @@ def main() -> int:
         if args.import_legacy_manifest is not None or args.import_legacy_platform is not None:
             fail("legacy import options are valid only with --write")
         count = self_check(profile)
+        from current_mainnet_runtime_controls import self_check as runtime_controls
+        controls = runtime_controls()
+        print(f"OK — current-mainnet runtime construction controls: {len(controls)} fail-closed and relocation controls")
         print(f"OK — current-mainnet runtime-lock self-check: {count} mutants rejected")
         return 0
     if args.check and (args.import_legacy_manifest is not None or args.import_legacy_platform is not None):
@@ -286,7 +294,9 @@ def main() -> int:
     except OSError as exc:
         fail(f"cannot read committed current-mainnet runtime lock: {exc}")
     if committed != rendered:
-        fail("committed current-mainnet runtime lock is stale for this native platform")
+        fail("committed current-mainnet runtime lock differs from this native installation; "
+             "preserve it and construct a fresh root with scripts/setup-current-mainnet.py; "
+             "see docs/CURRENT_MAINNET_SETUP.md, not a lock refresh")
     print("OK — current-mainnet runtime lock matches the native platform")
     return 0
 
