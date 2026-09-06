@@ -2,6 +2,25 @@ schema_version = 1
 generated_notice = "Generated from scripts/proof-recipes.toml; do not edit by hand."
 
 [[recipe]]
+id = "same-frame-stack-certificate"
+status = "active"
+triggers = ["goal-head:CompiledStackSafety.StepSafe", "goal-head:CompiledStackSafety.ResumeSafe"]
+preferred_path = "Use CompiledStackSafety.Certificate.at_parentPrefix for a checked certificate and an actual same-frame prefix, deriving the exact root entry invariant first. Use resume_call_safe to close an actual CALL resumption from parent headroom and its continuation stack invariant; call_resumes_of_room constructs the actual status-word result."
+boundary = "The certificate requires local proofs for actual decoded steps; a symbolic PC/height table alone is insufficient. The theorem covers arbitrary raw parent outcomes but does not assert safety of arbitrary entered child code. Fatal child errors are distinguished from newly generated parent stack faults."
+owner_module = "Blanc/CompiledStackSafety.lean"
+canonical_example = "Blanc/CompiledStackSafety.lean:Certificate.at_parentPrefix"
+symbols = [
+  "declaration:Blanc.CompiledStackSafety.Certificate",
+  "declaration:Blanc.CompiledStackSafety.Certificate.parentStep",
+  "declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix",
+  "declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix",
+  "declaration:Blanc.CompiledStackSafety.call_resumes_of_room",
+  "declaration:Blanc.CompiledStackSafety.resume_call_safe",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-06"
+
+[[recipe]]
 id = "runcompiled-construction"
 status = "active"
 triggers = [

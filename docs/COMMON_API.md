@@ -321,6 +321,20 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 
 ### E5. I need to inspect what happened in an `Exec`
 
+- For operand-stack safety at every reached same-frame node, use
+  [`Blanc/CompiledStackSafety.lean`](../Blanc/CompiledStackSafety.lean).
+  `CompiledStackSafety.Certificate` carries local actual-decoder step and height
+  proofs; `Certificate.parentStep`, `parentPrefix`, and `at_parentPrefix`
+  transport them over the existing raw `Exec.Deriv.ParentPrefix`, including
+  failing outcomes and repeated loops. The entry invariant must be proved for
+  the exact execution root. `call_resumes_of_room` constructs a status-word
+  resume from parent headroom; `resume_call_safe` distinguishes a newly generated
+  parent operand-stack fault from an inherited child-settlement error. This
+  interface does not synthesize an opcode or concrete-program certificate.
+  Its exact `StepSafe`/`ResumeSafe` goal-head advice is implemented in the
+  leaf-only `proofRecipeLeafTriggerMatches` dispatch in `ProofRecipeTactic`, reusing
+  the shared raw-head helper. Unmatched triggers retain the original matcher;
+  the generator validates both fixed inventories and rejects duplicate owners.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
