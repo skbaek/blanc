@@ -40,6 +40,53 @@ open ContractSpec
 
 variable {c : ContractSpec}
 
+/-- One fork-selected SELFDESTRUCT settlement step preserves an installed
+contract that is not selected.  The Amsterdam clearing branch preserves the
+complete balance function; the legacy branch uses the existing deletion
+closure. -/
+theorem StateInv.settleSelfdestructsStep
+    {ca address : Adr} {state : State} (rules : ForkRules)
+    (hne : address ≠ ca) (inv : c.StateInv ca state) :
+    c.StateInv ca (ExecutionTrace.settleSelfdestructsStep rules state address) := by
+  cases hgas : rules.stateGas with
+  | none =>
+      simpa only [ExecutionTrace.settleSelfdestructsStep, hgas] using
+        inv.destroyAccount hne
+  | some stateGas =>
+      have hget :
+          (ExecutionTrace.settleSelfdestructsStep rules state address).get ca =
+            state.get ca :=
+        ExecutionTrace.settleSelfdestructsStep_get_eq rules hne
+      have hbal :
+          (ExecutionTrace.settleSelfdestructsStep rules state address).bal =
+            state.bal := by
+        simp only [ExecutionTrace.settleSelfdestructsStep, hgas]
+        exact ExecutionTrace.clearAccountPreservingBalance_bal state address
+      refine ⟨?_, ?_, ?_⟩
+      · rw [hget]
+        exact inv.code
+      · rw [hbal]
+        exact inv.side
+      · rw [hget]
+        exact inv.inv
+
+/-- The complete fork-selected SELFDESTRUCT settlement preserves an installed
+contract omitted from the selected address list. -/
+theorem StateInv.settleSelfdestructs
+    {ca : Adr} {state : State} (rules : ForkRules) (addresses : List Adr)
+    (hne : ∀ address ∈ addresses, address ≠ ca)
+    (inv : c.StateInv ca state) :
+    c.StateInv ca (Jaune.settleSelfdestructs rules addresses state) := by
+  rw [ExecutionTrace.settleSelfdestructs_eq_foldl]
+  induction addresses generalizing state with
+  | nil => exact inv
+  | cons address addresses ih =>
+      rw [List.foldl_cons]
+      exact ih
+        (fun tail htail => hne tail (List.mem_cons_of_mem _ htail))
+        (inv.settleSelfdestructsStep rules
+          (hne address List.mem_cons_self))
+
 /-- An arbitrary contract invariant survives one retained transaction when
 the concrete message frames selected by that transaction are admitted. -/
 theorem TransactionTrace.benvInv_admitted
@@ -65,9 +112,11 @@ theorem TransactionTrace.benvInv_admitted
       (trace.coinbaseState chronology.refundCounter) :=
     StateInv.addBal bounds.2 refundInv
   have finalInv : c.StateInv ca
-      (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+      (settleSelfdestructs benv.beginTransaction.stat.rules
+        trace.messageOut.accountsToDelete.toList
         (trace.coinbaseState chronology.refundCounter)) :=
-    StateInv.foldl_destroyAccount messageInv.2 coinbaseInv
+    StateInv.settleSelfdestructs benv.beginTransaction.stat.rules
+      trace.messageOut.accountsToDelete.toList messageInv.2 coinbaseInv
   refine ⟨?_, by simpa [Benv.withState] using inv.ca⟩
   rw [chronology.finalState_eq]
   exact finalInv

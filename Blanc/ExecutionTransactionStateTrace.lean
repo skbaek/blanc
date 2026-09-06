@@ -4,9 +4,9 @@ import Blanc.ExecutionMessageStateTrace
 Contract-neutral state chronology for a successful Jaune transaction.
 
 The chronology retains the up-front sender debit, the settled message stream,
-the sender gas refund, the priority-fee credit, and each final account
-deletion as distinct ordered boundaries.  No contract-specific address is
-selected here.
+the sender gas refund, the priority-fee credit, and each fork-selected final
+SELFDESTRUCT step as a distinct ordered boundary.  No contract-specific
+address is selected here.
 -/
 
 namespace Blanc
@@ -15,15 +15,23 @@ open Jaune
 
 namespace ExecutionTrace
 
-/-- Charged gas after refund and calldata-floor accounting. -/
+/-- The exact gas settlement selected by the transaction's fork rules. -/
+def TransactionTrace.gasSettlement
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (refundCounter : Nat) : TransactionGasSettlement :=
+  settleTransactionGas benv.beginTransaction.stat.rules tx.gas
+    trace.calldataFloorGasCost trace.messageOut.gasLeft
+    trace.messageOut.stateGasLeft refundCounter trace.messageOut.stateGasUsed
+
+/-- Charged gas after the fork-selected refund and calldata-floor accounting. -/
 def TransactionTrace.chargedGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (refundCounter : Nat) : Nat :=
-  max (tx.gas - trace.messageOut.gasLeft -
-      min ((tx.gas - trace.messageOut.gasLeft) / 5) refundCounter)
-    trace.calldataFloorGasCost
+  (trace.gasSettlement refundCounter).gasUsed
 
 /-- Sender refund installed after the settled message. -/
 def TransactionTrace.refundValue
@@ -31,7 +39,7 @@ def TransactionTrace.refundValue
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (refundCounter : Nat) : B256 :=
-  ((tx.gas - trace.chargedGas refundCounter) *
+  ((trace.gasSettlement refundCounter).gasLeft *
     trace.effectiveGasPrice).toB256
 
 /-- Priority fee credited to the block coinbase. -/
@@ -40,8 +48,9 @@ def TransactionTrace.coinbaseValue
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (refundCounter : Nat) : B256 :=
-  (trace.chargedGas refundCounter *
-    (trace.effectiveGasPrice - benv.stat.baseFeePerGas)).toB256
+  ((trace.gasSettlement refundCounter).gasUsed *
+    (trace.effectiveGasPrice -
+      benv.beginTransaction.stat.baseFeePerGas)).toB256
 
 def TransactionTrace.refundedState
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -68,7 +77,8 @@ structure TransactionStateChronology
   refundCounter_eq :
     Int.toNat? trace.messageOut.refundCounter = some refundCounter
   finalState_eq :
-    state = trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+    state = settleSelfdestructs benv.beginTransaction.stat.rules
+      trace.messageOut.accountsToDelete.toList
       (trace.coinbaseState refundCounter)
 
 /-- Exact provenance for one retained transaction-level state boundary. -/
@@ -102,7 +112,7 @@ inductive TransactionStateBoundaryOrigin where
 abbrev TransactionStateBoundary :=
   StateTransition TransactionStateBoundaryOrigin
 
-/-- Retain every final account deletion in fold order. -/
+/-- Retain every fork-selected final SELFDESTRUCT step in fold order. -/
 def TransactionStateChronology.deletionBoundaries
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
@@ -113,8 +123,11 @@ def TransactionStateChronology.deletionBoundaries
   | before, address :: addresses =>
       { origin := .deletion chronology address
         before
-        after := destroyAccount before address } ::
-      chronology.deletionBoundaries (destroyAccount before address) addresses
+        after := settleSelfdestructsStep benv.beginTransaction.stat.rules
+          before address } ::
+      chronology.deletionBoundaries
+        (settleSelfdestructsStep benv.beginTransaction.stat.rules
+          before address) addresses
 
 /-- Exact state chronology of one successful transaction. -/
 def TransactionStateChronology.stateBoundaries
@@ -148,12 +161,12 @@ theorem TransactionTrace.exists_stateChronology
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     Nonempty (TransactionStateChronology trace) := by
-  rcases trace.exists_finalStateForm with
+  rcases trace.exists_finalStateFormWithRules with
     ⟨refundCounter, refundCounterEq, finalStateEq⟩
   refine ⟨⟨refundCounter, refundCounterEq, ?_⟩⟩
   simpa [TransactionTrace.coinbaseState,
     TransactionTrace.refundedState, TransactionTrace.refundValue,
-    TransactionTrace.coinbaseValue, TransactionTrace.chargedGas] using
+    TransactionTrace.coinbaseValue, TransactionTrace.gasSettlement] using
     finalStateEq
 
 /-- The retained deletion suffix replays its `foldl` exactly. -/
@@ -165,15 +178,18 @@ private theorem TransactionStateChronology.deletionReplay
     (before : State) (addresses : List Adr) :
     StateReplay before
       (chronology.deletionBoundaries before addresses)
-      (addresses.foldl destroyAccount before) := by
+      (addresses.foldl
+        (settleSelfdestructsStep benv.beginTransaction.stat.rules) before) := by
   induction addresses generalizing before with
   | nil => exact .nil _
   | cons address addresses ih =>
       exact .cons
         { origin := .deletion chronology address
           before
-          after := destroyAccount before address }
-        (ih (destroyAccount before address))
+          after := settleSelfdestructsStep
+            benv.beginTransaction.stat.rules before address }
+        (ih (settleSelfdestructsStep benv.beginTransaction.stat.rules
+          before address))
 
 /-- The retained transaction chronology is continuous from the transaction's
 pre-state to its exact final state. -/
@@ -210,9 +226,11 @@ theorem TransactionStateChronology.stateReplay
         (refund :: coinbase :: chronology.deletionBoundaries
           (trace.coinbaseState chronology.refundCounter)
           trace.messageOut.accountsToDelete.toList)
-        (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
-          (trace.coinbaseState chronology.refundCounter)) :=
-    .cons refund (.cons coinbase deletionReplay)
+        (settleSelfdestructs benv.beginTransaction.stat.rules
+          trace.messageOut.accountsToDelete.toList
+          (trace.coinbaseState chronology.refundCounter)) := by
+    rw [settleSelfdestructs_eq_foldl]
+    exact .cons refund (.cons coinbase deletionReplay)
   rw [← chronology.finalState_eq] at settlementReplay
   exact .cons debit
     (.cons preparation (messageReplay.append settlementReplay))

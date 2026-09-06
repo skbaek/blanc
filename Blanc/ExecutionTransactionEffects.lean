@@ -8,7 +8,7 @@ Contract-neutral transaction-envelope facts.
 
 A retained `TransactionTrace` moves the world in five places: the nonce bump
 and up-front gas debit, the prepared message, the sender gas refund, the
-coinbase priority-fee credit, and the final account-deletion fold.  This
+coinbase priority-fee credit, and the fork-selected final SELFDESTRUCT fold.  This
 module says what each of those does to an installed contract address `ca`
 carrying an *arbitrary* `ContractSpec` invariant, so no contract has to
 re-derive its own copy.  `Blanc/ExecutionMessageEffects.lean` is the message
@@ -135,7 +135,9 @@ theorem TransactionTrace.accountsToDelete_ne
   (ContractSpec.processMessageCall_preserves_inv preserves
     trace.message.result (trace.msgInv inv notCreated)).2
 
-/-- An account the deletion fold never names survives the fold untouched. -/
+/-- Legacy compatibility: an account the destroy-only fold never names
+survives the fold untouched.  Fork-selected callers use
+`settleSelfdestructs_get_eq`. -/
 theorem foldl_destroyAccount_get_eq
     {ca : Adr} {state : State} {addresses : List Adr}
     (hne : ∀ address ∈ addresses, address ≠ ca) :
@@ -165,25 +167,27 @@ theorem TransactionTrace.settlement_sum_bounds
   have feeLt := checkTransaction_upfront_lt_modulus trace.checked
   simp only [Benv.beginTransaction] at feeLt
   have floor := validateTransaction_calldataFloorGasCost_le_gas trace.validation
-  have usedLe : trace.chargedGas refundCounter ≤ tx.gas := by
-    unfold TransactionTrace.chargedGas
-    exact max_le (by omega) floor
   have creditsLe :
-      (tx.gas - trace.chargedGas refundCounter) * trace.effectiveGasPrice +
-          trace.chargedGas refundCounter *
-            (trace.effectiveGasPrice - benv.stat.baseFeePerGas) ≤
+      (trace.gasSettlement refundCounter).gasLeft *
+          trace.effectiveGasPrice +
+        (trace.gasSettlement refundCounter).gasUsed *
+          (trace.effectiveGasPrice -
+            benv.beginTransaction.stat.baseFeePerGas) ≤
         tx.gas * trace.effectiveGasPrice := by
-    apply le_trans (Nat.add_le_add_left
-      (Nat.mul_le_mul_left _
-        (Nat.sub_le trace.effectiveGasPrice benv.stat.baseFeePerGas)) _)
-    rw [← Nat.add_mul, Nat.sub_add_cancel usedLe]
+    exact settleTransactionGas_credits_le
+      benv.beginTransaction.stat.rules tx.gas trace.calldataFloorGasCost
+      trace.messageOut.gasLeft trace.messageOut.stateGasLeft refundCounter
+      trace.effectiveGasPrice benv.beginTransaction.stat.baseFeePerGas
+      trace.messageOut.stateGasUsed floor
   have refundLe : (trace.refundValue refundCounter).toNat ≤
-      (tx.gas - trace.chargedGas refundCounter) * trace.effectiveGasPrice := by
+      (trace.gasSettlement refundCounter).gasLeft *
+        trace.effectiveGasPrice := by
     unfold TransactionTrace.refundValue
     exact toB256_toNat_le _
   have tipLe : (trace.coinbaseValue refundCounter).toNat ≤
-      trace.chargedGas refundCounter *
-        (trace.effectiveGasPrice - benv.stat.baseFeePerGas) := by
+      (trace.gasSettlement refundCounter).gasUsed *
+        (trace.effectiveGasPrice -
+          benv.beginTransaction.stat.baseFeePerGas) := by
     unfold TransactionTrace.coinbaseValue
     exact toB256_toNat_le _
   have debitSum := State.balSum_subBal trace.debit

@@ -576,6 +576,7 @@ theorem TransactionTrace.message_ready
       hflashDebit hnotBegin horigin
   exact ⟨hbackedMsg, hflashMsg⟩
 
+/-- Legacy compatibility for the destroy-only final-state form. -/
 theorem foldl_destroyAccount_getStor_eq
     {ca : Adr} {state : State} {addresses : List Adr}
     (hne : ∀ address ∈ addresses, address ≠ ca) :
@@ -600,11 +601,20 @@ theorem TransactionTrace.postMessage_getStor_eq
     (hstable : Stable dp ca benv.state)
   (hnotCreated : ca ∉ benv.createdAccounts) :
     state.getStor ca = trace.messageState.getStor ca := by
-  rcases trace.exists_finalStateForm with
-    ⟨refundCounter, _hrefund, hstate⟩
+  rcases trace.exists_stateChronology with ⟨chronology⟩
   have hdelete := trace.accountsToDelete_ne_ca hstable hnotCreated
-  have hstateStor := congrArg (fun world : State => world.getStor ca) hstate
-  rw [foldl_destroyAccount_getStor_eq hdelete] at hstateStor
+  have hdeleteGet := ExecutionTrace.settleSelfdestructs_get_eq
+    benv.beginTransaction.stat.rules
+    (state := trace.coinbaseState chronology.refundCounter)
+    hdelete
+  have hstateStor := congrArg (fun world : State => world.getStor ca)
+    chronology.finalState_eq
+  rw [show
+      (settleSelfdestructs benv.beginTransaction.stat.rules
+        trace.messageOut.accountsToDelete.toList
+        (trace.coinbaseState chronology.refundCounter)).getStor ca =
+      (trace.coinbaseState chronology.refundCounter).getStor ca from
+    congrArg Acct.stor hdeleteGet] at hstateStor
   exact hstateStor.trans
     ((congrFun (state_addBal_getStor_eq _ _ _) ca).trans
       (congrFun (state_addBal_getStor_eq _ _ _) ca))

@@ -801,6 +801,7 @@ theorem TransactionTrace.accountsToDelete_ne_ca
     (backedSpec_preserves dp ca)
     ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
 
+/-- Legacy compatibility for the destroy-only final-state form. -/
 theorem foldl_destroyAccount_bal_eq
     {ca : Adr} {state : State} {addresses : List Adr}
     (hne : ∀ address ∈ addresses, address ≠ ca) :
@@ -848,10 +849,12 @@ theorem TransactionTrace.postMessage_ethBound
   have hdelete := TransactionTrace.accountsToDelete_ne_ca trace
     hstable hnotCreated
   have hdeleteBal :
-      (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+      (settleSelfdestructs benv.beginTransaction.stat.rules
+        trace.messageOut.accountsToDelete.toList
         (trace.coinbaseState chronology.refundCounter)).bal ca =
         (trace.coinbaseState chronology.refundCounter).bal ca :=
-    foldl_destroyAccount_bal_eq hdelete
+    congrArg Acct.bal (ExecutionTrace.settleSelfdestructs_get_eq
+      benv.beginTransaction.stat.rules hdelete)
   have hstateBal :
       state.bal ca = (trace.coinbaseState chronology.refundCounter).bal ca :=
     (congrArg (fun w : State => w.bal ca) chronology.finalState_eq).trans

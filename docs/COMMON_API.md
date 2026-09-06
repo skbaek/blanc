@@ -342,7 +342,11 @@ and constructor families cover every modelled wrapper layer:
 - `ExecutionTrace.transactionPreludeBout`, `transactionBlobGasFee`, and
   `transactionTenv` expose transaction preparation;
   `TransactionTrace`, `exists_transactionTrace`, and
-  `TransactionTrace.exists_finalStateForm` retain the whole transaction.
+  `TransactionTrace.exists_finalStateFormWithRules` retain the whole
+  transaction. `transactionValidationRecovery` names the driver's actual
+  pre-validation sender recovery, while
+  `TransactionTrace.exists_finalStateForm_legacy` is the explicitly
+  legacy-only specialization of settlement.
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
@@ -857,10 +861,16 @@ Use
   `ExecutionTrace.TransactionTrace.msg_shouldTransferValue` records that a
   transaction message always transfers its value.
 - `ExecutionTrace.TransactionTrace.accountsToDelete_ne` and
-  `ExecutionTrace.foldl_destroyAccount_get_eq` cover the final deletion fold.
+  `ExecutionTrace.settleSelfdestructs_get_eq` cover the fork-selected final
+  deletion or account-clearing fold. `StateInv.settleSelfdestructs` in
+  [`Blanc/ExecutionTransactionAdmission.lean`](../Blanc/ExecutionTransactionAdmission.lean)
+  carries an arbitrary global `ContractSpec.Side` through that same selected
+  fold; its Amsterdam branch uses complete balance-function equality.
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
-  refund and the coinbase priority fee out of the transaction's own up-front
-  debit, so neither credit needs a wrap-around side condition.
+  refund and the coinbase priority fee selected by
+  `TransactionTrace.gasSettlement` out of the transaction's own up-front
+  debit, so both credits carry the exact no-wrap bounds required by
+  `ContractSpec.StateInv.addBal`.
 - `ExecutionTrace.TransactionTrace.benvInv` moves a whole `ContractSpec.BenvInv`
   across one retained transaction.  Its balance-sum premise is explicit: a
   general `ContractSpec.Side` need not be `SumNof`.

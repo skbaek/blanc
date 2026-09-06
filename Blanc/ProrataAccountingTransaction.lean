@@ -124,8 +124,9 @@ theorem retainedTransactionAccountingReplay
         (RealizedSnapshot.ofState ca trace.messageState) refundSteps
         (RealizedSnapshot.ofState ca
           (trace.refundedState chronology.refundCounter)) := refundReplay
-  -- (5) The final deletion fold never names PRORATA.
-  have deleteGet := foldl_destroyAccount_get_eq
+  -- (5) The fork-selected final deletion/clearing fold never names PRORATA.
+  have deleteGet := settleSelfdestructs_get_eq
+    benv.beginTransaction.stat.rules
     (state := trace.coinbaseState chronology.refundCounter)
     (trace.accountsToDelete_ne (prorataSpec_preserves ca) inv notCreated)
   have finalSnapshot :

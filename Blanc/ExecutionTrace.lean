@@ -288,6 +288,97 @@ theorem MessageCallTrace.result
 
 /-! ## Transaction traces -/
 
+open private recoverValidationSender from Jaune.Transaction in
+/-- Exact local name for the recovery operation used by the pinned driver. -/
+def transactionValidationRecovery (benv : Benv) (tx : Tx) :
+    Except TransitionError Adr :=
+  recoverValidationSender benv tx
+
+/-- Validation bounds the actual charged amount for either settlement rule. -/
+theorem settleTransactionGas_gasUsed_le (rules : ForkRules)
+    (gas floor left stateLeft refund : Nat) (net : Int) (floorLe : floor ≤ gas) :
+    (settleTransactionGas rules gas floor left stateLeft refund net).gasUsed ≤ gas := by
+  cases h : rules.stateGas <;> simp only [settleTransactionGas, h] <;>
+    exact max_le (by omega) floorLe
+
+/-- The sender's refundable gas is the complement of the actual charged gas. -/
+theorem settleTransactionGas_gasLeft_eq (rules : ForkRules)
+    (gas floor left stateLeft refund : Nat) (net : Int) :
+    (settleTransactionGas rules gas floor left stateLeft refund net).gasLeft =
+      gas - (settleTransactionGas rules gas floor left stateLeft refund net).gasUsed := by
+  cases h : rules.stateGas <;> simp only [settleTransactionGas, h]
+
+/-- Both actual settlement credits are funded by the upfront gas payment. -/
+theorem settleTransactionGas_credits_le (rules : ForkRules)
+    (gas floor left stateLeft refund price base : Nat) (net : Int)
+    (floorLe : floor ≤ gas) :
+    let settlement := settleTransactionGas rules gas floor left stateLeft refund net
+    settlement.gasLeft * price + settlement.gasUsed * (price - base) ≤ gas * price := by
+  dsimp only
+  rw [settleTransactionGas_gasLeft_eq]
+  apply le_trans (Nat.add_le_add_left
+    (Nat.mul_le_mul_left _ (Nat.sub_le price base)) _)
+  rw [← Nat.add_mul, Nat.sub_add_cancel
+    (settleTransactionGas_gasUsed_le rules gas floor left stateLeft refund net floorLe)]
+
+/-- The single account operation selected by the transaction's deletion rule. -/
+def settleSelfdestructsStep (rules : ForkRules) (state : State) (address : Adr) : State :=
+  match rules.stateGas with
+  | none => destroyAccount state address
+  | some _ => clearAccountPreservingBalance state address
+
+/-- The driver applies the selected account operation in the retained list order. -/
+theorem settleSelfdestructs_eq_foldl (rules : ForkRules)
+    (addresses : List Adr) (state : State) :
+    settleSelfdestructs rules addresses state =
+      addresses.foldl (settleSelfdestructsStep rules) state := by
+  unfold settleSelfdestructsStep
+  cases h : rules.stateGas <;> simp only [settleSelfdestructs, h]
+
+/-- Clearing account data preserves the entire balance function, including the target. -/
+theorem clearAccountPreservingBalance_bal (state : State) (address : Adr) :
+    (clearAccountPreservingBalance state address).bal = state.bal := by
+  funext ca
+  unfold State.bal clearAccountPreservingBalance
+  by_cases h : address = ca
+  · subst ca
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
+/-- A selected deletion step leaves every unlisted account completely unchanged. -/
+theorem settleSelfdestructsStep_get_eq (rules : ForkRules)
+    {ca address : Adr} {state : State} (hne : address ≠ ca) :
+    (settleSelfdestructsStep rules state address).get ca = state.get ca := by
+  cases h : rules.stateGas
+  · simp only [settleSelfdestructsStep, h]
+    unfold destroyAccount State.get
+    have hc : compare address ca ≠ Ordering.eq :=
+      fun eq => hne (compare_eq_iff_eq.mp eq)
+    rw [Std.TreeMap.getD_erase]
+    simp [hc]
+  · simp only [settleSelfdestructsStep, h]
+    exact State.get_set_ne _ hne _
+
+/-- The complete rules-selected deletion fold preserves every unlisted account. -/
+theorem settleSelfdestructs_get_eq (rules : ForkRules)
+    {ca : Adr} {state : State} {addresses : List Adr}
+    (hne : ∀ address ∈ addresses, address ≠ ca) :
+    (settleSelfdestructs rules addresses state).get ca = state.get ca := by
+  rw [settleSelfdestructs_eq_foldl]
+  induction addresses generalizing state with
+  | nil => rfl
+  | cons address addresses ih =>
+      rw [List.foldl_cons, ih]
+      · exact settleSelfdestructsStep_get_eq rules (hne address List.mem_cons_self)
+      · intro tail htail
+        exact hne tail (List.mem_cons_of_mem _ htail)
+
+open private recoverValidationSender from Jaune.Transaction in
+theorem transactionValidationRecovery_legacy
+    (benv : Benv) (tx : Tx) (hlegacy : benv.stat.rules.stateGas = none) :
+    transactionValidationRecovery benv tx = .ok 0 := by
+  simp only [transactionValidationRecovery, recoverValidationSender, hlegacy]
+
 def transactionPreludeBout
     (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
   { bout with
@@ -306,7 +397,8 @@ def transactionTenv (benv : Benv) (tx : Tx) (index : Nat)
     stat :=
       { origin := sender
         gasPrice := effectiveGasPrice
-        gas := tx.gas - intrinsicGas
+        gas := (allocateEvmGas benv.stat.rules tx.gas intrinsicGas).executionGas
+        stateGasReservoir := (allocateEvmGas benv.stat.rules tx.gas intrinsicGas).stateGasReservoir
         accessListAddresses :=
           .ofList (benv.stat.coinbase :: tx.accessList.map Prod.fst)
         accessListStorageKeys :=
@@ -333,7 +425,9 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
   msg : Msg
   messageState : State
   messageOut : MsgCallOutput
-  validation : validateTransaction benv.stat.rules tx =
+  validationSender : Adr
+  recovered : transactionValidationRecovery benv.beginTransaction tx = .ok validationSender
+  validation : validateTransaction benv.stat.rules tx validationSender =
     .ok (intrinsicGas, calldataFloorGasCost)
   checked : checkTransaction benv.beginTransaction
     (transactionPreludeBout bout tx index) tx =
@@ -359,6 +453,7 @@ theorem exists_transactionTrace
   dsimp only at h
   obtain ⟨prelude, hprelude, h⟩ := Except.bind_eq_ok h
   cases hprelude
+  obtain ⟨validationSender, hrecovered, h⟩ := Except.bind_eq_ok h
   obtain ⟨validated, hvalidated, h⟩ := Except.bind_eq_ok h
   obtain ⟨intrinsicGas, calldataFloorGasCost⟩ := validated
   rw [Except.mapError_eq_ok_iff] at hvalidated
@@ -374,47 +469,53 @@ theorem exists_transactionTrace
   rcases exists_messageCallTrace hmessage with ⟨messageTrace⟩
   exact ⟨⟨intrinsicGas, calldataFloorGasCost, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState,
-    msg, messageState, messageOut,
-    by simpa [Benv.beginTransaction] using hvalidated,
+    msg, messageState, messageOut, validationSender,
+    by simpa only [transactionValidationRecovery] using hrecovered,
+    by simpa [Benv.beginTransaction, BenvStat.rules] using hvalidated,
     by simpa [transactionPreludeBout] using hchecked,
-    by simpa [transactionBlobGasFee, Benv.beginTransaction] using hdebit',
+    by simpa [transactionBlobGasFee, Benv.beginTransaction, BenvStat.rules] using hdebit',
     by simpa [transactionTenv, Benv.beginTransaction] using hprepared,
     messageTrace, h_result⟩⟩
 
 /-- Exact post-message transaction settlement form.  This exposes the two
 gas credits and the final account-deletion fold without re-executing or
 approximating the transaction. -/
-theorem TransactionTrace.exists_finalStateForm
+theorem TransactionTrace.exists_finalStateFormWithRules
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     ∃ refundCounter : Nat,
       Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
       state =
-        trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+        settleSelfdestructs benv.beginTransaction.stat.rules
+          trace.messageOut.accountsToDelete.toList
           ((trace.messageState.addBal trace.sender
-              ((tx.gas -
-                  max (tx.gas - trace.messageOut.gasLeft -
-                    min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                      refundCounter)
-                    trace.calldataFloorGasCost) *
-                trace.effectiveGasPrice).toB256).addBal
-            benv.stat.coinbase
-              (max (tx.gas - trace.messageOut.gasLeft -
-                  min ((tx.gas - trace.messageOut.gasLeft) / 5)
-                    refundCounter)
-                  trace.calldataFloorGasCost *
-                (trace.effectiveGasPrice -
-                  benv.stat.baseFeePerGas)).toB256) := by
+              ((settleTransactionGas benv.beginTransaction.stat.rules tx.gas
+                trace.calldataFloorGasCost trace.messageOut.gasLeft
+                trace.messageOut.stateGasLeft refundCounter
+                trace.messageOut.stateGasUsed).gasLeft * trace.effectiveGasPrice).toB256).addBal
+            benv.beginTransaction.stat.coinbase
+              ((settleTransactionGas benv.beginTransaction.stat.rules tx.gas
+                trace.calldataFloorGasCost trace.messageOut.gasLeft
+                trace.messageOut.stateGasLeft refundCounter
+                trace.messageOut.stateGasUsed).gasUsed *
+                (trace.effectiveGasPrice - benv.beginTransaction.stat.baseFeePerGas)).toB256) := by
   have hrun := trace.result
   unfold processTransaction at hrun
-  simp only [Benv.beginTransaction] at hrun
+  dsimp only at hrun
   rcases Except.bind_eq_ok hrun with ⟨prelude, hprelude, hrun⟩
   have hpreludeEq := Except.ok.inj hprelude
   subst prelude
+  rcases Except.bind_eq_ok hrun with ⟨validationSender, hrecovered, hrun⟩
+  have hsender : validationSender = trace.validationSender := by
+    exact Except.ok.inj (hrecovered.symm.trans trace.recovered)
   rcases Except.bind_eq_ok hrun with ⟨validated, hvalidated, hrun⟩
   rcases validated with ⟨intrinsicGas, calldataFloorGasCost⟩
   rw [Except.mapError_eq_ok_iff] at hvalidated
+  rw [hsender] at hvalidated
+  have hvalidated : validateTransaction benv.stat.rules tx
+      (trace.validationSender) = .ok (intrinsicGas, calldataFloorGasCost) := by
+    simpa only [Benv.beginTransaction, BenvStat.rules] using hvalidated
   have hvalidatedEq : intrinsicGas = trace.intrinsicGas ∧
       calldataFloorGasCost = trace.calldataFloorGasCost := by
     exact Prod.mk.inj (Except.ok.inj (hvalidated.symm.trans trace.validation))
@@ -429,7 +530,7 @@ theorem TransactionTrace.exists_finalStateForm
   have hdebitSome := Option.toExcept_eq_ok hdebit
   have hdebitEq : debitState = trace.debitState := by
     have htraceDebit := trace.debit
-    simp only [transactionBlobGasFee] at htraceDebit
+    simp only [transactionBlobGasFee, Benv.beginTransaction, BenvStat.rules] at htraceDebit hdebitSome
     rw [htraceDebit] at hdebitSome
     exact Option.some.inj hdebitSome.symm
   subst debitState
@@ -453,6 +554,34 @@ theorem TransactionTrace.exists_finalStateForm
   simp only at hrun
   have hfinal := Except.ok.inj hrun
   exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
+
+/-- Legacy specialization of the exact rules-selected final state. -/
+theorem TransactionTrace.exists_finalStateForm_legacy
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hlegacy : benv.stat.rules.stateGas = none) :
+    ∃ refundCounter : Nat,
+      Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
+      state =
+        trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+          ((trace.messageState.addBal trace.sender
+              ((tx.gas -
+                  max (tx.gas - trace.messageOut.gasLeft -
+                    min ((tx.gas - trace.messageOut.gasLeft) / 5)
+                      refundCounter)
+                    trace.calldataFloorGasCost) *
+                trace.effectiveGasPrice).toB256).addBal
+            benv.stat.coinbase
+              (max (tx.gas - trace.messageOut.gasLeft -
+                  min ((tx.gas - trace.messageOut.gasLeft) / 5)
+                    refundCounter)
+                  trace.calldataFloorGasCost *
+                (trace.effectiveGasPrice -
+                  benv.stat.baseFeePerGas)).toB256) := by
+  have hlegacy' : (Fork.ruleSet benv.stat.fork).stateGas = none := hlegacy
+  simpa only [settleSelfdestructs, settleTransactionGas, Benv.beginTransaction,
+    BenvStat.rules, hlegacy'] using trace.exists_finalStateFormWithRules
 
 /-- Exact retained replay of the decoded transaction list. -/
 inductive ApplyTransactionsTrace :
