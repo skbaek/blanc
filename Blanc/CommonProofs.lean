@@ -3016,9 +3016,19 @@ charges leave the operand stack alone. -/
 @[simp] lemma Devm.creditStateGasRefund_stack (amount : Nat) (d : Devm) :
     (Devm.creditStateGasRefund amount d).stack = d.stack := rfl
 
-/-- Charging state gas leaves the operand stack alone, for the same reason:
-`Mach.chargeStateGas` rewrites the two meters and copies every other machine
-field through, in each of its three branches. -/
+/-- `Mach.chargeStateGas` rewrites the two meters and copies every other
+machine field through, in each of its three branches, and its out-of-gas branch
+returns the machine untouched. The success-path world sibling
+`chargeStateGas_state_eq` is in `Blanc/Semantics.lean`, beside the frame layer
+that first needed it. -/
+lemma chargeStateGas_err_snd {amount : Nat} {devm : Devm}
+    {err : EvmError × Devm} (h : chargeStateGas amount devm = .error err) :
+    err.2 = devm := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
 lemma chargeStateGas_memory_eq {amount : Nat} {devm devm' : Devm}
     (h : chargeStateGas amount devm = .ok devm') :
     devm.memory = devm'.memory := by
@@ -4761,6 +4771,27 @@ teaching `Xinst.Shape` the two Amsterdam dispatch targets. -/
 def Xlot.Legacy : Xlot → Prop
   | .none => True
   | .some ⟨evm, _⟩ => evm.sta.benvStat.rules.stateGas = none
+
+/-- A frame's suspended child slot, if it has one, runs under the fork the
+frame's own message carries. This is `Xlot.Legacy`'s introduction rule, and
+what lets a message-level legacy premise reach the slot the message suspended
+on. -/
+lemma RunFrame.slot_legacy {f : Frame} {xl : Xlot}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : RunFrame f xl r)
+    (hleg : f.inner.benv.stat.rules.stateGas = none) : xl.Legacy := by
+  unfold RunFrame at h
+  cases he : f.enter with
+  | done r' =>
+      rw [he] at h
+      rw [h.1]
+      trivial
+  | run cevm =>
+      rw [he] at h
+      obtain ⟨raw, rfl, -⟩ := h
+      show cevm.sta.benvStat.rules.stateGas = none
+      rw [Frame.enter_run_benvStat he]
+      exact hleg
 
 /-- Canonical outcome-aware effect of a terminal instruction. -/
 def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
@@ -9939,7 +9970,7 @@ lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
   rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
   · exact Linst.selfdestruct_balance_effect
-  · intro sevm pre out run
+  · intro sevm pre out _ run
     have hf := Linst.run_instructionFrame sevm pre l h_not_selfdestruct
     rw [run] at hf
     cases out <;> exact Devm.balNoninc_of_getBal_eq
@@ -9982,46 +10013,83 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
     {rules : ForkRules} {pre : Devm} {out : Execution}
     (h : processCreateMessage.chargeCodeGas rules pre = out) :
     Execution.Rel Devm.BalNoninc pre out := by
+  -- Both code-deposit algorithms only charge, so neither can raise a balance.
   rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
   · simp only [processCreateMessage.chargeCodeGas] at h
     split at h
-    · simp only [Except.error.injEq] at h
-      cases h
-      exact balNoninc_refl_trans.2.1 pre
-    · dsimp [Bind.bind, Except.bind] at h
-      split at h
-      · rename_i code neq ex errCharge hCharge
-        simp only [Except.error.injEq] at h
+    · split at h
+      · simp only [Except.error.injEq] at h
         cases h
-        have hstate := chargeGas_err_snd hCharge
-        change d = pre at hstate
-        rw [hstate]
+        exact balNoninc_refl_trans.2.1 pre
+      · dsimp [Bind.bind, Except.bind] at h
+        split at h
+        · rename_i code neq ex errCharge hCharge
+          simp only [Except.error.injEq] at h
+          cases h
+          have hstate := chargeGas_err_snd hCharge
+          change d = pre at hstate
+          rw [hstate]
+          exact balNoninc_refl_trans.2.1 pre
+        · split at h
+          · simp only [Except.error.injEq] at h
+            cases h
+            rename_i code neq ex hSize hCharge
+            have hb := Devm.burn_of_chargeGas hCharge
+            apply Devm.balNoninc_of_state
+            rw [hb.state]
+            exact balNoninc_refl_trans.1.1 d.state
+          · cases h
+    · split at h
+      · simp only [Except.error.injEq] at h
+        cases h
         exact balNoninc_refl_trans.2.1 pre
       · split at h
         · simp only [Except.error.injEq] at h
           cases h
-          rename_i code neq ex hSize hCharge
-          have hb := Devm.burn_of_chargeGas hCharge
-          apply Devm.balNoninc_of_state
-          rw [hb.state]
-          exact balNoninc_refl_trans.1.1 d.state
-        · cases h
+          exact balNoninc_refl_trans.2.1 pre
+        · dsimp [Bind.bind, Except.bind] at h
+          split at h
+          · rename_i errCharge hCharge
+            simp only [Except.error.injEq] at h
+            cases h
+            have hstate := chargeGas_err_snd hCharge
+            change d = pre at hstate
+            rw [hstate]
+            exact balNoninc_refl_trans.2.1 pre
+          · rename_i dd hCharge
+            have hb := Devm.burn_of_chargeGas hCharge
+            apply Devm.balNoninc_of_state
+            rw [chargeStateGas_err_snd h.symm, hb.state]
+            exact balNoninc_refl_trans.1.1 dd.state
   · simp only [id]
     simp only [processCreateMessage.chargeCodeGas] at h
     split at h
-    · cases h
-    · dsimp [Bind.bind, Except.bind] at h
-      split at h
+    · split at h
+      · cases h
+      · dsimp [Bind.bind, Except.bind] at h
+        split at h
+        · cases h
+        · split at h
+          · cases h
+          · rename_i code neq ex hSize hCharge
+            simp only [Except.ok.injEq] at h
+            cases h
+            have hb := Devm.burn_of_chargeGas hSize
+            apply Devm.balNoninc_of_state
+            rw [hb.state]
+            exact balNoninc_refl_trans.1.1 d.state
+    · split at h
       · cases h
       · split at h
         · cases h
-        · rename_i code neq ex hSize hCharge
-          simp only [Except.ok.injEq] at h
-          cases h
-          have hb := Devm.burn_of_chargeGas hSize
-          apply Devm.balNoninc_of_state
-          rw [hb.state]
-          exact balNoninc_refl_trans.1.1 d.state
+        · dsimp [Bind.bind, Except.bind] at h
+          split at h
+          · cases h
+          · rename_i dd hCharge
+            have hb := Devm.burn_of_chargeGas hCharge
+            apply Devm.balNoninc_of_state
+            rw [chargeStateGas_state_eq h.symm, hb.state]
+            exact balNoninc_refl_trans.1.1 dd.state
 
 lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     (h : executePrecomp evm a = out) :
@@ -10431,9 +10499,9 @@ lemma GenericCreate.balance_effect
 
 lemma Xinst.balance_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.BalNoninc x := by
-  intro sevm pre xl out hxl run
+  intro sevm pre xl out hleg hxl run
   unfold Xinst.Run at run
-  rcases Xinst.step_shape sevm pre x with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shape sevm pre x hleg with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hs⟩ <;> rw [hs] at run
@@ -10460,11 +10528,22 @@ lemma Ninst.balance_effectRec (n : Ninst) :
     apply Xinst.balance_effectRec
   case push xs hxs =>
     apply Ninst.push_balance_effectRec
+  case dupn d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.BalNoninc) Devm.instructionFrame_refines_balNoninc).1
+  case swapn d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.BalNoninc) Devm.instructionFrame_refines_balNoninc).2.1
+  case exchange d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.BalNoninc) Devm.instructionFrame_refines_balNoninc).2.2
 
 theorem Exec.balance_effect {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out) :
+    {out : Execution} (run : Exec pc sevm pre out)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     Execution.Rel Devm.BalNoninc pre out :=
-  Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2 Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect run
+  Exec.effect balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
+    Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect run hleg
 
 lemma Ninst.balance_effect (n : Ninst) : Ninst.Effect Devm.BalNoninc n := by
   apply Ninst.effect_of_effectRec balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
@@ -10474,8 +10553,10 @@ lemma Ninst.balance_effect (n : Ninst) : Ninst.Effect Devm.BalNoninc n := by
 
 theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
     {pre post : Devm} {p : Func}
-    (run : Func.Run fs sevm pre p post) : Devm.BalNoninc pre post := by
-  apply Func.effect (R := Devm.BalNoninc) (htrans := balNoninc_refl_trans.2.2) _ _ Ninst.balance_effect Linst.balance_effect run
+    (run : Func.Run fs sevm pre p post)
+    (hleg : sevm.benvStat.rules.stateGas = none) : Devm.BalNoninc pre post := by
+  refine Func.effect (R := Devm.BalNoninc) (htrans := balNoninc_refl_trans.2.2)
+    ?_ ?_ Ninst.balance_effect Linst.balance_effect run hleg
   · intro xs pr po hpop
     apply Devm.balNoninc_of_state
     rw [hpop.state]
@@ -10488,27 +10569,31 @@ theorem Func.balance_effect {fs : List Func} {sevm : Sevm}
 /-! ## 6. Executable wrappers and the Solvent.lean endpoint -/
 
 lemma Xlot.balance_rel_of_filled {xl : Xlot}
-    (hfill : xl.Filled) :
+    (hfill : xl.Filled) (hleg : xl.Legacy) :
     Xlot.Rel Devm.BalNoninc xl := by
   rcases xl with _ | ⟨evm, exn⟩
   · constructor
   · rcases hfill with ⟨exc⟩
-    exact Exec.balance_effect exc
+    exact Exec.balance_effect exc hleg
 
 lemma processMessage_balance_noninc {msg : Msg} {post : Devm}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processMessage msg = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
   obtain ⟨xl, hfill, hrun⟩ := of_processMessage msg (.ok post) h
-  have heff := ProcessMessage.balance_effect (Xlot.balance_rel_of_filled hfill) hrun
+  have heff := ProcessMessage.balance_effect
+    (Xlot.balance_rel_of_filled hfill (RunFrame.slot_legacy hrun hleg)) hrun
   change State.BalNoninc msg.benv.state post.state at heff
   exact heff
 
 lemma processCreateMessage_balance_noninc
     {msg : Msg} {post : Devm}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processCreateMessage msg = .ok post) :
     State.BalNoninc msg.benv.state post.state := by
   rcases of_processCreateMessage msg (.ok post) h with ⟨xl, hfill, hrun⟩
-  have hxl : Xlot.Rel Devm.BalNoninc xl := Xlot.balance_rel_of_filled hfill
+  have hxl : Xlot.Rel Devm.BalNoninc xl :=
+    Xlot.balance_rel_of_filled hfill (RunFrame.slot_legacy hrun hleg)
   have heff := ProcessCreateMessage.balance_effect hxl hrun
   exact heff
 
