@@ -79,6 +79,56 @@ private theorem readTotalAssets_depth_ne_zero
   · obtain ⟨_, _, _, _, _, _, _, positiveDepth, _⟩ := success
     exact Nat.ne_of_gt positiveDepth
 
+/-- The actual configured WETH crossing paid its parent-side gas charge. -/
+private theorem staticGasAvailable_of_runCompiled
+    {sevm : Sevm} {pre post : Devm} {inputSize : B256}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (run : Ninst.RunCompiled sevm pre staticcall post) :
+    StaticGasAvailable pre inputSize := by
+  intro gasWord rest stack
+  obtain ⟨xl, _, steps⟩ := run
+  have execution := steps 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  let base := addAccessedAddress popped wethAccount
+  have address : wethAccount.toB256.toAdr = wethAccount :=
+    toAdr_toB256 wethAccount
+  have code : base.state.getCode wethAccount = pre.getCode wethAccount := rfl
+  have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
+    unfold getDelegatedCodeAddress
+    rw [if_neg config.notDelegated]
+  have delegation : accessDelegation base wethAccount =
+      ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
+    simp only [accessDelegation, code, nondelegated]
+  dsimp only [base, popped] at delegation
+  simp only [Xinst.step, Devm.pop_eq_ok stack, bind, Except.bind] at execution
+  rw [Devm.popToAdr_eq_ok
+    (devm := pre.setMach ⟨wethAccount.toB256 :: 28 :: inputSize :: 0 :: 32 :: rest,
+      pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨28 :: inputSize :: 0 :: 32 :: rest,
+      pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨inputSize :: 0 :: 32 :: rest,
+      pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    address, delegation, Nat.add_zero] at execution
+  split at execution
+  · cases XStep.run_ofExcept_error execution
+  · rename_i charged charge
+    exact chargeGas_le charge
+
+-- Retain the resource argument for existing callers; the proof derives its
+-- needed depth and gas facts from successful execution.
+set_option linter.unusedVariables false in
 /-- Exact body effect of `totalAssets`: the configured WETH program is read at
 the vault address, every account's storage and the parent log frame are
 preserved, and the returned ABI word is that pre-call WETH balance. -/
@@ -113,7 +163,7 @@ theorem totalAssets_body_effect
   obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
       wordPrefix, -, -, -, returnRun⟩ :=
     readTotalAssets_exactEffect callConfig memory staging depth
-      (resources.2 callPre staging) crossing suffix
+      (staticGasAvailable_of_runCompiled callConfig crossing) crossing suffix
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
   have stagingLogs : entry.logs = callPre.logs :=
