@@ -685,6 +685,27 @@ lemma Devm.withRefundCounter_getStor (devm : Devm) (refundCounter : Int) :
     Devm.getStor (devm.withRefundCounter refundCounter) = Devm.getStor devm := by
   rfl
 
+/-- The Amsterdam-series writes that stand between `SSTORE`'s pops and its
+storage write leave the storage map alone: the state-gas refund credit is a
+machine write, the state-gas charge is a machine write, and the two EIP-7928
+recorders are meta writes. -/
+lemma Devm.creditStateGasRefund_getStor (amount : Nat) (devm : Devm) :
+    Devm.getStor (Devm.creditStateGasRefund amount devm) = Devm.getStor devm :=
+  rfl
+
+lemma Devm.balReadAccount_getStor (rules : ForkRules) (a : Adr) (devm : Devm) :
+    Devm.getStor (Devm.balReadAccount rules a devm) = Devm.getStor devm := by
+  funext b
+  unfold Devm.getStor
+  rw [Devm.balReadAccount_getAcct]
+
+lemma Devm.balReadStorage_getStor (rules : ForkRules) (a : Adr) (k : B256)
+    (devm : Devm) :
+    Devm.getStor (Devm.balReadStorage rules a k devm) = Devm.getStor devm := by
+  funext b
+  unfold Devm.getStor
+  rw [Devm.balReadStorage_getAcct]
+
 lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
     Devm.getStor (devm.addLog log) = Devm.getStor devm := by
   rfl
@@ -730,6 +751,13 @@ lemma Devm.pop_getStor_eq {x devm devm'} (h : Devm.pop devm = .ok ⟨x, devm'⟩
     Devm.getStor devm = Devm.getStor devm' := by
   funext a
   exact Devm.WorldEq.getStor (Devm.pop_worldEq_of_ok h) a
+
+lemma chargeStateGas_getStor_eq {amount devm devm'}
+    (h : chargeStateGas amount devm = .ok devm') :
+    Devm.getStor devm = Devm.getStor devm' := by
+  funext a
+  unfold Devm.getStor Devm.getAcct
+  rw [chargeStateGas_state_eq h]
 
 lemma chargeGas_getStor_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') :
     Devm.getStor devm = Devm.getStor devm' := by
@@ -10059,7 +10087,8 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
           · rename_i dd hCharge
             have hb := Devm.burn_of_chargeGas hCharge
             apply Devm.balNoninc_of_state
-            rw [chargeStateGas_err_snd h.symm, hb.state]
+            have hdd : d = dd := chargeStateGas_err_snd h
+            rw [hdd, hb.state]
             exact balNoninc_refl_trans.1.1 dd.state
   · simp only [id]
     simp only [processCreateMessage.chargeCodeGas] at h
@@ -10088,7 +10117,7 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
           · rename_i dd hCharge
             have hb := Devm.burn_of_chargeGas hCharge
             apply Devm.balNoninc_of_state
-            rw [chargeStateGas_state_eq h.symm, hb.state]
+            rw [chargeStateGas_state_eq h, hb.state]
             exact balNoninc_refl_trans.1.1 dd.state
 
 lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
@@ -10099,21 +10128,26 @@ lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     Devm.BalNoninc Devm.balSum State.balSum
   cases precompileRun evm a <;> rfl
 
-/-- `executeCode.handleError` selects between the raw execution result and a
-rolled-back state without introducing any balance write of its own, so it
+/-- `executeCode.handleErrorWith` selects between the raw execution result and
+a rolled-back state without introducing any balance write of its own, so it
 transports a raw `Devm.BalNoninc` frame to a `State.BalNoninc` on the handled
-message outcome. -/
+message outcome.
+
+Definition-tracked to the rules-keyed settlement: neither arm touches a balance
+-- Amsterdam's restores the state-gas meter and forfeits execution gas, both
+machine writes -- so this holds on every fork with no premise about the lane. -/
 lemma executeCode.handleError_balance_effect {pre : Devm} {raw : Execution}
-    {handled : MessageExecution}
+    {handled : MessageExecution} {st : Option StateGasRules}
     (hb : Execution.Rel Devm.BalNoninc pre raw)
-    (hh : executeCode.handleError raw = handled) :
+    (hh : executeCode.handleErrorWith st raw = handled) :
     State.BalNoninc pre.state (MessageExecution.state handled) := by
   rcases raw with ⟨err, d⟩ | d
-  · cases err <;>
-      (simp only [executeCode.handleError] at hh; subst handled; exact hb)
-  · simp only [executeCode.handleError] at hh
-    subst handled
-    exact hb
+  · cases st <;> cases err <;>
+      (simp only [executeCode.handleErrorWith, executeCode.handleError,
+        executeCode.handleErrorAmsterdam] at hh; subst handled; exact hb)
+  · cases st <;>
+      (simp only [executeCode.handleErrorWith, executeCode.handleError,
+        executeCode.handleErrorAmsterdam] at hh; subst handled; exact hb)
 
 /-- Frame projections of the two child messages, as explicit equations: the
 defeq is cheap to state and expensive to re-derive at every use site. -/
@@ -11257,31 +11291,56 @@ lemma Devm.sstoreWarmBase_accessedStorageKeys
 lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: xs <<+ s.stack) :
     ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
+  -- Both algorithms pop the same two operands and write the same slot; they
+  -- differ in where the static check sits, in how the charge is computed, and
+  -- in Amsterdam's second charge. The storage map moves only at the write.
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hkx : x = key :=
-    (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  refine ⟨val, ?_⟩
-  rw [← eq, setStorVal_getStor_self, hkx, E]
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have hkx : x = key :=
+      (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+      · rw [addAccessedStorageKey_getStor, Devm.balReadStorage_getStor]
+      · rw [Devm.balReadStorage_getStor]
+    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+      injection h6 with eq; rw [← eq]; rfl
+    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+    injection h9 with eq
+    refine ⟨val, ?_⟩
+    rw [← eq, setStorVal_getStor_self, Devm.balReadAccount_getStor, hkx, E]
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    have hkx : x = key :=
+      (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e3 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      rw [← chargeGas_getStor_eq h4, Devm.creditStateGasRefund_getStor,
+        Devm.withRefundCounter_getStor, Devm.balReadStorage_getStor]
+      split
+      · rw [addAccessedStorageKey_getStor]
+      · rfl
+    have e4 : Devm.getStor s₃ = Devm.getStor s₄ := chargeStateGas_getStor_eq h5
+    have E : Devm.getStor s = Devm.getStor s₄ := e1.trans (e2.trans (e3.trans e4))
+    injection h6 with eq
+    refine ⟨val, ?_⟩
+    rw [← eq, setStorVal_getStor_self, Devm.balReadAccount_getStor, hkx, E]
 
 lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
@@ -11299,36 +11358,62 @@ lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
 lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     (h_run : Ninst.Run sevm s Blanc.Ninst.sstore s') (hx : x :: y :: xs <<+ s.stack) :
     Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x y := by
+  -- Both algorithms, as in `sstore_getStor_setStorVal`: the popped key and
+  -- value are the same, and the storage map moves only at the write.
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
-  have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
-  have hxy : x = key ∧ y = val := by
+  have hkv : ∀ {key val : B256} {s₁ s₂ : Devm},
+      Devm.pop s = .ok ⟨key, s₁⟩ → Devm.pop s₁ = .ok ⟨val, s₂⟩ →
+      x = key ∧ y = val := by
+    intro key val s₁ s₂ h1 h2
+    have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
+    have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
     rw [hs, hs2] at hx
     rcases hx with ⟨sfx, heq⟩
     injection heq with hk hrest
     injection hrest with hv _
     exact ⟨hk.symm, hv.symm⟩
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E]
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    obtain ⟨hxk, hyv⟩ := hkv h1 h2
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+      · rw [addAccessedStorageKey_getStor, Devm.balReadStorage_getStor]
+      · rw [Devm.balReadStorage_getStor]
+    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+      injection h6 with eq; rw [← eq]; rfl
+    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+    injection h9 with eq
+    rw [← eq, setStorVal_getStor_self, Devm.balReadAccount_getStor, hxk, hyv, E]
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    obtain ⟨hxk, hyv⟩ := hkv h1 h2
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e3 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      rw [← chargeGas_getStor_eq h4, Devm.creditStateGasRefund_getStor,
+        Devm.withRefundCounter_getStor, Devm.balReadStorage_getStor]
+      split
+      · rw [addAccessedStorageKey_getStor]
+      · rfl
+    have e4 : Devm.getStor s₃ = Devm.getStor s₄ := chargeStateGas_getStor_eq h5
+    have E : Devm.getStor s = Devm.getStor s₄ := e1.trans (e2.trans (e3.trans e4))
+    injection h6 with eq
+    rw [← eq, setStorVal_getStor_self, Devm.balReadAccount_getStor, hxk, hyv, E]
 
 syntax "invariance" : tactic
 macro_rules
