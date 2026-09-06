@@ -31,6 +31,13 @@ def Matches : Pattern → Stack → Prop
     Matches (word :: words) (value :: values) ↔
       WordMatches word value ∧ Matches words values := Iff.rfl
 
+/-- An exact abstract word determines the matching concrete word. -/
+theorem WordMatches.eq_of_some {expected actual : B256}
+    (matched : WordMatches (some expected) actual) : actual = expected := by
+  rcases matched with impossible | exact
+  · cases impossible
+  · exact Option.some.inj exact |>.symm
+
 theorem Matches.length {words : Pattern} {values : Stack}
     (matched : Matches words values) : values.length = words.length := by
   induction words generalizing values with
@@ -110,6 +117,20 @@ theorem step_ofExecution_safe {pc : Nat} {invariant : Nat → Devm → Prop}
     StepSafe invariant (Step.ofExecution pc action) := by
   cases action with
   | ok post => exact safe
+  | error error =>
+      rcases error with ⟨error, post⟩
+      intro other actual equality
+      cases equality
+      exact safe
+
+/-- The semantic judgment also plugs into a control-flow step, retaining the
+actual successor counter supplied by the jump implementation. -/
+theorem step_ofJump_safe {invariant : Nat → Devm → Prop}
+    {action : Except (EvmError × Devm) (Nat × Devm)}
+    (safe : SafeResult (fun result => invariant result.1 result.2) action) :
+    StepSafe invariant (Step.ofJump action) := by
+  cases action with
+  | ok result => exact safe
   | error error =>
       rcases error with ⟨error, post⟩
       intro other actual equality

@@ -1,11 +1,11 @@
 import Blanc.AbstractStackSafety
 
 /-!
-Forward stack safety for concrete non-control instructions.
+Forward stack safety for concrete regular and control-flow instructions.
 
 Each theorem unfolds the actual Jaune opcode implementation.  Successful
-outcomes preserve the checked full-stack pattern, while every raw error arm
-excludes a locally generated stack fault.
+outcomes preserve the checked full-stack pattern and precise successor facts,
+while every raw error arm excludes a locally generated stack fault.
 -/
 
 namespace Blanc.AbstractStackSafety
@@ -184,6 +184,15 @@ theorem assert_safe (condition : Prop) [Decidable condition]
       (Except.assert condition (error, pre)) := by
   unfold Except.assert
   split <;> simp [SafeResult, notFault]
+
+/-- A successful assertion exposes the proposition it checked, while its
+supplied failure remains a permitted non-stack error. -/
+theorem assert_true_safe (condition : Prop) [Decidable condition]
+    {error : EvmError} {pre : Devm} (notFault : ¬ StackFault error) :
+    SafeResult (fun _ : Unit => condition)
+      (Except.assert condition (error, pre)) := by
+  unfold Except.assert
+  split <;> simp_all [SafeResult]
 
 theorem assertDynamic_safe (sevm : Sevm) (pre : Devm) :
     SafeResult (fun _ : Unit => True) (assertDynamic sevm pre) := by
@@ -423,5 +432,167 @@ theorem ninst_regularTransfer_safe {evm : Evm} {instruction : Rinst}
   apply step_ofExecution_safe
   exact (regularTransfer_safe matched bound checked).mono
     (fun _ transferred => ⟨rfl, transferred⟩)
+
+/-! ## Control-flow transfer -/
+
+/-- Abstract transfer for `JUMP`. The destination must be exact, while the
+remaining full-stack pattern is preserved. Destination validity is checked by
+the actual opcode semantics and reflected in the successful postcondition. -/
+def jumpTransfer : Pattern → Option (B256 × Pattern)
+  | some destination :: words => some (destination, words)
+  | _ => none
+
+/-- Abstract transfer for `JUMPI`. The destination must be exact; the branch
+condition may remain abstract because the theorem covers both actual arms. -/
+def jumpiTransfer : Pattern → Option (B256 × Option B256 × Pattern)
+  | some destination :: condition :: words =>
+      some (destination, condition, words)
+  | _ => none
+
+/-- `JUMPDEST` preserves the complete operand-stack pattern. -/
+def jumpdestTransfer (input : Pattern) : Option Pattern := some input
+
+theorem noStackFault_invalidJumpDest :
+    ¬ StackFault (.halt (.invalidJumpDest .none)) := by
+  simp [StackFault]
+
+/-- Universal `JUMP` transfer soundness against the actual `Jinst.run`.
+An accepted transfer excludes stack underflow. On success it exposes both the
+exact target and its actual `jumpable` check; gas and invalid-target failures
+remain permitted non-stack errors. -/
+theorem jumpTransfer_safe {evm : Evm} {input output : Pattern}
+    {destination : B256}
+    (matched : Matches input evm.dyna.stack)
+    (checked : jumpTransfer input = some (destination, output)) :
+    SafeResult (fun result =>
+      result.1 = destination.toNat ∧
+      jumpable evm.sta.code destination.toNat = true ∧
+      Matches output result.2.stack)
+      (Jinst.run evm .jump) := by
+  cases input with
+  | nil => simp [jumpTransfer] at checked
+  | cons abstractDestination words =>
+      cases abstractDestination with
+      | none => simp [jumpTransfer] at checked
+      | some expected =>
+          simp only [jumpTransfer, Option.some.injEq, Prod.mk.injEq] at checked
+          rcases checked with ⟨rfl, rfl⟩
+          simp only [Jinst.run, Jinst.runCore]
+          apply (pop_safe matched).bind
+          intro result popped
+          rcases result with ⟨actualDestination, afterPop⟩
+          have destinationEq : actualDestination = expected :=
+            WordMatches.eq_of_some popped.1
+          subst actualDestination
+          apply (chargeGas_safe gMid popped.2).bind
+          intro charged chargedMatch
+          apply (assert_true_safe _ noStackFault_invalidJumpDest).bind
+          intro _ valid
+          exact ⟨rfl, valid, chargedMatch⟩
+
+/-- Universal `JUMPI` transfer soundness against the actual `Jinst.run`.
+The actual condition selects the exact one-byte fall-through arm or the exact
+validated target arm. Invalid taken destinations remain non-stack errors. -/
+theorem jumpiTransfer_safe {evm : Evm} {input output : Pattern}
+    {destination : B256} {condition : Option B256}
+    (matched : Matches input evm.dyna.stack)
+    (checked :
+      jumpiTransfer input = some (destination, condition, output)) :
+    SafeResult (fun result =>
+      ∃ actualCondition,
+        WordMatches condition actualCondition ∧
+        ((actualCondition = 0 ∧ result.1 = evm.pc + 1) ∨
+          (actualCondition ≠ 0 ∧
+            result.1 = destination.toNat ∧
+            jumpable evm.sta.code destination.toNat = true)) ∧
+        Matches output result.2.stack)
+      (Jinst.run evm .jumpi) := by
+  cases input with
+  | nil => simp [jumpiTransfer] at checked
+  | cons abstractDestination rest =>
+      cases rest with
+      | nil => simp [jumpiTransfer] at checked
+      | cons abstractCondition words =>
+          cases abstractDestination with
+          | none => simp [jumpiTransfer] at checked
+          | some expected =>
+              simp only [jumpiTransfer, Option.some.injEq, Prod.mk.injEq]
+                at checked
+              rcases checked with ⟨rfl, rfl, rfl⟩
+              simp only [Jinst.run, Jinst.runCore]
+              apply (pop_safe matched).bind
+              intro destinationResult destinationPopped
+              rcases destinationResult with ⟨actualDestination, afterDestination⟩
+              have destinationEq : actualDestination = expected :=
+                WordMatches.eq_of_some destinationPopped.1
+              subst actualDestination
+              apply (pop_safe destinationPopped.2).bind
+              intro conditionResult conditionPopped
+              rcases conditionResult with ⟨actualCondition, afterCondition⟩
+              apply (chargeGas_safe gHigh conditionPopped.2).bind
+              intro charged chargedMatch
+              by_cases zero : actualCondition = 0
+              · simp only [zero, if_pos, bind, Except.bind, SafeResult]
+                exact ⟨actualCondition, conditionPopped.1,
+                  Or.inl ⟨zero, True.intro⟩,
+                  chargedMatch⟩
+              · simp only [if_neg zero]
+                apply (assert_true_safe _ noStackFault_invalidJumpDest).bind
+                intro _ valid
+                exact ⟨actualCondition, conditionPopped.1,
+                  Or.inr ⟨zero, rfl, valid⟩, chargedMatch⟩
+
+/-- Universal `JUMPDEST` transfer soundness against the actual `Jinst.run`.
+It charges the real opcode gas, advances by its exact one-byte size, and
+preserves the complete stack pattern. -/
+theorem jumpdestTransfer_safe {evm : Evm} {input output : Pattern}
+    (matched : Matches input evm.dyna.stack)
+    (checked : jumpdestTransfer input = some output) :
+    SafeResult (fun result => result.1 = evm.pc + 1 ∧
+      Matches output result.2.stack)
+      (Jinst.run evm .jumpdest) := by
+  simp only [jumpdestTransfer, Option.some.injEq] at checked
+  subst output
+  simp only [Jinst.run, Jinst.runCore]
+  apply (chargeGas_safe gJumpdest matched).bind
+  intro charged chargedMatch
+  exact ⟨rfl, chargedMatch⟩
+
+/-- The actual `JUMP` control-flow step has the checked successor relation. -/
+theorem jinst_jumpTransfer_safe {evm : Evm} {input output : Pattern}
+    {destination : B256}
+    (matched : Matches input evm.dyna.stack)
+    (checked : jumpTransfer input = some (destination, output)) :
+    StepSafe (fun pc post =>
+      pc = destination.toNat ∧
+      jumpable evm.sta.code destination.toNat = true ∧
+      Matches output post.stack)
+      (Step.ofJump (Jinst.run evm .jump)) :=
+  step_ofJump_safe (jumpTransfer_safe matched checked)
+
+/-- The actual `JUMPI` control-flow step records the concrete condition and
+therefore its exact taken or one-byte fall-through successor. -/
+theorem jinst_jumpiTransfer_safe {evm : Evm} {input output : Pattern}
+    {destination : B256} {condition : Option B256}
+    (matched : Matches input evm.dyna.stack)
+    (checked :
+      jumpiTransfer input = some (destination, condition, output)) :
+    StepSafe (fun pc post =>
+      ∃ actualCondition,
+        WordMatches condition actualCondition ∧
+        ((actualCondition = 0 ∧ pc = evm.pc + 1) ∨
+          (actualCondition ≠ 0 ∧ pc = destination.toNat ∧
+            jumpable evm.sta.code destination.toNat = true)) ∧
+        Matches output post.stack)
+      (Step.ofJump (Jinst.run evm .jumpi)) :=
+  step_ofJump_safe (jumpiTransfer_safe matched checked)
+
+/-- The actual `JUMPDEST` control-flow step advances by exactly one byte. -/
+theorem jinst_jumpdestTransfer_safe {evm : Evm} {input output : Pattern}
+    (matched : Matches input evm.dyna.stack)
+    (checked : jumpdestTransfer input = some output) :
+    StepSafe (fun pc post => pc = evm.pc + 1 ∧ Matches output post.stack)
+      (Step.ofJump (Jinst.run evm .jumpdest)) :=
+  step_ofJump_safe (jumpdestTransfer_safe matched checked)
 
 end Blanc.AbstractStackSafety

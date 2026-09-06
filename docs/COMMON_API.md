@@ -344,15 +344,17 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Compose it with `SafeResult.bind` and `mono`. `chargeGas_safe`, `push_safe`,
   `pop_safe`, `pushItem_safe`, `applyUnary_safe`, `applyBinary_safe`,
   `dup_safe`, and `swap_safe` cover the named actual primitive semantics.
-  `ninst_push_safe` includes exact next-PC equality;
-  `step_ofExecution_safe` and `call_resume_safe` connect to the existing
+  `WordMatches.eq_of_some` recovers an exact concrete operand.
+  `ninst_push_safe` includes exact next-PC equality; `step_ofExecution_safe`,
+  `step_ofJump_safe`, and `call_resume_safe` connect to the existing
   `StepSafe`/`ResumeSafe` obligations. None requires sufficient gas or a
-  successful terminal outcome. These lemmas do not yet implement a decoded
-  table checker or construct a concrete program certificate. The generic
-  `SafeResult` head alone does not identify an instruction/transfer, so this
-  primitive inventory is registry-only until that selection interface exists.
-- Forward stack safety for concrete non-control opcodes, proved against the
-  actual `Rinst.runCore` implementation including every raw error arm, is in
+  successful terminal outcome. These lemmas do not construct a concrete
+  program certificate. The generic `SafeResult` head alone does not identify
+  an instruction or transfer, so this primitive inventory is registry-only
+  until that selection interface exists.
+- Forward stack safety for concrete regular and control-flow opcodes, proved
+  against the actual `Rinst.runCore` and `Jinst.runCore` implementations
+  including every raw error arm, is in
   [`Blanc/AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean).
   `regularTransfer` is the decidable abstract transfer for the regular opcodes
   a DRIP row can carry. `regularTransfer_safe` proves every accepted transfer
@@ -364,12 +366,18 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `gas_safe`, `calldataload_safe`, `mload_safe`, `mstore_safe`, `sload_safe`,
   `sstore_safe`, and `ninst_pop_safe` remain available for direct composition.
   `SafeResult.map`, `SafeResult.pure_bind`, `assert_safe` (any decidable
-  proposition), and `assertDynamic_safe` are the composition helpers they
-  use. Control flow, CALL, decoded-table validation, and a concrete program
-  certificate remain separate obligations. The existing stack-certificate
-  recipe advises the `StepSafe` head; selection of this transfer wrapper
-  additionally needs the exact regular instruction and successful check, so
-  its discovery remains in this registry.
+  proposition), `assert_true_safe`, and `assertDynamic_safe` are the
+  composition helpers they use. `jumpTransfer`, `jumpiTransfer`, and
+  `jumpdestTransfer` are universal decidable transfers for the exact-destination
+  `JUMP`, exact-destination/arbitrary-condition `JUMPI`, and stack-preserving
+  `JUMPDEST` shapes. Their `_safe` theorems expose the actual taken target,
+  `JUMPI` one-byte fall-through, and successful `jumpable` check while allowing
+  gas and invalid-target failures as non-stack errors. The `jinst_*Transfer_safe`
+  wrappers lift those facts to the actual `Step.ofJump (Jinst.run ...)` step.
+  CALL, decoded-table validation, and a concrete program certificate remain
+  separate obligations. The existing stack-certificate recipe advises the
+  `StepSafe` head; selecting a transfer wrapper additionally needs the exact
+  instruction and successful check, so discovery remains in this registry.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
