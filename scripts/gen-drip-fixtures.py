@@ -133,7 +133,7 @@ def artifacts():
     spec.loader.exec_module(parser)
     runtime = parser.parse_lean_literal(ROOT / "Blanc/DripCode.lean", "code")
     creation = parser.parse_lean_literal(ROOT / "Blanc/DripCreationCode.lean", "creationCodeLiteral")
-    require(len(runtime) == 1884 and len(creation) == 2123, "measured artifact size changed")
+    require(len(runtime) == 1872 and len(creation) == 2111, "measured artifact size changed")
     require(creation[239:] == runtime, "creation suffix does not bind runtime")
     return runtime, creation
 
