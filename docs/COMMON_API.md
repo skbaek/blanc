@@ -351,6 +351,17 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   table checker or construct a concrete program certificate. The generic
   `SafeResult` head alone does not identify an instruction/transfer, so this
   primitive inventory is registry-only until that selection interface exists.
+- Forward stack safety for concrete non-control opcodes, proved against the
+  actual `Rinst.runCore` implementation including every raw error arm, is in
+  [`Blanc/AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean).
+  `regularTransfer` is the decidable abstract transfer for the regular opcodes
+  a DRIP row can carry; `gas_safe`, `calldataload_safe`, `mload_safe`,
+  `mstore_safe`, `sload_safe`, and `sstore_safe` are the semantic proofs
+  finished so far, and `ninst_pop_safe` is the first `Ninst.step` wrapper.
+  `SafeResult.map`, `SafeResult.pure_bind`, `assert_safe` (any decidable
+  proposition), and `assertDynamic_safe` are the composition helpers they
+  use. The remaining regular opcodes, control flow, CALL, and the concrete
+  certificate are not yet proved here.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;

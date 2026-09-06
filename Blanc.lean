@@ -28,6 +28,7 @@ import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
 import Blanc.CompiledStackSafety
 import Blanc.AbstractStackSafety
+import Blanc.AbstractStackTransfer
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal
