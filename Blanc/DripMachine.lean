@@ -1122,37 +1122,31 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
       Devm.getStorVal_of_state
         (frame11.state.trans (of_run_pushB256 hpush).state).symm] at hy
     simpa using hy
+  -- retain rho across the comparison for the subsequent subtraction
+  refine run_prepend_elim _ [dup 0] ?_ run
+  intro s12dup hline12dup run
+  have frame12dup := frame12.line (by line_inv) (by line_inv) (by line_inv) hline12dup
+  have hp12dup : Devm.getStorVal entry e.currentTarget rhoSlot ::
+      Devm.getStorVal entry e.currentTarget rhoSlot :: tail <<+ s12dup.stack :=
+    prefix_of_dup_val (of_run_singleton hline12dup) (by show_nth) hp12
   refine run_prepend_elim _ (loadWord nowWord) ?_ run
   intro s13 hline13 run
-  obtain ⟨hp13, frame13⟩ := frame12.loadWord hp12 hline13
+  obtain ⟨hp13, frame13⟩ := frame12dup.loadWord hp12dup hline13
   rw [scratch_setScratch_self] at hp13
   refine run_prepend_elim _ [lt] ?_ run
   intro s14 hline14 run
   have frame14 := frame13.line (by line_inv) (by line_inv) (by line_inv) hline14
   have hp14 : (e.benvStat.time <?
-      Devm.getStorVal entry e.currentTarget rhoSlot) :: tail <<+ s14.stack :=
+      Devm.getStorVal entry e.currentTarget rhoSlot) ::
+      Devm.getStorVal entry e.currentTarget rhoSlot :: tail <<+ s14.stack :=
     prefix_of_lt (of_run_singleton hline14) hp13
   obtain ⟨hflagClock, s15, hp15, hpop15, run⟩ := of_run_guard hp14 run
   have frame15 := frame14.of_popBurn hpop15
   have hclock := B256.not_lt_of_ltCheck_eq_zero hflagClock
-  -- stage the elapsed interval
-  refine run_prepend_elim _ [pushB256 rhoSlot, sload] ?_ run
-  intro s16 hline16 run
-  have frame16 := frame15.line (by line_inv) (by line_inv) (by line_inv) hline16
-  have hp16 : Devm.getStorVal entry e.currentTarget rhoSlot :: tail <<+
-      s16.stack := by
-    rcases Line.of_run_cons hline16 with ⟨u, hpush, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨v, hsload, hnil⟩
-    cases hnil
-    obtain ⟨y, hy, hyval⟩ :=
-      prefix_of_sload hsload (prefix_of_push (of_run_pushB256 hpush) hp15)
-    rw [hyval,
-      Devm.getStorVal_of_state
-        (frame15.state.trans (of_run_pushB256 hpush).state).symm] at hy
-    simpa using hy
+  -- stage the elapsed interval using the retained rho
   refine run_prepend_elim _ (loadWord nowWord) ?_ run
   intro s17 hline17 run
-  obtain ⟨hp17, frame17⟩ := frame16.loadWord hp16 hline17
+  obtain ⟨hp17, frame17⟩ := frame15.loadWord hp15 hline17
   rw [scratch_setScratch_self] at hp17
   refine run_prepend_elim _ [sub] ?_ run
   intro s18 hline18 run

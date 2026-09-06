@@ -161,8 +161,6 @@ def freshStart : Func :=
     lt :::
     (.revert <?> initializeRpow)
   let stageElapsed : Func :=
-    pushB256 rhoSlot :::
-    sload :::
     loadWord nowWord +++
     sub :::
     mstoreAt exponentWord +++
@@ -170,6 +168,7 @@ def freshStart : Func :=
   let checkClock : Func :=
     pushB256 rhoSlot :::
     sload :::
+    dup 0 :::
     loadWord nowWord +++
     lt :::
     (.revert <?> stageElapsed)
