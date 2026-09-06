@@ -714,14 +714,14 @@ theorem Exec.Frame.compiledMainCursorCounted
       rcases subcode_of_get?_eq_some hcode hget with ⟨hjumpdest, hsub⟩
       have hboundary : noPushBefore e.code 1 32 = true :=
         (Prog.jumpable_of_get?_table hcode hget).2
-      rcases jumpdest_at_exact run hjumpdest with
-        ⟨actualMid, continuation, hburn, hgas, _hprec⟩
+      rcases jumpdest_at_pinned run hjumpdest with
+        ⟨actualMid, continuation, hburn, hgas, hreads, _hprec⟩
       have hmid : actualMid = compiledMid :=
-        Devm.eq_of_burnBy (Devm.BurnBy.of_burn hburn hgas)
+        Devm.eq_of_burnBy (Devm.BurnBy.of_burn hburn hgas hreads)
           hcompiledBurn
       subst compiledMid
       have hstep : Evm.step ⟨0, e, pre⟩ = .cont 1 actualMid :=
-        Evm.jumpdest_cont hjumpdest (Devm.BurnBy.of_burn hburn hgas)
+        Evm.jumpdest_cont hjumpdest (Devm.BurnBy.of_burn hburn hgas hreads)
       have hrootPrefix : Exec.Deriv.ParentPrefixActions dp ca
           ⟨0, e, pre, .ok post, run⟩
           ⟨0, e, pre, .ok post, run⟩ [] :=
@@ -1221,14 +1221,14 @@ theorem Exec.Frame.compiledMainCursorCountedSilent
       rcases subcode_of_get?_eq_some hcode hget with ⟨hjumpdest, hsub⟩
       have hboundary : noPushBefore e.code 1 32 = true :=
         (Prog.jumpable_of_get?_table hcode hget).2
-      rcases jumpdest_at_exact run hjumpdest with
-        ⟨actualMid, continuation, hburn, hgas, _hprec⟩
+      rcases jumpdest_at_pinned run hjumpdest with
+        ⟨actualMid, continuation, hburn, hgas, hreads, _hprec⟩
       have hmid : actualMid = compiledMid :=
-        Devm.eq_of_burnBy (Devm.BurnBy.of_burn hburn hgas)
+        Devm.eq_of_burnBy (Devm.BurnBy.of_burn hburn hgas hreads)
           hcompiledBurn
       subst compiledMid
       have hstep : Evm.step ⟨0, e, pre⟩ = .cont 1 actualMid :=
-        Evm.jumpdest_cont hjumpdest (Devm.BurnBy.of_burn hburn hgas)
+        Evm.jumpdest_cont hjumpdest (Devm.BurnBy.of_burn hburn hgas hreads)
       have hrootPrefix : Exec.Deriv.ParentPrefixActions dp ca
           ⟨0, e, pre, .ok post, run⟩
           ⟨0, e, pre, .ok post, run⟩ [] :=
@@ -1244,7 +1244,7 @@ theorem Exec.Frame.compiledMainCursorCountedSilent
       exact ⟨⟨1, actualMid, actualContinuation, hentryPrefix,
         hentryCounted, hmain, hsub, hboundary⟩,
         Devm.DispatchSilent.of_burnBy
-          (Devm.BurnBy.of_burn hburn hgas)⟩
+          (Devm.BurnBy.of_burn hburn hgas hreads)⟩
 
 /-- A successful authentic non-receive invocation reaches the counted
 cursor for its exact listed selector body while retaining the frame-entry

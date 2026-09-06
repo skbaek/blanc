@@ -3491,10 +3491,10 @@ theorem Exec.Frame.SourceCursor.main
         ⟨jumpdestAt, sourceSlice⟩
       have sourceBoundary : noPushBefore sevm.code 1 32 = true :=
         (Prog.jumpable_of_get?_table hcode hget).2
-      rcases jumpdest_at_exact run jumpdestAt with
-        ⟨inter, current, burn, hgas, prec⟩
+      rcases jumpdest_at_pinned run jumpdestAt with
+        ⟨inter, current, burn, hgas, hreads, prec⟩
       have entryStep : Evm.step ⟨0, sevm, pre⟩ = .cont 1 inter :=
-        Evm.jumpdest_cont jumpdestAt (Devm.BurnBy.of_burn burn hgas)
+        Evm.jumpdest_cont jumpdestAt (Devm.BurnBy.of_burn burn hgas hreads)
       have runEq : run = .cont entryStep current := Exec.unique _ _
       have parentPrefix : Exec.Deriv.ParentPrefix
           (Exec.Frame.rootDeriv ⟨0, sevm, pre, .ok post, run, committed⟩)
@@ -3624,20 +3624,21 @@ theorem Exec.Frame.SourceCursor.branch
           cursor.codeBoundary with
         ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
           jumpdestAt, jumpable, rightSlice, rightBoundary⟩
-      rcases pushAt_exact cursor.current ⟨_, pushAt⟩ (by simp) with
-        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushPrec⟩
+      rcases pushAt_pinned cursor.current ⟨_, pushAt⟩ (by simp) with
+        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushReads, pushPrec⟩
       rw [List.toB256_pair _ hloc] at pushBurn
-      rcases jumpi_at_exact afterPush jumpiAt with
-        ⟨x, armPre, armExec, popBurn, jumpGas, jumpPrec⟩ |
+      rcases jumpi_at_pinned afterPush jumpiAt with
+        ⟨x, armPre, armExec, popBurn, jumpGas, jumpReads, jumpPrec⟩ |
         ⟨x, flag, beforeJumpdestPre, beforeJumpdest, popBurn, jumpGas,
-          actualJumpable, nonzero, jumpPrec⟩
+          jumpReads, actualJumpable, nonzero, jumpPrec⟩
       · have combined : Devm.PopBurn [0] cursor.pre armPre := by
           rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right with
             ⟨stack, pushBurn', popBurn'⟩
           exact Devm.popBurn_of_burn_of_popBurn
             (Devm.burn_of_pushBurn_nil pushBurn') popBurn'
         have steps := Evm.branch_zero_steps pushAt jumpiAt hloc room
-          (Devm.PopBurnBy.of_popBurn combined (by omega))
+          (Devm.PopBurnBy.of_popBurn combined (by omega)
+            (pushReads.trans jumpReads))
         rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
           ⟨afterPush', pushEdge, afterPushPrefix⟩
         rcases afterPushPrefix.advance_cont afterPush' steps.2 with
@@ -3683,15 +3684,17 @@ theorem Exec.Frame.SourceCursor.branch
         rcases combined with ⟨hxeq, combined⟩
         have jumpdestAtX := jumpdestAt
         rw [hxeq] at jumpdestAtX
-        rcases jumpdest_at_exact beforeJumpdest jumpdestAtX with
-          ⟨armPre, armExec, jumpdestBurn, jumpdestGas, jumpdestPrec⟩
+        rcases jumpdest_at_pinned beforeJumpdest jumpdestAtX with
+          ⟨armPre, armExec, jumpdestBurn, jumpdestGas, jumpdestReads,
+            jumpdestPrec⟩
         have combined' : Devm.PopBurn [flag] cursor.pre armPre :=
           Devm.popBurn_of_popBurn_of_pop combined jumpdestBurn
         have totalGas : cursor.pre.gasLeft =
             armPre.gasLeft + (gVerylow + gHigh + gJumpdest) := by omega
         have steps := Evm.branch_succ_steps pushAt jumpiAt jumpdestAt
           jumpable hloc nonzero room
-          (Devm.PopBurnBy.of_popBurn combined' totalGas)
+          (Devm.PopBurnBy.of_popBurn combined' totalGas
+            (pushReads.trans (jumpReads.trans jumpdestReads)))
         rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
           ⟨afterPush', pushEdge, afterPushPrefix⟩
         rcases afterPushPrefix.advance_cont afterPush' steps.2.1 with
@@ -3764,11 +3767,11 @@ theorem Exec.Frame.SourceCursor.call
         have h := @Prog.get?_table 0 index (program.main :: program.aux)
         rw [hgetTable] at h
         simpa using h.symm
-      rcases pushAt_exact cursor.current ⟨pushLe, pushAt⟩ (by simp) with
-        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushPrec⟩
+      rcases pushAt_pinned cursor.current ⟨pushLe, pushAt⟩ (by simp) with
+        ⟨afterPushPre, afterPush, pushBurn, room, pushGas, pushReads, pushPrec⟩
       rw [List.toB256_pair _ hloc] at pushBurn
-      rcases jump_at_exact afterPush jumpAt with
-        ⟨x, beforeJumpdestPre, beforeJumpdest, popBurn, jumpGas,
+      rcases jump_at_pinned afterPush jumpAt with
+        ⟨x, beforeJumpdestPre, beforeJumpdest, popBurn, jumpGas, jumpReads,
           actualJumpable, jumpPrec⟩
       have hloc256 : loc < 2 ^ 256 := by
         apply Nat.lt_trans hloc
@@ -3789,15 +3792,17 @@ theorem Exec.Frame.SourceCursor.call
       have targetJumpable := Prog.jumpable_of_get?_table compiled hgetTable
       have jumpdestAtX := jumpdestAt
       rw [hxeq] at jumpdestAtX
-      rcases jumpdest_at_exact beforeJumpdest jumpdestAtX with
-        ⟨bodyPre, bodyExec, jumpdestBurn, jumpdestGas, jumpdestPrec⟩
+      rcases jumpdest_at_pinned beforeJumpdest jumpdestAtX with
+        ⟨bodyPre, bodyExec, jumpdestBurn, jumpdestGas, jumpdestReads,
+          jumpdestPrec⟩
       have totalBurn : Devm.Burn cursor.pre bodyPre :=
         Devm.burn_trans combined jumpdestBurn
       have totalGas : cursor.pre.gasLeft =
           bodyPre.gasLeft + (gVerylow + gMid + gJumpdest) := by omega
       have steps := Evm.call_steps (le := pushLe) pushAt jumpAt
         jumpdestAt targetJumpable.1 hloc room
-        (Devm.BurnBy.of_burn totalBurn totalGas)
+        (Devm.BurnBy.of_burn totalBurn totalGas
+          (pushReads.trans (jumpReads.trans jumpdestReads)))
       rcases cursor.parentPrefix.advance_cont cursor.current steps.1 with
         ⟨afterPush', pushEdge, afterPushPrefix⟩
       rcases afterPushPrefix.advance_cont afterPush' steps.2.1 with

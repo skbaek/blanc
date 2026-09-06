@@ -895,16 +895,16 @@ private theorem Exec.Frame.compiledMainCursorWithSourcePrefix
         ⟨jumpdestAt, sourceSlice⟩
       have sourceBoundary : noPushBefore e.code 1 32 = true :=
         (Prog.jumpable_of_get?_table hcode hget).2
-      rcases jumpdest_at_exact run jumpdestAt with
-        ⟨actualMid, continuation, hburn, hgas, _prec⟩
+      rcases jumpdest_at_pinned run jumpdestAt with
+        ⟨actualMid, continuation, hburn, hgas, hreads, _prec⟩
       have midEq : actualMid = compiledMid :=
         Devm.eq_of_burnBy
-          (Devm.BurnBy.of_burn hburn hgas)
+          (Devm.BurnBy.of_burn hburn hgas hreads)
           hcompiledBurn
       subst compiledMid
       have entryStep : Evm.step ⟨0, e, pre⟩ = .cont 1 actualMid :=
         Evm.jumpdest_cont jumpdestAt
-          (Devm.BurnBy.of_burn hburn hgas)
+          (Devm.BurnBy.of_burn hburn hgas hreads)
       have runEq : run = .cont entryStep continuation := Exec.unique _ _
       have entryEdge : Exec.Deriv.ParentStepActions dp ca
           ⟨1, e, actualMid, .ok post, continuation⟩
