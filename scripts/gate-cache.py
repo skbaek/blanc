@@ -79,6 +79,8 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
+from gate_execution import API_VERSION as MANAGED_API_VERSION, ExecutionContext, FatalOperationError, validate_recipe, require_certificate
+
 from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
@@ -86,6 +88,7 @@ from gate_cache_t8n_root import (
     resolve_t8n_python_base,
 )
 
+_DIRECT_EXECUTION = object()
 SCHEMA_VERSION = 1
 EVIDENCE_SCHEMA_VERSION = 2
 
@@ -381,13 +384,14 @@ def load_registry(path: Path) -> dict[str, Any]:
         unknown_keys = sorted(
             set(gate)
             - {"id", "order", "command", "kind", "reason", "note", "inputs",
-               "verdict", "prerequisite", "ci_only", "depends_on"}
+               "verdict", "prerequisite", "ci_only", "depends_on", "managed_execution"}
         )
         if unknown_keys:
             raise GateCacheError(
                 f"gate {identifier} carries unknown key(s): {', '.join(unknown_keys)}"
             )
 
+        validate_recipe(gate)
         inputs = gate.get("inputs", {})
         if not isinstance(inputs, dict):
             raise GateCacheError(f"gate {identifier} has a malformed inputs object")
@@ -415,7 +419,9 @@ def load_registry(path: Path) -> dict[str, Any]:
         for spec in material:
             if (
                 not isinstance(spec, dict)
-                or set(spec) != {"id", "command", "authority"}
+                or set(spec) - {"id", "command", "authority", "resource_class"}
+                or not {"id", "command", "authority"} <= set(spec)
+                or ("resource_class" in spec and spec["resource_class"] not in {"light", "elaboration", "exclusive"})
                 or not isinstance(spec.get("id"), str)
                 or not spec["id"]
                 or not isinstance(spec.get("command"), list)
@@ -615,7 +621,7 @@ RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
 # change how evidence is displayed or retained; they cannot change whether the
 # substantive verdict recorded in that evidence was true.
 SOUNDNESS_AUTHORITY_NAMES = frozenset({
-    "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
+    "_DIRECT_EXECUTION", "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
     "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
     "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
     "SHARED_STATE_RELATIVE", "BUILD_CERTIFICATE_RELATIVE",
@@ -656,7 +662,7 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     absent: it serializes writes but cannot make evidence reusable.
     """
 
-    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness"]
+    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness", "gate_execution.py", "gate-economy.json"]
     if gate_uses_t8n_resolver(gate):
         sources.append(RUNNER_T8N_SOURCE)
     return tuple(sources)
@@ -692,6 +698,8 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
         f"scripts/{RUNNER_SOUNDNESS_SOURCE}#soundness":
             semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE)
     }
+    detail["scripts/gate_execution.py"] = file_digest(here / "gate_execution.py")
+    detail["scripts/gate-economy.json"] = file_digest(here / "gate-economy.json")
     if gate_uses_t8n_resolver(gate):
         detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
     return digest_of({"schema": SCHEMA_VERSION, "sources": detail}), detail
@@ -1103,7 +1111,8 @@ def component_clock(
 
 
 def component_material_output(
-    root: Path, specs: list[dict[str, Any]]
+    root: Path, specs: list[dict[str, Any]], context: ExecutionContext | None = None,
+    gate: dict[str, Any] | None = None, phase: str = "planning",
 ) -> tuple[str, dict[str, str]]:
     """Cheap deterministic projection of bytes an expensive gate consumes.
 
@@ -1124,9 +1133,14 @@ def component_material_output(
             for relative in sorted(set(spec["authority"]))
         }
         try:
-            result = subprocess.run(
-                spec["command"], cwd=root, capture_output=True, check=False, timeout=180
-            )
+            if context is None:
+                result = subprocess.run(
+                    spec["command"], cwd=root, capture_output=True, check=False, timeout=180
+                )
+            else:
+                if gate is None:
+                    raise FatalOperationError("material operation has no catalogue owner")
+                result = context.capture(gate, phase, f"{gate['id']}/material/{identifier}", timeout=180)
         except (OSError, subprocess.SubprocessError) as error:
             raise Unresolvable(f"material output {identifier} could not run: {error}") from error
         if result.returncode != 0:
@@ -1145,7 +1159,7 @@ def component_material_output(
 # --- fingerprints -----------------------------------------------------------
 
 
-def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def fingerprint(root: Path, gate: dict[str, Any], context: ExecutionContext | None = None, phase: str = "planning") -> tuple[str, dict[str, Any]]:
     """The complete declared mutable-input identity of one gate command.
 
     Raises `Unresolvable` if any declared component cannot be identified.  The
@@ -1169,6 +1183,7 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 "kind": gate["kind"],
                 "inputs": inputs,
                 "verdict": gate.get("verdict"),
+                "managed_execution": gate.get("managed_execution"),
             }
         ),
         "detail": None,
@@ -1207,7 +1222,7 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         digest, detail = component_clock(root, inputs["clock"])
         components["clock"] = {"digest": digest, "detail": detail}
     if "material_output" in inputs:
-        digest, detail = component_material_output(root, inputs["material_output"])
+        digest, detail = component_material_output(root, inputs["material_output"], context, gate, phase)
         components["material_output"] = {"digest": digest, "detail": detail}
 
     overall = digest_of(
@@ -1510,7 +1525,8 @@ def tree_identity(root: Path) -> dict[str, str]:
 
 
 def plan(
-    root: Path, registry: dict[str, Any], cache: dict[str, Any], fresh: bool
+    root: Path, registry: dict[str, Any], cache: dict[str, Any], fresh: bool,
+    context: ExecutionContext | None = None,
 ) -> list[dict[str, Any]]:
     has_build_row = any(gate["id"] == "lake-build" for gate in registry["gates"])
     build_current, build_reason, _ = (
@@ -1548,7 +1564,7 @@ def plan(
             rows.append(row)
             continue
         try:
-            print_, components = fingerprint(root, gate)
+            print_, components = fingerprint(root, gate) if context is None else fingerprint(root, gate, context, "planning")
         except Unresolvable as error:
             row["disposition"] = "fresh"
             row["reason"] = f"input not identifiable: {error}"
@@ -1643,7 +1659,9 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
     }
 
 
-def execute(root: Path, gate: dict[str, Any], echo: bool) -> tuple[dict[str, Any], float]:
+def execute(root: Path, gate: dict[str, Any], echo: bool, context: ExecutionContext | None = None, phase: str = "body") -> tuple[dict[str, Any], float]:
+    if context is not None:
+        return context.execute(gate, phase, echo)
     started = time.monotonic()
     result = subprocess.run(
         gate["command"], cwd=root, capture_output=True, text=True, check=False
@@ -1656,7 +1674,7 @@ def execute(root: Path, gate: dict[str, Any], echo: bool) -> tuple[dict[str, Any
     return capture_verdict(gate, result), elapsed
 
 
-def run(root: Path, arguments: argparse.Namespace) -> int:
+def run(root: Path, arguments: argparse.Namespace, context: ExecutionContext | None = None) -> int:
     # Reconcile the registry against the catalogue *before* planning anything.
     # Without this, deleting a registry entry silently shrinks the audited
     # population: the run reports a smaller row count, every remaining row is
@@ -1717,7 +1735,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
                 }
                 continue
         print(f"[fresh ] {command_text(gate)}   (prerequisite refresh)")
-        verdict, elapsed = execute(root, gate, echo=arguments.echo)
+        verdict, elapsed = (execute(root, gate, echo=arguments.echo) if context is None else
+                            execute(root, gate, echo=arguments.echo, context=context, phase="prerequisite"))
         prerequisites[gate["id"]] = {
             "disposition": "fresh", "verdict": verdict, "elapsed": elapsed
         }
@@ -1725,7 +1744,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             problem = "; ".join(verdict["problems"])
             print(f"         FAILED: {problem}", file=sys.stderr)
             failures.append(f"{command_text(gate)}: {problem}")
-        elif gate["id"] == "lake-build":
+        elif gate["id"] == "lake-build" and context is None:
             try:
                 write_build_certificate(root)
             except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
@@ -1741,7 +1760,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         return 1
 
     forget_digests()
-    rows = plan(root, registry, cache, fresh=arguments.fresh)
+    rows = plan(root, registry, cache, fresh=arguments.fresh) if context is None else plan(root, registry, cache, fresh=arguments.fresh, context=context)
     planned = {row["id"]: row["fingerprint"] for row in rows}
 
     for row in rows:
@@ -1800,7 +1819,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             continue
 
         print(f"[fresh ] {label}")
-        verdict, elapsed = execute(root, row["gate"], echo=arguments.echo)
+        verdict, elapsed = (execute(root, row["gate"], echo=arguments.echo) if context is None else
+                            execute(root, row["gate"], echo=arguments.echo, context=context))
         row["elapsed"] = elapsed
         row["verdict"] = verdict
         for line in verdict["summary"]:
@@ -1829,7 +1849,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # verdict to inputs it never saw.
         forget_digests()
         try:
-            after, components = fingerprint(root, row["gate"])
+            after, components = (fingerprint(root, row["gate"]) if context is None else
+                                 fingerprint(root, row["gate"], context, "post-run"))
         except Unresolvable as error:
             row["cached"] = False
             row["cache_reason"] = f"inputs became unidentifiable during the run: {error}"
@@ -1864,19 +1885,26 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         if row["disposition"] != "reused":
             continue
         try:
-            after, _ = fingerprint(root, row["gate"])
+            after, _ = (fingerprint(root, row["gate"]) if context is None else
+                        fingerprint(root, row["gate"], context, "reused-revalidation"))
         except Unresolvable as error:
             drifted.append(f"{command_text(row['gate'])}: {error}")
             continue
         if after != planned[row["id"]]:
             drifted.append(f"{command_text(row['gate'])}: inputs changed during the run")
 
+    if context is not None:
+        context.check()
     wall = time.monotonic() - wall_started
     if not drifted:
         prune_details(cache)
         atomic_json(cache_path(root), cache)
 
     write_report(root, rows, identity, started_utc, wall, failures, drifted)
+    if context is not None:
+        manifest = json.loads(manifest_path(root).read_text())
+        manifest["managed_execution"] = {"version": MANAGED_API_VERSION, "operations": context.operations}
+        atomic_json(manifest_path(root), manifest)
 
     if drifted:
         print("DRIFT: reused evidence no longer describes this tree:", file=sys.stderr)
@@ -2162,12 +2190,14 @@ def audit(root: Path, quiet: bool = False) -> int:
 # --- plan / explain ---------------------------------------------------------
 
 
-def show_plan(root: Path, arguments: argparse.Namespace) -> int:
+def show_plan(root: Path, arguments: argparse.Namespace, context: ExecutionContext | None = None) -> int:
     registry = load_registry(registry_path(root))
     cache, cache_reason = read_cache(cache_path(root))
     if cache_reason:
         print(f"cache: {cache_reason}")
-    rows = plan(root, registry, cache, fresh=arguments.fresh)
+    if context is not None and any(g["id"] == "lake-build" for g in registry["gates"]):
+        require_certificate(root, "blanc-build-v1", sys.modules[__name__])
+    rows = plan(root, registry, cache, fresh=arguments.fresh) if context is None else plan(root, registry, cache, fresh=arguments.fresh, context=context)
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
     reused = sum(1 for row in rows if row["disposition"] == "reused")
     certified = sum(1 for row in rows if row["disposition"] == "certified")
@@ -2213,6 +2243,8 @@ def render_inventory(root: Path) -> str:
             lines.append(f"- reason: {gate['reason']}")
         if gate.get("note"):
             lines.append(f"- note: {gate['note']}")
+        if gate.get("managed_execution"):
+            lines.append("- optional managed recipe: `" + json.dumps(gate["managed_execution"], sort_keys=True) + "`")
         verdict = gate.get("verdict") or {}
         for pattern in verdict.get("summary_patterns", []):
             lines.append(f"- terminal summary must match `{pattern}` exactly once")
@@ -2294,16 +2326,28 @@ def build_parser() -> argparse.ArgumentParser:
         "certify-build",
         help="record exact state immediately after a successful authoritative lake build",
     )
+    certificate = commands.add_parser("verify-managed-certificate", help="verify a registered managed body precondition")
+    certificate.add_argument("kind", choices=["blanc-build-v1", "elab-modules-v1"])
     commands.add_parser("self-test", help="run the fail-closed control suite")
     return parser
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], executor: Any = _DIRECT_EXECUTION) -> int:
     arguments = build_parser().parse_args(argv)
     root = ROOT
     try:
-        if arguments.mode == "plan":
+        context = None
+        if executor is not _DIRECT_EXECUTION:
+            if arguments.mode not in {"run", "plan"}:
+                raise FatalOperationError("unsupported managed runner mode")
+            if audit(root, quiet=True) != 0:
+                raise FatalOperationError("managed catalogue audit failed")
+            context = ExecutionContext(root, load_registry(registry_path(root)), executor, sys.modules[__name__])
+        if arguments.mode == "plan" and context is None:
             return show_plan(root, arguments)
+        if arguments.mode == "verify-managed-certificate":
+            require_certificate(root, arguments.kind, sys.modules[__name__])
+            return 0
         if arguments.mode == "audit":
             return audit(root)
         if arguments.mode == "inventory":
@@ -2311,10 +2355,14 @@ def main(argv: list[str]) -> int:
         if arguments.mode == "self-test":
             from gate_cache_selftest import self_test  # noqa: PLC0415
 
-            return self_test()
+            code = self_test()
+            from gate_execution_selftest import self_test as managed_self_test
+            return managed_self_test() or code
         if not acquire_lock(lock_path(root)):
             return 2
         try:
+            if arguments.mode == "plan":
+                return show_plan(root, arguments, context)
             if arguments.mode == "certify-build":
                 certificate = write_build_certificate(root)
                 print(
@@ -2322,10 +2370,10 @@ def main(argv: list[str]) -> int:
                     f"{certificate['identity'][:16]} on {certificate['host']}"
                 )
                 return 0
-            return run(root, arguments)
+            return run(root, arguments) if context is None else run(root, arguments, context)
         finally:
             release_lock(lock_path(root))
-    except GateCacheError as error:
+    except (GateCacheError, FatalOperationError) as error:
         print(f"check-gates: {error}", file=sys.stderr)
         return 2
 

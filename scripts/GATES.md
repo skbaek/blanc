@@ -251,6 +251,63 @@ then refuses until the fixture runner exists; `--fresh` always forces the build.
 Source/configuration, toolchain, package-pin, trace, and runner-artifact movement
 are independently controlled.
 
+### Optional managed operation execution
+
+A host with Creme's v1 adapter may use `creme gate-run GOAL` to run this same
+catalogue with admission around each actual operation. `--requirements` is a
+non-elaborating inventory of operation argv, resource classes, cost identities
+and unresolved inputs. It runs no material producer, build, timing body or
+admission. `--plan` still computes material projections and therefore requires
+an exact build certificate and admitted projection operations. `--fresh` adds
+work; `--echo` exposes child output. Standalone `scripts/check-gates.sh` and CI
+remain independent of Creme and retain their original build behavior.
+
+The registry's finite `managed_execution` recipes preserve all 61 logical rows.
+The managed build prerequisite performs the authoritative default build,
+`jaune/jaune`, and the complete module target set from
+`check-elab-selection.py`, each through the owned build wrapper without an
+outer hold. This includes unimported discovered modules required by the
+existing complete trace certificate. It then runs the artifact-cache integrity
+checker as a separate elaboration operation immediately before certification.
+An exact certificate skips those operations; `--fresh` requires them again,
+while the owned wrapper may prove a build fresh and take no hold.
+
+The WETH current-mainnet recipe adds `--managed-build-certificate` to the
+registered composed command. The wrapper verifies the actual current build
+certificate before any work and again at the former fixture-build boundary;
+only then does it omit its internal `lake build jaune/jaune`. The elab recipe
+refreshes that same complete selector-derived target set, writes a local
+certificate binding host, root, sources and every module trace, and executes
+`--no-build --managed-build-certificate`. Its ordinary measurement, selector,
+baseline, report lock and quiet-host checks remain in force. A flag, stale
+binary, missing module, foreign certificate or drifted selector cannot satisfy
+these preconditions. Both direct wrappers retain their ordinary builds.
+
+The validated resource census is 28 light, 18 elaboration and 15 exclusive
+rows; `error-data` is elaboration because its registered helper runs Lean.
+The six material projections have their own elaboration declarations. Light,
+reused and certified bodies acquire no fictitious hold. Non-build cost evidence
+binds each operation's declared inputs independently of the whole-candidate
+source snapshot used to reject changes during execution. Material cost identity
+uses producer source and imported traces without evaluating the producer.
+Missing traces are an unresolved prerequisite, never a guessed identity.
+
+Admission refusal, cancellation, uncertain cleanup and managed source drift are
+fatal through planning, post-run fingerprinting and reused-row revalidation.
+None can become an unidentified-input fallback or cache credit. Child stdout
+and stderr remain separate bytes; only child stdout identifies material output.
+Gate summaries use the original text decoding and exactly-once rules. The
+existing owned-build API's combined text is recorded separately as a full
+build/wrapper receipt under `.lake/managed-gate-receipts/`, with empty pure
+child-stream fields for that role. Receipts cannot forge a gate summary.
+The manifest records actual prerequisite/body requests and lifecycle receipts.
+
+The managed protocol, recipes and resource declarations identify evidence and
+legitimately invalidate older records when they change. `--self-test` includes
+isolated fake-executor, certificate and actual-wrapper compatibility controls;
+Creme separately owns short real-process lifecycle controls. No managed option
+weakens repository criteria or grants a host execution permission.
+
 ### Local Lake artifact-cache trust boundary
 
 Blanc enables Lake's local artifact cache for immutable build artifacts. Cache

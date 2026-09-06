@@ -223,6 +223,7 @@ LSP_RSS_TOTAL_MB=600
 
 REBASE=0
 LIST_ONLY=0
+MANAGED_BUILD_CERTIFICATE=0
 NO_BUILD=0
 FORCE=0
 FULL=0
@@ -243,6 +244,7 @@ while [ $# -gt 0 ]; do
     --list)     LIST_ONLY=1; shift ;;
     --calibrate) CALIBRATE=1; shift ;;
     --no-build) NO_BUILD=1; shift ;;
+    --managed-build-certificate) MANAGED_BUILD_CERTIFICATE=1; shift ;;
     --force)    FORCE=1; shift ;;
     --self-test) SELF_TEST=1; shift ;;
     --report)
@@ -256,6 +258,14 @@ while [ $# -gt 0 ]; do
       exit 2 ;;
   esac
 done
+
+if [ "$MANAGED_BUILD_CERTIFICATE" -eq 1 ]; then
+  if [ "$NO_BUILD" -ne 1 ] || [ "$FULL" -ne 0 ] || [ "$REBASE" -ne 0 ] || [ "$LIST_ONLY" -ne 0 ] || [ "$CALIBRATE" -ne 0 ] || [ "$SELF_TEST" -ne 0 ] || [ "$FORCE" -ne 0 ]; then
+    echo "usage error: managed certificate requires the ordinary --no-build body" >&2
+    exit 2
+  fi
+  python3 "$SCRIPT_DIR/gate-cache.py" verify-managed-certificate elab-modules-v1 || exit 2
+fi
 
 if [ "$REBASE" -eq 1 ] && [ "$LIST_ONLY" -eq 1 ]; then
   echo "usage error: --rebase and --list are mutually exclusive" >&2
@@ -361,6 +371,9 @@ gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
 # its number is meaningless, so every discovered module must be current before
 # we start. Explicit targets also give a newly added, not-yet-imported module a
 # Lake trace; the selector uses each trace's transitive dependency hash.
+if [ "$MANAGED_BUILD_CERTIFICATE" -eq 1 ]; then
+  python3 "$SCRIPT_DIR/gate-cache.py" verify-managed-certificate elab-modules-v1 || exit 2
+fi
 if [ "$NO_BUILD" -eq 0 ]; then
   if ! MODULE_TARGETS="$(python3 "$SELECTOR" modules --root "$ROOT")"; then
     echo "SETUP — elab: could not discover local module build targets."

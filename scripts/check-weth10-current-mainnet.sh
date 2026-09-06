@@ -10,21 +10,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 : "${HOME:?HOME is required}"
 
+MANAGED_BUILD_CERTIFICATE=0
 COMPOSED_PREREQUISITES=0
 WRITE=0
 STATIC_SELF_CHECK=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --composed-prerequisites) COMPOSED_PREREQUISITES=1 ;;
+    --managed-build-certificate) MANAGED_BUILD_CERTIFICATE=1 ;;
     --write) WRITE=1 ;;
     --static-self-check) STATIC_SELF_CHECK=1 ;;
     *)
-      echo "usage: scripts/check-weth10-current-mainnet.sh [--composed-prerequisites] [--write] [--static-self-check]" >&2
+      echo "usage: scripts/check-weth10-current-mainnet.sh [--composed-prerequisites] [--managed-build-certificate] [--write] [--static-self-check]" >&2
       exit 2
       ;;
   esac
   shift
 done
+
+if [ "$MANAGED_BUILD_CERTIFICATE" -eq 1 ]; then
+  if [ "$COMPOSED_PREREQUISITES" -ne 1 ] || [ "$WRITE" -ne 0 ] || [ "$STATIC_SELF_CHECK" -ne 0 ]; then
+    echo "REGRESSION — WETH10 current-mainnet: managed certificate requires only composed prerequisites" >&2
+    exit 2
+  fi
+  python3 "$SCRIPT_DIR/gate-cache.py" verify-managed-certificate blanc-build-v1 || exit 2
+fi
 
 if [ -n "${JAUNE_T8N_TARGET:-}" ]; then
   TARGET_ROOT="$JAUNE_T8N_TARGET"
@@ -119,7 +129,9 @@ fi
   "$SCRIPT_DIR/gen-weth10-current-mainnet.py" "${GENERATOR_ARGS[@]}"
 
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
-if ! (cd "$ROOT" && lake build jaune/jaune); then
+if [ "$MANAGED_BUILD_CERTIFICATE" -eq 1 ]; then
+  python3 "$SCRIPT_DIR/gate-cache.py" verify-managed-certificate blanc-build-v1 || exit 2
+elif ! (cd "$ROOT" && lake build jaune/jaune); then
   echo "REGRESSION — WETH10 current-mainnet: lake build jaune/jaune failed" >&2
   exit 1
 fi

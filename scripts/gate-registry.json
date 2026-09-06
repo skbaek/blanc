@@ -690,6 +690,21 @@
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": []
+      },
+      "managed_execution": {
+        "recipe": "authoritative-build-v1",
+        "build_targets": [
+          [],
+          [
+            "jaune/jaune"
+          ]
+        ],
+        "module_refresh": "scripts/check-elab-selection.py",
+        "integrity_command": [
+          "scripts/check-lake-artifact-cache.sh"
+        ],
+        "integrity_resource_class": "elaboration",
+        "certificate": "blanc-build-v1"
       }
     },
     {
@@ -1275,7 +1290,8 @@
               "lean",
               "scripts/eval-weth10-differential-code.lean"
             ],
-            "id": "weth10-compiled-runtime"
+            "id": "weth10-compiled-runtime",
+            "resource_class": "elaboration"
           }
         ],
         "populations": [
@@ -1540,7 +1556,8 @@
               "lean",
               "scripts/eval-lido-ossifiable-proxy-artifacts.lean"
             ],
-            "id": "ossifiable-proxy-generated-artifacts"
+            "id": "ossifiable-proxy-generated-artifacts",
+            "resource_class": "elaboration"
           }
         ],
         "populations": [
@@ -1876,7 +1893,8 @@
               "lean",
               "scripts/eval-weth10-deployment-code.lean"
             ],
-            "id": "weth10-current-mainnet-deployment-artifacts"
+            "id": "weth10-current-mainnet-deployment-artifacts",
+            "resource_class": "elaboration"
           },
           {
             "authority": [
@@ -1888,7 +1906,8 @@
               "lean",
               "scripts/eval-weth10-differential-code.lean"
             ],
-            "id": "weth10-current-mainnet-runtime-artifacts"
+            "id": "weth10-current-mainnet-runtime-artifacts",
+            "resource_class": "elaboration"
           }
         ],
         "populations": [
@@ -1921,6 +1940,15 @@
         "summary_patterns": [
           "^OK — WETH10 current-mainnet: "
         ]
+      },
+      "managed_execution": {
+        "recipe": "fixture-certificate-v1",
+        "body": [
+          "scripts/check-weth10-current-mainnet.sh",
+          "--composed-prerequisites",
+          "--managed-build-certificate"
+        ],
+        "certificate": "blanc-build-v1"
       }
     },
     {
@@ -1978,7 +2006,8 @@
               "lean",
               "scripts/eval-beacon-deposit-differential-code.lean"
             ],
-            "id": "beacon-deposit-current-mainnet-artifacts"
+            "id": "beacon-deposit-current-mainnet-artifacts",
+            "resource_class": "elaboration"
           }
         ],
         "populations": [
@@ -2121,7 +2150,8 @@
             ],
             "authority": [
               "scripts/eval-beacon-deposit-deployment.lean"
-            ]
+            ],
+            "resource_class": "elaboration"
           }
         ]
       },
@@ -2405,6 +2435,16 @@
         "summary_patterns": [
           "^OK — elab: "
         ]
+      },
+      "managed_execution": {
+        "recipe": "all-modules-v1",
+        "selector": "scripts/check-elab-selection.py",
+        "body": [
+          "scripts/check-elab.sh",
+          "--no-build",
+          "--managed-build-certificate"
+        ],
+        "certificate": "elab-modules-v1"
       }
     },
     {
