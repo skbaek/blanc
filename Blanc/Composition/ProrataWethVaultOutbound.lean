@@ -27,18 +27,6 @@ open Jaune.Ninst Ninst
 open scoped LogOutputHinv
 open Source
 
-/-- Resources required by the exact WETH `transfer` child of one outbound flow.
-As with the inbound transfer, the gas obligation is tied to the fixed staging
-line that produces the call state, not asserted universally. -/
-def OutboundChildResources (sevm : Sevm) (assetsSel : B256) : Prop :=
-  sevm.depth ≠ 0 ∧
-    sevm.isStatic = false ∧
-    ∀ stagingEntry callPre,
-      Line.Run sevm stagingEntry
-        (transferStaging Blanc.ProrataWethVault.receiverWord assetsSel)
-        callPre →
-      CallGasAvailable callPre 68
-
 /-- Exact observation made by a successful compiled outbound flow.
 
 The WETH row moves by the exact quoted asset amount from the vault to the
@@ -121,7 +109,6 @@ theorem outboundAfterQuote_effect
     (returnedBelow : (returnedSel * 32).toNat + 32 ≤
       (Blanc.ProrataWethVault.balanceWord * 32).toNat)
     (stack : quote :: [] <<+ entry.stack)
-    (resources : OutboundChildResources sevm assetsSel)
     (lookup : fs[burnSlot]? =
       some (Blanc.ProrataWethVault.finishOutbound
         (Blanc.ProrataWethVault.loadWord sharesSel)
@@ -157,8 +144,6 @@ theorem outboundAfterQuote_effect
         (Devm.getStorVal entry sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat ∧
       OutboundEffect sevm receiver owner assets shares returned entry post := by
-  obtain ⟨depth, dynamic, gasAvailable⟩ := resources
-
   -- Caller, receiver and owner guards.
   obtain ⟨sharesPre, callerNonzero, receiverValid, receiverNonzero,
       ownerValid, ownerNonzero, sharesStack, sharesWf, sharesReads,
@@ -281,6 +266,13 @@ theorem outboundAfterQuote_effect
 
   -- Burn the shares and decrease the supply.
   rw [Blanc.ProrataWethVault.finishOutbound_shape] at burnRun
+  have dynamic : sevm.isStatic = false := by
+    obtain ⟨_, _, dynamicRun⟩ := runCompiledTo_prepend_inv burnRun
+    obtain ⟨_, _, dynamicRun⟩ := runCompiledTo_prepend_inv dynamicRun
+    obtain ⟨_, _, dynamicRun⟩ := runCompiledTo_next_inv dynamicRun
+    obtain ⟨_, _, dynamicRun⟩ := runCompiledTo_prepend_inv dynamicRun
+    obtain ⟨_, storeRun, _⟩ := runCompiledTo_next_inv dynamicRun
+    exact of_run_sstore_not_static (Ninst.Run.of_runCompiled storeRun)
   obtain ⟨childEntry, roomFits, burnSet, burnForeign, burnLogged, burnCode,
       childStack, childWf, childReads, childRun⟩ :=
     Blanc.ProrataWethVault.outboundBurn_trace (R := Func.RunOk) burnWf burnReads
@@ -331,8 +323,7 @@ theorem outboundAfterQuote_effect
     callWethTransfer_worldEffect callConfig ⟨childWf, childReads⟩
       (sliceBytes_of_toB256 receiverAtChild)
       (sliceBytes_of_toB256 assetsAtChild)
-      (by decide +kernel) (by omega) staging depth dynamic
-      (gasAvailable childEntry callPre staging) crossing suffix
+      (by decide +kernel) (by omega) staging dynamic crossing suffix
 
   -- Transport every operation word across the calldata frame and the child.
   have tailReads : Mem.Reads tailPre.memory tailPre.memory.data.toList := by
@@ -700,7 +691,6 @@ theorem outboundBody_effect
     (returnedAbove : 1024 ≤ (returnedSel * 32).toNat)
     (returnedBelow : (returnedSel * 32).toNat + 32 ≤
       (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (resources : OutboundChildResources sevm assetsSel)
     (lookup : fs[burnSlot]? =
       some (Blanc.ProrataWethVault.finishOutbound
         (Blanc.ProrataWethVault.loadWord sharesSel)
@@ -777,7 +767,7 @@ theorem outboundBody_effect
         rw [← supplyBridge]
         exact carry (by decide +kernel) supplyAt)
       sharesAt assetsAt returnedAt sharesAbove sharesBelow assetsAbove
-      assetsBelow returnedAbove returnedBelow afterStack resources lookup
+      assetsBelow returnedAbove returnedBelow afterStack lookup
       afterRun
   exact ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, (storVal owner) ▸ covered,
@@ -790,8 +780,6 @@ theorem withdraw_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (childResources : OutboundChildResources sevm
-      Blanc.ProrataWethVault.amountWord)
     (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.withdrawAfterQuote)
     (burnLookup : fs[Blanc.ProrataWethVault.withdrawBurnSlot]? =
@@ -884,7 +872,7 @@ theorem withdraw_body_effect
       (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
-      childResources burnLookup afterRun
+      burnLookup afterRun
   refine ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, ownerValid, ownerNonzero, covered, ?_, effect⟩
   have supplyNat : supply.toNat =
@@ -898,8 +886,6 @@ theorem redeem_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (childResources : OutboundChildResources sevm
-      Blanc.ProrataWethVault.quoteWord)
     (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.redeemAfterQuote)
     (burnLookup : fs[Blanc.ProrataWethVault.redeemBurnSlot]? =
@@ -981,7 +967,7 @@ theorem redeem_body_effect
       (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
-      childResources burnLookup afterRun
+      burnLookup afterRun
   refine ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, ownerValid, ownerNonzero, covered, ?_, effect⟩
   have supplyNat : supply.toNat =
@@ -1034,11 +1020,6 @@ private theorem redeem_mem_vaultFuncs :
       Blanc.ProrataWethVault.vaultFuncs := by
   simp [Blanc.ProrataWethVault.vaultFuncs]
 
-/-- Resources for a compiled outbound endpoint, tied to the exact selector's
-body rather than asserted for every state. -/
-def OutboundCompiledResources (sevm : Sevm) (assetsSel : B256) : Prop :=
-  OutboundChildResources sevm assetsSel
-
 /-- Public compiled `withdraw(amount, receiver, owner)`.
 
 The vault burns exactly `ceil(assets * D / X)` shares from the owner, pays the
@@ -1051,8 +1032,6 @@ theorem withdraw_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.amountWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address]) :
@@ -1103,7 +1082,7 @@ theorem withdraw_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
-    withdraw_body_effect bodyConfig bodyWf resources
+    withdraw_body_effect bodyConfig bodyWf
       withdrawAfterQuote_lookup withdrawBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1142,8 +1121,6 @@ theorem redeem_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address]) :
@@ -1188,7 +1165,7 @@ theorem redeem_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
-    redeem_body_effect bodyConfig bodyWf resources
+    redeem_body_effect bodyConfig bodyWf
       redeemAfterQuote_lookup redeemBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1225,8 +1202,6 @@ theorem withdraw_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.amountWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address])
@@ -1235,15 +1210,13 @@ theorem withdraw_preserves_conserved
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
-    withdraw_compiled_effect config memoryWf resources run selectorEq
+    withdraw_compiled_effect config memoryWf run selectorEq
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 theorem redeem_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address])
@@ -1252,7 +1225,7 @@ theorem redeem_preserves_conserved
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
-    redeem_compiled_effect config memoryWf resources run selectorEq
+    redeem_compiled_effect config memoryWf run selectorEq
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- `redeem_compiled_effect` with the quoted asset amount *named*, for the same
@@ -1262,8 +1235,6 @@ theorem redeem_compiled_effect_named
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address]) :
@@ -1278,7 +1249,7 @@ theorem redeem_compiled_effect_named
       OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
         assets (Sevm.argWord sevm 0) assets pre post := by
   obtain ⟨-, supply, supplyEq, -, fits, -, -, -, -, -, -, burnable, effect⟩ :=
-    redeem_compiled_effect config memoryWf resources run selectorEq
+    redeem_compiled_effect config memoryWf run selectorEq
   exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, burnable, effect⟩
 
 end Blanc.Composition.ProrataWethVault

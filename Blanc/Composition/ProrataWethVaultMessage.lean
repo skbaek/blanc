@@ -50,10 +50,6 @@ theorem vault_message_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (depositResources : InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
-    (mintResources : InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord)
-    (withdrawResources : OutboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
-    (redeemResources : OutboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor pre sevm.currentTarget)) :
@@ -102,13 +98,13 @@ theorem vault_message_preserves_conserved
       (body := Blanc.ProrataWethVault.previewRedeem) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact deposit_preserves_conserved config memoryWf depositResources run sel
+  · exact deposit_preserves_conserved config memoryWf run sel
       conserved
   · exact readOnly_message (words := 1)
       (body := Blanc.ProrataWethVault.balanceOf) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact mint_preserves_conserved config memoryWf mintResources run sel
+  · exact mint_preserves_conserved config memoryWf run sel
       conserved
   · exact readOnly_message (words := 0)
       (body := Blanc.ProrataWethVault.symbol) run sel
@@ -120,9 +116,9 @@ theorem vault_message_preserves_conserved
       (body := Blanc.ProrataWethVault.previewMint) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact withdraw_preserves_conserved config memoryWf withdrawResources run sel
+  · exact withdraw_preserves_conserved config memoryWf run sel
       conserved
-  · exact redeem_preserves_conserved config memoryWf redeemResources run sel
+  · exact redeem_preserves_conserved config memoryWf run sel
       conserved
   · exact readOnly_message (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) run sel
@@ -317,8 +313,7 @@ alone. That claim needs the other account's code, and the generic
 `Blanc/ProrataWethVaultLedgerSpec.lean`. Naming the restriction here is the
 point: an unqualified "history" claim would be broader than the evidence. -/
 
-/-- A sequence of vault messages, each configured and resourced at its own
-entry state. -/
+/-- A sequence of vault messages, each configured at its own entry state. -/
 inductive ConfiguredMessages (vault : Adr) : Devm → Devm → Prop
   | refl (s : Devm) : ConfiguredMessages vault s s
   | step {s t u : Devm} {sevm : Sevm} :
@@ -326,10 +321,6 @@ inductive ConfiguredMessages (vault : Adr) : Devm → Devm → Prop
       sevm.currentTarget = vault →
       DirectWethConfiguration vault sevm t →
       Mem.Wf t.memory →
-      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord →
-      InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord →
-      OutboundCompiledResources sevm Blanc.ProrataWethVault.amountWord →
-      OutboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord →
       Prog.RunCompiled sevm t Blanc.ProrataWethVault.vault u →
       ConfiguredMessages vault s u
 
@@ -343,10 +334,9 @@ theorem ConfiguredMessages.preserves_conserved {vault : Adr} {s t : Devm}
       (Devm.getStor t vault) := by
   induction chain with
   | refl => exact conserved
-  | step _ target config memoryWf depositR mintR withdrawR redeemR run ih =>
+  | step _ target config memoryWf run ih =>
       subst target
-      exact vault_message_preserves_conserved config memoryWf depositR mintR
-        withdrawR redeemR run ih
+      exact vault_message_preserves_conserved config memoryWf run ih
 
 /-- **From the root.**  A configured two-runtime root conserves the ledger, and
 every reachable state along a chain of vault messages still does. -/
