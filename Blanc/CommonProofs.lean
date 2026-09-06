@@ -5090,6 +5090,159 @@ lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error er
 lemma Devm.popToAdr_getCode_err {devm err} (h : Devm.popToAdr devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_error (core := Mach.popToAdr) h).getCode a |>.symm
 
+/-- Pointwise equality of code maps: the frame every non-create step keeps. -/
+def Devm.CodeFrame (before after : Devm) : Prop :=
+  ∀ a : Adr, after.getCode a = before.getCode a
+
+lemma Devm.codeFrame_refl : ReflexiveRel Devm.CodeFrame := by
+  intro d a
+  rfl
+
+lemma Devm.codeFrame_trans : TransitiveRel Devm.CodeFrame := by
+  intro a b c hab hbc adr
+  exact (hbc adr).trans (hab adr)
+
+lemma Devm.instructionFrame_refines_codeFrame {before after : Devm}
+    (h : Devm.InstructionFrame before after) :
+    Devm.CodeFrame before after := by
+  intro adr
+  exact (h.getCode adr).symm
+
+lemma Devm.pop_codeFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.CodeFrame d d.pop := by
+  exact Outcome.Rel.mono (fun _ _ h =>
+      Devm.instructionFrame_refines_codeFrame h)
+    (Devm.pop_instructionFrame d)
+
+lemma Devm.popToNat_codeFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.CodeFrame d d.popToNat := by
+  exact Outcome.Rel.mono (fun _ _ h =>
+      Devm.instructionFrame_refines_codeFrame h)
+    (Devm.popToNat_instructionFrame d)
+
+lemma chargeGas_codeFrame (cost : Nat) (d : Devm) :
+    Execution.Rel Devm.CodeFrame d (chargeGas cost d) := by
+  cases h : chargeGas cost d with
+  | error err => exact chargeGas_getCode_err h
+  | ok d' => exact chargeGas_getCode_eq h
+
+lemma chargeStateGas_codeFrame (amount : Nat) (d : Devm) :
+    Execution.Rel Devm.CodeFrame d (chargeStateGas amount d) := by
+  cases h : chargeStateGas amount d <;>
+    exact chargeStateGas_getCode_gen h
+
+lemma Devm.popToAdr_codeFrame (d : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.CodeFrame d d.popToAdr := by
+  cases h : d.popToAdr with
+  | error err => exact Devm.popToAdr_getCode_err h
+  | ok res => exact Devm.popToAdr_getCode_eq h
+
+lemma Devm.memExtends_codeFrame (d : Devm) (ranges : List (Nat × Nat)) :
+    Devm.CodeFrame d (d.memExtends ranges) :=
+  Devm.instructionFrame_refines_codeFrame
+    (Devm.memExtends_instructionFrame d ranges)
+
+lemma addAccessedAddress_codeFrame (d : Devm) (adr : Adr) :
+    Devm.CodeFrame d (addAccessedAddress d adr) :=
+  Devm.instructionFrame_refines_codeFrame
+    (addAccessedAddress_instructionFrame d adr)
+
+lemma Devm.balReadAccount_codeFrame
+    (rules : ForkRules) (adr : Adr) (d : Devm) :
+    Devm.CodeFrame d (d.balReadAccount rules adr) :=
+  Devm.instructionFrame_refines_codeFrame
+    (Devm.balReadAccount_instructionFrame rules adr d)
+
+lemma Devm.drainStateGasReservoir_codeFrame (d : Devm) :
+    Devm.CodeFrame d d.drainStateGasReservoir.2 := by
+  intro adr
+  exact Devm.drainStateGasReservoir_getCode d adr
+
+lemma completeDelegationAccess_codeFrame
+    (d : Devm) (delegated : Bool) (adr : Adr) :
+    Devm.CodeFrame d (completeDelegationAccess d delegated adr).2 := by
+  unfold completeDelegationAccess
+  split
+  · exact addAccessedAddress_codeFrame d adr
+  · exact Devm.codeFrame_refl d
+
+lemma Devm.subBal_toExcept_codeFrame
+    (d : Devm) (account : Adr) (amount : B256) :
+    Execution.Rel Devm.CodeFrame d
+      ((d.subBal account amount).toExcept
+        ⟨.internal (.invariant (.text "InsufficientBalanceError")), d⟩) := by
+  cases h : d.subBal account amount with
+  | none =>
+      simp only [Option.toExcept, Execution.Rel, Outcome.Rel]
+      exact Devm.codeFrame_refl d
+  | some d' =>
+      simp only [Option.toExcept, Execution.Rel, Outcome.Rel, id_eq]
+      intro adr
+      dsimp [Devm.subBal, Option.bind] at h
+      cases hs : d.state.subBal account amount
+      · rw [hs] at h
+        contradiction
+      · rw [hs] at h
+        injection h with heq
+        subst heq
+        exact State.subBal_getCode hs
+
+lemma Devm.addBal_codeFrame (d : Devm) (account : Adr) (amount : B256) :
+    Devm.CodeFrame d (d.addBal account amount) := by
+  intro adr
+  dsimp [Devm.addBal, Devm.getCode]
+  exact State.addBal_getCode d.state account adr amount
+
+lemma Devm.emitTransferLog_codeFrame
+    (d : Devm) (sender recipient : Adr) (amount : B256) :
+    Devm.CodeFrame d (d.emitTransferLog sender recipient amount) := by
+  unfold Devm.emitTransferLog
+  split
+  · exact Devm.codeFrame_refl d
+  · intro adr
+    rfl
+
+lemma addAccountToDelete_codeFrame (d : Devm) (account : Adr) :
+    Devm.CodeFrame d (addAccountToDelete d account) := by
+  intro adr
+  rfl
+
+lemma Except.assert_bindExecution_codeFrame
+    {p : Prop} [Decidable p] {pre : Devm} {err : EvmError × Devm}
+    {next : Unit → Execution}
+    (herr : Devm.CodeFrame pre err.2)
+    (hnext : ∀ u, Execution.Rel Devm.CodeFrame pre (next u)) :
+    Execution.Rel Devm.CodeFrame pre (Except.assert p err >>= next) := by
+  unfold Except.assert
+  split
+  · exact hnext ()
+  · exact herr
+
+lemma Linst.selfdestructAmsterdam_finish_codeFrame
+    (d : Devm) (donor donee : Adr) (amount : B256) :
+    Execution.Rel Devm.CodeFrame d
+      (let moved := d.addBal donee amount
+       let logged := moved.emitTransferLog donor donee amount
+       if donor ∈ logged.createdAccounts then
+         .ok (addAccountToDelete logged donor)
+       else .ok logged) := by
+  let moved := d.addBal donee amount
+  let logged := moved.emitTransferLog donor donee amount
+  change Execution.Rel Devm.CodeFrame d
+    (if donor ∈ logged.createdAccounts then
+      .ok (addAccountToDelete logged donor)
+    else .ok logged)
+  have hmoved : Devm.CodeFrame d moved :=
+    Devm.addBal_codeFrame d donee amount
+  have hlogged : Devm.CodeFrame moved logged :=
+    Devm.emitTransferLog_codeFrame moved donor donee amount
+  by_cases hdel : donor ∈ logged.createdAccounts
+  · simp only [hdel, if_pos, Execution.Rel, Outcome.Rel, id_eq]
+    exact Devm.codeFrame_trans (Devm.codeFrame_trans hmoved hlogged)
+      (addAccountToDelete_codeFrame logged donor)
+  · simp only [hdel, Execution.Rel, Outcome.Rel, id_eq]
+    exact Devm.codeFrame_trans hmoved hlogged
+
 lemma Rinst.preserves_getCode_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
@@ -5200,19 +5353,87 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
               dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
             exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
 
-/-- Pointwise equality of code maps: the frame every non-create step keeps. -/
-def Devm.CodeFrame (before after : Devm) : Prop :=
-  ∀ a : Adr, after.getCode a = before.getCode a
+lemma Linst.selfdestructAmsterdam_codeFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Execution.Rel Devm.CodeFrame devm
+      (Linst.run sevm devm .selfdestruct) := by
+  rw [Linst.run, hsg]
+  refine Except.assert_bindExecution_codeFrame
+    (Devm.codeFrame_refl devm) ?_
+  intro _
+  dsimp only
+  refine Outcome.Rel.bindExecutionPair Devm.codeFrame_trans
+    (Devm.popToAdr_codeFrame devm) ?_
+  intro pair
+  rcases pair with ⟨donee, d⟩
+  dsimp only
+  let cold := donee ∉ d.accessedAddresses
+  let gasCost := gasSelfDestruct +
+    (if cold then sevm.benvStat.rules.gas.coldAccountAccess else 0)
+  refine Except.assert_bindExecution_codeFrame
+    (Devm.codeFrame_refl d) ?_
+  intro _
+  let warm : Devm := if cold then addAccessedAddress d donee else d
+  let read : Devm :=
+    (warm.balReadAccount sevm.benvStat.rules donee).balReadAccount
+      sevm.benvStat.rules sevm.currentTarget
+  let donorBal := (read.getAcct sevm.currentTarget).bal
+  let creating := (read.getAcct donee).Empty ∧ donorBal ≠ 0
+  have hwarm : Devm.CodeFrame d warm := by
+    dsimp only [warm]
+    split
+    · exact fun adr => addAccessedAddress_getCode
+    · exact Devm.codeFrame_refl d
+  have hread : Devm.CodeFrame warm read :=
+    Devm.codeFrame_trans
+      (fun adr => Devm.balReadAccount_getCode
+        sevm.benvStat.rules donee adr warm)
+      (fun adr => Devm.balReadAccount_getCode sevm.benvStat.rules
+        sevm.currentTarget adr (warm.balReadAccount sevm.benvStat.rules donee))
+  refine Execution.Rel.trans_left Devm.codeFrame_trans
+    (Devm.codeFrame_trans hwarm hread) ?_
+  apply Execution.Rel.bind Devm.codeFrame_trans
+    (chargeGas_codeFrame
+      (gasCost + if creating then state.accountWrite else 0) read)
+  intro charged
+  apply Execution.Rel.bind Devm.codeFrame_trans
+    (chargeStateGas_codeFrame
+      (if creating then state.newAccount else 0) charged)
+  intro stateCharged
+  apply Execution.Rel.bind Devm.codeFrame_trans
+    (Devm.subBal_toExcept_codeFrame stateCharged sevm.currentTarget donorBal)
+  intro debited
+  exact Linst.selfdestructAmsterdam_finish_codeFrame
+    debited sevm.currentTarget donee donorBal
 
-theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
-    {exn : Execution} (hleg : sevm.benvStat.rules.stateGas = none)
-    (run : Linst.Run sevm devm l exn) :
+lemma Linst.selfdestructAmsterdam_preserves_getCode
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {exn : Execution}
+    (hsg : sevm.benvStat.rules.stateGas = some state)
+    (run : Linst.Run sevm devm .selfdestruct exn) :
+    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
+  have hf := Linst.selfdestructAmsterdam_codeFrame (devm := devm) hsg
+  rw [run] at hf
+  cases exn <;> exact hf
+
+theorem Linst.run_codeFrame_any {sevm : Sevm} {devm : Devm} {l : Linst}
+    {exn : Execution} (run : Linst.Run sevm devm l exn) :
     Execution.Rel Devm.CodeFrame devm exn := by
   rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
-  · cases exn <;> exact Linst.selfdestruct_preserves_getCode hleg run
+  · cases hsg : sevm.benvStat.rules.stateGas with
+    | none => cases exn <;> exact Linst.selfdestruct_preserves_getCode hsg run
+    | some state =>
+        cases exn <;>
+          exact Linst.selfdestructAmsterdam_preserves_getCode hsg run
   · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
+
+theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
+    {exn : Execution} (_hleg : sevm.benvStat.rules.stateGas = none)
+    (run : Linst.Run sevm devm l exn) :
+    Execution.Rel Devm.CodeFrame devm exn :=
+  Linst.run_codeFrame_any run
 
 /-- Relational invariant carried by a filled recursive execution slot. -/
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
@@ -5477,6 +5698,313 @@ lemma Xlot.rel_of_invGetCode {xl : Xlot}
   · cases exn with
     | error e => exact fun a ha => (h a ha).symm
     | ok d => exact fun a ha => (h a ha).symm
+
+/-- Code preservation for a recursive step, uniformly over its suspended
+child slot and its eventual result. -/
+def XStep.CodeEffect (pre : Devm) (step : XStep) : Prop :=
+  ∀ {xl exn}, xl.InvGetCode → XStep.Run step xl exn →
+    Execution.CodePreserve pre exn
+
+lemma XStep.CodeEffect.trans_left {a b : Devm} {step : XStep}
+    (hab : Devm.CodeFrame a b) (h : XStep.CodeEffect b step) :
+    XStep.CodeEffect a step := by
+  intro xl exn inv run adr ha
+  have hb : (b.getCode adr).toList ≠ [] := by
+    rw [hab adr]
+    exact ha
+  exact (h inv run adr hb).trans (hab adr)
+
+lemma XStep.codeEffect_done {pre : Devm} {exn : Execution}
+    (h : Execution.CodePreserve pre exn) :
+    XStep.CodeEffect pre (.done exn) := by
+  intro xl out _ run
+  simp only [XStep.Run] at run
+  rw [run.2]
+  exact h
+
+lemma XStep.codeEffect_bind
+    {pre : Devm} {out : Except (EvmError × Devm) (α × Devm)}
+    {next : α × Devm → Except (EvmError × Devm) XStep}
+    (hout : Outcome.Rel Prod.snd Prod.snd Devm.CodeFrame pre out)
+    (hnext : ∀ p : α × Devm,
+      XStep.CodeEffect p.2 (XStep.ofExcept (next p))) :
+    XStep.CodeEffect pre (XStep.ofExcept (out >>= next)) := by
+  intro xl exn inv run
+  cases out with
+  | error err =>
+      have heq := XStep.run_ofExcept_error run
+      rw [heq]
+      exact fun adr _ => hout adr
+  | ok p =>
+      exact XStep.CodeEffect.trans_left hout (hnext p) inv run
+
+lemma XStep.codeEffect_bindE
+    {pre : Devm} {out : Execution}
+    {next : Devm → Except (EvmError × Devm) XStep}
+    (hout : Execution.Rel Devm.CodeFrame pre out)
+    (hnext : ∀ d : Devm, XStep.CodeEffect d (XStep.ofExcept (next d))) :
+    XStep.CodeEffect pre (XStep.ofExcept (out >>= next)) := by
+  intro xl exn inv run
+  cases out with
+  | error err =>
+      have heq := XStep.run_ofExcept_error run
+      rw [heq]
+      exact fun adr _ => hout adr
+  | ok d =>
+      exact XStep.CodeEffect.trans_left hout (hnext d) inv run
+
+lemma XStep.codeEffect_assert
+    {pre : Devm} {p : Prop} [Decidable p] {err : EvmError × Devm}
+    {next : Unit → Except (EvmError × Devm) XStep}
+    (herr : Devm.CodeFrame pre err.2)
+    (hnext : XStep.CodeEffect pre (XStep.ofExcept (next ()))) :
+    XStep.CodeEffect pre
+      (XStep.ofExcept (Except.assert p err >>= next)) := by
+  unfold Except.assert
+  split
+  · exact hnext
+  · apply XStep.codeEffect_done (exn := .error err)
+    exact fun _ _ => herr _
+
+lemma XStep.codeEffect_assertDynamic
+    {sevm : Sevm} {pre : Devm}
+    {next : Unit → Except (EvmError × Devm) XStep}
+    (hnext : XStep.CodeEffect pre (XStep.ofExcept (next ()))) :
+    XStep.CodeEffect pre
+      (XStep.ofExcept (assertDynamic sevm pre >>= next)) := by
+  unfold assertDynamic
+  exact XStep.codeEffect_assert (Devm.codeFrame_refl pre) hnext
+
+lemma genericCreateAmsterdam.codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat} :
+    XStep.CodeEffect devm
+      (genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms) := by
+  intro xl exn inv run
+  exact genericCreateAmsterdam.codePreserve inv run
+
+lemma genericCallAmsterdam.codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool} :
+    XStep.CodeEffect devm
+      (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+        target codeAddress stv isSt ii isz oi osz code dp nac ib) := by
+  intro xl exn inv run
+  exact genericCallAmsterdam.codePreserve inv run
+
+/-- The common Amsterdam CALL-family suffix, after its constructor-specific
+stack reads have fixed the value, target, and memory ranges. -/
+lemma genericCallAmsterdam.meteredPrelude_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {d : Devm}
+    {gas value : B256} {transferCost : Nat}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat}
+    {newAccountCharged insufficientBalance : Bool} :
+    XStep.CodeEffect d
+      (XStep.ofExcept do
+        let gasRules := sevm.benvStat.rules.gas
+        let extendCost :=
+          d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        let accessGas := gasRules.accessCost codeAddress d.accessedAddresses
+        Except.assert (accessGas + extendCost + transferCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := addAccessedAddress d codeAddress
+        let ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩ :=
+          gasRules.delegationCost d codeAddress
+        let d := d.balReadAccount sevm.benvStat.rules codeAddress
+        let extraGas := accessGas + transferCost + delegatedAccessGasCost
+        Except.assert (extraGas + extendCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := d.balReadAccount sevm.benvStat.rules newCodeAddress
+        let ⟨code, d⟩ :=
+          completeDelegationAccess d disablePrecompiles newCodeAddress
+        let ⟨msgCallCost, msgCallStipend⟩ :=
+          calculateMsgCallGas value.toNat gas.toNat d.gasLeft extendCost extraGas
+        let d ← chargeGas (msgCallCost + extendCost) d
+        let ⟨reservoir, d⟩ := d.drainStateGasReservoir
+        let d :=
+          d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        return genericCallAmsterdam.step
+          sevm state d msgCallStipend reservoir value caller target
+          newCodeAddress stv isSt inputIndex inputSize outputIndex outputSize
+          code disablePrecompiles newAccountCharged insufficientBalance) := by
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d)
+  let d₁ := addAccessedAddress d codeAddress
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ codeAddress with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  simp only [d₁] at hdelegation
+  simp only [hdelegation]
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules codeAddress
+  apply XStep.CodeEffect.trans_left
+    (Devm.codeFrame_trans (addAccessedAddress_codeFrame d codeAddress)
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules codeAddress d₁))
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d₂)
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles newCodeAddress with
+    ⟨code, d₄⟩
+  simp only [d₁, d₂, d₃] at hcomplete
+  have hcomplete_snd :
+      (completeDelegationAccess d₃ disablePrecompiles newCodeAddress).2 = d₄ := by
+    rw [hcomplete]
+  apply XStep.CodeEffect.trans_left
+    (Devm.codeFrame_trans
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules newCodeAddress d₂)
+      (completeDelegationAccess_codeFrame d₃ disablePrecompiles newCodeAddress))
+  rw [hcomplete_snd]
+  apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d₄)
+  intro d₅
+  exact XStep.CodeEffect.trans_left
+    (Devm.codeFrame_trans
+      (Devm.drainStateGasReservoir_codeFrame d₅)
+      (Devm.memExtends_codeFrame d₅.drainStateGasReservoir.2
+        [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+    genericCallAmsterdam.codeEffect
+
+lemma Xinst.createAmsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .create) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_assertDynamic
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨endowment, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memoryIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memorySize, d⟩
+  apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d)
+  intro d'
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d')
+  exact XStep.CodeEffect.trans_left
+    (Devm.memExtends_codeFrame d' [⟨memoryIndex, memorySize⟩])
+    genericCreateAmsterdam.codeEffect
+
+lemma Xinst.create2Amsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .create2) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_assertDynamic
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨endowment, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memoryIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memorySize, d⟩
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨salt, d⟩
+  apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d)
+  intro d'
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d')
+  exact XStep.CodeEffect.trans_left
+    (Devm.memExtends_codeFrame d' [⟨memoryIndex, memorySize⟩])
+    genericCreateAmsterdam.codeEffect
+
+lemma Xinst.callAmsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .call) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.codeEffect_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨callee, d⟩
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨value, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d)
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d)
+  let d₁ := addAccessedAddress d callee
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ callee with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules callee
+  apply XStep.CodeEffect.trans_left
+    (Devm.codeFrame_trans (addAccessedAddress_codeFrame d callee)
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules callee d₁))
+  apply XStep.codeEffect_assert (Devm.codeFrame_refl d₂)
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles newCodeAddress with
+    ⟨code, d₄⟩
+  apply XStep.CodeEffect.trans_left
+    (Devm.codeFrame_trans
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules newCodeAddress d₂)
+      (by simpa [hcomplete] using
+        completeDelegationAccess_codeFrame d₃ disablePrecompiles newCodeAddress))
+  apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d₄)
+  intro d₅
+  dsimp only
+  split
+  · apply XStep.codeEffect_bindE (chargeStateGas_codeFrame state.newAccount d₅)
+    intro d₆
+    apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d₆)
+    intro d₇
+    exact XStep.CodeEffect.trans_left
+      (Devm.codeFrame_trans
+        (Devm.drainStateGasReservoir_codeFrame d₇)
+        (Devm.memExtends_codeFrame d₇.drainStateGasReservoir.2
+          [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+      genericCallAmsterdam.codeEffect
+
+  · apply XStep.codeEffect_bindE (chargeGas_codeFrame _ d₅)
+    intro d₇
+    exact XStep.CodeEffect.trans_left
+      (Devm.codeFrame_trans
+        (Devm.drainStateGasReservoir_codeFrame d₇)
+        (Devm.memExtends_codeFrame d₇.drainStateGasReservoir.2
+          [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+      genericCallAmsterdam.codeEffect
+
+lemma Xinst.callcodeAmsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .callcode) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.codeEffect_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨value, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_codeEffect
 
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
