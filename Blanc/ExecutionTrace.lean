@@ -169,6 +169,24 @@ inductive MessageCallTrace (msg : Msg) (state : State)
       (trace : ProcessMessageTrace execMsg (.ok evm))
       (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
       MessageCallTrace msg state out
+  /-- **The Amsterdam top-level path.**
+
+  Under `rules.stateGas = some sgr` both wrapper arms route through
+  `processTopLevelAmsterdam`, which prepares, runs and settles the frame in one
+  step rather than through the create/call shapes the other three constructors
+  name. The trace records which lane ran and the result it produced; it
+  deliberately claims nothing about the internal shape, because Blanc has no
+  vocabulary for the metered lifecycle yet.
+
+  `h_rules` is what makes this case free at every consumer: a contract theorem
+  fixes a concrete `Fork`, and `Fork.ruleSet` of any fork but Amsterdam has
+  `stateGas = none`, so the case closes by computation. -/
+  | topLevelAmsterdam
+      (sgr : StateGasRules)
+      (h_rules : msg.benv.stat.rules.stateGas = some sgr)
+      (h_result : processMessageCall msg = .ok ⟨state, out⟩) :
+      MessageCallTrace msg state out
+
 /-- Every successful settled message-call wrapper admits a retained trace of
 the exact raw execution core it ran. -/
 theorem exists_messageCallTrace {msg : Msg} {state : State}
@@ -180,7 +198,9 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
   split at h
   · rename_i htarget
     unfold processMessageCall.create at h
-    dsimp only at h
+    rcases hsg : msg.benv.stat.rules.stateGas with _ | sgr
+    case some => exact ⟨.topLevelAmsterdam sgr hsg h_result⟩
+    simp only [hsg] at h
     split at h
     · rename_i hcollision
       exact ⟨.createCollision htarget (by
@@ -197,6 +217,9 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
     have htargetFalse : msg.target.isNone = false := by
       cases ht : msg.target.isNone <;> simp_all
     unfold processMessageCall.call at h
+    rcases hsg : msg.benv.stat.rules.stateGas with _ | sgr
+    case some => exact ⟨.topLevelAmsterdam sgr hsg h_result⟩
+    simp only [hsg] at h
     split at h
     · rename_i hauth
       obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
