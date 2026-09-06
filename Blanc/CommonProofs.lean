@@ -825,7 +825,8 @@ def Devm.Rels.Refl (r : Devm.Rels) : Prop :=
   ReflexiveRel r.accountsToDelete ∧ ReflexiveRel r.returnData ∧ ReflexiveRel r.error ∧
   ReflexiveRel r.accessedAddresses ∧ ReflexiveRel r.accessedStorageKeys ∧
   ReflexiveRel r.state ∧ ReflexiveRel r.createdAccounts ∧
-  ReflexiveRel r.transientStorage
+  ReflexiveRel r.transientStorage ∧ ReflexiveRel r.stateGas ∧
+  ReflexiveRel r.accountReads ∧ ReflexiveRel r.storageReads
 
 def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
   TransitiveRel r.stack ∧ TransitiveRel r.memory ∧ TransitiveRel r.gasLeft ∧
@@ -833,12 +834,14 @@ def Devm.Rels.Trans (r : Devm.Rels) : Prop :=
   TransitiveRel r.accountsToDelete ∧ TransitiveRel r.returnData ∧ TransitiveRel r.error ∧
   TransitiveRel r.accessedAddresses ∧ TransitiveRel r.accessedStorageKeys ∧
   TransitiveRel r.state ∧ TransitiveRel r.createdAccounts ∧
-  TransitiveRel r.transientStorage
+  TransitiveRel r.transientStorage ∧ TransitiveRel r.stateGas ∧
+  TransitiveRel r.accountReads ∧ TransitiveRel r.storageReads
 
 lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
     ReflexiveRel (Devm.Rel r) := by
   intro d
-  rcases hr with ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩
+  rcases hr with
+    ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17⟩
   constructor
   · exact h1 _
   · exact h2 _
@@ -854,6 +857,9 @@ lemma Devm.rel_refl {r : Devm.Rels} (hr : Devm.Rels.Refl r) :
   · exact h12 _
   · exact h13 _
   · exact h14 _
+  · exact h15 _
+  · exact h16 _
+  · exact h17 _
 
 lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
     TransitiveRel (Devm.Rel r) := by
@@ -872,7 +878,10 @@ lemma Devm.rel_trans {r : Devm.Rels} (hr : Devm.Rels.Trans r) :
   · exact hr.2.2.2.2.2.2.2.2.2.2.1 hab.accessedStorageKeys hbc.accessedStorageKeys
   · exact hr.2.2.2.2.2.2.2.2.2.2.2.1 hab.state hbc.state
   · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.createdAccounts hbc.createdAccounts
-  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.transientStorage hbc.transientStorage
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.transientStorage hbc.transientStorage
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.stateGas hbc.stateGas
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1 hab.accountReads hbc.accountReads
+  · exact hr.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2 hab.storageReads hbc.storageReads
 
 /-! ## Outcome-aware effects for the EVM semantic layers -/
 
@@ -918,12 +927,14 @@ def Devm.delSets (d : Devm) : AdrSet × AdrSet :=
 
 /-! ## Full-frame relations for instruction preservation -/
 
-/-- A Mach-only step may change exactly the three `Mach` fields. -/
+/-- A Mach-only step may change exactly the `Mach` fields -- four of them since
+the Amsterdam series gave the machine its state-gas reservoir. -/
 def Devm.Rels.machFrame : Devm.Rels :=
   { Devm.Rels.eq with
     stack := fun _ _ => True
     memory := fun _ _ => True
-    gasLeft := fun _ _ => True }
+    gasLeft := fun _ _ => True
+    stateGas := fun _ _ => True }
 
 /-- A regular instruction may change every field except the world and the two
     deletion-relevant sets. -/
@@ -942,7 +953,13 @@ def Devm.Rels.instructionFrame : Devm.Rels :=
     accessedStorageKeys := fun _ _ => True
     state := _root_.Eq
     createdAccounts := _root_.Eq
-    transientStorage := _root_.Eq }
+    transientStorage := _root_.Eq
+    -- The reservoir is a `Mach` field and the two read sets are `Meta` fields,
+    -- so an ordinary instruction may move all three; only the world and the
+    -- deletion-relevant sets are pinned.
+    stateGas := fun _ _ => True
+    accountReads := fun _ _ => True
+    storageReads := fun _ _ => True }
 
 abbrev Devm.MachFrame : Devm → Devm → Prop :=
   Devm.Rel Devm.Rels.machFrame
@@ -986,7 +1003,11 @@ lemma Devm.machFrame_refines_instructionFrame :
     accessedStorageKeys := trivial
     state := h.state
     createdAccounts := h.createdAccounts
-    transientStorage := h.transientStorage }
+    transientStorage := h.transientStorage
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 lemma Devm.InstructionFrame.getBal {d d' : Devm}
     (h : Devm.InstructionFrame d d') (a : Adr) :
@@ -1027,7 +1048,10 @@ lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
     accessedStorageKeys := rfl
     state := rfl
     createdAccounts := rfl
-    transientStorage := rfl }
+    transientStorage := rfl
+    stateGas := trivial
+    accountReads := rfl
+    storageReads := rfl }
 
 lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
     (h : Meta.InstructionFrame d.meta view.2) :
@@ -1048,7 +1072,11 @@ lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
     accessedStorageKeys := trivial
     state := rfl
     createdAccounts := hcreated
-    transientStorage := rfl }
+    transientStorage := rfl
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 /-! ### Full-frame lift rules -/
 
@@ -1261,12 +1289,16 @@ lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
     accessedStorageKeys := trivial
     state := rfl
     createdAccounts := rfl
-    transientStorage := rfl }
+    transientStorage := rfl
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 lemma Rinst.balanceCore_meta_instructionFrame
-    (world : World) (mach : Mach) (view : Meta) :
+    (rules : ForkRules) (world : World) (mach : Mach) (view : Meta) :
     Outcome.Rel (fun e => e.2.2) (fun x => x.2.2)
-      Meta.InstructionFrame view (Rinst.balanceCore world mach view) := by
+      Meta.InstructionFrame view (Rinst.balanceCore rules world mach view) := by
   cases hpop : mach.pop with
   | error e =>
       simp only [Rinst.balanceCore, hpop]
@@ -1274,21 +1306,26 @@ lemma Rinst.balanceCore_meta_instructionFrame
   | ok out =>
       rcases out with ⟨x, mach'⟩
       simp only [Rinst.balanceCore, hpop]
+      -- EIP-7928 added a `readAccount` branch, which touches only
+      -- `accountReads`; the two sets `Meta.InstructionFrame` pins are still
+      -- carried through unchanged.
       by_cases hw : x.toAdr ∈ view.accessedAddresses
       · simp only [hw, if_pos]
-        split
-        · exact ⟨rfl, rfl⟩
-        · split <;> exact ⟨rfl, rfl⟩
+        split <;> [skip; split] <;>
+          first
+            | exact ⟨rfl, rfl⟩
+            | (split <;> exact ⟨rfl, rfl⟩)
       · simp only [hw, if_false]
-        split
-        · exact ⟨rfl, rfl⟩
-        · split <;> exact ⟨rfl, rfl⟩
+        split <;> [skip; split] <;>
+          first
+            | exact ⟨rfl, rfl⟩
+            | (split <;> exact ⟨rfl, rfl⟩)
 
-lemma Rinst.balanceCore_instructionFrame (d : Devm) :
+lemma Rinst.balanceCore_instructionFrame (rules : ForkRules) (d : Devm) :
     Execution.Rel Devm.InstructionFrame d
-      (liftMachMetaWorldExecution Rinst.balanceCore d) := by
-  exact liftMachMetaWorldExecution_instructionFrame Rinst.balanceCore d
-    (Rinst.balanceCore_meta_instructionFrame d.world d.mach d.meta)
+      (liftMachMetaWorldExecution (Rinst.balanceCore rules) d) := by
+  exact liftMachMetaWorldExecution_instructionFrame (Rinst.balanceCore rules) d
+    (Rinst.balanceCore_meta_instructionFrame rules d.world d.mach d.meta)
 
 /-! ### Bind composition for frame relations -/
 
@@ -1337,7 +1374,8 @@ lemma Rinst.balance_runCore_instructionFrame
     (pc : Nat) (devm : Devm) (sevm : Sevm) :
     Execution.Rel Devm.InstructionFrame devm
       (Rinst.runCore pc devm sevm .balance) := by
-  simpa only [Rinst.runCore] using Rinst.balanceCore_instructionFrame devm
+  simpa only [Rinst.runCore] using
+    Rinst.balanceCore_instructionFrame sevm.benvStat.rules devm
 
 lemma Rinst.blobhash_runCore_instructionFrame
     (pc : Nat) (devm : Devm) (sevm : Sevm) :
@@ -1469,7 +1507,11 @@ lemma Devm.instructionFrame_of_world_eq {d d' : Devm}
     accessedStorageKeys := trivial
     state := hstate
     createdAccounts := hcreated
-    transientStorage := htransient }
+    transientStorage := htransient
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 lemma popChargePush_instructionFrame (pre : Devm)
     (cost : B256 → Devm → Nat) (value : B256 → Devm → B256) :
@@ -2113,7 +2155,11 @@ lemma Devm.stateWriteFrame_of_world_eq {d d' : Devm}
       change State.BalCodeEq d.state d'.state
       rw [hstate]
       rfl
-    createdAccounts := hcreated, transientStorage := htransient }
+    createdAccounts := hcreated, transientStorage := htransient
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 /-- The state-writer frame implies the pre-existing `SSTORE` balance fact. -/
 lemma Devm.StateWriteFrame.getBal_eq {d d' : Devm}
@@ -2141,7 +2187,11 @@ lemma Devm.setStorVal_stateWriteFrame (d : Devm)
     accessedStorageKeys := trivial, state := by
       change State.BalCodeEq d.state (d.state.setStorVal adr key value)
       exact State.setStorVal_balCodeEq d.state adr key value
-    createdAccounts := rfl, transientStorage := rfl }
+    createdAccounts := rfl, transientStorage := rfl
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
     (hdel : d.accountsToDelete = d'.accountsToDelete)
@@ -2153,7 +2203,11 @@ lemma Devm.transientWriteFrame_of_world_eq {d d' : Devm}
     refundCounter := trivial, output := trivial, accountsToDelete := hdel
     returnData := trivial, error := trivial, accessedAddresses := trivial
     accessedStorageKeys := trivial, state := hstate
-    createdAccounts := hcreated, transientStorage := trivial }
+    createdAccounts := hcreated, transientStorage := trivial
+    stateGas := trivial
+    accountReads := trivial
+    storageReads := trivial
+  }
 
 lemma Rinst.tstore_runCore_transientWriteFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
