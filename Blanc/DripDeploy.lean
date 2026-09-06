@@ -126,7 +126,7 @@ theorem creationCode_slice_runtime :
 theorem eip3860InitcodeLimit_exact : eip3860InitcodeLimit = 49152 := by
   rfl
 
-theorem creationCodeSize_exact : creationCodeSize = 2030 := by
+theorem creationCodeSize_exact : creationCodeSize = 2001 := by
   decide +kernel
 
 theorem creationCode_eip3860 :
@@ -134,7 +134,7 @@ theorem creationCode_eip3860 :
   rw [creationCodeSize_exact, eip3860InitcodeLimit_exact]
   decide
 
-theorem creationCodeHeadroom_exact : creationCodeHeadroom = 47122 := by
+theorem creationCodeHeadroom_exact : creationCodeHeadroom = 47151 := by
   unfold creationCodeHeadroom
   rw [eip3860InitcodeLimit_exact, creationCodeSize_exact]
 

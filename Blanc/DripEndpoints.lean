@@ -27,46 +27,40 @@ private theorem getStor_of_state {s t : Devm} (h : s.state = t.state) :
   rw [h]
 
 theorem of_run_afterDrip {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    {entry s r : Devm} {image : Bytes} {tail : Stack} {chi : B256}
+    (frame : Frame image entry s) (hp : chi :: tail <<+ s.stack)
     (run : Func.Run fs e s afterDrip r) :
     Devm.getStor r e.currentTarget =
         ((Devm.getStor entry e.currentTarget).set chiSlot
-          (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) ∧
-      ReturnsWord (scratch image freshChiWord) r := by
+          (chi)).set rhoSlot (scratch image nowWord) ∧
+      ReturnsWord (chi) r := by
   unfold Drip.afterDrip at run
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
-  intro s1 hline1 run
-  obtain ⟨hp1, hwf1, hreads1, hst1⟩ :=
-    of_run_loadWordAt_image (word := freshChiWord)
-      (value := scratch image freshChiWord) hp frame.wf frame.reads rfl hline1
   refine run_prepend_elim _ [dup 0] ?_ run
   intro sd hdupLine run
-  have hpd : scratch image freshChiWord :: scratch image freshChiWord :: tail <<+ sd.stack :=
-    prefix_of_dup_val (of_run_singleton hdupLine) (by show_nth) hp1
-  have hmd : s1.memory = sd.memory := Line.of_inv Devm.memory (by line_inv) hdupLine
-  have hsd : s1.state = sd.state := Line.of_inv Devm.state (by line_inv) hdupLine
+  have hpd : chi :: chi :: tail <<+ sd.stack :=
+    prefix_of_dup_val (of_run_singleton hdupLine) (by show_nth) hp
+  have hmd : s.memory = sd.memory := Line.of_inv Devm.memory (by line_inv) hdupLine
+  have hsd : s.state = sd.state := Line.of_inv Devm.state (by line_inv) hdupLine
   refine run_prepend_elim _ [pushB256 chiSlot, sstore] ?_ run
   intro s2 hline2 run
   rcases Line.of_run_cons hline2 with ⟨u1, hpush1, hrest⟩
   rcases Line.of_run_cons hrest with ⟨u2, hstore1, hnil⟩
   cases hnil
-  have hpu1 : chiSlot :: scratch image freshChiWord :: scratch image freshChiWord :: tail <<+ u1.stack :=
+  have hpu1 : chiSlot :: chi :: chi :: tail <<+ u1.stack :=
     prefix_of_push (of_run_pushB256 hpush1) hpd
   have hstor2 : Devm.getStor s2 e.currentTarget =
       (Devm.getStor entry e.currentTarget).set chiSlot
-        (scratch image freshChiWord) := by
+        (chi) := by
     rw [sstore_getStor_set hstore1 hpu1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush1).state)
         e.currentTarget,
       ← congrFun (getStor_of_state hsd) e.currentTarget,
-      ← congrFun (getStor_of_state hst1) e.currentTarget,
       ← congrFun (getStor_of_state frame.state) e.currentTarget]
-  have hp2 : scratch image freshChiWord :: tail <<+ s2.stack := prefix_of_sstore hstore1 hpu1
+  have hp2 : chi :: tail <<+ s2.stack := prefix_of_sstore hstore1 hpu1
   have hmem2 : sd.memory = s2.memory :=
     Line.of_inv Devm.memory (by line_inv) hline2
-  have hwf2 : Mem.Wf s2.memory := by rw [← hmem2, ← hmd]; exact hwf1
-  have hreads2 : Mem.Reads s2.memory image := by rw [← hmem2, ← hmd]; exact hreads1
+  have hwf2 : Mem.Wf s2.memory := by rw [← hmem2, ← hmd]; exact frame.wf
+  have hreads2 : Mem.Reads s2.memory image := by rw [← hmem2, ← hmd]; exact frame.reads
   refine run_prepend_elim _ (loadWord nowWord) ?_ run
   intro s3 hline3 run
   obtain ⟨hp3, hwf3, hreads3, hst3⟩ :=
@@ -77,16 +71,16 @@ theorem of_run_afterDrip {fs : List Func} {e : Sevm}
   rcases Line.of_run_cons hline4 with ⟨v1, hpush2, hrest⟩
   rcases Line.of_run_cons hrest with ⟨v2, hstore2, hnil⟩
   cases hnil
-  have hpv1 : rhoSlot :: scratch image nowWord :: scratch image freshChiWord :: tail <<+ v1.stack :=
+  have hpv1 : rhoSlot :: scratch image nowWord :: chi :: tail <<+ v1.stack :=
     prefix_of_push (of_run_pushB256 hpush2) hp3
   have hstor4 : Devm.getStor s4 e.currentTarget =
       ((Devm.getStor entry e.currentTarget).set chiSlot
-        (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) := by
+        (chi)).set rhoSlot (scratch image nowWord) := by
     rw [sstore_getStor_set hstore2 hpv1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush2).state)
         e.currentTarget,
       ← congrFun (getStor_of_state hst3) e.currentTarget, hstor2]
-  have hp4 : scratch image freshChiWord :: tail <<+ s4.stack := prefix_of_sstore hstore2 hpv1
+  have hp4 : chi :: tail <<+ s4.stack := prefix_of_sstore hstore2 hpv1
   refine ⟨?_, (returnsWord_of_storeReturn hp4 run).1⟩
   rw [← congrFun
       (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run) e.currentTarget,
@@ -156,8 +150,7 @@ theorem of_run_drip {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagE) (by decide +kernel)
   · exact absurd (htag.symm.trans htagU) (by decide +kernel)
   · obtain ⟨hstor, hret⟩ := of_run_afterDrip frame4 hp4 run
-    rw [hfresh, hnow] at hstor
-    rw [hfresh] at hret
+    rw [hnow] at hstor
     exact ⟨hlower, hupper, hclock, helapsed, hguards, hnofm, hcap, hstor, hret⟩
   · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
 
@@ -169,39 +162,37 @@ surface floor; neither writes storage, so a successful view leaves the
 contract's rows exactly as it found them. -/
 
 theorem of_run_afterConvertToAssets {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    {entry s r : Devm} {image : Bytes} {tail : Stack} {chi : B256}
+    (frame : Frame image entry s) (hp : chi :: tail <<+ s.stack)
     (run : Func.Run fs e s afterConvertToAssets r) :
     Devm.getStor s = Devm.getStor r ∧
       ReturnsWord
-        ((scratch image freshChiWord * scratch image argumentWord) / scale) r := by
+        ((chi * scratch image argumentWord) / scale) r := by
   refine ⟨Func.of_inv Devm.getStor Devm.getStor (by func_inv) run, ?_⟩
   unfold Drip.afterConvertToAssets at run
   refine run_prepend_elim _ (loadWord argumentWord) ?_ run
   intro s1 hline1 run
   obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
-  intro s2 hline2 run
-  obtain ⟨hp2, frame2⟩ := frame1.loadWord hp1 hline2
   refine run_prepend_elim _ [mul, pushB256 scale, swap 0, div] ?_ run
   intro s3 hline3 run
-  have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
-  have hp3 : ((scratch image freshChiWord * scratch image argumentWord) /
+  have frame3 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline3
+  have hp3 : ((chi * scratch image argumentWord) /
       scale) :: tail <<+ s3.stack := by
     rcases Line.of_run_cons hline3 with ⟨u1, hmul, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u3, hswap, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u4, hdiv, hnil⟩
     cases hnil
-    have h1 := prefix_of_mul hmul hp2
+    have h1 := prefix_of_mul hmul hp1
+    rw [B256.mul_comm (scratch image argumentWord) chi] at h1
     have h2 := prefix_of_push (of_run_pushB256 hpush) h1
-    have h3 : (scratch image freshChiWord * scratch image argumentWord) ::
+    have h3 : (chi * scratch image argumentWord) ::
         scale :: tail <<+ u3.stack :=
       Stack.prefix_of_swap
         (show Stack.Swap 0
-            (scale :: (scratch image freshChiWord *
+            (scale :: (chi *
               scratch image argumentWord) :: tail)
-            ((scratch image freshChiWord * scratch image argumentWord) ::
+            ((chi * scratch image argumentWord) ::
               scale :: tail)
           from Stack.swapCore_zero)
         (of_run_swap hswap) h2
@@ -209,13 +200,13 @@ theorem of_run_afterConvertToAssets {fs : List Func} {e : Sevm}
   exact (returnsWord_of_storeReturn hp3 run).1
 
 theorem of_run_afterConvertToUnits {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    {entry s r : Devm} {image : Bytes} {tail : Stack} {chi : B256}
+    (frame : Frame image entry s) (hp : chi :: tail <<+ s.stack)
     (run : Func.Run fs e s afterConvertToUnits r) :
     Devm.getStor s = Devm.getStor r ∧
       ReturnsWord
         ((scale * scratch image argumentWord) /
-          scratch image freshChiWord) r := by
+          chi) r := by
   refine ⟨Func.of_inv Devm.getStor Devm.getStor (by func_inv) run, ?_⟩
   unfold Drip.afterConvertToUnits at run
   refine run_prepend_elim _ (loadWord argumentWord) ?_ run
@@ -224,33 +215,14 @@ theorem of_run_afterConvertToUnits {fs : List Func} {e : Sevm}
   refine run_prepend_elim _ [pushB256 scale, mul] ?_ run
   intro s2 hline2 run
   have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
-  have hp2 : (scale * scratch image argumentWord) :: tail <<+ s2.stack := by
+  have hp2 : (scale * scratch image argumentWord) :: chi :: tail <<+ s2.stack := by
     rcases Line.of_run_cons hline2 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hmul, hnil⟩
     cases hnil
     exact prefix_of_mul hmul (prefix_of_push (of_run_pushB256 hpush) hp1)
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
-  intro s3 hline3 run
-  obtain ⟨hp3, frame3⟩ := frame2.loadWord hp2 hline3
-  refine run_prepend_elim _ [swap 0, div] ?_ run
+  refine run_prepend_elim _ [div] ?_ run
   intro s4 hline4 run
-  have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
-  have hp4 : ((scale * scratch image argumentWord) /
-      scratch image freshChiWord) :: tail <<+ s4.stack := by
-    rcases Line.of_run_cons hline4 with ⟨u1, hswap, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨u2, hdiv, hnil⟩
-    cases hnil
-    have h1 : (scale * scratch image argumentWord) ::
-        scratch image freshChiWord :: tail <<+ u1.stack :=
-      Stack.prefix_of_swap
-        (show Stack.Swap 0
-            (scratch image freshChiWord ::
-              (scale * scratch image argumentWord) :: tail)
-            ((scale * scratch image argumentWord) ::
-              scratch image freshChiWord :: tail)
-          from Stack.swapCore_zero)
-        (of_run_swap hswap) hp3
-    exact prefix_of_div hdiv h1
+  have hp4 := prefix_of_div (of_run_singleton hline4) hp2
   exact (returnsWord_of_storeReturn hp4 run).1
 
 /-! ## The two views, end to end at source level -/
@@ -274,12 +246,12 @@ private theorem of_run_viewEntry {fs : List Func} (hlookup : AuxLookup fs)
           Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
       scratch image' routeWord = route ∧
       scratch image' argumentWord = Sevm.dataWord e (32 * 0 + 4) ∧
-      scratch image' freshChiWord =
-        (B256.rpow scale half rate
-              (e.benvStat.time -
-                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
-            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
-      Frame image' entry t ∧ (tail <<+ t.stack) ∧
+      scratch image' accumulatorWord = B256.rpow scale half rate
+        (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      Frame image' entry t ∧
+      (((B256.rpow scale half rate
+        (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+        Devm.getStorVal entry e.currentTarget chiSlot) / scale) :: tail <<+ t.stack) ∧
       Func.Run fs e t (.call freshRouteSlot) r := by
   refine run_prepend_elim _ (arg 0) ?_ run
   intro s1 hline1 run
@@ -354,7 +326,7 @@ theorem of_run_convertToAssets {fs : List Func} (hlookup : AuxLookup fs)
   rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
     ⟨htagD, run⟩ | ⟨htagJ, run⟩
   · obtain ⟨hstor, hret⟩ := of_run_afterConvertToAssets frame2 hp2 run
-    rw [hfresh, harg] at hret
+    rw [harg] at hret
     exact ⟨hcap, hlower, hupper, hclock, helapsed, hguards,
       (getStor_of_state frame2.state).trans hstor, hret⟩
   · exact absurd (htag.symm.trans htagE) (by decide +kernel)
@@ -391,7 +363,7 @@ theorem of_run_convertToUnits {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagA) (by decide +kernel)
   · exact absurd (htag.symm.trans htagE) (by decide +kernel)
   · obtain ⟨hstor, hret⟩ := of_run_afterConvertToUnits frame2 hp2 run
-    rw [hfresh, harg] at hret
+    rw [harg] at hret
     exact ⟨hcap, hlower, hupper, hclock, helapsed, hguards,
       (getStor_of_state frame2.state).trans hstor, hret⟩
   · exact absurd (htag.symm.trans htagD) (by decide +kernel)
@@ -406,25 +378,25 @@ and the total.  The caller's row is keyed by the raw address word, which
 `Blanc/DripCore.lean` separately proves cannot alias a scalar slot. -/
 
 theorem of_run_afterJoin {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    {entry s r : Devm} {image : Bytes} {tail : Stack} {chi : B256}
+    (frame : Frame image entry s) (hp : chi :: tail <<+ s.stack)
     (run : Func.Run fs e s afterJoin r) :
     ¬ maxUnits < scratch image rowWord +
-        (scale * scratch image argumentWord / scratch image freshChiWord) ∧
+        (scale * scratch image argumentWord / chi) ∧
       ¬ maxPie <
-        (scale * scratch image argumentWord / scratch image freshChiWord) +
+        (scale * scratch image argumentWord / chi) +
           scratch image totalWord ∧
       Devm.getStor r e.currentTarget =
         ((((Devm.getStor entry e.currentTarget).set chiSlot
-              (scratch image freshChiWord)).set rhoSlot
+              (chi)).set rhoSlot
             (scratch image nowWord)).set e.caller.toB256
             (scratch image rowWord +
               (scale * scratch image argumentWord /
-                scratch image freshChiWord))).set totalUnitsSlot
-          ((scale * scratch image argumentWord / scratch image freshChiWord) +
+                chi))).set totalUnitsSlot
+          ((scale * scratch image argumentWord / chi) +
             scratch image totalWord) ∧
       ReturnsWord
-        (scale * scratch image argumentWord / scratch image freshChiWord) r := by
+        (scale * scratch image argumentWord / chi) r := by
   unfold Drip.afterJoin at run
   -- the credited unit count
   refine run_prepend_elim _ (loadWord argumentWord) ?_ run
@@ -433,47 +405,49 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
   refine run_prepend_elim _ [pushB256 scale, mul] ?_ run
   intro s2 hline2 run
   have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
-  have hp2 : (scale * scratch image argumentWord) :: tail <<+ s2.stack := by
+  have hp2 : (scale * scratch image argumentWord) :: chi :: tail <<+ s2.stack := by
     rcases Line.of_run_cons hline2 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hmul, hnil⟩
     cases hnil
     exact prefix_of_mul hmul (prefix_of_push (of_run_pushB256 hpush) hp1)
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  refine run_prepend_elim _ [dup 1] ?_ run
   intro s3 hline3 run
-  obtain ⟨hp3, frame3⟩ := frame2.loadWord hp2 hline3
+  have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
+  have hp3 : chi :: (scale * scratch image argumentWord) :: chi :: tail <<+ s3.stack :=
+    prefix_of_dup_val (of_run_singleton hline3) (by show_nth) hp2
   refine run_prepend_elim _ [swap 0, div, dup 0] ?_ run
   intro s4 hline4 run
   have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
   have hp4 : (scale * scratch image argumentWord /
-        scratch image freshChiWord) ::
-      (scale * scratch image argumentWord / scratch image freshChiWord) ::
-      tail <<+ s4.stack := by
+        chi) ::
+      (scale * scratch image argumentWord / chi) ::
+      chi :: tail <<+ s4.stack := by
     rcases Line.of_run_cons hline4 with ⟨u1, hswap, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hdiv, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u3, hdup, hnil⟩
     cases hnil
     have h1 : (scale * scratch image argumentWord) ::
-        scratch image freshChiWord :: tail <<+ u1.stack :=
+        chi :: chi :: tail <<+ u1.stack :=
       Stack.prefix_of_swap
         (show Stack.Swap 0
-            (scratch image freshChiWord ::
-              (scale * scratch image argumentWord) :: tail)
+            (chi ::
+              (scale * scratch image argumentWord) :: chi :: tail)
             ((scale * scratch image argumentWord) ::
-              scratch image freshChiWord :: tail)
+              chi :: chi :: tail)
           from Stack.swapCore_zero)
         (of_run_swap hswap) hp3
     exact prefix_of_dup_val hdup (by show_nth) (prefix_of_div hdiv h1)
-  let credit := scale * scratch image argumentWord / scratch image freshChiWord
+  let credit := scale * scratch image argumentWord / chi
   let row := scratch image rowWord + credit
   let total := credit + scratch image totalWord
-  change credit :: credit :: tail <<+ s4.stack at hp4
+  change credit :: credit :: chi :: tail <<+ s4.stack at hp4
   refine run_prepend_elim _ (loadWord rowWord) ?_ run
   intro s6 hline6 run
   obtain ⟨hp6, frame6⟩ := frame4.loadWord hp4 hline6
   refine run_prepend_elim _ [add, dup 0] ?_ run
   intro s7 hline7 run
   have frame7 := frame6.line (by line_inv) (by line_inv) (by line_inv) hline7
-  have hp7 : row :: row :: credit :: tail <<+ s7.stack := by
+  have hp7 : row :: row :: credit :: chi :: tail <<+ s7.stack := by
     rcases Line.of_run_cons hline7 with ⟨u1, hadd, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hdup, hnil⟩
     cases hnil
@@ -481,7 +455,7 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
   refine run_prepend_elim _ [pushB256 maxUnits, lt] ?_ run
   intro s9 hline9 run
   have frame9 := frame7.line (by line_inv) (by line_inv) (by line_inv) hline9
-  have hp9 : (maxUnits <? row) :: row :: credit :: tail <<+ s9.stack := by
+  have hp9 : (maxUnits <? row) :: row :: credit :: chi :: tail <<+ s9.stack := by
     rcases Line.of_run_cons hline9 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hlt, hnil⟩
     cases hnil
@@ -495,18 +469,18 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
   refine run_prepend_elim _ [dup 2, add, dup 0] ?_ run
   intro s13 hline13 run
   have frame13 := frame11.line (by line_inv) (by line_inv) (by line_inv) hline13
-  have hp13 : total :: total :: row :: credit :: tail <<+ s13.stack := by
+  have hp13 : total :: total :: row :: credit :: chi :: tail <<+ s13.stack := by
     rcases Line.of_run_cons hline13 with ⟨u1, hdup1, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hadd, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u3, hdup2, hnil⟩
     cases hnil
-    have h1 : credit :: scratch image totalWord :: row :: credit :: tail <<+ u1.stack :=
+    have h1 : credit :: scratch image totalWord :: row :: credit :: chi :: tail <<+ u1.stack :=
       prefix_of_dup_val hdup1 (by show_nth) hp11
     exact prefix_of_dup_val hdup2 (by show_nth) (prefix_of_add hadd h1)
   refine run_prepend_elim _ [pushB256 maxPie, lt] ?_ run
   intro s15 hline15 run
   have frame15 := frame13.line (by line_inv) (by line_inv) (by line_inv) hline15
-  have hp15 : (maxPie <? total) :: total :: row :: credit :: tail <<+ s15.stack := by
+  have hp15 : (maxPie <? total) :: total :: row :: credit :: chi :: tail <<+ s15.stack := by
     rcases Line.of_run_cons hline15 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hlt, hnil⟩
     cases hnil
@@ -516,25 +490,31 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
   have htotalCap := B256.not_lt_of_ltCheck_eq_zero hflagTotal
   -- The original memory image survives; all three results stay on the stack.
   unfold Drip.commitFresh at run
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  refine run_prepend_elim _ [swap 2] ?_ run
   intro s17 hline17 run
-  obtain ⟨hp17, hwf17, hreads17, hst17⟩ :=
-    of_run_loadWordAt_image (word := freshChiWord)
-      (value := scratch image freshChiWord) hp16 frame16.wf frame16.reads rfl hline17
+  have hp17 : chi :: row :: credit :: total :: tail <<+ s17.stack :=
+    Stack.prefix_of_swap (show Stack.Swap 2
+      (total :: row :: credit :: chi :: tail) (chi :: row :: credit :: total :: tail)
+      from Stack.swapCore_succ (Stack.swapCore_succ Stack.swapCore_zero))
+      (of_run_swap (of_run_singleton hline17)) hp16
+  have hmem17 : s16.memory = s17.memory := Line.of_inv Devm.memory (by line_inv) hline17
+  have hwf17 : Mem.Wf s17.memory := hmem17 ▸ frame16.wf
+  have hreads17 : Mem.Reads s17.memory image := hmem17 ▸ frame16.reads
+  have hst17 : s16.state = s17.state := Line.of_inv Devm.state (by line_inv) hline17
   refine run_prepend_elim _ [pushB256 chiSlot, sstore] ?_ run
   intro s18 hline18 run
   rcases Line.of_run_cons hline18 with ⟨u1, hpush1, hrest⟩
   rcases Line.of_run_cons hrest with ⟨u2, hstore1, hnil⟩
   cases hnil
-  have hpu1 : chiSlot :: scratch image freshChiWord :: total :: row :: credit :: tail <<+ u1.stack :=
+  have hpu1 : chiSlot :: chi :: row :: credit :: total :: tail <<+ u1.stack :=
     prefix_of_push (of_run_pushB256 hpush1) hp17
   have hstor18 : Devm.getStor s18 e.currentTarget =
-      (Devm.getStor entry e.currentTarget).set chiSlot (scratch image freshChiWord) := by
+      (Devm.getStor entry e.currentTarget).set chiSlot (chi) := by
     rw [sstore_getStor_set hstore1 hpu1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush1).state) e.currentTarget,
       ← congrFun (getStor_of_state hst17) e.currentTarget,
       ← congrFun (getStor_of_state frame16.state) e.currentTarget]
-  have hp18 : total :: row :: credit :: tail <<+ s18.stack := prefix_of_sstore hstore1 hpu1
+  have hp18 : row :: credit :: total :: tail <<+ s18.stack := prefix_of_sstore hstore1 hpu1
   have hmem18 : s17.memory = s18.memory := Line.of_inv Devm.memory (by line_inv) hline18
   refine run_prepend_elim _ (loadWord nowWord) ?_ run
   intro s19 hline19 run
@@ -546,48 +526,49 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
   rcases Line.of_run_cons hline20 with ⟨v1, hpush2, hrest⟩
   rcases Line.of_run_cons hrest with ⟨v2, hstore2, hnil⟩
   cases hnil
-  have hpv1 : rhoSlot :: scratch image nowWord :: total :: row :: credit :: tail <<+ v1.stack :=
+  have hpv1 : rhoSlot :: scratch image nowWord :: row :: credit :: total :: tail <<+ v1.stack :=
     prefix_of_push (of_run_pushB256 hpush2) hp19
   have hstor20 : Devm.getStor s20 e.currentTarget =
       ((Devm.getStor entry e.currentTarget).set chiSlot
-        (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) := by
+        (chi)).set rhoSlot (scratch image nowWord) := by
     rw [sstore_getStor_set hstore2 hpv1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush2).state) e.currentTarget,
       ← congrFun (getStor_of_state hst19) e.currentTarget, hstor18]
-  have hp20 : total :: row :: credit :: tail <<+ s20.stack := prefix_of_sstore hstore2 hpv1
-  refine run_prepend_elim _ [swap 0] ?_ run
-  intro s21 hline21 run
-  have hp21 : row :: total :: credit :: tail <<+ s21.stack :=
-    Stack.prefix_of_swap (show Stack.Swap 0
-      (total :: row :: credit :: tail) (row :: total :: credit :: tail)
-      from Stack.swapCore_zero) (of_run_swap (of_run_singleton hline21)) hp20
-  have hst21 : s20.state = s21.state := Line.of_inv Devm.state (by line_inv) hline21
+  have hp20 : row :: credit :: total :: tail <<+ s20.stack := prefix_of_sstore hstore2 hpv1
   refine run_prepend_elim _ [caller, sstore] ?_ run
   intro s22 hline22 run
   rcases Line.of_run_cons hline22 with ⟨w1, hcaller, hrest⟩
   rcases Line.of_run_cons hrest with ⟨w2, hstore3, hnil⟩
   cases hnil
-  have hpw1 : e.caller.toB256 :: row :: total :: credit :: tail <<+ w1.stack :=
-    prefix_of_push (of_run_caller hcaller) hp21
+  have hpw1 : e.caller.toB256 :: row :: credit :: total :: tail <<+ w1.stack :=
+    prefix_of_push (of_run_caller hcaller) hp20
   have hstor22 : Devm.getStor s22 e.currentTarget =
-      (((Devm.getStor entry e.currentTarget).set chiSlot (scratch image freshChiWord)).set rhoSlot
+      (((Devm.getStor entry e.currentTarget).set chiSlot (chi)).set rhoSlot
         (scratch image nowWord)).set e.caller.toB256 row := by
     rw [sstore_getStor_set hstore3 hpw1,
       ← congrFun (getStor_of_state (of_run_caller hcaller).state) e.currentTarget,
-      ← congrFun (getStor_of_state hst21) e.currentTarget, hstor20]
-  have hp22 : total :: credit :: tail <<+ s22.stack := prefix_of_sstore hstore3 hpw1
+      hstor20]
+  have hp22 : credit :: total :: tail <<+ s22.stack := prefix_of_sstore hstore3 hpw1
+  refine run_prepend_elim _ [swap 0] ?_ run
+  intro s23 hline23 run
+  have hp23 : total :: credit :: tail <<+ s23.stack :=
+    Stack.prefix_of_swap (show Stack.Swap 0
+      (credit :: total :: tail) (total :: credit :: tail)
+      from Stack.swapCore_zero) (of_run_swap (of_run_singleton hline23)) hp22
+  have hst23 : s22.state = s23.state := Line.of_inv Devm.state (by line_inv) hline23
   refine run_prepend_elim _ [pushB256 totalUnitsSlot, sstore] ?_ run
   intro s24 hline24 run
   rcases Line.of_run_cons hline24 with ⟨x1, hpush4, hrest⟩
   rcases Line.of_run_cons hrest with ⟨x2, hstore4, hnil⟩
   cases hnil
   have hpx1 : totalUnitsSlot :: total :: credit :: tail <<+ x1.stack :=
-    prefix_of_push (of_run_pushB256 hpush4) hp22
+    prefix_of_push (of_run_pushB256 hpush4) hp23
   have hstor24 : Devm.getStor s24 e.currentTarget =
-      ((((Devm.getStor entry e.currentTarget).set chiSlot (scratch image freshChiWord)).set rhoSlot
+      ((((Devm.getStor entry e.currentTarget).set chiSlot (chi)).set rhoSlot
         (scratch image nowWord)).set e.caller.toB256 row).set totalUnitsSlot total := by
     rw [sstore_getStor_set hstore4 hpx1,
-      ← congrFun (getStor_of_state (of_run_pushB256 hpush4).state) e.currentTarget, hstor22]
+      ← congrFun (getStor_of_state (of_run_pushB256 hpush4).state) e.currentTarget,
+      ← congrFun (getStor_of_state hst23) e.currentTarget, hstor22]
   have hp24 : credit :: tail <<+ s24.stack := prefix_of_sstore hstore4 hpx1
   refine ⟨hrowCap, htotalCap, ?_, (returnsWord_of_storeReturn hp24 run).1⟩
   rw [← congrFun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run) e.currentTarget,
@@ -762,7 +743,7 @@ theorem of_run_join {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagD) (by decide +kernel)
   · obtain ⟨hrowCap, htotalCap, hstor, hret⟩ :=
       of_run_afterJoin frame16 hp16 run
-    simp only [harg, hrow, htotal, hfresh, hnow] at hrowCap htotalCap hstor hret
+    simp only [harg, hrow, htotal, hnow] at hrowCap htotalCap hstor hret
     refine ⟨hassetCap, hrowCapPre, htotalCapPre, hlower, hupper, hclock,
       helapsed, hguards, _, _, rfl, rfl, hrowCap, htotalCap, hstor, hret⟩
 
@@ -775,18 +756,18 @@ checks-effects-interactions requirement, stated as a property of the walk
 rather than assumed of the code. -/
 
 theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    {entry s r : Devm} {image : Bytes} {tail : Stack} {chi : B256}
+    (frame : Frame image entry s) (hp : chi :: tail <<+ s.stack)
     (run : Func.Run fs e s afterExit r) :
     ∃ t,
       Devm.getStor t e.currentTarget =
         ((((Devm.getStor entry e.currentTarget).set chiSlot
-              (scratch image freshChiWord)).set rhoSlot
+              (chi)).set rhoSlot
             (scratch image nowWord)).set e.caller.toB256
             (scratch image rowWord - scratch image argumentWord)).set
           totalUnitsSlot
           (scratch image totalWord - scratch image argumentWord) ∧
-      (((scratch image freshChiWord * scratch image argumentWord) / scale) :: tail <<+ t.stack) ∧
+      (((chi * scratch image argumentWord) / scale) :: tail <<+ t.stack) ∧
       Mem.Wf t.memory ∧
       Mem.Reads t.memory image ∧
       Func.Run fs e t
@@ -797,14 +778,16 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
   refine run_prepend_elim _ (loadWord argumentWord) ?_ run
   intro s1 hline1 run
   obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  refine run_prepend_elim _ [dup 1] ?_ run
   intro s2 hline2 run
-  obtain ⟨hp2, frame2⟩ := frame1.loadWord hp1 hline2
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : chi :: scratch image argumentWord :: chi :: tail <<+ s2.stack :=
+    prefix_of_dup_val (of_run_singleton hline2) (by show_nth) hp1
   refine run_prepend_elim _ [mul, pushB256 scale, swap 0, div] ?_ run
   intro s3 hline3 run
   have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
-  have hp3 : ((scratch image freshChiWord * scratch image argumentWord) /
-      scale) :: tail <<+ s3.stack := by
+  have hp3 : ((chi * scratch image argumentWord) /
+      scale) :: chi :: tail <<+ s3.stack := by
     rcases Line.of_run_cons hline3 with ⟨u1, hmul, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u3, hswap, hrest⟩
@@ -812,35 +795,39 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
     cases hnil
     have h1 := prefix_of_mul hmul hp2
     have h2 := prefix_of_push (of_run_pushB256 hpush) h1
-    have h3 : (scratch image freshChiWord * scratch image argumentWord) ::
-        scale :: tail <<+ u3.stack :=
+    have h3 : (chi * scratch image argumentWord) ::
+        scale :: chi :: tail <<+ u3.stack :=
       Stack.prefix_of_swap
         (show Stack.Swap 0
-            (scale :: (scratch image freshChiWord *
-              scratch image argumentWord) :: tail)
-            ((scratch image freshChiWord * scratch image argumentWord) ::
-              scale :: tail)
+            (scale :: (chi *
+              scratch image argumentWord) :: chi :: tail)
+            ((chi * scratch image argumentWord) ::
+              scale :: chi :: tail)
           from Stack.swapCore_zero)
         (of_run_swap hswap) h2
     exact prefix_of_div hdiv h3
-  let payout := (scratch image freshChiWord * scratch image argumentWord) / scale
+  let payout := (chi * scratch image argumentWord) / scale
   -- the four ordered writes
-  refine run_prepend_elim _ (loadWord freshChiWord) ?_ run
+  refine run_prepend_elim _ [swap 0] ?_ run
   intro s5 hline5 run
-  obtain ⟨hp5, hwf5, hreads5, hst5⟩ :=
-    of_run_loadWordAt_image (word := freshChiWord)
-      (value := scratch image freshChiWord) hp3 frame3.wf frame3.reads
-      rfl hline5
+  have hp5 : chi :: payout :: tail <<+ s5.stack :=
+    Stack.prefix_of_swap (show Stack.Swap 0
+      (payout :: chi :: tail) (chi :: payout :: tail)
+      from Stack.swapCore_zero) (of_run_swap (of_run_singleton hline5)) hp3
+  have hmem5 : s3.memory = s5.memory := Line.of_inv Devm.memory (by line_inv) hline5
+  have hwf5 : Mem.Wf s5.memory := hmem5 ▸ frame3.wf
+  have hreads5 : Mem.Reads s5.memory image := hmem5 ▸ frame3.reads
+  have hst5 : s3.state = s5.state := Line.of_inv Devm.state (by line_inv) hline5
   refine run_prepend_elim _ [pushB256 chiSlot, sstore] ?_ run
   intro s6 hline6 run
   rcases Line.of_run_cons hline6 with ⟨u1, hpush1, hrest⟩
   rcases Line.of_run_cons hrest with ⟨u2, hstore1, hnil⟩
   cases hnil
-  have hpu1 : chiSlot :: scratch image freshChiWord :: payout :: tail <<+ u1.stack :=
+  have hpu1 : chiSlot :: chi :: payout :: tail <<+ u1.stack :=
     prefix_of_push (of_run_pushB256 hpush1) hp5
   have hstor6 : Devm.getStor s6 e.currentTarget =
       (Devm.getStor entry e.currentTarget).set chiSlot
-        (scratch image freshChiWord) := by
+        (chi) := by
     rw [sstore_getStor_set hstore1 hpu1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush1).state)
         e.currentTarget,
@@ -864,7 +851,7 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
     prefix_of_push (of_run_pushB256 hpush2) hp7
   have hstor8 : Devm.getStor s8 e.currentTarget =
       ((Devm.getStor entry e.currentTarget).set chiSlot
-        (scratch image freshChiWord)).set rhoSlot (scratch image nowWord) := by
+        (chi)).set rhoSlot (scratch image nowWord) := by
     rw [sstore_getStor_set hstore2 hpv1,
       ← congrFun (getStor_of_state (of_run_pushB256 hpush2).state)
         e.currentTarget,
@@ -897,7 +884,7 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
     prefix_of_push (of_run_caller hcaller) (prefix_of_sub hsub hp10)
   have hstor11 : Devm.getStor s11 e.currentTarget =
       (((Devm.getStor entry e.currentTarget).set chiSlot
-          (scratch image freshChiWord)).set rhoSlot
+          (chi)).set rhoSlot
         (scratch image nowWord)).set e.caller.toB256
         (scratch image rowWord - scratch image argumentWord) := by
     rw [sstore_getStor_set hstore3 hpw2,
@@ -937,7 +924,7 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
     prefix_of_push (of_run_pushB256 hpush4) (prefix_of_sub hsub2 hp13)
   have hstor14 : Devm.getStor s14 e.currentTarget =
       ((((Devm.getStor entry e.currentTarget).set chiSlot
-            (scratch image freshChiWord)).set rhoSlot
+            (chi)).set rhoSlot
           (scratch image nowWord)).set e.caller.toB256
           (scratch image rowWord - scratch image argumentWord)).set
         totalUnitsSlot
@@ -1176,7 +1163,7 @@ theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagA) (by decide +kernel)
   · obtain ⟨t26, hstor, hp26, hwf26, hreads26, run⟩ :=
       of_run_afterExit_settles frame25 hp25 run
-    simp only [harg, hrow, htotal, hfresh, hnow] at hstor hp26
+    simp only [harg, hrow, htotal, hnow] at hstor hp26
     exact ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
       helapsed, hguards, t26, _,
       image24, rfl, hp26, hwf26, hreads26, hstor, run⟩

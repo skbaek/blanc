@@ -90,7 +90,6 @@ def composeFresh : Func :=
       swap 0 :::
       div :::
       dup 0 :::
-      mstoreAt freshChiWord +++
       pushB256 maxChi :::
       lt :::
       (.revert <?> .call freshRouteSlot)))
@@ -191,15 +190,15 @@ def freshStart : Func :=
   mstoreAt storedChiWord +++
   checkLowerChi
 
+/-- Consume the carried fresh index; word 8 still contains the rpow factor. -/
 def commitFresh : Line :=
-  loadWord freshChiWord ++ [pushB256 chiSlot, sstore] ++
+  [pushB256 chiSlot, sstore] ++
   loadWord nowWord ++ [pushB256 rhoSlot, sstore]
 
 def returnScratch (word : B256) : Func :=
   loadWord word +++ mstoreAt 0 +++ returnMemoryRange 0 32
 
 def afterDrip : Func :=
-  loadWord freshChiWord +++
   dup 0 :::
   pushB256 chiSlot :::
   sstore :::
@@ -210,7 +209,6 @@ def afterDrip : Func :=
 
 def afterConvertToAssets : Func :=
   loadWord argumentWord +++
-  loadWord freshChiWord +++
   mul :::
   pushB256 scale :::
   swap 0 :::
@@ -222,18 +220,17 @@ def afterConvertToUnits : Func :=
   loadWord argumentWord +++
   pushB256 scale :::
   mul :::
-  loadWord freshChiWord +++
-  swap 0 :::
   div :::
   mstoreAt 0 +++
   returnMemoryRange 0 32
 
 def afterJoin : Func :=
   let commit : Func :=
+    swap 2 :::
     commitFresh +++
-    swap 0 :::
     caller :::
     sstore :::
+    swap 0 :::
     pushB256 totalUnitsSlot :::
     sstore :::
     mstoreAt 0 +++ returnMemoryRange 0 32
@@ -248,7 +245,7 @@ def afterJoin : Func :=
   loadWord argumentWord +++
   pushB256 scale :::
   mul :::
-  loadWord freshChiWord +++
+  dup 1 :::
   swap 0 :::
   div :::
   dup 0 :::
@@ -270,6 +267,7 @@ def afterExit : Func :=
     sendToCaller +++
     (returnOnSuccess <?> .revert)
   let commit : Func :=
+    swap 0 :::
     commitFresh +++
     loadWord argumentWord +++
     loadWord rowWord +++
@@ -283,7 +281,7 @@ def afterExit : Func :=
     sstore :::
     callRecipient
   loadWord argumentWord +++
-  loadWord freshChiWord +++
+  dup 1 :::
   mul :::
   pushB256 scale :::
   swap 0 :::

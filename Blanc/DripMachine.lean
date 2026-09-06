@@ -882,11 +882,9 @@ theorem of_run_composeFresh {fs : List Func} (hlookup : AuxLookup fs)
       B256.Nofm (scratch image storedChiWord) (scratch image accumulatorWord) ∧
       ¬ maxChi <
         (scratch image accumulatorWord * scratch image storedChiWord) / scale ∧
-      (tail <<+ t.stack) ∧
-      Frame
-        (setScratch image freshChiWord
-          ((scratch image accumulatorWord * scratch image storedChiWord) / scale))
-        entry t ∧
+      (((scratch image accumulatorWord * scratch image storedChiWord) / scale) ::
+        tail <<+ t.stack) ∧
+      Frame image entry t ∧
       Func.Run fs e t (.call freshRouteSlot) r := by
   obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.composeFresh run
   have frame0 := frame.of_burn hburn0
@@ -991,19 +989,17 @@ theorem of_run_composeFresh {fs : List Func} (hlookup : AuxLookup fs)
           from Stack.swapCore_zero)
         (of_run_swap hswap) h1
     exact prefix_of_dup_val hdup (by show_nth) (prefix_of_div hdiv h2)
-  refine run_prepend_elim _ (mstoreAt freshChiWord) ?_ run
-  intro s10 hline10 run
-  obtain ⟨hp10, frame10⟩ := frame9.mstoreAt hp9 hline10
   refine run_prepend_elim _ [pushB256 maxChi, lt] ?_ run
   intro s11 hline11 run
-  have frame11 := frame10.line (by line_inv) (by line_inv) (by line_inv) hline11
+  have frame11 := frame9.line (by line_inv) (by line_inv) (by line_inv) hline11
   have hp11 : (maxChi <?
       ((scratch image accumulatorWord * scratch image storedChiWord) / scale))
-      :: tail <<+ s11.stack := by
+      :: ((scratch image accumulatorWord * scratch image storedChiWord) / scale) ::
+      tail <<+ s11.stack := by
     rcases Line.of_run_cons hline11 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hlt, hnil⟩
     cases hnil
-    exact prefix_of_lt hlt (prefix_of_push (of_run_pushB256 hpush) hp10)
+    exact prefix_of_lt hlt (prefix_of_push (of_run_pushB256 hpush) hp9)
   obtain ⟨hflag2, s12, hp12, hpop12, run⟩ := of_run_guard hp11 run
   have frame12 := frame11.of_popBurn hpop12
   exact ⟨s12, hnofm, B256.not_lt_of_ltCheck_eq_zero hflag2, hp12, frame12, run⟩
@@ -1109,14 +1105,15 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
               (e.benvStat.time -
                 Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
             Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
-      scratch image' freshChiWord =
-        (B256.rpow scale half rate
-              (e.benvStat.time -
-                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
-            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+      scratch image' accumulatorWord =
+        B256.rpow scale half rate
+          (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
       scratch image' nowWord = e.benvStat.time ∧
       MachineOnly image image' ∧
-      Frame image' entry t ∧ (tail <<+ t.stack) ∧
+      Frame image' entry t ∧
+      (((B256.rpow scale half rate
+          (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+          Devm.getStorVal entry e.currentTarget chiSlot) / scale) :: tail <<+ t.stack) ∧
       Func.Run fs e t (.call freshRouteSlot) r := by
   obtain ⟨s0, hburn0, run⟩ := of_run_call_of_lookup hlookup.freshStart run
   have frame0 := frame.of_burn hburn0
@@ -1460,11 +1457,9 @@ theorem of_run_freshStart {fs : List Func} (hlookup : AuxLookup fs)
     run⟩ := key
   obtain ⟨t, hnofm, hcap, hpt, framet, run⟩ :=
     of_run_composeFresh hlookup frameM hpM run
-  rw [haccM, hchiM] at hnofm hcap framet
-  refine ⟨t, _, hlower, hupper, hclock, helapsed, hguards, hnofm, hcap,
-    scratch_setScratch_self _ _ _, ?_,
-    hmachineM.trans (MachineOnly.freshChi imageM _), framet, hpt, run⟩
-  rw [scratch_setScratch_of_disjoint _ _ now_freshChi, hnowM]
+  rw [haccM, hchiM] at hnofm hcap hpt
+  exact ⟨t, imageM, hlower, hupper, hclock, helapsed, hguards, hnofm, hcap,
+    haccM, hnowM, hmachineM, framet, hpt, run⟩
 
 /-! ## The route dispatcher
 
