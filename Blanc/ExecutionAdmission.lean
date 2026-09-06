@@ -22,6 +22,7 @@ def ForallSubExecAdmitted (k : Nat) (ca : Adr) (p : Prog)
     (R : Sevm → Devm → Devm → Prop) : Prop :=
   ∀ pc sevm devm post (run : Exec pc sevm devm (.ok post)),
     sevm.depth < k →
+    sevm.benvStat.rules.stateGas = none →
     p.At ca pc sevm devm →
     Exec.FrameAdmitted ca entry run →
     R sevm devm post
@@ -45,6 +46,7 @@ private lemma lift_admitted.atTarget
     (h_fa : ForallDeeperAt sevm.depth ca p
       (fun _ sevm' pre' out' run' =>
         Exec.FrameAdmitted ca entry run' → ifOk (R sevm' pre') out'))
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (h_at : p.At ca pc sevm pre)
     (target : sevm.currentTarget = ca) :
     Exec.FrameAdmitted ca entry run → ifOk (R sevm pre) out := by
@@ -57,8 +59,9 @@ private lemma lift_admitted.atTarget
       refine depth_ind run
         (correct sevm pre p post run (h_at.right target).left)
         target admitted ?_
-      intro pc' sevm' pre' post' child depth childAt childAdmitted
-      exact h_fa pc' sevm' pre' (.ok post') child depth childAt childAdmitted
+      intro pc' sevm' pre' post' child depth hleg' childAt childAdmitted
+      exact h_fa pc' sevm' pre' (.ok post') child depth hleg' childAt
+        childAdmitted
 
 /-- Trace-admitted counterpart of `lift`. It preserves the existing driver
 decomposition, but keeps the concrete execution proof in the induction motive
@@ -120,9 +123,9 @@ lemma lift_admitted
       (Exec.Wkn ca p (fun _ sevm pre out run =>
         Exec.FrameAdmitted ca entry run → ifOk (R sevm pre) out)))
     -- halt
-    · intro pc sevm pre out hstep h_fa h_at admitted
+    · intro pc sevm pre out hstep h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
-      · exact lift_admitted.atTarget depth_ind (.halt hstep) h_fa h_at target admitted
+      · exact lift_admitted.atTarget depth_ind (.halt hstep) h_fa hleg h_at target admitted
       · cases out with
         | error error => exact trivial
         | ok post =>
@@ -146,14 +149,14 @@ lemma lift_admitted
                   injection hstep with hrun
                   exact last hgi hrun targetNe
     -- cont
-    · intro pc sevm pre pc' inter out hstep next ih h_fa h_at admitted
+    · intro pc sevm pre pc' inter out hstep next ih h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
       · exact lift_admitted.atTarget depth_ind (.cont hstep next)
-          h_fa h_at target admitted
+          h_fa hleg h_at target admitted
       · have h_ne_code : (pre.getCode ca).toList ≠ [] := fun empty =>
           Prog.compile_ne_nil (Eq.trans h_at.left.symm (congrArg some empty))
         have hcode : inter.getCode ca = pre.getCode ca :=
-          lift_core.stepCode (xl := .none) trivial
+          lift_core.stepCode hleg (xl := .none) trivial
             (by rw [hstep]; exact ⟨rfl, rfl⟩) ca h_ne_code
         have h_at' : p.At ca pc' sevm inter :=
           ⟨by rw [hcode]; exact h_at.left, fun equal => (targetNe equal).elim⟩
@@ -175,27 +178,27 @@ lemma lift_admitted
                     rw [hns]
                     exact ⟨rfl, rfl⟩
                   exact nextNone hgi hrun next targetNe
-                    (ih h_fa h_at' (admitted.cont_of_ne targetNe))
+                    (ih h_fa hleg h_at' (admitted.cont_of_ne targetNe))
               | jump j =>
                   rw [Evm.step_jump (j := j) hgi] at hstep
                   exact jump hgi (Step.ofJump_cont hstep) next targetNe
-                    (ih h_fa h_at' (admitted.cont_of_ne targetNe))
+                    (ih h_fa hleg h_at' (admitted.cont_of_ne targetNe))
               | last l =>
                   rw [Evm.step_last (l := l) hgi] at hstep
                   cases hstep
     -- doneErr
     · intro pc sevm pre frame resume pc' result error hstep henter hresume
-        h_fa h_at admitted
+        h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
       · exact lift_admitted.atTarget depth_ind
-          (.doneErr hstep henter hresume) h_fa h_at target admitted
+          (.doneErr hstep henter hresume) h_fa hleg h_at target admitted
       · exact trivial
     -- doneOk
     · intro pc sevm pre frame resume pc' result inter out hstep henter hresume
-        next ih h_fa h_at admitted
+        next ih h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
       · exact lift_admitted.atTarget depth_ind
-          (.doneOk hstep henter hresume next) h_fa h_at target admitted
+          (.doneOk hstep henter hresume next) h_fa hleg h_at target admitted
       · cases out with
         | error error => exact trivial
         | ok post =>
@@ -208,38 +211,40 @@ lemma lift_admitted
               rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
               exact ⟨result, RunFrame.of_done henter, hresume.symm⟩
             have hcode : inter.getCode ca = pre.getCode ca :=
-              lift_core.stepCode (xl := .none) trivial
+              lift_core.stepCode hleg (xl := .none) trivial
                 (by rw [hstep]; exact ⟨result, RunFrame.of_done henter, hresume.symm⟩)
                 ca h_ne_code
             have h_at' : p.At ca (pc + 1) sevm inter :=
               ⟨by rw [hcode]; exact h_at.left,
                 fun equal => (targetNe equal).elim⟩
             exact nextNone hxat hrun next targetNe
-              (ih h_fa h_at' (admitted.doneOk_of_ne targetNe))
+              (ih h_fa hleg h_at' (admitted.doneOk_of_ne targetNe))
     -- runErr
     · intro pc sevm pre frame resume pc' childEvm raw error hstep henter child
-        hresume ihc h_fa h_at admitted
+        hresume ihc h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
       · exact lift_admitted.atTarget depth_ind
-          (.runErr hstep henter child hresume) h_fa h_at target admitted
+          (.runErr hstep henter child hresume) h_fa hleg h_at target admitted
       · exact trivial
     -- runOk
     · intro pc sevm pre frame resume pc' childEvm raw inter out hstep henter child
-        hresume next ihc ih h_fa h_at admitted
+        hresume next ihc ih h_fa hleg h_at admitted
       rcases em (sevm.currentTarget = ca) with target | targetNe
       · exact lift_admitted.atTarget depth_ind
-          (.runOk hstep henter child hresume next) h_fa h_at target admitted
+          (.runOk hstep henter child hresume next) h_fa hleg h_at target admitted
       · cases out with
         | error error => exact trivial
         | ok post =>
             obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
             subst hpc'
-            obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
+            obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep hleg henter
             have hdepth : childEvm.sta.depth < sevm.depth := by
               rw [Frame.enter_run_depth henter]
               exact Step.spawn_depth_lt hstep
             have h_ne_code : (pre.getCode ca).toList ≠ [] := fun empty =>
               Prog.compile_ne_nil (Eq.trans h_at.left.symm (congrArg some empty))
+            have hchildleg : childEvm.sta.benvStat.rules.stateGas = none := by
+              rw [Evm.step_spawn_benvStat hstep hleg henter]; exact hleg
             have h_at_child : p.At ca childEvm.pc childEvm.sta childEvm.dyna := by
               refine ⟨by rw [hgc ca]; exact h_at.left, fun childTarget => ⟨?_, hpc0⟩⟩
               have targetsNe : sevm.currentTarget ≠ childEvm.sta.currentTarget := by
@@ -260,7 +265,7 @@ lemma lift_admitted
               rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
               exact ⟨frame.settle raw, RunFrame.of_run henter, hresume.symm⟩
             have hcode : inter.getCode ca = pre.getCode ca :=
-              lift_core.stepCode (xl := .some ⟨childEvm, raw⟩) hchild
+              lift_core.stepCode hleg (xl := .some ⟨childEvm, raw⟩) hchild
                 (by rw [hstep]
                     exact ⟨frame.settle raw, RunFrame.of_run henter, hresume.symm⟩)
                 ca h_ne_code
@@ -269,8 +274,8 @@ lemma lift_admitted
                 fun equal => (targetNe equal).elim⟩
             exact nextSome hxat hrun child next targetNe
               (h_fa childEvm.pc childEvm.sta childEvm.dyna raw child
-                hdepth h_at_child admitted.runOk_child)
-              (ih h_fa h_at' (admitted.runOk_next_of_ne targetNe))
+                hdepth hchildleg h_at_child admitted.runOk_child)
+              (ih h_fa hleg h_at' (admitted.runOk_next_of_ne targetNe))
   intro pc sevm pre post run h_at admitted
   exact all pc sevm pre (.ok post) run h_at admitted
 
