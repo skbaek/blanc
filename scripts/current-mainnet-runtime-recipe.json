@@ -1,0 +1,82 @@
+{
+  "buildRequirements": [
+    {
+      "filename": "setuptools-78.0.2-py3-none-any.whl",
+      "name": "setuptools",
+      "sha256": "4a612c80e1f1d71b80e4906ce730152e8dec23df439f82731d9d0b608d7b700d",
+      "url": "https://files.pythonhosted.org/packages/aa/db/2fd473dfe436ad19fda190f4079162d400402aedfcc41e048d38c0a375c6/setuptools-78.0.2-py3-none-any.whl",
+      "version": "78.0.2"
+    },
+    {
+      "filename": "wheel-0.45.1-py3-none-any.whl",
+      "name": "wheel",
+      "sha256": "708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248",
+      "url": "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl",
+      "version": "0.45.1"
+    }
+  ],
+  "checkoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+  "commitObjectSha256": "d0f6b969f190064a06498049a282a15179deb3ddc330d181c7de93c021324c18",
+  "exportArgs": [
+    "--frozen",
+    "--no-default-groups",
+    "--group",
+    "test",
+    "--no-emit-workspace",
+    "--format",
+    "requirements.txt",
+    "--no-header"
+  ],
+  "exportSha256": "724d37332f3935289af69751bcd47ff420267abe72b80ef8d4239ec17051551b",
+  "overlaySha256": "fc0048871d3f0546d95401f1727e4828523ea46269cbea461ceefeaf13042ea8",
+  "platforms": {
+    "linux-x86_64": {
+      "python": {
+        "bytes": 21200862,
+        "executables": {
+          "python/bin/python3.11": "d1483a82342508f2ec2b172b788d5b676a59eaf70ed01ae846a0f84f63a3a82a"
+        },
+        "name": "python-linux-x86_64.tar.gz",
+        "sha256": "daa487c7e73005c4426ac393273117cf0e2dc4ab9b2eeda366e04cd00eea00c9",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20240814/cpython-3.11.9%2B20240814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+      },
+      "uv": {
+        "bytes": 23914165,
+        "executables": {
+          "uv-x86_64-unknown-linux-gnu/uv": "fa5fc652fa5ed5b44fa8e7dda507f27975c02f59643787fd8ab4bf36f1ba7438"
+        },
+        "name": "uv-linux-x86_64.tar.gz",
+        "sha256": "c0f3236f146e55472663cfbcc9be3042a9f1092275bbe3fe2a56a6cbfd3da5ce",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.11.3/uv-x86_64-unknown-linux-gnu.tar.gz"
+      }
+    },
+    "macos-arm64": {
+      "python": {
+        "bytes": 17618881,
+        "executables": {
+          "python/bin/python3.11": "ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884"
+        },
+        "name": "python-macos-arm64.tar.gz",
+        "sha256": "c4e2f7774421bcb381245945e132419b529399dfa4a56059acda1493751fa377",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20240814/cpython-3.11.9%2B20240814-aarch64-apple-darwin-install_only_stripped.tar.gz"
+      },
+      "uv": {
+        "bytes": 20546171,
+        "executables": {
+          "uv-aarch64-apple-darwin/uv": "4424f8430c3cb3990daaa68268af640bdc61190f2e5c276197e3473358b1e4e8"
+        },
+        "name": "uv-macos-arm64.tar.gz",
+        "sha256": "2bc3d0c7bf2bd08325b1e170abac6f7e5b3346e1d4eab3370d17cefec934996f",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.11.3/uv-aarch64-apple-darwin.tar.gz"
+      }
+    }
+  },
+  "pythonBuild": "20240814",
+  "schema": 1,
+  "sourceFiles": {
+    "packages/testing/pyproject.toml": "177018b71f2d5d271a662bd4ac7dd917217b367d7277d2c5bfb5a0073f43512b",
+    "pyproject.toml": "8b9fd3e67dbf0cec475aaafa366c28900955b5b5ed337c03c2e326b754057afd",
+    "uv.lock": "27be811b81351200a9b6700d8e8a02f86d3221f3b806e34dc9469ddf804cbfde"
+  },
+  "uvVersion": "0.11.3"
+}

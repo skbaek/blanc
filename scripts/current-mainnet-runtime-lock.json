@@ -8,9 +8,10 @@
           "**/*.pyc",
           "**/*.pyo"
         ],
-        "fileRecords": 4371,
+        "fileRecords": 3827,
         "relativeRoot": ".venv/lib/python3.11/site-packages",
-        "sha256": "5f1dea4e0153ee73c799f9e454f10044af00491937fba3e86f33209feaa0583c"
+        "representation": 2,
+        "sha256": "dcf7a307d51984645e04fa20dc88812bbb5e6fbf1f6ae7c7ff5f62fb10c179ce"
       }
     },
     "macos-arm64": {
@@ -21,15 +22,17 @@
           "**/*.pyc",
           "**/*.pyo"
         ],
-        "fileRecords": 3269,
+        "fileRecords": 3824,
         "relativeRoot": ".venv/lib/python3.11/site-packages",
-        "sha256": "46cb9ec85254aefe093d4f50ef1501310781fb50f97f0f121f4de20b99aa59fb"
+        "representation": 2,
+        "sha256": "a0639bbb19b15a466cfc56ccaeecf7c13e8a15f0385be1e71d31654c63dbeac0"
       }
     }
   },
-  "schema": 1,
+  "schema": 2,
   "target": {
     "checkoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+    "constructionRecipeSha256": "4af5288193ae662e925116e0a8e1be64ab2ee96c6316248954b1021cc963ba22",
     "entrypointBodySha256": "ab52479bdf9187d1a1684342b7decc774b7e2ddf9133dc51754be17c7dc102af",
     "pythonImplementation": "CPython",
     "pythonVersion": "3.11.9",

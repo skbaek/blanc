@@ -1,0 +1,41 @@
+tree a19284343208948fbcb925293779058079233e56
+parent 9d6e6f8352a0f76e7e8803722d1a2798fa4f0a96
+author jaune-wrapper <agent@localhost> 1786303870 +0900
+committer jaune-wrapper <agent@localhost> 1786303870 +0900
+
+client_clis: add a Jaune transition-tool wrapper
+
+Jaune (https://github.com/skbaek/jaune) is a formally verified execution-layer
+implementation in Lean 4. Its `jaune t8n` serves the Prague-BPO2 lane.
+
+The wrapper is ordinary except in two respects, both of them Jaune's design:
+
+- Its rejection reasons are already canonical EEST identities. Jaune assigns
+  one official identity to each of its typed rejection reasons internally and
+  writes that identity as `rejected[].error` / `blockException`, rather than
+  inventing prose for the framework to pattern-match. `JauneExceptionMapper`
+  is therefore a coverage declaration: it names the 43 identities Jaune can
+  emit and matches each against its own spelling, anchored. Anything Jaune
+  cannot classify it emits as a `JauneT8n.UNMAPPED_*` token, which matches
+  nothing and surfaces as an `UndefinedException`.
+
+  The match is anchored rather than substring because two declared identities
+  nest -- `BlockException.UNKNOWN_PARENT` inside
+  `BlockException.UNKNOWN_PARENT_ZERO` -- and substring matching returns both
+  for the longer message. `test_jaune.py` pins that.
+
+- It advertises its lane on `jaune t8n --forks`, one line, answerable from any
+  working directory.
+
+Also adds `TransitionTool.supports_state_test`, defaulting to False.
+`TransitionToolData.state_test` reaches the in-process tool but has never
+reached an external binary: neither `_evaluate_filesystem` nor
+`construct_args_stream` passes it on. A state test's pre-allocation is
+`fork.pre_allocation()`, which carries no system contracts, so an external
+tool told to run a *block* over it performs the fork's checked system
+transactions against addresses holding no code, and reports an invalid block
+for a test that is not about blocks. With the flag opted into, `fill
+--evm-bin jaune tests/frontier/opcodes/test_calldatasize.py --fork Prague`
+fills all 30 cases and the three fixture files are identical to the in-process
+EELS fill outside `_info`. Without it, the ten `state_test` cases fail.
+Nothing changes for a tool that has not opted in.
