@@ -338,6 +338,7 @@ def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
   ∀ pc sevm devm post,
     Exec pc sevm devm (.ok post) →
     sevm.depth < k →
+    sevm.benvStat.rules.stateGas = none →
     p.At ca pc sevm devm →
     R sevm devm post
 
@@ -1362,6 +1363,199 @@ lemma BenvStat.bal_none_of_stateGas_none {s : BenvStat}
     intro f hf
     cases f <;> first | rfl | exact absurd hf (by decide)
   exact key s.fork h
+
+/-! **Every projection but the read sets sees through an EIP-7928 recorder.**
+
+`Devm.balRead{Account,Storage}` is a `setMeta` whose new `Meta` differs from the
+old one in `accountReads` or `storageReads` alone, so each of these holds by
+`rfl` in both branches of the rules switch.  Marking them `@[simp]` lets an
+instruction walk that Jaune's Amsterdam series threaded a recorder through
+recover its pre-bump shape, with no premise about the fork. -/
+
+@[simp] lemma Devm.balReadAccount_stack (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).stack = d.stack := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_stack (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).stack = d.stack := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_memory (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).memory = d.memory := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_memory (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).memory = d.memory := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_gasLeft (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).gasLeft = d.gasLeft := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_gasLeft (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).gasLeft = d.gasLeft := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_stateGas (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).stateGas = d.stateGas := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_stateGas (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).stateGas = d.stateGas := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_logs (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).logs = d.logs := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_logs (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).logs = d.logs := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_refundCounter (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).refundCounter = d.refundCounter := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_refundCounter (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).refundCounter = d.refundCounter := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_output (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).output = d.output := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_output (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).output = d.output := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_accountsToDelete (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).accountsToDelete = d.accountsToDelete := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_accountsToDelete (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).accountsToDelete = d.accountsToDelete := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_returnData (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).returnData = d.returnData := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_returnData (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).returnData = d.returnData := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_error (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).error = d.error := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_error (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).error = d.error := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_accessedAddresses (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).accessedAddresses = d.accessedAddresses := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_accessedAddresses (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).accessedAddresses = d.accessedAddresses := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_accessedStorageKeys (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).accessedStorageKeys = d.accessedStorageKeys := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_accessedStorageKeys (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).accessedStorageKeys = d.accessedStorageKeys := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_state (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).state = d.state := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_state (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).state = d.state := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_createdAccounts (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).createdAccounts = d.createdAccounts := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_createdAccounts (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).createdAccounts = d.createdAccounts := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_transientStorage (rules : ForkRules) (a : Adr) (d : Devm) :
+    (Devm.balReadAccount rules a d).transientStorage = d.transientStorage := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
+@[simp] lemma Devm.balReadStorage_transientStorage (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : (Devm.balReadStorage rules a k d).transientStorage = d.transientStorage := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+@[simp] lemma Devm.balReadAccount_getAcct (rules : ForkRules) (a b : Adr)
+    (d : Devm) : (Devm.balReadAccount rules a d).getAcct b = d.getAcct b := by
+  unfold Devm.getAcct; rw [Devm.balReadAccount_state]
+
+@[simp] lemma Devm.balReadStorage_getAcct (rules : ForkRules) (a : Adr)
+    (k : B256) (b : Adr) (d : Devm) :
+    (Devm.balReadStorage rules a k d).getAcct b = d.getAcct b := by
+  unfold Devm.getAcct; rw [Devm.balReadStorage_state]
+
+/-- **A recorder on the near side of a frame can be dropped.**
+
+Any `Devm.Rels` that leaves the two read sets unconstrained — which is every
+frame in Blanc's vocabulary except `Devm.BurnBy` and `Devm.PopBurnBy` — cannot
+tell a machine from the same machine with one EIP-7928 read recorded.  This is
+the form an instruction inversion wants: Jaune's Amsterdam series inserted the
+recorder *between* the charge and the push, and this lemma moves it out of the
+way without a premise about the fork. -/
+lemma Devm.rel_of_balReadAccount_left {rels : Devm.Rels} {rules : ForkRules}
+    {a : Adr} {d d' : Devm}
+    (har : ∀ x y, rels.accountReads x y) (hsr : ∀ x y, rels.storageReads x y)
+    (h : Devm.Rel rels (Devm.balReadAccount rules a d) d') :
+    Devm.Rel rels d d' :=
+  {
+    stack := by rw [← Devm.balReadAccount_stack rules a d]; exact h.stack
+    memory := by rw [← Devm.balReadAccount_memory rules a d]; exact h.memory
+    gasLeft := by rw [← Devm.balReadAccount_gasLeft rules a d]; exact h.gasLeft
+    logs := by rw [← Devm.balReadAccount_logs rules a d]; exact h.logs
+    refundCounter := by rw [← Devm.balReadAccount_refundCounter rules a d]; exact h.refundCounter
+    output := by rw [← Devm.balReadAccount_output rules a d]; exact h.output
+    accountsToDelete := by rw [← Devm.balReadAccount_accountsToDelete rules a d]; exact h.accountsToDelete
+    returnData := by rw [← Devm.balReadAccount_returnData rules a d]; exact h.returnData
+    error := by rw [← Devm.balReadAccount_error rules a d]; exact h.error
+    accessedAddresses := by rw [← Devm.balReadAccount_accessedAddresses rules a d]; exact h.accessedAddresses
+    accessedStorageKeys := by rw [← Devm.balReadAccount_accessedStorageKeys rules a d]; exact h.accessedStorageKeys
+    state := by rw [← Devm.balReadAccount_state rules a d]; exact h.state
+    createdAccounts := by rw [← Devm.balReadAccount_createdAccounts rules a d]; exact h.createdAccounts
+    transientStorage := by rw [← Devm.balReadAccount_transientStorage rules a d]; exact h.transientStorage
+    stateGas := by rw [← Devm.balReadAccount_stateGas rules a d]; exact h.stateGas
+    accountReads := har _ _
+    storageReads := hsr _ _ }
+
+lemma Devm.rel_of_balReadStorage_left {rels : Devm.Rels} {rules : ForkRules}
+    {a : Adr} {k : B256} {d d' : Devm}
+    (har : ∀ x y, rels.accountReads x y) (hsr : ∀ x y, rels.storageReads x y)
+    (h : Devm.Rel rels (Devm.balReadStorage rules a k d) d') :
+    Devm.Rel rels d d' :=
+  {
+    stack := by rw [← Devm.balReadStorage_stack rules a k d]; exact h.stack
+    memory := by rw [← Devm.balReadStorage_memory rules a k d]; exact h.memory
+    gasLeft := by rw [← Devm.balReadStorage_gasLeft rules a k d]; exact h.gasLeft
+    logs := by rw [← Devm.balReadStorage_logs rules a k d]; exact h.logs
+    refundCounter := by rw [← Devm.balReadStorage_refundCounter rules a k d]; exact h.refundCounter
+    output := by rw [← Devm.balReadStorage_output rules a k d]; exact h.output
+    accountsToDelete := by rw [← Devm.balReadStorage_accountsToDelete rules a k d]; exact h.accountsToDelete
+    returnData := by rw [← Devm.balReadStorage_returnData rules a k d]; exact h.returnData
+    error := by rw [← Devm.balReadStorage_error rules a k d]; exact h.error
+    accessedAddresses := by rw [← Devm.balReadStorage_accessedAddresses rules a k d]; exact h.accessedAddresses
+    accessedStorageKeys := by rw [← Devm.balReadStorage_accessedStorageKeys rules a k d]; exact h.accessedStorageKeys
+    state := by rw [← Devm.balReadStorage_state rules a k d]; exact h.state
+    createdAccounts := by rw [← Devm.balReadStorage_createdAccounts rules a k d]; exact h.createdAccounts
+    transientStorage := by rw [← Devm.balReadStorage_transientStorage rules a k d]; exact h.transientStorage
+    stateGas := by rw [← Devm.balReadStorage_stateGas rules a k d]; exact h.stateGas
+    accountReads := har _ _
+    storageReads := hsr _ _ }
 
 /-- Under `bal = none` the account-read recorder is the identity. -/
 @[simp] lemma Devm.balReadAccount_eq_of_bal_none
@@ -5246,15 +5440,16 @@ lemma lift
         R sevm pre post ) :
     ∀ pc sevm pre post,
       Exec pc sevm pre (.ok post) →
+      sevm.benvStat.rules.stateGas = none →
       Prog.At p ca pc sevm pre →
       R sevm pre post := by
-  intro pc sevm pre post h_exc h_at
+  intro pc sevm pre post h_exc hleg h_at
   refine lift_core (fun _ sevm pre exn => ifOk (R sevm pre) exn) R (fun h => h) ca p
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ pc sevm pre (.ok post) h_exc h_at
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ pc sevm pre (.ok post) h_exc hleg h_at
   · intro sevm' pre' post' h_run h_eq h_fa
     apply depth_ind h_run h_eq
-    intro pc_ sevm_ devm_ post_ h_exc' h_lt h_at'
-    exact h_fa pc_ sevm_ devm_ (.ok post_) h_exc' h_lt h_at'
+    intro pc_ sevm_ devm_ post_ h_exc' h_lt hleg' h_at'
+    exact h_fa pc_ sevm_ devm_ (.ok post_) h_exc' h_lt hleg' h_at'
   · intro pc' sevm' devm' err devm'' h_eq; exact trivial
   · intro pc' sevm' devm' h_get h_ne; exact trivial
   · intro pc' sevm' devm' n err devm'' h_at' h_run h_ne; exact trivial
@@ -5288,6 +5483,7 @@ lemma lift_inv
         ( ∀ pc' sevm' pre' post',
             Exec pc' sevm' pre' (.ok post') →
             sevm'.depth < sevm.depth →
+            sevm'.benvStat.rules.stateGas = none →
             Prog.At p ca pc' sevm' pre' →
             σ sevm' pre' →
             ρ sevm' post' ) →
@@ -5324,6 +5520,7 @@ lemma lift_inv
         ρ sevm post ) :
     ∀ pc sevm devm post,
       Exec pc sevm devm (.ok post) →
+      sevm.benvStat.rules.stateGas = none →
       Prog.At p ca pc sevm devm →
       σ sevm devm →
       ρ sevm post := by
@@ -5398,6 +5595,27 @@ def Devm.Push (xs : List B256) : Devm → Devm → Prop :=
 
 def Devm.DiffBurn (xs ys : List B256) : Devm → Devm → Prop :=
   Rel {Rels.eq with stack := Stack.Diff xs ys, gasLeft := (· ≥ ·)}
+
+/-- **The EIP-7928 recorders are invisible to Blanc's frame vocabulary.**
+
+`Devm.balRead{Account,Storage}` is a `setMeta` that touches only the two read
+sets, and `Devm.Rels` leaves those unconstrained by default, so a recorder is a
+`Devm.Burn` that burns nothing.  This is what lets an instruction inversion
+walk straight through the reads Jaune's Amsterdam series inserted, on every
+fork and with no premise about the lane. -/
+lemma Devm.balReadAccount_burn (rules : ForkRules) (a : Adr) (d : Devm) :
+    Devm.Burn d (Devm.balReadAccount rules a d) := by
+  unfold Devm.balReadAccount Meta.readAccount
+  split <;>
+    exact ⟨rfl, rfl, Nat.le_refl _, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+      rfl, rfl, rfl, rfl, trivial, trivial⟩
+
+lemma Devm.balReadStorage_burn (rules : ForkRules) (a : Adr) (k : B256)
+    (d : Devm) : Devm.Burn d (Devm.balReadStorage rules a k d) := by
+  unfold Devm.balReadStorage Meta.readStorage
+  split <;>
+    exact ⟨rfl, rfl, Nat.le_refl _, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+      rfl, rfl, rfl, rfl, trivial, trivial⟩
 
 lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
     Devm.Push [x] s s' := by
@@ -5822,7 +6040,15 @@ lemma of_run_selfbalance {e : Sevm} {s s' : Devm}
     Devm.PushBurn [s.getBal e.currentTarget] s s' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact Devm.pushBurn_of_pushItem run
+  rcases Except.bind_eq_ok run with ⟨d, hcharge, hpush⟩
+  have hburn : Devm.Burn s (Devm.balReadAccount e.benvStat.rules e.currentTarget d) :=
+    Devm.burn_trans (Devm.burn_of_chargeGas hcharge)
+      (Devm.balReadAccount_burn _ _ _)
+  have hbal : d.getBal e.currentTarget = s.getBal e.currentTarget := by
+    unfold Devm.getBal Devm.getAcct
+    rw [(Devm.burn_of_chargeGas hcharge).state]
+  rw [hbal] at hpush
+  exact Devm.pushBurn_of_burn_of_push hburn (Devm.push_of_push hpush)
 
 lemma of_run_returndatasize {e : Sevm} {s s' : Devm} (h : Ninst.Run e s returndatasize s') :
     ∃ x, Devm.PushBurn [x] s s' := by
@@ -6275,11 +6501,13 @@ lemma prefix_of_extcodesize_val
       rw [hst]
     refine ⟨?_, ?_⟩
     · rw [← hcode]
-      exact append_pref (Devm.push_of_push hpush).stack
+      exact append_pref (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push hpush)).stack
         (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
-          (Devm.push_of_push hpush).memory)
+          (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push hpush)).memory)
   · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
     have hst : s.state = d2.state :=
       hpop'.state.trans
@@ -6290,12 +6518,14 @@ lemma prefix_of_extcodesize_val
       rw [hst]
     refine ⟨?_, ?_⟩
     · rw [← hcode]
-      exact append_pref (Devm.push_of_push hpush).stack
+      exact append_pref (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push hpush)).stack
         (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
           ((Devm.burn_of_chargeGas hgas).memory.trans
-            (Devm.push_of_push hpush).memory))
+            (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push hpush)).memory))
 
 /-! ### Reading a described calldata layout
 
