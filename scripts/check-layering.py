@@ -151,7 +151,8 @@ CONTRACTS = {
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy",
              "DripCreationCode", "DripRpow", "DripIngress",
              "DripFunctional", "DripAccounting", "DripMachine",
-             "DripEndpoints", "DripFresh", "DripStackSafetyData", "DripStackSafety"],
+             "DripEndpoints", "DripFresh", "DripStackSafetyData", "DripStackSafety",
+             "DripStackSafetyRegion214"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
