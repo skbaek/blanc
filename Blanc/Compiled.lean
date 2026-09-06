@@ -60,6 +60,45 @@ def Devm.PopBurnBy (xs : List B256) (cost : Nat) : Devm → Devm → Prop :=
     storageReads := _root_.Eq
   }
 
+/-! ### What the loose frames leave out
+
+`Devm.Burn`, `Devm.PopBurn` and `Devm.PushBurn` leave EIP-7928's two read sets
+free (DP-E3d): a recorder is a burn that burns nothing, and that is what lets
+the instruction-inversion family walk through recorders premise-free.  The two
+exact frames above pin them, because `Devm.eq_of_proj` rebuilds a whole machine
+from one and `Evm.jumpdest_cont` is false without it.
+
+So the upgrade from a loose frame to an exact one genuinely gains information,
+and the missing half has to be carried.  This is that half, named once so it
+composes: the read log did not move.  It is not a frame -- it constrains two
+`Meta` fields and nothing else -- and it is deliberately weaker than
+`meta` equality, which would also re-assert the nine `Meta` fields the loose
+frames already pin.
+
+Its only consumers today are the two upgrade lemmas in this module and their
+call sites, so it lives here; a second module needing it makes it a hoisting
+candidate for `Blanc/CommonProofs.lean`, not before. -/
+
+/-- EIP-7928's two read sets are the same on both sides. -/
+def Devm.ReadsFixed (devm devm' : Devm) : Prop :=
+  devm.meta.accountReads = devm'.meta.accountReads ∧
+    devm.meta.storageReads = devm'.meta.storageReads
+
+lemma Devm.ReadsFixed.refl (devm : Devm) : Devm.ReadsFixed devm devm :=
+  ⟨rfl, rfl⟩
+
+lemma Devm.ReadsFixed.trans {a b c : Devm} (h : Devm.ReadsFixed a b)
+    (h' : Devm.ReadsFixed b c) : Devm.ReadsFixed a c :=
+  ⟨h.1.trans h'.1, h.2.trans h'.2⟩
+
+/-- A step that rewrites only the `Mach` half of a `Devm` fixes the read log.
+Every instruction this module inverts -- `PUSH`, `JUMP`, `JUMPI`, `JUMPDEST` --
+is such a step, which is why the equations are recoverable rather than
+assumed. -/
+lemma Devm.readsFixed_of_meta {a b : Devm} (h : b.meta = a.meta) :
+    Devm.ReadsFixed a b :=
+  ⟨by rw [h], by rw [h]⟩
+
 /-! ## The instruction premise
 
 The strong form: the child-execution witness is chosen once, *outside* the
@@ -345,10 +384,17 @@ recorder is a burn that burns nothing and the instruction-inversion family walks
 through recorders premise-free. `Devm.BurnBy` pins them, because
 `Devm.eq_of_proj` reconstructs a whole machine from it and `Evm.jumpdest_cont`
 is false without that. So the upgrade genuinely gains information, and the two
-equations are supplied rather than invented. Every call site is a gas charge or
-a `JUMPDEST`, neither of which reads. -/
+equations are supplied rather than invented: without `hr` the statement is
+false, not merely unproved -- take `devm'` to be `devm` with the gas charged and
+one address added to `accountReads`.
+
+`hr` is never an assumption in practice. Every frame this module hands to the
+upgrade comes out of `pushAt_pinned`, `jumpdest_at_pinned`, `jump_at_pinned` or
+`jumpi_at_pinned`, which read it off the same step equation the loose frame
+comes from. -/
 lemma Devm.BurnBy.of_burn {cost : Nat} {devm devm' : Devm}
-    (h : Devm.Burn devm devm') (hg : devm.gasLeft = devm'.gasLeft + cost) :
+    (h : Devm.Burn devm devm') (hg : devm.gasLeft = devm'.gasLeft + cost)
+    (hr : Devm.ReadsFixed devm devm') :
     Devm.BurnBy cost devm devm' :=
   { stack := h.stack, memory := h.memory, gasLeft := hg, logs := h.logs,
     refundCounter := h.refundCounter, output := h.output,
@@ -357,12 +403,14 @@ lemma Devm.BurnBy.of_burn {cost : Nat} {devm devm' : Devm}
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads }
+    accountReads := hr.1, storageReads := hr.2 }
 
 /-- Upgrade a `Devm.PopBurn` to a `Devm.PopBurnBy` with the measured
-decrement. -/
+decrement.  `hr` carries the read log for the same reason as in
+`Devm.BurnBy.of_burn`. -/
 lemma Devm.PopBurnBy.of_popBurn {xs : List B256} {cost : Nat} {devm devm' : Devm}
-    (h : Devm.PopBurn xs devm devm') (hg : devm.gasLeft = devm'.gasLeft + cost) :
+    (h : Devm.PopBurn xs devm devm') (hg : devm.gasLeft = devm'.gasLeft + cost)
+    (hr : Devm.ReadsFixed devm devm') :
     Devm.PopBurnBy xs cost devm devm' :=
   { stack := h.stack, memory := h.memory, gasLeft := hg, logs := h.logs,
     refundCounter := h.refundCounter, output := h.output,
@@ -371,7 +419,7 @@ lemma Devm.PopBurnBy.of_popBurn {xs : List B256} {cost : Nat} {devm devm' : Devm
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads }
+    accountReads := hr.1, storageReads := hr.2 }
 
 /-- `chargeGas`'s gas equation, kept exact.  `Devm.burn_of_chargeGas` is the
 same fact with `(· ≥ ·)` in place of the equation. -/
@@ -400,6 +448,51 @@ lemma Devm.gasLeft_of_pop {x : B256} {devm devm' : Devm}
     (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm.gasLeft = devm'.gasLeft :=
   (Devm.pop_of_pop h).gasLeft
 
+/-! ### The read log, recovered from the same step equations
+
+`chargeGas`, `Devm.push` and `Devm.pop` are `Devm.setMach` of a rewritten
+`Mach`, and `Devm.setMach` replaces the machine alone.  So each of them fixes
+the whole `Meta`, the two EIP-7928 read sets with it, and the fact is available
+wherever the raw step equation is -- which is exactly where the loose frames
+are read off.  These are the lemmas the exact frames' upgrade needs; nothing
+here is assumed about the fork or the rules. -/
+
+/-- `chargeGas` rewrites the machine and nothing else. -/
+lemma Devm.meta_of_chargeGas {cost : Nat} {devm devm' : Devm}
+    (h : chargeGas cost devm = .ok devm') : devm'.meta = devm.meta := by
+  simp only [chargeGas_def] at h
+  cases hs : safeSub devm.gasLeft cost with
+  | none => rw [hs] at h; cases h
+  | some gas =>
+    rw [hs] at h
+    injection h with h'
+    rw [← h']
+    rfl
+
+/-- `Devm.push` rewrites the machine and nothing else. -/
+lemma Devm.meta_of_push {x : B256} {devm devm' : Devm}
+    (h : Devm.push x devm = .ok devm') : devm'.meta = devm.meta := by
+  rw [Devm.push_def] at h
+  simp only [Except.assert, bind, Except.bind] at h
+  by_cases hroom : devm.stack.length < 1024
+  · simp only [if_pos hroom] at h
+    injection h with h'
+    rw [← h']
+    rfl
+  · simp only [if_neg hroom] at h
+    cases h
+
+/-- `Devm.pop` rewrites the machine and nothing else. -/
+lemma Devm.meta_of_pop {x : B256} {devm devm' : Devm}
+    (h : Devm.pop devm = .ok ⟨x, devm'⟩) : devm'.meta = devm.meta := by
+  rw [Devm.pop_def] at h
+  split at h
+  · cases h
+  · injection h with h'
+    injection h' with _ hd
+    rw [← hd]
+    rfl
+
 /-! ### The three `Jinst` costs
 
 Read off `Jinst.runCore`: `.jumpdest` charges `gJumpdest`, `.jump` pops once and
@@ -415,6 +508,15 @@ lemma Devm.gasLeft_of_jumpdest_run {pc sevm pre pc' inter}
   cases eq_devm
   exact Devm.gasLeft_of_chargeGas eq_charge
 
+lemma Devm.readsFixed_of_jumpdest_run {pc sevm pre pc' inter}
+    (run : Jinst.Run ⟨pc, sevm, pre⟩ .jumpdest (.ok ⟨pc', inter⟩)) :
+    Devm.ReadsFixed pre inter := by
+  rcases Except.bind_eq_ok run with ⟨devm, eq_charge, eq_ok⟩
+  injection eq_ok with eq
+  injection eq with eq_pc eq_devm
+  cases eq_devm
+  exact Devm.readsFixed_of_meta (Devm.meta_of_chargeGas eq_charge)
+
 lemma Devm.gasLeft_of_jump_run {pc sevm pre pc' inter}
     (run : Jinst.Run ⟨pc, sevm, pre⟩ .jump (.ok ⟨pc', inter⟩)) :
     pre.gasLeft = inter.gasLeft + gMid := by
@@ -427,6 +529,19 @@ lemma Devm.gasLeft_of_jump_run {pc sevm pre pc' inter}
   injection eq with eq_pc eq_devm
   cases eq_devm
   omega
+
+lemma Devm.readsFixed_of_jump_run {pc sevm pre pc' inter}
+    (run : Jinst.Run ⟨pc, sevm, pre⟩ .jump (.ok ⟨pc', inter⟩)) :
+    Devm.ReadsFixed pre inter := by
+  rcases Except.bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run⟩
+  rcases Except.bind_eq_ok run with ⟨devm2, eq2, run⟩
+  have h1 : devm1.meta = pre.meta := Devm.meta_of_pop eq1
+  have h2 : devm2.meta = devm1.meta := Devm.meta_of_chargeGas eq2
+  rcases Except.bind_eq_ok run with ⟨_, _, run⟩
+  injection run with eq
+  injection eq with eq_pc eq_devm
+  cases eq_devm
+  exact Devm.readsFixed_of_meta (h2.trans h1)
 
 lemma Devm.gasLeft_of_jumpi_run {pc sevm pre pc' inter}
     (run : Jinst.Run ⟨pc, sevm, pre⟩ .jumpi (.ok ⟨pc', inter⟩)) :
@@ -444,6 +559,23 @@ lemma Devm.gasLeft_of_jumpi_run {pc sevm pre pc' inter}
       injection run with eq; injection eq
   rw [h4] at h3
   omega
+
+lemma Devm.readsFixed_of_jumpi_run {pc sevm pre pc' inter}
+    (run : Jinst.Run ⟨pc, sevm, pre⟩ .jumpi (.ok ⟨pc', inter⟩)) :
+    Devm.ReadsFixed pre inter := by
+  rcases Except.bind_eq_ok run with ⟨⟨x, devm1⟩, eq1, run⟩
+  rcases Except.bind_eq_ok run with ⟨⟨y, devm2⟩, eq2, run⟩
+  rcases Except.bind_eq_ok run with ⟨devm3, eq3, run⟩
+  have h1 : devm1.meta = pre.meta := Devm.meta_of_pop eq1
+  have h2 : devm2.meta = devm1.meta := Devm.meta_of_pop eq2
+  have h3 : devm3.meta = devm2.meta := Devm.meta_of_chargeGas eq3
+  have h4 : devm3 = inter := by
+    split at run
+    · injection run with eq; injection eq
+    · rcases Except.bind_eq_ok run with ⟨_, _, run⟩
+      injection run with eq; injection eq
+  rw [h4] at h3
+  exact Devm.readsFixed_of_meta (h3.trans (h2.trans h1))
 
 /-! ### The `PUSH`'s cost and its headroom
 
@@ -467,6 +599,14 @@ lemma Devm.pushRun_exact {x : B256} {pre inter : Devm} {cost : Nat}
     exact ⟨hst ▸ h_room, hg⟩
   · simp only [if_neg h_room] at eq_push
     cases eq_push
+
+/-- The same `PUSH` step, read for the EIP-7928 log instead of the gas. -/
+lemma Devm.readsFixed_of_pushRun {x : B256} {pre inter : Devm} {cost : Nat}
+    (h : (chargeGas cost pre >>= fun d => Devm.push x d) = .ok inter) :
+    Devm.ReadsFixed pre inter := by
+  rcases Except.bind_eq_ok h with ⟨d, eq_charge, eq_push⟩
+  exact Devm.readsFixed_of_meta
+    ((Devm.meta_of_push eq_push).trans (Devm.meta_of_chargeGas eq_charge))
 
 /-! ## pc-independence of a pc-free `Ninst`
 
@@ -557,6 +697,27 @@ lemma pushAt_run {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     rw [Ninst.step_push] at hs
     cases Step.ofExecution_ne_spawn hs
 
+/-! Each wrapper comes in two forms.  The `_pinned` form carries the read log
+alongside the loose frame -- both are read off the same step equation, so the
+second costs nothing -- and is what the forward direction feeds to
+`Devm.BurnBy.of_burn` and `Devm.PopBurnBy.of_popBurn`.  The plain form is the
+`_pinned` one with that component dropped; its statement is unchanged, so the
+walks elsewhere that consume it are untouched. -/
+
+lemma pushAt_pinned {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
+    (h_at : PushAt sevm.code pc xs) (hne : xs ≠ []) :
+    ∃ (inter : Devm) (exc' : Exec (pc + xs.length + 1) sevm inter (.ok post)),
+      Devm.PushBurn [xs.toB256] pre inter ∧
+      pre.stack.length < 1024 ∧
+      pre.gasLeft = inter.gasLeft + gVerylow ∧
+      Devm.ReadsFixed pre inter ∧
+      ⟨pc + xs.length + 1, sevm, inter, .ok post, exc'⟩ ≺
+        ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  rcases pushAt_run exc h_at hne with ⟨inter, exc', hrun, hprec⟩
+  rcases Devm.pushRun_exact hrun with ⟨hroom, hgas⟩
+  exact ⟨inter, exc', Devm.pushBurn_of_run hrun, hroom, hgas,
+    Devm.readsFixed_of_pushRun hrun, hprec⟩
+
 lemma pushAt_exact {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
     (h_at : PushAt sevm.code pc xs) (hne : xs ≠ []) :
     ∃ (inter : Devm) (exc' : Exec (pc + xs.length + 1) sevm inter (.ok post)),
@@ -565,9 +726,23 @@ lemma pushAt_exact {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
       pre.gasLeft = inter.gasLeft + gVerylow ∧
       ⟨pc + xs.length + 1, sevm, inter, .ok post, exc'⟩ ≺
         ⟨pc, sevm, pre, .ok post, exc⟩ := by
-  rcases pushAt_run exc h_at hne with ⟨inter, exc', hrun, hprec⟩
-  rcases Devm.pushRun_exact hrun with ⟨hroom, hgas⟩
-  exact ⟨inter, exc', Devm.pushBurn_of_run hrun, hroom, hgas, hprec⟩
+  rcases pushAt_pinned exc h_at hne with
+    ⟨inter, exc', hburn, hroom, hgas, _, hprec⟩
+  exact ⟨inter, exc', hburn, hroom, hgas, hprec⟩
+
+lemma jumpdest_at_pinned {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jumpdest) :
+    ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
+      Devm.Burn pre inter ∧
+      pre.gasLeft = inter.gasLeft + gJumpdest ∧
+      Devm.ReadsFixed pre inter ∧
+      ⟨pc + 1, sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jumpdest_run run
+  have hreads := Devm.readsFixed_of_jumpdest_run run
+  rcases of_jumpdest_run run with ⟨eq_pc, burn⟩
+  cases eq_pc
+  exact ⟨inter, exc', burn, hgas, hreads, prec⟩
 
 lemma jumpdest_at_exact {pc sevm pre post}
     (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jumpdest) :
@@ -575,11 +750,23 @@ lemma jumpdest_at_exact {pc sevm pre post}
       Devm.Burn pre inter ∧
       pre.gasLeft = inter.gasLeft + gJumpdest ∧
       ⟨pc + 1, sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
-  have hgas := Devm.gasLeft_of_jumpdest_run run
-  rcases of_jumpdest_run run with ⟨eq_pc, burn⟩
-  cases eq_pc
+  rcases jumpdest_at_pinned exc jat with ⟨inter, exc', burn, hgas, _, prec⟩
   exact ⟨inter, exc', burn, hgas, prec⟩
+
+lemma jump_at_pinned {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jump) :
+    ∃ (x : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter (.ok post)),
+      Devm.PopBurn [x] pre inter ∧
+      pre.gasLeft = inter.gasLeft + gMid ∧
+      Devm.ReadsFixed pre inter ∧
+      jumpable sevm.code x.toNat = true ∧
+      ⟨x.toNat, sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jump_run run
+  have hreads := Devm.readsFixed_of_jump_run run
+  rcases of_jump_run run with ⟨x, eq_pc, pb, jp⟩
+  cases eq_pc
+  exact ⟨x, inter, exc', pb, hgas, hreads, jp, prec⟩
 
 lemma jump_at_exact {pc sevm pre post}
     (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jump) :
@@ -588,11 +775,30 @@ lemma jump_at_exact {pc sevm pre post}
       pre.gasLeft = inter.gasLeft + gMid ∧
       jumpable sevm.code x.toNat = true ∧
       ⟨x.toNat, sevm, inter, .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
-  have hgas := Devm.gasLeft_of_jump_run run
-  rcases of_jump_run run with ⟨x, eq_pc, pb, jp⟩
-  cases eq_pc
+  rcases jump_at_pinned exc jat with ⟨x, inter, exc', pb, hgas, _, jp, prec⟩
   exact ⟨x, inter, exc', pb, hgas, jp, prec⟩
+
+lemma jumpi_at_pinned {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jumpi) :
+    ( ∃ (x : B256) (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
+        Devm.PopBurn [x, 0] pre inter ∧
+        pre.gasLeft = inter.gasLeft + gHigh ∧
+        Devm.ReadsFixed pre inter ∧
+        ⟨pc + 1, sevm, inter, .ok post, exc'⟩ ≺
+          ⟨pc, sevm, pre, .ok post, exc⟩ ) ∨
+    ( ∃ (x y : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter (.ok post)),
+        Devm.PopBurn [x, y] pre inter ∧
+        pre.gasLeft = inter.gasLeft + gHigh ∧
+        Devm.ReadsFixed pre inter ∧
+        jumpable sevm.code x.toNat = true ∧ y ≠ 0 ∧
+        ⟨x.toNat, sevm, inter, .ok post, exc'⟩ ≺
+          ⟨pc, sevm, pre, .ok post, exc⟩ ) := by
+  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jumpi_run run
+  have hreads := Devm.readsFixed_of_jumpi_run run
+  rcases of_jumpi_run run with ⟨x, pc_eq, pb⟩ | ⟨x, y, pc_eq, pb, je, ne⟩
+  · left; cases pc_eq; exact ⟨x, inter, exc', pb, hgas, hreads, prec⟩
+  · right; cases pc_eq; exact ⟨x, y, inter, exc', pb, hgas, hreads, je, ne, prec⟩
 
 lemma jumpi_at_exact {pc sevm pre post}
     (exc : Exec pc sevm pre (.ok post)) (jat : Jinst.At sevm.code pc .jumpi) :
@@ -607,11 +813,11 @@ lemma jumpi_at_exact {pc sevm pre post}
         jumpable sevm.code x.toNat = true ∧ y ≠ 0 ∧
         ⟨x.toNat, sevm, inter, .ok post, exc'⟩ ≺
           ⟨pc, sevm, pre, .ok post, exc⟩ ) := by
-  rcases Jinst.run_of_at exc jat with ⟨pc', inter, exc', run, prec⟩
-  have hgas := Devm.gasLeft_of_jumpi_run run
-  rcases of_jumpi_run run with ⟨x, pc_eq, pb⟩ | ⟨x, y, pc_eq, pb, je, ne⟩
-  · left; cases pc_eq; exact ⟨x, inter, exc', pb, hgas, prec⟩
-  · right; cases pc_eq; exact ⟨x, y, inter, exc', pb, hgas, je, ne, prec⟩
+  rcases jumpi_at_pinned exc jat with
+    ⟨x, inter, exc', pb, hgas, _, prec⟩ |
+    ⟨x, y, inter, exc', pb, hgas, _, je, ne, prec⟩
+  · exact Or.inl ⟨x, inter, exc', pb, hgas, prec⟩
+  · exact Or.inr ⟨x, y, inter, exc', pb, hgas, je, ne, prec⟩
 
 /-! ### pc-freedom, projected onto the sub-`Func`s a proof descends into -/
 
@@ -695,17 +901,19 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
           Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
           pre.stack.length < 1024 ∧
           pre.gasLeft = devm'.gasLeft + gVerylow ∧
+          Devm.ReadsFixed pre devm' ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺
             ⟨pc, sevm, pre, .ok post, exc⟩ := by
       simp at pushAt
-      rcases pushAt_exact exc ⟨_, pushAt⟩ (by simp) with
-        ⟨s', cr', h, h_room, h_gas, h_prec⟩
+      rcases pushAt_pinned exc ⟨_, pushAt⟩ (by simp) with
+        ⟨s', cr', h, h_room, h_gas, h_reads, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
-      exact ⟨s', cr', h, h_room, h_gas, h_prec⟩
-    rcases h with ⟨devm', exc', pushBurn, h_room, h_gas1, h_prec⟩
-    rcases jumpi_at_exact exc' h_jumpi with
-        ⟨x, devm'', exc'', popBurn, h_gas2, prec⟩
-      | ⟨x, y, devm'', exc'', popBurn, h_gas2, jumpable, ne, prec⟩ <;> clear h_jumpi
+      exact ⟨s', cr', h, h_room, h_gas, h_reads, h_prec⟩
+    rcases h with ⟨devm', exc', pushBurn, h_room, h_gas1, h_reads1, h_prec⟩
+    rcases jumpi_at_pinned exc' h_jumpi with
+        ⟨x, devm'', exc'', popBurn, h_gas2, h_reads2, prec⟩
+      | ⟨x, y, devm'', exc'', popBurn, h_gas2, h_reads2, jumpable, ne, prec⟩ <;>
+      clear h_jumpi
     · clear h_scq h_jumpdest
       have h_pop' : Devm.PopBurn [0] pre devm'' := by
         rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right
@@ -713,7 +921,7 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
         apply Devm.popBurn_of_burn_of_popBurn _ popBurn'
         apply Devm.burn_of_pushBurn_nil pushBurn'
       apply Func.RunCompiled.zero h_room
-        (Devm.PopBurnBy.of_popBurn h_pop' (by omega))
+        (Devm.PopBurnBy.of_popBurn h_pop' (by omega) (h_reads1.trans h_reads2))
       have h_lt :
           Exec.Deriv.lt
             ⟨pc + 4, sevm, devm'', .ok post, exc''⟩
@@ -736,8 +944,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
           (Devm.burn_of_pushBurn_nil pushBurn') popBurn'⟩
       rcases h with ⟨hx, popBurn'⟩
       rw [← hx] at h_jumpdest
-      rcases jumpdest_at_exact exc'' h_jumpdest with
-        ⟨inter_jd, exc_jd, burn_jd, h_gas3, prec_jd⟩
+      rcases jumpdest_at_pinned exc'' h_jumpdest with
+        ⟨inter_jd, exc_jd, burn_jd, h_gas3, h_reads3, prec_jd⟩
       have run : Func.RunCompiled (f :: fs) sevm inter_jd q post := by
         have h_lt :
             Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩
@@ -750,7 +958,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
         exact ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc_jd⟩ h_lt q h_pq h_eq h_scq
       exact Func.RunCompiled.succ ne h_room
         (Devm.PopBurnBy.of_popBurn
-          (Devm.popBurn_of_popBurn_of_pop popBurn' burn_jd) (by omega)) run
+          (Devm.popBurn_of_popBurn_of_pop popBurn' burn_jd) (by omega)
+          ((h_reads1.trans h_reads2).trans h_reads3)) run
   | .call k =>
     rcases subcode_compile_call sub with ⟨loc, p, h_get, h_loc, pushAt, h_jump⟩
     have h_get' : (f :: fs)[k]? = some p := by
@@ -760,15 +969,16 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
         Devm.PushBurn [loc.toB256] pre devm' ∧
         pre.stack.length < 1024 ∧
         pre.gasLeft = devm'.gasLeft + gVerylow ∧
+        Devm.ReadsFixed pre devm' ∧
         ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺
           ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      rcases pushAt_exact exc pushAt (by simp) with
-        ⟨inter, exc', h, h_room, h_gas, h_prec⟩
+      rcases pushAt_pinned exc pushAt (by simp) with
+        ⟨inter, exc', h, h_room, h_gas, h_reads, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
-      exact ⟨inter, exc', h, h_room, h_gas, h_prec⟩
-    rcases hd with ⟨devm', exc', h_push, h_room, h_gas1, h_prec⟩
-    rcases jump_at_exact exc' h_jump with
-      ⟨x, devm'', exc'', h_pop, h_gas2, h_jumpable, h_prec'⟩
+      exact ⟨inter, exc', h, h_room, h_gas, h_reads, h_prec⟩
+    rcases hd with ⟨devm', exc', h_push, h_room, h_gas1, h_reads1, h_prec⟩
+    rcases jump_at_pinned exc' h_jump with
+      ⟨x, devm'', exc'', h_pop, h_gas2, h_reads2, h_jumpable, h_prec'⟩
     rcases subcode_of_get?_eq_some h_eq h_get with ⟨h_jd, hp⟩; clear h_get
     have h_loc' : loc < 2 ^ 256 := by
       apply Nat.lt_trans h_loc
@@ -783,8 +993,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
         (Devm.burn_of_popBurn_nil popBurn')⟩
     rcases h_rw with ⟨h_rw, h_burn⟩
     rw [h_rw] at h_jd
-    rcases jumpdest_at_exact exc'' h_jd with
-      ⟨inter_jd, exc''', burn_jd, h_gas3, h_prec''⟩
+    rcases jumpdest_at_pinned exc'' h_jd with
+      ⟨inter_jd, exc''', burn_jd, h_gas3, h_reads3, h_prec''⟩
     rw [h_rw] at hp
     have h_lt :
         Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩
@@ -797,7 +1007,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
       ih ⟨x.toNat + 1, sevm, inter_jd, .ok post, exc'''⟩ h_lt p
         (Func.pcFree_call h_pcf h_get') h_eq hp
     exact Func.RunCompiled.call h_get' h_room
-      (Devm.BurnBy.of_burn (Devm.burn_trans h_burn burn_jd) (by omega)) run
+      (Devm.BurnBy.of_burn (Devm.burn_trans h_burn burn_jd) (by omega)
+        ((h_reads1.trans h_reads2).trans h_reads3)) run
 
 /-- The exact-gas strengthening of `correct`: a successful execution of a
 compiled pc-free program yields a gas-exact run of it. -/
@@ -808,8 +1019,8 @@ theorem Prog.runCompiled_of_exec (sevm : Sevm) (pre : Devm) (p : Prog) (post : D
     Prog.RunCompiled sevm pre p post := by
   rcases @subcode_of_get?_eq_some p.main p.aux sevm.code 0 _ p.main eq rfl
     with ⟨h_at, h_sub⟩
-  rcases jumpdest_at_exact exc h_at with ⟨inter, exc', burn, h_gas, prec⟩
-  refine ⟨inter, Devm.BurnBy.of_burn burn h_gas, ?_⟩
+  rcases jumpdest_at_pinned exc h_at with ⟨inter, exc', burn, h_gas, h_reads, prec⟩
+  refine ⟨inter, Devm.BurnBy.of_burn burn h_gas h_reads, ?_⟩
   exact Func.runCompiled_of_exec_core p.main p.aux
     ⟨1, sevm, inter, .ok post, exc'⟩ p.main h_pcf eq h_sub
 
