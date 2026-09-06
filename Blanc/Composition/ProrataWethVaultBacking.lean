@@ -680,8 +680,6 @@ theorem deposit_message_accountingStep
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
     (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
     (wethSumNof : SumNof (Stor.rest (Devm.getStor pre wethAccount)))
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
@@ -693,7 +691,7 @@ theorem deposit_message_accountingStep
         (.deposit (Sevm.argWord sevm 0).toNat shares.toNat)
         (snapshotAt sevm post) := by
   obtain ⟨supply, shares, supplyEq, quoteEq, stable, roomFits, effect⟩ :=
-    deposit_compiled_effect_named config memoryWf resources run selectorEq
+    deposit_compiled_effect_named config memoryWf run selectorEq
   have effectWhole := effect
   obtain ⟨-, movement, -, -, -⟩ := effect
   have supplyNof : B256.Nof supply shares := by
@@ -736,8 +734,6 @@ theorem redeem_message_accountingStep
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : OutboundCompiledResources sevm
-      Blanc.ProrataWethVault.quoteWord)
     (receiverNotVault :
       sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
@@ -749,7 +745,7 @@ theorem redeem_message_accountingStep
         (.withdraw (Sevm.argWord sevm 0).toNat assets.toNat)
         (snapshotAt sevm post) := by
   obtain ⟨supply, assets, supplyEq, quoteEq, burnable, effect⟩ :=
-    redeem_compiled_effect_named config memoryWf resources run selectorEq
+    redeem_compiled_effect_named config memoryWf run selectorEq
   have effectWhole := effect
   obtain ⟨-, movement, -, -, -, -, -, -⟩ := effect
   refine ⟨assets, outboundEffect_accountingStep receiverNotVault ?_ ?_

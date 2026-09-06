@@ -38,24 +38,12 @@ discharged here for every instruction class at a foreign frame:
 
 The target-frame obligation `with_depth_ind` is `vault_message_preserves_conserved`
 applied to the gas-exact run that `Prog.runCompiled_of_exec` recovers from the
-raw execution — the vault program is `pcFree`, checked by the kernel — with the
-four resource bundles read off the trace-local admission at that frame.  The
-deeper-frame hypothesis is not consumed: a vault message's only child is the
-configured WETH program, whose effect the flow theorems already carry.
-
-## What is assumed at each vault frame, and why
-
-`VaultFrameEntry` is the resource bundle the flows' effect theorems take —
-`depth ≠ 0`, `isStatic = false` and the call-gas bounds at the two staging
-lines — asserted at every actually entered vault frame through
-`Exec.FrameAdmitted`.  It is threaded rather than derived: a frame at depth
-zero or without gas for its WETH child *reverts* (the CALL pushes `0` and the
-`iszero` guard takes the `REVERT` arm), so the bundle is a consequence of
-success rather than an extra premise, but that derivation is not yet made
-inside the effect theorems.  Until it is, the rung is stated with the
-admission premise explicit, and `Exec.FrameAdmitted` makes it trace-local:
-it constrains the frames the execution actually entered, not every frame the
-adversary might have entered.
+raw execution — the vault program is `pcFree`, checked by the kernel.  The flow
+theorems now derive CALL depth and gas from each successful crossing and derive
+dynamic mode from the actual parent `SSTORE`, so this rung needs no separate
+frame-entry resource premise.  The deeper-frame hypothesis is not consumed: a
+vault message's only child is the configured WETH program, whose effect the
+flow theorems already carry.
 -/
 
 namespace Blanc.Composition.ProrataWethVault
@@ -66,14 +54,6 @@ open Jaune
 compiled code is a gas-exact `Prog.RunCompiled`. -/
 private theorem vault_pcFree : Prog.pcFree Blanc.ProrataWethVault.vault = true := by
   decide +kernel
-
-/-- The resources every actually entered vault frame carries: the four flow
-bundles, exactly as `vault_message_preserves_conserved` takes them. -/
-def VaultFrameEntry (sevm : Sevm) (_pre : Devm) : Prop :=
-  InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord ∧
-    InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord ∧
-    OutboundCompiledResources sevm Blanc.ProrataWethVault.amountWord ∧
-    OutboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord
 
 /-- The frame invariant carried across every frame of the execution. -/
 structure VaultFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
@@ -122,33 +102,34 @@ private theorem Ninst.stepRun_codePreserve
 
 /-- **The rely rung.**  Any successful execution — at any target, from any
 program counter — that starts with the vault program installed at `vault`, the
-configuration in force and the ledger conserved, and whose actually entered
-vault frames carry the flow resources, ends with the ledger conserved at the
-vault.  A message to some *other* account is the case `sevm.currentTarget ≠
+configuration in force and the ledger conserved ends with the ledger conserved
+at the vault.  A message to some *other* account is the case `sevm.currentTarget ≠
 vault`; the execution's vault frames, however deep and however re-entered, are
 covered by the same induction. -/
 theorem vault_rely_preserves_conserved (vault : Adr) :
-    ∀ pc sevm pre post (run : Exec pc sevm pre (.ok post)),
+    ∀ pc sevm pre post (_run : Exec pc sevm pre (.ok post)),
       Prog.At Blanc.ProrataWethVault.vault vault pc sevm pre →
-      Exec.FrameAdmitted vault VaultFrameEntry run →
       VaultFrameInv vault sevm pre →
       Blanc.ProrataWethVault.vaultSpec.Post vault sevm post := by
-  refine lift_inv_admitted VaultFrameEntry vault Blanc.ProrataWethVault.vault
+  intro pc sevm pre post run programAt inv
+  have admitted : Exec.FrameAdmitted vault (fun _ _ => True) run := by
+    intro _ _ _
+    trivial
+  refine lift_inv_admitted (fun _ _ => True) vault Blanc.ProrataWethVault.vault
     (VaultFrameInv vault) (Blanc.ProrataWethVault.vaultSpec.Post vault)
-    ?_ ?_ ?_ ?_ ?_
+    ?_ ?_ ?_ ?_ ?_ pc sevm pre post run programAt admitted inv
   -- the vault's own frame
   · intro sevm pre post run _ target admitted _ inv
     subst target
     have compiled : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post :=
       Prog.runCompiled_of_exec sevm pre _ post vault_pcFree run (inv.code rfl)
-    obtain ⟨depositR, mintR, withdrawR, redeemR⟩ := admitted.root rfl
     have conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
         (Devm.getStor pre sevm.currentTarget) :=
       (ContractSpec.ofStorageOnly_preInv_iff).mp inv.preWf.pre.inv
     refine ⟨trivial, ?_⟩
     exact (ContractSpec.ofStorageOnly_postInv_iff).mpr
       (vault_message_preserves_conserved inv.config (inv.preWf.wf rfl)
-        depositR mintR withdrawR redeemR compiled conserved)
+        compiled conserved)
   -- a childless step at a foreign frame
   · intro pc sevm pre n inter h_at h_run h_ne inv
     refine ⟨⟨?_, fun h => absurd h h_ne⟩,
@@ -249,7 +230,6 @@ frame has well-formed memory, and the storage-only precondition and the
 configuration hold. -/
 theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post))
-    (admitted : Exec.FrameAdmitted vault VaultFrameEntry run)
     (code : sevm.currentTarget = vault →
       some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (memoryWf : sevm.currentTarget = vault → Mem.Wf pre.memory)
@@ -258,7 +238,7 @@ theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
     LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post vault) :=
   (ContractSpec.ofStorageOnly_postInv_iff).mp
     (vault_rely_preserves_conserved vault 0 sevm pre post run
-      ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩ admitted
+      ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩
       ⟨⟨pre_, memoryWf⟩, config, code⟩).inv
 
 end Blanc.Composition.ProrataWethVault

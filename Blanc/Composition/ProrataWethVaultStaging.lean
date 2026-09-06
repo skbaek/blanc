@@ -1536,6 +1536,102 @@ theorem checkedCanonicalTrue_success
       occurrence.success_of_post successFlag outputEq, bodyRun⟩
   · exact (revert_not_ok revertRun).elim
 
+/-- A successful checked CALL had room to enter its child frame. -/
+private theorem checkedCall_depth_ne_zero
+    {fs : List Func} {sevm : Sevm} {pre post final : Devm} {body : Func}
+    {gasWord inputSize : B256} {rest : List B256}
+    (stack : pre.stack =
+      gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
+        rest)
+    (crossing : Ninst.RunCompiled sevm pre call post)
+    (suffix : Func.RunCompiledTo fs sevm post
+      (iszero :::
+        (Func.revert <?>
+          Blanc.ProrataWethVault.requireCanonicalWethTrue body))
+      (.ok final)) :
+    sevm.depth ≠ 0 := by
+  have operands :
+      gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
+        rest <<+ pre.stack := by
+    rw [stack]
+    exact ⟨[], by simp [Split]⟩
+  obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
+    checkedCall_status_nonzero suffix
+  rcases of_run_call_val_with_depth operands
+      (Ninst.Run.of_runCompiled crossing) with failure | success
+  · obtain ⟨zeroPrefix, -⟩ := failure
+    have statusPrefix : status :: [] <<+ post.stack := by
+      rw [statusStack]
+      exact pref_append [status] tail
+    exact (statusNonzero (pref_head_unique zeroPrefix statusPrefix).symm).elim
+  · obtain ⟨_, _, _, _, _, _, _, positiveDepth, _⟩ := success
+    exact Nat.ne_of_gt positiveDepth
+
+/-- The actual zero-value CALL paid the parent-side gas charge that its
+configured occurrence needs. -/
+private theorem callGasAvailable_of_runCompiled
+    {sevm : Sevm} {pre post : Devm} {inputSize : B256}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (run : Ninst.RunCompiled sevm pre call post) :
+    CallGasAvailable pre inputSize := by
+  intro gasWord rest stack
+  obtain ⟨xl, _, steps⟩ := run
+  have execution := steps 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  let base := addAccessedAddress popped wethAccount
+  have address : wethAccount.toB256.toAdr = wethAccount :=
+    toAdr_toB256 wethAccount
+  have code : base.state.getCode wethAccount = pre.getCode wethAccount := rfl
+  have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
+    unfold getDelegatedCodeAddress
+    rw [if_neg config.notDelegated]
+  have delegation : accessDelegation base wethAccount =
+      ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
+    simp only [accessDelegation, code, nondelegated]
+  dsimp only [base, popped] at delegation
+  simp only [Xinst.step, Devm.pop_eq_ok stack, bind, Except.bind] at execution
+  rw [Devm.popToAdr_eq_ok
+    (devm := pre.setMach
+      ⟨wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest,
+        pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach] at execution
+  rw [Devm.pop_eq_ok
+    (devm := pre.setMach
+      ⟨0 :: 28 :: inputSize :: 0 :: 32 :: rest,
+        pre.memory, pre.gasLeft⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach
+      ⟨28 :: inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach
+      ⟨inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach] at execution
+  rw [Devm.popToNat_eq_ok
+    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach, address, delegation, Nat.add_zero] at execution
+  split at execution
+  · cases XStep.run_ofExcept_error execution
+  · rename_i charged charge
+    simpa [show (0 : B256).toNat = 0 from rfl,
+      show (28 : B256).toNat = 28 from rfl,
+      show (32 : B256).toNat = 32 from rfl] using chargeGas_le charge
+
 /-! ## Source-level exact effects and rollback -/
 
 /-- A successful source-level asset query executes the exact configured WETH
@@ -1663,9 +1759,7 @@ theorem callWethTransferFrom_worldEffect
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
     (staging : Line.Run sevm entry
       (transferFromStaging assetsWord) callPre)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
-    (gasAvailable : CallGasAvailable callPre 100)
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
@@ -1688,6 +1782,9 @@ theorem callWethTransferFrom_worldEffect
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
+  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have gasAvailable : CallGasAvailable callPre 100 :=
+    callGasAvailable_of_runCompiled config crossing
   have occurrence := transferFromStaging_occurrence config memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
@@ -1764,9 +1861,7 @@ theorem callWethTransferFrom_exactEffect
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
     (staging : Line.Run sevm entry
       (transferFromStaging assetsWord) callPre)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
-    (gasAvailable : CallGasAvailable callPre 100)
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
@@ -1782,6 +1877,9 @@ theorem callWethTransferFrom_exactEffect
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨gasWord, rest, stack, -, -⟩ :=
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
+  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have gasAvailable : CallGasAvailable callPre 100 :=
+    callGasAvailable_of_runCompiled config crossing
   have occurrence := transferFromStaging_occurrence config memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
@@ -1828,9 +1926,7 @@ theorem callWethTransfer_worldEffect
     (assetsAboveReceiver : 64 ≤ (assetsWord * 32).toNat)
     (staging : Line.Run sevm entry
       (transferStaging receiverWord assetsWord) callPre)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
-    (gasAvailable : CallGasAvailable callPre 68)
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
@@ -1854,6 +1950,9 @@ theorem callWethTransfer_worldEffect
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
+  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have gasAvailable : CallGasAvailable callPre 68 :=
+    callGasAvailable_of_runCompiled config crossing
   have occurrence := transferStaging_occurrence config memory receiverAt
     assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing
@@ -1932,9 +2031,7 @@ theorem callWethTransfer_exactEffect
     (assetsAboveReceiver : 64 ≤ (assetsWord * 32).toNat)
     (staging : Line.Run sevm entry
       (transferStaging receiverWord assetsWord) callPre)
-    (depth : sevm.depth ≠ 0)
     (dynamic : sevm.isStatic = false)
-    (gasAvailable : CallGasAvailable callPre 68)
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (suffix : Func.RunCompiledTo fs sevm callPost
       (iszero :::
@@ -1954,6 +2051,9 @@ theorem callWethTransfer_exactEffect
   obtain ⟨gasWord, rest, stack, -⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
+  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have gasAvailable : CallGasAvailable callPre 68 :=
+    callGasAvailable_of_runCompiled config crossing
   have occurrence := transferStaging_occurrence config memory receiverAt
     assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing

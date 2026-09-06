@@ -26,17 +26,6 @@ open Jaune.Ninst Ninst
 open scoped LogOutputHinv
 open Source
 
-/-- Resources required by the exact WETH `transferFrom` child of one inbound
-flow.  As with the asset query, the gas obligation is tied to the fixed
-staging line that produces the call state, not asserted universally. -/
-def InboundChildResources (sevm : Sevm) (assetsSourceWord : B256) : Prop :=
-  sevm.depth ≠ 0 ∧
-    sevm.isStatic = false ∧
-    ∀ stagingEntry callPre,
-      Line.Run sevm stagingEntry
-        (transferFromStaging assetsSourceWord) callPre →
-      CallGasAvailable callPre 100
-
 /-- Exact observation made by a successful compiled inbound flow.
 
 The WETH row moves by the exact quoted asset amount from the caller to the
@@ -100,7 +89,6 @@ theorem inboundAfterQuote_effect
         Blanc.ProrataWethVault.supplySlot)
     (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
     (stack : quote :: [] <<+ entry.stack)
-    (resources : InboundChildResources sevm assetsSourceWord)
     (run : Func.RunCompiledTo fs sevm entry
       (mstoreAt Blanc.ProrataWethVault.quoteWord +++
         Blanc.ProrataWethVault.nonzeroCaller
@@ -116,7 +104,6 @@ theorem inboundAfterQuote_effect
       receiver ≠ 0 ∧
       shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
       InboundEffect sevm receiver assets shares quote entry post := by
-  obtain ⟨depth, dynamic, gasAvailable⟩ := resources
   have scratchEnd :
       Blanc.ProrataWethVault.arithmeticScratchEnd = 896 := by decide +kernel
   obtain ⟨guardPre, callerNonzero, receiverValid, receiverNonzero,
@@ -161,6 +148,70 @@ theorem inboundAfterQuote_effect
 
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     callWethTransferFrom_trace childRun
+  obtain ⟨_, continuationRun⟩ : ∃ continuationPre,
+      Func.RunCompiledTo fs sevm continuationPre
+        (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.receiverWord +++
+          sload ::: mstoreAt Blanc.ProrataWethVault.balanceWord +++
+          Blanc.ProrataWethVault.loadWord sharesWord +++
+          Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.balanceWord +++
+          add ::: mstoreAt Blanc.ProrataWethVault.scratchWord +++
+          Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.balanceWord +++
+          Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.scratchWord +++
+          lt :::
+          (Func.revert <?>
+            (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.scratchWord +++
+              Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.receiverWord +++
+              sstore :::
+              Blanc.ProrataWethVault.loadWord sharesWord +++
+              Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.supplyWord +++
+              add ::: Blanc.ProrataWethVault.pushSupplySlot +++ sstore :::
+              Blanc.ProrataWethVault.logMintTransfer
+                (Blanc.ProrataWethVault.loadWord sharesWord) +++
+              Blanc.ProrataWethVault.logDeposit
+                (Blanc.ProrataWethVault.loadWord assetsSourceWord)
+                (Blanc.ProrataWethVault.loadWord sharesWord) +++
+              Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord +++
+              Blanc.ProrataWethVault.returnWord))) (.ok post) := by
+    obtain ⟨_, _, _, _, _, _, _, _, _, sizeRun⟩ :=
+      checkedCall_status_nonzero suffix
+    rw [Blanc.ProrataWethVault.requireCanonicalWethTrue] at sizeRun
+    obtain ⟨_, _, sizeRun⟩ := runCompiledTo_next_inv sizeRun
+    obtain ⟨_, _, sizeRun⟩ := runCompiledTo_next_inv sizeRun
+    obtain ⟨_, _, sizeRun⟩ := runCompiledTo_next_inv sizeRun
+    obtain ⟨_, _, sizeBranchRun⟩ := runCompiledTo_next_inv sizeRun
+    rcases runCompiledTo_branch_inv sizeBranchRun with
+      ⟨_, _, _, canonicalRun⟩ | ⟨_, _, _, _, _, revertRun⟩
+    · obtain ⟨_, _, canonicalRun⟩ := runCompiledTo_next_inv canonicalRun
+      obtain ⟨_, _, canonicalRun⟩ := runCompiledTo_next_inv canonicalRun
+      obtain ⟨_, _, canonicalRun⟩ := runCompiledTo_next_inv canonicalRun
+      obtain ⟨_, _, canonicalRun⟩ := runCompiledTo_next_inv canonicalRun
+      obtain ⟨_, _, canonicalBranchRun⟩ := runCompiledTo_next_inv canonicalRun
+      rcases runCompiledTo_branch_inv canonicalBranchRun with
+        ⟨bodyPre, _, _, bodyRun⟩ | ⟨_, _, _, _, _, revertRun⟩
+      · exact ⟨bodyPre, bodyRun⟩
+      · rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
+        cases impossible
+    · rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
+      cases impossible
+  have dynamic : sevm.isStatic = false := by
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_next_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_next_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, continuationRun⟩ := runCompiledTo_prepend_inv continuationRun
+    obtain ⟨_, _, branchRun⟩ := runCompiledTo_next_inv continuationRun
+    rcases runCompiledTo_branch_inv branchRun with
+      ⟨_, _, _, settleRun⟩ | ⟨_, _, _, _, _, revertRun⟩
+    · obtain ⟨_, _, settleRun⟩ := runCompiledTo_prepend_inv settleRun
+      obtain ⟨_, _, settleRun⟩ := runCompiledTo_prepend_inv settleRun
+      obtain ⟨_, storeRun, _⟩ := runCompiledTo_next_inv settleRun
+      exact of_run_sstore_not_static (Ninst.Run.of_runCompiled storeRun)
+    · rcases runCompiledTo_revert_inv revertRun with ⟨_, impossible, -⟩
+      cases impossible
   have stagingCode : Devm.getCode childEntry = Devm.getCode callPre :=
     Line.of_inv Devm.getCode (by
       unfold transferFromStaging Blanc.ProrataWethVault.loadWord mstoreAt
@@ -175,8 +226,7 @@ theorem inboundAfterQuote_effect
   obtain ⟨tailPre, movement, childForeign, childLogged, -, tailWf,
       tailWindow, tailRun⟩ :=
     callWethTransferFrom_worldEffect callConfig ⟨childWf, childReads⟩
-      (sliceBytes_of_toB256 assetsAt) (by omega) staging depth dynamic
-      (gasAvailable childEntry callPre staging) crossing suffix
+      (sliceBytes_of_toB256 assetsAt) (by omega) staging dynamic crossing suffix
   have stagingStorage : Devm.getStor childEntry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by
       unfold transferFromStaging Blanc.ProrataWethVault.loadWord mstoreAt
@@ -429,7 +479,6 @@ theorem inboundBody_effect
     (assetsAbove : 896 ≤ (assetsSourceWord * 32).toNat)
     (assetsBelow : (assetsSourceWord * 32).toNat + 32 ≤
       (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (resources : InboundChildResources sevm assetsSourceWord)
     (afterRun : Func.RunCompiledTo fs sevm afterPre
       (mstoreAt Blanc.ProrataWethVault.quoteWord +++
         Blanc.ProrataWethVault.nonzeroCaller
@@ -470,7 +519,7 @@ theorem inboundBody_effect
           (Devm.getStor afterPre sevm.currentTarget).get
             Blanc.ProrataWethVault.supplySlot
         rw [funext (getStor_eq_of_state_eq quoteFrame.1)])
-      stable afterStack resources afterRun
+      stable afterStack afterRun
   have quoteStorage : Devm.getStor quotePre = Devm.getStor afterPre :=
     funext (getStor_eq_of_state_eq quoteFrame.1)
   have storValEq : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
@@ -504,8 +553,6 @@ theorem deposit_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (childResources :
-      InboundChildResources sevm Blanc.ProrataWethVault.amountWord)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.depositAfterQuote)
     (stack : [] <<+ entry.stack)
@@ -567,7 +614,7 @@ theorem deposit_body_effect
           (Or.inl (by decide +kernel))]
         exact amountAtAfter)
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
-      (by decide +kernel) childResources afterRun
+      (by decide +kernel) afterRun
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect⟩
 
@@ -581,8 +628,6 @@ theorem mint_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (childResources :
-      InboundChildResources sevm Blanc.ProrataWethVault.quoteWord)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.mintAfterQuote)
     (stack : [] <<+ entry.stack)
@@ -642,7 +687,7 @@ theorem mint_body_effect
         exact amountAtAfter)
       (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
-      (by decide +kernel) childResources afterRun
+      (by decide +kernel) afterRun
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect⟩
 
@@ -704,11 +749,6 @@ private theorem mint_mem_vaultFuncs :
       Blanc.ProrataWethVault.vaultFuncs := by
   simp [Blanc.ProrataWethVault.vaultFuncs]
 
-/-- Resources for a compiled inbound endpoint, tied to the exact selector's
-body rather than asserted for every state. -/
-def InboundCompiledResources (sevm : Sevm) (assetsSourceWord : B256) : Prop :=
-  InboundChildResources sevm assetsSourceWord
-
 /-- Public compiled `deposit(assets, receiver)`.
 
 The vault acquires exactly `assets` WETH from the caller through the exact
@@ -721,8 +761,6 @@ theorem deposit_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
       Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
@@ -765,7 +803,7 @@ theorem deposit_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect⟩ :=
-    deposit_body_effect bodyConfig bodyWf resources
+    deposit_body_effect bodyConfig bodyWf
       depositAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, ?_, ?_⟩
@@ -787,8 +825,6 @@ theorem mint_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
       Sevm.selector sevm = selector "mint" [.uint256, .address]) :
@@ -829,7 +865,7 @@ theorem mint_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect⟩ :=
-    mint_body_effect bodyConfig bodyWf resources
+    mint_body_effect bodyConfig bodyWf
       mintAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, roomFits, ?_⟩
@@ -857,8 +893,6 @@ theorem deposit_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
       Sevm.selector sevm = selector "deposit" [.uint256, .address])
@@ -868,7 +902,7 @@ theorem deposit_preserves_conserved
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    deposit_compiled_effect config memoryWf resources run selectorEq
+    deposit_compiled_effect config memoryWf run selectorEq
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -876,8 +910,6 @@ theorem mint_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.quoteWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
       Sevm.selector sevm = selector "mint" [.uint256, .address])
@@ -887,7 +919,7 @@ theorem mint_preserves_conserved
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    mint_compiled_effect config memoryWf resources run selectorEq
+    mint_compiled_effect config memoryWf run selectorEq
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -908,8 +940,6 @@ theorem deposit_compiled_effect_named
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources :
-      InboundCompiledResources sevm Blanc.ProrataWethVault.amountWord)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
       Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
@@ -925,7 +955,7 @@ theorem deposit_compiled_effect_named
       InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
         shares shares pre post := by
   obtain ⟨-, supply, supplyEq, stable, fits, -, -, -, roomFits, effect⟩ :=
-    deposit_compiled_effect config memoryWf resources run selectorEq
+    deposit_compiled_effect config memoryWf run selectorEq
   exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, stable, roomFits,
     effect⟩
 
