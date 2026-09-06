@@ -4267,6 +4267,23 @@ lemma genericCall.step_spawn_frame
   all_goals obtain ⟨rfl, -⟩ := hs
   exact ⟨fun _ => rfl, rfl, rfl⟩
 
+lemma genericCallAmsterdam.step_spawn_frame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress stv isSt ii isz oi osz code dp nac ib = .spawn f rsm) :
+    (∀ a : Adr, f.inner.benv.state.getCode a = devm.getCode a) ∧
+      f.inner.currentTarget = target ∧ f.inner.code = code := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  exact ⟨fun _ => rfl, rfl, rfl⟩
+
 /-- A spawned create frame runs under its parent's block rules. -/
 lemma genericCreate.step_spawn_benvStat
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
@@ -4279,7 +4296,21 @@ lemma genericCreate.step_spawn_benvStat
   repeat' split at hs
   all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
   all_goals obtain ⟨rfl, -⟩ := hs
-  rfl
+  all_goals rfl
+
+lemma genericCreateAmsterdam.step_spawn_benvStat
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms
+      = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind,
+    Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals rfl
 
 /-- A spawned call frame runs under its parent's block rules. -/
 lemma genericCall.step_spawn_benvStat
@@ -4291,6 +4322,22 @@ lemma genericCall.step_spawn_benvStat
       isSt ii isz oi osz code dp = .spawn f rsm) :
     f.inner.benv.stat = sevm.benvStat := by
   simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+lemma genericCallAmsterdam.step_spawn_benvStat
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress stv isSt ii isz oi osz code dp nac ib = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
     Except.pure] at hs
   repeat' split at hs
   all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
@@ -4327,6 +4374,24 @@ lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
   · cases hs
   · exact genericCreate.step_spawn_benvStat hs
   · exact genericCall.step_spawn_benvStat hs
+
+/-- The fork transport fact for both interpreter lanes. Amsterdam changes the
+meter carried by a child, but the block statistics in its message are still
+the parent's exact `BenvStat`. -/
+lemma Xinst.step_spawn_benvStat_any {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  cases x <;>
+    simp only [Xinst.step, Bind.bind, Except.bind, Except.assert,
+      Pure.pure, Except.pure] at hs <;>
+    repeat' split at hs
+  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+  all_goals
+    first
+      | exact genericCreate.step_spawn_benvStat hs
+      | exact genericCall.step_spawn_benvStat hs
+      | exact genericCreateAmsterdam.step_spawn_benvStat hs
+      | exact genericCallAmsterdam.step_spawn_benvStat hs
 
 /-- Delegation resolution is the identity on an address whose code carries no
 EIP-7702 designator, so the resolved code address is the queried address. -/
@@ -4534,6 +4599,15 @@ lemma Evm.step_spawn_benvStat {pc : Nat} {sevm : Sevm} {devm : Devm}
     cevm.sta.benvStat = sevm.benvStat := by
   obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
   exact (Frame.enter_run_benvStat he).trans (Xinst.step_spawn_benvStat hx hleg)
+
+/-- Premise-free block-rule transport through an entered spawned frame. -/
+lemma Evm.step_spawn_benvStat_any {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
+    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
+    (he : f.enter = .run cevm) :
+    cevm.sta.benvStat = sevm.benvStat := by
+  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
+  exact (Frame.enter_run_benvStat he).trans (Xinst.step_spawn_benvStat_any hx)
 
 /-- The same, read off a suspended `Xinst` run rather than a step equation. -/
 lemma Xinst.run_slot_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
