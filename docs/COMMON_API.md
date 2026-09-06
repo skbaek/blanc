@@ -355,13 +355,21 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   actual `Rinst.runCore` implementation including every raw error arm, is in
   [`Blanc/AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean).
   `regularTransfer` is the decidable abstract transfer for the regular opcodes
-  a DRIP row can carry; `gas_safe`, `calldataload_safe`, `mload_safe`,
-  `mstore_safe`, `sload_safe`, and `sstore_safe` are the semantic proofs
-  finished so far, and `ninst_pop_safe` is the first `Ninst.step` wrapper.
+  a DRIP row can carry. `regularTransfer_safe` proves every accepted transfer
+  against actual `Rinst.run`, from exact full-stack matching and an input
+  length at most eight; `ninst_regularTransfer_safe` lifts it to `Ninst.step`
+  with the exact fall-through PC. Both include every error arm, without a
+  successful-run or adequate-gas premise. Unsupported opcodes and insufficient
+  operand shapes are rejected by the existing check. The individual
+  `gas_safe`, `calldataload_safe`, `mload_safe`, `mstore_safe`, `sload_safe`,
+  `sstore_safe`, and `ninst_pop_safe` remain available for direct composition.
   `SafeResult.map`, `SafeResult.pure_bind`, `assert_safe` (any decidable
   proposition), and `assertDynamic_safe` are the composition helpers they
-  use. The remaining regular opcodes, control flow, CALL, and the concrete
-  certificate are not yet proved here.
+  use. Control flow, CALL, decoded-table validation, and a concrete program
+  certificate remain separate obligations. The existing stack-certificate
+  recipe advises the `StepSafe` head; selection of this transfer wrapper
+  additionally needs the exact regular instruction and successful check, so
+  its discovery remains in this registry.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;

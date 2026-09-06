@@ -319,4 +319,109 @@ theorem ninst_pop_safe {evm : Evm} {word : Option B256} {words : Pattern}
   exact (chargeGas_safe gBase popped).mono
     (fun _ charged => ⟨rfl, charged⟩)
 
+/-- Every accepted regular transfer is sound for the actual interpreter,
+including all error arms. The input bound supplies room for every push;
+the successful abstract check supplies the required operands. -/
+theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
+    {input output : Pattern}
+    (matched : Matches input evm.dyna.stack) (bound : input.length ≤ 8)
+    (checked : regularTransfer instruction input = some output) :
+    SafeResult (fun post => Matches output post.stack)
+      (Rinst.run evm instruction) := by
+  have room : input.length < 1024 := by omega
+  cases instruction <;> simp only [regularTransfer] at checked
+  case add | mul | sub | div | lt | gt | eq | and | shr =>
+    simp only [Rinst.run, Rinst.runCore]
+    exact applyBinary_transfer_safe _ _ matched bound checked
+  case iszero =>
+    simp only [Rinst.run, Rinst.runCore]
+    exact applyUnary_transfer_safe _ _ matched bound checked
+  case caller | callvalue | calldatasize | timestamp =>
+    cases checked
+    exact pushUnknown_safe _ _ matched room
+  case gas =>
+    cases checked
+    exact gas_safe evm.pc evm.sta matched room
+  case calldataload =>
+    cases input with
+    | nil => simp [unaryTransfer] at checked
+    | cons word words =>
+      simp only [unaryTransfer, Option.some.injEq] at checked
+      subst output
+      exact calldataload_safe evm.pc evm.sta matched (by
+        simp only [List.length_cons] at room
+        omega)
+  case mload =>
+    cases input with
+    | nil => simp [unaryTransfer] at checked
+    | cons word words =>
+      simp only [unaryTransfer, Option.some.injEq] at checked
+      subst output
+      exact mload_safe evm.pc evm.sta matched (by
+        simp only [List.length_cons] at room
+        omega)
+  case sload =>
+    cases input with
+    | nil => simp [unaryTransfer] at checked
+    | cons word words =>
+      simp only [unaryTransfer, Option.some.injEq] at checked
+      subst output
+      exact sload_safe evm.pc evm.sta matched (by
+        simp only [List.length_cons] at room
+        omega)
+  case pop =>
+    cases input with
+    | nil => simp [dropOneTransfer] at checked
+    | cons word words =>
+      simp only [dropOneTransfer, Option.some.injEq] at checked
+      subst output
+      simp only [Rinst.run, Rinst.runCore]
+      apply ((pop_safe matched).map
+        (q := fun post => Matches words post.stack) Prod.snd
+        (fun _ popped => popped.2)).bind
+      intro post popped
+      exact chargeGas_safe gBase popped
+  case mstore =>
+    cases input with
+    | nil => simp [dropTwoTransfer] at checked
+    | cons index words =>
+      cases words with
+      | nil => simp [dropTwoTransfer] at checked
+      | cons value words =>
+        simp only [dropTwoTransfer, Option.some.injEq] at checked
+        subst output
+        exact mstore_safe evm.pc evm.sta matched
+  case sstore =>
+    cases input with
+    | nil => simp [dropTwoTransfer] at checked
+    | cons key words =>
+      cases words with
+      | nil => simp [dropTwoTransfer] at checked
+      | cons value words =>
+        simp only [dropTwoTransfer, Option.some.injEq] at checked
+        subst output
+        exact sstore_safe evm.pc evm.sta matched
+  case dup index =>
+    cases lookup : input[index]? with
+    | none => simp [lookup] at checked
+    | some word =>
+      simp only [lookup, Option.some.injEq] at checked
+      subst output
+      exact dup_safe matched (by simpa only [Fin.getElem?_fin] using lookup) room
+  case swap index => exact swap_safe matched checked
+  all_goals cases checked
+
+/-- The actual regular `Ninst` step has the checked full-stack output and
+the exact fall-through PC, or a non-stack error. No successful-run premise
+or adequate-gas assumption is needed. -/
+theorem ninst_regularTransfer_safe {evm : Evm} {instruction : Rinst}
+    {input output : Pattern}
+    (matched : Matches input evm.dyna.stack) (bound : input.length ≤ 8)
+    (checked : regularTransfer instruction input = some output) :
+    StepSafe (fun pc post => pc = evm.pc + (Ninst.reg instruction).size ∧
+      Matches output post.stack) (Ninst.step evm (.reg instruction)) := by
+  apply step_ofExecution_safe
+  exact (regularTransfer_safe matched bound checked).mono
+    (fun _ transferred => ⟨rfl, transferred⟩)
+
 end Blanc.AbstractStackSafety
