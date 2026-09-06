@@ -2954,6 +2954,96 @@ lemma chargeStateGas_error_eq {amount : Nat} {devm devm' : Devm}
     Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
   split_ifs at h with h1 h2 <;> cases h <;> rfl
 
+@[simp] lemma addAccessedStorageKey_logs (d : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey d a k).logs = d.logs := rfl
+
+@[simp] lemma Devm.withRefundCounter_logs (d : Devm) (rc : Int) :
+    (d.withRefundCounter rc).logs = d.logs := rfl
+
+@[simp] lemma Devm.creditStateGasRefund_logs (amount : Nat) (d : Devm) :
+    (Devm.creditStateGasRefund amount d).logs = d.logs := rfl
+
+@[simp] lemma Devm.setStorVal_logs (d : Devm) (a : Adr) (k v : B256) :
+    (d.setStorVal a k v).logs = d.logs := rfl
+
+lemma chargeStateGas_logs_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm.logs = devm'.logs := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+@[simp] lemma addAccessedStorageKey_output (d : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey d a k).output = d.output := rfl
+
+@[simp] lemma Devm.withRefundCounter_output (d : Devm) (rc : Int) :
+    (d.withRefundCounter rc).output = d.output := rfl
+
+@[simp] lemma Devm.creditStateGasRefund_output (amount : Nat) (d : Devm) :
+    (Devm.creditStateGasRefund amount d).output = d.output := rfl
+
+@[simp] lemma Devm.setStorVal_output (d : Devm) (a : Adr) (k v : B256) :
+    (d.setStorVal a k v).output = d.output := rfl
+
+lemma chargeStateGas_output_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm.output = devm'.output := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+/-- The three total machine writes the Amsterdam SSTORE arm makes before it
+charges leave the operand stack and memory alone. -/
+@[simp] lemma addAccessedStorageKey_memory (d : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey d a k).memory = d.memory := rfl
+
+@[simp] lemma Devm.withRefundCounter_memory (d : Devm) (rc : Int) :
+    (d.withRefundCounter rc).memory = d.memory := rfl
+
+@[simp] lemma Devm.creditStateGasRefund_memory (amount : Nat) (d : Devm) :
+    (Devm.creditStateGasRefund amount d).memory = d.memory := rfl
+
+/-- The three total machine writes the Amsterdam SSTORE arm makes before it
+charges leave the operand stack alone. -/
+@[simp] lemma addAccessedStorageKey_stack (d : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey d a k).stack = d.stack := rfl
+
+@[simp] lemma Devm.withRefundCounter_stack (d : Devm) (rc : Int) :
+    (d.withRefundCounter rc).stack = d.stack := rfl
+
+@[simp] lemma Devm.creditStateGasRefund_stack (amount : Nat) (d : Devm) :
+    (Devm.creditStateGasRefund amount d).stack = d.stack := rfl
+
+/-- Charging state gas leaves the operand stack alone, for the same reason:
+`Mach.chargeStateGas` rewrites the two meters and copies every other machine
+field through, in each of its three branches. -/
+lemma chargeStateGas_memory_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm.memory = devm'.memory := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+lemma chargeStateGas_stack_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm'.stack = devm.stack := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+/-- And the gas counter can only fall. -/
+lemma chargeStateGas_gasLeft_le {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm'.gasLeft ≤ devm.gasLeft := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> simp [Devm.gasLeft] <;> omega
+
 lemma chargeStateGas_getCode_eq {amount devm devm'}
     (h : chargeStateGas amount devm = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a :=
@@ -5739,21 +5829,31 @@ lemma of_run_reg {e : Sevm} {s s' : Devm} {r : Rinst}
 so a successful storage write witnesses a dynamic context. -/
 theorem of_run_sstore_not_static {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s sstore s') : e.isStatic = false := by
+  -- The conclusion is fork-independent, so both algorithms are walked rather
+  -- than one of them premised away: the legacy body clears `assertDynamic`
+  -- after the pops, the access split and the charge, and Amsterdam's clears it
+  -- before anything else.
+  have hstatic : ∀ (d : Devm) (t : Except (EvmError × Devm) Devm),
+      assertDynamic e d >>= (fun _ => t) = .ok s' → e.isStatic = false := by
+    intro d t hrun
+    rcases Except.bind_eq_ok hrun with ⟨_, hassert, _⟩
+    unfold assertDynamic Except.assert at hassert
+    split at hassert
+    · rename_i hdynamic
+      simpa using hdynamic
+    · exact absurd hassert (by simp)
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨_, _⟩, _, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨_, _⟩, _, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨_, _⟩, _, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨_, _, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨_, _, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, hassert, _⟩
-  unfold assertDynamic Except.assert at hassert
-  split at hassert
-  · rename_i hdynamic
-    simpa using hdynamic
-  · exact absurd hassert (by simp)
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨_, _⟩, _, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨_, _⟩, _, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨_, _⟩, _, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨_, _, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨_, _, run₇⟩
+    exact hstatic _ _ run₇
+  · exact hstatic _ _ run
 
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
     Devm.PushBurn [xs.toB256] s s' := by
@@ -5880,30 +5980,56 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
 
 lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
+  -- Both algorithms pop the same two operands and then leave the stack alone;
+  -- they differ in where the static check sits and in how the charge is
+  -- computed, so the walk is written twice rather than premised on the lane.
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
-  have hb := Devm.burn_of_chargeGas h7
-  have h_s₃ : s₃.stack = s₂.stack := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have h_s₄ : s₄.stack = s₃.stack := by
-    injection h6 with eq; rw [← eq]
-    rfl
-  injection h9 with eq
-  refine ⟨x, y, ?_⟩
-  rw [← eq]
-  show Stack.Pop [x, y] s.stack s₅.stack
-  rw [← hb.stack, h_s₄, h_s₃]
-  exact hp
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
+    have hb := Devm.burn_of_chargeGas h7
+    have h_s₃ : s₃.stack = s₂.stack := by
+      injection h4 with eq
+      split at eq <;>
+        (injection eq with eq _; subst eq;
+         simp only [addAccessedStorageKey_stack, Devm.balReadStorage_stack])
+    have h_s₄ : s₄.stack = s₃.stack := by
+      injection h6 with eq; rw [← eq]
+      rfl
+    injection h9 with eq
+    refine ⟨x, y, ?_⟩
+    rw [← eq]
+    show Stack.Pop [x, y] s.stack
+      (Devm.balReadAccount e.benvStat.rules e.currentTarget s₅).stack
+    rw [Devm.balReadAccount_stack, ← hb.stack, h_s₄, h_s₃]
+    exact hp
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
+    have h_s₃ : s₃.stack = s₂.stack := by
+      rw [(Devm.burn_of_chargeGas h4).stack.symm]
+      simp only [Devm.creditStateGasRefund_stack, Devm.withRefundCounter_stack,
+        Devm.balReadStorage_stack]
+      split <;> simp only [addAccessedStorageKey_stack]
+    injection h6 with eq
+    refine ⟨x, y, ?_⟩
+    rw [← eq]
+    show Stack.Pop [x, y] s.stack
+      (Devm.balReadAccount e.benvStat.rules e.currentTarget s₄).stack
+    rw [Devm.balReadAccount_stack, chargeStateGas_stack_eq h5, h_s₃]
+    exact hp
 
 /-- `Devm.memWrite` changes memory to the requested write. -/
 @[simp] lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
@@ -7723,24 +7849,47 @@ each produce one, and every one of them leaves `Devm.memory` alone. -/
 instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have m3 : s₂.memory = s₃.memory := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have m4 : s₃.memory = s₄.memory := by
-    injection h6 with eq; rw [← eq]; rfl
-  injection h9 with eq
-  rw [← eq]
-  show pre.memory = s₅.memory
-  exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
-    m4).trans (Devm.burn_of_chargeGas h7).memory⟩
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have m3 : s₂.memory = s₃.memory := by
+      injection h4 with eq
+      split at eq <;>
+        (injection eq with eq _; subst eq;
+         simp only [addAccessedStorageKey_memory, Devm.balReadStorage_memory])
+    have m4 : s₃.memory = s₄.memory := by
+      injection h6 with eq; rw [← eq]; rfl
+    injection h9 with eq
+    rw [← eq]
+    show pre.memory =
+      (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅).memory
+    rw [Devm.balReadAccount_memory]
+    exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
+      m4).trans (Devm.burn_of_chargeGas h7).memory
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    have m3 : s₂.memory = s₃.memory := by
+      rw [(Devm.burn_of_chargeGas h4).memory.symm]
+      simp only [Devm.creditStateGasRefund_memory,
+        Devm.withRefundCounter_memory, Devm.balReadStorage_memory]
+      split <;> simp only [addAccessedStorageKey_memory]
+    injection h6 with eq
+    rw [← eq]
+    show pre.memory =
+      (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄).memory
+    rw [Devm.balReadAccount_memory]
+    exact (((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans
+      m3).trans (chargeStateGas_memory_eq h5)⟩
 
 /-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
 a memory image across a whole `Line` rather than stopping at the first `PUSH`.
@@ -7906,12 +8055,14 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.sload := ⟨by
   split at run₁
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     exact hp.logs.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs)
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.rel_of_balReadStorage_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).logs)
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     have ha : s₁.logs =
         (addAccessedStorageKey s₁ sevm.currentTarget key).logs := rfl
     exact hp.logs.trans (ha.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs))⟩
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.rel_of_balReadStorage_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).logs))⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.sload := ⟨by
   intro pc sevm pre post run
@@ -7921,12 +8072,14 @@ scoped instance : Rinst.Hinv Devm.output Rinst.sload := ⟨by
   split at run₁
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     exact hp.output.trans
-      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output)
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.rel_of_balReadStorage_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).output)
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     have ha : s₁.output =
         (addAccessedStorageKey s₁ sevm.currentTarget key).output := rfl
     exact hp.output.trans (ha.trans
-      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output))⟩
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.rel_of_balReadStorage_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).output))⟩
 
 scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
   intro pc sevm pre post run
@@ -7941,11 +8094,13 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
   split at run₁
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     exact hpop.logs.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs)
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).logs)
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     have ha : d0.logs = (addAccessedAddress d0 word.toAdr).logs := rfl
     exact hpop.logs.trans (ha.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.push_of_push h3).logs))⟩
+      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).logs))⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
   intro pc sevm pre post run
@@ -7960,11 +8115,13 @@ scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
   split at run₁
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     exact hpop.output.trans
-      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output)
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).output)
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     have ha : d0.output = (addAccessedAddress d0 word.toAdr).output := rfl
     exact hpop.output.trans (ha.trans
-      ((Devm.burn_of_chargeGas h2).output.trans (Devm.push_of_push h3).output))⟩
+      ((Devm.burn_of_chargeGas h2).output.trans (Devm.rel_of_balReadAccount_left (fun _ _ => trivial)
+          (fun _ _ => trivial) (Devm.push_of_push h3)).output))⟩
 
 scoped instance {n} : Rinst.Hinv Devm.logs (Rinst.swap n) := ⟨by
   intro pc sevm pre post run
@@ -8087,48 +8244,100 @@ scoped instance : Rinst.Hinv Devm.output Rinst.mstore := ⟨by
 scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have l3 : s₂.logs = s₃.logs := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have l4 : s₃.logs = s₄.logs := by
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have l3 : s₂.logs = s₃.logs := by
+      injection h4 with eq
+      split at eq <;>
+        (injection eq with eq _; subst eq;
+         simp only [addAccessedStorageKey_logs, Devm.balReadStorage_logs])
+    have l4 : s₃.logs = s₄.logs := by
+      injection h6 with eq
+      rw [← eq]
+      rfl
+    injection h9 with eq
+    rw [← eq]
+    show pre.logs =
+      ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅).setStorVal
+        sevm.currentTarget x y).logs
+    rw [Devm.setStorVal_logs, Devm.balReadAccount_logs]
+    exact ((((Devm.pop_of_pop h1).logs.trans (Devm.pop_of_pop h2).logs).trans
+      l3).trans l4).trans (Devm.burn_of_chargeGas h7).logs
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    have l3 : s₂.logs = s₃.logs := by
+      rw [(Devm.burn_of_chargeGas h4).logs.symm]
+      simp only [Devm.creditStateGasRefund_logs, Devm.withRefundCounter_logs,
+        Devm.balReadStorage_logs]
+      split <;> simp only [addAccessedStorageKey_logs]
     injection h6 with eq
     rw [← eq]
-    rfl
-  injection h9 with eq
-  rw [← eq]
-  exact ((((Devm.pop_of_pop h1).logs.trans (Devm.pop_of_pop h2).logs).trans
-    l3).trans l4).trans (Devm.burn_of_chargeGas h7).logs⟩
+    show pre.logs =
+      ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄).setStorVal
+        sevm.currentTarget x y).logs
+    rw [Devm.setStorVal_logs, Devm.balReadAccount_logs]
+    exact (((Devm.pop_of_pop h1).logs.trans (Devm.pop_of_pop h2).logs).trans
+      l3).trans (chargeStateGas_logs_eq h5)⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have o3 : s₂.output = s₃.output := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have o4 : s₃.output = s₄.output := by
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have o3 : s₂.output = s₃.output := by
+      injection h4 with eq
+      split at eq <;>
+        (injection eq with eq _; subst eq;
+         simp only [addAccessedStorageKey_output, Devm.balReadStorage_output])
+    have o4 : s₃.output = s₄.output := by
+      injection h6 with eq
+      rw [← eq]
+      rfl
+    injection h9 with eq
+    rw [← eq]
+    show pre.output =
+      ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅).setStorVal
+        sevm.currentTarget x y).output
+    rw [Devm.setStorVal_output, Devm.balReadAccount_output]
+    exact ((((Devm.pop_of_pop h1).output.trans (Devm.pop_of_pop h2).output).trans
+      o3).trans o4).trans (Devm.burn_of_chargeGas h7).output
+  · rcases Except.bind_eq_ok run with ⟨_, h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨s₃, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₄, h5, h6⟩
+    have o3 : s₂.output = s₃.output := by
+      rw [(Devm.burn_of_chargeGas h4).output.symm]
+      simp only [Devm.creditStateGasRefund_output, Devm.withRefundCounter_output,
+        Devm.balReadStorage_output]
+      split <;> simp only [addAccessedStorageKey_output]
     injection h6 with eq
     rw [← eq]
-    rfl
-  injection h9 with eq
-  rw [← eq]
-  exact ((((Devm.pop_of_pop h1).output.trans (Devm.pop_of_pop h2).output).trans
-    o3).trans o4).trans (Devm.burn_of_chargeGas h7).output⟩
+    show pre.output =
+      ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄).setStorVal
+        sevm.currentTarget x y).output
+    rw [Devm.setStorVal_output, Devm.balReadAccount_output]
+    exact (((Devm.pop_of_pop h1).output.trans (Devm.pop_of_pop h2).output).trans
+      o3).trans (chargeStateGas_output_eq h5)⟩
 
 scoped instance {n} : Rinst.Hinv Devm.output (Rinst.log n) := ⟨by
   intro pc sevm pre post run
