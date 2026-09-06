@@ -595,4 +595,302 @@ theorem jinst_jumpdestTransfer_safe {evm : Evm} {input output : Pattern}
       (Step.ofJump (Jinst.run evm .jumpdest)) :=
   step_ofJump_safe (jumpdestTransfer_safe matched checked)
 
+/-! ## Terminal and CALL transfer -/
+
+/-- A successful `SafeResult` proof also excludes stack faults when only the
+terminal outcome matters. -/
+theorem SafeResult.noStackFault {postcondition : Devm → Prop}
+    {action : Execution} (safe : SafeResult postcondition action) :
+    NoStackFault action := by
+  cases action with
+  | error error =>
+      intro actualError actualPost equality
+      cases equality
+      exact safe
+  | ok post =>
+      intro actualError actualPost equality
+      cases equality
+
+/-- Lift safety through the `XStep.ofExcept` adapter used by external
+instructions. Raw errors become ordinary halted steps; successful external
+steps retain their exact done-or-spawn behavior. -/
+theorem xstep_ofExcept_safe {invariant : Nat → Devm → Prop} {pc : Nat}
+    {action : Except (EvmError × Devm) XStep}
+    (safe : SafeResult
+      (fun step => StepSafe invariant (XStep.toStep pc step)) action) :
+    StepSafe invariant (XStep.toStep pc (XStep.ofExcept action)) := by
+  cases action with
+  | error error =>
+      rcases error with ⟨actualError, post⟩
+      change NoStackFault (.error (actualError, post))
+      intro error actualPost equality
+      cases equality
+      exact safe
+  | ok step => exact safe
+
+theorem Matches.withOutput {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (output : Bytes) :
+    Matches words (pre.withOutput output).stack :=
+  matched.of_stack_eq rfl
+
+theorem Matches.withReturnData {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (data : Bytes) :
+    Matches words (pre.withReturnData data).stack :=
+  matched.of_stack_eq rfl
+
+theorem Matches.withGasLeft {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (gas : Nat) :
+    Matches words (pre.withGasLeft gas).stack :=
+  matched.of_stack_eq rfl
+
+theorem Matches.memExtends {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (ranges : List (Nat × Nat)) :
+    Matches words (pre.memExtends ranges).stack :=
+  matched.of_stack_eq rfl
+
+theorem Matches.addAccessedAddress {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (address : Adr) :
+    Matches words (addAccessedAddress pre address).stack :=
+  matched.of_stack_eq rfl
+
+/-- Delegation resolution may warm the delegated address, but it preserves the
+complete operand stack. -/
+theorem Matches.accessDelegation {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (address : Adr) :
+    Matches words (Jaune.accessDelegation pre address).2.2.2.2.stack := by
+  unfold Jaune.accessDelegation
+  cases delegated : getDelegatedCodeAddress (pre.state.getCode address) with
+  | none =>
+      simp only [delegated]
+      exact matched
+  | some target =>
+      simp only [delegated]
+      exact matched.addAccessedAddress target
+
+/-- Decidable abstract transfer for the terminal instructions used by DRIP.
+`SELFDESTRUCT` is outside the accepted family. -/
+def terminalTransfer : Linst → Pattern → Option Pattern
+  | .stop, words => some words
+  | .return_, words => dropTwoTransfer words
+  | .revert, words => dropTwoTransfer words
+  | .selfdestruct, _ => none
+
+/-- Universal terminal transfer soundness against the actual `Linst.run`.
+`RETURN` preserves the exact tail on success; `REVERT` and memory/gas failures
+remain terminal non-stack errors. -/
+theorem terminalTransfer_safe
+    {sevm : Sevm} {pre : Devm} {instruction : Linst}
+    {input output : Pattern}
+    (matched : Matches input pre.stack)
+    (checked : terminalTransfer instruction input = some output) :
+    SafeResult (fun post => Matches output post.stack)
+      (Linst.run sevm pre instruction) := by
+  cases instruction with
+  | stop =>
+      simp only [terminalTransfer, Option.some.injEq] at checked
+      subst output
+      exact matched
+  | return_ =>
+      cases input with
+      | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+      | cons index rest =>
+          cases rest with
+          | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+          | cons size words =>
+              simp only [terminalTransfer, dropTwoTransfer,
+                Option.some.injEq] at checked
+              subst output
+              simp only [Linst.run]
+              apply (popToNat_safe matched).bind
+              intro indexResult indexPopped
+              apply (popToNat_safe indexPopped).bind
+              intro sizeResult sizePopped
+              apply (chargeGas_safe
+                (sizeResult.2.extCost [(indexResult.1, sizeResult.1)])
+                sizePopped).bind
+              intro charged chargedMatch
+              exact (chargedMatch.memRead indexResult.1 sizeResult.1).withOutput _
+  | revert =>
+      cases input with
+      | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+      | cons index rest =>
+          cases rest with
+          | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+          | cons size words =>
+              simp only [terminalTransfer, dropTwoTransfer,
+                Option.some.injEq] at checked
+              subst output
+              simp only [Linst.run]
+              apply (popToNat_safe matched).bind
+              intro indexResult indexPopped
+              apply (popToNat_safe indexPopped).bind
+              intro sizeResult sizePopped
+              apply (chargeGas_safe
+                (sizeResult.2.extCost [(indexResult.1, sizeResult.1)])
+                sizePopped).bind
+              intro charged chargedMatch
+              simp [SafeResult, StackFault]
+  | selfdestruct =>
+      simp [terminalTransfer] at checked
+
+/-- The actual terminal dispatcher path has no operand-stack fault. Its halted
+success or revert does not continue the same-frame invariant. -/
+theorem linst_terminalTransfer_safe
+    {sevm : Sevm} {pre : Devm} {instruction : Linst}
+    {input output : Pattern}
+    (matched : Matches input pre.stack)
+    (checked : terminalTransfer instruction input = some output) :
+    StepSafe (fun _ post => Matches output post.stack)
+      (.halt (Linst.run sevm pre instruction)) := by
+  exact (terminalTransfer_safe matched checked).noStackFault
+
+/-- A low-depth CALL answers immediately with status zero; every other CALL
+spawns the actual child frame and resumes the original parent with status zero
+or one. This theorem covers the caller continuation only, not the arbitrary
+callee's operand stack. -/
+theorem genericCall_step_safe
+    (sevm : Sevm) (pre : Devm) (gas : Nat) (value : B256)
+    (caller target codeAddress : Adr) (shouldTransferValue isStaticcall : Bool)
+    (inputIndex inputSize outputIndex outputSize : Nat)
+    (code : ByteArray) (disablePrecompiles : Bool) (pc : Nat)
+    {words : Pattern} (matched : Matches words pre.stack)
+    (room : words.length < 1024) :
+    StepSafe (fun actualPc post =>
+      actualPc = pc ∧ Matches (none :: words) post.stack)
+      (XStep.toStep pc
+        (genericCall.step sevm pre gas value caller target codeAddress
+          shouldTransferValue isStaticcall inputIndex inputSize outputIndex
+          outputSize code disablePrecompiles)) := by
+  by_cases depth : sevm.depth = 0
+  · rw [genericCall.step_zero_depth depth (matched.length ▸ room)]
+    exact ⟨rfl, matched.push_any 0⟩
+  · rw [genericCall.step_spawn depth]
+    change ResumeSafe
+      (fun actualPc post => actualPc = pc ∧ Matches (none :: words) post.stack)
+      pc (.call (pre.withReturnData []) outputIndex outputSize)
+    apply resume_call_safe
+      (pre.withReturnData []) outputIndex outputSize
+      (matched.length ▸ room)
+    intro post flag _ stack
+    exact ⟨rfl, by
+      rw [stack]
+      exact matched.push_any flag⟩
+
+/-- Abstract CALL transfer: seven operands are removed and the eventual status
+word is prepended to the exact remaining pattern. -/
+def callTransfer : Pattern → Option Pattern
+  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: words => some (none :: words)
+  | _ => none
+
+/-- Universal CALL transfer soundness through the actual `Xinst.step` and
+`XStep.toStep` path. It covers pop, access/delegation, memory, gas, static,
+insufficient-balance, depth-zero, child-spawn, child-settlement and resumption
+arms without assuming concrete success or adequate gas. -/
+theorem callTransfer_safe (pc : Nat)
+    {evm : Evm} {input output : Pattern}
+    (matched : Matches input evm.dyna.stack)
+    (bound : input.length ≤ 8)
+    (checked : callTransfer input = some output) :
+    StepSafe (fun actualPc post =>
+      actualPc = pc ∧ Matches output post.stack)
+      (XStep.toStep pc (Xinst.step evm.sta evm.dyna .call)) := by
+  cases input with
+  | nil => simp [callTransfer] at checked
+  | cons gasWord rest =>
+      cases rest with
+      | nil => simp [callTransfer] at checked
+      | cons calleeWord rest =>
+          cases rest with
+          | nil => simp [callTransfer] at checked
+          | cons valueWord rest =>
+              cases rest with
+              | nil => simp [callTransfer] at checked
+              | cons inputIndexWord rest =>
+                  cases rest with
+                  | nil => simp [callTransfer] at checked
+                  | cons inputSizeWord rest =>
+                      cases rest with
+                      | nil => simp [callTransfer] at checked
+                      | cons outputIndexWord rest =>
+                          cases rest with
+                          | nil => simp [callTransfer] at checked
+                          | cons outputSizeWord words =>
+                              simp only [callTransfer, Option.some.injEq]
+                                at checked
+                              subst output
+                              have room : words.length < 1024 := by
+                                simp only [List.length_cons] at bound
+                                omega
+                              simp only [Xinst.step]
+                              apply xstep_ofExcept_safe
+                              apply (pop_safe matched).bind
+                              intro gasResult gasPopped
+                              apply (popToAdr_safe gasPopped.2).bind
+                              intro calleeResult calleePopped
+                              apply (pop_safe calleePopped).bind
+                              intro valueResult valuePopped
+                              apply (popToNat_safe valuePopped.2).bind
+                              intro inputIndexResult inputIndexPopped
+                              apply (popToNat_safe inputIndexPopped).bind
+                              intro inputSizeResult inputSizePopped
+                              apply (popToNat_safe inputSizePopped).bind
+                              intro outputIndexResult outputIndexPopped
+                              apply (popToNat_safe outputIndexPopped).bind
+                              intro outputSizeResult outputSizePopped
+                              let ranges :=
+                                [(inputIndexResult.1, inputSizeResult.1),
+                                  (outputIndexResult.1, outputSizeResult.1)]
+                              let accessed := addAccessedAddress
+                                outputSizeResult.2 calleeResult.1
+                              have accessedMatch : Matches words accessed.stack :=
+                                outputSizePopped.addAccessedAddress calleeResult.1
+                              rcases delegation :
+                                  accessDelegation accessed calleeResult.1 with
+                                ⟨disablePrecompiles, newCodeAddress, code,
+                                  delegatedAccessGasCost, delegated⟩
+                              have delegatedMatch : Matches words
+                                  delegated.stack := by
+                                have preserved :=
+                                  accessedMatch.accessDelegation calleeResult.1
+                                rw [delegation] at preserved
+                                exact preserved
+                              apply (chargeGas_safe _ delegatedMatch).bind
+                              intro charged chargedMatch
+                              apply (assert_safe _
+                                noStackFault_writeInStaticContext).bind
+                              intro _ _
+                              have extendedMatch : Matches words
+                                  (charged.memExtends ranges).stack :=
+                                chargedMatch.memExtends ranges
+                              by_cases insufficient :
+                                  ((charged.memExtends ranges).getAcct
+                                    evm.sta.currentTarget).bal < valueResult.1
+                              · rw [if_pos insufficient]
+                                apply (push_safe 0 extendedMatch room).bind
+                                intro pushed pushedMatch
+                                exact ⟨rfl,
+                                  ((pushedMatch.withReturnData []).withGasLeft _).forget_head⟩
+                              · rw [if_neg insufficient]
+                                exact genericCall_step_safe
+                                  evm.sta (charged.memExtends ranges) _
+                                  valueResult.1 evm.sta.currentTarget
+                                  calleeResult.1 newCodeAddress true false
+                                  inputIndexResult.1 inputSizeResult.1
+                                  outputIndexResult.1 outputSizeResult.1 code
+                                  disablePrecompiles pc extendedMatch room
+
+/-- The actual `Ninst.step` CALL wrapper has the checked eventual caller stack
+and exact one-byte continuation PC, whether the status is produced immediately
+or after arbitrary child settlement. -/
+theorem ninst_callTransfer_safe
+    {evm : Evm} {input output : Pattern}
+    (matched : Matches input evm.dyna.stack)
+    (bound : input.length ≤ 8)
+    (checked : callTransfer input = some output) :
+    StepSafe (fun pc post =>
+      pc = evm.pc + (Ninst.exec .call).size ∧ Matches output post.stack)
+      (Ninst.step evm (.exec .call)) := by
+  unfold Ninst.step
+  exact callTransfer_safe _ matched bound checked
+
 end Blanc.AbstractStackSafety

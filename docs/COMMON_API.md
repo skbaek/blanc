@@ -367,17 +367,32 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `sstore_safe`, and `ninst_pop_safe` remain available for direct composition.
   `SafeResult.map`, `SafeResult.pure_bind`, `assert_safe` (any decidable
   proposition), `assert_true_safe`, and `assertDynamic_safe` are the
-  composition helpers they use. `jumpTransfer`, `jumpiTransfer`, and
+  composition helpers they use. `SafeResult.noStackFault` and
+  `xstep_ofExcept_safe` connect terminal/external outcomes to `StepSafe`;
+  the `Matches` update lemmas for output, return data, gas, memory extension,
+  accessed addresses, and delegation resolution preserve the complete stack
+  through CALL staging. `jumpTransfer`, `jumpiTransfer`, and
   `jumpdestTransfer` are universal decidable transfers for the exact-destination
   `JUMP`, exact-destination/arbitrary-condition `JUMPI`, and stack-preserving
   `JUMPDEST` shapes. Their `_safe` theorems expose the actual taken target,
   `JUMPI` one-byte fall-through, and successful `jumpable` check while allowing
   gas and invalid-target failures as non-stack errors. The `jinst_*Transfer_safe`
   wrappers lift those facts to the actual `Step.ofJump (Jinst.run ...)` step.
-  CALL, decoded-table validation, and a concrete program certificate remain
-  separate obligations. The existing stack-certificate recipe advises the
-  `StepSafe` head; selecting a transfer wrapper additionally needs the exact
-  instruction and successful check, so discovery remains in this registry.
+  `terminalTransfer` covers `STOP`, `RETURN`, and `REVERT` through actual
+  `Linst.run`; `terminalTransfer_safe` retains the successful RETURN tail and
+  all non-stack error arms, while `linst_terminalTransfer_safe` is the actual
+  halted dispatcher path. `callTransfer` removes CALL's seven operands and
+  prepends its eventual status word. `callTransfer_safe` follows actual
+  `Xinst.step` through access/delegation, gas, static, insufficient-balance,
+  depth-zero, child-spawn and resumption behavior, and
+  `ninst_callTransfer_safe` fixes the actual one-byte parent continuation PC.
+  `genericCall_step_safe` makes the caller/callee boundary explicit: it proves
+  the caller's status-word continuation for arbitrary child settlement and
+  does not assert operand-stack safety of arbitrary callee code. Decoded-table
+  validation and a concrete program certificate remain separate obligations.
+  The existing stack-certificate recipe advises the `StepSafe` head; selecting
+  a transfer wrapper additionally needs the exact instruction and successful
+  check, so discovery remains in this registry.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
