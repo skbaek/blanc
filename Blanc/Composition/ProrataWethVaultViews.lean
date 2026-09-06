@@ -45,6 +45,40 @@ def TotalAssetsCompiledResources (sevm : Sevm) (post : Devm) : Prop :=
   TotalAssetsCompiledResourcesFor sevm post
     Blanc.ProrataWethVault.totalAssets
 
+/-- A successful vault balance query had room to enter its STATICCALL child.
+The depth fact comes from the actual crossing and the executed zero-status
+guard, independently of the configured asset and any call-gas premise. -/
+private theorem readTotalAssets_depth_ne_zero
+    {fs : List Func} {sevm : Sevm} {entry final : Devm} {body : Func}
+    (memoryWf : Mem.Wf entry.memory)
+    (run : Func.RunCompiledTo fs sevm entry
+      (Blanc.ProrataWethVault.readTotalAssets body) (.ok final)) :
+    sevm.depth ≠ 0 := by
+  have memory : MemoryImage entry entry.memory.data.toList := by
+    refine ⟨memoryWf, ?_⟩
+    intro index
+    simp
+  obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
+    readTotalAssets_trace run
+  obtain ⟨gasWord, rest, stack, -, -⟩ :=
+    balanceOfStaging_boundary memory staging
+  have operands :
+      gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
+        callPre.stack := by
+    rw [stack]
+    exact ⟨[], by simp [Split]⟩
+  obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
+    checkedCall_status_nonzero suffix
+  rcases of_run_staticcall_val_with_depth operands
+      (Ninst.Run.of_runCompiled crossing) with failure | success
+  · obtain ⟨zeroPrefix, -, -⟩ := failure
+    have statusPrefix : status :: [] <<+ callPost.stack := by
+      rw [statusStack]
+      exact pref_append [status] tail
+    exact (statusNonzero (pref_head_unique zeroPrefix statusPrefix).symm).elim
+  · obtain ⟨_, _, _, _, _, _, _, positiveDepth, _⟩ := success
+    exact Nat.ne_of_gt positiveDepth
+
 /-- Exact body effect of `totalAssets`: the configured WETH program is read at
 the vault address, every account's storage and the parent log frame are
 preserved, and the returned ABI word is that pre-call WETH balance. -/
@@ -62,6 +96,7 @@ theorem totalAssets_body_effect
     refine ⟨memoryWf, ?_⟩
     intro index
     simp
+  have depth := readTotalAssets_depth_ne_zero memoryWf run
   unfold Blanc.ProrataWethVault.totalAssets at run
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
@@ -77,7 +112,7 @@ theorem totalAssets_body_effect
     exact config.code
   obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
       wordPrefix, -, -, -, returnRun⟩ :=
-    readTotalAssets_exactEffect callConfig memory staging resources.1
+    readTotalAssets_exactEffect callConfig memory staging depth
       (resources.2 callPre staging) crossing suffix
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
