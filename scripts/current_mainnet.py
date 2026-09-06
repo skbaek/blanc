@@ -50,7 +50,7 @@ _EXPECTED: dict[str, Any] = {
         "packages/testing/src/execution_testing/client_clis/transition_tool.py",
     ],
     "overlayDiffSha256": (
-        "fc0048871d3f0546d95401f1727e4828523ea46269cbea461ceefeaf13042ea8"
+        "5a27d6fc16dc59b393e8d1dd31c787d4299f237880d08791f5e4dde1004299aa"
     ),
     "rootEnv": "JAUNE_T8N_TARGET",
     "defaultRoot": "~/execution-specs-t8n-amsterdam",
@@ -499,6 +499,13 @@ def verify_target(
         [
             "-c",
             "core.autocrlf=false",
+            # `core.abbrev=auto` sizes the `index <old>..<new>` object names from
+            # the repository's own object count, so the same four-file overlay
+            # hashes differently in a shallow clone, a full clone, and a clone
+            # that has since gained objects. Pinning the full 40-hex rendering
+            # makes the digest a function of the compared content alone.
+            "-c",
+            "core.abbrev=40",
             "diff",
             "--no-ext-diff",
             "--no-textconv",

@@ -8,9 +8,9 @@
           "**/*.pyc",
           "**/*.pyo"
         ],
-        "fileRecords": 4371,
+        "fileRecords": 3272,
         "relativeRoot": ".venv/lib/python3.11/site-packages",
-        "sha256": "5f1dea4e0153ee73c799f9e454f10044af00491937fba3e86f33209feaa0583c"
+        "sha256": "55bb71b598d154779d6db5cdf00b91631897de129c79c733d0cecefe9cd7ec00"
       }
     },
     "macos-arm64": {

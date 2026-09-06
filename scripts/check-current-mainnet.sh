@@ -60,7 +60,7 @@ exec /usr/bin/env -i "${CHILD_ENV[@]}" \
     --_expected-repository https://github.com/ethereum/execution-specs.git \
     --_expected-upstream 9d6e6f8352a0f76e7e8803722d1a2798fa4f0a96 \
     --_expected-checkout 827a1cad9c9c8528512f90a06888c8bd9171d9ae \
-    --_expected-overlay-sha fc0048871d3f0546d95401f1727e4828523ea46269cbea461ceefeaf13042ea8 \
+    --_expected-overlay-sha 5a27d6fc16dc59b393e8d1dd31c787d4299f237880d08791f5e4dde1004299aa \
     --_expected-overlay-path packages/testing/src/execution_testing/client_clis/__init__.py \
     --_expected-overlay-path packages/testing/src/execution_testing/client_clis/clis/jaune.py \
     --_expected-overlay-path packages/testing/src/execution_testing/client_clis/tests/test_jaune.py \

@@ -28,7 +28,7 @@
         "packages/testing/src/execution_testing/client_clis/tests/test_jaune.py",
         "packages/testing/src/execution_testing/client_clis/transition_tool.py"
       ],
-      "diffSha256": "fc0048871d3f0546d95401f1727e4828523ea46269cbea461ceefeaf13042ea8"
+      "diffSha256": "5a27d6fc16dc59b393e8d1dd31c787d4299f237880d08791f5e4dde1004299aa"
     },
     "rootEnv": "JAUNE_T8N_TARGET",
     "defaultRoot": "~/execution-specs-t8n-amsterdam",

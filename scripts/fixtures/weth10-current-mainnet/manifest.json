@@ -241,7 +241,7 @@
       "macos-arm64"
     ],
     "schema": 1,
-    "sha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
+    "sha256": "2bf55ea3436b5071ebb2e407057016c2ed3e693f2468a4a95eaf4de3c2f2cdd2",
     "targetCheckoutCommit": "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
   },
   "timestampPin": {
