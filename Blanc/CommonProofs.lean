@@ -1172,6 +1172,26 @@ lemma chargeGas_instructionFrame (cost : Nat) (d : Devm) :
   exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
     (chargeGas_machFrame cost d)
 
+/-- The Amsterdam step lemmas, in the shape the frame walks want them. Charging
+state gas is a machine operation exactly as charging execution gas is; crediting
+the refund and setting the refund counter are a machine write and a meta write,
+and `Devm.InstructionFrame` pins neither. Adding them here means the two SSTORE
+algorithms are each a short chain rather than a walk written twice. -/
+lemma chargeStateGas_instructionFrame (amount : Nat) (d : Devm) :
+    Execution.Rel Devm.InstructionFrame d (chargeStateGas amount d) := by
+  exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
+    (liftMachExecution_machFrame (Mach.chargeStateGas amount) d)
+
+lemma Devm.creditStateGasRefund_instructionFrame (amount : Nat) (d : Devm) :
+    Devm.InstructionFrame d (Devm.creditStateGasRefund amount d) :=
+  Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
+
+lemma Devm.withRefundCounter_instructionFrame (d : Devm) (rc : Int) :
+    Devm.InstructionFrame d (d.withRefundCounter rc) := by
+  unfold Devm.withRefundCounter
+  exact Devm.instructionFrame_setMachMeta d
+    ⟨d.mach, {d.meta with refundCounter := rc}⟩ ⟨rfl, rfl⟩
+
 lemma Devm.popToNat_machFrame (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
   exact liftMach_machFrame Mach.popToNat d
@@ -1370,6 +1390,26 @@ lemma Outcome.Rel.bindExecution
           have h := hnext x.1 x.2
           rw [hn] at h
           simpa only [Except.bind_ok, hn, id_eq, Execution.Rel, Outcome.Rel] using htrans hout h
+
+/-- `bindExecution` with the continuation taking the pair rather than its two
+projections.
+
+The two are interchangeable in what they prove, and this one is what a `do`
+block's own elaboration produces: `let ⟨x, d⟩ ← out` becomes
+`out >>= fun p => match p with …`, which unifies with `next p` first-order and
+does **not** unify with `next p.1 p.2`. Using the projection form there forces
+the caller to spell the whole continuation out, and for a body the size of
+`SSTORE`'s two schedules that is both unreadable and past the elaborator's
+heartbeat budget — which the proof-debt gate rightly refuses to raise. -/
+lemma Outcome.Rel.bindExecutionPair
+    {R : Devm → Devm → Prop} (htrans : TransitiveRel R)
+    {pre : Devm} {out : Except (EvmError × Devm) (α × Devm)}
+    {next : α × Devm → Execution}
+    (hout : Outcome.Rel Prod.snd Prod.snd R pre out)
+    (hnext : ∀ p : α × Devm, Execution.Rel R p.2 (next p)) :
+    Execution.Rel R pre (out >>= next) :=
+  Outcome.Rel.bindExecution htrans (next := fun x d => next (x, d)) hout
+    (fun x d => hnext (x, d))
 
 lemma Execution.Rel.bind
     {R : Devm → Devm → Prop} (htrans : TransitiveRel R)
@@ -2363,91 +2403,110 @@ lemma Rinst.tstore_runCore_transientWriteFrame
     · exact body pre
     · exact Devm.transientWriteFrame_refl pre
 
+/-- The tail both SSTORE algorithms end in: the read recorder is an instruction
+frame and the storage write is the only world change, so the frame closes on the
+pair however the rules routed the charge. -/
+private lemma sstore_tail_stateWriteFrame
+    (rules : ForkRules) (ct : Adr) (key value : B256) (d : Devm) :
+    Devm.StateWriteFrame d
+      ((Devm.balReadAccount rules ct d).setStorVal ct key value) :=
+  Devm.stateWriteFrame_trans
+    (Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.balReadAccount_instructionFrame rules ct d))
+    (Devm.setStorVal_stateWriteFrame _ ct key value)
+
+/-- `SSTORE` writes storage and nothing else in the frame's sight.
+
+Since the Amsterdam series this is two algorithms — the legacy schedule with
+its refund counter, and `sstoreAmsterdamGasCost`/`sstoreAmsterdamStateRefund`/
+`sstoreAmsterdamStateGas` with a state-gas charge and a reservoir credit — but
+the claim is only a frame, and every step of either is an instruction frame
+except the single storage write they share. So each arm is the same short
+chain into `sstore_tail_stateWriteFrame`, and the walk is not written twice. -/
 lemma Rinst.sstore_runCore_stateWriteFrame
     (pc : Nat) (pre : Devm) (sevm : Sevm) :
     Execution.Rel Devm.StateWriteFrame pre
       (Rinst.runCore pc pre sevm .sstore) := by
+  have step : ∀ {d d' : Devm}, Devm.InstructionFrame d d' →
+      Devm.StateWriteFrame d d' :=
+    fun h => Devm.instructionFrame_refines_stateWriteFrame h
+  have popSW : ∀ d : Devm,
+      Outcome.Rel Prod.snd Prod.snd Devm.StateWriteFrame d d.pop :=
+    fun d => Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (Devm.pop_instructionFrame d)
+  have chargeSW : ∀ (c : Nat) (d : Devm),
+      Execution.Rel Devm.StateWriteFrame d (chargeGas c d) :=
+    fun c d => Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (chargeGas_instructionFrame c d)
+  have chargeStateSW : ∀ (c : Nat) (d : Devm),
+      Execution.Rel Devm.StateWriteFrame d (chargeStateGas c d) :=
+    fun c d => Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
+      (chargeStateGas_instructionFrame c d)
+  -- Since the Amsterdam series this is two algorithms — the legacy schedule
+  -- with its refund counter, and `sstoreAmsterdamGasCost` /
+  -- `sstoreAmsterdamStateRefund` / `sstoreAmsterdamStateGas` with a state-gas
+  -- charge and a reservoir credit. The claim is only a frame, and in both every
+  -- step is an instruction frame except the single storage write they share, so
+  -- both walks are the same shape and end in `sstore_tail_stateWriteFrame`.
   simp only [Rinst.runCore]
-  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-      (Devm.pop_instructionFrame pre)) (next := fun key d => do
-        let ⟨value, d⟩ ← d.pop
-        .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
-        let ct := sevm.currentTarget
-        let original := getOrigStorVal sevm ct key
-        let current := d.getStorVal ct key
-        let ⟨d3, gas2⟩ ← .ok <|
-          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
-            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
-        let gas3 ← .ok <|
-          if original = current ∧ current ≠ value then
-            if original = 0 then gas2 + gasStorageSet
-            else gas2 + (gasStorageUpdate - gasColdSload)
-          else gas2 + gasWarmAccess
-        let d4 ← .ok <| d3.withRefundCounter
-          (sstoreNewRefundCounter sevm.benvStat.rules.gas value original current d3.refundCounter)
-        let d5 ← chargeGas gas3 d4
-        assertDynamic sevm d5
-        .ok (d5.setStorVal ct key value)) ?_
-  intro key d
-  refine Outcome.Rel.bindExecution Devm.stateWriteFrame_trans
-    (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-      (Devm.pop_instructionFrame d)) (next := fun value d => do
-        .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
-        let ct := sevm.currentTarget
-        let original := getOrigStorVal sevm ct key
-        let current := d.getStorVal ct key
-        let ⟨d3, gas2⟩ ← .ok <|
-          if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
-            (addAccessedStorageKey d ct key, gasColdSload) else (d, 0)
-        let gas3 ← .ok <|
-          if original = current ∧ current ≠ value then
-            if original = 0 then gas2 + gasStorageSet
-            else gas2 + (gasStorageUpdate - gasColdSload)
-          else gas2 + gasWarmAccess
-        let d4 ← .ok <| d3.withRefundCounter
-          (sstoreNewRefundCounter sevm.benvStat.rules.gas value original current d3.refundCounter)
-        let d5 ← chargeGas gas3 d4
-        assertDynamic sevm d5
-        .ok (d5.setStorVal ct key value)) ?_
-  intro value d
-  unfold Except.assert
-  dsimp only
   split
-  · simp only [Except.bind_ok]
-    let d3gas : Devm × Nat :=
-      if (sevm.currentTarget, key) ∉ d.accessedStorageKeys then
-        (addAccessedStorageKey d sevm.currentTarget key, gasColdSload)
-      else (d, 0)
-    let gas3 :=
-      if getOrigStorVal sevm sevm.currentTarget key =
-          d.getStorVal sevm.currentTarget key ∧
-          d.getStorVal sevm.currentTarget key ≠ value then
-        if getOrigStorVal sevm sevm.currentTarget key = 0 then
-          d3gas.2 + gasStorageSet
-        else d3gas.2 + (gasStorageUpdate - gasColdSload)
-      else d3gas.2 + gasWarmAccess
-    let d4 : Devm := d3gas.1.withRefundCounter (
-      sstoreNewRefundCounter sevm.benvStat.rules.gas value
-        (getOrigStorVal sevm sevm.currentTarget key)
-        (d.getStorVal sevm.currentTarget key) d3gas.1.refundCounter)
-    change Execution.Rel Devm.StateWriteFrame d
-      (chargeGas gas3 d4 >>= fun d5 =>
-        assertDynamic sevm d5 >>= fun _ =>
-          .ok (d5.setStorVal sevm.currentTarget key value))
-    have hd4 : Devm.StateWriteFrame d d4 := by
-      unfold d4 d3gas
-      split <;> exact Devm.stateWriteFrame_of_world_eq rfl rfl rfl rfl
-    apply Execution.Rel.bind Devm.stateWriteFrame_trans
-      (Execution.Rel.trans_left Devm.stateWriteFrame_trans hd4
-        (Outcome.Rel.mono Devm.instructionFrame_refines_stateWriteFrame
-          (chargeGas_instructionFrame gas3 d4)))
-    intro d5
-    unfold assertDynamic Except.assert
+  · refine Outcome.Rel.bindExecutionPair Devm.stateWriteFrame_trans
+      (popSW pre) (fun p => ?_)
+    refine Outcome.Rel.bindExecutionPair Devm.stateWriteFrame_trans
+      (popSW p.2) (fun q => ?_)
+    unfold Except.assert
     split
-    · exact Devm.setStorVal_stateWriteFrame d5 sevm.currentTarget key value
-    · exact Devm.stateWriteFrame_refl d5
-  · exact Devm.stateWriteFrame_refl d
+    · simp only [Except.bind_ok]
+      refine Execution.Rel.bind Devm.stateWriteFrame_trans ?_ (fun d5 => ?_)
+      · refine Execution.Rel.trans_left Devm.stateWriteFrame_trans ?_
+          (chargeSW _ _)
+        refine Devm.stateWriteFrame_trans
+          (step (Devm.balReadStorage_instructionFrame sevm.benvStat.rules
+            sevm.currentTarget p.1 q.2)) ?_
+        refine Devm.stateWriteFrame_trans ?_
+          (step (Devm.withRefundCounter_instructionFrame _ _))
+        split <;>
+          first
+            | exact step (addAccessedStorageKey_instructionFrame _ _ _)
+            | exact Devm.stateWriteFrame_refl _
+      · unfold assertDynamic Except.assert
+        split
+        · exact sstore_tail_stateWriteFrame _ sevm.currentTarget p.1 q.1 d5
+        · exact Devm.stateWriteFrame_refl d5
+    · exact Devm.stateWriteFrame_refl q.2
+  · unfold assertDynamic Except.assert
+    split
+    · simp only [Except.bind_ok]
+      refine Outcome.Rel.bindExecutionPair Devm.stateWriteFrame_trans
+        (popSW pre) (fun p => ?_)
+      refine Outcome.Rel.bindExecutionPair Devm.stateWriteFrame_trans
+        (popSW p.2) (fun q => ?_)
+      -- the metered schedule asserts before it charges
+      by_cases hg :
+          max (if (sevm.currentTarget, p.1) ∉ q.2.accessedStorageKeys then
+              gasColdSload else gasWarmAccess) (gCallStipend + 1) ≤ q.2.gasLeft
+      · rw [if_pos hg]
+        simp only [Except.bind_ok]
+        refine Execution.Rel.bind Devm.stateWriteFrame_trans ?_ (fun devm => ?_)
+        · refine Execution.Rel.trans_left Devm.stateWriteFrame_trans ?_
+            (chargeSW _ _)
+          refine Devm.stateWriteFrame_trans ?_
+            (Devm.stateWriteFrame_trans
+              (step (Devm.balReadStorage_instructionFrame sevm.benvStat.rules
+                sevm.currentTarget p.1 _))
+              (Devm.stateWriteFrame_trans
+                (step (Devm.withRefundCounter_instructionFrame _ _))
+                (step (Devm.creditStateGasRefund_instructionFrame _ _))))
+          split <;>
+            first
+              | exact step (addAccessedStorageKey_instructionFrame _ _ _)
+              | exact Devm.stateWriteFrame_refl _
+        · refine Execution.Rel.bind Devm.stateWriteFrame_trans
+            (chargeStateSW _ devm) (fun devm' => ?_)
+          exact sstore_tail_stateWriteFrame _ sevm.currentTarget p.1 q.1 devm'
+      · rw [if_neg hg]
+        exact Devm.stateWriteFrame_refl q.2
+    · exact Devm.stateWriteFrame_refl pre
 
 theorem Rinst.run_instructionFrame
     (pc : Nat) (sevm : Sevm) (pre : Devm) (r : Rinst)
