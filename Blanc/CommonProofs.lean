@@ -4385,6 +4385,11 @@ lemma genericCreate.step_spawn_frame
     (devm.withReturnData []).getCode a = devm.getCode a := by
   rfl
 
+@[simp] lemma Devm.restoreChildGas_getCode
+    (gas reservoir : Nat) (devm : Devm) (a : Adr) :
+    (devm.restoreChildGas gas reservoir).getCode a = devm.getCode a := by
+  rfl
+
 lemma genericCreateAmsterdam.step_spawn_frame
     {sevm : Sevm} {state : StateGasRules} {devm : Devm}
     {endowment : B256} {newAddress : Adr} {mi ms : Nat}
@@ -4480,6 +4485,177 @@ lemma genericCallAmsterdam.step_spawn_frame
   all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
   all_goals obtain ⟨rfl, -⟩ := hs
   exact ⟨fun _ => rfl, rfl, rfl⟩
+
+/-- The metered Amsterdam call wrapper preserves code. The preflight return
+restores gas and possibly a state-gas refund, while the spawn path delegates
+world changes to the child and then uses Amsterdam settlement. -/
+lemma genericCallAmsterdam.codePreserve
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
+    (run : XStep.Run
+      (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+        target codeAddress stv isSt ii isz oi osz code dp nac ib) xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a ha
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    split <;> simp only [Devm.creditStateGasRefund_getCode,
+      Devm.restoreChildGas_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    rw [Devm.push_getCode_gen heq a]
+    split <;> simp only [Devm.creditStateGasRefund_getCode,
+      Devm.restoreChildGas_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨r, hframe, rfl⟩ := run
+    have hmsg :
+        ({ callMsg sevm (devm.withReturnData []) gas value caller target
+            codeAddress stv isSt
+            ((devm.withReturnData []).memory.data.sliceD ii isz 0) code dp with
+            stateGasGrant := reservoir }).benv.state.getCode a =
+          (devm.withReturnData []).getCode a := by
+      exact callMsg_benv_state_getCode
+        (sevm := sevm) (evm1 := devm.withReturnData []) (gas := gas)
+        (value := value) (caller := caller) (target := target)
+        (codeAddress := codeAddress) (shouldTransferValue := stv)
+        (isStaticcall := isSt)
+        (calldata := (devm.withReturnData []).memory.data.sliceD ii isz 0)
+        (code := code) (disablePrecompiles := dp) a
+    rw [Resume.callAmsterdam_getCode ?_]
+    · rfl
+    · rw [ProcessMessage.codePreserve inv hframe a
+          (by rw [hmsg, Devm.withReturnData_getCode]; exact ha)]
+      exact hmsg
+
+lemma genericCreateAmsterdam.spawn_codePreserve
+    {sevm : Sevm} {state : StateGasRules} {base parent : Devm}
+    {createGas reservoir : Nat} {endowment : B256} {newAddress : Adr}
+    {calldata : Bytes} {newAccountCharged : Bool}
+    {xl : Xlot} {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (inv : xl.InvGetCode)
+    (hparent : ∀ a : Adr, parent.getCode a = base.getCode a)
+    (hfresh : base.getCode newAddress = .empty)
+    (hframe : RunFrame
+      (Frame.ofCreate
+        { createMsg sevm parent createGas endowment newAddress calldata with
+          stateGasGrant := reservoir }) xl r) :
+    Execution.CodePreserve base
+      ((Resume.createAmsterdam state parent newAddress newAccountCharged).run r) := by
+  intro a ha
+  have hne : a ≠ newAddress := by
+    intro heq
+    rw [heq, hfresh] at ha
+    exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
+  have hmsg :
+      ({ createMsg sevm parent createGas endowment newAddress calldata with
+        stateGasGrant := reservoir }).benv.state.getCode a = parent.getCode a := by
+    exact createMsg_benv_state_getCode
+      (sevm := sevm) (devm := parent) (createGas := createGas)
+      (endowment := endowment) (newAddress := newAddress)
+      (calldata := calldata) a
+  rw [Resume.createAmsterdam_getCode ?_, hparent a]
+  rw [ProcessCreateMessage.codePreserve inv hframe a hne
+      (by rw [hmsg, hparent a]; exact ha)]
+  exact hmsg
+
+/-- The metered Amsterdam create wrapper can only install code at the fresh
+child address; the ordinary `Execution.CodePreserve` premise excludes that
+address from the queried code support. -/
+lemma genericCreateAmsterdam.codePreserve
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
+    (run : XStep.Run
+      (genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms)
+      xl exn) : Execution.CodePreserve devm exn := by
+  intro a ha
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨-, rfl⟩ := run
+    rw [chargeStateGas_getCode_gen
+      ‹chargeStateGas state.newAccount _ = .error _› a,
+      Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+      Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.incrNonce_getCode, Devm.withholdCreateGas_getCode]
+    have hc := chargeStateGas_getCode_gen
+      ‹chargeStateGas state.newAccount _ = .ok _› a
+    dsimp only [Execution.getCode] at hc
+    exact hc.trans (by simp only [Devm.balReadAccount_getCode,
+      addAccessedAddress_getCode, Devm.withReturnData_getCode])
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.incrNonce_getCode, Devm.withholdCreateGas_getCode]
+    have hc := chargeStateGas_getCode_gen
+      ‹chargeStateGas state.newAccount _ = .ok _› a
+    dsimp only [Execution.getCode] at hc
+    exact hc.trans (by simp only [Devm.balReadAccount_getCode,
+      addAccessedAddress_getCode, Devm.withReturnData_getCode])
+  · obtain ⟨r, hframe, rfl⟩ := run
+    rename_i _ _ _ charged hcharge hcollision
+    have hparent : ∀ b : Adr,
+        ((charged.withholdCreateGas.2.drainStateGasReservoir.2).incrNonce
+          sevm.currentTarget).getCode b = devm.getCode b := by
+      intro b
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode]
+      have hc := chargeStateGas_getCode_gen hcharge b
+      dsimp only [Execution.getCode] at hc
+      exact hc.trans (by simp only [Devm.balReadAccount_getCode,
+        addAccessedAddress_getCode, Devm.withReturnData_getCode])
+    have hfresh : devm.getCode newAddress = .empty := by
+      push Not at hcollision
+      rw [← hparent newAddress]
+      apply ByteArray.eq_empty_of_size_eq_zero
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode]
+      exact hcollision.2.1
+    exact genericCreateAmsterdam.spawn_codePreserve inv hparent hfresh hframe a ha
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.incrNonce_getCode, Devm.withholdCreateGas_getCode,
+      Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+      Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨-, rfl⟩ := run
+    rw [Devm.push_getCode_gen ‹Devm.push 0 _ = _› a,
+      Devm.incrNonce_getCode, Devm.withholdCreateGas_getCode,
+      Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+      Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+  · obtain ⟨r, hframe, rfl⟩ := run
+    rename_i _ _ hcollision
+    have hparent : ∀ b : Adr,
+        (((Devm.balReadAccount sevm.benvStat.rules newAddress
+            (addAccessedAddress
+              (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+                (devm.withReturnData [])) newAddress)).withholdCreateGas.2.drainStateGasReservoir.2
+            ).incrNonce sevm.currentTarget).getCode b = devm.getCode b := by
+      intro b
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode, Devm.balReadAccount_getCode,
+        addAccessedAddress_getCode, Devm.balReadAccount_getCode,
+        Devm.withReturnData_getCode]
+    have hfresh : devm.getCode newAddress = .empty := by
+      push Not at hcollision
+      rw [← hparent newAddress]
+      apply ByteArray.eq_empty_of_size_eq_zero
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode]
+      exact hcollision.2.1
+    exact genericCreateAmsterdam.spawn_codePreserve inv hparent hfresh hframe a ha
 
 /-- A spawned create frame runs under its parent's block rules. -/
 lemma genericCreate.step_spawn_benvStat
