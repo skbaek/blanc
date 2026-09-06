@@ -163,7 +163,7 @@ GAS_PRICE = 10
 # Capping each reverting trigger bounded the damage -- a harness accommodation
 # for a contract defect, never a property of the contract.
 #
-# `Func.rev` is now `PUSH0 PUSH0 REVERT`, so a rejected call reverts cleanly and
+# `Func.revert` is now `PUSH0 PUSH0 REVERT`, so a rejected call reverts cleanly and
 # refunds its remaining gas. Every reverting trigger therefore forwards all
 # available gas again (`gas=None` -> the `GAS` opcode), exactly as the
 # succeeding ones always have. Measured at retirement, whole-block `gasUsed`,
@@ -924,7 +924,7 @@ def get_fmint_code_hex():
     hexstr = out.strip().strip('"')
     # 2514 = 2 x 1257 bytes. Was 2434 (1217 bytes) until the `Func.rev`
     # normalization documented in `scripts/fixtures/fmint/README.md` put two
-    # `PUSH0`s ahead of each of fmint's twenty rev sites.
+    # `PUSH0`s ahead of each of fmint's twenty revert sites.
     #
     # WHY THIS STAYS A LENGTH ASSERT, adjudicated by the fixture README's
     # "Provenance and shape" contract (which strengthened the *coverage
@@ -1429,9 +1429,9 @@ def case_wrong_magic():
 
 
 def case_reverting():
-    """The reverting borrower: `Func.rev` alone. `flashLoan`'s callback
+    """The reverting borrower: `Func.revert` alone. `flashLoan`'s callback
     `CALL` itself fails (not merely its return value), so the `iszero :::
-    .rev <?>` guard on the call's own success flag fires before the magic
+    .revert <?>` guard on the call's own success flag fires before the magic
     check is ever reached. Zoo member 3."""
     trigger_key = 3
     amount = 2 * WAD
@@ -1474,7 +1474,7 @@ def case_returndata_spectrum():
     the EOA receiver, empty returndata, must fail the magic check even with
     no data at all), exactly 32 (the ordinary compliant path), and overlong
     with a correct head (must PASS -- `checkReturnDataHead` only pins the head
-    word, per `retdataShorterThan 32` branching first, row 10)."""
+    word, per `returnDataShorterThan 32` branching first, row 10)."""
     trigger_key = 4
     amount_short = 1 * WAD
     amount_exact = 2 * WAD
@@ -1486,7 +1486,7 @@ def case_returndata_spectrum():
                  ("uint256", amount_short), ("bytes", b"")),
         reverts_because="an EOA receiver has no code, so the callback CALL "
                         "'succeeds' with zero return data, which fails "
-                        "retdataShorterThan 32 before the magic word is "
+                        "returnDataShorterThan 32 before the magic word is "
                         "ever read")
     t_exact = Trigger(
         "flashLoan(compliant, exactly 32)", FMINT_ADDR,
@@ -1875,7 +1875,7 @@ def case_guards():
     answers rather than fails; the dirty (non-address-shaped) receiver word
     rejected before the mint (conservation-critical, D4 step 1);
     `amount > maxFlashLoan`; and the two DISPATCHER-MISS probes (an unknown
-    selector, and empty calldata), which reach the shared `Func.rev` through
+    selector, and empty calldata), which reach the shared `Func.revert` through
     `mainWith`'s fallback rather than through any guard at all. Supply is
     pre-set away from zero so the bound is a small, legible number rather
     than `2^256 - 1` (which no ordinary `amount` could ever exceed) -- a
@@ -1931,9 +1931,9 @@ def case_guards():
                         "the mint-overflow guard")
 
     # Dispatcher miss. `Blanc.Fmint.fmint = Prog.mk (Func.mainWith
-    # fallbackSlot fmintTree) fmintAux` with `fmintAux = [Func.rev, ...]`, so
+    # fallbackSlot fmintTree) fmintAux` with `fmintAux = [Func.revert, ...]`, so
     # a selector matching no leaf routes to `.call fallbackSlot` and lands on
-    # the shared `Func.rev` -- the same definition every guard above reverts
+    # the shared `Func.revert` -- the same definition every guard above reverts
     # through, reached by the one path that is not a guard at all. This is the
     # probe class the fixture README's clean-failure section names first:
     # before the normalization it was the pure stack-UNDERFLOW shape, since a
@@ -1949,7 +1949,7 @@ def case_guards():
         "unknown selector (dispatcher miss)", FMINT_ADDR,
         miss_sel.to_bytes(4, "big"),
         reverts_because="no leaf of fmintTree carries this selector, so "
-                        "mainWith routes it to fallbackSlot -- Func.rev in "
+                        "mainWith routes it to fallbackSlot -- Func.revert in "
                         "fmintAux")
     t_empty_calldata = Trigger(
         "empty calldata (dispatcher miss)", FMINT_ADDR, b"",
@@ -1988,7 +1988,7 @@ def case_guards():
             "both maxFlashLoan calls answer rather than reverting; the "
             "dirty receiver and the over-bound amount are both rejected "
             "before any mint; and both dispatcher misses land on the "
-            "fallback Func.rev. Every one of the six rejections records the "
+            "fallback Func.revert. Every one of the six rejections records the "
             "same clean-failure triple -- flag 0, RETURNDATASIZE + 1 = 1, "
             "gas floor cleared")
         e.expect_storage_exact(

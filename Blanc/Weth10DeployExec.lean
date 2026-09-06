@@ -806,7 +806,7 @@ private theorem weth10InitMemory_size (sevm : Sevm) :
     omega)]
   exact hs9
 
-private theorem weth10InitRet_runCompiled
+private theorem weth10InitReturn_runCompiled
     {fs : List Func} {sevm : Sevm} {returnPre : Devm}
     {rd : Bytes × Devm} {G : Nat}
     (h_stack : returnPre.stack = [(0 : B256), (6313 : B256)])
@@ -865,7 +865,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (weth10InitAfterReturnArgs base (weth10InitMemory sevm) g)
         Func.return_ (weth10InitPost sevm base g) := by
     rw [weth10InitAfterReturnArgs_eq, weth10InitPost_eq]
-    apply weth10InitRet_runCompiled
+    apply weth10InitReturn_runCompiled
         (returnPre := weth10InitReturnPre base (weth10InitMemory sevm) g)
         (rd := weth10InitReturnRead base (weth10InitMemory sevm) g)
         (G := g - 1471)

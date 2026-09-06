@@ -2117,13 +2117,13 @@ theorem pauseAfterSet_committed_outcomes
     · rw [pauseStatArm] at hstat
       obtain ⟨statPre, hstatStaging, hstat⟩ :=
         runCompiledTo_prepend_inv hstat
-      obtain ⟨statPost, hstatCall, hobservation⟩ :=
+      obtain ⟨statPost, hstaticCall, hobservation⟩ :=
         runCompiledTo_next_inv hstat
       have targetStatPre := targetArm.acrossPauseStatStaging
         (by decide) hstatStaging
       have durationStatPre := durationArm.acrossPauseStatStaging
         (by decide) hstatStaging
-      exact Or.inr ⟨armPre, statPre, statPost, hstatStaging, hstatCall,
+      exact Or.inr ⟨armPre, statPre, statPost, hstatStaging, hstaticCall,
         fun statBoundary =>
           pauseObservation_committed_outcomes h_empty h_bubble h_failed
             h_panic statBoundary targetStatPre durationStatPre

@@ -723,7 +723,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 
 #### CALL-3 — The branch flag takes exactly two values and inverts the callee's error; the failure arm cannot commit, and any successful walk past the branch forces the `pauseFor` call to have succeeded
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.pauseCall_flag_dichotomy`, `Blanc.LidoCircuitBreaker.pauseAfterCall_arms`, `Blanc.LidoCircuitBreaker.pauseCall_failureArm_bubbles`, `Blanc.LidoCircuitBreaker.pauseCall_failureArm_neverCommits`, `Blanc.LidoCircuitBreaker.pauseCall_successArm_reachesStatcall`, `Blanc.LidoCircuitBreaker.pauseAfterCall_ok_forces_callSuccess`
+- **Declarations:** `Blanc.LidoCircuitBreaker.pauseCall_flag_dichotomy`, `Blanc.LidoCircuitBreaker.pauseAfterCall_arms`, `Blanc.LidoCircuitBreaker.pauseCall_failureArm_bubbles`, `Blanc.LidoCircuitBreaker.pauseCall_failureArm_neverCommits`, `Blanc.LidoCircuitBreaker.pauseCall_successArm_reachesStaticcall`, `Blanc.LidoCircuitBreaker.pauseAfterCall_ok_forces_callSuccess`
 - **Premises:** as CALL-1.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`

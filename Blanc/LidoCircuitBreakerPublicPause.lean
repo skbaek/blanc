@@ -299,15 +299,15 @@ theorem pauseAfterSet_boundary_committed_outcomes
     · rw [pauseStatArm] at statRun
       obtain ⟨statPre, statStaging, statRun⟩ :=
         runCompiledTo_prepend_inv statRun
-      obtain ⟨statPost, statCall, observation⟩ :=
+      obtain ⟨statPost, staticCall, observation⟩ :=
         runCompiledTo_next_inv statRun
       obtain ⟨_statGas, _statRest, statStack, targetStatPre⟩ :=
         pauseStatStaging_boundary_operands targetArm statStaging
       have statBoundary : PauseStatBoundary sevm target statPre statPost :=
         pauseStat_boundary statStack
           (pauseStatStaging_boundary_calldata targetArm.memImage statStaging)
-          hDepth statCall
-      exact Or.inr ⟨armPre, statPre, statPost, statStaging, statCall,
+          hDepth staticCall
+      exact Or.inr ⟨armPre, statPre, statPost, statStaging, staticCall,
         statBoundary, observation⟩
 
 /-! ## Production public-entry family -/

@@ -2288,7 +2288,7 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
 /-- Why a value-carrying `STATICCALL` returned its failure flag.  The depth
 case has no child and therefore empty returndata.  The other case records the
 exact errored child message, including delegation resolution and calldata. -/
-def StatcallFailureCause (sevm : Sevm) (s : Devm)
+def StaticcallFailureCause (sevm : Sevm) (s : Devm)
     (g t ii is oi os : B256) (out : Bytes) : Prop :=
   out = [] ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
@@ -2330,7 +2330,7 @@ lemma of_run_staticcall_val_with_depth_cause
         sf.memory = (s.memory.extends
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
             oi.toNat (out.take os.toNat) ∧
-        StatcallFailureCause sevm s g t ii is oi os out) ∨
+        StaticcallFailureCause sevm s g t ii is oi os out) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧

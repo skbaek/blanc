@@ -177,7 +177,7 @@ whatever two words the guard left on the stack, so the payload a rejected call
 returned was not something WETH's specification determined, and an expectation
 that cannot be derived from the specification is dropped rather than weakened.
 
-**Since 2026-08-05 the payload *is* determined** — `Blanc.Func.rev` is
+**Since 2026-08-05 the payload *is* determined** — `Blanc.Func.revert` is
 `PUSH0 PUSH0 REVERT`, so every guard failure returns exactly zero bytes and
 hands back the frame's unused gas ([`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s
 fifth row) — **but this suite still does not assert it**, deliberately: the

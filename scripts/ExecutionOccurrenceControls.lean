@@ -31,7 +31,7 @@ private def directCallPre : Devm :=
   (((default : Devm).setCode addressB targetCode).withGasLeft 100000)
     |>.withStack [50000, addressB.toB256, 0, 0, 0, 0, 0]
 
-private def directStatcallPre : Devm :=
+private def directStaticcallPre : Devm :=
   (((default : Devm).setCode addressB targetCode).withGasLeft 100000)
     |>.withStack [50000, addressB.toB256, 0, 0, 0, 0]
 
@@ -62,7 +62,7 @@ private def callFrame : Frame := spawnedFrame callStep
 private def callResume : Resume := spawnedResume callStep
 
 private def staticcallStep : XStep :=
-  Xinst.step dynamicSevm directStatcallPre .staticcall
+  Xinst.step dynamicSevm directStaticcallPre .staticcall
 private def staticcallFrame : Frame := spawnedFrame staticcallStep
 private def staticcallResume : Resume := spawnedResume staticcallStep
 
@@ -81,7 +81,7 @@ macro "dca_kernel_decide" : tactic => `(tactic|
       callcodeStep, delegatecallStep,
       callFrame, callResume, staticcallFrame, staticcallResume,
       callcodeFrame, callcodeResume, delegatecallFrame, delegatecallResume,
-      directCallPre, directStatcallPre, callcodePre,
+      directCallPre, directStaticcallPre, callcodePre,
       delegatecallPre, dynamicSevm, addressA, addressB, targetCode, parentCode,
       Xinst.step, genericCall.step, genericCreate.step, callMsg, createMsg,
       default, Prod.mapFst, Devm.pop_def, Devm.popToAdr_def,
@@ -121,16 +121,16 @@ theorem call_direct_codeAddress_control :
     (by dca_kernel_decide)
 
 private theorem staticcall_spawn :
-    Xinst.step dynamicSevm directStatcallPre .staticcall =
+    Xinst.step dynamicSevm directStaticcallPre .staticcall =
       .spawn staticcallFrame staticcallResume := by
   exact eq_spawn_of_spawned staticcallStep (by dca_kernel_decide)
 
 /-- A concrete foreign STATICCALL is the second positive direct-code control. -/
 theorem staticcall_direct_codeAddress_control :
-    Xinst.step dynamicSevm directStatcallPre .staticcall =
+    Xinst.step dynamicSevm directStaticcallPre .staticcall =
         .spawn staticcallFrame staticcallResume ∧
       dynamicSevm.currentTarget ≠ staticcallFrame.inner.currentTarget ∧
-      directStatcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
+      directStaticcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
       staticcallFrame.inner.codeAddress = some staticcallFrame.inner.currentTarget := by
   refine ⟨staticcall_spawn, by dca_kernel_decide, by dca_kernel_decide, ?_⟩
   exact Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
@@ -239,10 +239,10 @@ theorem required_positive_controls :
         dynamicSevm.currentTarget ≠ callFrame.inner.currentTarget ∧
         directCallPre.getCode callFrame.inner.currentTarget ≠ .empty ∧
         callFrame.inner.codeAddress = some callFrame.inner.currentTarget) ∧
-    (Xinst.step dynamicSevm directStatcallPre .staticcall =
+    (Xinst.step dynamicSevm directStaticcallPre .staticcall =
           .spawn staticcallFrame staticcallResume ∧
         dynamicSevm.currentTarget ≠ staticcallFrame.inner.currentTarget ∧
-        directStatcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
+        directStaticcallPre.getCode staticcallFrame.inner.currentTarget ≠ .empty ∧
         staticcallFrame.inner.codeAddress = some staticcallFrame.inner.currentTarget) ∧
     (∀ {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume},
       Xinst.step sevm devm .create = .spawn frame resume →

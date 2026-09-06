@@ -172,8 +172,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.tload_run_cell
 #print axioms Blanc.directCall_nonzero_spawn
 #print axioms Blanc.directCall_zero_spawn
-#print axioms Blanc.directStatcall_spawn
-#print axioms Blanc.directDelcall_spawn
+#print axioms Blanc.directStaticcall_spawn
+#print axioms Blanc.directDelegatecall_spawn
 #print axioms Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
 #print axioms Blanc.delegatecall_enters_with_parent_as_storage_owner
 #print axioms Blanc.control_delegatecall_separates_call_fuses

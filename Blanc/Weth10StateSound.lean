@@ -140,8 +140,8 @@ theorem prefix_of_allowanceKeyFromMemory {e : Sevm} {xs : Stack}
   rcases Line.of_run_cons run1 with ⟨s2, hpush0, run2⟩
   have hp2 : (0 : B256) :: 64 :: xs <<+ s2.stack :=
     prefix_of_push (of_run_pushB256 hpush0) hp1
-  rcases Line.of_run_cons run2 with ⟨s3, hkec, run3⟩
-  rcases prefix_of_keccak256 hkec hp2 with ⟨hash, hp3⟩
+  rcases Line.of_run_cons run2 with ⟨s3, hkeccak256, run3⟩
+  rcases prefix_of_keccak256 hkeccak256 hp2 with ⟨hash, hp3⟩
   rcases Line.of_run_cons run3 with ⟨s4, hpushMask, run4⟩
   have hp4 : allowancePayloadMask :: hash :: xs <<+ s4.stack :=
     prefix_of_push (of_run_pushB256 hpushMask) hp3

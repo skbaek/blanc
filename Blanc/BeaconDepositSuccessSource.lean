@@ -1454,7 +1454,7 @@ theorem stageDepositEvent_success_of_run
 
 /-- A successful fall-through past a constant-error branch consumes the zero
 selector and otherwise preserves the machine-local memory and world state. -/
-theorem branchRevWith_success_of_prefix
+theorem branchRevertWith_success_of_prefix
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
     {flag : B256} {slot : Nat} {reason : String}
     {tail : Stack} {rest : Func}
@@ -1514,7 +1514,7 @@ theorem depositRootGuard_success_of_run
   have hpTest : ((Sevm.argWord sevm 3 =? node) =? 0) :: tail <<+
       afterTest.stack := prefix_of_iszero zeroRun hpEq
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   have hroot : Sevm.argWord sevm 3 = node := by
     by_contra hne
     simp [B256.eqCheck, hne] at hflag
@@ -1587,7 +1587,7 @@ theorem depositCapGuard_success_of_run
   have hpTest : ((oldCount <? Nat.toB256 (2 ^ 32 - 1)) =? 0) ::
       tail <<+ afterTest.stack := prefix_of_iszero zeroRun hpLt
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   have hcap : oldCount < Nat.toB256 (2 ^ 32 - 1) := by
     by_contra hnot
     have hzero : (oldCount <? Nat.toB256 (2 ^ 32 - 1)) = 0 := by
@@ -2415,7 +2415,7 @@ private theorem depositLengthGuard_success_of_run
   have hpTest : ((expected =? actual) =? 0) :: tail <<+
       afterTest.stack := prefix_of_iszero zeroRun hpEq
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   have heq : actual = expected := by
     by_contra hne
     have hne' : expected ≠ actual := Ne.symm hne
@@ -2466,7 +2466,7 @@ private theorem depositValueLowerGuard_success_of_run
   have hpTest : (sevm.value <? Nat.toB256 oneEther) :: tail <<+
       afterTest.stack := prefix_of_lt ltRun hpValue
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   have hlower : Nat.toB256 oneEther ≤ sevm.value := by
     apply B256.not_lt.mp
     intro hlt
@@ -2506,7 +2506,7 @@ private theorem depositGweiMultipleGuard_success_of_run
   have hpTest : (sevm.value % Nat.toB256 oneGwei) :: tail <<+
       afterTest.stack := prefix_of_mod modRun hpValue
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   exact ⟨hflag, next, hpNext, restRun,
     memoryNext.trans (Line.of_inv Devm.memory (by line_inv) testRunInv).symm,
     (Line.of_inv Devm.state (by line_inv) testRunInv).trans stateNext⟩
@@ -2563,7 +2563,7 @@ private theorem depositAmountUpperGuard_success_of_run
       (sevm.value / Nat.toB256 oneGwei)) :: tail <<+
       afterTest.stack := prefix_of_lt ltRun hpMax
   obtain ⟨hflag, next, hpNext, restRun, memoryNext, stateNext⟩ :=
-    branchRevWith_success_of_prefix hget hpTest branchRun
+    branchRevertWith_success_of_prefix hget hpTest branchRun
   have hupper : sevm.value / Nat.toB256 oneGwei ≤
       Nat.toB256 (2 ^ 64 - 1) := by
     apply B256.not_lt.mp

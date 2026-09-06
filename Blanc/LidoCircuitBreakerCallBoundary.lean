@@ -793,7 +793,7 @@ theorem pauseStat_boundary_with_execution
     cases hcontra
   case pos =>
     obtain ⟨hstep, -, -, -, -, -, -, htra⟩ :=
-      directStatcall_spawn h_stk hext h_del hacc hsplit hga h_depth
+      directStaticcall_spawn h_stk hext h_del hacc hsplit hga h_depth
     rw [hta] at hstep htra
     obtain ⟨hd1stk, hd1mem, -, -⟩ := accessDelegation_inv hdel
     obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
@@ -1005,7 +1005,7 @@ not.  In both cases the state entering the arm still carries the child's
 returndata.
 
 The continuation `g` is arbitrary: this theorem is about the branch, not about
-what the success arm goes on to do, and `pauseCall_successArm_reachesStatcall`
+what the success arm goes on to do, and `pauseCall_successArm_reachesStaticcall`
 below instantiates it at the program's own observation arm.
 
 **No premise constrains the callee.**  `child.error.isSome` is not assumed on
@@ -1241,7 +1241,7 @@ observation succeeds, that the target answers, or that what comes back decodes
 say this arm is reached: `h_ok` is the case hypothesis, the sibling of
 `pauseCall_failureArm_bubbles`'s `h_fail`, and `pauseCall_flag_dichotomy` shows
 the two exhaust the possibilities. -/
-theorem pauseCall_successArm_reachesStatcall {fs : List Func} {sevm : Sevm}
+theorem pauseCall_successArm_reachesStaticcall {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost : Devm}
     {ex : Execution}
     (boundary : PauseCallBoundary sevm target duration callPre callPost)
@@ -1412,7 +1412,7 @@ What this does **not** claim.  It does not say the bubbled bytes mean anything:
 and `Func.revertReturnData`'s own docstring records that a zero-length child
 revert is an ordinary empty revert.  And it does not say this arm is reached —
 `h_fail` is the case hypothesis, the sibling of
-`pauseCall_successArm_reachesStatcall`'s `h_ok`, and
+`pauseCall_successArm_reachesStaticcall`'s `h_ok`, and
 `pauseCall_flag_dichotomy` shows the two exhaust the possibilities. -/
 theorem pauseCall_failureArm_payload {fs : List Func} {sevm : Sevm}
     {target : Adr} {duration : B256} {callPre callPost : Devm}
@@ -1826,7 +1826,7 @@ the two crossings: the CALL is `PauseCallBoundary`'s message to `target`, the
 staged target word is still the CircuitBreaker's when the observation is
 staged, and the STATICCALL is `PauseStatBoundary`'s message to the **same**
 target.  The order is in the statement's own shape — `callPost` is where
-`pauseStatStaging` starts — and `pauseCall_successArm_reachesStatcall` is what
+`pauseStatStaging` starts — and `pauseCall_successArm_reachesStaticcall` is what
 supplies that walk from the program.
 
 Neither operand stack is a premise.  Both are derived by forward evaluation of

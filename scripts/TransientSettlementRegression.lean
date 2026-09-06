@@ -110,15 +110,15 @@ private def staticCallPre : Devm :=
   ((default : Devm).withGasLeft 100000)
     |>.withStack [50000, addressA.toB256, 0, 0, 0, 0, 0]
 
-private def staticDelcallPre : Devm :=
+private def staticDelegatecallPre : Devm :=
   ((default : Devm).withGasLeft 100000)
     |>.withStack [50000, addressA.toB256, 0, 0, 0, 0]
 
 private def staticCallFamilyControls : Bool :=
   spawnedStatic (Xinst.step staticSevm staticCallPre .call) &&
   spawnedStatic (Xinst.step staticSevm staticCallPre .callcode) &&
-  spawnedStatic (Xinst.step staticSevm staticDelcallPre .delegatecall) &&
-  spawnedStatic (Xinst.step dynamicSevm staticDelcallPre .staticcall)
+  spawnedStatic (Xinst.step staticSevm staticDelegatecallPre .delegatecall) &&
+  spawnedStatic (Xinst.step dynamicSevm staticDelegatecallPre .staticcall)
 
 private def isNotSpawn : XStep → Bool
   | .spawn _ _ => false
@@ -146,12 +146,12 @@ private def directCallControl : Bool :=
         directPre.getTransVal addressA key
   | _ => false
 
-private def directStatcallPre : Devm :=
+private def directStaticcallPre : Devm :=
   (((default : Devm).setTransVal addressA key 37).withGasLeft 100000)
     |>.withStack [50000, addressB.toB256, 0, 0, 0, 0]
 
-private def directStatcallControl : Bool :=
-  match Xinst.step dynamicSevm directStatcallPre .staticcall with
+private def directStaticcallControl : Bool :=
+  match Xinst.step dynamicSevm directStaticcallPre .staticcall with
   | .spawn frame _ =>
       let child := frame.inner
       child.currentTarget == addressB &&
@@ -159,7 +159,7 @@ private def directStatcallControl : Bool :=
       child.caller == addressA && child.value == 0 &&
       child.shouldTransferValue && child.isStatic &&
       (child.tenv.transientStorage.getD addressA .empty).get key ==
-        directStatcallPre.getTransVal addressA key
+        directStaticcallPre.getTransVal addressA key
   | _ => false
 
 /-- Actual CALLCODE and DELEGATECALL edges can have the same target and code
@@ -167,7 +167,7 @@ address as the current frame. Their opcode edge—not a field inequality—is wh
 keeps them distinct from the direct CALL/STATICCALL projections. -/
 private def coincidentIndirectEdgesControl : Bool :=
   match Xinst.step dynamicSevm staticCallPre .callcode,
-      Xinst.step dynamicSevm staticDelcallPre .delegatecall with
+      Xinst.step dynamicSevm staticDelegatecallPre .delegatecall with
   | .spawn callcodeFrame _, .spawn delegateFrame _ =>
       callcodeFrame.inner.currentTarget == addressA &&
       callcodeFrame.inner.codeAddress == some addressA &&
@@ -503,7 +503,7 @@ private def controls : List Bool := [
   staticCallFamilyControls,
   staticCreateControl,
   directCallControl,
-  directStatcallControl,
+  directStaticcallControl,
   coincidentIndirectEdgesControl,
   delegatedDirectCallControl,
   sameTransactionAddressIsolation,
@@ -530,7 +530,7 @@ private theorem required_positive_controls : True := by
   let _tload := @Blanc.tload_run_cell
   let _callNonzero := @Blanc.directCall_nonzero_spawn
   let _callZero := @Blanc.directCall_zero_spawn
-  let _staticcall := @Blanc.directStatcall_spawn
+  let _staticcall := @Blanc.directStaticcall_spawn
   let _caught := @Blanc.caughtCall_childSettlement
   let _clean := @Blanc.cleanCall_childSettlement
   let _prepared := @Blanc.preparedTransactionMessage_exists

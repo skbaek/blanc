@@ -451,7 +451,7 @@ private theorem stepCall_spawn_resume
     | cases spawn
     | exact ⟨_, _, _, (genericCall_step_spawn_exact spawn).2⟩
 
-private theorem stepStatcall_spawn_resume
+private theorem stepStaticcall_spawn_resume
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
     (spawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume) :
@@ -759,7 +759,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
           _ = code := callPreInstalled
       rcases statExecution with
         ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
-          statCurrent, statTarget, statCodeAddress, statCaller, statValue,
+          statCurrent, statTarget, statCodeAddress, staticCaller, statValue,
           statTransfer, statStatic, statDataEq, statTime, statRules,
           statSpawn, statFilled, statProcess, statStepRun, statState,
           statOutput⟩
@@ -776,7 +776,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
           statTransfer statRules statXSpawn statFilled statProcess
       have statExact : ExactTargetCall sevm.currentTarget target
           isPausedCalldata true statMsg :=
-        ⟨statCurrent, statTarget, statCodeAddress, statCaller, statValue,
+        ⟨statCurrent, statTarget, statCodeAddress, staticCaller, statValue,
           statTransfer, statStatic, statDataEq⟩
       have pinnedStat : PinnedStatBoundaryExecutesProgram sevm target
           program statPre statPost :=
@@ -861,7 +861,7 @@ private theorem staticcallMessage_entry_getStor_eq
   rcases executes with ⟨-, childEvm, raw, rfl, -⟩
   have actualEnter : (Jaune.Frame.ofCall msg).enter = .run childEvm :=
     (RunFrame.some_inv process).1
-  have resumeCall := stepStatcall_spawn_resume spawn
+  have resumeCall := stepStaticcall_spawn_resume spawn
   rcases Xinst.step_shape sevm pre .staticcall with
     ⟨done, shape, -⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
@@ -1005,7 +1005,7 @@ private theorem pinnedTarget_witness_and_paused
     observation_zeroBranch h_bubble observationRun
   have statClean : statChild.error.isSome = false :=
     spawnedChild_clean_of_zeroBranch statSpawn statProcess statStepRun
-      (stepStatcall_spawn_resume statXSpawn) statIszero statZeroPop
+      (stepStaticcall_spawn_resume statXSpawn) statIszero statZeroPop
   obtain ⟨observed, observedOutput, -, observedLong, observedOne⟩ :=
     observation_success_answer_one h_empty h_bubble h_failed statBoundary
       observationRun
