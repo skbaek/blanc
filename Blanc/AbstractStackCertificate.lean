@@ -339,6 +339,89 @@ theorem Table.row_unique {table : Table} (ordered : table.Ordered)
   have two := Table.lookup_of_row ordered second
   exact Option.some.inj (one.symm.trans two)
 
+/-- Exact decoded coverage of a byte interval, in tree order. An empty
+subtree consumes no bytes; each node consumes the actual decoded width. -/
+def Table.Layout (code : ByteArray) (start : Nat) : Table → Nat → Prop
+  | .empty, stop => start = stop
+  | .node pc _ left right, stop =>
+      ∃ instruction, code.getInst pc = some instruction ∧
+        left.Layout code start pc ∧
+        pc + instructionWidth instruction ≤ stop ∧
+        right.Layout code (pc + instructionWidth instruction) stop
+
+def Table.checkLayout (code : ByteArray) (start : Nat) : Table → Nat → Bool
+  | .empty, stop => decide (start = stop)
+  | .node pc _ left right, stop =>
+      match code.getInst pc with
+      | none => false
+      | some instruction =>
+          left.checkLayout code start pc &&
+          decide (pc + instructionWidth instruction ≤ stop) &&
+          right.checkLayout code (pc + instructionWidth instruction) stop
+
+theorem Table.checkLayout_sound {code : ByteArray} {start stop : Nat}
+    {table : Table} (checked : table.checkLayout code start stop = true) :
+    table.Layout code start stop := by
+  induction table generalizing start stop with
+  | empty => simpa only [Table.checkLayout, Table.Layout, decide_eq_true_eq] using checked
+  | node pc input left right ihLeft ihRight =>
+      cases decoded : code.getInst pc with
+      | none => simp [Table.checkLayout, decoded] at checked
+      | some instruction =>
+          simp only [Table.checkLayout, decoded, Bool.and_eq_true,
+            decide_eq_true_eq] at checked
+          exact ⟨instruction, decoded, ihLeft checked.1.1,
+            checked.1.2, ihRight checked.2⟩
+
+def Table.size : Table → Nat
+  | .empty => 0
+  | .node _ _ left right => left.size + 1 + right.size
+
+/-- Count structural occurrences of a key, including identical duplicates. -/
+def Table.count (key : Nat) : Table → Nat
+  | .empty => 0
+  | .node pc _ left right =>
+      left.count key + (if key = pc then 1 else 0) + right.count key
+
+theorem Table.count_zero {table : Table} {pc : Nat}
+    (absent : ∀ input, ¬ table.Row pc input) : table.count pc = 0 := by
+  induction table with
+  | empty => rfl
+  | node key words left right ihLeft ihRight =>
+      have different : pc ≠ key := by
+        intro same
+        exact absent words (Or.inl ⟨same.symm, rfl⟩)
+      have leftZero := ihLeft (fun input row => absent input (Or.inr (Or.inl row)))
+      have rightZero := ihRight (fun input row => absent input (Or.inr (Or.inr row)))
+      simp only [Table.count, leftZero, rightZero, if_neg different, Nat.add_zero]
+
+/-- Strict checked ordering excludes even duplicate rows with equal patterns. -/
+theorem Table.count_le_one {table : Table} (ordered : table.Ordered) (pc : Nat) :
+    table.count pc ≤ 1 := by
+  induction table with
+  | empty => exact Nat.zero_le _
+  | node key words left right ihLeft ihRight =>
+      by_cases before : pc < key
+      · have different : pc ≠ key := by omega
+        have rightZero : right.count pc = 0 := Table.count_zero (by
+          intro input row
+          have after := ordered.2.1 _ _ row
+          omega)
+        simpa only [Table.count, if_neg different, rightZero, Nat.add_zero] using
+          ihLeft ordered.2.2.1
+      · have leftZero : left.count pc = 0 := Table.count_zero (by
+          intro input row
+          exact before (ordered.1 _ _ row))
+        by_cases same : pc = key
+        · have rightZero : right.count pc = 0 := Table.count_zero (by
+            intro input row
+            have after := ordered.2.1 _ _ row
+            omega)
+          simp only [Table.count, leftZero, rightZero, if_pos same,
+            Nat.zero_add, Nat.add_zero, Nat.le_refl]
+        · simpa only [Table.count, leftZero, if_neg same, Nat.zero_add] using
+            ihRight ordered.2.2.2
+
 /-- Complete finite validation, retaining the accepted transfer family's
 eight-word ceiling as an explicit limit of this checker. -/
 def checkTable (code : ByteArray) (table : Table) (maximum : Nat) : Bool :=

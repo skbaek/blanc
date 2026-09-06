@@ -408,8 +408,11 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   fatal-error provenance while adapting the accepted opcode theorems.
   `Table.checkOrder_sound`, `lookup_iff_row`, and `row_unique` connect checked
   strict subtree ordering to exact structural-row lookup and unique patterns.
-  The checker itself does not establish entry, decoded-byte coverage outside
-  its rows, feasible-path reachability, or arbitrary child-frame stack safety.
+  `Table.count_le_one` excludes even identical duplicate rows. Independently,
+  `Table.checkLayout_sound` proves exact decoded-byte interval coverage from
+  the layout check; each node consumes its actual decoded instruction width.
+  `checkTable` itself does not include that separate layout check or establish
+  entry, feasible-path reachability, or arbitrary child-frame stack safety.
   This table-construction interface is registered here; the existing
   same-frame recipe supplies the subsequent actual `ParentPrefix` transport.
 - Raw nodes, raw frame roots, and instruction occurrence:

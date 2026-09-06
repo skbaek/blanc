@@ -84,6 +84,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "beacon-deposit-deployment",
             "weth10-current-mainnet",
             "drip-evidence",
+            "drip-stack-certificate-data",
             "drip-current-mainnet",
         ],
     }

@@ -2898,6 +2898,33 @@
     },
     {
       "command": [
+        "scripts/check-drip-stack-certificate.sh"
+      ],
+      "id": "drip-stack-certificate-data",
+      "inputs": {
+        "files": [
+          "scripts/check-drip-stack-certificate.sh",
+          "scripts/gen-drip-stack-certificate.py",
+          "scripts/test-drip-stack-certificate.py",
+          "Blanc/DripCode.lean",
+          "Blanc/DripStackSafetyData.lean"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Non-elaborating deterministic generation and disposable corruption controls. The generated table is data only; actual decoding and semantic stack certification are checked by the production Lean module in the separately required build. No external interpreter, private Plans input, or current-mainnet target is consumed.",
+      "order": 63,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — DRIP stack certificate data: "
+        ]
+      }
+    },
+    {
+      "command": [
         "scripts/check-drip-current-mainnet.sh",
         "--composed-prerequisites"
       ],
@@ -2971,7 +2998,7 @@
       },
       "kind": "cacheable",
       "note": "DRIP's isolated, read-only BPO2 consumer of the contract-neutral current-mainnet API. It runs the generated fixture writer only as --check-runtime under the verified target interpreter and byte-compares the complete generated JSON population. The fixture directory is intentionally absent until the generator's explicit --write mode has established it after a successful runtime validation. CI retains target-independent DRIP arithmetic/artifact controls and committed-fixture replay through the separate drip-evidence row; this external row owns regeneration only.",
-      "order": 63,
+      "order": 64,
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
