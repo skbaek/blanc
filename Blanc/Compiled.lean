@@ -457,6 +457,15 @@ wherever the raw step equation is -- which is exactly where the loose frames
 are read off.  These are the lemmas the exact frames' upgrade needs; nothing
 here is assumed about the fork or the rules. -/
 
+/-- The missing `Devm.setMach` projection law.  Jaune names
+`Devm.setMach_<projection>` for the thirteen fields it exposes and Amsterdam's
+`stateGas`; `meta` itself has none, so `devm-common-update-laws` says to state
+it once rather than re-derive it by `rfl` at each use.  It sits here beside its
+three consumers, in the same shape as this module's `Devm.memory_setMach`,
+`Devm.gasLeft_setMach` and `Devm.stateGas_setMach`. -/
+lemma Devm.meta_setMach (devm : Devm) (mach : Mach) :
+    (devm.setMach mach).meta = devm.meta := rfl
+
 /-- `chargeGas` rewrites the machine and nothing else. -/
 lemma Devm.meta_of_chargeGas {cost : Nat} {devm devm' : Devm}
     (h : chargeGas cost devm = .ok devm') : devm'.meta = devm.meta := by
@@ -467,7 +476,7 @@ lemma Devm.meta_of_chargeGas {cost : Nat} {devm devm' : Devm}
     rw [hs] at h
     injection h with h'
     rw [← h']
-    rfl
+    exact Devm.meta_setMach _ _
 
 /-- `Devm.push` rewrites the machine and nothing else. -/
 lemma Devm.meta_of_push {x : B256} {devm devm' : Devm}
@@ -478,7 +487,7 @@ lemma Devm.meta_of_push {x : B256} {devm devm' : Devm}
   · simp only [if_pos hroom] at h
     injection h with h'
     rw [← h']
-    rfl
+    exact Devm.meta_setMach _ _
   · simp only [if_neg hroom] at h
     cases h
 
@@ -491,7 +500,7 @@ lemma Devm.meta_of_pop {x : B256} {devm devm' : Devm}
   · injection h with h'
     injection h' with _ hd
     rw [← hd]
-    rfl
+    exact Devm.meta_setMach _ _
 
 /-! ### The three `Jinst` costs
 
