@@ -1237,6 +1237,14 @@ lemma Devm.creditStateGasRefund_instructionFrame (amount : Nat) (d : Devm) :
     Devm.InstructionFrame d (Devm.creditStateGasRefund amount d) :=
   Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
 
+lemma Devm.withholdCreateGas_instructionFrame (d : Devm) :
+    Devm.InstructionFrame d d.withholdCreateGas.2 := by
+  exact Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
+
+lemma Devm.drainStateGasReservoir_instructionFrame (d : Devm) :
+    Devm.InstructionFrame d d.drainStateGasReservoir.2 := by
+  exact Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
+
 lemma Devm.withRefundCounter_instructionFrame (d : Devm) (rc : Int) :
     Devm.InstructionFrame d (d.withRefundCounter rc) := by
   unfold Devm.withRefundCounter
@@ -4099,6 +4107,465 @@ lemma Xinst.shape_assert {sevm : Sevm} {devm : Devm} {p : Prop} [Decidable p]
   · exact hf
   · exact Xinst.shape_error herr
 
+lemma GasSchedule.delegationCost_of_not_delegation {gas : GasSchedule}
+    {d : Devm} {adr : Adr} (h : ¬ isValidDelegation (d.getCode adr)) :
+    gas.delegationCost d adr = ⟨false, adr, 0⟩ := by
+  have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+  dsimp only [GasSchedule.delegationCost]
+  rw [hnone]
+
+lemma completeDelegationAccess_instructionFrame
+    (d : Devm) (delegated : Bool) (adr : Adr) :
+    Devm.InstructionFrame d (completeDelegationAccess d delegated adr).2 := by
+  unfold completeDelegationAccess
+  split
+  · exact addAccessedAddress_instructionFrame d adr
+  · exact Devm.instructionFrame_refl d
+
+/-- Dispatch shape for the metered Amsterdam arms of `Xinst.step`. -/
+def Xinst.ShapeAmsterdam (sevm : Sevm) (state : StateGasRules)
+    (devm : Devm) (s : XStep) : Prop :=
+  (∃ ex, s = .done ex ∧ Execution.Rel Devm.InstructionFrame devm ex) ∨
+  (∃ d endowment newAddress mi ms,
+      Devm.InstructionFrame devm d ∧
+      s = genericCreateAmsterdam.step
+        sevm state d endowment newAddress mi ms) ∨
+  (∃ d d₀ gas reservoir value caller target codeAddress stv isSt
+      ii isz oi osz code dp nac ib,
+      Devm.InstructionFrame devm d ∧
+      Devm.InstructionFrame devm d₀ ∧
+      ((stv = true ∧ caller = sevm.currentTarget) ∨
+        (stv = false ∧ target = sevm.currentTarget)) ∧
+      (target = sevm.currentTarget ∨
+        (¬ isValidDelegation (d₀.getCode target) →
+          code = d₀.getCode target)) ∧
+      s = genericCallAmsterdam.step sevm state d gas reservoir value caller
+        target codeAddress stv isSt ii isz oi osz code dp nac ib)
+
+lemma Xinst.ShapeAmsterdam.trans_left
+    {sevm : Sevm} {state : StateGasRules} {a b : Devm} {s : XStep}
+    (hab : Devm.InstructionFrame a b)
+    (h : Xinst.ShapeAmsterdam sevm state b s) :
+    Xinst.ShapeAmsterdam sevm state a s := by
+  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
+    ⟨d, d₀, g, reservoir, v, c, t, cadr, stv, isSt, ii, isz, oi, osz,
+      code, dp, nac, ib, hf, hf₀, hcal, hsrc, rfl⟩
+  · exact Or.inl ⟨ex, rfl,
+      Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
+  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
+      Devm.instructionFrame_trans hab hf, rfl⟩)
+  · exact Or.inr (Or.inr
+      ⟨d, d₀, g, reservoir, v, c, t, cadr, stv, isSt, ii, isz, oi, osz,
+        code, dp, nac, ib, Devm.instructionFrame_trans hab hf,
+        Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)
+
+lemma Xinst.shapeAmsterdam_done
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {ex : Execution}
+    (h : Execution.Rel Devm.InstructionFrame devm ex) :
+    Xinst.ShapeAmsterdam sevm state devm (.done ex) :=
+  Or.inl ⟨ex, rfl, h⟩
+
+lemma Xinst.shapeAmsterdam_error
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {err : EvmError × Devm} (h : Devm.InstructionFrame devm err.2) :
+    Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (.error err)) :=
+  Xinst.shapeAmsterdam_done h
+
+lemma Xinst.shapeAmsterdam_create
+    {sevm : Sevm} {state : StateGasRules} {devm d : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    (hf : Devm.InstructionFrame devm d) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (genericCreateAmsterdam.step
+        sevm state d endowment newAddress mi ms) :=
+  Or.inr (Or.inl ⟨d, endowment, newAddress, mi, ms, hf, rfl⟩)
+
+lemma Xinst.shapeAmsterdam_call
+    {sevm : Sevm} {state : StateGasRules} {devm d d₀ : Devm}
+    {gas reservoir : Nat} {value : B256} {caller target codeAddress : Adr}
+    {stv isSt : Bool} {ii isz oi osz : Nat} {code : ByteArray}
+    {dp nac ib : Bool}
+    (hf : Devm.InstructionFrame devm d)
+    (hf₀ : Devm.InstructionFrame devm d₀)
+    (hcal : (stv = true ∧ caller = sevm.currentTarget) ∨
+      (stv = false ∧ target = sevm.currentTarget))
+    (hsrc : target = sevm.currentTarget ∨
+      (¬ isValidDelegation (d₀.getCode target) →
+        code = d₀.getCode target)) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (genericCallAmsterdam.step sevm state d gas reservoir value caller
+        target codeAddress stv isSt ii isz oi osz code dp nac ib) :=
+  Or.inr (Or.inr
+    ⟨d, d₀, gas, reservoir, value, caller, target, codeAddress, stv, isSt,
+      ii, isz, oi, osz, code, dp, nac, ib, hf, hf₀, hcal, hsrc, rfl⟩)
+
+lemma Xinst.shapeAmsterdam_bind
+    {sevm : Sevm} {state : StateGasRules} {devm d : Devm} {α : Type}
+    {x : Except (EvmError × Devm) (α × Devm)}
+    {f : α × Devm → Except (EvmError × Devm) XStep}
+    (hd : Devm.InstructionFrame devm d)
+    (hx : Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d x)
+    (hf : ∀ (v : α) (d' : Devm), Devm.InstructionFrame devm d' →
+      Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (f ⟨v, d'⟩))) :
+    Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (x >>= f)) := by
+  rcases x with e | ⟨v, d'⟩
+  · exact Xinst.shapeAmsterdam_error
+      (Devm.instructionFrame_trans hd hx)
+  · exact hf v d' (Devm.instructionFrame_trans hd hx)
+
+lemma Xinst.shapeAmsterdam_bindE
+    {sevm : Sevm} {state : StateGasRules} {devm d : Devm} {x : Execution}
+    {f : Devm → Except (EvmError × Devm) XStep}
+    (hd : Devm.InstructionFrame devm d)
+    (hx : Execution.Rel Devm.InstructionFrame d x)
+    (hf : ∀ d' : Devm, Devm.InstructionFrame devm d' →
+      Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (f d'))) :
+    Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (x >>= f)) := by
+  rcases x with e | d'
+  · exact Xinst.shapeAmsterdam_error
+      (Devm.instructionFrame_trans hd hx)
+  · exact hf d' (Devm.instructionFrame_trans hd hx)
+
+lemma Xinst.shapeAmsterdam_assert
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {p : Prop} [Decidable p] {err : EvmError × Devm}
+    {f : Unit → Except (EvmError × Devm) XStep}
+    (herr : Devm.InstructionFrame devm err.2)
+    (hf : Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (f ()))) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (XStep.ofExcept (Except.assert p err >>= f)) := by
+  unfold Except.assert
+  split
+  · exact hf
+  · exact Xinst.shapeAmsterdam_error herr
+
+lemma Xinst.shapeAmsterdam_assertDynamic
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {f : Unit → Except (EvmError × Devm) XStep}
+    (hf : Xinst.ShapeAmsterdam sevm state devm (XStep.ofExcept (f ()))) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (XStep.ofExcept (assertDynamic sevm devm >>= f)) := by
+  unfold assertDynamic
+  exact Xinst.shapeAmsterdam_assert (Devm.instructionFrame_refl devm) hf
+
+lemma Xinst.create_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm .create) := by
+  simp only [Xinst.step, hsg]
+  apply Xinst.shapeAmsterdam_assertDynamic
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bindE h3
+    (chargeGas_instructionFrame _ d3) fun d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_assert h4 ?_
+  exact Xinst.shapeAmsterdam_create
+    (Devm.instructionFrame_trans h4
+      (Devm.memExtends_instructionFrame d4 _))
+
+lemma Xinst.create2_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm .create2) := by
+  simp only [Xinst.step, hsg]
+  apply Xinst.shapeAmsterdam_assertDynamic
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bind h3
+    (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_bindE h4
+    (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
+  refine Xinst.shapeAmsterdam_assert h5 ?_
+  exact Xinst.shapeAmsterdam_create
+    (Devm.instructionFrame_trans h5
+      (Devm.memExtends_instructionFrame d5 _))
+
+lemma Xinst.shapeAmsterdam_meteredPrelude
+    {sevm : Sevm} {state : StateGasRules} {devm d : Devm}
+    {gas value : B256} {gasValue transferCost : Nat}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat}
+    {newAccountCharged insufficientBalance : Bool}
+    (hbase : Devm.InstructionFrame devm d)
+    (hcal : (stv = true ∧ caller = sevm.currentTarget) ∨
+      (stv = false ∧ target = sevm.currentTarget))
+    (htarget : target = sevm.currentTarget ∨ target = codeAddress) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (XStep.ofExcept do
+        let gasRules := sevm.benvStat.rules.gas
+        let extendCost :=
+          d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        let accessGas := gasRules.accessCost codeAddress d.accessedAddresses
+        Except.assert (accessGas + extendCost + transferCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := addAccessedAddress d codeAddress
+        let ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩ :=
+          gasRules.delegationCost d codeAddress
+        let d := d.balReadAccount sevm.benvStat.rules codeAddress
+        let extraGas := accessGas + transferCost + delegatedAccessGasCost
+        Except.assert (extraGas + extendCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := d.balReadAccount sevm.benvStat.rules newCodeAddress
+        let ⟨code, d⟩ :=
+          completeDelegationAccess d disablePrecompiles newCodeAddress
+        let ⟨msgCallCost, msgCallStipend⟩ :=
+          calculateMsgCallGas gasValue gas.toNat d.gasLeft extendCost extraGas
+        let d ← chargeGas (msgCallCost + extendCost) d
+        let ⟨reservoir, d⟩ := d.drainStateGasReservoir
+        let d :=
+          d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        return genericCallAmsterdam.step
+          sevm state d msgCallStipend reservoir value caller target
+          newCodeAddress stv isSt inputIndex inputSize outputIndex outputSize
+          code disablePrecompiles newAccountCharged insufficientBalance) := by
+  apply Xinst.shapeAmsterdam_assert hbase
+  let d₁ := addAccessedAddress d codeAddress
+  have h₁ : Devm.InstructionFrame devm d₁ :=
+    Devm.instructionFrame_trans hbase
+      (addAccessedAddress_instructionFrame d codeAddress)
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ codeAddress with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  simp only [d₁] at hdelegation
+  simp only [hdelegation]
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules codeAddress
+  have h₂ : Devm.InstructionFrame devm d₂ :=
+    Devm.instructionFrame_trans h₁
+      (Devm.balReadAccount_instructionFrame
+        sevm.benvStat.rules codeAddress d₁)
+  apply Xinst.shapeAmsterdam_assert h₂
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  have h₃ : Devm.InstructionFrame devm d₃ :=
+    Devm.instructionFrame_trans h₂
+      (Devm.balReadAccount_instructionFrame
+        sevm.benvStat.rules newCodeAddress d₂)
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles newCodeAddress with
+    ⟨code, d₄⟩
+  have h₄ : Devm.InstructionFrame devm d₄ := by
+    have h := Devm.instructionFrame_trans h₃
+      (completeDelegationAccess_instructionFrame
+        d₃ disablePrecompiles newCodeAddress)
+    simpa only [hcomplete] using h
+  have hsrc : target = sevm.currentTarget ∨
+      (¬ isValidDelegation (d₁.getCode target) →
+        code = d₁.getCode target) := by
+    rcases htarget with htarget | htarget
+    · exact Or.inl htarget
+    · subst target
+      refine Or.inr fun hnd => ?_
+      rw [GasSchedule.delegationCost_of_not_delegation hnd] at hdelegation
+      simp only [Prod.mk.injEq] at hdelegation
+      rcases hdelegation with ⟨hdp, hnew, hcost⟩
+      subst disablePrecompiles
+      subst newCodeAddress
+      have hc := congrArg Prod.fst hcomplete
+      simp only [completeDelegationAccess, Bool.false_eq_true, if_false] at hc
+      exact hc.symm
+  refine Xinst.shapeAmsterdam_bindE h₄
+    (chargeGas_instructionFrame _ d₄) fun d₅ h₅ => ?_
+  exact Xinst.shapeAmsterdam_call
+    (Devm.instructionFrame_trans h₅
+      (Devm.instructionFrame_trans
+        (Devm.drainStateGasReservoir_instructionFrame d₅)
+        (Devm.memExtends_instructionFrame d₅.drainStateGasReservoir.2 _)))
+    h₁ hcal hsrc
+
+lemma Xinst.callcode_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm .callcode) := by
+  simp only [Xinst.step, hsg]
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun gas d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToAdr_instructionFrame d1) fun codeAddress d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.pop_instructionFrame d2) fun value d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bind h3
+    (Devm.popToNat_instructionFrame d3) fun inputIndex d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_bind h4
+    (Devm.popToNat_instructionFrame d4) fun inputSize d5 h5 => ?_
+  refine Xinst.shapeAmsterdam_bind h5
+    (Devm.popToNat_instructionFrame d5) fun outputIndex d6 h6 => ?_
+  refine Xinst.shapeAmsterdam_bind h6
+    (Devm.popToNat_instructionFrame d6) fun outputSize d7 h7 => ?_
+  dsimp only
+  exact Xinst.shapeAmsterdam_meteredPrelude
+    (sevm := sevm) (state := state) (d := d7) (gas := gas)
+    (value := value) (gasValue := value.toNat)
+    (transferCost := if value = 0 then 0 else sevm.benvStat.rules.gas.callValue)
+    (caller := sevm.currentTarget) (target := sevm.currentTarget)
+    (codeAddress := codeAddress) (stv := true) (isSt := false)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false)
+    (insufficientBalance := decide ((d7.getAcct sevm.currentTarget).bal < value))
+    h7 (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
+
+lemma Xinst.delegatecall_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm
+      (Xinst.step sevm devm .delegatecall) := by
+  simp only [Xinst.step, hsg]
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun gas d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToAdr_instructionFrame d1) fun codeAddress d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.popToNat_instructionFrame d2) fun inputIndex d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bind h3
+    (Devm.popToNat_instructionFrame d3) fun inputSize d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_bind h4
+    (Devm.popToNat_instructionFrame d4) fun outputIndex d5 h5 => ?_
+  refine Xinst.shapeAmsterdam_bind h5
+    (Devm.popToNat_instructionFrame d5) fun outputSize d6 h6 => ?_
+  dsimp only
+  exact Xinst.shapeAmsterdam_meteredPrelude
+    (sevm := sevm) (state := state) (d := d6) (gas := gas)
+    (value := sevm.value) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.caller) (target := sevm.currentTarget)
+    (codeAddress := codeAddress) (stv := false) (isSt := false)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false) (insufficientBalance := false)
+    h6 (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
+
+lemma Xinst.staticcall_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm .staticcall) := by
+  simp only [Xinst.step, hsg]
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun gas d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToAdr_instructionFrame d1) fun codeAddress d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.popToNat_instructionFrame d2) fun inputIndex d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bind h3
+    (Devm.popToNat_instructionFrame d3) fun inputSize d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_bind h4
+    (Devm.popToNat_instructionFrame d4) fun outputIndex d5 h5 => ?_
+  refine Xinst.shapeAmsterdam_bind h5
+    (Devm.popToNat_instructionFrame d5) fun outputSize d6 h6 => ?_
+  dsimp only
+  exact Xinst.shapeAmsterdam_meteredPrelude
+    (sevm := sevm) (state := state) (d := d6) (gas := gas)
+    (value := 0) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.currentTarget) (target := codeAddress)
+    (codeAddress := codeAddress) (stv := true) (isSt := true)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false) (insufficientBalance := false)
+    h6 (Or.inl ⟨rfl, rfl⟩) (Or.inr rfl)
+
+lemma Xinst.call_step_shapeAmsterdam
+    (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm .call) := by
+  simp only [Xinst.step, hsg]
+  refine Xinst.shapeAmsterdam_bind (Devm.instructionFrame_refl devm)
+    (Devm.pop_instructionFrame devm) fun gas d1 h1 => ?_
+  refine Xinst.shapeAmsterdam_bind h1
+    (Devm.popToAdr_instructionFrame d1) fun callee d2 h2 => ?_
+  refine Xinst.shapeAmsterdam_bind h2
+    (Devm.pop_instructionFrame d2) fun value d3 h3 => ?_
+  refine Xinst.shapeAmsterdam_bind h3
+    (Devm.popToNat_instructionFrame d3) fun inputIndex d4 h4 => ?_
+  refine Xinst.shapeAmsterdam_bind h4
+    (Devm.popToNat_instructionFrame d4) fun inputSize d5 h5 => ?_
+  refine Xinst.shapeAmsterdam_bind h5
+    (Devm.popToNat_instructionFrame d5) fun outputIndex d6 h6 => ?_
+  refine Xinst.shapeAmsterdam_bind h6
+    (Devm.popToNat_instructionFrame d6) fun outputSize d7 h7 => ?_
+  dsimp only
+  apply Xinst.shapeAmsterdam_assert h7
+  apply Xinst.shapeAmsterdam_assert h7
+  let d₁ := addAccessedAddress d7 callee
+  have h₁ : Devm.InstructionFrame devm d₁ :=
+    Devm.instructionFrame_trans h7
+      (addAccessedAddress_instructionFrame d7 callee)
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ callee with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  simp only [d₁] at hdelegation
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules callee
+  have h₂ : Devm.InstructionFrame devm d₂ :=
+    Devm.instructionFrame_trans h₁
+      (Devm.balReadAccount_instructionFrame
+        sevm.benvStat.rules callee d₁)
+  apply Xinst.shapeAmsterdam_assert h₂
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  have h₃ : Devm.InstructionFrame devm d₃ :=
+    Devm.instructionFrame_trans h₂
+      (Devm.balReadAccount_instructionFrame
+        sevm.benvStat.rules newCodeAddress d₂)
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles
+      newCodeAddress with
+    ⟨code, d₄⟩
+  have h₄ : Devm.InstructionFrame devm d₄ := by
+    have h := Devm.instructionFrame_trans h₃
+      (completeDelegationAccess_instructionFrame
+        d₃ disablePrecompiles newCodeAddress)
+    simpa only [hcomplete] using h
+  have hsrc : ¬ isValidDelegation (d₁.getCode callee) →
+      code = d₁.getCode callee := by
+    intro hnd
+    rw [GasSchedule.delegationCost_of_not_delegation hnd] at hdelegation
+    simp only [Prod.mk.injEq] at hdelegation
+    rcases hdelegation with ⟨hdp, hnew, hcost⟩
+    subst disablePrecompiles
+    subst newCodeAddress
+    have hc := congrArg Prod.fst hcomplete
+    simp only [completeDelegationAccess, Bool.false_eq_true, if_false] at hc
+    exact hc.symm
+  refine Xinst.shapeAmsterdam_bindE h₄
+    (chargeGas_instructionFrame _ d₄) fun d₅ h₅ => ?_
+  dsimp only
+  split
+  · refine Xinst.shapeAmsterdam_bindE h₅
+      (chargeStateGas_instructionFrame state.newAccount d₅) fun d₆ h₆ => ?_
+    refine Xinst.shapeAmsterdam_bindE h₆
+      (chargeGas_instructionFrame _ d₆) fun d₇ h₇ => ?_
+    exact Xinst.shapeAmsterdam_call
+      (Devm.instructionFrame_trans h₇
+        (Devm.instructionFrame_trans
+          (Devm.drainStateGasReservoir_instructionFrame d₇)
+          (Devm.memExtends_instructionFrame d₇.drainStateGasReservoir.2 _)))
+      h₁ (Or.inl ⟨rfl, rfl⟩) (Or.inr hsrc)
+  · refine Xinst.shapeAmsterdam_bindE h₅
+      (show Execution.Rel Devm.InstructionFrame d₅ (.ok d₅) from
+        Devm.instructionFrame_refl d₅) fun d₆ h₆ => ?_
+    refine Xinst.shapeAmsterdam_bindE h₆
+      (chargeGas_instructionFrame _ d₆) fun d₇ h₇ => ?_
+    exact Xinst.shapeAmsterdam_call
+      (Devm.instructionFrame_trans h₇
+        (Devm.instructionFrame_trans
+          (Devm.drainStateGasReservoir_instructionFrame d₇)
+          (Devm.memExtends_instructionFrame d₇.drainStateGasReservoir.2 _)))
+      h₁ (Or.inl ⟨rfl, rfl⟩) (Or.inr hsrc)
+
+lemma Xinst.step_shapeAmsterdam (sevm : Sevm) (state : StateGasRules)
+    (devm : Devm) (x : Xinst)
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    Xinst.ShapeAmsterdam sevm state devm (Xinst.step sevm devm x) := by
+  cases x with
+  | create => exact Xinst.create_step_shapeAmsterdam sevm state devm hsg
+  | create2 => exact Xinst.create2_step_shapeAmsterdam sevm state devm hsg
+  | call => exact Xinst.call_step_shapeAmsterdam sevm state devm hsg
+  | callcode => exact Xinst.callcode_step_shapeAmsterdam sevm state devm hsg
+  | delegatecall =>
+    exact Xinst.delegatecall_step_shapeAmsterdam sevm state devm hsg
+  | staticcall => exact Xinst.staticcall_step_shapeAmsterdam sevm state devm hsg
+
 /-- The early exit taken when the caller cannot cover the transferred value:
 a push onto a machine whose world is untouched. -/
 lemma Xinst.shape_shortfall {sevm : Sevm} {devm d : Devm} {stipend : Nat}
@@ -6476,6 +6943,60 @@ lemma Xinst.step_spawn_getCode_any {sevm : Sevm} {devm : Devm} {x : Xinst}
       | callcode => exact Xinst.callcodeAmsterdam_spawnFrame hsg hs a
       | delegatecall => exact Xinst.delegatecallAmsterdam_spawnFrame hsg hs a
       | staticcall => exact Xinst.staticcallAmsterdam_spawnFrame hsg hs a
+
+/-- Fork-uniform source classification for a spawned external-call child. -/
+lemma Xinst.step_spawn_source_any {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
+    devm.getCode f.inner.currentTarget = .empty ∨
+    f.inner.currentTarget = sevm.currentTarget ∨
+    (¬ isValidDelegation (devm.getCode f.inner.currentTarget) →
+      f.inner.code = devm.getCode f.inner.currentTarget) := by
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Xinst.step_spawn_source hs hsg
+  | some state =>
+      rcases Xinst.step_shapeAmsterdam sevm state devm x hsg with
+        ⟨ex, hsh, -⟩ |
+        ⟨d, e, na, mi, ms, hf, hsh⟩ |
+        ⟨d, d₀, g, reservoir, v, c, t, cadr, stv, isSt, ii, isz, oi,
+          osz, code, dp, nac, ib, hf, hf₀, -, hsrc, hsh⟩ <;>
+        rw [hsh] at hs
+      · cases hs
+      · obtain ⟨-, htgt, hempty⟩ :=
+          genericCreateAmsterdam.step_spawn_frame hs
+        exact Or.inl (by rw [htgt, hf.getCode na]; exact hempty)
+      · obtain ⟨-, htgt, hcode⟩ :=
+          genericCallAmsterdam.step_spawn_frame hs
+        rcases hsrc with rfl | hsrc
+        · exact Or.inr (Or.inl htgt)
+        · refine Or.inr (Or.inr fun hnd => ?_)
+          rw [htgt] at hnd ⊢
+          rw [hf₀.getCode t] at hnd ⊢
+          rw [hcode]
+          exact hsrc hnd
+
+/-- Fork-uniform child-location and code-source facts for a spawned step. -/
+lemma Evm.step_spawn_child_any {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
+    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
+    (he : f.enter = .run cevm) :
+    cevm.pc = 0 ∧
+    (∀ a : Adr, cevm.dyna.getCode a = devm.getCode a) ∧
+    (sevm.currentTarget ≠ cevm.sta.currentTarget →
+      devm.getCode cevm.sta.currentTarget ≠ .empty →
+      ¬ isValidDelegation (devm.getCode cevm.sta.currentTarget) →
+      cevm.sta.code = devm.getCode cevm.sta.currentTarget) := by
+  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
+  have htgt := Frame.enter_run_currentTarget he
+  have hcode := Frame.enter_run_code he
+  refine ⟨Frame.enter_run_pc he, fun a => ?_, fun hne hnotEmpty hnotDel => ?_⟩
+  · rw [Frame.enter_run_getCode he a]
+    exact Xinst.step_spawn_getCode_any hx a
+  · rw [htgt] at hne hnotEmpty hnotDel ⊢
+    rw [hcode]
+    rcases Xinst.step_spawn_source_any hx with hempty | hsame | hsrc
+    · exact absurd hempty hnotEmpty
+    · exact absurd hsame.symm hne
+    · exact hsrc hnotDel
 
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
