@@ -537,33 +537,56 @@ structure RequestsTrace (benv : Benv) (bout : BlockOutput)
   consolidation : SystemMessageTrace (benv.withState withdrawalState)
     consolidationRequestPredeployAddress []
     consolidationState consolidationOut
+  /-- **The two request contracts this trace is about are the ones the rules
+  name, in order.**
+
+  Jaune's request pass is now a fold over `rules.requests` -- an ordered list of
+  `(type byte, address)` pairs -- rather than two named calls, and Amsterdam
+  appends two more entries. Pinning the list is what keeps this structure's two
+  named calls faithful: under Prague, Osaka, BPO1 and BPO2 the list is exactly
+  these two, so the fields below are the fold, spelled out. Under a fork that
+  names a different list the structure is uninhabited, which is honest -- Blanc
+  has no theory of the extra contracts yet.
+
+  Every consumer fixes a concrete `Fork`, so this is discharged by
+  computation. -/
+  requestsShape : benv.stat.rules.requests =
+    [(1, withdrawalRequestPredeployAddress),
+     (2, consolidationRequestPredeployAddress)]
   run : processGeneralPurposeRequests benv bout = .ok (state, bout')
+
 theorem exists_requestsTrace
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (hreq : benv.stat.rules.requests =
+      [(1, withdrawalRequestPredeployAddress),
+       (2, consolidationRequestPredeployAddress)])
     (h : processGeneralPurposeRequests benv bout = .ok (state, bout')) :
     Nonempty (RequestsTrace benv bout state bout') := by
   have h_result := h
-  unfold processGeneralPurposeRequests at h
+  unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at h
+  rw [hreq] at h
+  unfold runRequestContracts at h
   obtain ⟨deposits, hdeposits, h⟩ := Except.bind_eq_ok h
-  dsimp only at h
-  split at h <;>
-    (obtain ⟨⟨withdrawalState, withdrawalOut⟩, hwithdrawal, h⟩ :=
-      Except.bind_eq_ok h
-     have hwithdrawal' :=
-       processCheckedSystemTransaction_to_unchecked hwithdrawal
-     rcases exists_systemMessageTrace hwithdrawal' with ⟨withdrawalTrace⟩
-     dsimp only at h
-     split at h <;>
-       (obtain ⟨⟨consolidationState, consolidationOut⟩,
-          hconsolidation, _⟩ := Except.bind_eq_ok h
-        have hconsolidation' :=
-          processCheckedSystemTransaction_to_unchecked hconsolidation
-        rcases exists_systemMessageTrace hconsolidation' with
-          ⟨consolidationTrace⟩
-        exact ⟨⟨deposits, hdeposits,
-          withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
-          consolidationState, consolidationOut,
-          hconsolidation, consolidationTrace, h_result⟩⟩))
+  -- The fold now returns a triple -- state, the accumulated request bytes, and
+  -- EIP-7928's builder -- so peel the fold itself before its steps.
+  obtain ⟨⟨foldState, foldRequests, foldBal⟩, hfold, _⟩ := Except.bind_eq_ok h
+  -- The fold's first step: the withdrawal contract.
+  obtain ⟨⟨withdrawalState, withdrawalOut⟩, hwithdrawal, hfold⟩ :=
+    Except.bind_eq_ok hfold
+  have hwithdrawal' :=
+    processCheckedSystemTransaction_to_unchecked hwithdrawal
+  rcases exists_systemMessageTrace hwithdrawal' with ⟨withdrawalTrace⟩
+  -- and its second: the consolidation contract, on the threaded environment.
+  unfold runRequestContracts at hfold
+  obtain ⟨⟨consolidationState, consolidationOut⟩, hconsolidation, _⟩ :=
+    Except.bind_eq_ok hfold
+  have hconsolidation' :=
+    processCheckedSystemTransaction_to_unchecked hconsolidation
+  rcases exists_systemMessageTrace hconsolidation' with ⟨consolidationTrace⟩
+  exact ⟨⟨deposits, hdeposits,
+    withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
+    consolidationState, consolidationOut,
+    hconsolidation, consolidationTrace, hreq, h_result⟩⟩
 
 /-- The final request-processing state is the state returned by the second
 checked system message. -/
@@ -572,26 +595,20 @@ theorem RequestsTrace.state_eq_consolidationState
     {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') :
     state = trace.consolidationState := by
-  have hconsolidation :
-      processCheckedSystemTransaction
-        { state := trace.withdrawalState
-          createdAccounts := benv.createdAccounts
-          stat := benv.stat }
-        consolidationRequestPredeployAddress [] =
-          .ok (trace.consolidationState, trace.consolidationOut) := by
-    simpa only [Benv.withState] using trace.consolidationRun
+  -- The fold threads the environment as `benv.withState _`, so the field is
+  -- used in the form it is stated in rather than simped into a record literal.
   have hrun := trace.run
-  unfold processGeneralPurposeRequests at hrun
+  unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at hrun
+  rw [trace.requestsShape] at hrun
+  unfold runRequestContracts at hrun
   rw [trace.parsed] at hrun
   simp only [bind, Except.bind] at hrun
-  split at hrun <;>
-    (rw [trace.withdrawalRun] at hrun
-     dsimp only at hrun
-     split at hrun <;>
-       (rw [hconsolidation] at hrun
-        dsimp only at hrun
-        split at hrun <;>
-          exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm))
+  rw [trace.withdrawalRun] at hrun
+  simp only [bind, Except.bind] at hrun
+  unfold runRequestContracts at hrun
+  rw [trace.consolidationRun] at hrun
+  simp only [bind, Except.bind] at hrun
+  exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm
 
 /-- Complete retained execution evidence for a successful body under Jaune's
 currently modelled body semantics.  This includes the two pre-transaction
@@ -626,9 +643,33 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
     (transactionBout.withWithdrawalsTrie
       (processWithdrawalsTrie transactionBout.withdrawalsTrie wds))
     state bout
+/-- **The transaction fold carries the block's static environment.**
+
+`applyTransactions` only ever rebuilds its environment with `Benv.withState`,
+which rewrites `state` and copies `stat` through, so the fork -- and with it the
+request-contract list -- is the block's throughout. -/
+theorem applyTransactions_stat :
+    ∀ (txis : List (Nat × Tx)) {benv : Benv} {bout : BlockOutput}
+      {p : Benv × BlockOutput},
+      applyTransactions txis benv bout = .ok p → p.1.stat = benv.stat
+  | [], _, _, _, hp => by cases hp; rfl
+  | txi :: txis, benv, bout, p, hp => by
+    unfold applyTransactions at hp
+    obtain ⟨⟨st, bout'⟩, _, hp⟩ := Except.bind_eq_ok hp
+    dsimp only at hp
+    -- The recursive call runs on `benv.withState st`. Its `stat` is `benv`'s by
+    -- definition, so the induction hypothesis *is* the goal -- but the implicit
+    -- has to be given, or it unifies against the goal's `benv` and `hp` no
+    -- longer matches.
+    have ih := applyTransactions_stat (benv := benv.withState st) txis hp
+    exact ih
+
 theorem exists_appliedBodyTrace
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
+    (hreq : benv.stat.rules.requests =
+      [(1, withdrawalRequestPredeployAddress),
+       (2, consolidationRequestPredeployAddress)])
     (h : applyBody benv txs wds = .ok (state, bout)) :
     Nonempty (AppliedBodyTrace benv txs wds state bout) := by
   have h_result := h
@@ -649,7 +690,14 @@ theorem exists_appliedBodyTrace
   rcases exists_applyTransactionsTrace htransactions with
     ⟨transactionsTrace⟩
   dsimp [processWithdrawals] at hrequests
-  rcases exists_requestsTrace hrequests with ⟨requestsTrace⟩
+  have hreq' : (transactionBenv.withState
+      (processWithdrawalsState transactionBenv.state wds)).stat.rules.requests =
+      [(1, withdrawalRequestPredeployAddress),
+       (2, consolidationRequestPredeployAddress)] := by
+    show transactionBenv.stat.rules.requests = _
+    rw [applyTransactions_stat _ htransactions]
+    exact hreq
+  rcases exists_requestsTrace hreq' hrequests with ⟨requestsTrace⟩
   exact ⟨⟨h_result, beaconState, beaconOut, beaconTrace,
     lastHash, hlastHash, historyState, historyOut, historyTrace,
     decodedTxs, hdecoded, transactionBenv, transactionBout,
