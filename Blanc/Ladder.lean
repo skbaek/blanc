@@ -9919,6 +9919,436 @@ private lemma processCreateMessage_settle_preserves_inv
     rw [← Except.ok.inj h_run]
     exact h_saved
 
+open private runPreparedTopFrame from Jaune.Transaction in
+private lemma runPreparedTopFrame_ofCreate_preserves_inv
+    {wa : Adr} {msg : Msg} {prepared post : Devm}
+    (hp : c.Preserves wa)
+    (h_run : runPreparedTopFrame (Frame.ofCreate msg) prepared = .ok post)
+    (h_ct_ne : msg.currentTarget ≠ wa)
+    (h_msg : c.MsgInv wa msg)
+    (h_memory : Mem.Wf prepared.memory) :
+    c.StateInv wa post.state := by
+  unfold runPreparedTopFrame at h_run
+  simp only [Frame.ofCreate] at h_run
+  cases h_bt : (processCreateMessage.msg msg).benvAfterTransfer with
+  | error err =>
+      rw [h_bt] at h_run
+      simp [Frame.settleMsg, processMessage.settle,
+        processCreateMessage.settle] at h_run
+  | ok benv =>
+      rw [h_bt] at h_run
+      simp only [Frame.settle, Frame.settleMsg,
+        if_true] at h_run
+      let inner := (processCreateMessage.msg msg).withBenv benv
+      let dyna :=
+        (prepared.withState benv.state).withCreatedAccounts benv.createdAccounts
+      let entry : Evm := {
+        pc := 0
+        sta := initSevm inner
+        dyna := dyna
+      }
+      change processCreateMessage.settle msg
+        (processMessage.settle (processCreateMessage.msg msg)
+          (executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+            (match inner.codeAddress with
+            | none => exec entry
+            | some adr =>
+              if !inner.disablePrecompiles && inner.benv.stat.rules.isPrecomp adr then
+                executePrecomp entry adr
+              else exec entry))) = .ok post at h_run
+      have h_saved :
+          c.StateInv wa (processCreateMessage.msg msg).benv.state := by
+        change c.StateInv wa
+          ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+            msg.currentTarget)
+        exact StateInv.incrNonce (StateInv.setStor_ne h_ct_ne h_msg.state)
+      have h_seed_ne :
+          (processCreateMessage.msg msg).shouldTransferValue = true →
+            (processCreateMessage.msg msg).caller ≠ wa := by
+        simpa [processCreateMessage.msg, Msg.withBenv] using h_msg.ne
+      have h_seed_val0 :
+          (processCreateMessage.msg msg).shouldTransferValue = false →
+            (processCreateMessage.msg msg).currentTarget = wa →
+              (processCreateMessage.msg msg).value = 0 := by
+        simpa [processCreateMessage.msg, Msg.withBenv] using h_msg.val0
+      have h_pre0 : c.Pre wa (initSevm inner) (initDevm inner) :=
+        Pre.of_inv_benvAfterTransfer h_seed_ne h_seed_val0 h_bt h_saved
+      have h_pre : c.Pre wa entry.sta entry.dyna :=
+        Pre.state_eq h_pre0 rfl
+      have h_entry : c.StateInv wa entry.dyna.state := by
+        exact StateInv.of_benvAfterTransfer h_seed_ne h_bt h_saved
+      have h_code : entry.sta.currentTarget = wa →
+          some entry.sta.code.toList = Prog.compile c.prog := by
+        intro h_current
+        exfalso
+        apply h_ct_ne
+        exact h_current
+      have h_wf : entry.sta.currentTarget = wa → Mem.Wf entry.dyna.memory := by
+        intro _
+        exact h_memory
+      have finish (raw : Execution)
+          (h_route : raw = exec entry ∨
+            ∃ adr, raw = executePrecomp entry adr)
+          (h_run' : processCreateMessage.settle msg
+            (processMessage.settle (processCreateMessage.msg msg)
+              (executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw)) =
+                .ok post) :
+          c.StateInv wa post.state := by
+        cases h_pm : processMessage.settle (processCreateMessage.msg msg)
+            (executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw) with
+        | error err =>
+            rw [h_pm, processCreateMessage.settle_error] at h_run'
+            contradiction
+        | ok settled =>
+            rw [h_pm] at h_run'
+            have h_settled : c.StateInv wa settled.state :=
+              processMessage_settle_prepared_preserves_inv hp h_pm h_route
+                rfl h_saved h_entry h_pre h_code h_wf
+            exact processCreateMessage_settle_preserves_inv h_run' h_ct_ne
+              h_settled h_msg.state
+      cases h_ca : inner.codeAddress with
+      | none =>
+          rw [h_ca] at h_run
+          exact finish (exec entry) (.inl rfl) h_run
+      | some adr =>
+          rw [h_ca] at h_run
+          simp only at h_run
+          by_cases h_precompile :
+              (!inner.disablePrecompiles && inner.benv.stat.rules.isPrecomp adr) = true
+          · rw [if_pos h_precompile] at h_run
+            exact finish (executePrecomp entry adr) (.inr ⟨adr, rfl⟩) h_run
+          · rw [if_neg h_precompile] at h_run
+            exact finish (exec entry) (.inl rfl) h_run
+
+open private msgCallOutputAmsterdam from Jaune.Transaction in
+private lemma msgCallOutputAmsterdam_preserves_inv
+    {wa : Adr} {msg : Msg} {evm : Devm} {st : Jaune.State}
+    {out : MsgCallOutput}
+    (h_run : msgCallOutputAmsterdam msg evm = .ok ⟨st, out⟩)
+    (h_inv : c.StateInv wa evm.state) :
+    c.StateInv wa st := by
+  unfold msgCallOutputAmsterdam at h_run
+  by_cases h_clean : evm.error.isNone = true
+  · rw [if_pos h_clean] at h_run
+    rcases Except.bind_eq_ok h_run with ⟨refundCounter, _, h_out⟩
+    have h_state : evm.state = st :=
+      congrArg Prod.fst (Except.ok.inj h_out)
+    rw [← h_state]
+    exact h_inv
+  · rw [if_neg h_clean] at h_run
+    have h_state : evm.state = st :=
+      congrArg Prod.fst (Except.ok.inj h_run)
+    rw [← h_state]
+    exact h_inv
+
+private lemma settleTopLevelPreparationFailure_preserves_inv
+    {wa : Adr} {msg : Msg} {error : EvmError} {prepared : Devm}
+    {st : Jaune.State} {out : MsgCallOutput}
+    (h_run : settleTopLevelPreparationFailure msg error prepared =
+      .ok ⟨st, out⟩)
+    (h_inv : c.StateInv wa msg.benv.state) :
+    c.StateInv wa st := by
+  unfold settleTopLevelPreparationFailure at h_run
+  cases error with
+  | halt reason =>
+      have h_state : msg.benv.state = st :=
+        congrArg Prod.fst (Except.ok.inj h_run)
+      rw [← h_state]
+      exact h_inv
+  | revert => cases h_run
+  | crypto reason => cases h_run
+  | internal reason => cases h_run
+
+open private resolveTopLevelCallAmsterdam preparedTopLevelMsg
+  from Jaune.Transaction in
+private lemma resolveTopLevelCallAmsterdam_target_current
+    {msg preparedMsg : Msg} {before prepared : Devm}
+    (h_run : resolveTopLevelCallAmsterdam msg before =
+      .ok ⟨preparedMsg, prepared⟩) :
+    preparedMsg.target = msg.target ∧
+      preparedMsg.currentTarget = msg.currentTarget := by
+  unfold resolveTopLevelCallAmsterdam at h_run
+  rcases h_cost : msg.benv.stat.rules.gas.delegationCost before
+      msg.currentTarget with ⟨delegated, codeAddress, accessCost⟩
+  rw [h_cost] at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  cases h_charge : chargeGas accessCost before with
+  | error err =>
+      rw [h_charge] at h_run
+      contradiction
+  | ok charged =>
+      rw [h_charge] at h_run
+      simp only at h_run
+      have h_msg :
+          { preparedTopLevelMsg msg
+              ((completeDelegationAccess charged delegated codeAddress).2.balReadAccount
+                msg.benv.stat.rules codeAddress) with
+            codeAddress := some codeAddress
+            code := (completeDelegationAccess charged delegated codeAddress).1
+            disablePrecompiles := delegated } = preparedMsg :=
+        congrArg Prod.fst (Except.ok.inj h_run)
+      rw [← h_msg]
+      exact ⟨rfl, rfl⟩
+
+open private dispatchTopLevelAmsterdam resolveTopLevelCallAmsterdam
+  preparedTopLevelMsg from Jaune.Transaction in
+private lemma dispatchTopLevelAmsterdam_target_current
+    {state : StateGasRules} {msg preparedMsg : Msg} {before prepared : Devm}
+    (h_run : dispatchTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩) :
+    preparedMsg.target = msg.target ∧
+      preparedMsg.currentTarget = msg.currentTarget := by
+  unfold dispatchTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  let read := before.balReadAccount msg.benv.stat.rules msg.currentTarget
+  have from_prepared (d : Devm)
+      (h : (Except.ok (preparedTopLevelMsg msg d, d) :
+        Except (EvmError × Devm) (Msg × Devm)) =
+          Except.ok (preparedMsg, prepared)) :
+      preparedMsg.target = msg.target ∧
+        preparedMsg.currentTarget = msg.currentTarget := by
+    have h_msg : preparedTopLevelMsg msg d = preparedMsg :=
+      congrArg Prod.fst (Except.ok.inj h)
+    rw [← h_msg]
+    exact ⟨rfl, rfl⟩
+  by_cases h_target : msg.target.isNone = true
+  · rw [if_pos h_target] at h_run
+    by_cases h_collision :
+        (accountHasCodeOrNonce read.state msg.currentTarget ||
+          accountHasStorage read.state msg.currentTarget) = true
+    · rw [if_pos h_collision] at h_run
+      contradiction
+    · rw [if_neg h_collision] at h_run
+      by_cases h_new : msg.benv.stat.origState.get msg.currentTarget = .nil
+      · rw [if_pos h_new] at h_run
+        cases h_charge : chargeStateGas state.newAccount read with
+        | error err =>
+            rw [h_charge] at h_run
+            contradiction
+        | ok charged =>
+            rw [h_charge] at h_run
+            exact from_prepared charged h_run
+      · rw [if_neg h_new] at h_run
+        exact from_prepared read h_run
+  · rw [if_neg h_target] at h_run
+    by_cases h_new :
+        (msg.value != 0 && ¬ AccountExists read.state msg.currentTarget) = true
+    · rw [if_pos h_new] at h_run
+      cases h_charge : chargeStateGas state.newAccount read with
+      | error err =>
+          rw [h_charge] at h_run
+          contradiction
+      | ok charged =>
+          rw [h_charge] at h_run
+          exact resolveTopLevelCallAmsterdam_target_current h_run
+    · rw [if_neg h_new] at h_run
+      exact resolveTopLevelCallAmsterdam_target_current h_run
+
+open private dispatchTopLevelAmsterdam from Jaune.Transaction in
+private lemma dispatchTopLevelAmsterdam_create_currentTarget_ne
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {before prepared : Devm}
+    (h_run : dispatchTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_target : msg.target.isNone = true)
+    (h_code : (before.state.getCode wa).toList ≠ []) :
+    msg.currentTarget ≠ wa := by
+  unfold dispatchTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  let read := before.balReadAccount msg.benv.stat.rules msg.currentTarget
+  rw [if_pos h_target] at h_run
+  by_cases h_collision :
+      (accountHasCodeOrNonce read.state msg.currentTarget ||
+        accountHasStorage read.state msg.currentTarget) = true
+  · rw [if_pos h_collision] at h_run
+    contradiction
+  · rw [if_neg h_collision] at h_run
+    simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_collision
+    have h_frame := Devm.balReadAccount_instructionFrame msg.benv.stat.rules
+      msg.currentTarget before
+    have h_state := h_frame.state
+    change before.state = read.state at h_state
+    apply ne_wa_of_not_hasCodeOrNonce ?_ h_collision.1
+    rw [← h_state]
+    exact h_code
+
+open private finishTopLevelAmsterdam dispatchTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma finishTopLevelAmsterdam_target_current
+    {state : StateGasRules} {msg preparedMsg : Msg} {before prepared : Devm}
+    (h_run : finishTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩) :
+    preparedMsg.target = msg.target ∧
+      preparedMsg.currentTarget = msg.currentTarget := by
+  unfold finishTopLevelAmsterdam at h_run
+  split at h_run
+  · exact dispatchTopLevelAmsterdam_target_current h_run
+  · exact dispatchTopLevelAmsterdam_target_current h_run
+
+open private finishTopLevelAmsterdam dispatchTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma finishTopLevelAmsterdam_create_currentTarget_ne
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {before prepared : Devm}
+    (h_run : finishTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_target : msg.target.isNone = true)
+    (h_code : (before.state.getCode wa).toList ≠ []) :
+    msg.currentTarget ≠ wa := by
+  unfold finishTopLevelAmsterdam at h_run
+  split at h_run
+  · exact dispatchTopLevelAmsterdam_create_currentTarget_ne h_run h_target
+      h_code
+  · have h_frame := Devm.commitStateGas_instructionFrame before
+    have h_state := h_frame.state
+    apply dispatchTopLevelAmsterdam_create_currentTarget_ne h_run h_target
+    rw [← h_state]
+    exact h_code
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_target_current
+    {state : StateGasRules} {msg preparedMsg : Msg} {prepared : Devm}
+    (h_run : prepareTopLevelAmsterdam state msg =
+      .ok ⟨preparedMsg, prepared⟩) :
+    preparedMsg.target = msg.target ∧
+      preparedMsg.currentTarget = msg.currentTarget := by
+  unfold prepareTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  split at h_run
+  · exact finishTopLevelAmsterdam_target_current h_run
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error err =>
+        rw [h_delegation] at h_run
+        contradiction
+    | ok delegated =>
+        rw [h_delegation] at h_run
+        exact finishTopLevelAmsterdam_target_current h_run
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_create_currentTarget_ne
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {prepared : Devm}
+    (h_run : prepareTopLevelAmsterdam state msg =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_target : msg.target.isNone = true)
+    (h_msg : c.MsgInv wa msg) :
+    msg.currentTarget ≠ wa := by
+  unfold prepareTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  have h_init : AmsterdamPrepInv c wa (initDevm msg) :=
+    ⟨h_msg.state, h_msg.nodel.initDevm⟩
+  split at h_run
+  · exact finishTopLevelAmsterdam_create_currentTarget_ne h_run h_target
+      h_init.2.code
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error err =>
+        rw [h_delegation] at h_run
+        contradiction
+    | ok delegated =>
+        rw [h_delegation] at h_run
+        have h_delegated : AmsterdamPrepInv c wa delegated :=
+          setDelegationAmsterdam_preserves_prep_ok h_delegation h_init
+        exact finishTopLevelAmsterdam_create_currentTarget_ne h_run h_target
+          h_delegated.2.code
+
+open private runPreparedTopFrame msgCallOutputAmsterdam
+  from Jaune.Transaction in
+private lemma processTopLevelAmsterdam_ofCall_preserves_inv
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {st : Jaune.State}
+    {out : MsgCallOutput}
+    (hp : c.Preserves wa)
+    (h_run : processTopLevelAmsterdam state msg Frame.ofCall =
+      .ok ⟨st, out⟩)
+    (h_target : msg.target.isNone = false)
+    (h_msg : c.MsgInv wa msg) :
+    c.StateInv wa st := by
+  unfold processTopLevelAmsterdam at h_run
+  cases h_prepare : prepareTopLevelAmsterdam state msg with
+  | error prepError =>
+      rw [h_prepare] at h_run
+      simp only at h_run
+      exact settleTopLevelPreparationFailure_preserves_inv h_run h_msg.state
+  | ok preparedPair =>
+      rcases preparedPair with ⟨preparedMsg, prepared⟩
+      rw [h_prepare] at h_run
+      simp only at h_run
+      have h_prep : AmsterdamPrepInv c wa prepared :=
+        prepareTopLevelAmsterdam_preserves_prep_ok h_prepare h_msg.state
+          h_msg.nodel
+      have h_prepared_msg : c.MsgInv wa preparedMsg :=
+        prepareTopLevelAmsterdam_preserves_msgInv_ok h_prepare h_msg h_prep
+      have h_fields := prepareTopLevelAmsterdam_target_current h_prepare
+      have h_prepared_target : preparedMsg.target.isNone = false := by
+        rw [h_fields.1, h_target]
+      have h_memory_frame := prepareTopLevelAmsterdam_memoryFrame state msg
+      rw [h_prepare] at h_memory_frame
+      have h_memory : Mem.Wf prepared.memory := by
+        rw [← h_memory_frame]
+        exact Mem.wf_empty
+      cases h_frame : runPreparedTopFrame (Frame.ofCall preparedMsg) prepared with
+      | error frameError =>
+          rw [h_frame] at h_run
+          contradiction
+      | ok post =>
+          rw [h_frame] at h_run
+          simp only [Except.bimap, Bind.bind, Except.bind, id_eq] at h_run
+          have h_post : c.StateInv wa post.state :=
+            runPreparedTopFrame_ofCall_preserves_inv hp h_frame
+              h_prepared_target h_prepared_msg h_memory
+          exact msgCallOutputAmsterdam_preserves_inv h_run h_post
+
+open private runPreparedTopFrame msgCallOutputAmsterdam
+  from Jaune.Transaction in
+private lemma processTopLevelAmsterdam_ofCreate_preserves_inv
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {st : Jaune.State}
+    {out : MsgCallOutput}
+    (hp : c.Preserves wa)
+    (h_run : processTopLevelAmsterdam state msg Frame.ofCreate =
+      .ok ⟨st, out⟩)
+    (h_target : msg.target.isNone = true)
+    (h_msg : c.MsgInv wa msg) :
+    c.StateInv wa st := by
+  unfold processTopLevelAmsterdam at h_run
+  cases h_prepare : prepareTopLevelAmsterdam state msg with
+  | error prepError =>
+      rw [h_prepare] at h_run
+      simp only at h_run
+      exact settleTopLevelPreparationFailure_preserves_inv h_run h_msg.state
+  | ok preparedPair =>
+      rcases preparedPair with ⟨preparedMsg, prepared⟩
+      rw [h_prepare] at h_run
+      simp only at h_run
+      have h_prep : AmsterdamPrepInv c wa prepared :=
+        prepareTopLevelAmsterdam_preserves_prep_ok h_prepare h_msg.state
+          h_msg.nodel
+      have h_prepared_msg : c.MsgInv wa preparedMsg :=
+        prepareTopLevelAmsterdam_preserves_msgInv_ok h_prepare h_msg h_prep
+      have h_fields := prepareTopLevelAmsterdam_target_current h_prepare
+      have h_ct : msg.currentTarget ≠ wa :=
+        prepareTopLevelAmsterdam_create_currentTarget_ne h_prepare h_target
+          h_msg
+      have h_prepared_ct : preparedMsg.currentTarget ≠ wa := by
+        rw [h_fields.2]
+        exact h_ct
+      have h_memory_frame := prepareTopLevelAmsterdam_memoryFrame state msg
+      rw [h_prepare] at h_memory_frame
+      have h_memory : Mem.Wf prepared.memory := by
+        rw [← h_memory_frame]
+        exact Mem.wf_empty
+      cases h_frame : runPreparedTopFrame (Frame.ofCreate preparedMsg) prepared with
+      | error frameError =>
+          rw [h_frame] at h_run
+          contradiction
+      | ok post =>
+          rw [h_frame] at h_run
+          simp only [Except.bimap, Bind.bind, Except.bind, id_eq] at h_run
+          have h_post : c.StateInv wa post.state :=
+            runPreparedTopFrame_ofCreate_preserves_inv hp h_frame
+              h_prepared_ct h_prepared_msg h_memory
+          exact msgCallOutputAmsterdam_preserves_inv h_run h_post
+
 theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (hp : c.Preserves wa)
     (h_run : processCreateMessage msg = .ok evm)
@@ -10327,6 +10757,38 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
             · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
               rcases h_run with ⟨rfl, _⟩
               exact h_evm_inv
+
+theorem processMessageCall_preserves_stateInv
+    {wa : Adr} {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
+    (hp : c.Preserves wa)
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h_inv : c.MsgInv wa msg) :
+    c.StateInv wa st' := by
+  have h_run_original := h_run
+  unfold processMessageCall at h_run
+  by_cases h_target : msg.target.isNone = true
+  · rw [if_pos h_target] at h_run
+    unfold processMessageCall.create at h_run
+    cases h_stateGas : msg.benv.stat.rules.stateGas with
+    | none =>
+        exact (processMessageCall_preserves_inv hp h_run_original h_stateGas
+          h_inv).1
+    | some state =>
+        rw [h_stateGas] at h_run
+        exact processTopLevelAmsterdam_ofCreate_preserves_inv hp h_run
+          h_target h_inv
+  · have h_target_false : msg.target.isNone = false :=
+      Bool.eq_false_of_not_eq_true h_target
+    rw [if_neg h_target] at h_run
+    unfold processMessageCall.call at h_run
+    cases h_stateGas : msg.benv.stat.rules.stateGas with
+    | none =>
+        exact (processMessageCall_preserves_inv hp h_run_original h_stateGas
+          h_inv).1
+    | some state =>
+        rw [h_stateGas] at h_run
+        exact processTopLevelAmsterdam_ofCall_preserves_inv hp h_run
+          h_target_false h_inv
 
 /-! ### Transaction-level helper lemmas
 
