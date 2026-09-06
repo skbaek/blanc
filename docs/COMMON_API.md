@@ -411,6 +411,11 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Table.count_le_one` excludes even identical duplicate rows. Independently,
   `Table.checkLayout_sound` proves exact decoded-byte interval coverage from
   the layout check; each node consumes its actual decoded instruction width.
+  `Table.all_node` composes named row checks while retaining their identical
+  predicate (and thus the complete table for successor lookup).
+  `Table.checkLayout_node` composes checked left/right intervals through an
+  actual-decoder-checked singleton; no gap or assumed instruction width is
+  introduced by a named-subtree boundary.
   `checkTable` itself does not include that separate layout check or establish
   entry, feasible-path reachability, or arbitrary child-frame stack safety.
   This table-construction interface is registered here; the existing

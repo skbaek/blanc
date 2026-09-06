@@ -69,6 +69,15 @@ def Table.all (check : Nat → Pattern → Bool) : Table → Bool
   | .node pc input left right =>
       check pc input && left.all check && right.all check
 
+/-- Join independently checked pieces without changing their row predicate.
+In a stack certificate that predicate still searches the complete table. -/
+theorem Table.all_node {check : Nat → Pattern → Bool} {pc : Nat}
+    {input : Pattern} {left right : Table}
+    (row : check pc input = true) (leftChecked : left.all check = true)
+    (rightChecked : right.all check = true) :
+    (Table.node pc input left right).all check = true := by
+  simpa only [Table.all, Bool.and_eq_true] using And.intro (And.intro row leftChecked) rightChecked
+
 theorem Table.lookup_all {table : Table} {check : Nat → Pattern → Bool}
     (checked : table.all check = true) {pc : Nat} {input : Pattern}
     (found : table.lookup pc = some input) : check pc input = true := by
@@ -372,6 +381,24 @@ theorem Table.checkLayout_sound {code : ByteArray} {start stop : Nat}
             decide_eq_true_eq] at checked
           exact ⟨instruction, decoded, ihLeft checked.1.1,
             checked.1.2, ihRight checked.2⟩
+
+/-- Join exact decoded intervals through a separately checked singleton.
+The singleton checks the actual instruction and fixes its next byte boundary. -/
+theorem Table.checkLayout_node {code : ByteArray} {start stop pc next : Nat}
+    {input : Pattern} {left right : Table}
+    (single : (Table.node pc input .empty .empty).checkLayout code pc next = true)
+    (leftChecked : left.checkLayout code start pc = true)
+    (rightChecked : right.checkLayout code next stop = true)
+    (bound : next ≤ stop) :
+    (Table.node pc input left right).checkLayout code start stop = true := by
+  cases decoded : code.getInst pc with
+  | none => simp [Table.checkLayout, decoded] at single
+  | some instruction =>
+      simp only [Table.checkLayout, decoded, Bool.and_eq_true, decide_eq_true_eq] at single
+      have width : pc + instructionWidth instruction = next := single.2
+      simp only [Table.checkLayout, decoded, width, leftChecked, rightChecked,
+        Bool.true_and, Bool.and_true, decide_eq_true_eq]
+      exact bound
 
 def Table.size : Table → Nat
   | .empty => 0
