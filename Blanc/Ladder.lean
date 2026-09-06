@@ -22,6 +22,7 @@
 -- `fmint_preserves_conserved`.  (It was a statement-level instance only until
 -- Arc B of that proposal closed; both instances now carry proofs.)
 
+import Batteries.Tactic.OpenPrivate
 import Blanc.CommonProofs
 
 namespace Blanc
@@ -7742,6 +7743,1024 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       exact Exec.inv_noDel_any exc hnd
   exact ProcessCreateMessage.inv_noDel hinv hrel h_ct h
 
+namespace ContractSpec
+
+variable {c : ContractSpec}
+
+lemma StateInv.of_instructionFrame {wa : Adr} {before after : Devm}
+    (hf : Devm.InstructionFrame before after)
+    (h : c.StateInv wa before.state) : c.StateInv wa after.state := by
+  have h_state := hf.state
+  change before.state = after.state at h_state
+  rw [← h_state]
+  exact h
+
+lemma Devm.balReadAccount_addAccessed_delSets (d : Devm) (rules : ForkRules)
+    (authority : Adr) :
+    Devm.delSets ((addAccessedAddress d authority).balReadAccount
+      rules authority) = Devm.delSets d := by
+  have hf := Devm.instructionFrame_trans
+    (addAccessedAddress_instructionFrame d authority)
+    (Devm.balReadAccount_instructionFrame rules authority
+      (addAccessedAddress d authority))
+  exact hf.delSets.symm
+
+private lemma outcomeInstructionFrame_trans_left {ε α : Type}
+    {errState : ε → Devm} {okState : α → Devm}
+    {before middle : Devm} {out : Except ε α}
+    (h_before : Devm.InstructionFrame before middle)
+    (h_out : Outcome.Rel errState okState Devm.InstructionFrame middle out) :
+    Outcome.Rel errState okState Devm.InstructionFrame before out := by
+  cases out <;> exact Devm.instructionFrame_trans h_before h_out
+
+private def MemoryFrame (before after : Devm) : Prop :=
+  before.memory = after.memory
+
+private lemma MemoryFrame.refl (d : Devm) : MemoryFrame d d := rfl
+
+private lemma MemoryFrame.trans {before middle after : Devm}
+    (h₁ : MemoryFrame before middle) (h₂ : MemoryFrame middle after) :
+    MemoryFrame before after := Eq.trans h₁ h₂
+
+private lemma outcomeMemoryFrame_trans_left {ε α : Type}
+    {errState : ε → Devm} {okState : α → Devm}
+    {before middle : Devm} {out : Except ε α}
+    (h_before : MemoryFrame before middle)
+    (h_out : Outcome.Rel errState okState MemoryFrame middle out) :
+    Outcome.Rel errState okState MemoryFrame before out := by
+  cases out <;> exact MemoryFrame.trans h_before h_out
+
+private lemma chargeGas_memoryFrame (cost : Nat) (devm : Devm) :
+    Execution.Rel MemoryFrame devm (chargeGas cost devm) := by
+  cases h : chargeGas cost devm with
+  | error err =>
+      change devm.memory = err.2.memory
+      rw [chargeGas_err_snd h]
+  | ok after =>
+      change devm.memory = after.memory
+      exact (Devm.burn_of_chargeGas h).memory
+
+private lemma chargeStateGas_memoryFrame (amount : Nat) (devm : Devm) :
+    Execution.Rel MemoryFrame devm (chargeStateGas amount devm) := by
+  cases h : chargeStateGas amount devm with
+  | error err =>
+      change devm.memory = err.2.memory
+      rw [chargeStateGas_err_snd h]
+  | ok after =>
+      change devm.memory = after.memory
+      exact chargeStateGas_memory_eq h
+
+open private chargeNewAuthorityAmsterdam from Jaune.Transaction in
+private lemma chargeNewAuthorityAmsterdam_instructionFrame
+    (state : StateGasRules) (authority : Adr) (devm : Devm) :
+    Execution.Rel Devm.InstructionFrame devm
+      (chargeNewAuthorityAmsterdam state authority devm) := by
+  unfold chargeNewAuthorityAmsterdam
+  split
+  · exact chargeStateGas_instructionFrame state.newAccount devm
+  · exact Devm.instructionFrame_refl devm
+
+open private chargeNewAuthorityAmsterdam from Jaune.Transaction in
+private lemma chargeNewAuthorityAmsterdam_memoryFrame
+    (state : StateGasRules) (authority : Adr) (devm : Devm) :
+    Execution.Rel MemoryFrame devm
+      (chargeNewAuthorityAmsterdam state authority devm) := by
+  unfold chargeNewAuthorityAmsterdam
+  split
+  · exact chargeStateGas_memoryFrame state.newAccount devm
+  · exact MemoryFrame.refl devm
+
+open private chargePaidAccountWriteAmsterdam from Jaune.Transaction in
+private lemma chargePaidAccountWriteAmsterdam_instructionFrame
+    (state : StateGasRules) (authority : Adr) (devm : Devm)
+    (paidWrites : AdrSet) :
+    Outcome.Rel Prod.snd Prod.fst Devm.InstructionFrame devm
+      (chargePaidAccountWriteAmsterdam state authority devm paidWrites) := by
+  unfold chargePaidAccountWriteAmsterdam
+  split
+  · exact Devm.instructionFrame_refl devm
+  · cases h : chargeGas state.accountWrite devm with
+    | error err =>
+        change Devm.InstructionFrame devm err.2
+        have hf := chargeGas_instructionFrame state.accountWrite devm
+        rw [h] at hf
+        exact hf
+    | ok d =>
+        change Devm.InstructionFrame devm d
+        have hf := chargeGas_instructionFrame state.accountWrite devm
+        rw [h] at hf
+        exact hf
+
+open private chargePaidAccountWriteAmsterdam from Jaune.Transaction in
+private lemma chargePaidAccountWriteAmsterdam_memoryFrame
+    (state : StateGasRules) (authority : Adr) (devm : Devm)
+    (paidWrites : AdrSet) :
+    Outcome.Rel Prod.snd Prod.fst MemoryFrame devm
+      (chargePaidAccountWriteAmsterdam state authority devm paidWrites) := by
+  unfold chargePaidAccountWriteAmsterdam
+  split
+  · exact MemoryFrame.refl devm
+  · cases h : chargeGas state.accountWrite devm with
+    | error err =>
+        have hf := chargeGas_memoryFrame state.accountWrite devm
+        rw [h] at hf
+        exact hf
+    | ok d =>
+        have hf := chargeGas_memoryFrame state.accountWrite devm
+        rw [h] at hf
+        exact hf
+
+open private chargeAuthBaseAmsterdam from Jaune.Transaction in
+private lemma chargeAuthBaseAmsterdam_instructionFrame
+    (state : StateGasRules) (msg : Msg) (authority target : Adr)
+    (devm : Devm) (delegationSetFor : AdrSet) :
+    Outcome.Rel Prod.snd (fun x => x.1) Devm.InstructionFrame devm
+      (chargeAuthBaseAmsterdam state msg authority target devm
+        delegationSetFor) := by
+  unfold chargeAuthBaseAmsterdam
+  split
+  · exact Devm.instructionFrame_refl devm
+  · dsimp only
+    split
+    · cases h : chargeStateGas state.authBase devm with
+      | error err =>
+          change Devm.InstructionFrame devm err.2
+          have hf := chargeStateGas_instructionFrame state.authBase devm
+          rw [h] at hf
+          exact hf
+      | ok d =>
+          change Devm.InstructionFrame devm d
+          have hf := chargeStateGas_instructionFrame state.authBase devm
+          rw [h] at hf
+          exact hf
+    · exact Devm.instructionFrame_refl devm
+
+open private chargeAuthBaseAmsterdam from Jaune.Transaction in
+private lemma chargeAuthBaseAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) (authority target : Adr)
+    (devm : Devm) (delegationSetFor : AdrSet) :
+    Outcome.Rel Prod.snd (fun x => x.1) MemoryFrame devm
+      (chargeAuthBaseAmsterdam state msg authority target devm
+        delegationSetFor) := by
+  unfold chargeAuthBaseAmsterdam
+  split
+  · exact MemoryFrame.refl devm
+  · dsimp only
+    split
+    · cases h : chargeStateGas state.authBase devm with
+      | error err =>
+          have hf := chargeStateGas_memoryFrame state.authBase devm
+          rw [h] at hf
+          exact hf
+      | ok d =>
+          have hf := chargeStateGas_memoryFrame state.authBase devm
+          rw [h] at hf
+          exact hf
+    · exact MemoryFrame.refl devm
+
+open private applyValidatedDelegationAmsterdam chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  from Jaune.Transaction in
+private lemma applyValidatedDelegationAmsterdam_error_instructionFrame
+    {state : StateGasRules} {msg : Msg} {authority target : Adr}
+    {devm : Devm} {paidWrites delegationSetFor : AdrSet}
+    {err : EvmError × Devm}
+    (h_run : applyValidatedDelegationAmsterdam state msg authority target devm
+      paidWrites delegationSetFor = .error err) :
+    Devm.InstructionFrame devm err.2 := by
+  unfold applyValidatedDelegationAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  cases h_new : chargeNewAuthorityAmsterdam state authority devm with
+  | error newErr =>
+      rw [h_new] at h_run
+      have h_payload := Except.error.inj h_run
+      have hf := chargeNewAuthorityAmsterdam_instructionFrame state authority devm
+      rw [h_new] at hf
+      rw [← h_payload]
+      exact hf
+  | ok d_new =>
+      rw [h_new] at h_run
+      simp only at h_run
+      cases h_paid : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites with
+      | error paidErr =>
+          rw [h_paid] at h_run
+          have h_payload := Except.error.inj h_run
+          have h_new_frame :=
+            chargeNewAuthorityAmsterdam_instructionFrame state authority devm
+          rw [h_new] at h_new_frame
+          have h_paid_frame := chargePaidAccountWriteAmsterdam_instructionFrame
+            state authority d_new paidWrites
+          rw [h_paid] at h_paid_frame
+          rw [← h_payload]
+          exact Devm.instructionFrame_trans h_new_frame h_paid_frame
+      | ok d_paid =>
+          rw [h_paid] at h_run
+          simp only at h_run
+          cases h_auth : chargeAuthBaseAmsterdam state msg authority target
+            d_paid.1 delegationSetFor with
+          | error authErr =>
+              rw [h_auth] at h_run
+              have h_payload := Except.error.inj h_run
+              have h_new_frame :=
+                chargeNewAuthorityAmsterdam_instructionFrame state authority devm
+              rw [h_new] at h_new_frame
+              have h_paid_frame := chargePaidAccountWriteAmsterdam_instructionFrame
+                state authority d_new paidWrites
+              rw [h_paid] at h_paid_frame
+              have h_auth_frame := chargeAuthBaseAmsterdam_instructionFrame state
+                msg authority target d_paid.1 delegationSetFor
+              rw [h_auth] at h_auth_frame
+              rw [← h_payload]
+              exact Devm.instructionFrame_trans h_new_frame
+                (Devm.instructionFrame_trans h_paid_frame h_auth_frame)
+          | ok d_auth =>
+              rw [h_auth] at h_run
+              contradiction
+
+open private applyValidatedDelegationAmsterdam chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  from Jaune.Transaction in
+private lemma applyValidatedDelegationAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) (authority target : Adr)
+    (devm : Devm) (paidWrites delegationSetFor : AdrSet) :
+    Outcome.Rel Prod.snd (fun x => x.1) MemoryFrame devm
+      (applyValidatedDelegationAmsterdam state msg authority target devm
+        paidWrites delegationSetFor) := by
+  unfold applyValidatedDelegationAmsterdam
+  simp only [Bind.bind, Except.bind]
+  cases h_new : chargeNewAuthorityAmsterdam state authority devm with
+  | error newErr =>
+      have hf := chargeNewAuthorityAmsterdam_memoryFrame state authority devm
+      rw [h_new] at hf
+      exact hf
+  | ok d_new =>
+      have h_new_frame :=
+        chargeNewAuthorityAmsterdam_memoryFrame state authority devm
+      rw [h_new] at h_new_frame
+      simp only
+      cases h_paid : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites with
+      | error paidErr =>
+          have h_paid_frame := chargePaidAccountWriteAmsterdam_memoryFrame
+            state authority d_new paidWrites
+          rw [h_paid] at h_paid_frame
+          exact MemoryFrame.trans h_new_frame h_paid_frame
+      | ok d_paid =>
+          have h_paid_frame := chargePaidAccountWriteAmsterdam_memoryFrame
+            state authority d_new paidWrites
+          rw [h_paid] at h_paid_frame
+          simp only
+          cases h_auth : chargeAuthBaseAmsterdam state msg authority target
+            d_paid.1 delegationSetFor with
+          | error authErr =>
+              have h_auth_frame := chargeAuthBaseAmsterdam_memoryFrame state
+                msg authority target d_paid.1 delegationSetFor
+              rw [h_auth] at h_auth_frame
+              exact MemoryFrame.trans h_new_frame
+                (MemoryFrame.trans h_paid_frame h_auth_frame)
+          | ok d_auth =>
+              have h_auth_frame := chargeAuthBaseAmsterdam_memoryFrame state
+                msg authority target d_paid.1 delegationSetFor
+              rw [h_auth] at h_auth_frame
+              exact MemoryFrame.trans h_new_frame
+                (MemoryFrame.trans h_paid_frame
+                  (MemoryFrame.trans h_auth_frame (by rfl)))
+
+open private setDelegationAmsterdamStep chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  applyValidatedDelegationAmsterdam
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_preserves_stateInv_ok
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm}
+    {paidWrites delegationSetFor paidWrites' delegationSetFor' : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .ok ⟨devm', paidWrites', delegationSetFor'⟩)
+    (h_inv : c.StateInv wa devm.state) :
+    c.StateInv wa devm'.state := by
+  simp only [setDelegationAmsterdamStep, Bind.bind, Except.bind,
+    applyValidatedDelegationAmsterdam, chargeNewAuthorityAmsterdam,
+    chargePaidAccountWriteAmsterdam, chargeAuthBaseAmsterdam] at h_run
+  repeat' split at h_run
+  all_goals try contradiction
+  all_goals try { simp_all only [Except.ok.injEq, Prod.mk.injEq] }
+  all_goals
+    have h_devm := congrArg
+      (fun (x : Except (EvmError × Devm) (Devm × AdrSet × AdrSet)) =>
+        match x with | .error e => e.2 | .ok v => v.1) h_run
+    dsimp only at h_devm
+    rw [← h_devm]
+  all_goals try { simpa only [Devm.balReadAccount_state,
+    addAccessedAddress_state] using h_inv }
+  case h_2 =>
+    rename_i _ _ _ authority _ h_apply _ _ d_new h_new _ d_paid h_paid _
+      d_auth h_auth
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_new_frame :=
+      chargeNewAuthorityAmsterdam_instructionFrame state authority warmed
+    have h_new' : chargeNewAuthorityAmsterdam state authority warmed =
+        .ok d_new := by
+      simpa only [chargeNewAuthorityAmsterdam, warmed] using h_new
+    rw [h_new'] at h_new_frame
+    have h_paid_frame :=
+      chargePaidAccountWriteAmsterdam_instructionFrame state authority d_new
+        paidWrites
+    have h_paid' : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites = .ok d_paid := by
+      simpa only [chargePaidAccountWriteAmsterdam, Bind.bind,
+        Except.bind] using h_paid
+    rw [h_paid'] at h_paid_frame
+    have h_auth_frame :=
+      chargeAuthBaseAmsterdam_instructionFrame state msg authority auth.address
+        d_paid.1 delegationSetFor
+    have h_auth' : chargeAuthBaseAmsterdam state msg authority auth.address
+        d_paid.1 delegationSetFor = .ok d_auth := by
+      simpa only [chargeAuthBaseAmsterdam, Bind.bind,
+        Except.bind] using h_auth
+    rw [h_auth'] at h_auth_frame
+    have h_new_state := h_new_frame.state
+    change warmed.state = d_new.state at h_new_state
+    have h_paid_state := h_paid_frame.state
+    change d_new.state = d_paid.1.state at h_paid_state
+    have h_auth_state := h_auth_frame.state
+    change d_paid.1.state = d_auth.1.state at h_auth_state
+    have h_inv_auth : c.StateInv wa d_auth.1.state := by
+      rw [← h_auth_state, ← h_paid_state, ← h_new_state]
+      simpa only [warmed, Devm.balReadAccount_state,
+        addAccessedAddress_state] using h_inv
+    have h_no : ¬ ((devm.state.get wa).code.isEmpty = true ∨
+        isValidDelegation (devm.state.get wa).code) := by
+      intro h
+      rcases h with h_empty | h_del
+      · have h_empty' : (devm.state.getCode wa).toList = [] := by
+          apply List.eq_nil_of_length_eq_zero
+          rw [← ByteArray.size_eq_length_toList]
+          unfold ByteArray.isEmpty at h_empty
+          simp at h_empty
+          simpa [State.getCode] using congrArg ByteArray.size h_empty
+        exact Prog.compile_ne_nil (p := c.prog)
+          (by rw [← h_inv.code, h_empty'])
+      · exact not_delegation_of_compile h_inv.code h_del
+    have h_ne : authority ≠ wa := by
+      intro h_eq
+      subst authority
+      exact h_apply (by simpa only [Devm.balReadAccount_state,
+        addAccessedAddress_state] using h_no)
+    change c.StateInv wa
+      ((d_auth.1.state.setCode authority d_auth.2.2).incrNonce authority)
+    exact StateInv.incrNonce (StateInv.setCode_ne h_ne h_inv_auth)
+
+open private setDelegationAmsterdamStep chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  applyValidatedDelegationAmsterdam
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_preserves_stateInv_error
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm} {err : EvmError}
+    {paidWrites delegationSetFor : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .error ⟨err, devm'⟩)
+    (h_inv : c.StateInv wa devm.state) :
+    c.StateInv wa devm'.state := by
+  simp only [setDelegationAmsterdamStep, Bind.bind, Except.bind,
+    applyValidatedDelegationAmsterdam, chargeNewAuthorityAmsterdam,
+    chargePaidAccountWriteAmsterdam, chargeAuthBaseAmsterdam] at h_run
+  repeat' split at h_run
+  all_goals try contradiction
+  all_goals try { simp_all only [Except.error.injEq, Prod.mk.injEq] }
+  all_goals
+    have h_payload := Except.error.inj h_run
+    have h_devm := congrArg Prod.snd h_payload
+    change _ = devm' at h_devm
+    rw [← h_devm]
+  next _ _ _ authority _ _ _ _ err_mid h_new =>
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warmed : c.StateInv wa warmed.state := by
+      simpa only [warmed, Devm.balReadAccount_state,
+        addAccessedAddress_state] using h_inv
+    have h_new' : chargeNewAuthorityAmsterdam state authority warmed =
+        .error err_mid := by
+      simpa only [chargeNewAuthorityAmsterdam, warmed] using h_new
+    have h_new_frame := chargeNewAuthorityAmsterdam_instructionFrame state
+      authority warmed
+    rw [h_new'] at h_new_frame
+    exact StateInv.of_instructionFrame h_new_frame h_warmed
+  next _ _ _ authority _ _ _ _ d_new h_new _ err_mid h_paid =>
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warmed : c.StateInv wa warmed.state := by
+      simpa only [warmed, Devm.balReadAccount_state,
+        addAccessedAddress_state] using h_inv
+    have h_new' : chargeNewAuthorityAmsterdam state authority warmed =
+        .ok d_new := by
+      simpa only [chargeNewAuthorityAmsterdam, warmed] using h_new
+    have h_new_frame := chargeNewAuthorityAmsterdam_instructionFrame state
+      authority warmed
+    rw [h_new'] at h_new_frame
+    have h_after_new := StateInv.of_instructionFrame h_new_frame h_warmed
+    have h_paid' : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites = .error err_mid := by
+      simpa only [chargePaidAccountWriteAmsterdam, Bind.bind,
+        Except.bind] using h_paid
+    have h_paid_frame := chargePaidAccountWriteAmsterdam_instructionFrame state
+      authority d_new paidWrites
+    rw [h_paid'] at h_paid_frame
+    exact StateInv.of_instructionFrame h_paid_frame h_after_new
+  next _ _ _ authority _ _ _ _ d_new h_new _ d_paid h_paid _ err_mid h_auth =>
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warmed : c.StateInv wa warmed.state := by
+      simpa only [warmed, Devm.balReadAccount_state,
+        addAccessedAddress_state] using h_inv
+    have h_new' : chargeNewAuthorityAmsterdam state authority warmed =
+        .ok d_new := by
+      simpa only [chargeNewAuthorityAmsterdam, warmed] using h_new
+    have h_new_frame := chargeNewAuthorityAmsterdam_instructionFrame state
+      authority warmed
+    rw [h_new'] at h_new_frame
+    have h_after_new := StateInv.of_instructionFrame h_new_frame h_warmed
+    have h_paid' : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites = .ok d_paid := by
+      simpa only [chargePaidAccountWriteAmsterdam, Bind.bind,
+        Except.bind] using h_paid
+    have h_paid_frame := chargePaidAccountWriteAmsterdam_instructionFrame state
+      authority d_new paidWrites
+    rw [h_paid'] at h_paid_frame
+    have h_after_paid := StateInv.of_instructionFrame h_paid_frame h_after_new
+    have h_auth' : chargeAuthBaseAmsterdam state msg authority auth.address
+        d_paid.1 delegationSetFor = .error err_mid := by
+      simpa only [chargeAuthBaseAmsterdam, Bind.bind,
+        Except.bind] using h_auth
+    have h_auth_frame := chargeAuthBaseAmsterdam_instructionFrame state msg
+      authority auth.address d_paid.1 delegationSetFor
+    rw [h_auth'] at h_auth_frame
+    exact StateInv.of_instructionFrame h_auth_frame h_after_paid
+
+open private setDelegationAmsterdamStep applyValidatedDelegationAmsterdam
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_memoryFrame
+    (state : StateGasRules) (msg : Msg) (auth : Auth) (devm : Devm)
+    (paidWrites delegationSetFor : AdrSet) :
+    Outcome.Rel Prod.snd (fun x => x.1) MemoryFrame devm
+      (setDelegationAmsterdamStep state msg auth devm paidWrites
+        delegationSetFor) := by
+  unfold setDelegationAmsterdamStep
+  repeat' split
+  all_goals try { exact MemoryFrame.refl devm }
+  next _ authority _ =>
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warmed : MemoryFrame devm warmed := by rfl
+    dsimp only
+    split
+    · exact h_warmed
+    · split
+      · exact h_warmed
+      · exact outcomeMemoryFrame_trans_left h_warmed
+          (applyValidatedDelegationAmsterdam_memoryFrame state msg authority
+            auth.address warmed paidWrites delegationSetFor)
+
+open private setDelegationAmsterdamStep chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  applyValidatedDelegationAmsterdam
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_delSets_ok
+    {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm}
+    {paidWrites delegationSetFor paidWrites' delegationSetFor' : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .ok ⟨devm', paidWrites', delegationSetFor'⟩) :
+    Devm.delSets devm' = Devm.delSets devm := by
+  simp only [setDelegationAmsterdamStep, Bind.bind, Except.bind,
+    applyValidatedDelegationAmsterdam, chargeNewAuthorityAmsterdam,
+    chargePaidAccountWriteAmsterdam, chargeAuthBaseAmsterdam] at h_run
+  repeat' split at h_run
+  all_goals try contradiction
+  all_goals try { simp_all only [Except.ok.injEq, Prod.mk.injEq,
+    Devm.delSets] }
+  all_goals
+    have h_devm := congrArg
+      (fun (x : Except (EvmError × Devm) (Devm × AdrSet × AdrSet)) =>
+        match x with | .error e => e.2 | .ok v => v.1) h_run
+    dsimp only at h_devm
+    rw [← h_devm]
+  all_goals try { apply Devm.balReadAccount_addAccessed_delSets }
+  case h_2 =>
+    rename_i _ _ _ authority _ _ _ _ d_new h_new _ d_paid h_paid _
+      d_auth h_auth
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warm_frame := Devm.instructionFrame_trans
+      (addAccessedAddress_instructionFrame devm authority)
+      (Devm.balReadAccount_instructionFrame msg.benv.stat.rules authority
+        (addAccessedAddress devm authority))
+    have h_new' : chargeNewAuthorityAmsterdam state authority warmed =
+        .ok d_new := by
+      simpa only [chargeNewAuthorityAmsterdam, warmed] using h_new
+    have h_new_frame := chargeNewAuthorityAmsterdam_instructionFrame state
+      authority warmed
+    rw [h_new'] at h_new_frame
+    have h_paid' : chargePaidAccountWriteAmsterdam state authority d_new
+        paidWrites = .ok d_paid := by
+      simpa only [chargePaidAccountWriteAmsterdam, Bind.bind,
+        Except.bind] using h_paid
+    have h_paid_frame := chargePaidAccountWriteAmsterdam_instructionFrame state
+      authority d_new paidWrites
+    rw [h_paid'] at h_paid_frame
+    have h_auth' : chargeAuthBaseAmsterdam state msg authority auth.address
+        d_paid.1 delegationSetFor = .ok d_auth := by
+      simpa only [chargeAuthBaseAmsterdam, Bind.bind,
+        Except.bind] using h_auth
+    have h_auth_frame := chargeAuthBaseAmsterdam_instructionFrame state msg
+      authority auth.address d_paid.1 delegationSetFor
+    rw [h_auth'] at h_auth_frame
+    change Devm.delSets d_auth.1 = Devm.delSets devm
+    exact (Devm.instructionFrame_trans h_warm_frame
+      (Devm.instructionFrame_trans h_new_frame
+        (Devm.instructionFrame_trans h_paid_frame h_auth_frame))).delSets.symm
+
+open private setDelegationAmsterdamStep chargeNewAuthorityAmsterdam
+  chargePaidAccountWriteAmsterdam chargeAuthBaseAmsterdam
+  applyValidatedDelegationAmsterdam
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_delSets_error
+    {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm} {err : EvmError}
+    {paidWrites delegationSetFor : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .error ⟨err, devm'⟩) :
+    Devm.delSets devm' = Devm.delSets devm := by
+  simp only [setDelegationAmsterdamStep] at h_run
+  repeat' split at h_run
+  all_goals try contradiction
+  all_goals try { simp_all only [Except.error.injEq, Prod.mk.injEq,
+    Devm.delSets] }
+  case h_3.isFalse.isFalse =>
+    rename_i _ _ _ authority _ _ _
+    let warmed := (addAccessedAddress devm authority).balReadAccount
+      msg.benv.stat.rules authority
+    have h_warm_frame := Devm.instructionFrame_trans
+      (addAccessedAddress_instructionFrame devm authority)
+      (Devm.balReadAccount_instructionFrame msg.benv.stat.rules authority
+        (addAccessedAddress devm authority))
+    have h_apply_frame :=
+      applyValidatedDelegationAmsterdam_error_instructionFrame h_run
+    exact (Devm.instructionFrame_trans h_warm_frame h_apply_frame).delSets.symm
+
+private lemma noDel_of_delSets_stateInv {wa : Adr}
+    {before after : Devm}
+    (h_sets : Devm.delSets after = Devm.delSets before)
+    (h_before : Devm.NoDel wa before)
+    (h_after : c.StateInv wa after.state) : Devm.NoDel wa after := by
+  have h_atd := congrArg Prod.fst h_sets
+  have h_ca := congrArg Prod.snd h_sets
+  change after.accountsToDelete = before.accountsToDelete at h_atd
+  change after.createdAccounts = before.createdAccounts at h_ca
+  refine ⟨?_, ?_, ?_⟩
+  · rw [h_atd]
+    exact h_before.atd
+  · rw [h_ca]
+    exact h_before.ca
+  · intro h_empty
+    apply Prog.compile_ne_nil (p := c.prog)
+    exact h_after.code.symm.trans (congrArg some h_empty)
+
+private def AmsterdamPrepInv (c : ContractSpec) (wa : Adr) (d : Devm) : Prop :=
+  c.StateInv wa d.state ∧ Devm.NoDel wa d
+
+open private setDelegationAmsterdamStep from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_preserves_prep_ok
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm}
+    {paidWrites delegationSetFor paidWrites' delegationSetFor' : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .ok ⟨devm', paidWrites', delegationSetFor'⟩)
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  have h_state := setDelegationAmsterdamStep_preserves_stateInv_ok h_run h.1
+  exact ⟨h_state,
+    noDel_of_delSets_stateInv (setDelegationAmsterdamStep_delSets_ok h_run)
+      h.2 h_state⟩
+
+open private setDelegationAmsterdamStep from Jaune.Transaction in
+private lemma setDelegationAmsterdamStep_preserves_prep_error
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auth : Auth}
+    {devm devm' : Devm} {err : EvmError}
+    {paidWrites delegationSetFor : AdrSet}
+    (h_run : setDelegationAmsterdamStep state msg auth devm paidWrites
+      delegationSetFor = .error ⟨err, devm'⟩)
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  have h_state := setDelegationAmsterdamStep_preserves_stateInv_error h_run h.1
+  exact ⟨h_state,
+    noDel_of_delSets_stateInv (setDelegationAmsterdamStep_delSets_error h_run)
+      h.2 h_state⟩
+
+open private setDelegationAmsterdamLoop setDelegationAmsterdamStep
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamLoop_preserves_prep_ok
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auths : List Auth}
+    {devm devm' : Devm}
+    {paidWrites delegationSetFor paidWrites' delegationSetFor' : AdrSet}
+    (h_run : setDelegationAmsterdamLoop state msg auths devm paidWrites
+      delegationSetFor = .ok ⟨devm', paidWrites', delegationSetFor'⟩)
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  induction auths generalizing devm paidWrites delegationSetFor with
+  | nil =>
+      injection h_run with h_run
+      have h_devm := congrArg (fun x => x.1) h_run
+      change devm = devm' at h_devm
+      rw [← h_devm]
+      exact h
+  | cons auth auths ih =>
+      rw [setDelegationAmsterdamLoop] at h_run
+      cases h_step : setDelegationAmsterdamStep state msg auth devm paidWrites
+        delegationSetFor with
+      | error err =>
+          rw [h_step] at h_run
+          contradiction
+      | ok next =>
+          rw [h_step] at h_run
+          exact ih h_run
+            (setDelegationAmsterdamStep_preserves_prep_ok h_step h)
+
+open private setDelegationAmsterdamLoop setDelegationAmsterdamStep
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamLoop_preserves_prep_error
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {auths : List Auth}
+    {devm devm' : Devm} {err : EvmError}
+    {paidWrites delegationSetFor : AdrSet}
+    (h_run : setDelegationAmsterdamLoop state msg auths devm paidWrites
+      delegationSetFor = .error ⟨err, devm'⟩)
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  induction auths generalizing devm paidWrites delegationSetFor with
+  | nil => contradiction
+  | cons auth auths ih =>
+      rw [setDelegationAmsterdamLoop] at h_run
+      cases h_step : setDelegationAmsterdamStep state msg auth devm paidWrites
+        delegationSetFor with
+      | error stepErr =>
+          rw [h_step] at h_run
+          have h_payload := Except.error.inj h_run
+          have h_devm := congrArg (fun x => x.2) h_payload
+          change stepErr.2 = devm' at h_devm
+          rw [← h_devm]
+          exact setDelegationAmsterdamStep_preserves_prep_error h_step h
+      | ok next =>
+          rw [h_step] at h_run
+          exact ih h_run
+            (setDelegationAmsterdamStep_preserves_prep_ok h_step h)
+
+open private setDelegationAmsterdam setDelegationAmsterdamLoop
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdam_preserves_prep_ok
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {devm devm' : Devm}
+    (h_run : setDelegationAmsterdam state msg devm = .ok devm')
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  unfold setDelegationAmsterdam at h_run
+  rcases Except.bind_eq_ok h_run with
+    ⟨⟨mid, paidWrites, delegationSetFor⟩, h_loop, h_rest⟩
+  have h_devm : mid = devm' := by
+    simpa only [Except.ok.injEq] using h_rest
+  rw [← h_devm]
+  exact setDelegationAmsterdamLoop_preserves_prep_ok h_loop h
+
+open private setDelegationAmsterdam setDelegationAmsterdamLoop
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdam_preserves_prep_error
+    {wa : Adr} {state : StateGasRules} {msg : Msg} {devm devm' : Devm}
+    {err : EvmError}
+    (h_run : setDelegationAmsterdam state msg devm = .error ⟨err, devm'⟩)
+    (h : AmsterdamPrepInv c wa devm) : AmsterdamPrepInv c wa devm' := by
+  unfold setDelegationAmsterdam at h_run
+  dsimp only [Bind.bind, Except.bind] at h_run
+  cases h_loop : setDelegationAmsterdamLoop state msg msg.tenv.stat.auths devm
+      _ .emptyWithCapacity with
+  | error loopErr =>
+      rw [h_loop] at h_run
+      have h_payload := Except.error.inj h_run
+      have h_devm := congrArg Prod.snd h_payload
+      change loopErr.2 = devm' at h_devm
+      rw [← h_devm]
+      exact setDelegationAmsterdamLoop_preserves_prep_error h_loop h
+  | ok loopResult =>
+      rw [h_loop] at h_run
+      contradiction
+
+open private setDelegationAmsterdamLoop setDelegationAmsterdamStep
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdamLoop_memoryFrame
+    (state : StateGasRules) (msg : Msg) (auths : List Auth)
+    (devm : Devm) (paidWrites delegationSetFor : AdrSet) :
+    Outcome.Rel Prod.snd (fun x => x.1) MemoryFrame devm
+      (setDelegationAmsterdamLoop state msg auths devm paidWrites
+        delegationSetFor) := by
+  induction auths generalizing devm paidWrites delegationSetFor with
+  | nil => exact MemoryFrame.refl devm
+  | cons auth auths ih =>
+      rw [setDelegationAmsterdamLoop]
+      cases h_step : setDelegationAmsterdamStep state msg auth devm paidWrites
+        delegationSetFor with
+      | error err =>
+          have hf := setDelegationAmsterdamStep_memoryFrame state msg auth devm
+            paidWrites delegationSetFor
+          rw [h_step] at hf
+          exact hf
+      | ok next =>
+          have hf := setDelegationAmsterdamStep_memoryFrame state msg auth devm
+            paidWrites delegationSetFor
+          rw [h_step] at hf
+          exact outcomeMemoryFrame_trans_left hf
+            (ih next.1 next.2.1 next.2.2)
+
+open private setDelegationAmsterdam setDelegationAmsterdamLoop
+  from Jaune.Transaction in
+private lemma setDelegationAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) (devm : Devm) :
+    Execution.Rel MemoryFrame devm
+      (setDelegationAmsterdam state msg devm) := by
+  unfold setDelegationAmsterdam
+  dsimp only [Bind.bind, Except.bind]
+  let paidWrites : AdrSet := {msg.caller}
+  let paidWrites :=
+    if msg.target.isNone || msg.value != 0 then
+      paidWrites.insert msg.currentTarget
+    else paidWrites
+  cases h_loop : setDelegationAmsterdamLoop state msg msg.tenv.stat.auths devm
+      paidWrites .emptyWithCapacity with
+  | error err =>
+      have hf := setDelegationAmsterdamLoop_memoryFrame state msg
+        msg.tenv.stat.auths devm paidWrites .emptyWithCapacity
+      rw [h_loop] at hf
+      exact hf
+  | ok result =>
+      have hf := setDelegationAmsterdamLoop_memoryFrame state msg
+        msg.tenv.stat.auths devm paidWrites .emptyWithCapacity
+      rw [h_loop] at hf
+      exact hf
+
+private lemma Devm.commitStateGas_instructionFrame (devm : Devm) :
+    Devm.InstructionFrame devm devm.commitStateGas := by
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.machFrame_setMach devm devm.mach.commitStateGas)
+
+private lemma Devm.commitStateGas_memoryFrame (devm : Devm) :
+    MemoryFrame devm devm.commitStateGas := by rfl
+
+open private resolveTopLevelCallAmsterdam preparedTopLevelMsg
+  from Jaune.Transaction in
+private lemma resolveTopLevelCallAmsterdam_instructionFrame
+    (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame devm
+      (resolveTopLevelCallAmsterdam msg devm) := by
+  unfold resolveTopLevelCallAmsterdam
+  rcases h_cost : msg.benv.stat.rules.gas.delegationCost devm msg.currentTarget
+    with ⟨delegated, codeAddress, accessCost⟩
+  simp only [Bind.bind, Except.bind]
+  cases h_charge : chargeGas accessCost devm with
+  | error err =>
+      have hf := chargeGas_instructionFrame accessCost devm
+      rw [h_charge] at hf
+      exact hf
+  | ok charged =>
+      have h_charge_frame := chargeGas_instructionFrame accessCost devm
+      rw [h_charge] at h_charge_frame
+      have h_complete := completeDelegationAccess_instructionFrame charged
+        delegated codeAddress
+      have h_read := Devm.balReadAccount_instructionFrame msg.benv.stat.rules
+        codeAddress (completeDelegationAccess charged delegated codeAddress).2
+      exact Devm.instructionFrame_trans h_charge_frame
+        (Devm.instructionFrame_trans h_complete h_read)
+
+open private resolveTopLevelCallAmsterdam preparedTopLevelMsg
+  from Jaune.Transaction in
+private lemma resolveTopLevelCallAmsterdam_memoryFrame
+    (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd MemoryFrame devm
+      (resolveTopLevelCallAmsterdam msg devm) := by
+  unfold resolveTopLevelCallAmsterdam
+  rcases h_cost : msg.benv.stat.rules.gas.delegationCost devm msg.currentTarget
+    with ⟨delegated, codeAddress, accessCost⟩
+  simp only [Bind.bind, Except.bind]
+  cases h_charge : chargeGas accessCost devm with
+  | error err =>
+      have hf := chargeGas_memoryFrame accessCost devm
+      rw [h_charge] at hf
+      exact hf
+  | ok charged =>
+      have hf := chargeGas_memoryFrame accessCost devm
+      rw [h_charge] at hf
+      have h_complete : MemoryFrame charged
+          (completeDelegationAccess charged delegated codeAddress).2 := by
+        unfold completeDelegationAccess
+        split <;> rfl
+      have h_read : MemoryFrame
+          (completeDelegationAccess charged delegated codeAddress).2
+          ((completeDelegationAccess charged delegated codeAddress).2.balReadAccount
+            msg.benv.stat.rules codeAddress) := by
+        change _ = _
+        rw [Devm.balReadAccount_memory]
+      exact MemoryFrame.trans hf (MemoryFrame.trans h_complete h_read)
+
+open private dispatchTopLevelAmsterdam resolveTopLevelCallAmsterdam
+  preparedTopLevelMsg from Jaune.Transaction in
+private lemma dispatchTopLevelAmsterdam_instructionFrame
+    (state : StateGasRules) (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame devm
+      (dispatchTopLevelAmsterdam state msg devm) := by
+  unfold dispatchTopLevelAmsterdam
+  simp only [Bind.bind, Except.bind]
+  repeat' split
+  all_goals
+    have h_read := Devm.balReadAccount_instructionFrame msg.benv.stat.rules
+      msg.currentTarget devm
+  next _ _ => exact h_read
+  next _ _ _ _ chargeErr h_charge =>
+    have h_charge_frame := chargeStateGas_instructionFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at h_charge_frame
+    exact Devm.instructionFrame_trans h_read h_charge_frame
+  next _ _ _ _ charged h_charge =>
+    have h_charge_frame := chargeStateGas_instructionFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at h_charge_frame
+    exact Devm.instructionFrame_trans h_read h_charge_frame
+  next _ _ _ => exact h_read
+  next _ _ _ chargeErr h_charge =>
+    have h_charge_frame := chargeStateGas_instructionFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at h_charge_frame
+    exact Devm.instructionFrame_trans h_read h_charge_frame
+  next _ _ _ charged h_charge =>
+    have h_charge_frame := chargeStateGas_instructionFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at h_charge_frame
+    have h_prefix := Devm.instructionFrame_trans h_read h_charge_frame
+    exact outcomeInstructionFrame_trans_left h_prefix
+      (resolveTopLevelCallAmsterdam_instructionFrame msg charged)
+  next _ _ =>
+    exact outcomeInstructionFrame_trans_left h_read
+      (resolveTopLevelCallAmsterdam_instructionFrame msg
+        (devm.balReadAccount msg.benv.stat.rules msg.currentTarget))
+
+open private dispatchTopLevelAmsterdam resolveTopLevelCallAmsterdam
+  preparedTopLevelMsg from Jaune.Transaction in
+private lemma dispatchTopLevelAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd MemoryFrame devm
+      (dispatchTopLevelAmsterdam state msg devm) := by
+  unfold dispatchTopLevelAmsterdam
+  simp only [Bind.bind, Except.bind]
+  repeat' split
+  all_goals
+    have h_read : MemoryFrame devm
+        (devm.balReadAccount msg.benv.stat.rules msg.currentTarget) := by rfl
+  next _ _ => exact h_read
+  next _ _ _ _ chargeErr h_charge =>
+    have hf := chargeStateGas_memoryFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at hf
+    exact MemoryFrame.trans h_read hf
+  next _ _ _ _ charged h_charge =>
+    have hf := chargeStateGas_memoryFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at hf
+    exact MemoryFrame.trans h_read hf
+  next _ _ _ => exact h_read
+  next _ _ _ chargeErr h_charge =>
+    have hf := chargeStateGas_memoryFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at hf
+    exact MemoryFrame.trans h_read hf
+  next _ _ _ charged h_charge =>
+    have hf := chargeStateGas_memoryFrame state.newAccount
+      (devm.balReadAccount msg.benv.stat.rules msg.currentTarget)
+    rw [h_charge] at hf
+    exact outcomeMemoryFrame_trans_left (MemoryFrame.trans h_read hf)
+      (resolveTopLevelCallAmsterdam_memoryFrame msg charged)
+  next _ _ =>
+    exact outcomeMemoryFrame_trans_left h_read
+      (resolveTopLevelCallAmsterdam_memoryFrame msg
+        (devm.balReadAccount msg.benv.stat.rules msg.currentTarget))
+
+open private finishTopLevelAmsterdam dispatchTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma finishTopLevelAmsterdam_instructionFrame
+    (state : StateGasRules) (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame devm
+      (finishTopLevelAmsterdam state msg devm) := by
+  unfold finishTopLevelAmsterdam
+  split
+  · exact dispatchTopLevelAmsterdam_instructionFrame state msg devm
+  · exact outcomeInstructionFrame_trans_left
+      (Devm.commitStateGas_instructionFrame devm)
+      (dispatchTopLevelAmsterdam_instructionFrame state msg devm.commitStateGas)
+
+open private finishTopLevelAmsterdam dispatchTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma finishTopLevelAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) (devm : Devm) :
+    Outcome.Rel Prod.snd Prod.snd MemoryFrame devm
+      (finishTopLevelAmsterdam state msg devm) := by
+  unfold finishTopLevelAmsterdam
+  split
+  · exact dispatchTopLevelAmsterdam_memoryFrame state msg devm
+  · exact outcomeMemoryFrame_trans_left
+      (Devm.commitStateGas_memoryFrame devm)
+      (dispatchTopLevelAmsterdam_memoryFrame state msg devm.commitStateGas)
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_memoryFrame
+    (state : StateGasRules) (msg : Msg) :
+    Outcome.Rel Prod.snd Prod.snd MemoryFrame (initDevm msg)
+      (prepareTopLevelAmsterdam state msg) := by
+  unfold prepareTopLevelAmsterdam
+  simp only [Bind.bind, Except.bind]
+  split
+  · exact finishTopLevelAmsterdam_memoryFrame state msg (initDevm msg)
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error err =>
+        have hf := setDelegationAmsterdam_memoryFrame state msg (initDevm msg)
+        rw [h_delegation] at hf
+        exact hf
+    | ok delegated =>
+        have hf := setDelegationAmsterdam_memoryFrame state msg (initDevm msg)
+        rw [h_delegation] at hf
+        exact outcomeMemoryFrame_trans_left hf
+          (finishTopLevelAmsterdam_memoryFrame state msg delegated)
+
+private lemma prepInv_of_instructionFrame {wa : Adr}
+    {before after : Devm}
+    (hf : Devm.InstructionFrame before after)
+    (h : AmsterdamPrepInv c wa before) : AmsterdamPrepInv c wa after :=
+  ⟨StateInv.of_instructionFrame hf h.1, Devm.NoDel.of_instructionFrame hf h.2⟩
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_preserves_prep_ok
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {prepared : Devm}
+    (h_run : prepareTopLevelAmsterdam state msg = .ok ⟨preparedMsg, prepared⟩)
+    (h_state : c.StateInv wa msg.benv.state)
+    (h_nodel : Msg.NoDel wa msg) : AmsterdamPrepInv c wa prepared := by
+  have h_init : AmsterdamPrepInv c wa (initDevm msg) :=
+    ⟨h_state, h_nodel.initDevm⟩
+  unfold prepareTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  split at h_run
+  · have hf := finishTopLevelAmsterdam_instructionFrame state msg (initDevm msg)
+    rw [h_run] at hf
+    exact prepInv_of_instructionFrame hf h_init
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error err =>
+        rw [h_delegation] at h_run
+        contradiction
+    | ok delegated =>
+        rw [h_delegation] at h_run
+        simp only at h_run
+        have h_delegated :=
+          setDelegationAmsterdam_preserves_prep_ok h_delegation h_init
+        have hf := finishTopLevelAmsterdam_instructionFrame state msg delegated
+        rw [h_run] at hf
+        exact prepInv_of_instructionFrame hf h_delegated
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_preserves_prep_error
+    {wa : Adr} {state : StateGasRules} {msg : Msg}
+    {err : EvmError} {prepared : Devm}
+    (h_run : prepareTopLevelAmsterdam state msg = .error ⟨err, prepared⟩)
+    (h_state : c.StateInv wa msg.benv.state)
+    (h_nodel : Msg.NoDel wa msg) : AmsterdamPrepInv c wa prepared := by
+  have h_init : AmsterdamPrepInv c wa (initDevm msg) :=
+    ⟨h_state, h_nodel.initDevm⟩
+  unfold prepareTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  split at h_run
+  · have hf := finishTopLevelAmsterdam_instructionFrame state msg (initDevm msg)
+    rw [h_run] at hf
+    exact prepInv_of_instructionFrame hf h_init
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error delegationErr =>
+        rw [h_delegation] at h_run
+        have h_payload := Except.error.inj h_run
+        have h_devm := congrArg Prod.snd h_payload
+        change delegationErr.2 = prepared at h_devm
+        rw [← h_devm]
+        exact setDelegationAmsterdam_preserves_prep_error h_delegation h_init
+    | ok delegated =>
+        rw [h_delegation] at h_run
+        simp only at h_run
+        have h_delegated :=
+          setDelegationAmsterdam_preserves_prep_ok h_delegation h_init
+        have hf := finishTopLevelAmsterdam_instructionFrame state msg delegated
+        rw [h_run] at hf
+        exact prepInv_of_instructionFrame hf h_delegated
+
+end ContractSpec
+
 lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
     (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
     Benv.EquivForDelegation msg.benv msg'.benv := by
@@ -8538,6 +9557,153 @@ structure MsgInv (c : ContractSpec) (wa : Adr) (msg : Msg) : Prop where
   (ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
   (val0 : msg.shouldTransferValue = false → msg.currentTarget = wa → msg.value = 0)
 
+open private preparedTopLevelMsg from Jaune.Transaction in
+private lemma MsgInv.preparedTopLevelMsg {wa : Adr} {msg : Msg} {devm : Devm}
+    (h_msg : c.MsgInv wa msg) (h_prep : AmsterdamPrepInv c wa devm) :
+    c.MsgInv wa (preparedTopLevelMsg msg devm) := by
+  refine ⟨h_prep.1, ?_, ?_, ?_, ?_, ?_⟩
+  · exact ⟨h_prep.2.ca, h_prep.2.code⟩
+  · intro h_target h_current
+    exact h_msg.code h_target h_current
+  · intro h_target h_current
+    exact h_msg.codeAddress h_target h_current
+  · exact h_msg.ne
+  · exact h_msg.val0
+
+open private resolveTopLevelCallAmsterdam preparedTopLevelMsg
+  from Jaune.Transaction in
+private lemma resolveTopLevelCallAmsterdam_preserves_msgInv_ok
+    {wa : Adr} {msg preparedMsg : Msg} {before prepared : Devm}
+    (h_run : resolveTopLevelCallAmsterdam msg before =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_msg : c.MsgInv wa msg)
+    (h_prep : AmsterdamPrepInv c wa prepared) :
+    c.MsgInv wa preparedMsg := by
+  have h_frame := resolveTopLevelCallAmsterdam_instructionFrame msg before
+  rw [h_run] at h_frame
+  have h_before : c.StateInv wa before.state := by
+    have h_state := h_frame.state
+    change before.state = prepared.state at h_state
+    rw [h_state]
+    exact h_prep.1
+  unfold resolveTopLevelCallAmsterdam at h_run
+  rcases h_cost : msg.benv.stat.rules.gas.delegationCost before
+      msg.currentTarget with ⟨delegated, codeAddress, accessCost⟩
+  rw [h_cost] at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  cases h_charge : chargeGas accessCost before with
+  | error err =>
+      rw [h_charge] at h_run
+      contradiction
+  | ok charged =>
+      rw [h_charge] at h_run
+      simp only at h_run
+      injection h_run with h_result
+      injection h_result with h_msg_eq h_devm_eq
+      subst preparedMsg
+      subst prepared
+      let resultDevm :=
+        (completeDelegationAccess charged delegated codeAddress).2.balReadAccount
+          msg.benv.stat.rules codeAddress
+      have h_base : c.MsgInv wa (preparedTopLevelMsg msg resultDevm) :=
+        MsgInv.preparedTopLevelMsg h_msg h_prep
+      have h_resolve_self : msg.currentTarget = wa →
+          delegated = false ∧ codeAddress = wa := by
+        intro h_current
+        have h_not : ¬ isValidDelegation (before.state.getCode wa) :=
+          not_delegation_of_compile h_before.code
+        have h_gda : getDelegatedCodeAddress (before.state.getCode wa) = none := by
+          dsimp only [getDelegatedCodeAddress]
+          rw [if_neg h_not]
+        unfold GasSchedule.delegationCost at h_cost
+        rw [h_current] at h_cost
+        simp only [h_gda] at h_cost
+        simp only [Prod.mk.injEq] at h_cost
+        exact ⟨h_cost.1.symm, h_cost.2.1.symm⟩
+      change c.MsgInv wa
+        { preparedTopLevelMsg msg resultDevm with
+          codeAddress := some codeAddress
+          code := (completeDelegationAccess charged delegated codeAddress).1
+          disablePrecompiles := delegated }
+      refine ⟨h_base.state, ⟨h_base.nodel.ca, h_base.nodel.code⟩,
+        ?_, ?_, h_base.ne, h_base.val0⟩
+      · intro h_target h_current
+        change msg.currentTarget = wa at h_current
+        rcases h_resolve_self h_current with ⟨rfl, rfl⟩
+        simpa only [completeDelegationAccess, resultDevm,
+          Devm.balReadAccount_state] using h_prep.1.code
+      · intro h_target h_current
+        change msg.currentTarget = wa at h_current
+        rcases h_resolve_self h_current with ⟨_, h_address⟩
+        simp only [h_address]
+
+open private dispatchTopLevelAmsterdam resolveTopLevelCallAmsterdam
+  preparedTopLevelMsg from Jaune.Transaction in
+private lemma dispatchTopLevelAmsterdam_preserves_msgInv_ok
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {before prepared : Devm}
+    (h_run : dispatchTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_msg : c.MsgInv wa msg)
+    (h_prep : AmsterdamPrepInv c wa prepared) :
+    c.MsgInv wa preparedMsg := by
+  unfold dispatchTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  repeat' split at h_run
+  all_goals try contradiction
+  next _ _ _ _ charged h_charge =>
+    injection h_run with h_result
+    injection h_result with h_msg_eq h_devm_eq
+    subst preparedMsg
+    subst prepared
+    exact MsgInv.preparedTopLevelMsg h_msg h_prep
+  next _ _ _ =>
+    injection h_run with h_result
+    injection h_result with h_msg_eq h_devm_eq
+    subst preparedMsg
+    subst prepared
+    exact MsgInv.preparedTopLevelMsg h_msg h_prep
+  next _ _ _ charged h_charge =>
+    exact resolveTopLevelCallAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+  next _ _ =>
+    exact resolveTopLevelCallAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+
+open private finishTopLevelAmsterdam dispatchTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma finishTopLevelAmsterdam_preserves_msgInv_ok
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {before prepared : Devm}
+    (h_run : finishTopLevelAmsterdam state msg before =
+      .ok ⟨preparedMsg, prepared⟩)
+    (h_msg : c.MsgInv wa msg)
+    (h_prep : AmsterdamPrepInv c wa prepared) :
+    c.MsgInv wa preparedMsg := by
+  unfold finishTopLevelAmsterdam at h_run
+  split at h_run
+  · exact dispatchTopLevelAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+  · exact dispatchTopLevelAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+
+open private setDelegationAmsterdam finishTopLevelAmsterdam
+  from Jaune.Transaction in
+private lemma prepareTopLevelAmsterdam_preserves_msgInv_ok
+    {wa : Adr} {state : StateGasRules} {msg preparedMsg : Msg}
+    {prepared : Devm}
+    (h_run : prepareTopLevelAmsterdam state msg = .ok ⟨preparedMsg, prepared⟩)
+    (h_msg : c.MsgInv wa msg)
+    (h_prep : AmsterdamPrepInv c wa prepared) :
+    c.MsgInv wa preparedMsg := by
+  unfold prepareTopLevelAmsterdam at h_run
+  simp only [Bind.bind, Except.bind] at h_run
+  split at h_run
+  · exact finishTopLevelAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+  · cases h_delegation : setDelegationAmsterdam state msg (initDevm msg) with
+    | error err =>
+        rw [h_delegation] at h_run
+        contradiction
+    | ok delegated =>
+        rw [h_delegation] at h_run
+        exact finishTopLevelAmsterdam_preserves_msgInv_ok h_run h_msg h_prep
+
 structure BenvInv (c : ContractSpec) (wa : Adr) (benv : Benv) : Prop where
   (state : c.StateInv wa benv.state)
   (ca : wa ∉ benv.createdAccounts)
@@ -8558,6 +9724,104 @@ lemma StateInv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
   show some (post.state.getCode wa).toList = Prog.compile c.prog
   rw [show post.state.getCode wa = post.getCode wa from rfl, h_ce]
   exact h_pc.code
+
+private lemma processMessage_settle_prepared_preserves_inv
+    {wa : Adr} {msg : Msg} {entry : Evm} {raw : Execution} {post : Devm}
+    (hp : c.Preserves wa)
+    (h_run : processMessage.settle msg
+      (executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw) = .ok post)
+    (h_route : raw = exec entry ∨ ∃ adr, raw = executePrecomp entry adr)
+    (h_pc0 : entry.pc = 0)
+    (h_saved : c.StateInv wa msg.benv.state)
+    (h_entry : c.StateInv wa entry.dyna.state)
+    (h_pre : c.Pre wa entry.sta entry.dyna)
+    (h_code : entry.sta.currentTarget = wa →
+      some entry.sta.code.toList = Prog.compile c.prog)
+    (h_wf : entry.sta.currentTarget = wa → Mem.Wf entry.dyna.memory) :
+    c.StateInv wa post.state := by
+  rcases processMessage.settle_ok_cases h_run with
+    ⟨settled, h_handle, h_rollback | h_clean⟩
+  · rw [← h_rollback.2]
+    exact h_saved
+  · rw [← h_clean.2]
+    rcases h_route with h_exec | ⟨adr, h_precompile⟩
+    · subst raw
+      have h_exec_ok := exec_ok_of_handleError h_handle h_clean.1
+      obtain ⟨exc⟩ :=
+        (exec_iff_exec_eq entry.pc entry.sta entry.dyna (.ok settled)).mpr
+          h_exec_ok
+      rw [h_pc0] at exc
+      exact StateInv.of_exec_precond hp h_pre h_code h_wf exc
+    · subst raw
+      rw [state_of_executePrecomp_ok h_handle h_clean.1]
+      exact h_entry
+
+open private runPreparedTopFrame from Jaune.Transaction in
+private lemma runPreparedTopFrame_ofCall_preserves_inv
+    {wa : Adr} {msg : Msg} {prepared post : Devm}
+    (hp : c.Preserves wa)
+    (h_run : runPreparedTopFrame (Frame.ofCall msg) prepared = .ok post)
+    (h_target : msg.target.isNone = false)
+    (h_msg : c.MsgInv wa msg)
+    (h_memory : Mem.Wf prepared.memory) :
+    c.StateInv wa post.state := by
+  unfold runPreparedTopFrame at h_run
+  simp only [Frame.ofCall] at h_run
+  cases h_bt : msg.benvAfterTransfer with
+  | error err =>
+      rw [h_bt] at h_run
+      simp [Frame.settleMsg, processMessage.settle] at h_run
+  | ok benv =>
+      rw [h_bt] at h_run
+      simp only [Frame.settle, Frame.settleMsg,
+        Bool.false_eq_true, if_false] at h_run
+      let inner := msg.withBenv benv
+      let dyna :=
+        (prepared.withState benv.state).withCreatedAccounts benv.createdAccounts
+      let entry : Evm := {
+        pc := 0
+        sta := initSevm inner
+        dyna := dyna
+      }
+      change processMessage.settle msg
+        (executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+          (match inner.codeAddress with
+          | none => exec entry
+          | some adr =>
+            if !inner.disablePrecompiles && inner.benv.stat.rules.isPrecomp adr then
+              executePrecomp entry adr
+            else exec entry)) = .ok post at h_run
+      have h_pre0 : c.Pre wa (initSevm (msg.withBenv benv))
+          (initDevm (msg.withBenv benv)) :=
+        Pre.of_inv_benvAfterTransfer h_msg.ne h_msg.val0 h_bt h_msg.state
+      have h_pre : c.Pre wa entry.sta entry.dyna :=
+        Pre.state_eq h_pre0 rfl
+      have h_entry : c.StateInv wa entry.dyna.state := by
+        exact StateInv.of_benvAfterTransfer h_msg.ne h_bt h_msg.state
+      have h_code : entry.sta.currentTarget = wa →
+          some entry.sta.code.toList = Prog.compile c.prog := by
+        intro h_current
+        change msg.currentTarget = wa at h_current
+        exact h_msg.code h_target h_current
+      have h_wf : entry.sta.currentTarget = wa → Mem.Wf entry.dyna.memory := by
+        intro _
+        exact h_memory
+      cases h_ca : inner.codeAddress with
+      | none =>
+          rw [h_ca] at h_run
+          exact processMessage_settle_prepared_preserves_inv hp h_run
+            (.inl rfl) rfl h_msg.state h_entry h_pre h_code h_wf
+      | some adr =>
+          rw [h_ca] at h_run
+          simp only at h_run
+          by_cases h_precompile :
+              (!inner.disablePrecompiles && inner.benv.stat.rules.isPrecomp adr) = true
+          · rw [if_pos h_precompile] at h_run
+            exact processMessage_settle_prepared_preserves_inv hp h_run
+              (.inr ⟨adr, rfl⟩) rfl h_msg.state h_entry h_pre h_code h_wf
+          · rw [if_neg h_precompile] at h_run
+            exact processMessage_settle_prepared_preserves_inv hp h_run
+              (.inl rfl) rfl h_msg.state h_entry h_pre h_code h_wf
 
 
 
@@ -8624,6 +9888,37 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
 -- `h_ct_ne` (the create address is fresh, hence `≠ wa`) subsumes both the
 -- WETH-code condition and the `value = 0` condition: their premises are all
 -- `currentTarget = wa`, so `h_ct_ne` discharges them vacuously.
+private lemma processCreateMessage_settle_preserves_inv
+    {wa : Adr} {msg : Msg} {raw post : Devm}
+    (h_run : processCreateMessage.settle msg (.ok raw) = .ok post)
+    (h_ct_ne : msg.currentTarget ≠ wa)
+    (h_raw : c.StateInv wa raw.state)
+    (h_saved : c.StateInv wa msg.benv.state) :
+    c.StateInv wa post.state := by
+  unfold processCreateMessage.settle at h_run
+  dsimp only [bind, Except.bind] at h_run
+  by_cases herr : raw.error.isNone = true
+  · rw [if_pos herr] at h_run
+    rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules raw
+      with ⟨err, charged⟩ | charged
+    · rw [hcg] at h_run
+      cases err
+      case halt reason =>
+        cases hsg : msg.benv.stat.rules.stateGas <;> rw [hsg] at h_run
+        · rw [← Except.ok.inj h_run]
+          exact h_saved
+        · rw [← Except.ok.inj h_run]
+          exact h_saved
+      all_goals cases h_run
+    · rw [hcg] at h_run
+      dsimp only at h_run
+      rw [← Except.ok.inj h_run, Devm.setCode_state,
+        chargeCodeGas_state_ok hcg]
+      exact StateInv.setCode_ne h_ct_ne h_raw
+  · rw [if_neg herr] at h_run
+    rw [← Except.ok.inj h_run]
+    exact h_saved
+
 theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (hp : c.Preserves wa)
     (h_run : processCreateMessage msg = .ok evm)
