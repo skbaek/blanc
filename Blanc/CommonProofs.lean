@@ -1492,6 +1492,11 @@ recover its pre-bump shape, with no premise about the fork. -/
     (d : Devm) : (Devm.balReadStorage rules a k d).transientStorage = d.transientStorage := by
   unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
 
+@[simp] lemma Devm.balReadStorage_getStorVal (rules : ForkRules) (a : Adr)
+    (k : B256) (b : Adr) (j : B256) (d : Devm) :
+    (Devm.balReadStorage rules a k d).getStorVal b j = d.getStorVal b j := by
+  unfold Devm.getStorVal Devm.getAcct; rw [Devm.balReadStorage_state]
+
 @[simp] lemma Devm.balReadAccount_getAcct (rules : ForkRules) (a b : Adr)
     (d : Devm) : (Devm.balReadAccount rules a d).getAcct b = d.getAcct b := by
   unfold Devm.getAcct; rw [Devm.balReadAccount_state]
@@ -6960,7 +6965,12 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
   refine ⟨key, s₁.stack, hpop.stack, ?_⟩
   suffices H : ∀ (d : Devm) (c : Nat),
       Devm.getStor s₁ = Devm.getStor d → s₁.stack = d.stack →
-      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) = .ok s' →
+      (chargeGas c d >>= fun y =>
+        Devm.push
+          (Devm.getStorVal
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)
+            e.currentTarget key)
+          (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) = .ok s' →
       Stack.Push [Devm.getStorVal s e.currentTarget key] s₁.stack s'.stack by
     split at run₁
     · exact H s₁ gasWarmAccess rfl rfl run₁
@@ -6968,7 +6978,9 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
         (@addAccessedStorageKey_getStor s₁ e.currentTarget key).symm rfl run₁
   intro d c hgs hst run'
   rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
-  have hpush := Devm.push_of_push run₂
+  rw [Devm.balReadStorage_getStorVal] at run₂
+  have hpush := Devm.rel_of_balReadStorage_left (fun _ _ => trivial)
+    (fun _ _ => trivial) (Devm.push_of_push run₂)
   have hstk : d.stack = s₂.stack := (Devm.burn_of_chargeGas h2).stack
   have e2 : Devm.getStor d = Devm.getStor s₂ := chargeGas_getStor_eq h2
   have hval : Devm.getStorVal s₂ e.currentTarget key
@@ -7622,7 +7634,17 @@ instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.returndatasize := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.selfbalance := by show_hinv_mem_push
+-- `SELFBALANCE` reads the originator's balance, so the Amsterdam series put an
+-- EIP-7928 recorder between its charge and its push. The recorder is
+-- memory-transparent, so the conclusion is unchanged.
+instance : Rinst.Hinv Devm.memory Rinst.selfbalance := by
+  refine ⟨?_⟩
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨d, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).memory.trans
+    (Devm.rel_of_balReadAccount_left (fun _ _ => trivial) (fun _ _ => trivial)
+      (Devm.push_of_push hpush)).memory
 
 instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
   intro pc sevm pre post run
@@ -7677,14 +7699,22 @@ instance : Rinst.Hinv Devm.memory Rinst.sload := ⟨by
   rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
   refine (Devm.pop_of_pop h1).memory.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s₁.memory = d.memory →
-      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y sevm.currentTarget key) y)
+      (chargeGas c d >>= fun y =>
+        Devm.push
+          (Devm.getStorVal
+            (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key y)
+            sevm.currentTarget key)
+          (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key y))
         = .ok post → s₁.memory = post.memory by
     split at run₁
     · exact H s₁ gasWarmAccess rfl run₁
     · exact H (addAccessedStorageKey s₁ sevm.currentTarget key) gasColdSload rfl run₁
   intro d c hm run'
   rcases Except.bind_eq_ok run' with ⟨s₂, h2, run₂⟩
-  exact (hm.trans (Devm.burn_of_chargeGas h2).memory).trans (Devm.push_of_push run₂).memory⟩
+  rw [Devm.balReadStorage_getStorVal] at run₂
+  exact (hm.trans (Devm.burn_of_chargeGas h2).memory).trans
+    (Devm.rel_of_balReadStorage_left (fun _ _ => trivial) (fun _ _ => trivial)
+      (Devm.push_of_push run₂)).memory⟩
 
 /-- `SSTORE` writes storage and touches nothing else.  The longest of these
 proofs only because the instruction has the most intermediate states: the
