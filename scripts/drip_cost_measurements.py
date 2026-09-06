@@ -325,8 +325,14 @@ def initial_allocation(api, operation):
 
 def execute_observation(api, case, artifact, variant, run_transition):
     """Two identical fresh single-transaction executions bind full and prefix."""
+    transaction = variant_transaction(api, case["operation"]["transaction"], variant)
+    return _execute_observation(api, case, artifact, variant, run_transition, transaction)
+
+
+def _execute_observation(api, case, artifact, variant, run_transition, transaction):
+    """Shared authenticated carrier; callers select their own fixed schedule."""
     operation = copy.deepcopy(case["operation"])
-    transaction = variant_transaction(api, operation["transaction"], variant)
+    transaction = copy.deepcopy(transaction)
     operation["transaction"] = transaction
     initial = initial_allocation(api, operation)
     genesis = genesis_header(initial)
@@ -386,6 +392,60 @@ def semantic_projection(row):
         "callerTransferDelta": row["callerTransferDelta"]}
 
 
+def _validate_observation(api, row, runtime, operation, transaction):
+    """Validate every field against the authenticated fixed operation."""
+    operation["transaction"] = transaction
+    require(row["transaction"] == {key: value for key, value in transaction.items() if key != "secretKey"},
+            "reported transaction differs from fixed cell")
+    require(row["warmth"] == warmth(transaction, operation["caller"], row["environment"]),
+            "reported warmth differs from authenticated access list")
+    require(row["initialAllocation"] == initial_allocation(api, operation), "reported initial allocation differs")
+    genesis = genesis_header(row["initialAllocation"])
+    _, genesis_hash = header(genesis)
+    require(row["genesisHeader"] == genesis and row["environment"] ==
+            environment(genesis, genesis_hash, operation["timestamp"], {0: genesis_hash}),
+            "reported environment/genesis differs")
+    authenticated = authenticate_body(row["signedBodyRlp"], [transaction], row["blockHeader"]["transactionsTrie"])[0]
+    require(row["signedTransactionRlp"] == "0x" + authenticated["raw"].hex() and
+            row["sender"] == authenticated["sender"] == operation["caller"], "reported envelope/sender differs")
+    result = row["transitionResult"]
+    require(checked_receipt(SimpleNamespace(result=result), transaction, authenticated) == row["receipt"],
+            "reported receipt differs from transition result")
+    require(row["blockHeader"] == linked_block_header(genesis_hash, row["environment"], result),
+            "reported block header differs from fixed environment/result")
+    api.check_direct_prefix(operation, row["initialAllocation"], row["finalAllocation"], {"receipts": [row["receipt"]]})
+    precompiles = ["0x" + bytes(address).hex() for address in PRE_COMPILED_CONTRACTS]
+    measurement = {"blockIndex": 0, "transactionIndex": 0, "stepIndex": 0,
+        "environment": row["environment"], "transaction": row["transaction"],
+        "sender": operation["caller"], "before": row["initialAllocation"], "after": row["finalAllocation"],
+        "receipt": row["receipt"], "intrinsicRegularGas": authenticated["regular"],
+        "calldataFloorGas": authenticated["floor"], "signedTransactionRlp": row["signedTransactionRlp"],
+        "initialPrecompileAddresses": precompiles}
+    projected = api.measurement_rows(row["scenario"], {"measurements": [measurement]}, api.TARGET,
+            kind="direct", expected_outcomes=[operation["expectedOutcome"]])[0]
+    require(all(row[key] == value for key, value in projected.items() if key != "warmth"),
+            "reported projection differs from authenticated observation")
+    value, block_hash = header(row["blockHeader"])
+    require(row["blockHash"] == block_hash and row["blockRlp"] == "0x" +
+            bytes(rlp.encode([value, [authenticated["blockTransaction"]], [], []])).hex(),
+            "reported block serialization differs")
+    require(row["expectedReceiptType"] == quantity(transaction["type"]) and
+            row["observedReceiptType"] == row["receipt"].get("type") and row["receiptTypeBoundToRoot"] is True and
+            row["reconstructedReceiptRlp"] == "0x" + receipt_encoding(row["receipt"], quantity(transaction["type"])).hex(),
+            "reported receipt type evidence differs")
+    for account_value in (row["targetPre"], row["targetPost"]):
+        require(account_value["codeSha256"] == digest(runtime) and
+                account_value["codeBytes"] == len(runtime), "reported artifact identity differs")
+    used = receipt_quantity(row["receipt"]["gasUsed"])
+    require(type(row["receiptChargedGas"]) is int and row["receiptChargedGas"] == used and
+            row["receiptMinusRegularIntrinsicGas"] == used-row["intrinsicRegularGas"] and
+            row["receiptMinusRegularIntrinsicAndDepositGas"] == used-row["intrinsicRegularGas"] and
+            row["derivedCodeDepositGas"] == 0, "reported gas decomposition differs")
+    require(row["senderFeeNormalizedTransfer"] == row["callerTransferDelta"] == operation["callerTransferDelta"],
+            "fee-normalized sender transfer differs")
+    require(all(row[key] is None for key in UNOBSERVED), "unobserved channel fabricated")
+
+
 def validate_rows(api, rows, runtimes):
     actual = [(row["scenario"], row["variant"], row["artifact"]) for row in rows]
     require(len(actual) == 60 and len(set(actual)) == 60 and set(actual) == expected_keys(),
@@ -396,56 +456,7 @@ def validate_rows(api, rows, runtimes):
     for row in rows:
         operation = copy.deepcopy(planned[row["artifact"]][row["scenario"]]["operation"])
         transaction = variant_transaction(api, operation["transaction"], row["variant"])
-        operation["transaction"] = transaction
-        require(row["transaction"] == {key: value for key, value in transaction.items() if key != "secretKey"},
-                "reported transaction differs from fixed cell")
-        require(row["warmth"] == warmth(transaction, operation["caller"], row["environment"]),
-                "reported warmth differs from authenticated access list")
-        require(row["initialAllocation"] == initial_allocation(api, operation), "reported initial allocation differs")
-        genesis = genesis_header(row["initialAllocation"])
-        _, genesis_hash = header(genesis)
-        require(row["genesisHeader"] == genesis and row["environment"] ==
-                environment(genesis, genesis_hash, operation["timestamp"], {0: genesis_hash}),
-                "reported environment/genesis differs")
-        authenticated = authenticate_body(row["signedBodyRlp"], [transaction], row["blockHeader"]["transactionsTrie"])[0]
-        require(row["signedTransactionRlp"] == "0x" + authenticated["raw"].hex() and
-                row["sender"] == authenticated["sender"] == operation["caller"], "reported envelope/sender differs")
-        result = row["transitionResult"]
-        require(checked_receipt(SimpleNamespace(result=result), transaction, authenticated) == row["receipt"],
-                "reported receipt differs from transition result")
-        require(row["blockHeader"] == linked_block_header(genesis_hash, row["environment"], result),
-                "reported block header differs from fixed environment/result")
-        api.check_direct_prefix(operation, row["initialAllocation"], row["finalAllocation"], {"receipts": [row["receipt"]]})
-        precompiles = ["0x" + bytes(address).hex() for address in PRE_COMPILED_CONTRACTS]
-        measurement = {"blockIndex": 0, "transactionIndex": 0, "stepIndex": 0,
-            "environment": row["environment"], "transaction": row["transaction"],
-            "sender": operation["caller"], "before": row["initialAllocation"], "after": row["finalAllocation"],
-            "receipt": row["receipt"], "intrinsicRegularGas": authenticated["regular"],
-            "calldataFloorGas": authenticated["floor"], "signedTransactionRlp": row["signedTransactionRlp"],
-            "initialPrecompileAddresses": precompiles}
-        projected = api.measurement_rows(row["scenario"], {"measurements": [measurement]}, api.TARGET,
-                kind="direct", expected_outcomes=[operation["expectedOutcome"]])[0]
-        require(all(row[key] == value for key, value in projected.items() if key != "warmth"),
-                "reported projection differs from authenticated observation")
-        value, block_hash = header(row["blockHeader"])
-        require(row["blockHash"] == block_hash and row["blockRlp"] == "0x" +
-                bytes(rlp.encode([value, [authenticated["blockTransaction"]], [], []])).hex(),
-                "reported block serialization differs")
-        require(row["expectedReceiptType"] == quantity(transaction["type"]) and
-                row["observedReceiptType"] == row["receipt"].get("type") and row["receiptTypeBoundToRoot"] is True and
-                row["reconstructedReceiptRlp"] == "0x" + receipt_encoding(row["receipt"], quantity(transaction["type"])).hex(),
-                "reported receipt type evidence differs")
-        for account_value in (row["targetPre"], row["targetPost"]):
-            require(account_value["codeSha256"] == digest(runtimes[row["artifact"]]) and
-                    account_value["codeBytes"] == len(runtimes[row["artifact"]]), "reported artifact identity differs")
-        used = receipt_quantity(row["receipt"]["gasUsed"])
-        require(type(row["receiptChargedGas"]) is int and row["receiptChargedGas"] == used and
-                row["receiptMinusRegularIntrinsicGas"] == used-row["intrinsicRegularGas"] and
-                row["receiptMinusRegularIntrinsicAndDepositGas"] == used-row["intrinsicRegularGas"] and
-                row["derivedCodeDepositGas"] == 0, "reported gas decomposition differs")
-        require(row["senderFeeNormalizedTransfer"] == row["callerTransferDelta"] == operation["callerTransferDelta"],
-                "fee-normalized sender transfer differs")
-        require(all(row[key] is None for key in UNOBSERVED), "unobserved channel fabricated")
+        _validate_observation(api, row, runtimes[row["artifact"]], operation, transaction)
     pairs = []
     for name, variant, artifact in sorted(expected_keys()):
         if artifact != "baseline":
@@ -508,4 +519,184 @@ def measure(api, profile, candidate, creation, run_transition, source_identity):
         "coverageBoundary": "supplements frozen 91 scenarios/137 transactions; first view steps do not replace later consistency prefixes",
         "coverageGaps": list(UNOBSERVED) + ["nested frame gas/warmth traces", "warm chi/Pie/row variants",
             "independent Jaune replay", "universal cost or liveness result", "separately compiled executable referent"],
+        "transactions": rows, "artifactPairs": pairs, "warmthPairs": warmth_pairs}
+
+
+# A separately versioned, closed schedule. These names never extend cases()
+# or the legacy 60-cell measurement interface.
+SUPPLEMENTAL_PLAN = (
+    ("drip-same-timestamp", ("A", "C", "CR"), 1),
+    ("supplemental-drip-k1", ("A", "C", "CR"), 1),
+    ("view-cap-convertToAssets-0", ("A", "C", "CR"), 1),
+    ("view-cap-convertToUnits-0", ("A", "C", "CR"), 1),
+    ("join-zero-value", ("A", "C", "P", "H", "ALL"), 1),
+    ("exit-zero-unit-call", ("A", "C", "P", "H", "ALL"), 1),
+    ("join-over-max-asset-revert", ("A", "ALL"), 0),
+    ("join-cap-row-pre", ("A", "H"), 0),
+    ("join-cap-total-pre", ("A", "HP"), 0),
+    ("exit-insufficient-units-revert", ("A", "HP"), 0),
+    ("supplemental-exit-total-insufficient", ("A", "HP"), 0),
+    ("drip-chi-below-scale-revert", ("A", "C"), 0),
+    ("drip-chi-above-cap-revert", ("A", "C"), 0),
+    ("drip-elapsed-overflow-revert", ("A", "CR"), 0),
+    ("drip-post-chi-cap-revert", ("A", "CR"), 0),
+    ("join-cap-row-result", ("A", "ALL"), 0),
+    ("join-cap-total-result", ("A", "ALL"), 0),
+)
+SUPPLEMENTAL_INVALID_SEEDS = frozenset((
+    "join-cap-row-pre", "join-cap-total-pre", "join-cap-row-result",
+    "supplemental-exit-total-insufficient", "drip-chi-below-scale-revert",
+    "drip-chi-above-cap-revert",
+))
+
+
+def supplemental_seed_boundary(name):
+    require(name in {n for n, _, _ in SUPPLEMENTAL_PLAN}, "unknown supplemental scenario")
+    return {"rootKind": "synthetic-preallocation", "reachableHistoryWitness": False,
+            "invariantViolatingGuardSeed": name in SUPPLEMENTAL_INVALID_SEEDS}
+
+
+def supplemental_cases(api, runtime):
+    frozen = {case["name"]: case for case in api.cases(runtime)}
+    result = []
+    for name, _variants, status in SUPPLEMENTAL_PLAN:
+        if name in frozen:
+            operation = copy.deepcopy(frozen[name]["steps"][0])
+        else:
+            require(name in ("supplemental-drip-k1", "supplemental-exit-total-insufficient"),
+                    "missing fixed supplemental operation")
+            is_drip = name == "supplemental-drip-k1"
+            model = api.model_at() if is_drip else api.model_at(total=10, row=11)
+            before = api.target_account(model, runtime)
+            now = api.START + (1 if is_drip else 0)
+            data = api.abi("drip") if is_drip else api.abi("exit", 11)
+            outcome = api.execute_model(model, api.ALICE, data, 0, now)
+            operation = {"index": 0, "timestamp": now, "caller": api.ALICE,
+                "transaction": {"type": "0x00", "chainId": "0x01", "nonce": "0x00",
+                    "gasPrice": api.q(api.GAS_PRICE), "gas": api.q(api.GAS), "to": api.TARGET,
+                    "value": "0x00", "input": data, "secretKey": "0x" + f"{api.KEYS[api.ALICE]:064x}"},
+                "preTarget": before, "expectedTarget": api.target_account(model, runtime),
+                "expectedOutcome": outcome, "callerTransferDelta": 0}
+        require(operation["expectedOutcome"]["status"] == status,
+                "fixed supplemental guard outcome differs")
+        require(operation["index"] == 0 and quantity(operation["transaction"]["nonce"]) == 0,
+                "supplemental call is not an isolated first transaction")
+        if not status:
+            require(operation["preTarget"] == operation["expectedTarget"], "guard probe did not roll back")
+        result.append({"name": name, "operation": operation})
+    return result
+
+
+def supplemental_transaction(api, case, variant):
+    permitted = {name: variants for name, variants, _ in SUPPLEMENTAL_PLAN}
+    require(case["name"] in permitted and variant in permitted[case["name"]],
+            "unknown supplemental scenario/variant")
+    operation = case["operation"]
+    transaction = copy.deepcopy(operation["transaction"])
+    sender = derive_address(int.from_bytes(hex_bytes(transaction["secretKey"], 32), "big"))
+    require(sender == operation["caller"] == api.ALICE, "supplemental holder/signer differs")
+    holder = int(sender, 16)
+    keys = {"A": (), "C": (api.CHI_SLOT,), "CR": (api.CHI_SLOT, api.RHO_SLOT),
+            "P": (api.PIE_SLOT,), "H": (holder,), "HP": (holder, api.PIE_SLOT),
+            "ALL": (api.CHI_SLOT, api.RHO_SLOT, api.PIE_SLOT, holder)}[variant]
+    require(len(keys) == len(set(keys)), "duplicate supplemental storage key")
+    transaction["type"] = "0x01"
+    transaction["accessList"] = [{"address": api.TARGET,
+                                   "storageKeys": ["0x" + f"{key:064x}" for key in keys]}]
+    return transaction
+
+
+def supplemental_expected_keys():
+    return {(name, variant, artifact) for name, variants, _ in SUPPLEMENTAL_PLAN
+            for variant in variants for artifact in ARTIFACTS}
+
+
+def execute_supplemental_observation(api, case, artifact, variant, run_transition):
+    transaction = supplemental_transaction(api, case, variant)
+    row = _execute_observation(api, case, artifact, variant, run_transition, transaction)
+    row["seedBoundary"] = supplemental_seed_boundary(case["name"])
+    return row
+
+
+def validate_supplemental_rows(api, rows, runtimes):
+    require(set(runtimes) == set(ARTIFACTS), "supplemental artifact population differs")
+    require(len(runtimes["baseline"]) == BASELINE_RUNTIME_BYTES and
+            digest(runtimes["baseline"]) == BASELINE_RUNTIME_SHA256, "supplemental baseline identity differs")
+    actual = [(row["scenario"], row["variant"], row["artifact"]) for row in rows]
+    require(len(actual) == 88 and len(set(actual)) == 88 and set(actual) == supplemental_expected_keys(),
+            "supplemental guard/warmth rows are not the exact 88-cell bijection")
+    planned = {artifact: {case["name"]: case for case in supplemental_cases(api, runtime)}
+               for artifact, runtime in runtimes.items()}
+    lookup = dict(zip(actual, rows))
+    for row in rows:
+        case = planned[row["artifact"]][row["scenario"]]
+        transaction = supplemental_transaction(api, case, row["variant"])
+        _validate_observation(api, row, runtimes[row["artifact"]],
+                              copy.deepcopy(case["operation"]), transaction)
+        require(row["seedBoundary"] == supplemental_seed_boundary(row["scenario"]),
+                "supplemental seed provenance differs")
+    pairs, warmth_pairs = [], []
+    for name, variants, _ in SUPPLEMENTAL_PLAN:
+        for variant in variants:
+            baseline, candidate = [lookup[name, variant, artifact] for artifact in ARTIFACTS]
+            require(semantic_projection(baseline) == semantic_projection(candidate),
+                    "supplemental artifact semantic projection differs")
+            for key in ("transaction", "warmth", "timestamp", "preRho", "elapsedFromPreRho",
+                        "elapsedBitLength", "elapsedPopcount", "intrinsicRegularGas", "calldataFloorGas",
+                        "seedBoundary"):
+                require(baseline[key] == candidate[key], f"supplemental artifact {key} differs")
+            pairs.append({"scenario": name, "variant": variant,
+                "candidateMinusBaselineChargedGas": candidate["receiptChargedGas"]-baseline["receiptChargedGas"],
+                "candidateMinusBaselineChargedRemainder": candidate["receiptMinusRegularIntrinsicGas"]-baseline["receiptMinusRegularIntrinsicGas"]})
+        for artifact in ARTIFACTS:
+            cold = lookup[name, "A", artifact]
+            for variant in variants[1:]:
+                warm = lookup[name, variant, artifact]
+                require(semantic_projection(cold) == semantic_projection(warm),
+                        "supplemental warmth semantic projection differs")
+                key_count = len(warm["transaction"]["accessList"][0]["storageKeys"])
+                require(warm["intrinsicRegularGas"]-cold["intrinsicRegularGas"] == 1900*key_count and
+                        warm["calldataFloorGas"] == cold["calldataFloorGas"],
+                        "supplemental key intrinsic/floor difference differs")
+                warmth_pairs.append({"scenario": name, "artifact": artifact, "variant": variant,
+                    "storageKeyCount": key_count, "intrinsicDelta": 1900*key_count,
+                    "warmMinusAddressOnlyChargedGas": warm["receiptChargedGas"]-cold["receiptChargedGas"],
+                    "warmMinusAddressOnlyChargedRemainder": warm["receiptMinusRegularIntrinsicGas"]-cold["receiptMinusRegularIntrinsicGas"]})
+    require((len(pairs), len(warmth_pairs)) == (44, 54), "supplemental pair population differs")
+    return pairs, warmth_pairs
+
+
+def measure_supplemental(api, profile, candidate, creation, run_transition, source_identity):
+    """Fixed 17-scenario supplement; real callers supply the verified transition runner."""
+    require(profile["target"]["checkoutCommit"] == TARGET_COMMIT and
+            profile["execution"]["fork"] == "BPO2", "measurement target identity differs")
+    before = source_identity()
+    runtimes = {"baseline": load_baseline(api.ROOT), "candidate": candidate}
+    planned = {artifact: {case["name"]: case for case in supplemental_cases(api, runtime)}
+               for artifact, runtime in runtimes.items()}
+    rows = []
+    for name, variants, _ in SUPPLEMENTAL_PLAN:
+        for variant in variants:
+            for artifact in ARTIFACTS:
+                rows.append(execute_supplemental_observation(
+                    api, planned[artifact][name], artifact, variant, run_transition))
+    pairs, warmth_pairs = validate_supplemental_rows(api, rows, runtimes)
+    assert_identity(before, source_identity())
+    assert_identity((candidate, creation), api.artifacts())
+    assert_identity(runtimes["baseline"], load_baseline(api.ROOT))
+    return {"schema": 1, "kind": "drip-bpo2-supplemental-storage-guard-cost-observations",
+        "executionEvidence": True, "scenarioCount": 17, "transactionCount": 88,
+        "transitionInvocations": 176, "targetProfile": profile, "sourceSha256": before,
+        "baseline": {"commit": BASELINE_COMMIT, "path": BASELINE_PATH,
+                     "sourceSha256": BASELINE_SOURCE_SHA256, "runtimeSha256": BASELINE_RUNTIME_SHA256,
+                     "runtimeBytes": BASELINE_RUNTIME_BYTES},
+        "candidate": {"runtimeSha256": digest(candidate), "runtimeBytes": len(candidate),
+                      "creationSha256": digest(creation), "creationBytes": len(creation)},
+        "costBoundary": "receipt charge after refund and calldata floor; remainders are not gross frame execution gas",
+        "prefixBoundary": "each full isolated transaction equals a separately executed identical prefix in receipt/body/poststate and final roots; no independent state-root reconstruction",
+        "receiptBoundary": "single typed receipt encoding authenticated against returned receiptsRoot using the pinned shared trie implementation",
+        "coverageBoundary": "separate fixed 17-scenario supplement; frozen 91/137 and existing 60-cell evidence remain mandatory",
+        "seedBoundary": "all cases are direct synthetic preallocations, not reachable history witnesses; labelled guard seeds violate the invariant",
+        "coverageGaps": list(UNOBSERVED) + ["nested frame gas/warmth traces", "all storage-key subsets",
+            "independent Jaune replay", "universal recipient/gas or liveness result", "separately compiled executable referent"],
         "transactions": rows, "artifactPairs": pairs, "warmthPairs": warmth_pairs}
