@@ -5798,7 +5798,7 @@ lemma genericCallAmsterdam.codeEffect
 stack reads have fixed the value, target, and memory ranges. -/
 lemma genericCallAmsterdam.meteredPrelude_codeEffect
     {sevm : Sevm} {state : StateGasRules} {d : Devm}
-    {gas value : B256} {transferCost : Nat}
+    {gas value : B256} {gasValue transferCost : Nat}
     {caller target codeAddress : Adr} {stv isSt : Bool}
     {inputIndex inputSize outputIndex outputSize : Nat}
     {newAccountCharged insufficientBalance : Bool} :
@@ -5821,7 +5821,7 @@ lemma genericCallAmsterdam.meteredPrelude_codeEffect
         let ⟨code, d⟩ :=
           completeDelegationAccess d disablePrecompiles newCodeAddress
         let ⟨msgCallCost, msgCallStipend⟩ :=
-          calculateMsgCallGas value.toNat gas.toNat d.gasLeft extendCost extraGas
+          calculateMsgCallGas gasValue gas.toNat d.gasLeft extendCost extraGas
         let d ← chargeGas (msgCallCost + extendCost) d
         let ⟨reservoir, d⟩ := d.drainStateGasReservoir
         let d :=
@@ -6005,6 +6005,84 @@ lemma Xinst.callcodeAmsterdam_codeEffect
   rcases p with ⟨outputSize, d⟩
   dsimp only
   exact genericCallAmsterdam.meteredPrelude_codeEffect
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := value) (gasValue := value.toNat)
+    (transferCost := if value = 0 then 0 else sevm.benvStat.rules.gas.callValue)
+    (caller := sevm.currentTarget) (target := sevm.currentTarget)
+    (codeAddress := codeAddress) (stv := true) (isSt := false)
+    (inputIndex := inputIndex)
+    (inputSize := inputSize) (outputIndex := outputIndex)
+    (outputSize := outputSize) (newAccountCharged := false)
+    (insufficientBalance :=
+      decide ((d.getAcct sevm.currentTarget).bal < value))
+
+lemma Xinst.delegatecallAmsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .delegatecall) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.codeEffect_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_codeEffect
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := sevm.value) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.caller)
+    (target := sevm.currentTarget) (codeAddress := codeAddress)
+    (stv := false) (isSt := false) (inputIndex := inputIndex)
+    (inputSize := inputSize) (outputIndex := outputIndex)
+    (outputSize := outputSize) (newAccountCharged := false)
+    (insufficientBalance := false)
+
+lemma Xinst.staticcallAmsterdam_codeEffect
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.CodeEffect devm (Xinst.step sevm devm .staticcall) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.codeEffect_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.codeEffect_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.codeEffect_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_codeEffect
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := 0) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.currentTarget)
+    (target := codeAddress) (codeAddress := codeAddress)
+    (stv := true) (isSt := true) (inputIndex := inputIndex)
+    (inputSize := inputSize) (outputIndex := outputIndex)
+    (outputSize := outputSize) (newAccountCharged := false)
+    (insufficientBalance := false)
 
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
@@ -6048,6 +6126,31 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
   -- dispatched to the CALL family
   · exact lift hf (GenericCall.codePreserve inv run)
 
+/-- Code preservation for `Xinst` on either execution lane. The legacy arm
+reuses the established shape theorem; every Amsterdam arm is discharged by
+its concrete metered `CodeEffect`. -/
+lemma Xinst.codePreserve_effectRec_any (x : Xinst) :
+    ∀ {sevm pre xl out}, Xlot.Rel Devm.CodePreserve xl →
+      Xinst.Run sevm pre x xl out → Execution.Rel Devm.CodePreserve pre out := by
+  intro sevm pre xl out hxl run
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Xinst.codePreserve_effectRec x hsg hxl run
+  | some state =>
+      have inv : xl.InvGetCode := Xlot.invGetCode_of_rel hxl
+      cases x with
+      | create =>
+          cases out <;> exact Xinst.createAmsterdam_codeEffect hsg inv run
+      | create2 =>
+          cases out <;> exact Xinst.create2Amsterdam_codeEffect hsg inv run
+      | call =>
+          cases out <;> exact Xinst.callAmsterdam_codeEffect hsg inv run
+      | callcode =>
+          cases out <;> exact Xinst.callcodeAmsterdam_codeEffect hsg inv run
+      | delegatecall =>
+          cases out <;> exact Xinst.delegatecallAmsterdam_codeEffect hsg inv run
+      | staticcall =>
+          cases out <;> exact Xinst.staticcallAmsterdam_codeEffect hsg inv run
+
 /-- Compatibility projection: the legacy observation theorem, now derived from
 the relational master `Xinst.codePreserve_effectRec` through the
 `Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
@@ -6060,6 +6163,19 @@ lemma Xinst.preserves_getCode_gen
       (devm.getCode a).toList ≠ [] →
       Execution.getCode exn a = devm.getCode a := by
   have h := Xinst.codePreserve_effectRec x hleg (Xlot.rel_of_invGetCode inv) run
+  cases exn with
+  | error e => exact fun a ha => h a ha
+  | ok d => exact fun a ha => h a ha
+
+lemma Xinst.preserves_getCode_gen_any
+    {sevm devm x xl exn}
+    (inv : xl.InvGetCode)
+    (run : Xinst.Run sevm devm x xl exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      Execution.getCode exn a = devm.getCode a := by
+  have h := Xinst.codePreserve_effectRec_any x
+    (Xlot.rel_of_invGetCode inv) run
   cases exn with
   | error e => exact fun a ha => h a ha
   | ok d => exact fun a ha => h a ha
