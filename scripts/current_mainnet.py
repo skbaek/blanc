@@ -10,8 +10,11 @@ This module never invokes solc.
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
+import csv
 import hashlib
+import io
 import json
 import os
 import platform
@@ -551,11 +554,108 @@ def _canonical_json_sha256(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _portable_site_payloads(paths: TargetPaths, root: Path) -> dict[str, bytes]:
+    """Validate installed bytes before normalizing only construction metadata.
+
+    RECORD is checked against the real installation first. Its replacement
+    hashes and sizes describe the validated portable bytes, never unchecked
+    assertions supplied by the installer. Other .pth/code/metadata stays exact.
+    """
+    payloads = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+        and path.suffix not in (".pyc", ".pyo")
+    }
+    portable = dict(payloads)
+    for distribution, suffix in (
+        ("ethereum_execution-2.19.0", ""),
+        ("ethereum_execution_testing-1.0.0", "/packages/testing"),
+    ):
+        package = Path(str(paths.root) + suffix)
+        pth = f"__editable__.{distribution}.pth"
+        _literal(payloads.get(pth), f"{package}/src\n".encode(), pth)
+        portable[pth] = f"$TARGET{suffix}/src\n".encode()
+        directory = f"{distribution}.dist-info"
+        direct = f"{directory}/direct_url.json"
+        cache = f"{directory}/uv_cache.json"
+        try:
+            url = json.loads(payloads[direct])
+            metadata = json.loads(payloads[cache])
+        except (KeyError, ValueError) as exc:
+            _fail(f"editable installation metadata is absent or malformed: {exc}")
+        _literal(url, {"url": package.as_uri(), "dir_info": {"editable": True}}, direct)
+        url["url"] = f"file://$TARGET{suffix}"
+        portable[direct] = json.dumps(url, sort_keys=True, separators=(",", ":")).encode()
+        _exact_keys(metadata, {"timestamp", "commit", "tags", "env", "directories"}, cache)
+        for key, expected in (("commit", None), ("tags", None), ("env", {})):
+            _literal(metadata[key], expected, f"{cache}.{key}")
+        _exact_keys(metadata["directories"], {"src"}, f"{cache}.directories")
+        for stamp in (metadata["timestamp"], metadata["directories"]["src"]):
+            _exact_keys(stamp, {"secs_since_epoch", "nanos_since_epoch"}, cache)
+            if type(stamp["secs_since_epoch"]) is not int or stamp["secs_since_epoch"] < 0 \
+                    or type(stamp["nanos_since_epoch"]) is not int \
+                    or not 0 <= stamp["nanos_since_epoch"] < 1_000_000_000:
+                _fail(f"invalid installation timestamp in {cache}")
+            stamp.update(secs_since_epoch=0, nanos_since_epoch=0)
+        portable[cache] = json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode()
+
+    for name, raw in payloads.items():
+        if not name.endswith(".dist-info/RECORD") or name.count("/") != 1:
+            continue
+        rows = list(csv.reader(io.StringIO(raw.decode())))
+        seen: set[str] = set()
+        normalized = []
+        for row in rows:
+            if len(row) != 3 or row[0] in seen:
+                _fail(f"malformed or duplicate RECORD row in {name}")
+            relative, expected_hash, expected_size = row
+            seen.add(relative)
+            target = (root / relative).resolve()
+            if not target.is_relative_to(paths.venv.resolve()):
+                _fail(f"RECORD path escapes selected venv: {relative}")
+            if relative == name:
+                _literal(row[1:], ["", ""], f"{name} self row")
+                normalized.append(row)
+                continue
+            if "__pycache__" in target.parts or target.suffix in (".pyc", ".pyo"):
+                _literal(row[1:], ["", ""], f"{name} bytecode row")
+                normalized.append(row)
+                continue
+            if not target.is_file():
+                _fail(f"RECORD payload is missing: {relative}")
+            actual = target.read_bytes()
+            actual_hash = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(actual).digest()).decode().rstrip("=")
+            _literal([expected_hash, expected_size], [actual_hash, str(len(actual))], f"{name}: {relative}")
+            if target.is_relative_to(root.resolve()):
+                content = portable.get(target.relative_to(root.resolve()).as_posix(), actual)
+            elif target.parent == (paths.venv / "bin").resolve():
+                first, separator, body = actual.partition(b"\n")
+                if actual.startswith(b"#!"):
+                    _literal(first, f"#!{paths.python}".encode(), f"{relative} shebang")
+                    if not separator or not body:
+                        _fail(f"empty entrypoint body: {relative}")
+                    content = b"#!$TARGET/.venv/bin/python\n" + body
+                else:
+                    content = actual  # native executable: every byte remains exact
+            else:
+                _fail(f"unsupported RECORD path outside site-packages: {relative}")
+            digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).decode().rstrip("=")
+            normalized.append([relative, "sha256=" + digest, str(len(content))])
+        if name not in seen:
+            _fail(f"RECORD lacks its own row: {name}")
+        output = io.StringIO()
+        csv.writer(output, lineterminator="\n").writerows(sorted(normalized))
+        portable[name] = output.getvalue().encode()
+    return portable
+
+
 def _site_packages_fingerprint(paths: TargetPaths) -> dict[str, Any]:
     series = ".".join(_EXPECTED["pythonVersion"].split(".")[:2])
     root = paths.venv / "lib" / f"python{series}" / "site-packages"
     if not root.is_dir():
         _fail(f"selected target site-packages tree is absent: {root}")
+    portable = _portable_site_payloads(paths, root)
     records: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
         if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
@@ -572,13 +672,14 @@ def _site_packages_fingerprint(paths: TargetPaths) -> dict[str, Any]:
             records.append(record)
         elif path.is_file():
             records.append(
-                {"path": relative, "kind": "file", "sha256": _sha256_file(path)}
+                {"path": relative, "kind": "file", "sha256": hashlib.sha256(portable[relative]).hexdigest()}
             )
     return {
         "relativeRoot": root.relative_to(paths.root).as_posix(),
         "fileRecords": len(records),
         "sha256": _canonical_json_sha256(records),
         "excludes": list(_RUNTIME_EXCLUDES),
+        "representation": 2,
     }
 
 
@@ -607,6 +708,7 @@ def _runtime_target_document(paths: TargetPaths) -> dict[str, Any]:
         "pythonVersion": _EXPECTED["pythonVersion"],
         "entrypointBodySha256": _entrypoint_body_sha256(paths.t8n),
         "sitePackagesExcludes": list(_RUNTIME_EXCLUDES),
+        "constructionRecipeSha256": _sha256_file(PROFILE_PATH.with_name("current-mainnet-runtime-recipe.json")),
     }
 
 
@@ -618,7 +720,9 @@ def _validate_runtime_lock_document(
     profile: dict[str, Any], document: Any
 ) -> dict[str, Any]:
     top = _exact_keys(document, {"schema", "target", "platforms"}, "runtime lock")
-    _literal(top["schema"], 1, "runtime lock.schema")
+    if type(top["schema"]) is not int or top["schema"] not in (1, 2):
+        _fail("unsupported runtime lock schema")
+    portable = top["schema"] == 2
     target = _exact_keys(
         top["target"],
         {
@@ -627,7 +731,7 @@ def _validate_runtime_lock_document(
             "pythonVersion",
             "entrypointBodySha256",
             "sitePackagesExcludes",
-        },
+        } | ({"constructionRecipeSha256"} if portable else set()),
         "runtime lock.target",
     )
     for key, expected in (
@@ -639,6 +743,10 @@ def _validate_runtime_lock_document(
         _literal(target[key], expected, f"runtime lock.target.{key}")
     if not _is_sha256(target["entrypointBodySha256"]):
         _fail("runtime lock target entrypoint body digest is malformed")
+    if portable:
+        _literal(target["constructionRecipeSha256"],
+                 _sha256_file(PROFILE_PATH.with_name("current-mainnet-runtime-recipe.json")),
+                 "runtime lock construction recipe")
 
     expected_platforms = set(profile["target"]["pythonIdentity"]["platforms"])
     platforms = _exact_keys(
@@ -654,7 +762,8 @@ def _validate_runtime_lock_document(
             _fail(f"runtime lock {key} executable digest is malformed")
         site = _exact_keys(
             entry["targetSitePackages"],
-            {"relativeRoot", "fileRecords", "sha256", "excludes"},
+            {"relativeRoot", "fileRecords", "sha256", "excludes"}
+            | ({"representation"} if portable else set()),
             f"runtime lock.platforms.{key}.targetSitePackages",
         )
         expected_root = ".venv/lib/python3.11/site-packages"
@@ -664,6 +773,8 @@ def _validate_runtime_lock_document(
                 or not _is_sha256(site["sha256"]) \
                 or site["excludes"] != list(_RUNTIME_EXCLUDES):
             _fail(f"runtime lock {key} site-packages fingerprint is malformed")
+        if portable and (type(site["representation"]) is not int or site["representation"] not in (1, 2)):
+            _fail(f"runtime lock {key} representation is unsupported")
     return top
 
 
@@ -763,17 +874,19 @@ def _verify_runtime_lock(
         )
     _validate_pyvenv(paths, platform_row)
     runtime_lock = _load_runtime_lock(profile)
+    if runtime_lock["schema"] != 2 or runtime_lock["platforms"][key]["targetSitePackages"]["representation"] != 2:
+        _fail(f"runtime lock {key} is historical installation-specific evidence, not a recoverable recipe; see docs/CURRENT_MAINNET_SETUP.md")
     target = runtime_lock["target"]
     _literal(
         _entrypoint_body_sha256(paths.t8n),
         target["entrypointBodySha256"],
         "runtime-lock t8n entrypoint body",
     )
-    _literal(
-        _runtime_entry(paths),
-        runtime_lock["platforms"][key],
-        f"runtime-lock native closure {key}",
-    )
+    actual = _runtime_entry(paths)
+    if actual != runtime_lock["platforms"][key]:
+        _fail(f"runtime-lock native closure {key} differs: expected {runtime_lock['platforms'][key]}, got {actual}; "
+              "preserve this environment and reconstruct a fresh root with scripts/setup-current-mainnet.py; "
+              "see docs/CURRENT_MAINNET_SETUP.md, never refresh the lock merely to accept a mismatch")
     return key
 
 
