@@ -292,6 +292,18 @@ import Blanc.ProrataAttackModel
 import Blanc.ProrataAttackPath
 import Blanc.ProrataAttackTrace
 
+import Blanc.Drip
+import Blanc.DripAccounting
+import Blanc.DripCode
+import Blanc.DripCore
+import Blanc.DripCreationCode
+import Blanc.DripDeploy
+import Blanc.DripEndpoints
+import Blanc.DripFresh
+import Blanc.DripFunctional
+import Blanc.DripIngress
+import Blanc.DripMachine
+import Blanc.DripRpow
 import Blanc.DripStackSafetyCertificate
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
