@@ -1042,6 +1042,7 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.Composition.ProrataWethVault.totalAssetsResources_of_run
 #print axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
 #print axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
 #print axioms Blanc.Composition.ProrataWethVault.maxDeposit_body_effect

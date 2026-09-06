@@ -66,7 +66,6 @@ theorem readTotalAssets_conversion_body_effect
     {calculate : Nat → Nat → Nat → Nat}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (localEffect : ∀ {bodyPre : Devm} {image : Bytes} {assets : B256},
       Mem.Wf bodyPre.memory →
       Mem.Reads bodyPre.memory image →
@@ -92,6 +91,7 @@ theorem readTotalAssets_conversion_body_effect
         (Nat.toB256 (calculate (Sevm.argWord sevm 0).toNat
           ((entry.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat)) entry post := by
+  have actualResources := totalAssetsResources_of_run config memoryWf run
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
@@ -110,8 +110,8 @@ theorem readTotalAssets_conversion_body_effect
     exact config.code
   obtain ⟨word, bodyPre, -, -, bodyStorage, bodyLogs,
       returnedWord, wordPrefix, bodyWf, -, -, bodyRun⟩ :=
-    readTotalAssets_exactEffect callConfig memory staging resources.1
-      (resources.2 callPre staging) crossing suffix
+    readTotalAssets_exactEffect callConfig memory staging actualResources.1
+      (actualResources.2 callPre staging) crossing suffix
   have bodyReads :
       Mem.Reads bodyPre.memory bodyPre.memory.data.toList := by
     intro index
@@ -157,7 +157,6 @@ theorem convertToShares_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (lookup : fs[returnWordSlot]? = some returnWord)
     (run : Func.RunCompiledTo fs sevm entry convertToShares (.ok post)) :
     ∃ supply,
@@ -173,7 +172,7 @@ theorem convertToShares_body_effect
   have run' : Func.RunCompiledTo fs sevm entry
       (readTotalAssets sharesFloorBody) (.ok post) := by
     simpa only [convertToShares, sharesFloorBody] using run
-  apply readTotalAssets_conversion_body_effect config memoryWf resources _ run'
+  apply readTotalAssets_conversion_body_effect config memoryWf _ run'
   intro bodyPre image assets bodyWf bodyReads bodyStack bodyRun
   apply Blanc.ProrataWethVault.convertToShares_body_effect bodyWf bodyReads
     bodyStack lookup
@@ -185,7 +184,6 @@ theorem convertToAssets_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (lookup : fs[returnWordSlot]? = some returnWord)
     (run : Func.RunCompiledTo fs sevm entry convertToAssets (.ok post)) :
     ∃ supply,
@@ -201,7 +199,7 @@ theorem convertToAssets_body_effect
   have run' : Func.RunCompiledTo fs sevm entry
       (readTotalAssets assetsFloorBody) (.ok post) := by
     simpa only [convertToAssets, assetsFloorBody] using run
-  apply readTotalAssets_conversion_body_effect config memoryWf resources _ run'
+  apply readTotalAssets_conversion_body_effect config memoryWf _ run'
   intro bodyPre image assets bodyWf bodyReads bodyStack bodyRun
   apply Blanc.ProrataWethVault.convertToAssets_body_effect bodyWf bodyReads
     bodyStack lookup
@@ -213,7 +211,6 @@ theorem previewMint_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (lookup : fs[returnWordSlot]? = some returnWord)
     (run : Func.RunCompiledTo fs sevm entry previewMint (.ok post)) :
     ∃ supply,
@@ -229,7 +226,7 @@ theorem previewMint_body_effect
   have run' : Func.RunCompiledTo fs sevm entry
       (readTotalAssets assetsCeilBody) (.ok post) := by
     simpa only [previewMint, assetsCeilBody] using run
-  apply readTotalAssets_conversion_body_effect config memoryWf resources _ run'
+  apply readTotalAssets_conversion_body_effect config memoryWf _ run'
   intro bodyPre image assets bodyWf bodyReads bodyStack bodyRun
   apply Blanc.ProrataWethVault.previewMint_body_effect bodyWf bodyReads
     bodyStack lookup
@@ -241,7 +238,6 @@ theorem previewWithdraw_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (lookup : fs[returnWordSlot]? = some returnWord)
     (run : Func.RunCompiledTo fs sevm entry previewWithdraw (.ok post)) :
     ∃ supply,
@@ -257,7 +253,7 @@ theorem previewWithdraw_body_effect
   have run' : Func.RunCompiledTo fs sevm entry
       (readTotalAssets sharesCeilBody) (.ok post) := by
     simpa only [previewWithdraw, sharesCeilBody] using run
-  apply readTotalAssets_conversion_body_effect config memoryWf resources _ run'
+  apply readTotalAssets_conversion_body_effect config memoryWf _ run'
   intro bodyPre image assets bodyWf bodyReads bodyStack bodyRun
   apply Blanc.ProrataWethVault.previewWithdraw_body_effect bodyWf bodyReads
     bodyStack lookup
@@ -270,12 +266,10 @@ private theorem conversion_compiled_effect
     {calculate : Nat → Nat → Nat → Nat}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post body)
     (member : (sig, routed 1 body) ∈ vaultFuncs)
     (bodyEffect : ∀ {entry : Devm},
       DirectWethConfiguration sevm.currentTarget sevm entry →
       Mem.Wf entry.memory →
-      TotalAssetsResources sevm entry →
       Func.RunCompiledTo (vault.main :: vault.aux) sevm entry body
         (.ok post) →
       ∃ supply,
@@ -317,7 +311,7 @@ private theorem conversion_compiled_effect
     rw [← entryMemory]
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, resultFits, result⟩ :=
-    bodyEffect bodyConfig bodyMemoryWf (resources bodyPre bodyRun) bodyRun
+    bodyEffect bodyConfig bodyMemoryWf bodyRun
   rcases result with ⟨output, bodyStorage, bodyLogs⟩
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -358,7 +352,6 @@ theorem convertToShares_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post convertToShares)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm =
       selector "convertToShares" [.uint256]) :
@@ -377,11 +370,10 @@ theorem convertToShares_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := convertToShares)
-    (calculate := convertToSharesN) config memoryWf resources (by
+    (calculate := convertToSharesN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
-  exact convertToShares_body_effect bodyConfig bodyMemory bodyResources
-    returnWord_lookup bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
+  exact convertToShares_body_effect bodyConfig bodyMemory returnWord_lookup bodyRun
 
 /-- Compiled `convertToAssets` returns the exact floor asset conversion of the
 pre-state booked WETH balance and share supply. -/
@@ -389,7 +381,6 @@ theorem convertToAssets_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post convertToAssets)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm =
       selector "convertToAssets" [.uint256]) :
@@ -408,18 +399,16 @@ theorem convertToAssets_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := convertToAssets)
-    (calculate := convertToAssetsN) config memoryWf resources (by
+    (calculate := convertToAssetsN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
-  exact convertToAssets_body_effect bodyConfig bodyMemory bodyResources
-    returnWord_lookup bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
+  exact convertToAssets_body_effect bodyConfig bodyMemory returnWord_lookup bodyRun
 
 /-- Compiled `previewDeposit` is the exact `convertToShares` arithmetic alias. -/
 theorem previewDeposit_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post previewDeposit)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm =
       selector "previewDeposit" [.uint256]) :
@@ -438,11 +427,11 @@ theorem previewDeposit_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := previewDeposit)
-    (calculate := previewDepositN) config memoryWf resources (by
+    (calculate := previewDepositN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
   have effect := convertToShares_body_effect bodyConfig bodyMemory
-    bodyResources returnWord_lookup (by
+    returnWord_lookup (by
       simpa only [previewDeposit] using bodyRun)
   simpa only [previewDepositN] using effect
 
@@ -451,7 +440,6 @@ theorem previewRedeem_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post previewRedeem)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm =
       selector "previewRedeem" [.uint256]) :
@@ -470,11 +458,11 @@ theorem previewRedeem_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := previewRedeem)
-    (calculate := previewRedeemN) config memoryWf resources (by
+    (calculate := previewRedeemN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
   have effect := convertToAssets_body_effect bodyConfig bodyMemory
-    bodyResources returnWord_lookup (by
+    returnWord_lookup (by
       simpa only [previewRedeem] using bodyRun)
   simpa only [previewRedeemN] using effect
 
@@ -483,7 +471,6 @@ theorem previewMint_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post previewMint)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm = selector "previewMint" [.uint256]) :
     sevm.value = 0 ∧
@@ -501,18 +488,16 @@ theorem previewMint_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := previewMint)
-    (calculate := previewMintN) config memoryWf resources (by
+    (calculate := previewMintN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
-  exact previewMint_body_effect bodyConfig bodyMemory bodyResources
-    returnWord_lookup bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
+  exact previewMint_body_effect bodyConfig bodyMemory returnWord_lookup bodyRun
 
 /-- Compiled `previewWithdraw` returns the exact ceiling share input. -/
 theorem previewWithdraw_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResourcesFor sevm post previewWithdraw)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq : Sevm.selector sevm =
       selector "previewWithdraw" [.uint256]) :
@@ -531,10 +516,9 @@ theorem previewWithdraw_compiled_effect
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   apply conversion_compiled_effect (body := previewWithdraw)
-    (calculate := previewWithdrawN) config memoryWf resources (by
+    (calculate := previewWithdrawN) config memoryWf (by
     simp [vaultFuncs]) _ run selectorEq
-  intro entry bodyConfig bodyMemory bodyResources bodyRun
-  exact previewWithdraw_body_effect bodyConfig bodyMemory bodyResources
-    returnWord_lookup bodyRun
+  intro entry bodyConfig bodyMemory bodyRun
+  exact previewWithdraw_body_effect bodyConfig bodyMemory returnWord_lookup bodyRun
 
 end Blanc.Composition.ProrataWethVault
