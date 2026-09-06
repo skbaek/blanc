@@ -106,7 +106,7 @@ def main() -> int:
     if not python.exists():
         if not args.install_python or args.offline or os.path.lexists(base) or os.path.lexists(alias):
             fail(f"pinned Python absent: {python}; on a fresh host use --install-python; preserve any partial base/alias")
-        run([str(uv), "python", "install", lane._EXPECTED["pythonVersion"]])
+        run([str(uv), "python", "install", "--no-bin", lane._EXPECTED["pythonVersion"]])
     if python.resolve() != (base / "bin/python3.11").resolve() or sha(python.read_bytes()) != sha(python_bytes):
         fail("installed Python differs from the pinned distribution; preserve it and provision the documented exact base")
     patch = (HERE / "reference/current-mainnet/target-overlay.patch").read_bytes()
