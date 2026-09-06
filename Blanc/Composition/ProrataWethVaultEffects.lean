@@ -168,6 +168,219 @@ private theorem runCompiled_enters_wethNonpayable
   · exact rootBurn.output.trans
       ((fsig_output hfsig).trans (dispatchOutput.trans wrapperOutput))
 
+/-- The exact untagged two-word key used by inherited WETH. -/
+def wethAllowanceKey (owner spender : B256) : B256 :=
+  (owner.toBytes ++ spender.toBytes).keccak
+
+/-- Retain the raw key and amount that the successful approval staging computes. -/
+private theorem prepApprove_exact {sevm : Sevm} {pre post : Devm}
+    (wf : Mem.Wf pre.memory) (run : Line.Run sevm pre prepApprove post) :
+    ∃ flag, [flag, wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0),
+      Sevm.argWord sevm 1] <<+ post.stack ∧
+      (flag = 0 ↔ ¬ ValidAdr
+        (wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0))) := by
+  unfold prepApprove at run
+  rcases Line.of_run_cons run with ⟨c1, hcaller, run⟩
+  have callerPush := of_run_caller hcaller
+  rcases of_run_append (mstoreAt 0) run with ⟨c2, hstore, run⟩
+  obtain ⟨tail, storeMemory⟩ := of_run_mstoreAt_val hstore
+    (prefix_of_push callerPush nil_pref)
+  change [] <<+ c2.stack at tail
+  rcases of_run_append (argCopy 1 0 1) run with ⟨c6, hcopyLine, run⟩
+  simp only [argCopy, cdc] at hcopyLine
+  rcases Line.of_run_cons hcopyLine with ⟨c3, hsize, hcopyLine⟩
+  rcases Line.of_run_cons hcopyLine with ⟨c4, hsrc, hcopyLine⟩
+  rcases Line.of_run_cons hcopyLine with ⟨c5, hdst, hcopyLine⟩
+  rcases Line.of_run_cons hcopyLine with ⟨c6', hcopy, hnil⟩
+  cases hnil
+  have pcopy : [32, 4, 32] <<+ c5.stack := by
+    have p := prefix_of_push (of_run_pushB256 hdst)
+      (prefix_of_push (of_run_pushB256 hsrc)
+        (prefix_of_push (of_run_pushB256 hsize) tail))
+    simpa only [show (1 * 32 : B256) = 32 by decide +kernel,
+      show (0 * 32 + 4 : B256) = 4 by decide +kernel,
+      List.cons_append, List.nil_append] using p
+  obtain ⟨copyTail, copyMemory⟩ := prefix_of_calldatacopy_val hcopy pcopy
+  rcases of_run_append (arg 1) run with ⟨c7, harg, run⟩
+  have amountPrefix := prefix_of_arg copyTail harg
+  rcases of_run_append (pushList [64, 0]) run with ⟨c9, hwindow, run⟩
+  have windowPrefix : [0, 64, Sevm.argWord sevm 1] <<+ c9.stack := by
+    rcases Line.of_run_cons hwindow with ⟨c8, h64, hw⟩
+    rcases Line.of_run_cons hw with ⟨c9', h0, hn⟩
+    cases hn
+    exact prefix_of_push (of_run_pushB256 h0)
+      (prefix_of_push (of_run_pushB256 h64) amountPrefix)
+  rcases Line.of_run_cons run with ⟨c10, hhash, run⟩
+  have hashPrefix := (prefix_of_keccak256_val hhash windowPrefix).1
+  have copiedWord : sevm.data.sliceD 4 32 0 = (Sevm.argWord sevm 0).toBytes := by
+    change sevm.data.sliceD 4 32 0 = (Bytes.toB256 (sevm.data.sliceD 4 32 0)).toBytes
+    exact (Bytes.toBytes_toB256_of_length (List.takeD_length _ _ _)).symm
+  have window : (c9.memory.read 0 64).1 =
+      sevm.caller.toB256.toBytes ++ (Sevm.argWord sevm 0).toBytes := by
+    rw [← Line.of_inv Devm.memory (by line_inv) hwindow,
+      ← Line.of_inv Devm.memory (by line_inv) harg, copyMemory,
+      ← (of_run_pushB256 hdst).memory, ← (of_run_pushB256 hsrc).memory,
+      ← (of_run_pushB256 hsize).memory, storeMemory, ← callerPush.memory]
+    change (((pre.memory.write 0 sevm.caller.toB256.toBytes).write 32
+      (sevm.data.sliceD 4 32 0)).read 0 64).1 = _
+    rw [copiedWord]
+    exact Mem.read_two_word_writes wf (image := pre.memory.data.toList)
+      (by intro i; simp) _ _
+  change (c9.memory.read 0 64).1.keccak :: [Sevm.argWord sevm 1] <<+
+    c10.stack at hashPrefix
+  rw [window] at hashPrefix
+  change wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0) ::
+    [Sevm.argWord sevm 1] <<+ c10.stack at hashPrefix
+  rcases Line.of_run_cons run with ⟨c11, hdup, hcheck⟩
+  have dupPrefix : [wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0),
+      wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0),
+      Sevm.argWord sevm 1] <<+ c11.stack := by
+    exact prefix_of_dup_val hdup (Stack.Nth.head _ _) hashPrefix
+  exact of_check_address dupPrefix hcheck
+
+/-- An actual successful exact compiled WETH approval writes precisely the
+caller/spender raw allowance cell, unconditionally in the hash model. -/
+theorem weth_approve_compiled_raw_effect {sevm : Sevm} {pre post : Devm}
+    (wf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.weth post)
+    (selected : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+    ¬ ValidAdr (wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0)) ∧
+      Devm.getStor post sevm.currentTarget =
+        (Devm.getStor pre sevm.currentTarget).set
+          (wethAllowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0))
+          (Sevm.argWord sevm 1) := by
+  obtain ⟨bodyPre, -, entryState, entryMemory, -, -, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable (body := Blanc.approve) run selected
+      (by simp [wethFuncs])
+  rcases of_run_prepend (arg 0 ++ checkNonAddress) _ bodyRun with
+    ⟨a, ha, run⟩
+  rcases of_run_branch_revert run with ⟨b, hb, run⟩
+  rcases of_run_prepend prepApprove _ run with ⟨c, hc, run⟩
+  have bMemory : pre.memory = b.memory := entryMemory.trans
+    ((Line.of_inv Devm.memory (by line_inv) ha).trans hb.memory)
+  obtain ⟨flag, hp, flagIff⟩ := prepApprove_exact (bMemory ▸ wf) hc
+  rcases of_run_branch_revert run with ⟨d, hd, run⟩
+  have pop := hd.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+  rw [pop] at hp
+  have flagZero : flag = 0 := pref_head_unique hp (pref_append [0] d.stack)
+  rw [flagZero] at hp
+  have storedPrefix := cons_pref_cons_inv hp
+  rcases of_run_next run with ⟨f, hs, run⟩
+  have stored := sstore_getStor_set hs storedPrefix
+  have before : Devm.getStor pre = Devm.getStor d :=
+    (funext (getStor_eq_of_state_eq entryState)).trans
+      ((Line.of_inv Devm.getStor (by line_inv) ha).trans
+        ((funext (fun account => (Devm.PopBurn.getStor hb account).symm)).trans
+          ((Line.of_inv Devm.getStor (by line_inv) hc).trans
+            (funext (fun account => (Devm.PopBurn.getStor hd account).symm)))))
+  have after : Devm.getStor f = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) run
+  refine ⟨flagIff.mp flagZero, ?_⟩
+  rw [← congrFun after sevm.currentTarget, stored, ← congrFun before sevm.currentTarget]
+
+/-! ## Finite allowance-key attribution
+
+The records below retain successful compiled invocations rather than assumed
+storage effects. Their list is an allowance-call projection; chronological
+completeness and world-state continuity must still be supplied by a retained
+history adapter. In particular this list is not itself `PairReach`.
+-/
+
+/-- A successful exact WETH invocation that can touch an allowance key.
+`approval = false` selects `transferFrom`. -/
+structure WethAllowanceInvocation where
+  sevm : Sevm
+  pre : Devm
+  post : Devm
+  approval : Bool
+  target : sevm.currentTarget = wethAccount
+  memoryWf : Mem.Wf pre.memory
+  run : Prog.RunCompiled sevm pre Blanc.weth post
+  selected : Sevm.selector sevm =
+    if approval then selector "approve" [.address, .uint256]
+    else selector "transferFrom" [.address, .address, .uint256]
+
+/-- Raw words, without address normalization. A self `transferFrom` bypasses
+allowance hashing; all other successful allowance invocations visit one pair.
+Both finite-decrement and maximum-allowance visits retain their pair. -/
+def WethAllowanceInvocation.pair? (call : WethAllowanceInvocation) :
+    Option (B256 × B256) :=
+  if call.approval then
+    some (call.sevm.caller.toB256, Sevm.argWord call.sevm 0)
+  else if Sevm.argWord call.sevm 0 = call.sevm.caller.toB256 then none
+  else some (Sevm.argWord call.sevm 0, call.sevm.caller.toB256)
+
+/-- The finite allowance-pair projection, preserving repeated visits. -/
+def touchedWethAllowancePairs (history : List WethAllowanceInvocation) :
+    List (B256 × B256) := history.filterMap WethAllowanceInvocation.pair?
+
+/-- The write projection drops maximum-allowance reads as well as self
+bypasses. The transferFrom raw-read/chronology adapter must justify this
+projection when assembling a retained history; the approval consumer below
+uses only the already-proved approval arm. -/
+def WethAllowanceInvocation.writtenPair? (call : WethAllowanceInvocation) :
+    Option (B256 × B256) :=
+  if call.approval then call.pair?
+  else call.pair?.filter fun p =>
+    call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) != B256.max
+
+/-- Only allowance invocations whose selected path writes the cell. -/
+def writtenWethAllowancePairs (history : List WethAllowanceInvocation) :
+    List (B256 × B256) := history.filterMap WethAllowanceInvocation.writtenPair?
+
+/-- D9's vault-local key separation: only a touched pair owned by the vault
+must be distinguished from a different touched pair that can write WETH
+allowance storage. No relation between two foreign pairs is required.
+The explicit finite predicate is kept separate from reachability. -/
+def NoVaultAllowanceKeyCollision (history : List WethAllowanceInvocation)
+    (vault : Adr) : Prop :=
+  ∀ p ∈ touchedWethAllowancePairs history, p.1 = vault.toB256 →
+    ∀ q ∈ writtenWethAllowancePairs history, p ≠ q →
+      wethAllowanceKey p.1 p.2 ≠ wethAllowanceKey q.1 q.2
+
+instance (history : List WethAllowanceInvocation) (vault : Adr) :
+    Decidable (NoVaultAllowanceKeyCollision history vault) := by
+  unfold NoVaultAllowanceKeyCollision
+  infer_instance
+
+/-- A foreign approval in the recorded exact executions cannot forge any
+vault-owned allowance pair touched by that record, under D9. The raw write is
+derived from the invocation's successful compiled run, never supplied as an
+effect premise. This is the approval preservation rung, not yet the rooted
+chronological no-foreign-debit theorem. -/
+theorem foreign_approve_preserves_vault_allowance
+    {history : List WethAllowanceInvocation} {vault : Adr}
+    (collision : NoVaultAllowanceKeyCollision history vault)
+    (call : WethAllowanceInvocation) (member : call ∈ history)
+    (approval : call.approval = true)
+    (foreign : call.sevm.caller ≠ vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs history)
+    (owner : p.1 = vault.toB256) :
+    Devm.getStorVal call.post wethAccount (wethAllowanceKey p.1 p.2) =
+      Devm.getStorVal call.pre wethAccount (wethAllowanceKey p.1 p.2) := by
+  have selected : Sevm.selector call.sevm =
+      selector "approve" [.address, .uint256] := by
+    simpa only [approval, Bool.true_eq, ↓reduceIte] using call.selected
+  have effect := (weth_approve_compiled_raw_effect call.memoryWf call.run selected).2
+  have writer : (call.sevm.caller.toB256, Sevm.argWord call.sevm 0) ∈
+      writtenWethAllowancePairs history := by
+    apply List.mem_filterMap.mpr
+    refine ⟨call, member, ?_⟩
+    simp only [WethAllowanceInvocation.writtenPair?, WethAllowanceInvocation.pair?,
+      approval, ↓reduceIte]
+  have different : p ≠ (call.sevm.caller.toB256, Sevm.argWord call.sevm 0) := by
+    intro equal
+    have callerWord : vault.toB256 = call.sevm.caller.toB256 :=
+      owner.symm.trans (congrArg Prod.fst equal)
+    have callerAdr := congrArg B256.toAdr callerWord
+    exact foreign (by simpa only [toAdr_toB256] using callerAdr.symm)
+  have keys := collision p touched owner _ writer different
+  rw [← call.target]
+  change (Devm.getStor call.post call.sevm.currentTarget).get _ =
+    (Devm.getStor call.pre call.sevm.currentTarget).get _
+  rw [effect, Stor.get_set_ne _ (Ne.symm keys)]
+
 /-- Exact read-only effect of the inherited WETH `balanceOf` body. -/
 private theorem balanceOfBody_effect
     {fs : List Func} {sevm : Sevm} {s r : Devm}
