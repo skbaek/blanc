@@ -38,6 +38,7 @@ from ethereum.utils.hexadecimal import hex_to_bytes
 from execution_testing.forks import BPO2 as TestingBPO2
 from spec256k1 import PrivateKey
 
+import current_mainnet
 from current_mainnet import (
     load_profile,
     resolve_root,
@@ -1612,8 +1613,7 @@ def load_runtime_lock(profile: Mapping[str, object]) -> dict[str, object]:
         lock = json.loads(RUNTIME_LOCK.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         die(f"cannot read current-mainnet runtime lock: {exc}")
-    if not isinstance(lock, dict) or lock.get("schema") != 1:
-        die("current-mainnet runtime lock schema differs")
+    lock = current_mainnet._validate_runtime_lock_document(dict(profile), lock)
     target = lock.get("target")
     platforms = lock.get("platforms")
     profile_target = profile.get("target")
