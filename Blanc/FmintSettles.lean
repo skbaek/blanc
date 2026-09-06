@@ -1199,7 +1199,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   have h_acc_le : acc ≤ 2 * gasColdAccountAccess := by
     have h1 := accessCost_le (x := receiver.toAdr)
       (a := (st.setMach
-        ⟨[amount, receiver], st.memory, st.gasLeft⟩).accessedAddresses)
+        ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).accessedAddresses)
     omega
   have h_afford : acc + 0 ≤ d1.gasLeft := by rw [hd1g']; omega
   have h_split := calculateMsgCallGas_zero (gas := (Nat.toB256 G).toNat) h_afford

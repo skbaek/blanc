@@ -666,12 +666,12 @@ theorem Func.execWitness_linearDispatchWith_fallback
           let pushGas := pushCost word.toBytes.sig
           let afterPush := entry.setMach
             ⟨word :: selector :: tail, entry.memory,
-              G + callCost + branchCost + gVerylow⟩
+              G + callCost + branchCost + gVerylow, entry.stateGas⟩
           let afterEq := entry.setMach
             ⟨(0 : B256) :: tail, entry.memory,
-              G + callCost + branchCost⟩
+              G + callCost + branchCost, entry.stateGas⟩
           let afterBranch := entry.setMach
-            ⟨tail, entry.memory, G + callCost⟩
+            ⟨tail, entry.memory, G + callCost, entry.stateGas⟩
           have hpush : Ninst.RunCompiled sevm entry
               (Ninst.pushB256 word) afterPush := by
             simpa only [afterPush, hstack] using
@@ -730,15 +730,15 @@ theorem Func.execWitness_linearDispatchWith_fallback
           let restCost := linearDispatchFallbackCost remaining
           let afterDup := entry.setMach
             ⟨selector :: selector :: tail, entry.memory,
-              G + restCost + branchCost + gVerylow + pushGas⟩
+              G + restCost + branchCost + gVerylow + pushGas, entry.stateGas⟩
           let afterPush := entry.setMach
             ⟨word :: selector :: selector :: tail, entry.memory,
-              G + restCost + branchCost + gVerylow⟩
+              G + restCost + branchCost + gVerylow, entry.stateGas⟩
           let afterEq := entry.setMach
             ⟨(0 : B256) :: selector :: tail, entry.memory,
-              G + restCost + branchCost⟩
+              G + restCost + branchCost, entry.stateGas⟩
           let afterBranch := entry.setMach
-            ⟨selector :: tail, entry.memory, G + restCost⟩
+            ⟨selector :: tail, entry.memory, G + restCost, entry.stateGas⟩
           have hdup : Ninst.RunCompiled sevm entry (.reg (.dup 0))
               afterDup := by
             simpa only [afterDup, hstack] using

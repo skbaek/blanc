@@ -67,7 +67,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     (hmiss : selector ∉ beaconSelectors) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach
-          ⟨[], Mem.empty, G + tree.dispatchMissGas selector + 11⟩)
+          ⟨[], Mem.empty, G + tree.dispatchMissGas selector + 11, base.stateGas⟩)
         (Func.main tree)
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
@@ -93,7 +93,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach, List.length_nil]; omega))
   let afterLoad := base.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
       calldataload afterLoad := by
     simpa only [afterPushZero, afterLoad, Devm.setMach_setMach,
@@ -105,7 +105,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
           gVerylow])
         (by decide))
   let afterPush224 := base.setMach
-    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + D + 3⟩
+    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + D + 3, base.stateGas⟩
   have hpush224Cost : pushCost (224 : B256).toBytes.sig = gVerylow := by
     decide +kernel
   have hpush224 : Ninst.RunCompiled sevm afterLoad
@@ -175,12 +175,12 @@ theorem unmatched_selector_noRawSstore
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
         runtime
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
@@ -192,7 +192,7 @@ theorem unmatched_selector_noRawSstore
   let pre := base.setMach ⟨[], Mem.empty, G + D + 28, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, G + D + 27, base.stateGas⟩
   let afterSize := base.setMach
-    ⟨[sevm.data.length.toB256], Mem.empty, G + D + 25⟩
+    ⟨[sevm.data.length.toB256], Mem.empty, G + D + 25, base.stateGas⟩
   let afterBranch := base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩
   let out : Execution :=
     .error (.revert,

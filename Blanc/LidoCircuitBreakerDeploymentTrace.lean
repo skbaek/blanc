@@ -1500,7 +1500,7 @@ theorem constructorEventLog1Opcode_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
-            (2 : B256) * 32, topic], memory, Gbefore⟩)
+            (2 : B256) * 32, topic], memory, Gbefore, base.stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post := by
   rw [hgas]
   have hi :
@@ -1542,7 +1542,7 @@ theorem constructorEventLog1Prefix_runCompiled
     (hlog : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
-            (2 : B256) * 32, topic], memory, Gafter⟩)
+            (2 : B256) * 32, topic], memory, Gafter, base.stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
@@ -1760,7 +1760,7 @@ theorem constructorEventLog2Opcode_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32, topic0, topic1],
-          memory, Gbefore⟩)
+          memory, Gbefore, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post := by
   rw [hgas]
   have hi : ((1 : B256) * 32).toNat = 32 := by decide
@@ -1809,7 +1809,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
     (hlog : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32,
-            eventTopic, indexedTopic], memory, Gafter⟩)
+            eventTopic, indexedTopic], memory, Gafter, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
@@ -1945,7 +1945,7 @@ theorem officialConstructorReturnLine_runCompiled
     {memory : Mem} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)], memory, G⟩)
+        ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)], memory, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + 6, base.stateGas⟩)
@@ -2835,7 +2835,7 @@ theorem officialConstructorInitializedLogOpcode_runCompiled
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32,
             circuitBreakerInitializedEvent, officialParams.admin],
-          officialConstructorPatchedMemory, G + 2149⟩)
+          officialConstructorPatchedMemory, G + 2149, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post := by
   apply constructorEventLog2Opcode_runCompiled
       (topic0 := circuitBreakerInitializedEvent)
@@ -2961,17 +2961,17 @@ theorem officialConstructorCopyPatch_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 985⟩)
+          officialConstructorDecodedMemory, G + 985, base.stateGas⟩)
       (codecopy ::: patchRuntimeLineForProof constructorRuntimeBaseForProof +++ rest) post := by
   have hpatch := officialConstructorPatchLine_runCompiled hrest
   refine Func.RunCompiled.next
     (devm' := base.setMach
-      ⟨[], officialConstructorCopiedMemory, G + 140⟩) ?_ ?_
+      ⟨[], officialConstructorCopiedMemory, G + 140, base.stateGas⟩) ?_ ?_
   · have hstep := Ninst.runCompiled_codecopy_of
       (sevm := sevm)
       (devm := base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 985⟩)
+          officialConstructorDecodedMemory, G + 985, base.stateGas⟩)
       (di := (224 : B256)) (si := (616 : B256)) (sz := (4282 : B256))
       (s := []) (c := 845) (G := G + 140)
       (M := officialConstructorCopiedMemory)
@@ -3016,7 +3016,7 @@ theorem officialConstructorEffectBody_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 49961⟩)
+          officialConstructorDecodedMemory, G + 49961, base.stateGas⟩)
       officialConstructorEffectBody
       (officialConstructorPost sevm base G) := by
   have hconfiguration := officialConstructorConfigurationSuffix_runCompiled
@@ -3030,10 +3030,10 @@ theorem officialConstructorEffectBody_runCompiled
       base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
             officialConstructorDecodedMemory,
-            G + 46813 + 2163 + 985⟩ =
+            G + 46813 + 2163 + 985, base.stateGas⟩ =
         base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-            officialConstructorDecodedMemory, G + 49961⟩ := by
+            officialConstructorDecodedMemory, G + 49961, base.stateGas⟩ := by
     congr
   rw [← hstart]
   exact hcopy
@@ -3129,7 +3129,7 @@ private theorem officialConstructorValidationFinish_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G⟩)
+          officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorEffectBody post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 9, base.stateGas⟩)
@@ -3572,7 +3572,7 @@ theorem officialConstructorValidationPrefix_runCompiled
       sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, g - 367⟩)
+          officialConstructorDecodedMemory, g - 367, base.stateGas⟩)
       officialConstructorEffectBody post) :
     Func.RunCompiled
       (lidoCircuitBreakerConstructorProgram.main ::
@@ -3646,7 +3646,7 @@ private theorem officialConstructorProgram_runCompiled
       sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, (G + 50328) - 367⟩)
+          officialConstructorDecodedMemory, (G + 50328) - 367, base.stateGas⟩)
       officialConstructorEffectBody
       (officialConstructorPost sevm base G) := by
     have hgas : (G + 50328) - 367 = G + 49961 := by omega

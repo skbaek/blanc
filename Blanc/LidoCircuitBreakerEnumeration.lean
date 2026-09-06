@@ -481,7 +481,7 @@ theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
         (by rw [(enumPrefixMemory_invariant entries entries).2.1]; omega))
   unfold Devm.memRead
   rw [show (base.setMach
-    ⟨[], enumPrefixMemory entries entries, G⟩).memory =
+    ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).memory =
       enumPrefixMemory entries entries by rfl, hread]
   rfl
 
@@ -937,12 +937,12 @@ theorem enumLoop_runCompiled
             ⟨[Nat.toB256 (64 + 32 * done.length), entry.1,
                 Nat.toB256 done.length],
               enumPrefixMemory entries done,
-              G + enumLoopGasWarmFrom done.length (entry :: rest) - 158⟩)
+              G + enumLoopGasWarmFrom done.length (entry :: rest) - 158, base.stateGas⟩)
           Ninst.mstore
           (base.setMach
             ⟨[Nat.toB256 done.length],
               enumPrefixMemory entries (done ++ [entry]),
-              G + enumLoopGasWarmFrom (done.length + 1) rest + 18⟩) := by
+              G + enumLoopGasWarmFrom (done.length + 1) rest + 18, base.stateGas⟩) := by
         refine Ninst.runCompiled_mstore_of (e := delta) rfl ?_ ?_ ?_
         · rw [hoffsetNat]
           exact enumPrefixMemory_extCost_next base
@@ -973,7 +973,7 @@ theorem enumLoop_runCompiled
 private theorem enumFirstHeaderMemory_extCost_second
     (base : Devm) (stack : List B256) (G : Nat) :
     (base.setMach
-      ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G⟩).extCost
+      ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G, base.stateGas⟩).extCost
       [⟨32, 32⟩] = 3 := by
   apply Devm.extCost_of_size
   · rw [Mem.size_write_word_at, if_neg (by simp [Mem.empty])]
@@ -1250,7 +1250,7 @@ private theorem registryScalarReturn_runCompiled
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
   let returnPre := base.setMach
-    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
+    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩
   let d := (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, rfl, ?_, rfl⟩

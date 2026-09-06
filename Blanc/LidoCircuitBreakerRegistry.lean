@@ -6998,7 +6998,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
       Func.runCompiledTo_revert_func
         (fs := fs) (sevm := sevm)
         (devm := codeBase.setMach
-          ⟨target :: stack, M, G + (gBase + gBase)⟩)
+          ⟨target :: stack, M, G + (gBase + gBase), codeBase.stateGas⟩)
         (G := G) rfl (by
           change (target :: stack).length < 1023
           simp only [List.length_cons]
@@ -7519,7 +7519,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
         (devm := base.setMach
           ⟨zeroWord :: zeroWord :: pauserSetEvent :: target ::
             previousPauser :: newPauser :: stack, base.memory,
-            G + terminalCost + logCost⟩)
+            G + terminalCost + logCost, base.stateGas⟩)
         (n := 4) (i := zeroWord) (sz := zeroWord)
         (topics := [pauserSetEvent, target, previousPauser, newPauser])
         (s := stack) (c := logCost) (G := G + terminalCost)
@@ -7551,7 +7551,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (sevm := sevm)
       (devm := base.setMach
         ⟨zeroWord :: pauserSetEvent :: target :: previousPauser ::
-          newPauser :: stack, base.memory, pushedGas + zeroCost⟩)
+          newPauser :: stack, base.memory, pushedGas + zeroCost, base.stateGas⟩)
       (w := zeroWord) (c := zeroCost) (G := pushedGas) rfl
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
@@ -7571,7 +7571,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (sevm := sevm)
       (devm := base.setMach
         ⟨pauserSetEvent :: target :: previousPauser :: newPauser :: stack,
-          base.memory, pushedGas + zeroCost + zeroCost⟩)
+          base.memory, pushedGas + zeroCost + zeroCost, base.stateGas⟩)
       (w := zeroWord) (c := zeroCost) (G := pushedGas + zeroCost) rfl
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
@@ -7591,7 +7591,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (sevm := sevm)
       (devm := base.setMach
         ⟨target :: previousPauser :: newPauser :: stack, base.memory,
-          pushedGas + zeroCost + zeroCost + eventCost⟩)
+          pushedGas + zeroCost + zeroCost + eventCost, base.stateGas⟩)
       (w := pauserSetEvent) (c := eventCost)
       (G := pushedGas + zeroCost + zeroCost) rfl
       (by simp only [Devm.gasLeft_setMach])
@@ -7886,7 +7886,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr]
     exact htargetRead
   let storePre := pre.setMach
-    ⟨indexSlot target :: 0 :: stack, M, storeGas⟩
+    ⟨indexSlot target :: 0 :: stack, M, storeGas, pre.stateGas⟩
   have hstoreStack : storePre.stack = indexSlot target :: 0 :: stack := rfl
   have hstoreWarm :
       (⟨sevm.currentTarget, indexSlot target⟩ : Adr × B256) ∈
@@ -7914,7 +7914,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
           omega
         let callPre := base.setMach ⟨stack, M, storeTailGas, base.stateGas⟩
         let finishPre := base.setMach
-          ⟨stack, M, G + spare + finishCost⟩
+          ⟨stack, M, G + spare + finishCost, base.stateGas⟩
         have hfinishStack : finishPre.stack = stack := rfl
         have hfinishWf : Mem.Wf finishPre.memory := by
           exact hwfM
@@ -8086,7 +8086,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr]
     exact harrayLengthRead
   let storePre := pre.setMach
-    ⟨arrayLengthSlot :: decrementedLength :: stack, M, storeGas⟩
+    ⟨arrayLengthSlot :: decrementedLength :: stack, M, storeGas, pre.stateGas⟩
   have hstoreStack :
       storePre.stack = arrayLengthSlot :: decrementedLength :: stack := rfl
   have hstoreWarm :
@@ -8173,7 +8173,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       (ca := sevm.currentTarget) (target := target)
       (word := arrayLengthSlot) (phase := .beforeZeroCode)
       (pre := loaded.setMach
-        ⟨decrementedLength :: stack, M, slotPushGas⟩)
+        ⟨decrementedLength :: stack, M, slotPushGas, loaded.stateGas⟩)
       (stack := decrementedLength :: stack) (c := slotPushCost)
       (G := storeGas) rfl rfl rfl
       (by simp only [List.length_cons]; omega)
@@ -8189,7 +8189,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       Devm.memory_setMach] using Ninst.runCompiled_binary
         (sevm := sevm)
         (devm := loaded.setMach
-          ⟨arrayLength :: 1 :: stack, M, subGas⟩)
+          ⟨arrayLength :: 1 :: stack, M, subGas, loaded.stateGas⟩)
         (r := .sub) (f := (· - ·)) (cost := gVerylow)
         (x := arrayLength) (y := 1) (v := decrementedLength)
         (s := stack) (G := slotPushGas) (by rintro ⟨⟩) rfl rfl
@@ -8206,7 +8206,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       Devm.memory_setMach] using Ninst.runCompiled_swap
         (sevm := sevm)
         (devm := loaded.setMach
-          ⟨1 :: arrayLength :: stack, M, swapGas⟩)
+          ⟨1 :: arrayLength :: stack, M, swapGas, loaded.stateGas⟩)
         (n := 0) (S := arrayLength :: 1 :: stack) (G := subGas) rfl
         (by
           simp only [Devm.gasLeft_setMach]
@@ -8218,7 +8218,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       (ca := sevm.currentTarget) (target := target) (word := 1)
       (phase := .beforeZeroCode)
       (pre := loaded.setMach
-        ⟨arrayLength :: stack, M, onePushGas⟩)
+        ⟨arrayLength :: stack, M, onePushGas, loaded.stateGas⟩)
       (stack := arrayLength :: stack) (c := onePushCost)
       (G := swapGas) rfl rfl rfl
       (by simp only [List.length_cons]; omega)
@@ -8320,7 +8320,7 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr]
     exact harrayLengthRead
   let storePre := pre.setMach
-    ⟨arrayEntrySlot arrayLength :: 0 :: stack, M, storeGas⟩
+    ⟨arrayEntrySlot arrayLength :: 0 :: stack, M, storeGas, pre.stateGas⟩
   have hstoreStack :
       storePre.stack = arrayEntrySlot arrayLength :: 0 :: stack := rfl
   have hstoreWarm :
@@ -8551,7 +8551,7 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr₁]
     exact hlastTargetRead
   let storePre := pre.setMach
-    ⟨indexSlot lastTarget :: removedIndex :: stack, M₂, storeGas⟩
+    ⟨indexSlot lastTarget :: removedIndex :: stack, M₂, storeGas, pre.stateGas⟩
   have hstoreStack :
       storePre.stack = indexSlot lastTarget :: removedIndex :: stack := rfl
   have hstoreWarm :
@@ -8667,17 +8667,17 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
     ⟨tagRun, tagPath⟩
   have hlastLoadGas :
       (afterRemoved.setMach
-        ⟨removedIndex :: stack, M₁, lastLoadGas⟩).gasLeft =
+        ⟨removedIndex :: stack, M₁, lastLoadGas, afterRemoved.stateGas⟩).gasLeft =
         tagGas + finishLoadWordCost
           (afterRemoved.setMach
-            ⟨removedIndex :: stack, M₁, lastLoadGas⟩)
+            ⟨removedIndex :: stack, M₁, lastLoadGas, afterRemoved.stateGas⟩)
           lastTargetWord := by
     change lastLoadGas =
       tagGas + finishLoadWordCost afterRemoved lastTargetWord
     dsimp only [lastLoadGas]
   rcases loadWord_prepend_directPause
       (pre := afterRemoved.setMach
-        ⟨removedIndex :: stack, M₁, lastLoadGas⟩)
+        ⟨removedIndex :: stack, M₁, lastLoadGas, afterRemoved.stateGas⟩)
       (word := lastTargetWord) (value := lastTarget)
       (markedTarget := target) (G := tagGas) (hstack := rfl)
       hlastValue hlastLoadGas
@@ -8809,7 +8809,7 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr₁]
     exact hremovedIndexRead
   let storePre := pre.setMach
-    ⟨arrayEntrySlot removedIndex :: lastTarget :: stack, M₂, storeGas⟩
+    ⟨arrayEntrySlot removedIndex :: lastTarget :: stack, M₂, storeGas, pre.stateGas⟩
   have hstoreStack :
       storePre.stack = arrayEntrySlot removedIndex :: lastTarget :: stack := rfl
   have hstoreWarm :
@@ -8936,17 +8936,17 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
     ⟨tagRun, tagPath⟩
   have hremovedLoadGas :
       (afterLast.setMach
-        ⟨lastTarget :: stack, M₁, removedLoadGas⟩).gasLeft =
+        ⟨lastTarget :: stack, M₁, removedLoadGas, afterLast.stateGas⟩).gasLeft =
         tagGas + finishLoadWordCost
           (afterLast.setMach
-            ⟨lastTarget :: stack, M₁, removedLoadGas⟩)
+            ⟨lastTarget :: stack, M₁, removedLoadGas, afterLast.stateGas⟩)
           removedIndexWord := by
     change removedLoadGas =
       tagGas + finishLoadWordCost afterLast removedIndexWord
     dsimp only [removedLoadGas]
   rcases loadWord_prepend_directPause
       (pre := afterLast.setMach
-        ⟨lastTarget :: stack, M₁, removedLoadGas⟩)
+        ⟨lastTarget :: stack, M₁, removedLoadGas, afterLast.stateGas⟩)
       (word := removedIndexWord) (value := removedIndex)
       (markedTarget := target) (G := tagGas) (hstack := rfl)
       hremovedValue hremovedLoadGas
@@ -9113,7 +9113,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
     rw [show 32 = lastTarget.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   let sloadPre := afterLength.setMach
-    ⟨arrayEntrySlot arrayLength :: stack, M₁, sloadGas⟩
+    ⟨arrayEntrySlot arrayLength :: stack, M₁, sloadGas, afterLength.stateGas⟩
   have hsloadStack :
       sloadPre.stack = arrayEntrySlot arrayLength :: stack := rfl
   have hsloadValue :
@@ -9148,10 +9148,10 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
           dsimp only [spare]
           omega
         let pushPre := base.setMach
-          ⟨lastTarget :: stack, M₁, sloadTailGas⟩
+          ⟨lastTarget :: stack, M₁, sloadTailGas, base.stateGas⟩
         let mstorePre := base.setMach
           ⟨lastTargetWord * 32 :: lastTarget :: stack, M₁,
-            G + spare + suffixCost + mstoreCost⟩
+            G + spare + suffixCost + mstoreCost, base.stateGas⟩
         have hmstoreStack : mstorePre.stack =
             lastTargetWord * 32 :: lastTarget :: stack := rfl
         have hmstoreMemory : mstorePre.memory = M₁ := rfl
@@ -9189,7 +9189,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
                 simp only [Devm.gasLeft_setMach] at hmstoreGasEq
                 omega
               let suffixPre := mstorePre.setMach
-                ⟨stack, M₂, mstoreTailGas⟩
+                ⟨stack, M₂, mstoreTailGas, mstorePre.stateGas⟩
               have hsuffixStack : suffixPre.stack = stack := rfl
               have hsuffixWf : Mem.Wf suffixPre.memory := hwf₂
               have hsuffixReads : Mem.Reads suffixPre.memory imgLast := hr₂
@@ -9442,7 +9442,7 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
     rw [show 32 = arrayLength.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   let sloadPre := pre.setMach
-    ⟨arrayLengthSlot :: stack, pre.memory, sloadGas⟩
+    ⟨arrayLengthSlot :: stack, pre.memory, sloadGas, pre.stateGas⟩
   have hsloadStack : sloadPre.stack = arrayLengthSlot :: stack := rfl
   have hsloadValue :
       sloadPre.getStorVal sevm.currentTarget arrayLengthSlot =
@@ -9478,10 +9478,10 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
           dsimp only [spare]
           omega
         let offsetPre := base.setMach
-          ⟨arrayLength :: stack, pre.memory, sloadTailGas⟩
+          ⟨arrayLength :: stack, pre.memory, sloadTailGas, base.stateGas⟩
         let mstorePre := base.setMach
           ⟨arrayLengthWord * 32 :: arrayLength :: stack, pre.memory,
-            G + spare + suffixCost + mstoreCost⟩
+            G + spare + suffixCost + mstoreCost, base.stateGas⟩
         have hmstoreStack : mstorePre.stack =
             arrayLengthWord * 32 :: arrayLength :: stack := rfl
         have hmstoreMemory : mstorePre.memory = pre.memory := rfl
@@ -9520,7 +9520,7 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
                 simp only [Devm.gasLeft_setMach] at hmstoreGasEq
                 omega
               let suffixPre := mstorePre.setMach
-                ⟨stack, M₁, mstoreTailGas⟩
+                ⟨stack, M₁, mstoreTailGas, mstorePre.stateGas⟩
               have hsuffixStack : suffixPre.stack = stack := rfl
               have hsuffixWf : Mem.Wf suffixPre.memory := hwf₁
               have hsuffixReads : Mem.Reads suffixPre.memory imgLength := hr₁
@@ -9760,7 +9760,7 @@ private theorem removeTarget_pause_runCompiledTo
     rw [show 32 = removedIndex.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   let sloadPre := afterTarget.setMach
-    ⟨indexSlot target :: stack, M₀, sloadGas⟩
+    ⟨indexSlot target :: stack, M₀, sloadGas, afterTarget.stateGas⟩
   have hsloadStack : sloadPre.stack = indexSlot target :: stack := rfl
   have hsloadValue :
       sloadPre.getStorVal sevm.currentTarget (indexSlot target) =
@@ -9797,10 +9797,10 @@ private theorem removeTarget_pause_runCompiledTo
           dsimp only [spare]
           omega
         let offsetPre := base.setMach
-          ⟨removedIndex :: stack, M₀, sloadTailGas⟩
+          ⟨removedIndex :: stack, M₀, sloadTailGas, base.stateGas⟩
         let mstorePre := base.setMach
           ⟨removedIndexWord * 32 :: removedIndex :: stack, M₀,
-            G + spare + suffixCost + mstoreCost⟩
+            G + spare + suffixCost + mstoreCost, base.stateGas⟩
         have hmstoreStack : mstorePre.stack =
             removedIndexWord * 32 :: removedIndex :: stack := rfl
         have hmstoreMemory : mstorePre.memory = M₀ := rfl
@@ -9840,7 +9840,7 @@ private theorem removeTarget_pause_runCompiledTo
                 simp only [Devm.gasLeft_setMach] at hmstoreGasEq
                 omega
               let suffixPre := mstorePre.setMach
-                ⟨stack, M₁, mstoreTailGas⟩
+                ⟨stack, M₁, mstoreTailGas, mstorePre.stateGas⟩
               have hsuffixStack : suffixPre.stack = stack := rfl
               have hsuffixWf : Mem.Wf suffixPre.memory := hwf₁
               have hsuffixReads : Mem.Reads suffixPre.memory imgIndex := hr₁
@@ -10053,10 +10053,10 @@ private theorem afterOldPauser_pause_runCompiledTo
   let removePre := pre.setMach ⟨stack, M, G + removeCost, pre.stateGas⟩
   let callPre := pre.setMach ⟨stack, M, G + removeCost + callCost, pre.stateGas⟩
   let branchPre := pre.setMach
-    ⟨1 :: stack, M, G + removeCost + callCost + branchCost⟩
+    ⟨1 :: stack, M, G + removeCost + callCost + branchCost, pre.stateGas⟩
   let iszeroPre := pre.setMach
     ⟨0 :: stack, M,
-      G + removeCost + callCost + branchCost + gVerylow⟩
+      G + removeCost + callCost + branchCost + gVerylow, pre.stateGas⟩
   have hwfM : Mem.Wf M := hwf.extend _ _
   have hrM : Mem.Reads M img := Mem.Reads.extend hr _ _
   have hnewValue : Bytes.toB256
@@ -10271,7 +10271,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr₁]
     exact hpreviousRead
   let sloadPre := afterPrevious.setMach
-    ⟨countSlot previousPauser :: stack, M₁, sloadGas⟩
+    ⟨countSlot previousPauser :: stack, M₁, sloadGas, afterPrevious.stateGas⟩
   have hsloadStack :
       sloadPre.stack = countSlot previousPauser :: stack := rfl
   have hsloadValue : sloadPre.getStorVal sevm.currentTarget
@@ -10301,7 +10301,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           omega
         let storePre := base.setMach
           ⟨countSlot previousPauser :: decrementedCount :: stack, M₂,
-            storeGas + sloadSpare⟩
+            storeGas + sloadSpare, base.stateGas⟩
         have hstoreStack : storePre.stack =
             countSlot previousPauser :: decrementedCount :: stack := rfl
         have hstoreWarm :
@@ -10327,9 +10327,9 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
                 dsimp only [storeSpare]
                 omega
               let afterPre := storeBase.setMach
-                ⟨stack, M₂, G + sloadSpare + storeSpare + suffixCost⟩
+                ⟨stack, M₂, G + sloadSpare + storeSpare + suffixCost, storeBase.stateGas⟩
               let afterCallPre := storeBase.setMach
-                ⟨stack, M₂, storeTailGas⟩
+                ⟨stack, M₂, storeTailGas, storeBase.stateGas⟩
               have hpair := registryAddressFamilies_pairwise
                 htargetCanonical htargetCanonical hpreviousCanonical
               have hlength := registryAddressFamilies_ne_arrayLengthSlot
@@ -10526,7 +10526,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           simpa only [Devm.setMach_setMach, Devm.stack_setMach,
             Devm.memory_setMach] using Ninst.runCompiled_binary
               (sevm := sevm) (devm := base.setMach
-                ⟨countValue :: 1 :: stack, M₁, subGas + sloadSpare⟩)
+                ⟨countValue :: 1 :: stack, M₁, subGas + sloadSpare, base.stateGas⟩)
               (r := .sub) (f := (· - ·)) (cost := gVerylow)
               (x := countValue) (y := 1) (v := decrementedCount)
               (s := stack) (G := secondLoadGas + sloadSpare)
@@ -10545,7 +10545,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           simpa only [Devm.setMach_setMach, Devm.stack_setMach,
             Devm.memory_setMach] using Ninst.runCompiled_swap
               (sevm := sevm) (devm := base.setMach
-                ⟨1 :: countValue :: stack, M₁, swapGas + sloadSpare⟩)
+                ⟨1 :: countValue :: stack, M₁, swapGas + sloadSpare, base.stateGas⟩)
               (n := 0) (S := countValue :: 1 :: stack)
               (G := subGas + sloadSpare) rfl (by
                 simp only [Devm.gasLeft_setMach]
@@ -10555,7 +10555,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
             (ca := sevm.currentTarget) (target := target) hswap (by simp)
             subRun subPath with ⟨swapRun, swapPath⟩
         let pushPre := base.setMach
-          ⟨countValue :: stack, M₁, onePushGas + sloadSpare⟩
+          ⟨countValue :: stack, M₁, onePushGas + sloadSpare, base.stateGas⟩
         have hpushGas : pushPre.gasLeft =
             (swapGas + sloadSpare) + onePushCost := by
           simp only [pushPre, Devm.gasLeft_setMach]
@@ -10688,7 +10688,7 @@ private theorem postAssignment_decrement_pause_branch_runCompiledTo
   let branchCost := gVerylow + gHigh
   let suffixPre := pre.setMach ⟨stack, pre.memory, G + suffixCost, pre.stateGas⟩
   let branchPre := pre.setMach
-    ⟨0 :: stack, pre.memory, G + suffixCost + branchCost⟩
+    ⟨0 :: stack, pre.memory, G + suffixCost + branchCost, pre.stateGas⟩
   have haccessSetMach (d : Devm) (s' : List B256)
       (m' : Mem) (g' : Nat) :
       (d.setMach ⟨s', m', g', d.stateGas⟩).accessedAddresses =
@@ -10862,7 +10862,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
     rw [Mem.Reads.read hr₁]
     exact htargetRead
   let storePre := loaded.setMach
-    ⟨assignmentSlot target :: 0 :: previousPauser :: stack, M₂, storeGas⟩
+    ⟨assignmentSlot target :: 0 :: previousPauser :: stack, M₂, storeGas, loaded.stateGas⟩
   have hstoreStack : storePre.stack =
       assignmentSlot target :: 0 :: previousPauser :: stack := rfl
   have hstoreWarm :
@@ -10890,7 +10890,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
           dsimp only [storeSpare]
           omega
         let suffixPre := storeBase.setMach
-          ⟨previousPauser :: stack, M₂, storeTailGas⟩
+          ⟨previousPauser :: stack, M₂, storeTailGas, storeBase.stateGas⟩
         have hpair := registryAddressFamilies_pairwise
           htargetCanonical htargetCanonical hpreviousCanonical
         have hlength := registryAddressFamilies_ne_arrayLengthSlot
@@ -11041,7 +11041,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
     simp only [finishLoadWordCost, Devm.extCost, Devm.memory_setMach]
   rcases loadWord_prepend_directPause
       (pre := afterNew.setMach
-        ⟨0 :: previousPauser :: stack, M₁, targetLoadGas⟩)
+        ⟨0 :: previousPauser :: stack, M₁, targetLoadGas, afterNew.stateGas⟩)
       (word := targetWord) (value := target) (markedTarget := target)
       (G := tagGas) rfl htargetValue htargetLoadGas
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
@@ -11204,7 +11204,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
       decide)]
     exact hcontinuationRead
   let sloadPre := afterTarget.setMach
-    ⟨assignmentSlot target :: stack, M₀, sloadGas⟩
+    ⟨assignmentSlot target :: stack, M₀, sloadGas, afterTarget.stateGas⟩
   have hsloadStack : sloadPre.stack = assignmentSlot target :: stack := rfl
   have hsloadValue : sloadPre.getStorVal sevm.currentTarget
       (assignmentSlot target) = previousPauser := by
@@ -11235,11 +11235,11 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
           omega
         let offsetPre := base.setMach
           ⟨previousPauser :: previousPauser :: stack, M₀,
-            offsetGas + spare⟩
+            offsetGas + spare, base.stateGas⟩
         let mstorePre := base.setMach
           ⟨previousPauserWord * 32 :: previousPauser ::
             previousPauser :: stack, M₀,
-            G + spare + suffixCost + mstoreCost⟩
+            G + spare + suffixCost + mstoreCost, base.stateGas⟩
         have hmstoreStack : mstorePre.stack = previousPauserWord * 32 ::
             previousPauser :: previousPauser :: stack := rfl
         have hmstoreMemory : mstorePre.memory = M₀ := rfl
@@ -11273,7 +11273,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
                 simp only [Devm.gasLeft_setMach] at hmstoreGasEq
                 omega
               let suffixPre := mstorePre.setMach
-                ⟨previousPauser :: stack, M₁, mstoreTailGas⟩
+                ⟨previousPauser :: stack, M₁, mstoreTailGas, mstorePre.stateGas⟩
               have hsuffixCount : suffixPre.getStorVal sevm.currentTarget
                   (countSlot previousPauser) = countValue := by
                 change base.getStorVal sevm.currentTarget
@@ -11403,14 +11403,14 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
           ⟨offsetRun, offsetPath⟩
         have hdup : Ninst.RunCompiled sevm
             (base.setMach
-              ⟨previousPauser :: stack, M₀, dupGas + spare⟩)
+              ⟨previousPauser :: stack, M₀, dupGas + spare, base.stateGas⟩)
             (dup 0) offsetPre := by
           simpa only [offsetPre, Devm.setMach_setMach,
             Devm.stack_setMach, Devm.memory_setMach] using
               Ninst.runCompiled_dup
                 (sevm := sevm)
                 (devm := base.setMach
-                  ⟨previousPauser :: stack, M₀, dupGas + spare⟩)
+                  ⟨previousPauser :: stack, M₀, dupGas + spare, base.stateGas⟩)
                 (n := 0) (w := previousPauser)
                 (G := offsetGas + spare) rfl (by
                   simp only [Devm.gasLeft_setMach]
@@ -11539,9 +11539,9 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
   let branchCost := gVerylow + gHigh
   let bodyPre := pre.setMach ⟨stack, M, G + bodyCost, pre.stateGas⟩
   let branchPre := pre.setMach
-    ⟨0 :: stack, M, G + bodyCost + branchCost⟩
+    ⟨0 :: stack, M, G + bodyCost + branchCost, pre.stateGas⟩
   let iszeroPre := pre.setMach
-    ⟨target :: stack, M, G + bodyCost + branchCost + gVerylow⟩
+    ⟨target :: stack, M, G + bodyCost + branchCost + gVerylow, pre.stateGas⟩
   have hwfM : Mem.Wf M := hwf.extend _ _
   have hrM : Mem.Reads M img := Mem.Reads.extend hr _ _
   have htargetValue : Bytes.toB256
@@ -11803,14 +11803,14 @@ private theorem continuation_save_setPauserKernel_call_pause_runCompiledTo
   let offsetPushCost := pushCost ((continuationWord * 32).toBytes.sig)
   let onePushCost := pushCost (1 : B256).toBytes.sig
   let callPre := pre.setMach
-    ⟨stack, M, G + kernelCost + callCost⟩
+    ⟨stack, M, G + kernelCost + callCost, pre.stateGas⟩
   let kernelPre := pre.setMach ⟨stack, M, G + kernelCost, pre.stateGas⟩
   let mstorePre := pre.setMach
     ⟨continuationWord * 32 :: 1 :: stack, pre.memory,
-      G + kernelCost + callCost + mstoreCost⟩
+      G + kernelCost + callCost + mstoreCost, pre.stateGas⟩
   let offsetPre := pre.setMach
     ⟨1 :: stack, pre.memory,
-      G + kernelCost + callCost + mstoreCost + offsetPushCost⟩
+      G + kernelCost + callCost + mstoreCost + offsetPushCost, pre.stateGas⟩
   have hwfM : Mem.Wf M := Mem.Wf.write hwf _ _
   have hrM : Mem.Reads M imgCont := Mem.Reads.write hwf hr _ _
   have hnewCont : Bytes.toB256
@@ -12026,10 +12026,10 @@ private theorem previous_zero_continuation_kernel_call_pause_runCompiledTo
   let suffixPre := pre.setMach ⟨stack, M, G + suffixCost, pre.stateGas⟩
   let mstorePre := pre.setMach
     ⟨previousPauserWord * 32 :: 0 :: stack, pre.memory,
-      G + suffixCost + mstoreCost⟩
+      G + suffixCost + mstoreCost, pre.stateGas⟩
   let offsetPre := pre.setMach
     ⟨0 :: stack, pre.memory,
-      G + suffixCost + mstoreCost + offsetPushCost⟩
+      G + suffixCost + mstoreCost + offsetPushCost, pre.stateGas⟩
   have hwfM : Mem.Wf M := Mem.Wf.write hwf _ _
   have hrM : Mem.Reads M imgPrev := Mem.Reads.write hwf hr _ _
   have hnewPrev : Bytes.toB256
@@ -12223,10 +12223,10 @@ private theorem new_zero_previous_continuation_kernel_call_pause_runCompiledTo
   let suffixPre := pre.setMach ⟨stack, M, G + suffixCost, pre.stateGas⟩
   let mstorePre := pre.setMach
     ⟨newPauserWord * 32 :: 0 :: stack, pre.memory,
-      G + suffixCost + mstoreCost⟩
+      G + suffixCost + mstoreCost, pre.stateGas⟩
   let offsetPre := pre.setMach
     ⟨0 :: stack, pre.memory,
-      G + suffixCost + mstoreCost + offsetPushCost⟩
+      G + suffixCost + mstoreCost + offsetPushCost, pre.stateGas⟩
   have hwfM : Mem.Wf M := Mem.Wf.write hwf _ _
   have hrM : Mem.Reads M imgNew := Mem.Reads.write hwf hr _ _
   have hnewNew : Bytes.toB256
@@ -12358,7 +12358,7 @@ private theorem directPausePath_prepend_arg_zero
       Devm.memory_setMach] using Ninst.runCompiled_calldataload
         (sevm := sevm)
         (devm := pre.setMach
-          ⟨(4 : B256) :: stack, pre.memory, G + gVerylow⟩)
+          ⟨(4 : B256) :: stack, pre.memory, G + gVerylow, pre.stateGas⟩)
         (x := 4) (v := value) (s := stack) (G := G) rfl hvalue
         (by simp only [Devm.gasLeft_setMach])
         (by omega)
@@ -12467,10 +12467,10 @@ private theorem target_arg_save_pause_runCompiledTo
   let suffixPre := pre.setMach ⟨stack, M, G + suffixCost, pre.stateGas⟩
   let mstorePre := pre.setMach
     ⟨targetWord * 32 :: target :: stack, pre.memory,
-      G + suffixCost + mstoreCost⟩
+      G + suffixCost + mstoreCost, pre.stateGas⟩
   let offsetPre := pre.setMach
     ⟨target :: stack, pre.memory,
-      G + suffixCost + mstoreCost + offsetPushCost⟩
+      G + suffixCost + mstoreCost + offsetPushCost, pre.stateGas⟩
   have hwfM : Mem.Wf M := Mem.Wf.write hwf _ _
   have hrM : Mem.Reads M imgTarget := Mem.Reads.write hwf hr _ _
   have htargetTarget : Bytes.toB256
@@ -12666,7 +12666,7 @@ private theorem pauseDuration_save_pause_runCompiledTo
   have hwfM : Mem.Wf M := Mem.Wf.write hwf _ _
   have hrM : Mem.Reads M imgDuration := Mem.Reads.write hwf hr _ _
   let sloadPre := pre.setMach
-    ⟨pauseDurationSlot :: stack, pre.memory, sloadGas⟩
+    ⟨pauseDurationSlot :: stack, pre.memory, sloadGas, pre.stateGas⟩
   have hsloadStack : sloadPre.stack = pauseDurationSlot :: stack := rfl
   have hsloadValue : sloadPre.getStorVal sevm.currentTarget
       pauseDurationSlot = duration := by
@@ -12695,10 +12695,10 @@ private theorem pauseDuration_save_pause_runCompiledTo
           dsimp only [spare]
           omega
         let offsetPre := base.setMach
-          ⟨duration :: stack, pre.memory, offsetGas + spare⟩
+          ⟨duration :: stack, pre.memory, offsetGas + spare, base.stateGas⟩
         let mstorePre := base.setMach
           ⟨durationWord * 32 :: duration :: stack, pre.memory,
-            G + spare + suffixCost + mstoreCost⟩
+            G + spare + suffixCost + mstoreCost, base.stateGas⟩
         have hmstoreStack : mstorePre.stack =
             durationWord * 32 :: duration :: stack := rfl
         have hmstoreMemory : mstorePre.memory = pre.memory := rfl
@@ -12731,7 +12731,7 @@ private theorem pauseDuration_save_pause_runCompiledTo
                 simp only [Devm.gasLeft_setMach] at hmstoreGasEq
                 omega
               let suffixPre := mstorePre.setMach
-                ⟨stack, M, mstoreTailGas⟩
+                ⟨stack, M, mstoreTailGas, mstorePre.stateGas⟩
               have hsuffixAssignment : suffixPre.getStorVal
                   sevm.currentTarget (assignmentSlot target) =
                     previousPauser := by
@@ -12987,7 +12987,7 @@ private theorem liveExpiry_pause_runCompiledTo
   let sloadGas := timestampGas + gasColdSload
   let tagGas := sloadGas + gVerylow + tagPushCost
   let sloadPre := pre.setMach
-    ⟨expirySlot pauser :: stack, pre.memory, sloadGas⟩
+    ⟨expirySlot pauser :: stack, pre.memory, sloadGas, pre.stateGas⟩
   have hsloadStack : sloadPre.stack = expirySlot pauser :: stack := rfl
   have hsloadValue : sloadPre.getStorVal sevm.currentTarget
       (expirySlot pauser) = expiry := by
@@ -13019,14 +13019,14 @@ private theorem liveExpiry_pause_runCompiledTo
           dsimp only [spare]
           omega
         let suffixPre := base.setMach
-          ⟨stack, pre.memory, G + spare + suffixCost⟩
+          ⟨stack, pre.memory, G + spare + suffixCost, base.stateGas⟩
         let branchPre := base.setMach
-          ⟨1 :: stack, pre.memory, spare + branchGas⟩
+          ⟨1 :: stack, pre.memory, spare + branchGas, base.stateGas⟩
         let ltPre := base.setMach
           ⟨sevm.benvStat.time :: expiry :: stack, pre.memory,
-            spare + ltGas⟩
+            spare + ltGas, base.stateGas⟩
         let timestampPre := base.setMach
-          ⟨expiry :: stack, pre.memory, sloadTailGas⟩
+          ⟨expiry :: stack, pre.memory, sloadTailGas, base.stateGas⟩
         have hsuffixDuration : suffixPre.getStorVal sevm.currentTarget
             pauseDurationSlot = duration := by
           change base.getStorVal sevm.currentTarget pauseDurationSlot =
@@ -13336,7 +13336,7 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
   let sloadGas := callerGas + gasColdSload
   let tagGas := sloadGas + gVerylow + tagPushCost
   let sloadPre := pre.setMach
-    ⟨assignmentSlot target :: stack, pre.memory, sloadGas⟩
+    ⟨assignmentSlot target :: stack, pre.memory, sloadGas, pre.stateGas⟩
   have hsloadStack : sloadPre.stack = assignmentSlot target :: stack := rfl
   have hsloadValue : sloadPre.getStorVal sevm.currentTarget
       (assignmentSlot target) = pauser := by
@@ -13370,13 +13370,13 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
           dsimp only [spare]
           omega
         let suffixPre := base.setMach
-          ⟨stack, pre.memory, G + spare + suffixCost⟩
+          ⟨stack, pre.memory, G + spare + suffixCost, base.stateGas⟩
         let branchPre := base.setMach
-          ⟨1 :: stack, pre.memory, spare + branchGas⟩
+          ⟨1 :: stack, pre.memory, spare + branchGas, base.stateGas⟩
         let eqPre := base.setMach
-          ⟨pauser :: pauser :: stack, pre.memory, spare + eqGas⟩
+          ⟨pauser :: pauser :: stack, pre.memory, spare + eqGas, base.stateGas⟩
         let callerPre := base.setMach
-          ⟨pauser :: stack, pre.memory, sloadTailGas⟩
+          ⟨pauser :: stack, pre.memory, sloadTailGas, base.stateGas⟩
         have hsuffixExpiry : suffixPre.getStorVal sevm.currentTarget
             (expirySlot pauser) = expiry := by
           change base.getStorVal sevm.currentTarget (expirySlot pauser) =
@@ -13611,7 +13611,7 @@ private theorem directPausePath_prepend_tload
     rw [Devm.pop_eq_ok hstack]
     simp only [bind, Except.bind]
     rw [show (pre.setMach
-      ⟨stack, pre.memory, pre.gasLeft⟩).getTransVal
+      ⟨stack, pre.memory, pre.gasLeft, pre.stateGas⟩).getTransVal
         sevm.currentTarget key = value by exact hvalue]
     rw [pushItem_eq_ok (by
       simp only [Devm.gasLeft_setMach]
@@ -13657,7 +13657,7 @@ private theorem directPausePath_prepend_tstore
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
       (devm := pre.setMach
-        ⟨value :: stack, pre.memory, pre.gasLeft⟩) rfl]
+        ⟨value :: stack, pre.memory, pre.gasLeft, pre.stateGas⟩) rfl]
     simp only [Devm.setMach_setMach, Devm.memory_setMach,
       Devm.gasLeft_setMach]
     rw [chargeGas_eq_ok
@@ -13803,9 +13803,9 @@ private theorem lock_write_authorized_pause_runCompiledTo
   let storeGas := G + suffixCost + gasWarmAccess
   let keyPushGas := storeGas + keyPushCost
   let storePre := pre.setMach
-    ⟨lockKey :: 1 :: stack, pre.memory, storeGas⟩
+    ⟨lockKey :: 1 :: stack, pre.memory, storeGas, pre.stateGas⟩
   let locked := (pre.setMach
-    ⟨stack, pre.memory, G + suffixCost⟩).setTransVal
+    ⟨stack, pre.memory, G + suffixCost, pre.stateGas⟩).setTransVal
       sevm.currentTarget lockKey 1
   have hlockedWf : Mem.Wf locked.memory := by
     exact hwf
@@ -13899,7 +13899,7 @@ private theorem lock_write_authorized_pause_runCompiledTo
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite)
       (pre := pre.setMach
-        ⟨1 :: stack, pre.memory, keyPushGas⟩)
+        ⟨1 :: stack, pre.memory, keyPushGas, pre.stateGas⟩)
       (word := lockKey) (stack := 1 :: stack) (c := keyPushCost)
       (G := storeGas) rfl rfl rfl
       (by simp only [List.length_cons]; omega)
@@ -14150,16 +14150,16 @@ private theorem directPausePath_prepend_checkNonAddress_zero
   let push160Cost := pushCost (Nat.toB256 160).toBytes.sig
   let pushZeroCost := pushCost (0 : B256).toBytes.sig
   let andPre := pre.setMach
-    ⟨addressMask :: target :: stack, pre.memory, G + gVerylow⟩
+    ⟨addressMask :: target :: stack, pre.memory, G + gVerylow, pre.stateGas⟩
   let shlPre := pre.setMach
     ⟨Nat.toB256 160 :: (~~~(0 : B256)) :: target :: stack, pre.memory,
-      G + gVerylow + gVerylow⟩
+      G + gVerylow + gVerylow, pre.stateGas⟩
   let push160Pre := pre.setMach
     ⟨(~~~(0 : B256)) :: target :: stack, pre.memory,
-      G + gVerylow + gVerylow + push160Cost⟩
+      G + gVerylow + gVerylow + push160Cost, pre.stateGas⟩
   let notPre := pre.setMach
     ⟨0 :: target :: stack, pre.memory,
-      G + gVerylow + gVerylow + push160Cost + gVerylow⟩
+      G + gVerylow + gVerylow + push160Cost + gVerylow, pre.stateGas⟩
   have hand : Ninst.RunCompiled sevm andPre (.reg .and)
       (pre.setMach ⟨0 :: stack, pre.memory, G, pre.stateGas⟩) := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl hmask (by
@@ -14519,9 +14519,9 @@ private theorem exact_pause_runCompiledTo
   let suffixPre := pre.setMach ⟨stack, pre.memory, G + suffixCost, pre.stateGas⟩
   let branchPre := pre.setMach ⟨0 :: stack, pre.memory, branchGas, pre.stateGas⟩
   let ltPre := pre.setMach
-    ⟨Nat.toB256 36 :: Nat.toB256 36 :: stack, pre.memory, ltGas⟩
+    ⟨Nat.toB256 36 :: Nat.toB256 36 :: stack, pre.memory, ltGas, pre.stateGas⟩
   let calldataPre := pre.setMach
-    ⟨Nat.toB256 36 :: stack, pre.memory, calldataGas⟩
+    ⟨Nat.toB256 36 :: stack, pre.memory, calldataGas, pre.stateGas⟩
   have hsuffixCostEq : canonicalUnlockedPauseCost suffixPre duration target
       previousPauser removedIndex arrayLength lastTarget = suffixCost := by
     change pushCost (4 : B256).toBytes.sig + gVerylow +
@@ -14745,16 +14745,16 @@ private theorem third_group_pause_dispatch_runCompiledTo
   let branchCost := gVerylow + gHigh + gJumpdest
   let pausePre := pre.setMach ⟨stack, pre.memory, G + pauseCost, pre.stateGas⟩
   let popPre := pre.setMach
-    ⟨pauseSelector :: stack, pre.memory, G + pauseCost + gBase⟩
+    ⟨pauseSelector :: stack, pre.memory, G + pauseCost + gBase, pre.stateGas⟩
   let branchPre := pre.setMach
     ⟨1 :: pauseSelector :: stack, pre.memory,
-      G + pauseCost + gBase + branchCost⟩
+      G + pauseCost + gBase + branchCost, pre.stateGas⟩
   let eqPre := pre.setMach
     ⟨pauseSelector :: pauseSelector :: pauseSelector :: stack, pre.memory,
-      G + pauseCost + gBase + branchCost + gVerylow⟩
+      G + pauseCost + gBase + branchCost + gVerylow, pre.stateGas⟩
   let pushPre := pre.setMach
     ⟨pauseSelector :: pauseSelector :: stack, pre.memory,
-      G + pauseCost + gBase + branchCost + gVerylow + selectorPushCost⟩
+      G + pauseCost + gBase + branchCost + gVerylow + selectorPushCost, pre.stateGas⟩
   have hpauseCostEq : exactPauseCost pausePre duration target previousPauser
       removedIndex arrayLength lastTarget = pauseCost := by
     change exactPauseCost pausePre duration target previousPauser removedIndex
@@ -14962,32 +14962,32 @@ private theorem hybrid_pause_dispatch_runCompiledTo
   let outerBranchCost := gVerylow + gHigh
   let innerBranchCost := gVerylow + gHigh + gJumpdest
   let thirdPre := pre.setMach
-    ⟨pauseSelector :: stack, pre.memory, G + thirdCost⟩
+    ⟨pauseSelector :: stack, pre.memory, G + thirdCost, pre.stateGas⟩
   let innerBranchPre := pre.setMach
     ⟨1 :: pauseSelector :: stack, pre.memory,
-      G + thirdCost + innerBranchCost⟩
+      G + thirdCost + innerBranchCost, pre.stateGas⟩
   let innerGtPre := pre.setMach
     ⟨innerPivot :: pauseSelector :: pauseSelector :: stack, pre.memory,
-      G + thirdCost + innerBranchCost + gVerylow⟩
+      G + thirdCost + innerBranchCost + gVerylow, pre.stateGas⟩
   let innerPushPre := pre.setMach
     ⟨pauseSelector :: pauseSelector :: stack, pre.memory,
-      G + thirdCost + innerBranchCost + gVerylow + innerPushCost⟩
+      G + thirdCost + innerBranchCost + gVerylow + innerPushCost, pre.stateGas⟩
   let innerPre := pre.setMach
     ⟨pauseSelector :: stack, pre.memory,
       G + thirdCost + innerBranchCost + gVerylow + innerPushCost +
-        gVerylow⟩
+        gVerylow, pre.stateGas⟩
   let outerBranchPre := pre.setMach
     ⟨0 :: pauseSelector :: stack, pre.memory,
       G + thirdCost + innerBranchCost + gVerylow + innerPushCost +
-        gVerylow + outerBranchCost⟩
+        gVerylow + outerBranchCost, pre.stateGas⟩
   let outerGtPre := pre.setMach
     ⟨outerPivot :: pauseSelector :: pauseSelector :: stack, pre.memory,
       G + thirdCost + innerBranchCost + gVerylow + innerPushCost +
-        gVerylow + outerBranchCost + gVerylow⟩
+        gVerylow + outerBranchCost + gVerylow, pre.stateGas⟩
   let outerPushPre := pre.setMach
     ⟨pauseSelector :: pauseSelector :: stack, pre.memory,
       G + thirdCost + innerBranchCost + gVerylow + innerPushCost +
-        gVerylow + outerBranchCost + gVerylow + outerPushCost⟩
+        gVerylow + outerBranchCost + gVerylow + outerPushCost, pre.stateGas⟩
   have hthirdCostEq : thirdGroupPauseDispatchCost thirdPre duration target
       previousPauser removedIndex arrayLength lastTarget = thirdCost := by
     change gVerylow + pushCost (selector "pause" [.address]).toBytes.sig +
@@ -15192,13 +15192,13 @@ private theorem directPausePath_prepend_fsig
       Func.RunCompiledTo.DirectPausePath sevm.currentTarget markedTarget
         (phase := phase) run := by
   let shrPre := pre.setMach
-    ⟨(224 : B256) :: selectorWord :: stack, pre.memory, G + gVerylow⟩
+    ⟨(224 : B256) :: selectorWord :: stack, pre.memory, G + gVerylow, pre.stateGas⟩
   let shrPushPre := pre.setMach
     ⟨selectorWord :: stack, pre.memory,
-      G + gVerylow + pushCost (224 : B256).toBytes.sig⟩
+      G + gVerylow + pushCost (224 : B256).toBytes.sig, pre.stateGas⟩
   let loadPre := pre.setMach
     ⟨(0 : B256) :: stack, pre.memory,
-      G + gVerylow + pushCost (224 : B256).toBytes.sig + gVerylow⟩
+      G + gVerylow + pushCost (224 : B256).toBytes.sig + gVerylow, pre.stateGas⟩
   have hshr : Ninst.RunCompiled sevm shrPre shr
       (pre.setMach ⟨selectedTarget :: stack, pre.memory, G, pre.stateGas⟩) := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
@@ -15353,7 +15353,7 @@ private theorem fsig_hybrid_pause_dispatch_runCompiledTo
   let hybridCost := hybridPauseDispatchCost dp pre duration target
     previousPauser removedIndex arrayLength lastTarget
   let hybridPre := pre.setMach
-    ⟨selector "pause" [.address] :: stack, pre.memory, G + hybridCost⟩
+    ⟨selector "pause" [.address] :: stack, pre.memory, G + hybridCost, pre.stateGas⟩
   have hhybridCostEq : hybridPauseDispatchCost dp hybridPre duration target
       previousPauser removedIndex arrayLength lastTarget = hybridCost := by
     exact hybridPauseDispatchCost_eq_of_memory_accessed rfl rfl dp duration
@@ -15504,20 +15504,20 @@ private theorem runtimeMain_pause_runCompiledTo
   let branchCost := gVerylow + gHigh
   let bodyPre := pre.setMach ⟨stack, pre.memory, G + bodyCost, pre.stateGas⟩
   let branchPre := pre.setMach
-    ⟨(0 : B256) :: stack, pre.memory, G + bodyCost + branchCost⟩
+    ⟨(0 : B256) :: stack, pre.memory, G + bodyCost + branchCost, pre.stateGas⟩
   let orPre := pre.setMach
     ⟨(0 : B256) :: (0 : B256) :: stack, pre.memory,
-      G + bodyCost + branchCost + gVerylow⟩
+      G + bodyCost + branchCost + gVerylow, pre.stateGas⟩
   let ltPre := pre.setMach
     ⟨Nat.toB256 36 :: (4 : B256) :: (0 : B256) :: stack, pre.memory,
-      G + bodyCost + branchCost + gVerylow + gVerylow⟩
+      G + bodyCost + branchCost + gVerylow + gVerylow, pre.stateGas⟩
   let calldataPre := pre.setMach
     ⟨(4 : B256) :: (0 : B256) :: stack, pre.memory,
-      G + bodyCost + branchCost + gVerylow + gVerylow + gBase⟩
+      G + bodyCost + branchCost + gVerylow + gVerylow + gBase, pre.stateGas⟩
   let pushPre := pre.setMach
     ⟨(0 : B256) :: stack, pre.memory,
       G + bodyCost + branchCost + gVerylow + gVerylow + gBase +
-        pushCost (4 : B256).toBytes.sig⟩
+        pushCost (4 : B256).toBytes.sig, pre.stateGas⟩
   have hbodyCostEq : fsigHybridPauseDispatchCost dp bodyPre duration target
       previousPauser removedIndex arrayLength lastTarget = bodyCost := by
     exact fsigHybridPauseDispatchCost_eq_of_memory_accessed rfl rfl dp

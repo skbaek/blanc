@@ -33,7 +33,7 @@ private theorem sha64_success_suffix_storageEffectRun
     (Ninst.runCompiled_unary
       (sevm := sevm)
       (devm := base.setMach
-        ⟨1 :: stack, base.memory, K + 37⟩)
+        ⟨1 :: stack, base.memory, K + 37, base.stateGas⟩)
       (r := .iszero) (f := (B256.eqCheck · 0))
       (cost := gVerylow) (x := 1) (v := 0) (s := stack)
       (G := K + 34)
@@ -65,7 +65,7 @@ private theorem sha64_success_suffix_storageEffectRun
     (Ninst.runCompiled_pushItem
       (sevm := sevm)
       (devm := base.setMach
-        ⟨32 :: stack, base.memory, K + 18⟩)
+        ⟨32 :: stack, base.memory, K + 18, base.stateGas⟩)
       (r := .returndatasize)
       (x := Nat.toB256 base.returnData.length)
       (cost := gBase) (G := K + 16)
@@ -80,7 +80,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (sevm := sevm)
       (devm := base.setMach
         ⟨Nat.toB256 base.returnData.length :: 32 :: stack,
-          base.memory, K + 16⟩)
+          base.memory, K + 16, base.stateGas⟩)
       (r := .lt) (f := B256.ltCheck)
       (cost := gVerylow)
       (x := Nat.toB256 base.returnData.length) (y := 32)
@@ -144,13 +144,13 @@ theorem sha64_success_prefix_storageEffectRun_ext
         Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord + ext⟩)
+              K + sha64SuccessCost inputWord outputWord + ext, base.stateGas⟩)
           (sha64 inputWord outputWord success) ex effects := by
   let callPre := base.setMach
     ⟨Nat.toB256 (K + 221 + ext) :: (2 : B256) ::
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
-      base.memory, K + 221 + ext⟩
+      base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
@@ -242,7 +242,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
       (sevm := sevm)
       (devm := base.setMach
         ⟨stack, base.memory,
-          K + sha64SuccessCost inputWord outputWord + ext⟩)
+          K + sha64SuccessCost inputWord outputWord + ext, base.stateGas⟩)
       (w := (32 : B256)) (c := c32)
       (G := K + (cout + c64 + cin + c2 + 223) + ext)
       rfl
@@ -293,7 +293,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
   simp only [Devm.setMach_setMach]
   apply Func.StorageEffectRun.next hstat
   have hpost : callPost.setMach
-      ⟨1 :: stack, callPost.memory, K + 37⟩ = callPost := by
+      ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩ = callPost := by
     apply Devm.ext
     · apply Mach.ext
       · exact hstack.symm
@@ -347,7 +347,7 @@ theorem sha64_success_prefix_storageEffectRun
         Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord⟩)
+              K + sha64SuccessCost inputWord outputWord, base.stateGas⟩)
           (sha64 inputWord outputWord success) ex effects := by
   have hext : base.extCost
       [⟨(inputWord * 32).toNat, 64⟩,
@@ -370,7 +370,7 @@ theorem insertionContinuation_storageEffectRun
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
     (tail : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K⟩)
+        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K, base.stateGas⟩)
       insertionLoop ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[height], memory, K + 36, base.stateGas⟩)
@@ -403,7 +403,7 @@ theorem insertionContinuation_storageEffectRun
     Ninst.runCompiled_mload_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨(shiftedSizeWord * 32) :: [height], memory, K + 33⟩)
+        ⟨(shiftedSizeWord * 32) :: [height], memory, K + 33, base.stateGas⟩)
       (i := shiftedSizeWord * 32) (v := size) (s := [height])
       (c := gVerylow) (G := K + 30) (M := memory) rfl
       (by
@@ -532,7 +532,7 @@ theorem insertionShaTail_storageEffectRun
         Func.StorageEffectRun fs sevm
           (callPost.setMach
             ⟨[height + 1],
-              callPost.memory.write 608 (size >>> 1).toBytes, K⟩)
+              callPost.memory.write 608 (size >>> 1).toBytes, K, callPost.stateGas⟩)
           insertionLoop ex effects →
         Func.StorageEffectRun fs sevm
           (base.setMach ⟨[height], base.memory, K + 285, base.stateGas⟩)
@@ -576,13 +576,13 @@ theorem insertionShaTail_storageEffectRun
   intro ex tail
   have hinsertion : Func.StorageEffectRun fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 36⟩)
+        ⟨[height], callPost.memory, K + 36, callPost.stateGas⟩)
       insertionContinuation ex effects :=
     insertionContinuation_storageEffectRun
       hcarrier hinsertionLoop tail
   have hsuccess : Func.StorageEffectRun fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 48⟩)
+        ⟨[height], callPost.memory, K + 48, callPost.stateGas⟩)
       (.call insertionContinuationSlot) ex effects := by
     apply Func.StorageEffectRun.call hinsertionContinuation
       (by
@@ -608,7 +608,7 @@ theorem insertionLive_storageEffectRun
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 20 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 20 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLive
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
         ⟨[], memory, K⟩))
@@ -670,7 +670,7 @@ theorem insertionLive_storageEffectRun
       (sevm := sevm)
       (devm := base.setMach
         ⟨[640, branchBase + height, height], memory,
-          K + 8 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 8 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       (i := 640) (v := node) (s := (branchBase + height) :: [height])
       (c := 3)
       (G := K + 5 + sstoreCost sevm base (branchBase + height) node)
@@ -717,7 +717,7 @@ private theorem insertionLoopBit_storageEffectRun
     (hroom : stack.length < 1022)
     (hinner : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K⟩)
+        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K, base.stateGas⟩)
       (insertionLive <?> insertionDead) ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨height :: stack, memory, K + 12, base.stateGas⟩)
@@ -793,7 +793,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
     (tail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       rest ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
@@ -854,13 +854,13 @@ private theorem insertionStageLoadedLeft_storageEffectRun
     Ninst.runCompiled_mload_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨640 :: height :: stack, M1, K + 9⟩)
+        ⟨640 :: height :: stack, M1, K + 9, base.stateGas⟩)
       (i := 640) (v := node) (s := height :: stack)
       (c := 3) (G := K + 6) (M := M1) rfl
       (by
         have hext :
             (base.setMach
-              ⟨(640 : B256) :: height :: stack, M1, K + 9⟩).extCost
+              ⟨(640 : B256) :: height :: stack, M1, K + 9, base.stateGas⟩).extCost
                 [⟨(640 : B256).toNat, 32⟩] = 0 := by
           apply Devm.extCost_zero_of_le
           · rw [hmem1.size_eq]
@@ -911,7 +911,7 @@ private theorem insertionDeadLoad_storageEffectRun
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       (Ninst.dup 0 ::: Ninst.pushB256 branchBase :::
         Ninst.add ::: Ninst.sload ::: rest)
       ex effects := by
@@ -969,7 +969,7 @@ private theorem insertionDeadStage_storageEffectRun
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionDead ex effects := by
   apply insertionDeadLoad_storageEffectRun hval hroom
   apply insertionStageLoadedLeft_storageEffectRun hmem hroom
@@ -1017,7 +1017,7 @@ theorem insertionLoopDead_storageEffectRun
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 51 + sloadCost sevm base (branchBase + height)⟩)
+          K + 51 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionLoop ex effects := by
   let C := sloadCost sevm base (branchBase + height)
   have arm : Func.StorageEffectRun fs sevm
@@ -1069,7 +1069,7 @@ theorem insertionLoopLive_storageEffectRun
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 46 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 46 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
         ⟨[], memory, K⟩))
@@ -1110,7 +1110,7 @@ theorem commitDeposit_storageEffectRun
       (base.setMach
         ⟨[], memory,
           K + 38 +
-            sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
       commitDeposit ex
       ((sevm.currentTarget, depositCountSlot, oldCount + 1) :: effects) := by
   have hmod : memory.size % 32 = 0 := by
@@ -1142,7 +1142,7 @@ theorem commitDeposit_storageEffectRun
       (devm := base.setMach
         ⟨[576], memory,
           K + 35 +
-            sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
       (i := 576) (v := oldCount) (s := []) (c := 3)
       (G := K + 32 +
         sstoreCost sevm base depositCountSlot (oldCount + 1))

@@ -84,7 +84,7 @@ private theorem stageReturnEnd_runCompiled
   func_run (2)
   apply Func.runCompiled_return_word
     (devm := base.setMach
-      ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5⟩)
+      ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5, base.stateGas⟩)
     (i := 0) (sz := Nat.toB256 2188) (s := [])
     (out := runtimeBytes) (G := G - 5) (e := 0)
   · rfl
@@ -120,7 +120,7 @@ private theorem stageCopy_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G, base.stateGas⟩) stageCopy
       ((((base.setMach
-          ⟨[], memory.write 0 runtimeBytes, G - (copyCost + 13)⟩).memRead
+          ⟨[], memory.write 0 runtimeBytes, G - (copyCost + 13), base.stateGas⟩).memRead
             0 2188).2).withOutput runtimeBytes) := by
   let copiedMemory : Mem := memory.write 0 runtimeBytes
   have hsizeCopied : copiedMemory.size = 2208 := by

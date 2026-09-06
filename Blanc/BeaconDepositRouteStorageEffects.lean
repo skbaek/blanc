@@ -111,7 +111,7 @@ private theorem exactDepositMiddleDispatch_storageEffectRun
           Devm.memory_setMach] using
         Devm.popBurnBy_setMach
           (devm := base.setMach
-            ⟨[(1 : B256), depositSelector], Mem.empty, G + 34⟩)
+            ⟨[(1 : B256), depositSelector], Mem.empty, G + 34, base.stateGas⟩)
           (G := G + 20) rfl
           (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
             gJumpdest]))
@@ -169,7 +169,7 @@ private theorem exactDepositRootDispatch_storageEffectRun
           Devm.memory_setMach] using
         Devm.popBurnBy_setMach
           (devm := base.setMach
-            ⟨[(0 : B256), depositSelector], Mem.empty, G + 56⟩)
+            ⟨[(0 : B256), depositSelector], Mem.empty, G + 56, base.stateGas⟩)
           (G := G + 43) rfl
           (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
     (by simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hmiddle)
@@ -224,7 +224,7 @@ theorem deposit_route_storageEffectRun
   let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, K + 92, base.stateGas⟩
   let afterSize := base.setMach
-    ⟨[sevm.data.length.toB256], Mem.empty, K + 90⟩
+    ⟨[sevm.data.length.toB256], Mem.empty, K + 90, base.stateGas⟩
   let afterBranch := base.setMach ⟨[], Mem.empty, K + 76, base.stateGas⟩
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,

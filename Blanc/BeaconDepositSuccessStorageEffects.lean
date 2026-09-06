@@ -88,7 +88,7 @@ theorem depositRootGuard_storageEffectRun
     (Ninst.runCompiled_binary
       (sevm := sevm)
       (devm := base.setMach
-        ⟨Sevm.argWord sevm 3 :: node :: [], memory, G + 19⟩)
+        ⟨Sevm.argWord sevm 3 :: node :: [], memory, G + 19, base.stateGas⟩)
       (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
       (x := Sevm.argWord sevm 3) (y := node) (v := 1) (s := [])
       (G := G + 16) (by rintro ⟨⟩) rfl rfl
@@ -166,7 +166,7 @@ theorem depositCapGuard_storageEffectRun
     (Ninst.runCompiled_mload_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨576 :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 22⟩)
+        ⟨576 :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 22, base.stateGas⟩)
       (i := 576) (v := oldCount)
       (s := Nat.toB256 (2 ^ 32 - 1) :: [])
       (c := gVerylow) (G := G + 19) (M := memory) rfl
@@ -183,7 +183,7 @@ theorem depositCapGuard_storageEffectRun
     (Ninst.runCompiled_binary
       (sevm := sevm)
       (devm := base.setMach
-        ⟨oldCount :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 19⟩)
+        ⟨oldCount :: Nat.toB256 (2 ^ 32 - 1) :: [], memory, G + 19, base.stateGas⟩)
       (r := .lt) (f := B256.ltCheck) (cost := gVerylow)
       (x := oldCount) (y := Nat.toB256 (2 ^ 32 - 1))
       (v := 1) (s := []) (G := G + 16)
@@ -361,7 +361,7 @@ theorem depositSuccessSuffix_storageEffectRun
                   insertionFirstLiveStoreCost sevm stor keys 0 n node) +
                 insertionDeadGas sevm.currentTarget stor n
                   (insertionNatState 0 size node keys)) + 38 + countCost)) +
-              1838⟩)
+              1838, base.stateGas⟩)
         (reconstructDepositDataNode depositSuccessGuards)
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch

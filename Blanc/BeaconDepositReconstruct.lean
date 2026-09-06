@@ -99,12 +99,12 @@ theorem reconstructLoadStore_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory,
-          K + reconstructLoadStoreCost sourceWord targetWord⟩)
+          K + reconstructLoadStoreCost sourceWord targetWord, base.stateGas⟩)
       (loadWord sourceWord +++ mstoreAt targetWord +++ rest) ex := by
   let csource := pushCost ((sourceWord * 32).toBytes.sig)
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -134,7 +134,7 @@ theorem reconstructLoadStore_runCompiledTo
         have hext :
             (base.setMach
               ⟨(sourceWord * 32) :: stack, memory,
-                K + 3 + ctarget + 3⟩).extCost
+                K + 3 + ctarget + 3, base.stateGas⟩).extCost
               [⟨(sourceWord * 32).toNat, 32⟩] = 0 :=
           Devm.extCost_zero_of_le hmod hsourceFit
         rw [hext]
@@ -183,11 +183,11 @@ theorem reconstructPushStore_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory, K + reconstructPushStoreCost value targetWord⟩)
+        ⟨stack, memory, K + reconstructPushStoreCost value targetWord, base.stateGas⟩)
       (pushB256 value ::: mstoreAt targetWord +++ rest) ex := by
   let cvalue := pushCost value.toBytes.sig
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -672,7 +672,7 @@ theorem reconstructPairSha_runCompiledTo
             ⟨stack, base.memory,
               K + sha64SuccessCost 0 outputWord +
                 reconstructLoadStoreCost rightWord 1 +
-                reconstructLoadStoreCost leftWord 0⟩)
+                reconstructLoadStoreCost leftWord 0, base.stateGas⟩)
           (loadWord leftWord +++ mstoreAt 0 +++
             loadWord rightWord +++ mstoreAt 1 +++
             sha64 0 outputWord success) ex := by
@@ -732,7 +732,7 @@ theorem reconstructPairSha_runCompiledTo
   have hshaBase := hlift htail
   have hsha : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord⟩)
+        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord, base.stateGas⟩)
       (sha64 0 outputWord success) ex := by
     simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach] using
       hshaBase
@@ -748,7 +748,7 @@ theorem reconstructPairSha_runCompiledTo
       (base.setMach
         ⟨stack, firstMemory,
           K + sha64SuccessCost 0 outputWord +
-            reconstructLoadStoreCost rightWord 1⟩)
+            reconstructLoadStoreCost rightWord 1, base.stateGas⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
         sha64 0 outputWord success) ex := by
     apply reconstructLoadStore_runCompiledTo

@@ -538,7 +538,7 @@ lemma Func.runCompiledTo_revert_func {fs : List Func} {sevm : Sevm} {devm : Devm
       (by omega)) ?_
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (devm := devm.setMach
-        ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase⟩)
+        ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase, devm.stateGas⟩)
       pushCost_zero (G := G) rfl
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach]

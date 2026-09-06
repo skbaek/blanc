@@ -20,7 +20,7 @@ private theorem insertionLoopBit_runCompiledTo
     (hroom : stack.length < 1022)
     (hinner : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K⟩)
+        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K, base.stateGas⟩)
       (insertionLive <?> insertionDead) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨height :: stack, memory, K + 12, base.stateGas⟩)
@@ -138,7 +138,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
@@ -198,7 +198,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       (by
         have hext :
             (base.setMach
-              ⟨(640 : B256) :: height :: stack, M1, K + 9⟩).extCost
+              ⟨(640 : B256) :: height :: stack, M1, K + 9, base.stateGas⟩).extCost
                 [⟨(640 : B256).toNat, 32⟩] = 0 := by
           apply Devm.extCost_zero_of_le
           · rw [hmem1.size_eq]
@@ -243,7 +243,7 @@ private theorem insertionDeadLoad_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       (dup 0 ::: pushB256 branchBase ::: add ::: sload ::: rest) ex := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := height)
@@ -293,7 +293,7 @@ theorem insertionDeadStage_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionDead ex := by
   apply insertionDeadLoad_runCompiledTo hval hroom
   apply insertionStageLoadedLeft_runCompiledTo hmem hroom
@@ -317,7 +317,7 @@ theorem insertionLoopDead_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 51 + sloadCost sevm base (branchBase + height)⟩)
+          K + 51 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionLoop ex := by
   let C := sloadCost sevm base (branchBase + height)
   have harm : Func.RunCompiledTo fs sevm
@@ -341,7 +341,7 @@ theorem insertionContinuation_runCompiledTo
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K⟩)
+        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K, base.stateGas⟩)
       insertionLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[height], memory, K + 36, base.stateGas⟩)
@@ -493,7 +493,7 @@ theorem insertionShaTail_runCompiledTo
         Func.RunCompiledTo fs sevm
           (callPost.setMach
             ⟨[height + 1],
-              callPost.memory.write 608 (size >>> 1).toBytes, K⟩)
+              callPost.memory.write 608 (size >>> 1).toBytes, K, callPost.stateGas⟩)
           insertionLoop ex →
         Func.RunCompiledTo fs sevm
           (base.setMach ⟨[height], base.memory, K + 285, base.stateGas⟩)
@@ -537,13 +537,13 @@ theorem insertionShaTail_runCompiledTo
   intro ex htail
   have hinsertion : Func.RunCompiledTo fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 36⟩)
+        ⟨[height], callPost.memory, K + 36, callPost.stateGas⟩)
       insertionContinuation ex :=
     insertionContinuation_runCompiledTo
       hcarrier hinsertionLoop htail
   have hsuccess : Func.RunCompiledTo fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 48⟩)
+        ⟨[height], callPost.memory, K + 48, callPost.stateGas⟩)
       (.call insertionContinuationSlot) ex := by
     exact Func.runCompiledTo_call' (G := K + 36) hinsertionContinuation
       (by
@@ -569,7 +569,7 @@ theorem insertionLive_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 20 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 20 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLive
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
         ⟨[], memory, K⟩)) := by
@@ -669,7 +669,7 @@ theorem insertionLoopLive_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 46 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 46 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
         ⟨[], memory, K⟩)) := by
@@ -708,7 +708,7 @@ theorem commitDeposit_runCompiledTo
       (base.setMach
         ⟨[], memory,
           K + 38 +
-            sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
       commitDeposit ex := by
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]

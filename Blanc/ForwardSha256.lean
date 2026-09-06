@@ -346,7 +346,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
@@ -609,7 +609,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
@@ -658,7 +658,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
@@ -736,7 +736,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal 2 0 := by
   have hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
     Devm.extCost_covered hcovered
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using

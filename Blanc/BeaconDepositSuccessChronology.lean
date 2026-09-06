@@ -94,7 +94,7 @@ theorem deposit_success_retainedStorageEffectTriples
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
           (base.setMach
@@ -102,7 +102,7 @@ theorem deposit_success_retainedStorageEffectTriples
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           runtime (.ok post) ∧
         Exec.retainedStorageEffectTriples execution =
           [(sevm.currentTarget, depositCountSlot,
@@ -149,7 +149,7 @@ theorem deposit_success_retainedStorageEffectTriples
       (base.setMach
         ⟨[], Mem.empty,
           depositEndpointSuccessGas sevm base stor keys depositDataRoot n
-            (s.count + 1) countCost G⟩)
+            (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint (.ok post)
       [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
         (sevm.currentTarget, branchSlot n, branchValue)] := by

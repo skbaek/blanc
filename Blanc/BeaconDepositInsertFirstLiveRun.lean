@@ -44,7 +44,7 @@ theorem insertionLoop_firstLive_exists_runCompiledTo
             (G + 46 +
                 insertionFirstLiveStoreCost sevm stor keys height n node) +
               insertionDeadGas sevm.currentTarget stor n
-                (insertionNatState height size node keys)⟩)
+                (insertionNatState height size node keys), base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (branchSlot (height + n))
@@ -115,7 +115,7 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
             (G + 46 +
                 insertionFirstLiveStoreCost sevm stor keys height n node) +
               insertionDeadGas sevm.currentTarget stor n
-                (insertionNatState height size node keys)⟩)
+                (insertionNatState height size node keys), base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (branchSlot (height + n))

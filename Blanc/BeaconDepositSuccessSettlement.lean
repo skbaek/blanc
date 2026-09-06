@@ -134,7 +134,7 @@ private theorem deposit_success_settled_effects_of_processMessage
         depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
           ((accOfStor
             (Devm.getStor base sevm.currentTarget)).count + 1)
-          countCost G⟩ = base := by
+          countCost G, base.stateGas⟩ = base := by
     rw [← hentryStack, ← hentryMemory, ← hgasEntry]
     cases base
     rfl
@@ -291,7 +291,7 @@ theorem deposit_success_settled_effects
         depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
           ((accOfStor
             (Devm.getStor base sevm.currentTarget)).count + 1)
-          countCost G⟩ = base := by
+          countCost G, base.stateGas⟩ = base := by
     have hstackEntry : base.stack = [] := by
       rw [hbase]
       rfl

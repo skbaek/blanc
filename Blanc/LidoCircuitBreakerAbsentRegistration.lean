@@ -1282,7 +1282,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
     have hbranch : Func.RunCompiled
         ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
-          ⟨addressMask :: checked :: [], Mem.empty, G' + 16⟩)
+          ⟨addressMask :: checked :: [], Mem.empty, G' + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> tail)) post := by
       func_run (2) [0]
       case h_arm =>
@@ -1293,14 +1293,14 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
         ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: checked :: [],
-            Mem.empty, G' + 16⟩)
+            Mem.empty, G' + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> tail)) post := by
       rw [← addressMask_eq_shl]
       exact hbranch
     have hshift : Func.RunCompiled
         ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
-          ⟨~~~(0 : B256) :: checked :: [], Mem.empty, G' + 16 + 6⟩)
+          ⟨~~~(0 : B256) :: checked :: [], Mem.empty, G' + 16 + 6, base.stateGas⟩)
         ([pushB256 (Nat.toB256 160), shl] +++
           ([Ninst.and] +++ ((.call emptyRevertSlot) <?> tail))) post := by
       func_run (2)
@@ -1408,7 +1408,7 @@ private theorem absentZeroRegisterPauserBody_fromStage_runCompiled
   have hstaticRun : Func.RunCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
-        ⟨[], Mem.empty, stageGas + 22 + 33 + 33 + 21⟩)
+        ⟨[], Mem.empty, stageGas + 22 + 33 + 33 + 21, base.stateGas⟩)
       (requireStaticArgs 2
         (canonicalAddressArg 0
           (canonicalAddressArg 1

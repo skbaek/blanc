@@ -261,7 +261,7 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     decide
   let charged := raw.setMach
     ⟨raw.stack, raw.memory,
-      raw.gasLeft - ossifiableRuntimeCodeDepositGas⟩
+      raw.gasLeft - ossifiableRuntimeCodeDepositGas, raw.stateGas⟩
   have hcharge : processCreateMessage.chargeCodeGas
       creationMessage.benv.stat.rules raw = .ok charged := by
     apply chargeCodeGas_runtimeBaseline hrawOutput hdeposit

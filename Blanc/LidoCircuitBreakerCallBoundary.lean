@@ -526,7 +526,7 @@ theorem pauseCall_boundary_with_execution
       ∃ n : Nat,
         accessCost (target.toB256).toAdr
           (callPre.setMach
-            ⟨rest, callPre.memory, callPre.gasLeft⟩).accessedAddresses
+            ⟨rest, callPre.memory, callPre.gasLeft, callPre.stateGas⟩).accessedAddresses
             + dgc = n := ⟨_, rfl⟩
   rcases hsplit : calculateMsgCallGas 0 gasWord.toNat d1.gasLeft ext acc
     with ⟨mcc, mcs⟩
@@ -781,7 +781,7 @@ theorem pauseStat_boundary_with_execution
       ∃ n : Nat,
         accessCost (target.toB256).toAdr
           (statPre.setMach
-            ⟨rest, statPre.memory, statPre.gasLeft⟩).accessedAddresses
+            ⟨rest, statPre.memory, statPre.gasLeft, statPre.stateGas⟩).accessedAddresses
             + dgc = n := ⟨_, rfl⟩
   rcases hsplit : calculateMsgCallGas 0 gasWord.toNat d1.gasLeft ext acc
     with ⟨mcc, mcs⟩
@@ -1183,11 +1183,11 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
         genericCall.step, if_pos h_depth, Devm.push_def] at hx
       simp only [Except.assert] at hx
       rw [if_neg (show ¬ ((((d1.setMach
-              ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+              ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
             [(iiw.toNat, isw.toNat), (oiw.toNat, osw.toNat)]).withReturnData
           []).withGasLeft
             ((((d1.setMach
-                  ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+                  ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
                 [(iiw.toNat, isw.toNat), (oiw.toNat, osw.toNat)]).withReturnData
               []).gasLeft + mcs)).stack.length < 1024 from hroom)] at hx
       obtain ⟨-, hcontra⟩ := hx

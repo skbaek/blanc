@@ -1067,7 +1067,7 @@ private theorem shiftAddressMask_prepend_runCompiled
     (htail : Func.RunCompiled fs sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          M, G⟩) tail post) :
+          M, G, base.stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨~~~(0 : B256) :: target :: [], M, G + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
@@ -1104,7 +1104,7 @@ private theorem checkNonAddress_success_runCompiled
       Func.RunCompiled fs sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-            M, G + 16⟩)
+            M, G + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch

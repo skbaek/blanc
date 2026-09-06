@@ -170,7 +170,7 @@ theorem depositAmountUpperGuard_runCompiledTo
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], memory.write 672 amount.toBytes, G⟩) rest ex) :
+        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
@@ -208,7 +208,7 @@ theorem depositGuards_runCompiledTo
       (stageDepositEvent +++ depositAfterEvent) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
       depositBody ex := by
   let memory := depositDecodedMemory sevm.data
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data := by

@@ -288,7 +288,7 @@ private def proxyCallPreSuccess : Devm :=
   let beforeSload := entry.setMach
     ⟨[implementationSlotLit, 0,
         Nat.toB256 (List.length (initSevm proxyMsgSuccess).data), 0, 0], mem,
-      27197⟩
+      27197, entry.stateGas⟩
   let afterSload :=
     (addAccessedStorageKey beforeSload
       (initSevm proxyMsgSuccess).currentTarget implementationSlotLit).setMach
@@ -300,11 +300,11 @@ private def proxyCallPreSuccess : Devm :=
       ⟨[Nat.toB256 25095,
         implAdr.toB256,
         0, Nat.toB256 (List.length (initSevm proxyMsgSuccess).data), 0, 0], mem,
-      25095⟩
+      25095, afterSload.stateGas⟩
 
 private def proxyCallBaseSuccess : Devm :=
   proxyCallPreSuccess.setMach
-    ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩
+    ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft, proxyCallPreSuccess.stateGas⟩
 
 private def proxySuccessD1 : Devm :=
   addAccessedAddress proxyCallBaseSuccess implAdr
@@ -455,7 +455,7 @@ theorem proxySuccessChildMsg_exec :
 
 private theorem proxy_success_h_ext :
     (proxyCallBaseSuccess.setMach
-      ⟨[], proxyCallBaseSuccess.memory, proxyCallBaseSuccess.gasLeft⟩).extCost
+      ⟨[], proxyCallBaseSuccess.memory, proxyCallBaseSuccess.gasLeft, proxyCallBaseSuccess.stateGas⟩).extCost
       [⟨0, 32⟩, ⟨0, 0⟩] = 0 := by
   apply Devm.extCost_covered
   decide
@@ -464,7 +464,7 @@ private theorem proxy_success_h_del :
     accessDelegation
       (addAccessedAddress
         (proxyCallPreSuccess.setMach
-          ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩)
+          ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft, proxyCallPreSuccess.stateGas⟩)
         implAdr) implAdr =
       ⟨false, implAdr, implGuardedCode, 0, proxySuccessD1⟩ := by
   change accessDelegation (addAccessedAddress proxyCallBaseSuccess implAdr) implAdr = _
@@ -550,7 +550,7 @@ private theorem proxy_success_delegatecall :
       accessDelegation
         (addAccessedAddress
           (proxyCallPreSuccess.setMach
-            ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft⟩)
+            ⟨[], proxyCallPreSuccess.memory, proxyCallPreSuccess.gasLeft, proxyCallPreSuccess.stateGas⟩)
           implAdr) implAdr =
         ⟨false, implAdr, implGuardedCode, 0, proxySuccessD1⟩ :=
     proxy_success_h_del
@@ -867,7 +867,7 @@ private def proxyCallPreRevert : Devm :=
   let beforeSload := entry.setMach
     ⟨[implementationSlotLit, 0,
         Nat.toB256 (List.length (initSevm proxyMsgRevert).data), 0, 0], mem,
-      27197⟩
+      27197, entry.stateGas⟩
   let afterSload :=
     (addAccessedStorageKey beforeSload
       (initSevm proxyMsgRevert).currentTarget implementationSlotLit).setMach
@@ -879,11 +879,11 @@ private def proxyCallPreRevert : Devm :=
       ⟨[Nat.toB256 25095,
         implAdr.toB256,
         0, Nat.toB256 (List.length (initSevm proxyMsgRevert).data), 0, 0], mem,
-      25095⟩
+      25095, afterSload.stateGas⟩
 
 private def proxyCallBaseRevert : Devm :=
   proxyCallPreRevert.setMach
-    ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft⟩
+    ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft, proxyCallPreRevert.stateGas⟩
 
 private def proxyRevertD1 : Devm :=
   addAccessedAddress proxyCallBaseRevert implAdr
@@ -1039,7 +1039,7 @@ theorem proxyRevertChildMsg_exec :
 
 private theorem proxy_revert_h_ext :
     (proxyCallBaseRevert.setMach
-      ⟨[], proxyCallBaseRevert.memory, proxyCallBaseRevert.gasLeft⟩).extCost
+      ⟨[], proxyCallBaseRevert.memory, proxyCallBaseRevert.gasLeft, proxyCallBaseRevert.stateGas⟩).extCost
       [⟨0, 32⟩, ⟨0, 0⟩] = 0 := by
   apply Devm.extCost_covered
   decide
@@ -1048,7 +1048,7 @@ private theorem proxy_revert_h_del :
     accessDelegation
       (addAccessedAddress
         (proxyCallPreRevert.setMach
-          ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft⟩)
+          ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft, proxyCallPreRevert.stateGas⟩)
         implAdr) implAdr =
       ⟨false, implAdr, implGuardedCode, 0, proxyRevertD1⟩ := by
   change accessDelegation (addAccessedAddress proxyCallBaseRevert implAdr) implAdr = _
@@ -1135,7 +1135,7 @@ private theorem proxy_revert_delegatecall :
       accessDelegation
         (addAccessedAddress
           (proxyCallPreRevert.setMach
-            ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft⟩)
+            ⟨[], proxyCallPreRevert.memory, proxyCallPreRevert.gasLeft, proxyCallPreRevert.stateGas⟩)
           implAdr) implAdr =
         ⟨false, implAdr, implGuardedCode, 0, proxyRevertD1⟩ :=
     proxy_revert_h_del

@@ -314,7 +314,7 @@ private theorem returnWord_runCompiled
       Devm.output post = word.toBytes := by
   let M := Mem.empty.write 0 word.toBytes
   let returnPre := base.setMach
-    ⟨[(0 : B256), (32 : B256)], M, g - 5⟩
+    ⟨[(0 : B256), (32 : B256)], M, g - 5, base.stateGas⟩
   let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, ?_, ?_⟩
@@ -366,7 +366,7 @@ private theorem balanceOfBody_cold_runCompiled
           Sevm.dataWord sevm (32 * 0 + 4)⟩ : Adr × B256) ∉
         (base.setMach
           ⟨[Sevm.dataWord sevm (32 * 0 + 4)], Mem.empty,
-            g - 3⟩).accessedStorageKeys := by
+            g - 3, base.stateGas⟩).accessedStorageKeys := by
     exact h_cold
   have h_tail_gas : g - 2111 = (g - 2116) + 5 := by omega
   have h_push_gas : g - 2103 = g - 2105 + gBase := by
@@ -389,7 +389,7 @@ private theorem balanceOfBody_cold_runCompiled
   simp only [balanceOfBodyTail]
   refine Func.RunCompiled.next
     (devm' := base.setMach
-      ⟨[Sevm.dataWord sevm (32 * 0 + 4)], Mem.empty, g - 3⟩) ?_ ?_
+      ⟨[Sevm.dataWord sevm (32 * 0 + 4)], Mem.empty, g - 3, base.stateGas⟩) ?_ ?_
   · exact Ninst.runCompiled_calldataload (sevm := sevm) rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega) (by decide)
   · refine Func.RunCompiled.next
@@ -403,7 +403,7 @@ private theorem balanceOfBody_cold_runCompiled
           Devm.getStorVal_setMach, Devm.memory_setMach] using
         (Ninst.runCompiled_sload_cold (sevm := sevm)
           (devm := base.setMach
-            ⟨[Sevm.dataWord sevm (32 * 0 + 4)], Mem.empty, g - 3⟩)
+            ⟨[Sevm.dataWord sevm (32 * 0 + 4)], Mem.empty, g - 3, base.stateGas⟩)
           (k := Sevm.dataWord sevm (32 * 0 + 4))
           (v := Devm.getStorVal base sevm.currentTarget
             (Sevm.dataWord sevm (32 * 0 + 4)))
@@ -483,7 +483,7 @@ private theorem totalSupplyBody_cold_runCompiled
       (⟨sevm.currentTarget, flashMintedSlot⟩ : Adr × B256) ∉
         (base.setMach
           ⟨[flashMintedSlot, base.getBal sevm.currentTarget], Mem.empty,
-            g - 10⟩).accessedStorageKeys := h_cold
+            g - 10, base.stateGas⟩).accessedStorageKeys := h_cold
   have h_self_gas : g = g - 5 + gLow := by
     change g = g - 5 + 5
     clear h_cold_at_load h_cold fs sevm base
@@ -530,7 +530,7 @@ private theorem totalSupplyBody_cold_runCompiled
   simp only [totalSupply, pushFlashMintedSlot]
   refine Func.RunCompiled.next
     (devm' := base.setMach
-      ⟨[base.getBal sevm.currentTarget], Mem.empty, g - 5⟩) ?_ ?_
+      ⟨[base.getBal sevm.currentTarget], Mem.empty, g - 5, base.stateGas⟩) ?_ ?_
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm)
@@ -544,12 +544,12 @@ private theorem totalSupplyBody_cold_runCompiled
   · refine Func.RunCompiled.next
       (devm' := base.setMach
         ⟨[(0 : B256), base.getBal sevm.currentTarget], Mem.empty,
-          g - 7⟩) ?_ ?_
+          g - 7, base.stateGas⟩) ?_ ?_
     · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach] using
         (Ninst.runCompiled_pushB256 (sevm := sevm)
           (devm := base.setMach
-            ⟨[base.getBal sevm.currentTarget], Mem.empty, g - 5⟩)
+            ⟨[base.getBal sevm.currentTarget], Mem.empty, g - 5, base.stateGas⟩)
           (w := 0) (c := gBase) (G := g - 7) rfl
           (by
             change g - 5 = g - 7 + gBase
@@ -559,13 +559,13 @@ private theorem totalSupplyBody_cold_runCompiled
     · refine Func.RunCompiled.next
         (devm' := base.setMach
           ⟨[flashMintedSlot, base.getBal sevm.currentTarget], Mem.empty,
-            g - 10⟩) ?_ ?_
+            g - 10, base.stateGas⟩) ?_ ?_
       · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
             Devm.memory_setMach, Devm.gasLeft_setMach] using
           (Ninst.runCompiled_unary (sevm := sevm)
             (devm := base.setMach
               ⟨[(0 : B256), base.getBal sevm.currentTarget], Mem.empty,
-                g - 7⟩)
+                g - 7, base.stateGas⟩)
             (r := .not) (f := (~~~ ·)) (cost := gVerylow)
             (x := 0) (v := flashMintedSlot)
             (s := [base.getBal sevm.currentTarget]) (G := g - 10)
@@ -585,7 +585,7 @@ private theorem totalSupplyBody_cold_runCompiled
             (Ninst.runCompiled_sload_cold (sevm := sevm)
               (devm := base.setMach
                 ⟨[flashMintedSlot, base.getBal sevm.currentTarget],
-                  Mem.empty, g - 10⟩)
+                  Mem.empty, g - 10, base.stateGas⟩)
               (k := flashMintedSlot)
               (v := Devm.getStorVal base sevm.currentTarget flashMintedSlot)
               (s := [base.getBal sevm.currentTarget]) (G := g - 2110)

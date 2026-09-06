@@ -170,6 +170,58 @@ def Func.pcFree (fs : List Func) (f : Func) : Bool :=
 def Prog.pcFree (p : Prog) : Bool :=
   Func.pcFree (p.main :: p.aux) p.main
 
+/-! ### Legacy encoding
+
+EIP-8024 gave `Ninst` three instructions that carry an immediate byte —
+`DUPN` (`0xE6`), `SWAPN` (`0xE7`) and `EXCHANGE` (`0xE8`). They are the first
+non-`PUSH` instructions Blanc's `Func` language can hold whose encoding is
+longer than one byte, and the jump-destination boundary walk below is **false**
+for them.
+
+The counterexample is concrete. `Ninst.toBytes (.dupn 0x60) = [0xE6, 0x60]`.
+Compile that at `k` into code that starts at a boundary. The walk's conclusion
+is `noPushBefore code (k + 2) 32 = true` — but the byte at `k + 1` is `0x60`,
+which *is* `PUSH1` to `noPushBefore`, and its immediate covers `k + 2`. So the
+conclusion fails.
+
+This is not an artefact of Blanc's encoder. `noPushBefore` is Jaune's, and
+Jaune's `jumpable` is defined in terms of it; Jaune's own
+`pinnedJumpDestsFrom_eq_legacy` holds precisely because the pinned Amsterdam
+walk and the legacy walk agree, and they agree by treating an immediate in
+`0x5B…0x7F` as an instruction byte. The legacy notion is the right one, and
+the boundary walk genuinely needs to know its instructions are one byte or a
+`PUSH`.
+
+Blanc's compiler emits none of the three, so every consumer discharges this by
+computation. The shape mirrors `Ninst.pcFree` above, deliberately: it is the
+same kind of restriction on which instructions a `Func` may hold. -/
+
+/-- The instructions whose encoding the pre-EIP-8024 boundary walk understands:
+everything except the three stack-access instructions, which carry an immediate
+byte the walk does not skip. -/
+def Ninst.legacyEncoded : Ninst → Bool
+  | .dupn _ => false
+  | .swapn _ => false
+  | .exchange _ => false
+  | _ => true
+
+/-- Legacy encoding of one `Func` body, not following `.call` edges — the same
+over-approximation `Func.pcFreeBody` takes, for the same reason. -/
+def Func.legacyEncodedBody : Func → Bool
+  | .branch f g => f.legacyEncodedBody && g.legacyEncodedBody
+  | .last _ => true
+  | .next n f => Ninst.legacyEncoded n && f.legacyEncodedBody
+  | .call _ => true
+
+/-- Legacy encoding of a `Func` in a context: the body and every entry it could
+reach through a `.call`. -/
+def Func.legacyEncoded (fs : List Func) (f : Func) : Bool :=
+  f.legacyEncodedBody && fs.all Func.legacyEncodedBody
+
+/-- Legacy encoding of a whole program. -/
+def Prog.legacyEncoded (p : Prog) : Bool :=
+  Func.legacyEncoded (p.main :: p.aux) p.main
+
 /-! ## The forgetful bridge
 
 Every exact frame implies the loose one, so a `RunCompiled` derivation is a
@@ -185,7 +237,8 @@ lemma Devm.Burn.refl {devm : Devm} : Devm.Burn devm devm :=
     refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
-    transientStorage := rfl }
+    transientStorage := rfl, stateGas := rfl, accountReads := rfl,
+    storageReads := rfl }
 
 lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     (h : Devm.BurnBy cost devm devm') : Devm.Burn devm devm' :=
@@ -196,7 +249,8 @@ lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     error := h.error, accessedAddresses := h.accessedAddresses,
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
-    transientStorage := h.transientStorage }
+    transientStorage := h.transientStorage, stateGas := h.stateGas,
+    accountReads := h.accountReads, storageReads := h.storageReads }
 
 lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') : Devm.PopBurn xs devm devm' :=
@@ -207,7 +261,8 @@ lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm
     error := h.error, accessedAddresses := h.accessedAddresses,
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
-    transientStorage := h.transientStorage }
+    transientStorage := h.transientStorage, stateGas := h.stateGas,
+    accountReads := h.accountReads, storageReads := h.storageReads }
 
 lemma Ninst.Run.of_runCompiled {sevm : Sevm} {devm : Devm} {n : Ninst} {devm' : Devm}
     (h : Ninst.RunCompiled sevm devm n devm') : Ninst.Run sevm devm n devm' := by
@@ -250,7 +305,8 @@ lemma Devm.burnBy_setMach {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft)
     logs := rfl, refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
-    transientStorage := rfl }
+    transientStorage := rfl, stateGas := rfl, accountReads := rfl,
+    storageReads := rfl }
 
 /-- The two-instruction program `[JUMPDEST, STOP]` has a gas-exact run
 whenever it can pay for its entry `JUMPDEST`. -/
@@ -282,7 +338,8 @@ lemma Devm.BurnBy.of_burn {cost : Nat} {devm devm' : Devm}
     error := h.error, accessedAddresses := h.accessedAddresses,
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
-    transientStorage := h.transientStorage }
+    transientStorage := h.transientStorage, stateGas := h.stateGas,
+    accountReads := h.accountReads, storageReads := h.storageReads }
 
 /-- Upgrade a `Devm.PopBurn` to a `Devm.PopBurnBy` with the measured
 decrement. -/
@@ -295,7 +352,8 @@ lemma Devm.PopBurnBy.of_popBurn {xs : List B256} {cost : Nat} {devm devm' : Devm
     error := h.error, accessedAddresses := h.accessedAddresses,
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
-    transientStorage := h.transientStorage }
+    transientStorage := h.transientStorage, stateGas := h.stateGas,
+    accountReads := h.accountReads, storageReads := h.storageReads }
 
 /-- `chargeGas`'s gas equation, kept exact.  `Devm.burn_of_chargeGas` is the
 same fact with `(· ≥ ·)` in place of the equation. -/
@@ -920,6 +978,7 @@ lemma noPushBefore_peel2 {code : ByteArray} {k : Nat} {x y : UInt8} {zs : Bytes}
 at one. -/
 lemma Func.noPushBefore_next {code : ByteArray} {l : List (Nat × Func)}
     {k : Nat} {i : Ninst} {p : Func}
+    (hi : Ninst.legacyEncoded i = true)
     (sub : subcode code.toList k (Func.compile l k (Func.next i p)))
     (hb : noPushBefore code k 32 = true) :
     noPushBefore code (k + i.size) 32 = true ∧
@@ -936,6 +995,11 @@ lemma Func.noPushBefore_next {code : ByteArray} {l : List (Nat × Func)}
       exact noPushBefore_peel1 h_slice hb (by rw [Xinst.toInstType_toUInt8]; simp)
     | push bs le =>
       exact noPushBefore_peel h_slice hb rfl (peel_inst_of_push le)
+    -- The three EIP-8024 instructions are excluded by `hi`; see the
+    -- counterexample beside `Ninst.legacyEncoded`.
+    | dupn d => simp [Ninst.legacyEncoded] at hi
+    | swapn d => simp [Ninst.legacyEncoded] at hi
+    | exchange d => simp [Ninst.legacyEncoded] at hi
   exact ⟨key.left, by rw [h_pbs]; exact key.right⟩
 
 /-- **The boundary walk.**  A compiled `Func` block whose first byte no `PUSH`
@@ -944,24 +1008,27 @@ immediate covers ends at a byte no `PUSH` immediate covers.
 The induction mirrors `Func.compile`'s own recursion, and the boundary property
 travels alongside `subcode` exactly as the program counter already does. -/
 lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
-    ∀ (p : Func) (k : Nat), subcode code.toList k (Func.compile l k p) →
+    ∀ (p : Func) (k : Nat), p.legacyEncodedBody = true →
+      subcode code.toList k (Func.compile l k p) →
       noPushBefore code k 32 = true →
       noPushBefore code (k + compsize p) 32 = true := by
   intro p
   induction p with
   | last o =>
-    intro k sub hb
+    intro k _ sub hb
     exact (noPushBefore_peel1 (zs := []) sub hb
       (by rw [Linst.toInstType_toUInt8]; simp)).left
   | next i p ih =>
-    intro k sub hb
-    have key := Func.noPushBefore_next sub hb
-    have hend := ih (k + i.size) key.right key.left
+    intro k hleg sub hb
+    simp only [Func.legacyEncodedBody, Bool.and_eq_true] at hleg
+    have key := Func.noPushBefore_next hleg.1 sub hb
+    have hend := ih (k + i.size) hleg.2 key.right key.left
     have harith : k + i.size + compsize p = k + compsize (Func.next i p) := by
       simp only [compsize, Ninst.size_eq_length_toBytes]; omega
     rwa [harith] at hend
   | branch p q ihp ihq =>
-    intro k sub hb
+    intro k hleg sub hb
+    simp only [Func.legacyEncodedBody, Bool.and_eq_true] at hleg
     rcases of_subcode sub with ⟨cd, h_eq, h_slice⟩
     rcases of_bind_eq_some h_eq with ⟨pbs, h_pbs, h⟩
     rcases of_guard_eq_some h with ⟨h_loc, h'⟩
@@ -973,7 +1040,7 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
       (by rw [Jinst.toInstType_toUInt8]; simp)
     have hlenp : pbs.length = compsize p := Func.length_compile h_pbs
     have harm : noPushBefore code (k + 3 + 1 + compsize p) 32 = true := by
-      refine ihp (k + 3 + 1) ?_ h4.left
+      refine ihp (k + 3 + 1) hleg.1 ?_ h4.left
       rw [h_pbs]; exact List.slice_prefix h4.right
     have hjd : List.Slice code.toList (k + 3 + 1 + compsize p)
         (Jinst.toUInt8 .jumpdest :: qbs) := by
@@ -983,12 +1050,13 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
     have h_qbs' : Func.compile l (k + 3 + 1 + compsize p + 1) q = some qbs := by
       have hidx : k + 3 + 1 + compsize p + 1 = k + pbs.length + 4 + 1 := by omega
       rw [hidx]; exact h_qbs
-    have hend := ihq (k + 3 + 1 + compsize p + 1) (by rw [h_qbs']; exact h5.right) h5.left
+    have hend := ihq (k + 3 + 1 + compsize p + 1) hleg.2
+      (by rw [h_qbs']; exact h5.right) h5.left
     have harith : k + 3 + 1 + compsize p + 1 + compsize q
         = k + compsize (Func.branch p q) := by simp only [compsize]; omega
     rwa [harith] at hend
   | call n =>
-    intro k sub hb
+    intro k _ sub hb
     rcases of_subcode sub with ⟨cd, h_eq, h_slice⟩
     rcases of_bind_eq_some h_eq with ⟨⟨loc, r⟩, h_get, h⟩
     rcases of_guard_eq_some h with ⟨h_lt, h'⟩
@@ -1013,6 +1081,7 @@ lemma noPushBefore_succ_of_getElem? {code : ByteArray} {k : Nat} {b : UInt8}
 `JUMPDEST` that no `PUSH` immediate covers. -/
 lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
     ∀ (c : List Func) (k : Nat) (bs : Bytes),
+      c.all Func.legacyEncodedBody = true →
       Table.compile l (table k c) = some bs →
       List.Slice code.toList k bs →
       noPushBefore code k 32 = true →
@@ -1021,9 +1090,10 @@ lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
         code.toList[loc]? = some (Jinst.toUInt8 .jumpdest) := by
   intro c
   induction c with
-  | nil => intro k bs _ _ _ n loc r h_get; simp [table] at h_get
+  | nil => intro k bs _ _ _ _ n loc r h_get; simp [table] at h_get
   | cons g c' ih =>
-    intro k bs h_cmp h_slice hb n loc r h_get
+    intro k bs hleg h_cmp h_slice hb n loc r h_get
+    simp only [List.all_cons, Bool.and_eq_true] at hleg
     simp only [table] at h_cmp h_get
     rcases Table.compile_cons_eq_some h_cmp with ⟨cg, crest, h_cg, h_crest, h_bs⟩
     rw [h_bs] at h_slice
@@ -1038,7 +1108,7 @@ lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
       have h1 := noPushBefore_peel1 h_slice hb (by rw [Jinst.toInstType_toUInt8]; simp)
       have hlen : cg.length = compsize g := Func.length_compile h_cg
       have harm : noPushBefore code (k + 1 + compsize g) 32 = true := by
-        refine @Func.noPushBefore_compile code l g (k + 1) ?_ h1.left
+        refine @Func.noPushBefore_compile code l g (k + 1) hleg.1 ?_ h1.left
         rw [h_cg]; exact List.slice_prefix h1.right
       have hrest : List.Slice code.toList (k + 1 + compsize g) crest := by
         have hs := List.slice_suffix h1.right
@@ -1046,7 +1116,7 @@ lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
       have hidx : k + 1 + compsize g = k + compsize g + 1 := by omega
       rw [hidx] at harm hrest
       simp only [List.getElem?_cons_succ] at h_get
-      exact ih (k + compsize g + 1) crest h_crest hrest harm m loc r h_get
+      exact ih (k + compsize g + 1) crest hleg.2 h_crest hrest harm m loc r h_get
 
 /-! ### The `Prog`-level consequences
 
@@ -1058,6 +1128,7 @@ consumed at exactly the two nodes that emit a jump. -/
 `.call` node, and the program's own entry at pc 0 -- is a valid jump
 destination, and its body starts at a position no `PUSH` immediate covers. -/
 theorem Prog.jumpable_of_get?_table {f fs} {code : ByteArray} {n loc : Nat} {r : Func}
+    (hleg : Prog.legacyEncoded ⟨f, fs⟩ = true)
     (h_eq : some code.toList = Prog.compile ⟨f, fs⟩)
     (h_get : (table 0 (f :: fs))[n]? = some (loc, r)) :
     jumpable code loc = true ∧ noPushBefore code (loc + 1) 32 = true := by
@@ -1065,7 +1136,11 @@ theorem Prog.jumpable_of_get?_table {f fs} {code : ByteArray} {n loc : Nat} {r :
   have hcmp : Table.compile (table 0 (f :: fs)) (table 0 (f :: fs)) = some code.toList :=
     h_eq.symm
   have hw := @Table.noPushBefore_compile code (table 0 (f :: fs)) (f :: fs) 0
-    code.toList hcmp (List.slice_refl _) rfl n loc r h_get
+    code.toList
+    (by
+      simp only [Prog.legacyEncoded, Func.legacyEncoded, Bool.and_eq_true] at hleg
+      exact hleg.2)
+    hcmp (List.slice_refl _) rfl n loc r h_get
   have hlt := ByteArray.lt_size_of_getElem?_eq_some hw.right
   have hbyte := ByteArray.getElem_of_getElem?_eq_some hw.right hlt
   refine ⟨?_, noPushBefore_succ_of_getElem? hw.right
@@ -1083,6 +1158,7 @@ the first arm's boundary comes from the `PUSH2`/`JUMPI` pair, and the target's
 from walking the first arm. -/
 lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
     {l : List (Nat × Func)} {p q : Func}
+    (hleg : (Func.branch p q).legacyEncodedBody = true)
     (h : subcode code.toList k (Func.compile l k (Func.branch p q)))
     (hb : noPushBefore code k 32 = true) :
     ∃ loc : Nat,
@@ -1117,7 +1193,9 @@ lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
   have hsubp : subcode code.toList (k + 4) (Func.compile l (k + 4) p) := by
     rw [h_pbs]; exact List.slice_prefix h4.right
   have harm : noPushBefore code (k + 4 + compsize p) 32 = true :=
-    @Func.noPushBefore_compile code l p (k + 4) hsubp h4.left
+    @Func.noPushBefore_compile code l p (k + 4)
+      (by simp only [Func.legacyEncodedBody, Bool.and_eq_true] at hleg; exact hleg.1)
+      hsubp h4.left
   have hjd : List.Slice code.toList (k + 4 + compsize p)
       (Jinst.toUInt8 .jumpdest :: qbs) := by
     have hs := List.slice_suffix h4.right
@@ -1147,10 +1225,17 @@ and `pop` on states whose success conditions the relation's premises supply.
 
 The frames pin every `Devm` field, so the state the machine computes and the
 state the derivation names are identified by extensionality through the
-fourteen canonical projections. -/
+seventeen canonical projections. -/
 
-/-- Extensionality through the fourteen canonical projections -- exactly the
-fields a `Devm.Rel` frame relates, so an all-equal frame identifies states. -/
+/-- Extensionality through the seventeen canonical projections -- exactly the
+fields a `Devm.Rel` frame relates, so an all-equal frame identifies states.
+
+Fourteen until the Amsterdam series: `Mach` gained `stateGas` (goal B) and
+`Meta` gained `accountReads` and `storageReads` (goal C), and an
+extensionality lemma that does not mention a field is false, not merely weak —
+two machines differing only in the reservoir would satisfy every hypothesis.
+Under Prague and BPO2 all three are invariantly their empty values, so every
+consumer discharges the new equalities by `rfl`. -/
 lemma Devm.eq_of_proj {a b : Devm}
     (h_stack : a.stack = b.stack) (h_memory : a.memory = b.memory)
     (h_gasLeft : a.gasLeft = b.gasLeft) (h_logs : a.logs = b.logs)
@@ -1161,13 +1246,18 @@ lemma Devm.eq_of_proj {a b : Devm}
     (h_aa : a.accessedAddresses = b.accessedAddresses)
     (h_ask : a.accessedStorageKeys = b.accessedStorageKeys)
     (h_state : a.state = b.state) (h_ca : a.createdAccounts = b.createdAccounts)
-    (h_ts : a.transientStorage = b.transientStorage) : a = b := by
-  rcases a with ⟨⟨s₁, m₁, g₁⟩, ⟨l₁, r₁, o₁, d₁, rd₁, e₁, aa₁, ak₁, ca₁⟩, ⟨st₁, ts₁⟩⟩
-  rcases b with ⟨⟨s₂, m₂, g₂⟩, ⟨l₂, r₂, o₂, d₂, rd₂, e₂, aa₂, ak₂, ca₂⟩, ⟨st₂, ts₂⟩⟩
+    (h_ts : a.transientStorage = b.transientStorage)
+    (h_stateGas : a.stateGas = b.stateGas)
+    (h_accountReads : a.meta.accountReads = b.meta.accountReads)
+    (h_storageReads : a.meta.storageReads = b.meta.storageReads) : a = b := by
+  rcases a with ⟨⟨s₁, m₁, g₁, sg₁⟩,
+    ⟨l₁, r₁, o₁, d₁, rd₁, e₁, aa₁, ak₁, ca₁, ar₁, sr₁⟩, ⟨st₁, ts₁⟩⟩
+  rcases b with ⟨⟨s₂, m₂, g₂, sg₂⟩,
+    ⟨l₂, r₂, o₂, d₂, rd₂, e₂, aa₂, ak₂, ca₂, ar₂, sr₂⟩, ⟨st₂, ts₂⟩⟩
   simp only [Devm.stack, Devm.memory, Devm.gasLeft, Devm.logs,
     Devm.refundCounter, Devm.output, Devm.accountsToDelete, Devm.returnData,
     Devm.error, Devm.accessedAddresses, Devm.accessedStorageKeys, Devm.state,
-    Devm.createdAccounts, Devm.transientStorage] at *
+    Devm.createdAccounts, Devm.transientStorage, Devm.stateGas] at *
   subst_vars
   rfl
 
@@ -1180,6 +1270,12 @@ lemma Devm.memory_setMach {devm : Devm} {m : Mach} :
 
 lemma Devm.gasLeft_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).gasLeft = m.gasLeft := rfl
+
+/-- The state-gas reservoir is a machine field like the other three, so a
+machine write carries it too. The forward walk needs this the moment a
+successor machine is written in terms of another successor machine. -/
+lemma Devm.stateGas_setMach {devm : Devm} {m : Mach} :
+    (devm.setMach m).stateGas = m.stateGas := rfl
 
 /-- `chargeGas`, evaluated forward: with the gas to pay, it succeeds and the
 whole account is the decrement. -/
@@ -1216,12 +1312,12 @@ lemma Evm.push_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {xs : Bytes}
     Evm.step ⟨pc, sevm, devm⟩ =
       .cont (pc + xs.length + 1)
         (devm.setMach
-          ⟨xs.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) := by
+          ⟨xs.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) := by
   rw [Evm.step_next h_at, Ninst.step_push, if_neg hne]
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
-    ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) h_room]
+    ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) h_room]
   rfl
 
 /-- A `JUMPDEST` continues to the next byte, and its exact burn frame lands
@@ -1237,7 +1333,8 @@ lemma Evm.jumpdest_cont {pc : Nat} {sevm : Sevm} {devm tgt : Devm}
       h_burn.refundCounter h_burn.output h_burn.accountsToDelete
       h_burn.returnData h_burn.error h_burn.accessedAddresses
       h_burn.accessedStorageKeys h_burn.state h_burn.createdAccounts
-      h_burn.transientStorage
+      h_burn.transientStorage h_burn.stateGas h_burn.accountReads
+      h_burn.storageReads
     show devm.gasLeft - gJumpdest = tgt.gasLeft
     have := h_burn.gasLeft; omega
   rw [Evm.step_jump h_at]
@@ -1267,7 +1364,8 @@ lemma Evm.jumpi_cont_zero {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
       (devm := devm.setMach ⟨(0 : B256) :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach]
     rw [chargeGas_eq_ok
       (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     simp only [if_true]
@@ -1294,7 +1392,8 @@ lemma Evm.jumpi_cont_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {x w : B256}
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
       (devm := devm.setMach ⟨w :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach]
     rw [chargeGas_eq_ok
       (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     simp only [if_neg h_ne, Except.assert, if_pos h_jp]
@@ -1357,6 +1456,25 @@ lemma Ninst.exec_of_stepRun {pc : Nat} {sevm : Sevm} {devm devmMid : Devm}
     refine ⟨Exec.cont ?_ exc'⟩
     rw [hstep, Ninst.step_push, ← h_step.2]
     rfl
+  -- EIP-8024: `Step.ofExecution`-shaped like `reg` and `push`.
+  | dupn d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at h_step
+    refine ⟨Exec.cont ?_ exc'⟩
+    rw [hstep]
+    simp only [Ninst.step, ← h_step.2]
+    rfl
+  | swapn d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at h_step
+    refine ⟨Exec.cont ?_ exc'⟩
+    rw [hstep]
+    simp only [Ninst.step, ← h_step.2]
+    rfl
+  | exchange d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at h_step
+    refine ⟨Exec.cont ?_ exc'⟩
+    rw [hstep]
+    simp only [Ninst.step, ← h_step.2]
+    rfl
   | exec x =>
     rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
     cases hx : Xinst.step sevm devm x with
@@ -1402,10 +1520,10 @@ lemma Evm.branch_zero_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     Evm.step ⟨pc, sevm, devm⟩ =
       .cont (pc + 3)
         (devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) ∧
     Evm.step ⟨pc + 3, sevm,
         devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩⟩ =
       .cont (pc + 4) tgt := by
   have h_stk : devm.stack = (0 : B256) :: tgt.stack := h_pop.stack
   have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gHigh) := h_pop.gasLeft
@@ -1417,18 +1535,22 @@ lemma Evm.branch_zero_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     exact h1
   · have h2 := Evm.jumpi_cont_zero
       (devm := devm.setMach
-        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩)
       (x := loc.toB256) (s := tgt.stack) h_jumpi
       (by show loc.toB256 :: devm.stack = _; rw [h_stk])
       (by show gHigh ≤ devm.gasLeft - gVerylow; omega)
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach]
       at h2
     have h_fin : devm.setMach
-        ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩ = tgt := by
-      refine Devm.eq_of_proj rfl h_pop.memory ?_ h_pop.logs h_pop.refundCounter
+        ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh, devm.stateGas⟩ = tgt := by
+      refine Devm.eq_of_proj (a := devm.setMach
+          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh, devm.stateGas⟩)
+        rfl h_pop.memory ?_ h_pop.logs h_pop.refundCounter
         h_pop.output h_pop.accountsToDelete h_pop.returnData h_pop.error
         h_pop.accessedAddresses h_pop.accessedStorageKeys h_pop.state
-        h_pop.createdAccounts h_pop.transientStorage
+        h_pop.createdAccounts h_pop.transientStorage h_pop.stateGas
+        h_pop.accountReads h_pop.storageReads
       show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft
       omega
     rw [h_fin] at h2
@@ -1450,16 +1572,16 @@ lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     Evm.step ⟨pc, sevm, devm⟩ =
       .cont (pc + 3)
         (devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) ∧
     Evm.step ⟨pc + 3, sevm,
         devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩⟩ =
       .cont loc
         (devm.setMach
-          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩) ∧
+          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh, devm.stateGas⟩) ∧
     Evm.step ⟨loc, sevm,
         devm.setMach
-          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh⟩⟩ =
+          ⟨tgt.stack, devm.memory, devm.gasLeft - gVerylow - gHigh, devm.stateGas⟩⟩ =
       .cont (loc + 1) tgt := by
   have h_stk : devm.stack = w :: tgt.stack := h_pop.stack
   have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gHigh + gJumpdest) :=
@@ -1476,12 +1598,13 @@ lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     exact h1
   · have h2 := Evm.jumpi_cont_jump
       (devm := devm.setMach
-        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩)
       (x := loc.toB256) (w := w) (s := tgt.stack) h_jumpi
       (by show loc.toB256 :: devm.stack = _; rw [h_stk]) h_ne
       (by show gHigh ≤ devm.gasLeft - gVerylow; omega)
       (by rw [h_toNat]; exact h_jp)
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach]
       at h2
     rw [h_toNat] at h2
     exact h2
@@ -1495,7 +1618,9 @@ lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
         accessedAddresses := h_pop.accessedAddresses,
         accessedStorageKeys := h_pop.accessedStorageKeys,
         state := h_pop.state, createdAccounts := h_pop.createdAccounts,
-        transientStorage := h_pop.transientStorage }
+        transientStorage := h_pop.transientStorage,
+        stateGas := h_pop.stateGas, accountReads := h_pop.accountReads,
+        storageReads := h_pop.storageReads }
     show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft + gJumpdest
     omega
 
@@ -1513,16 +1638,16 @@ lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     Evm.step ⟨pc, sevm, devm⟩ =
       .cont (pc + 3)
         (devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) ∧
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) ∧
     Evm.step ⟨pc + 3, sevm,
         devm.setMach
-          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩⟩ =
+          ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩⟩ =
       .cont loc
         (devm.setMach
-          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid⟩) ∧
+          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid, devm.stateGas⟩) ∧
     Evm.step ⟨loc, sevm,
         devm.setMach
-          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid⟩⟩ =
+          ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow - gMid, devm.stateGas⟩⟩ =
       .cont (loc + 1) tgt := by
   have h_gas : devm.gasLeft = tgt.gasLeft + (gVerylow + gMid + gJumpdest) :=
     h_burn.gasLeft
@@ -1538,11 +1663,12 @@ lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     exact h1
   · have h2 := Evm.jump_cont
       (devm := devm.setMach
-        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+        ⟨loc.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩)
       (x := loc.toB256) (s := devm.stack) h_jump rfl
       (by show gMid ≤ devm.gasLeft - gVerylow; omega)
       (by rw [h_toNat]; exact h_jp)
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach]
       at h2
     rw [h_toNat] at h2
     exact h2
@@ -1556,6 +1682,8 @@ lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
         accessedAddresses := h_burn.accessedAddresses,
         accessedStorageKeys := h_burn.accessedStorageKeys,
         state := h_burn.state, createdAccounts := h_burn.createdAccounts,
+        stateGas := h_burn.stateGas, accountReads := h_burn.accountReads,
+        storageReads := h_burn.storageReads,
         transientStorage := h_burn.transientStorage }
     show devm.gasLeft - gVerylow - gMid = tgt.gasLeft + gJumpdest
     omega
@@ -1579,6 +1707,7 @@ theorem Func.exec_of_runCompiled_core :
       Func.RunCompiled FS sevm devm p devm' →
       some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩ →
       FS = f₀ :: fs' →
+      Func.legacyEncoded (f₀ :: fs') p = true →
       ∀ pc,
         subcode sevm.code.toList pc (Func.compile (table 0 (f₀ :: fs')) pc p) →
         noPushBefore sevm.code pc 32 = true →
@@ -1586,38 +1715,60 @@ theorem Func.exec_of_runCompiled_core :
   intro f₀ fs' sevm FS devm p devm' h_run
   induction h_run with
   | zero h_room h_pop h_f ih =>
-    intro h_eq hFS pc sub hb
-    rcases subcode_compile_branch_jumpable sub hb with
+    intro h_eq hFS hleg pc sub hb
+    have hleg' := hleg
+    simp only [Func.legacyEncoded, Func.legacyEncodedBody, Bool.and_eq_true]
+      at hleg'
+    rcases subcode_compile_branch_jumpable
+      (by simp only [Func.legacyEncodedBody, Bool.and_eq_true]
+          exact ⟨hleg'.1.1, hleg'.1.2⟩) sub hb with
       ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
     rcases Evm.branch_zero_steps h_push h_jumpi h_loc h_room h_pop with ⟨h1, h2⟩
-    obtain ⟨excf⟩ := ih h_eq hFS (pc + 4) h_subp h_bp
+    obtain ⟨excf⟩ := ih h_eq hFS
+      (by simp only [Func.legacyEncoded, Bool.and_eq_true]
+          exact ⟨hleg'.1.1, hleg'.2⟩) (pc + 4) h_subp h_bp
     exact ⟨Exec.cont h1 (Exec.cont h2 excf)⟩
   | succ h_ne h_room h_pop h_g ih =>
-    intro h_eq hFS pc sub hb
-    rcases subcode_compile_branch_jumpable sub hb with
+    intro h_eq hFS hleg pc sub hb
+    have hleg' := hleg
+    simp only [Func.legacyEncoded, Func.legacyEncodedBody, Bool.and_eq_true]
+      at hleg'
+    rcases subcode_compile_branch_jumpable
+      (by simp only [Func.legacyEncodedBody, Bool.and_eq_true]
+          exact ⟨hleg'.1.1, hleg'.1.2⟩) sub hb with
       ⟨loc, h_loc_eq, h_loc, h_push, h_jumpi, h_subp, h_bp, h_jd, h_jp, h_subq, h_bq⟩
     rcases Evm.branch_succ_steps h_push h_jumpi h_jd h_jp h_loc h_ne h_room h_pop
       with ⟨h1, h2, h3⟩
-    obtain ⟨excg⟩ := ih h_eq hFS (loc + 1) h_subq h_bq
+    obtain ⟨excg⟩ := ih h_eq hFS
+      (by simp only [Func.legacyEncoded, Bool.and_eq_true]
+          exact ⟨hleg'.1.2, hleg'.2⟩) (loc + 1) h_subq h_bq
     exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excg))⟩
   | last h_lin =>
-    intro h_eq hFS pc sub hb
+    intro h_eq hFS _ pc sub hb
     refine ⟨Exec.halt ?_⟩
     rw [Evm.step_last (Linst.at_of_slice sub)]
     exact congrArg Step.halt h_lin
   | next h_n h_f ih =>
-    intro h_eq hFS pc sub hb
-    rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
+    intro h_eq hFS hleg pc sub hb
+    have hleg' := hleg
+    simp only [Func.legacyEncoded, Func.legacyEncodedBody, Bool.and_eq_true]
+      at hleg'
+    rcases Func.noPushBefore_next hleg'.1.1 sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
     simp [pure] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
-      h_filled (h_step pc) (ih h_eq hFS _ sub' hb')
+      h_filled (h_step pc)
+      (ih h_eq hFS
+        (by simp only [Func.legacyEncoded, Bool.and_eq_true]
+            exact ⟨hleg'.1.2, hleg'.2⟩) _ sub' hb')
   | call h_get h_room h_burn h_f ih =>
-    intro h_eq hFS pc sub hb
+    intro h_eq hFS hleg pc sub hb
     subst hFS
+    have hleg' := hleg
+    simp only [Func.legacyEncoded, Bool.and_eq_true] at hleg'
     rcases subcode_compile_call sub with ⟨loc, p₁, h_get_tab, h_loc, h_pushAt, h_jump⟩
     have h_pf := (Prog.get?_table (m := 0)).symm.trans
       (congrArg (Prod.snd <$> ·) h_get_tab)
@@ -1625,11 +1776,22 @@ theorem Func.exec_of_runCompiled_core :
     simp only [Option.map_eq_map, Option.map_some, Option.some.injEq] at h_pf
     subst h_pf
     rcases subcode_of_get?_eq_some h_eq h_get_tab with ⟨h_jd, h_subf⟩
-    have h_jpb := Prog.jumpable_of_get?_table h_eq h_get_tab
+    have hall : (f₀ :: fs').all Func.legacyEncodedBody = true := hleg'.2
+    have h_jpb := Prog.jumpable_of_get?_table
+      (by
+        simp only [Prog.legacyEncoded, Func.legacyEncoded, Bool.and_eq_true]
+        refine ⟨?_, hall⟩
+        exact List.all_eq_true.mp hall f₀ (by simp))
+      h_eq h_get_tab
     rcases h_pushAt with ⟨le, h_push⟩
     rcases Evm.call_steps (le := le) h_push h_jump h_jd h_jpb.1 h_loc h_room h_burn
       with ⟨h1, h2, h3⟩
-    obtain ⟨excf⟩ := ih h_eq rfl (loc + 1) h_subf h_jpb.2
+    obtain ⟨excf⟩ := ih h_eq rfl
+      (by
+        simp only [Func.legacyEncoded, Bool.and_eq_true]
+        refine ⟨?_, hall⟩
+        exact List.all_eq_true.mp hall _ (List.mem_of_getElem? h_get))
+      (loc + 1) h_subf h_jpb.2
     exact ⟨Exec.cont h1 (Exec.cont h2 (Exec.cont h3 excf))⟩
 
 /-- The liveness direction at the program level: a gas-exact run of a
@@ -1639,6 +1801,7 @@ with. -/
 theorem Prog.exec_of_runCompiled {sevm : Sevm} {pre : Devm} {p : Prog}
     {post : Devm}
     (h : Prog.RunCompiled sevm pre p post)
+    (h_leg : Prog.legacyEncoded p = true)
     (h_eq : some sevm.code.toList = p.compile) :
     exec ⟨0, sevm, pre⟩ = .ok post := by
   rcases h with ⟨mid, h_burn, h_run⟩
@@ -1646,11 +1809,11 @@ theorem Prog.exec_of_runCompiled {sevm : Sevm} {pre : Devm} {p : Prog}
   have h_get : (table 0 (p.main :: p.aux))[0]? = some (0, p.main) := rfl
   rcases subcode_of_get?_eq_some h_eq' h_get with ⟨h_jd, h_sub⟩
   have h_npb : noPushBefore sevm.code 1 32 = true :=
-    (Prog.jumpable_of_get?_table h_eq' h_get).2
+    (Prog.jumpable_of_get?_table h_leg h_eq' h_get).2
   have h1 : Evm.step ⟨0, sevm, pre⟩ = .cont 1 mid :=
     Evm.jumpdest_cont h_jd h_burn
   obtain ⟨exc⟩ :=
-    Func.exec_of_runCompiled_core h_run h_eq' rfl 1 h_sub h_npb
+    Func.exec_of_runCompiled_core h_run h_eq' rfl h_leg 1 h_sub h_npb
   rw [← exec_iff_exec_eq]
   exact ⟨Exec.cont h1 exc⟩
 
@@ -1673,15 +1836,23 @@ What this does **not** say, so that nothing downstream overreads it:
   error types differ and no error taxonomy is introduced.
 
 The `pcFree` hypothesis is consumed by the forward direction alone; the
-liveness direction holds without it. -/
+liveness direction holds without it.
+
+The `legacyEncoded` hypothesis is the EIP-8024 sibling of `pcFree`, and the
+liveness direction *does* need it: `DUPN`/`SWAPN`/`EXCHANGE` carry an immediate
+byte the jump-destination walk does not skip, so a program containing one can
+compile to bytes whose boundary property fails. See `Ninst.legacyEncoded` for
+the counterexample. Blanc's compiler emits none of the three, so every
+concrete program discharges it by computation. -/
 theorem Prog.runCompiled_iff_exec {sevm : Sevm} {pre : Devm} {p : Prog}
     {post : Devm}
     (h_pcf : Prog.pcFree p = true)
+    (h_leg : Prog.legacyEncoded p = true)
     (h_eq : some sevm.code.toList = p.compile) :
     Prog.RunCompiled sevm pre p post ↔ exec ⟨0, sevm, pre⟩ = .ok post := by
   constructor
   · intro h
-    exact Prog.exec_of_runCompiled h h_eq
+    exact Prog.exec_of_runCompiled h h_leg h_eq
   · intro h
     obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h
     exact Prog.runCompiled_of_exec sevm pre p post h_pcf exc h_eq

@@ -179,12 +179,12 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
     (haccept : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨depositLengthWord sevm.data head ::
-          depositOffsetWord sevm.data head :: stack, memory, G⟩)
+          depositOffsetWord sevm.data head :: stack, memory, G, base.stateGas⟩)
       (mstoreAt (Nat.toB256 lengthWord) +++
         mstoreAt (Nat.toB256 offsetWord) +++ body) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨depositOffsetWord sevm.data head :: stack, memory, G + 143⟩)
+        ⟨depositOffsetWord sevm.data head :: stack, memory, G + 143, base.stateGas⟩)
       (validateDynamicTailAfterArg
         (Nat.toB256 offsetWord) (Nat.toB256 lengthWord) body) ex := by
   let offsetNat := dynamicOffset sevm.data head
@@ -349,11 +349,11 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨depositOffsetWord sevm.data head :: stack, memory,
-          G + failure.afterArgGas⟩)
+          G + failure.afterArgGas, base.stateGas⟩)
       (validateDynamicTailAfterArg offsetWord lengthWord body)
       (.error (.revert,
         (base.setMach
-          ⟨failure.finalStack sevm.data head ++ stack, memory, G⟩).withOutput
+          ⟨failure.finalStack sevm.data head ++ stack, memory, G, base.stateGas⟩).withOutput
             [])) := by
   let offsetNat := dynamicOffset sevm.data head
   let lengthNat := dynamicLength sevm.data head
@@ -414,7 +414,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
         have hguard := Func.runCompiledTo_emptyRevertGuard
             (sevm := sevm)
             (devm := base.setMach
-              ⟨(1 : B256) :: offset :: stack, memory, G + 45 - 15⟩)
+              ⟨(1 : B256) :: offset :: stack, memory, G + 45 - 15, base.stateGas⟩)
             (G := G) (w := (1 : B256)) (stack := offset :: stack)
             (otherwise := checkLengthWord)
             hrev (by decide) rfl (by
@@ -471,7 +471,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
         simpa only [Devm.setMach_setMach, Devm.memory_setMach] using
           (Func.runCompiledTo_emptyRevertGuard
             (devm := base.setMach
-              ⟨(1 : B256) :: offset :: stack, memory, G + 44 - 14⟩)
+              ⟨(1 : B256) :: offset :: stack, memory, G + 44 - 14, base.stateGas⟩)
             (G := G) (w := (1 : B256)) (stack := offset :: stack)
             (otherwise := loadLength)
             hrev (by decide) rfl (by
@@ -547,7 +547,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           checkLength
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [checkLength]
         func_run (5) [0, 1]
         all_goals try {
@@ -558,7 +558,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           (Func.runCompiledTo_emptyRevertGuard
             (devm := base.setMach
               ⟨(1 : B256) :: length :: offset :: stack, memory,
-                G + 45 - 15⟩)
+                G + 45 - 15, base.stateGas⟩)
             (G := G) (w := (1 : B256))
             (stack := length :: offset :: stack)
             (otherwise := checkPaddedEnd)
@@ -573,7 +573,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           loadLength
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [loadLength]
         func_run (4) [4 + offset]
         all_goals try {
@@ -586,7 +586,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           checkLengthWord
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [checkLengthWord]
         func_run (6) [36 + offset, 0]
         all_goals try {
@@ -600,7 +600,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
             ((.call emptyRevertSlot) <?> checkLengthWord))
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         func_run (6) [1, 0]
         all_goals try {
           simp only [Devm.stack_setMach, List.length_cons] at *
@@ -696,7 +696,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           checkPaddedEnd
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [checkPaddedEnd]
         func_run (12)
           [31 + length, ~~~ (31 : B256), rounded, offset + rounded,
@@ -709,7 +709,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           (Func.runCompiledTo_emptyRevertGuard
             (devm := base.setMach
               ⟨(1 : B256) :: length :: offset :: stack, memory,
-                G + 65 - 35⟩)
+                G + 65 - 35, base.stateGas⟩)
             (G := G) (w := (1 : B256))
             (stack := length :: offset :: stack) (otherwise := accept)
             hrev (by decide) rfl (by
@@ -723,7 +723,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           checkLength
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [checkLength]
         func_run (6) [1, 0]
         all_goals try {
@@ -735,7 +735,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           loadLength
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [loadLength]
         func_run (4) [4 + offset]
         all_goals try {
@@ -748,7 +748,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
           checkLengthWord
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         dsimp only [checkLengthWord]
         func_run (6) [36 + offset, 0]
         all_goals try {
@@ -762,7 +762,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
             ((.call emptyRevertSlot) <?> checkLengthWord))
           (.error (.revert,
             (base.setMach
-              ⟨length :: offset :: stack, memory, G⟩).withOutput [])) := by
+              ⟨length :: offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         func_run (6) [1, 0]
         all_goals try {
           simp only [Devm.stack_setMach, List.length_cons] at *
@@ -817,7 +817,7 @@ private theorem depositTail0Stores_success_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[depositLengthWord sevm.data 0,
-          depositOffsetWord sevm.data 0], Mem.empty, G + 23⟩)
+          depositOffsetWord sevm.data 0], Mem.empty, G + 23, base.stateGas⟩)
       (mstoreAt 3 +++ mstoreAt 0 +++ body) ex := by
   func_run (2) [12]
   case h_ext =>
@@ -845,7 +845,7 @@ private theorem depositTail1Stores_success_runCompiledTo
       (base.setMach
         ⟨[depositLengthWord sevm.data 1,
           depositOffsetWord sevm.data 1],
-          depositDecodedTail0Memory sevm.data, G + 15⟩)
+          depositDecodedTail0Memory sevm.data, G + 15, base.stateGas⟩)
       (mstoreAt 4 +++ mstoreAt 1 +++ body) ex := by
   func_run (2) [3]
   case h_ext =>
@@ -894,13 +894,13 @@ private theorem depositTail2OffsetStore_success_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[depositOffsetWord sevm.data 2],
-          depositDecodedTail2LengthMemory sevm.data, G + 6⟩)
+          depositDecodedTail2LengthMemory sevm.data, G + 6, base.stateGas⟩)
       (mstoreAt 2 +++ body) ex := by
   have hbody' : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], (depositDecodedTail2LengthMemory sevm.data).write
           ((2 : B256) * 32).toNat
-          (depositOffsetWord sevm.data 2).toBytes, G⟩)
+          (depositOffsetWord sevm.data 2).toBytes, G, base.stateGas⟩)
       body ex := by
     rw [show ((2 : B256) * 32).toNat = 64 by decide +kernel,
       depositDecodedTail2Memory_eq]
@@ -933,7 +933,7 @@ private theorem depositTail2Stores_success_runCompiledTo
       (base.setMach
         ⟨[depositLengthWord sevm.data 2,
           depositOffsetWord sevm.data 2],
-          depositDecodedTail1Memory sevm.data, G + 15⟩)
+          depositDecodedTail1Memory sevm.data, G + 15, base.stateGas⟩)
       (mstoreAt 5 +++ mstoreAt 2 +++ body) ex := by
   have hoffsetRun :=
     depositTail2OffsetStore_success_runCompiledTo (base := base) hbody
@@ -943,7 +943,7 @@ private theorem depositTail2Stores_success_runCompiledTo
           (depositDecodedTail1Memory sevm.data).write
             ((5 : B256) * 32).toNat
             (depositLengthWord sevm.data 2).toBytes,
-          G + 6⟩)
+          G + 6, base.stateGas⟩)
       (mstoreAt 2 +++ body) ex := by
     rw [show ((5 : B256) * 32).toNat = 160 by decide +kernel]
     simpa only [depositDecodedTail2LengthMemory] using hoffsetRun
@@ -998,7 +998,7 @@ private theorem validateDynamicTail_failure_runCompiledTo
         (Nat.toB256 offsetWord) (Nat.toB256 lengthWord) body)
       (.error (.revert,
         (base.setMach
-          ⟨failure.finalStack sevm.data headNat ++ stack, memory, G⟩).withOutput
+          ⟨failure.finalStack sevm.data headNat ++ stack, memory, G, base.stateGas⟩).withOutput
             [])) := by
   have hafter := validateDynamicTailAfterArg_failure_runCompiledTo
     (base := base) (memory := memory) (stack := stack) (G := G)
@@ -1050,7 +1050,7 @@ private theorem validateDynamicTail_success_runCompiledTo
     (haccept : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨depositLengthWord sevm.data headNat ::
-          depositOffsetWord sevm.data headNat :: stack, memory, G⟩)
+          depositOffsetWord sevm.data headNat :: stack, memory, G, base.stateGas⟩)
       (mstoreAt (Nat.toB256 lengthWord) +++
         mstoreAt (Nat.toB256 offsetWord) +++ body) ex) :
     Func.RunCompiledTo fs sevm
@@ -1095,7 +1095,7 @@ private theorem depositTail2_success_runCompiledTo
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], depositDecodedTail1Memory sevm.data, G + 164⟩)
+        ⟨[], depositDecodedTail1Memory sevm.data, G + 164, base.stateGas⟩)
       (validateDynamicTail 2 2 5 body) ex := by
   have hstores := depositTail2Stores_success_runCompiledTo
     (base := base) hbody
@@ -1122,7 +1122,7 @@ private theorem depositTail1_success_runCompiledTo
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], depositDecodedTail0Memory sevm.data, G + 328⟩)
+        ⟨[], depositDecodedTail0Memory sevm.data, G + 328, base.stateGas⟩)
       (validateDynamicTail 1 1 4
         (validateDynamicTail 2 2 5 body)) ex := by
   have htail2 := depositTail2_success_runCompiledTo
@@ -1214,7 +1214,7 @@ theorem validateDepositAbi_failure_runCompiledTo
       (.error (.revert,
         (base.setMach
           ⟨failure.finalStack sevm.data,
-            failure.finalMemory sevm.data, G⟩).withOutput [])) := by
+            failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) := by
   cases failure with
   | head =>
       change ¬ 132 ≤ sevm.data.length at hfailure

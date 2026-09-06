@@ -50,7 +50,7 @@ structure DelegatecallSpawnDescriptor
 
   extensionEq :
     (callPre.setMach
-      ⟨stackTail, callPre.memory, callPre.gasLeft⟩).extCost
+      ⟨stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩).extCost
         [⟨inputOffsetWord.toNat, inputSizeWord.toNat⟩,
          ⟨outputOffsetWord.toNat, outputSizeWord.toNat⟩] =
       extensionCost
@@ -59,7 +59,7 @@ structure DelegatecallSpawnDescriptor
     accessDelegation
       (addAccessedAddress
         (callPre.setMach
-          ⟨stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         codeWord.toAdr)
       codeWord.toAdr =
       ⟨delegated, resolvedCodeAddress, code, delegationGas, afterAccess⟩
@@ -68,7 +68,7 @@ structure DelegatecallSpawnDescriptor
     accessCost codeWord.toAdr
         (callPre.setMach
           ⟨stackTail, callPre.memory,
-            callPre.gasLeft⟩).accessedAddresses +
+            callPre.gasLeft, callPre.stateGas⟩).accessedAddresses +
       delegationGas = accessCharge
 
   splitEq :
@@ -98,14 +98,14 @@ theorem DelegatecallSpawnDescriptor.afterAccess_memory
       (accessDelegation
         (addAccessedAddress
           (callPre.setMach
-            ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+            ⟨d.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
           d.codeWord.toAdr)
         d.codeWord.toAdr).2.2.2.2.memory = callPre.memory := by
     dsimp only [accessDelegation]
     cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨d.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         d.codeWord.toAdr).state.getCode d.codeWord.toAdr) <;> rfl
   have resolvedMemory := congrArg
     (fun result : Bool × Adr × ByteArray × Nat × Devm =>

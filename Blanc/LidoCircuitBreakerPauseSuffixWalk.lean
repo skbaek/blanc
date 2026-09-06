@@ -1224,7 +1224,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
         ⟨[Nat.toB256 (Gb + 198), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 198⟩)
+          Gb + 198, post1.stateGas⟩)
       (target := target) (iiw := 284) (isw := 4) (oiw := 0) (osw := 32)
       (s := []) (G := Gb + 198)
       rfl rfl
@@ -1233,7 +1233,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
           ⟨[Nat.toB256 (Gb + 198), target, 284, 4, 0, 32],
             ((M.write 256 pauseForSelector.toBytes).write 288
               duration.toBytes).write 256 isPausedSelector.toBytes,
-            Gb + 198⟩).extCost _ = 0
+            Gb + 198, post1.stateGas⟩).extCost _ = 0
         exact Devm.extCost_covered (by rw [hsize3]; decide))
       (by
         show post1.state.getCode target.toAdr = calleeCode

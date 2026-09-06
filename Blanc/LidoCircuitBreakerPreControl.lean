@@ -490,7 +490,7 @@ theorem pause_body_runCompiledTo_error_of_locked
       (∀ a k, post.getTransVal a k = base.getTransVal a k) := by
   let errData := customErrorData "ReentrantCall"
   refine ⟨(base.setMach
-      ⟨[], Mem.empty.write 0 errData.toB256.toBytes, G⟩).withOutput errData,
+      ⟨[], Mem.empty.write 0 errData.toB256.toBytes, G, base.stateGas⟩).withOutput errData,
     ?_, rfl, rfl, ?_, ?_⟩
   · unfold pauseReentrantGas pause requireStaticArgs canonicalAddressArg arg
       cdl checkNonAddress pushAddressMask
@@ -508,7 +508,7 @@ theorem pause_body_runCompiledTo_error_of_locked
           (base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩) Ninst.tload
           (base.setMach
             ⟨[base.getTransVal sevm.currentTarget lockKey], Mem.empty,
-              total - 157⟩) := by
+              total - 157, base.stateGas⟩) := by
         have h := runCompiled_tload_of (sevm := sevm)
           (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩)
           (key := lockKey)

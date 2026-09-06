@@ -100,7 +100,7 @@ theorem deposit_success_runCompiled
             depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
               ((accOfStor
                 (Devm.getStor base sevm.currentTarget)).count + 1)
-              countCost G⟩)
+              countCost G, base.stateGas⟩)
         runtime post ∧
       post.stack = [] ∧
       post.gasLeft = G ∧
@@ -158,7 +158,7 @@ theorem deposit_success_runCompiled
       (base.setMach
         ⟨[], Mem.empty,
           depositEndpointSuccessGas sevm base stor keys depositDataRoot n
-            (s.count + 1) countCost G⟩)
+            (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint (.ok post) := by
     simpa only [post, branchValue] using hendpointTo
   have hendpoint : Func.RunCompiled
@@ -166,7 +166,7 @@ theorem deposit_success_runCompiled
       (base.setMach
         ⟨[], Mem.empty,
           depositEndpointSuccessGas sevm base stor keys depositDataRoot n
-            (s.count + 1) countCost G⟩)
+            (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint post :=
     Func.RunCompiled.of_runCompiledTo_ok hendpointTo'
   have hlengthWordNe : sevm.data.length.toB256 ≠ 0 := by
@@ -181,7 +181,7 @@ theorem deposit_success_runCompiled
       (base.setMach
         ⟨[], Mem.empty,
           depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
-            (s.count + 1) countCost G⟩)
+            (s.count + 1) countCost G, base.stateGas⟩)
       runtime post := by
     simpa only [depositRuntimeSuccessGas] using hroute
   have hcountStor : stor =

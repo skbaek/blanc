@@ -244,7 +244,7 @@ theorem depositSuccessSuffix_runCompiledTo
                   insertionFirstLiveStoreCost sevm stor keys 0 n node) +
                 insertionDeadGas sevm.currentTarget stor n
                   (insertionNatState 0 size node keys)) + 38 + countCost)) +
-              1838⟩)
+              1838, base.stateGas⟩)
         (reconstructDepositDataNode depositSuccessGuards)
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch

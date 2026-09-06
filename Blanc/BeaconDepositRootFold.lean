@@ -291,13 +291,13 @@ theorem rootLoop_iterations_exists_runCompiledTo
           Func.RunCompiledTo fs sevm
             (base'.setMach
               ⟨[(rootLoopIter sevm.currentTarget stor n s).height],
-                memory', K⟩)
+                memory', K, base'.stateGas⟩)
             rootLoop ex) :
     ∃ ex, P ex ∧
       Func.RunCompiledTo fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            K + rootLoopGas sevm.currentTarget stor n s⟩)
+            K + rootLoopGas sevm.currentTarget stor n s, base.stateGas⟩)
         rootLoop ex := by
   induction n generalizing base memory s with
   | zero =>
@@ -407,7 +407,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
             (callPost.setMach
               ⟨[s.height + 1],
                 callPost.memory.write 608 (s.size >>> 1).toBytes,
-                K + tailGas⟩)
+                K + tailGas, callPost.stateGas⟩)
             rootLoop ex := by
           simpa only [tailGas, next, RootLoopState.step] using hnextRun
         have hshaRun := hlift hnextRun'
@@ -422,7 +422,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
               ⟨[s.height], memory,
                 (K + tailGas + 285) + 78 +
                   sloadCost sevm base
-                    (branchBase + s.height)⟩)
+                    (branchBase + s.height), base.stateGas⟩)
             rootLoop ex := by
           apply rootLoopLive_runCompiledTo
             carrier.mem hheight hlive hvalLive
@@ -515,7 +515,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
             (callPost.setMach
               ⟨[s.height + 1],
                 callPost.memory.write 608 (s.size >>> 1).toBytes,
-                K + tailGas⟩)
+                K + tailGas, callPost.stateGas⟩)
             rootLoop ex := by
           simpa only [tailGas, next, RootLoopState.step] using hnextRun
         have hshaRun := hlift hnextRun'
@@ -530,7 +530,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
               ⟨[s.height], memory,
                 (K + tailGas + 285) + 77 +
                   sloadCost sevm base
-                    (zeroHashBase + s.height)⟩)
+                    (zeroHashBase + s.height), base.stateGas⟩)
             rootLoop ex := by
           apply rootLoopDead_runCompiledTo
             carrier.mem hheight hbit hvalDead
@@ -576,12 +576,12 @@ theorem rootLoop_iterations_runCompiledTo
         Func.RunCompiledTo fs sevm
           (base'.setMach
             ⟨[(rootLoopIter sevm.currentTarget stor n s).height],
-              memory', K⟩)
+              memory', K, base'.stateGas⟩)
           rootLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[s.height], memory,
-          K + rootLoopGas sevm.currentTarget stor n s⟩)
+          K + rootLoopGas sevm.currentTarget stor n s, base.stateGas⟩)
       rootLoop ex := by
   obtain ⟨ex', hex, hrun⟩ :=
     rootLoop_iterations_exists_runCompiledTo
@@ -857,7 +857,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       rootLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], Mem.empty, K + getDepositRootPrefixGas sevm base⟩)
+        ⟨[], Mem.empty, K + getDepositRootPrefixGas sevm base, base.stateGas⟩)
       getDepositRootEndpoint ex := by
   let loaded := afterSload sevm base depositCountSlot
   let M1 := Mem.empty.write 576 count.toBytes

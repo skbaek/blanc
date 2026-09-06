@@ -219,13 +219,13 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           Func.RunCompiledTo fs sevm
             (base'.setMach
               ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-                memory', K⟩)
+                memory', K, base'.stateGas⟩)
             insertionLoop ex) :
     ∃ ex, P ex ∧
       Func.RunCompiledTo fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            K + insertionDeadGas sevm.currentTarget stor n s⟩)
+            K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop ex := by
   induction n generalizing base memory s with
   | zero =>
@@ -335,7 +335,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           (callPost.setMach
             ⟨[s.height + 1],
               callPost.memory.write 608 (s.size >>> 1).toBytes,
-              K + tailGas⟩)
+              K + tailGas, callPost.stateGas⟩)
           insertionLoop ex := by
         simpa only [tailGas, next, InsertionLoopState.step] using hnextRun
       have hshaRun := hlift hnextRun'
@@ -349,7 +349,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           (base.setMach
             ⟨[s.height], memory,
               (K + tailGas + 285) + 51 +
-                sloadCost sevm base (branchBase + s.height)⟩)
+                sloadCost sevm base (branchBase + s.height), base.stateGas⟩)
           insertionLoop ex := by
         apply insertionLoopDead_runCompiledTo
           carrier.mem hbit hvalDead
@@ -399,13 +399,13 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           Func.StorageEffectRun fs sevm
             (base'.setMach
               ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-                memory', K⟩)
+                memory', K, base'.stateGas⟩)
             insertionLoop ex effects) :
     ∃ ex, P ex ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            K + insertionDeadGas sevm.currentTarget stor n s⟩)
+            K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop ex effects := by
   induction n generalizing base memory s with
   | zero =>
@@ -516,7 +516,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           (callPost.setMach
             ⟨[s.height + 1],
               callPost.memory.write 608 (s.size >>> 1).toBytes,
-              K + tailGas⟩)
+              K + tailGas, callPost.stateGas⟩)
           insertionLoop ex effects := by
         simpa only [tailGas, next, InsertionLoopState.step] using nextRun
       have shaRun := lift nextRun'
@@ -530,7 +530,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           (base.setMach
             ⟨[s.height], memory,
               (K + tailGas + 285) + 51 +
-                sloadCost sevm base (branchBase + s.height)⟩)
+                sloadCost sevm base (branchBase + s.height), base.stateGas⟩)
           insertionLoop ex effects := by
         apply insertionLoopDead_storageEffectRun
           carrier.mem hbit hvalDead
@@ -586,7 +586,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
           ⟨[s.height], memory,
             (G + 46 + insertionStoreCost sevm stor
                 (insertionLoopIter sevm.currentTarget stor n s)) +
-              insertionDeadGas sevm.currentTarget stor n s⟩)
+              insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (insertionLoopIter sevm.currentTarget stor n s).key
@@ -662,12 +662,12 @@ theorem insertionLoop_dead_iterations_runCompiledTo
         Func.RunCompiledTo fs sevm
           (base'.setMach
             ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-              memory', K⟩)
+              memory', K, base'.stateGas⟩)
           insertionLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[s.height], memory,
-          K + insertionDeadGas sevm.currentTarget stor n s⟩)
+          K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
       insertionLoop ex := by
   obtain ⟨ex', hex, hrun⟩ :=
     insertionLoop_dead_iterations_exists_runCompiledTo
@@ -714,7 +714,7 @@ theorem insertionLoop_deadThenLive_exists_runCompiledTo
           ⟨[s.height], memory,
             (G + 46 + insertionStoreCost sevm stor
                 (insertionLoopIter sevm.currentTarget stor n s)) +
-              insertionDeadGas sevm.currentTarget stor n s⟩)
+              insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (insertionLoopIter sevm.currentTarget stor n s).key

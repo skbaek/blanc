@@ -179,7 +179,7 @@ structure OfficialValidationCheckpoints
     sevm
     (base.setMach
       ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-        officialConstructorDecodedMemory, G + 49961⟩)
+        officialConstructorDecodedMemory, G + 49961, base.stateGas⟩)
     officialConstructorEffectBody post
   inputLength : sevm.code.size = 5122
   decodedArguments : ∀ i : Fin 7,
@@ -249,7 +249,7 @@ structure OfficialConstructorExecutionTrace
   exec :
     Jaune.exec ⟨0, sevm,
         base.setMach
-          ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+          ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩⟩ =
       .ok post
 
 /-- The body-pinned public trace, derived from the fresh-frame constructor run
@@ -421,7 +421,7 @@ private theorem chargeCodeGas_official_output
     (hmax : 4282 ≤ rules.code.maxCodeSize) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
-        ⟨d.stack, d.memory, d.gasLeft - officialCodeDepositGas⟩) := by
+        ⟨d.stack, d.memory, d.gasLeft - officialCodeDepositGas, d.stateGas⟩) := by
   rw [officialCodeDepositGas_eq] at hgas ⊢
   obtain ⟨tail, hcons⟩ := lidoCircuitBreakerCode_official_cons
   have hlen := lidoCircuitBreakerCode_official_length
@@ -578,7 +578,7 @@ private theorem processMessage_official_constructor_checkpoint
       initEvm seeded =
         ⟨0, sevm,
           base.setMach
-            ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ := by
+            ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩⟩ := by
     rw [hGadd]
     rfl
   have hexec : exec (initEvm seeded) = .ok raw := by

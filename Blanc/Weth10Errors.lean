@@ -126,7 +126,7 @@ theorem lockedErrorGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨w :: stack, base.memory, G + errorGuardCost base e.reason⟩)
+        ⟨w :: stack, base.memory, G + errorGuardCost base e.reason, base.stateGas⟩)
       ((.call e.slot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
@@ -190,11 +190,11 @@ theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩)
       (iszero ::: (.call bubbleRevertSlot) <?> afterSuccess)
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   rw [show G + bubbleContinuationCost base =
       (G + revertReturnDataCost base) + 29 by
@@ -207,7 +207,7 @@ theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   all_goals try omega
   exact Func.runCompiledTo_revertReturnData
     (devm := base.setMach
-      ⟨stack, base.memory, G + revertReturnDataCost base⟩)
+      ⟨stack, base.memory, G + revertReturnDataCost base, base.stateGas⟩)
     (G := G) hwf hr halign h_len (by
       simp only [Devm.gasLeft_setMach, revertReturnDataCost,
         Devm.returnData_setMach, Devm.extCost, Devm.memory_setMach]) (by
@@ -224,10 +224,10 @@ theorem boolReturn_childRevert_runCompiledTo {dp : DeployParams}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩) boolReturn
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩) boolReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   simpa only [boolReturn] using
     callbackBubble_runCompiledTo hwf hr halign h_len h_room
@@ -274,11 +274,11 @@ theorem flashCallback_childRevert_runCompiledTo {dp : DeployParams}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩)
       flashCallbackReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   simpa only [flashCallbackReturn] using
     callbackBubble_runCompiledTo hwf hr halign h_len h_room
@@ -605,7 +605,7 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : base.stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨base.stack, base.memory, G + nonpayableRevertCost⟩)
+        ⟨base.stack, base.memory, G + nonpayableRevertCost, base.stateGas⟩)
       (nonpayable body)
       (.error (.revert,
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by

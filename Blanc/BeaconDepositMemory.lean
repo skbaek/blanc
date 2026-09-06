@@ -452,7 +452,7 @@ private theorem storeByteShiftStack_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨(word >>> 8) :: stack,
-          memory.write i.toNat [word.2.2.toUInt8], G⟩)
+          memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
@@ -508,7 +508,7 @@ private theorem storeByteLastStack_runCompiled
     (hroom : stack.length + 1 < 1024)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G⟩)
+        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨word :: stack, memory, G + 6, base.stateGas⟩)
@@ -557,7 +557,7 @@ theorem storeLe64At_runCompiled
     (hpush7 : pushCost (address + 7).toBytes.sig = gVerylow)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨stack, storeLe64Memory memory offset word, G⟩)
+        ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)
@@ -695,11 +695,11 @@ theorem storeLe64At64_runCompiled
     {word : B256} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩)
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[word], getDepositCountHeaderMemory, G + 111⟩)
+        ⟨[word], getDepositCountHeaderMemory, G + 111, base.stateGas⟩)
       (storeLe64At 64 +++ rest) post := by
   exact storeLe64At_runCompiled
     (memory := getDepositCountHeaderMemory)
@@ -725,7 +725,7 @@ theorem storeLe64At32_runCompiled
     (hfit : 32 + 8 ≤ memory.size)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], storeLe64Memory memory 32 word, G⟩)
+        ⟨[], storeLe64Memory memory 32 word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[word], memory, G + 111, base.stateGas⟩)
@@ -803,10 +803,10 @@ theorem getDepositCountReturn_runCompiled
     (word : B256) (G : Nat) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountResultMemory word, G + 5⟩)
+        ⟨[], getDepositCountResultMemory word, G + 5, base.stateGas⟩)
       (returnMemoryRange 0 96)
       ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
   have carrier := getDepositCountResultMemory_spec word
   exact return96_runCompiled G
@@ -826,7 +826,7 @@ private theorem storeByteShiftStack_runCompiledTo
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨(word >>> 8) :: stack,
-          memory.write i.toNat [word.2.2.toUInt8], G⟩)
+          memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
@@ -882,7 +882,7 @@ private theorem storeByteLastStack_runCompiledTo
     (hroom : stack.length + 1 < 1024)
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G⟩)
+        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨word :: stack, memory, G + 6, base.stateGas⟩)
@@ -931,7 +931,7 @@ theorem storeLe64At_runCompiledTo
     (hpush7 : pushCost (address + 7).toBytes.sig = gVerylow)
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, storeLe64Memory memory offset word, G⟩)
+        ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)

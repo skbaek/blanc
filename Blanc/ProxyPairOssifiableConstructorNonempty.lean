@@ -29,7 +29,7 @@ private theorem DelegatecallSpawnDescriptor.parent_state_eq_callPre
   cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         spawn.codeWord.toAdr).state.getCode spawn.codeWord.toAdr) <;> rfl
 
 private theorem DelegatecallSpawnDescriptor.parent_logs_eq_callPre
@@ -46,7 +46,7 @@ private theorem DelegatecallSpawnDescriptor.parent_logs_eq_callPre
   cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         spawn.codeWord.toAdr).state.getCode spawn.codeWord.toAdr) <;> rfl
 
 /-- A setup tail that finishes successfully can only have resumed a clean

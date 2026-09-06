@@ -418,7 +418,7 @@ private theorem chargeCodeGas_weth10_output
     (h_max : 6313 ≤ rules.code.maxCodeSize) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
-        ⟨d.stack, d.memory, d.gasLeft - 1262600⟩) := by
+        ⟨d.stack, d.memory, d.gasLeft - 1262600, d.stateGas⟩) := by
   obtain ⟨tail, hcons⟩ := weth10Code_cons dp
   have hlen : (weth10Code dp).length = 6313 :=
     weth10Code_length dp

@@ -91,7 +91,7 @@ theorem depositEndpoint_success_storageEffectRun
         (logged.setMach
           ⟨[], depositEventMemory sevm.data
             (sevm.value / Nat.toB256 oneGwei)
-            (Nat.toB256 s.count), G⟩)
+            (Nat.toB256 s.count), G, logged.stateGas⟩)
         mid ∧
       Nonempty (InsertionLoopCarrier
         (afterSstore sevm mid depositCountSlot
@@ -104,7 +104,7 @@ theorem depositEndpoint_success_storageEffectRun
         (base.setMach
           ⟨[], Mem.empty,
             depositEndpointSuccessGas sevm base stor keys depositDataRoot
-              n (s.count + 1) countCost G⟩)
+              n (s.count + 1) countCost G, base.stateGas⟩)
         depositEndpoint
         (.ok
           ((afterSstore sevm finalBase (branchSlot n)
@@ -189,7 +189,7 @@ theorem depositEndpoint_success_storageEffectRun
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
       (by simpa only [oldCount] using hcountValue) hstatic
   let stagedBase := logged.setMach
-    ⟨[], depositEventMemory sevm.data amount oldCount, G⟩
+    ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hsource :
       ReconstructSourceMemoryCarrier stagedBase.memory
         (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
@@ -251,7 +251,7 @@ theorem depositEndpoint_success_storageEffectRun
   have heventRun : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
-          suffixGas + 5799 + sloadCost sevm base depositCountSlot⟩)
+          suffixGas + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent)
       (.ok
         ((afterSstore sevm finalBase (branchSlot n)

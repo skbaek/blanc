@@ -1241,14 +1241,14 @@ private theorem freshCheckNonAddress_success_runCompiled
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-            Mem.empty, G + 16⟩)
+            Mem.empty, G + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch
   have hshift : Func.RunCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
-        ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 16 + 6⟩)
+        ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 16 + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body))) post := by
     func_run (2)
@@ -1367,7 +1367,7 @@ private theorem freshRegisterPauserBody_fromStage_runCompiled
   have hstaticRun : Func.RunCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
-        ⟨[], Mem.empty, stageGas + 22 + 33 + 33 + 21⟩)
+        ⟨[], Mem.empty, stageGas + 22 + 33 + 33 + 21, base.stateGas⟩)
       (requireStaticArgs 2
         (canonicalAddressArg 0
           (canonicalAddressArg 1

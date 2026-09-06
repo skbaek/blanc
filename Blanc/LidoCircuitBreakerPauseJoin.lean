@@ -188,7 +188,7 @@ private lemma step_push0_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
-    ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩) h_room]
+    ⟨devm.stack, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩) h_room]
   rfl
 
 /-- An `MSTORE` at offset zero over empty memory, without the gas for its
@@ -234,7 +234,7 @@ private lemma step_mstore_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
   have hstep : Step.ofExecution (pc + 1)
       (Rinst.runCore pc devm sevm .mstore) = .cont (pc + 1)
         ((devm.setMach
-          ⟨s, devm.memory, devm.gasLeft - (gVerylow + 3)⟩).memWrite
+          ⟨s, devm.memory, devm.gasLeft - (gVerylow + 3), devm.stateGas⟩).memWrite
             (0 : B256).toNat v.toBytes) := by
     unfold Rinst.runCore
     rw [Devm.popToNat_eq_ok (devm := devm) h_stk]
@@ -350,7 +350,7 @@ private theorem callee_exec_low_gas {m : Msg}
     omega
   have s4 : Evm.step ⟨5, initSevm m, d4⟩ = .cont 7
       (d4.setMach
-        ⟨Bytes.toB256 [32] :: d4.stack, d4.memory, d4.gasLeft - 3⟩) :=
+        ⟨Bytes.toB256 [32] :: d4.stack, d4.memory, d4.gasLeft - 3, d4.stateGas⟩) :=
     Evm.push_cont (by decide) at5 (show (3 : Nat) ≤ d4.gasLeft by omega)
       (by rw [hstk4]; decide)
   refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
@@ -805,7 +805,7 @@ theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
     (accessCost tw.toAdr
       (preC.setMach
-        ⟨rest, preC.memory, preC.gasLeft⟩).accessedAddresses + 0)
+        ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).accessedAddresses + 0)
     with ⟨mcc, mcs⟩
   obtain ⟨xl, hfill, hx⟩ := runCompiled_exec_okStep run
   by_cases hga : mcc +
@@ -861,7 +861,7 @@ theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
     (accessCost tw.toAdr
       (preC.setMach
-        ⟨rest, preC.memory, preC.gasLeft⟩).accessedAddresses + 0)
+        ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).accessedAddresses + 0)
     with ⟨mcc, mcs⟩
   obtain ⟨xl, hfill, hx⟩ := runCompiled_exec_okStep run
   by_cases hga : mcc +

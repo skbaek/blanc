@@ -2177,7 +2177,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
             ((runtime officialParams).main :: (runtime officialParams).aux)
             stubPauseWorldSevm
             (stubRunAfterSetBase.setMach
-              ⟨[], stubRunMemoryLast, 67693⟩)
+              ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
             pauseAfterSet final := by
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
@@ -2292,7 +2292,7 @@ private theorem stubPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet final ∧
       Func.RunCompiledTo
           ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -2301,11 +2301,11 @@ private theorem stubPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference stubPauseWorldSevm
         (stubRunAfterSetBase.setMach
-          ⟨[], stubRunMemoryLast, 67693⟩) successPre := by
+          ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
     stubPauseWorld_afterSetStubSeam
   have hmidCount : mid.getStorVal stubPauseWorldSevm.currentTarget
@@ -2354,7 +2354,7 @@ private theorem stubPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900⟩ = mid := by
+      ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
       stubRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
@@ -2380,11 +2380,11 @@ private theorem stubPauseWorld_productionRun :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference stubPauseWorldSevm
         (stubRunAfterSetBase.setMach
-          ⟨[], stubRunMemoryLast, 67693⟩) successPre := by
+          ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     stubPauseWorld_successSuffix
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
@@ -2514,7 +2514,7 @@ private theorem stubPauseWorld_productionRun :
       exact stubPauseWorld_publicPausePremises.codeAddress)
     stubPauseWorld_publicPausePremises.productionBytes hbodyTo
   have hentry : stubPauseWorldPre.setMach
-      ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892⟩ =
+      ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892, stubPauseWorldPre.stateGas⟩ =
       stubPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 99892 : Nat) = stubPauseWorldGas from by
       norm_num [pauseDispatchGas, stubPauseWorldGas]]

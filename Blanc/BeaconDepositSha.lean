@@ -99,13 +99,13 @@ theorem sha64_success_prefix_runCompiledTo_ext
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord + ext⟩)
+              K + sha64SuccessCost inputWord outputWord + ext, base.stateGas⟩)
           (sha64 inputWord outputWord success) ex := by
   let callPre := base.setMach
     ⟨Nat.toB256 (K + 221 + ext) :: (2 : B256) ::
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
-      base.memory, K + 221 + ext⟩
+      base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
@@ -198,7 +198,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
       (sevm := sevm)
       (devm := base.setMach
         ⟨stack, base.memory,
-          K + sha64SuccessCost inputWord outputWord + ext⟩)
+          K + sha64SuccessCost inputWord outputWord + ext, base.stateGas⟩)
       (w := (32 : B256)) (c := c32)
       (G := K + (cout + c64 + cin + c2 + 223) + ext)
       (by rfl)
@@ -259,7 +259,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
   refine Func.RunCompiledTo.next ?_ hsuffix
   have hpost :
       callPost.setMach
-        ⟨1 :: stack, callPost.memory, K + 37⟩ = callPost := by
+        ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩ = callPost := by
     apply Devm.ext
     · apply Mach.ext
       · exact hstack.symm
@@ -311,7 +311,7 @@ theorem sha64_success_prefix_runCompiledTo
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + sha64SuccessCost inputWord outputWord⟩)
+              K + sha64SuccessCost inputWord outputWord, base.stateGas⟩)
           (sha64 inputWord outputWord success) ex := by
   have hext : base.extCost
       [⟨(inputWord * 32).toNat, 64⟩,

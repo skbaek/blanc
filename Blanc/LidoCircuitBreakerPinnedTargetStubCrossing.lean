@@ -932,7 +932,7 @@ private theorem installedCallArgs_runCompiled
     (hreadValue : (M.read (targetWord * 32).toNat 32).1.toB256 = target)
     (htail : Func.RunCompiled fs sevm
       (devm.setMach
-        ⟨[Nat.toB256 G, target, 0, 284, 36, 0, 0], M, G⟩)
+        ⟨[Nat.toB256 G, target, 0, 284, 36, 0, 0], M, G, devm.stateGas⟩)
       tail post) :
     Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 20, devm.stateGas⟩)
       (pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++
@@ -1242,7 +1242,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 334⟩)
+          Gb + 334, post1.stateGas⟩)
       (target := target) (iiw := 284) (isw := 4) (oiw := 0) (osw := 32)
       (storedUntil := pauseForProjection sevm.benvStat.time duration)
       (s := []) (G := Gb + 334)
@@ -1252,7 +1252,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
           ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
             ((M.write 256 pauseForSelector.toBytes).write 288
               duration.toBytes).write 256 isPausedSelector.toBytes,
-            Gb + 334⟩).extCost _ = 0
+            Gb + 334, post1.stateGas⟩).extCost _ = 0
         exact Devm.extCost_covered (by rw [hsize3]; decide))
       (by
         show post1.state.getCode target.toAdr = stubCode
@@ -1384,7 +1384,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 334⟩)
+          Gb + 334, post1.stateGas⟩)
       (Ninst.staticcall ::: installedQueryPost) post := by
     refine Func.RunCompiled.next hrun2 ?_
     rw [heta2]
@@ -1392,7 +1392,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   have hQueryStage : Func.RunCompiled fs sevm
       (post1.setMach
         ⟨[], ((M.write 256 pauseForSelector.toBytes).write 288
-          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 353⟩)
+          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 353, post1.stateGas⟩)
       installedQueryStage post := by
     unfold installedQueryStage
     func_run (7) [3]

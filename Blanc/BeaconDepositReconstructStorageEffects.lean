@@ -29,12 +29,12 @@ theorem reconstructLoadStore_storageEffectRun
     (htail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, memory,
-          K + reconstructLoadStoreCost sourceWord targetWord⟩)
+          K + reconstructLoadStoreCost sourceWord targetWord, base.stateGas⟩)
       (loadWord sourceWord +++ mstoreAt targetWord +++ rest) ex effects := by
   let csource := pushCost ((sourceWord * 32).toBytes.sig)
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -62,7 +62,7 @@ theorem reconstructLoadStore_storageEffectRun
       (sevm := sevm)
       (devm := base.setMach
         ⟨(sourceWord * 32) :: stack, memory,
-          K + 3 + ctarget + 3⟩)
+          K + 3 + ctarget + 3, base.stateGas⟩)
       (i := sourceWord * 32) (v := value) (s := stack)
       (c := 3) (G := K + ctarget + 3) (M := memory)
       rfl
@@ -70,7 +70,7 @@ theorem reconstructLoadStore_storageEffectRun
         have hext :
             (base.setMach
               ⟨(sourceWord * 32) :: stack, memory,
-                K + 3 + ctarget + 3⟩).extCost
+                K + 3 + ctarget + 3, base.stateGas⟩).extCost
               [⟨(sourceWord * 32).toNat, 32⟩] = 0 :=
           Devm.extCost_zero_of_le hmod hsourceFit
         rw [hext]
@@ -97,7 +97,7 @@ theorem reconstructLoadStore_storageEffectRun
     (Ninst.runCompiled_mstore_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨(targetWord * 32) :: value :: stack, memory, K + 3⟩)
+        ⟨(targetWord * 32) :: value :: stack, memory, K + 3, base.stateGas⟩)
       (i := targetWord * 32) (v := value) (s := stack)
       (G := K) (e := 0)
       rfl
@@ -120,11 +120,11 @@ theorem reconstructPushStore_storageEffectRun
     (htail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨stack, memory, K + reconstructPushStoreCost value targetWord⟩)
+        ⟨stack, memory, K + reconstructPushStoreCost value targetWord, base.stateGas⟩)
       (Ninst.pushB256 value ::: mstoreAt targetWord +++ rest) ex effects := by
   let cvalue := pushCost value.toBytes.sig
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -158,7 +158,7 @@ theorem reconstructPushStore_storageEffectRun
     (Ninst.runCompiled_mstore_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨(targetWord * 32) :: value :: stack, memory, K + 3⟩)
+        ⟨(targetWord * 32) :: value :: stack, memory, K + 3, base.stateGas⟩)
       (i := targetWord * 32) (v := value) (s := stack)
       (G := K) (e := 0)
       rfl
@@ -541,7 +541,7 @@ theorem reconstructPairSha_storageEffectRun
             ⟨stack, base.memory,
               K + sha64SuccessCost 0 outputWord +
                 reconstructLoadStoreCost rightWord 1 +
-                reconstructLoadStoreCost leftWord 0⟩)
+                reconstructLoadStoreCost leftWord 0, base.stateGas⟩)
           (loadWord leftWord +++ mstoreAt 0 +++
             loadWord rightWord +++ mstoreAt 1 +++
             sha64 0 outputWord success) ex effects := by
@@ -602,7 +602,7 @@ theorem reconstructPairSha_storageEffectRun
   have hshaBase := hlift htail
   have hsha : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord⟩)
+        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord, base.stateGas⟩)
       (sha64 0 outputWord success) ex effects := by
     simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach] using
       hshaBase
@@ -618,7 +618,7 @@ theorem reconstructPairSha_storageEffectRun
       (base.setMach
         ⟨stack, firstMemory,
           K + sha64SuccessCost 0 outputWord +
-            reconstructLoadStoreCost rightWord 1⟩)
+            reconstructLoadStoreCost rightWord 1, base.stateGas⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
         sha64 0 outputWord success) ex effects := by
     apply reconstructLoadStore_storageEffectRun

@@ -205,7 +205,7 @@ theorem runCompiled_tload_of
   rw [Devm.pop_eq_ok hstack]
   simp only [bind, Except.bind]
   rw [show (pre.setMach
-    ⟨stack, pre.memory, pre.gasLeft⟩).getTransVal
+    ⟨stack, pre.memory, pre.gasLeft, pre.stateGas⟩).getTransVal
       sevm.currentTarget key = value by exact hvalue]
   rw [pushItem_eq_ok (by
     simp only [Devm.gasLeft_setMach]
@@ -564,7 +564,7 @@ private theorem pauseShiftAddressMask_prepend_runCompiled
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G⟩) tail post) :
+          Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
@@ -574,7 +574,7 @@ private theorem pauseShiftAddressMask_prepend_runCompiled
     change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G⟩) tail post
+          Mem.empty, G, base.stateGas⟩) tail post
     exact htail
 
 private theorem pauseCanonicalBranch_success_runCompiled
@@ -605,7 +605,7 @@ private theorem pauseCheckNonAddress_success_runCompiled
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-            Mem.empty, G + 16⟩)
+            Mem.empty, G + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch

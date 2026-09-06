@@ -420,22 +420,22 @@ theorem implGuarded_static_halt_exec
       post.transientStorage = base.transientStorage ∧
       post.logs = base.logs := by
   let dEntry := base.setMach
-    ⟨[], Mem.empty, G + implGuardedSuccessEntryGas⟩
+    ⟨[], Mem.empty, G + implGuardedSuccessEntryGas, base.stateGas⟩
   let d0 := dEntry.setMach
     {dEntry.mach with gasLeft := dEntry.gasLeft - gJumpdest}
   let d1 := d0.setMach
-    ⟨[0], Mem.empty, G + 22141⟩
+    ⟨[0], Mem.empty, G + 22141, d0.stateGas⟩
   let d2 := d1.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 22138⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 22138, d1.stateGas⟩
   let d3 := d2.setMach
-    ⟨[0], Mem.empty, G + 22135⟩
+    ⟨[0], Mem.empty, G + 22135, d2.stateGas⟩
   let d4 := d3
   let d8 := d4.setMach
-    ⟨[], Mem.empty, G + implBodyGas⟩
+    ⟨[], Mem.empty, G + implBodyGas, d4.stateGas⟩
   let d10 := d8.setMach
-    ⟨[1], Mem.empty, G + 22119⟩
+    ⟨[1], Mem.empty, G + 22119, d8.stateGas⟩
   let d12 := d10.setMach
-    ⟨[implSlot, 1], Mem.empty, G + 22116⟩
+    ⟨[implSlot, 1], Mem.empty, G + 22116, d10.stateGas⟩
   have hentry : Jinst.At sevm.code 0 .jumpdest := by
     rw [h_code]
     exact Jinst.at_of_slice (show List.Slice implGuardedCode.toList 0

@@ -95,7 +95,7 @@ theorem deposit_success_artifactInv
             depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
               ((accOfStor
                 (Devm.getStor base sevm.currentTarget)).count + 1)
-              countCost G⟩)
+              countCost G, base.stateGas⟩)
         runtime post ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget)
         (history ++ [depositDataNode Bytes.sha256 pubkey

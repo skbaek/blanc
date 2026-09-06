@@ -3010,11 +3010,11 @@ theorem erc677_childRevert_runCompiledTo
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩)
       boolReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   exact boolReturn_childRevert_runCompiledTo
     h_wf h_reads h_align h_len h_room

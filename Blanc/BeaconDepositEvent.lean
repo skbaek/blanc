@@ -244,11 +244,11 @@ private theorem pushMstoreAt_runCompiledTo
     (hroom : stack.length < 1023)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory.write offset value.toBytes, G⟩)
+        ⟨stack, memory.write offset value.toBytes, G, base.stateGas⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory, G + valueGas + wordGas + gVerylow⟩)
+        ⟨stack, memory, G + valueGas + wordGas + gVerylow, base.stateGas⟩)
       (([pushB256 value] ++ mstoreAt word) +++ body) ex := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -275,7 +275,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
     (hroom : stack.length < 1022)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, storeLe64Memory memory 352 amount, G⟩)
+        ⟨stack, storeLe64Memory memory 352 amount, G, base.stateGas⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨stack, memory, G + 117, base.stateGas⟩)
@@ -302,7 +302,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
       (by omega)) ?_
   · have hext :
         (base.setMach
-          ⟨amountWord * 32 :: stack, memory, G + 114⟩).extCost
+          ⟨amountWord * 32 :: stack, memory, G + 114, base.stateGas⟩).extCost
             [⟨(amountWord * 32).toNat, 32⟩] = 0 := by
       apply Devm.extCost_zero_of_le hsize32
       simpa only [hamountAddress] using hreadFit
@@ -355,13 +355,13 @@ private theorem copyDynamicPayload_runCompiledTo
     (hroom : stack.length < 1022)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory.write destination.toNat payload, G⟩)
+        ⟨stack, memory.write destination.toNat payload, G, base.stateGas⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory,
           G + sizeGas + offsetGas + gVerylow + deltaGas + gVerylow +
-            destinationGas + copyGas⟩)
+            destinationGas + copyGas, base.stateGas⟩)
       (copyDynamicPayload offsetWord delta destination size +++ body) ex := by
   unfold copyDynamicPayload loadWord
   refine Func.RunCompiledTo.next
@@ -393,7 +393,7 @@ private theorem copyDynamicPayload_runCompiledTo
         (base.setMach
           ⟨offsetWord * 32 :: size :: stack, memory,
             G + gVerylow + deltaGas + gVerylow + destinationGas +
-              copyGas⟩).extCost
+              copyGas, base.stateGas⟩).extCost
             [⟨(offsetWord * 32).toNat, 32⟩] = 0 := by
       exact Devm.extCost_zero_of_le hsize32 hreadFit
     rw [hext]
@@ -429,7 +429,7 @@ private theorem copyDynamicPayload_runCompiledTo
   · have hext :
         (base.setMach
           ⟨destination :: ((36 + delta) + offset) :: size :: stack,
-            memory, G + copyGas⟩).extCost
+            memory, G + copyGas, base.stateGas⟩).extCost
             [⟨destination.toNat, size.toNat⟩] = 0 := by
       exact Devm.extCost_zero_of_le hsize32 hcopyFit
     rw [hext, hcopyCost]
@@ -451,11 +451,11 @@ private theorem stageEventPayloads_runCompiledTo
     (hdec2 : DynamicTailDecodable sevm.data 2)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], eventPayloadMemory sevm.data amount, G⟩)
+        ⟨[], eventPayloadMemory sevm.data amount, G, base.stateGas⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], depositEventInputMemory sevm.data amount, G + 88⟩)
+        ⟨[], depositEventInputMemory sevm.data amount, G + 88, base.stateGas⟩)
       (([pushB256 0] ++ mstoreAt 7 ++
         copyDynamicPayload 0 0 192 48 ++
         copyDynamicPayload 1 0 288 32 ++
@@ -652,11 +652,11 @@ private theorem stageEventHeaders_runCompiledTo
     {amount : B256} {G : Nat} {body : Func} {ex : Execution}
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], eventBeforeCountMemory sevm.data amount, G⟩)
+        ⟨[], eventBeforeCountMemory sevm.data amount, G, base.stateGas⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], eventPayloadMemory sevm.data amount, G + 222⟩)
+        ⟨[], eventPayloadMemory sevm.data amount, G + 222, base.stateGas⟩)
       (([pushB256 160] ++ mstoreAt 0 ++
         [pushB256 256] ++ mstoreAt 1 ++
         [pushB256 320] ++ mstoreAt 2 ++
@@ -940,7 +940,7 @@ private theorem emitDepositEvent_runCompiledTo
       houtput, herror, hlift⟩ :=
     Func.runCompiledTo_log_step_exists (fs := fs) (sevm := sevm)
       (devm := base.setMach
-        ⟨[0 * 32, 18 * 32, depositEventTopic], memory, G + 5358⟩)
+        ⟨[0 * 32, 18 * 32, depositEventTopic], memory, G + 5358, base.stateGas⟩)
       (n := (0 : Fin 4).succ) (topics := [depositEventTopic]) (s := [])
       (c := 5358) (G := G) (M := memory) (M' := memory)
       (payload := abiDepositEvent event) (rest := body)
@@ -949,7 +949,7 @@ private theorem emitDepositEvent_runCompiledTo
         have hext :
             (base.setMach
               ⟨[0 * 32, 18 * 32, depositEventTopic], memory,
-                G + 5358⟩).extCost
+                G + 5358, base.stateGas⟩).extCost
               [⟨(0 * 32 : B256).toNat, (18 * 32 : B256).toNat⟩] = 0 := by
           apply Devm.extCost_zero_of_le
           · rw [hmem.size_eq]
@@ -1041,12 +1041,12 @@ private theorem stageEventCountLog_runCompiledTo
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (logged.setMach
-            ⟨[], depositEventMemory sevm.data amount oldCount, G⟩)
+            ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩)
           body ex →
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨[], eventBeforeCountMemory sevm.data amount,
-              G + 5489 + sloadCost sevm base depositCountSlot⟩)
+              G + 5489 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
           (([pushB256 depositCountSlot, sload, dup 0] ++
             mstoreAt oldCountWord ++ storeLe64At 544 ++
             [pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex := by
@@ -1173,12 +1173,12 @@ theorem stageDepositEvent_runCompiledTo
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (logged.setMach
-            ⟨[], depositEventMemory sevm.data amount oldCount, G⟩)
+            ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩)
           body ex →
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨[], depositEventInputMemory sevm.data amount,
-              G + 5799 + sloadCost sevm base depositCountSlot⟩)
+              G + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
           (stageDepositEvent +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hlift⟩ :=

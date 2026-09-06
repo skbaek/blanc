@@ -180,6 +180,15 @@ structure Devm.Rels : Type where
   (state : State → State → Prop)
   (createdAccounts : AdrSet → AdrSet → Prop)
   (transientStorage : Tra → Tra → Prop)
+  /-- The Amsterdam fields. `Mach` gained `stateGas` (goal B) and `Meta` gained
+  the two read sets (goal C). A frame that does not relate them cannot identify
+  two machines — `Devm.eq_of_proj` needs seventeen projections now, not
+  fourteen — so the frame vocabulary grows with the machine. They default to
+  equality: under Prague and BPO2 no Blanc frame moves them, so every existing
+  `Devm.Rels` literal keeps its text and its meaning. -/
+  (stateGas : StateGasMeter → StateGasMeter → Prop := _root_.Eq)
+  (accountReads : AdrSet → AdrSet → Prop := _root_.Eq)
+  (storageReads : KeySet → KeySet → Prop := _root_.Eq)
 
 /-- Canonical relation between dynamic EVM states, assembled field by field. -/
 structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
@@ -202,6 +211,11 @@ structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
     rels.createdAccounts devm.createdAccounts devm'.createdAccounts )
   ( transientStorage :
     rels.transientStorage devm.transientStorage devm'.transientStorage )
+  (stateGas : rels.stateGas devm.stateGas devm'.stateGas)
+  ( accountReads :
+    rels.accountReads devm.meta.accountReads devm'.meta.accountReads )
+  ( storageReads :
+    rels.storageReads devm.meta.storageReads devm'.meta.storageReads )
 
 def Devm.Rels.eq : Devm.Rels :=
   {

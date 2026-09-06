@@ -62,7 +62,7 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
                 insertionFirstLiveStoreCost sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
-            38 + sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
         commitDeposit
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -100,7 +100,7 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
           (G + 46 +
               insertionFirstLiveStoreCost sevm stor keys 0 n node) +
             insertionDeadGas sevm.currentTarget stor n
-              (insertionNatState 0 size node keys)⟩)
+              (insertionNatState 0 size node keys), countPost.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm finalBase (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -170,7 +170,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
                 insertionFirstLiveStoreCost sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
-            38 + sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
         commitDeposit
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -212,7 +212,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
           (G + 46 +
               insertionFirstLiveStoreCost sevm stor keys 0 n node) +
             insertionDeadGas sevm.currentTarget stor n
-              (insertionNatState 0 size node keys)⟩)
+              (insertionNatState 0 size node keys), countPost.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm finalBase (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch

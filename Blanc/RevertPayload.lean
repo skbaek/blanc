@@ -390,7 +390,7 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
           (Ninst.runCompiled_pushB256
             (devm := (devm.setMach
               ⟨devm.stack, Mem.writeStoresRev M iws,
-                G + (cw + ci + gVerylow + e)⟩).setMach
+                G + (cw + ci + gVerylow + e), devm.stateGas⟩).setMach
               ⟨iw.1 :: devm.stack, Mem.writeStoresRev M iws,
                 G + (ci + gVerylow + e)⟩)
             (c := ci) (G := G + (gVerylow + e)) (by rfl)
@@ -754,7 +754,7 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushB256
         (devm := (devm.setMach
-          ⟨devm.stack, M', G + (clen + gBase)⟩).setMach
+          ⟨devm.stack, M', G + (clen + gBase), devm.stateGas⟩).setMach
           ⟨Nat.toB256 blob.length :: devm.stack, M', G + gBase⟩)
         (c := gBase) (G := G) pushCost_zero rfl
         (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -976,7 +976,7 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
           · simpa using Nat.le_ceil32 (b :: bs).length
       have hext :
           (devm.setMach
-            ⟨(0 : B256) :: w :: devm.stack, M', G⟩).extCost
+            ⟨(0 : B256) :: w :: devm.stack, M', G, devm.stateGas⟩).extCost
               [⟨0, w.toNat⟩] = 0 := by
         rw [hw]
         exact Devm.extCost_zero_of_le ha (by omega)

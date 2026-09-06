@@ -31,7 +31,7 @@ private theorem chargeCodeGas_code
     (hmax : 2891 ≤ rules.code.maxCodeSize) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
-        ⟨d.stack, d.memory, d.gasLeft - constructorCodeDepositGas⟩) := by
+        ⟨d.stack, d.memory, d.gasLeft - constructorCodeDepositGas, d.stateGas⟩) := by
   rw [constructorCodeDepositGas_eq] at hgas ⊢
   obtain ⟨tail, hcons⟩ := code_cons_jumpdest
   have hlen := constructorAppendedRuntime_length_exact
@@ -208,11 +208,11 @@ theorem processCreateMessage_establishes_artifact
       ⟨0, sevm,
         base.setMach
           ⟨[], Mem.empty,
-            constructorProgramGas + constructorCodeDepositGas⟩⟩ := by
+            constructorProgramGas + constructorCodeDepositGas, base.stateGas⟩⟩ := by
     change initEvm seeded =
       ⟨0, sevm,
         base.setMach
-          ⟨[], Mem.empty, constructorCreateMessageGasAccounting⟩⟩
+          ⟨[], Mem.empty, constructorCreateMessageGasAccounting, base.stateGas⟩⟩
     rw [← hgas]
     rfl
   have hexec : exec (initEvm seeded) = .ok raw := by

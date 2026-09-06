@@ -63,7 +63,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
     (hmiss : ¬ tree.HasSelector selector) :
     ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
         (base.setMach
-          ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector⟩)
+          ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector, base.stateGas⟩)
         (dispatch tree)
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
@@ -111,12 +111,12 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           branchPre (body <?> Func.revert) out :=
         .zero hroom hpop hrev
       let afterPush := base.setMach
-        ⟨[leafSelector, selector], Mem.empty, G + 20⟩
+        ⟨[leafSelector, selector], Mem.empty, G + 20, base.stateGas⟩
       have hpush : Ninst.RunCompiled sevm
           (base.setMach
             ⟨[selector], Mem.empty,
               G + (DispatchTree.leaf leafSelector body).dispatchMissGas
-                selector⟩)
+                selector, base.stateGas⟩)
           (pushB256 leafSelector) afterPush := by
         simpa only [DispatchTree.dispatchMissGas, afterPush,
             Devm.setMach_setMach, Devm.stack_setMach,
@@ -124,7 +124,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           (Ninst.runCompiled_pushB256
             (devm := base.setMach
               ⟨[selector], Mem.empty,
-                G + pushCost leafSelector.toBytes.sig + 20⟩)
+                G + pushCost leafSelector.toBytes.sig + 20, base.stateGas⟩)
             (w := leafSelector) (G := G + 20) rfl
             (by simp only [Devm.gasLeft_setMach]; omega)
             (by simp only [Devm.stack_setMach, List.length_cons,
@@ -141,7 +141,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           (base.setMach
             ⟨[selector], Mem.empty,
               G + (DispatchTree.leaf leafSelector body).dispatchMissGas
-                selector⟩)
+                selector, base.stateGas⟩)
           (dispatch (.leaf leafSelector body)) out := by
         unfold dispatch
         exact .next hpush (.next heq hbranch)
@@ -172,9 +172,9 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           ihLeft hleft
         let childGas := left.dispatchMissGas selector
         let childPre := base.setMach
-          ⟨[selector], Mem.empty, G + childGas⟩
+          ⟨[selector], Mem.empty, G + childGas, base.stateGas⟩
         let branchPre := base.setMach
-          ⟨[(1 : B256), selector], Mem.empty, G + childGas + 14⟩
+          ⟨[(1 : B256), selector], Mem.empty, G + childGas + 14, base.stateGas⟩
         have hroom : branchPre.stack.length < 1024 := by
           simp only [branchPre, Devm.stack_setMach, List.length_cons,
             List.length_nil]
@@ -197,12 +197,12 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             simpa only [childPre, childGas] using hchild)
         let afterDup := base.setMach
           ⟨[selector, selector], Mem.empty,
-            G + childGas + pushCost pivot.toBytes.sig + 17⟩
+            G + childGas + pushCost pivot.toBytes.sig + 17, base.stateGas⟩
         have hdup : Ninst.RunCompiled sevm
             (base.setMach
               ⟨[selector], Mem.empty,
                 G + left.dispatchMissGas selector +
-                  pushCost pivot.toBytes.sig + 20⟩)
+                  pushCost pivot.toBytes.sig + 20, base.stateGas⟩)
             (dup 0) afterDup := by
           simpa only [afterDup, Devm.setMach_setMach,
               Devm.stack_setMach, Devm.memory_setMach, gVerylow]
@@ -211,7 +211,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                 (devm := base.setMach
                   ⟨[selector], Mem.empty,
                     G + left.dispatchMissGas selector +
-                      pushCost pivot.toBytes.sig + 20⟩)
+                      pushCost pivot.toBytes.sig + 20, base.stateGas⟩)
                 (n := 0) (w := selector)
                 (G := G + childGas + pushCost pivot.toBytes.sig + 17)
                 rfl (by
@@ -221,7 +221,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                   List.length_nil]; omega))
         let afterPush := base.setMach
           ⟨[pivot, selector, selector], Mem.empty,
-            G + childGas + 17⟩
+            G + childGas + 17, base.stateGas⟩
         have hpush : Ninst.RunCompiled sevm afterDup
             (pushB256 pivot) afterPush := by
           simpa only [afterDup, afterPush, Devm.setMach_setMach,
@@ -284,9 +284,9 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           ihRight hright
         let childGas := right.dispatchMissGas selector
         let childPre := base.setMach
-          ⟨[selector], Mem.empty, G + childGas⟩
+          ⟨[selector], Mem.empty, G + childGas, base.stateGas⟩
         let branchPre := base.setMach
-          ⟨[(0 : B256), selector], Mem.empty, G + childGas + 13⟩
+          ⟨[(0 : B256), selector], Mem.empty, G + childGas + 13, base.stateGas⟩
         have hroom : branchPre.stack.length < 1024 := by
           simp only [branchPre, Devm.stack_setMach, List.length_cons,
             List.length_nil]
@@ -309,12 +309,12 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             simpa only [childPre, childGas] using hchild)
         let afterDup := base.setMach
           ⟨[selector, selector], Mem.empty,
-            G + childGas + pushCost pivot.toBytes.sig + 16⟩
+            G + childGas + pushCost pivot.toBytes.sig + 16, base.stateGas⟩
         have hdup : Ninst.RunCompiled sevm
             (base.setMach
               ⟨[selector], Mem.empty,
                 G + right.dispatchMissGas selector +
-                  pushCost pivot.toBytes.sig + 19⟩)
+                  pushCost pivot.toBytes.sig + 19, base.stateGas⟩)
             (dup 0) afterDup := by
           simpa only [afterDup, Devm.setMach_setMach,
               Devm.stack_setMach, Devm.memory_setMach, gVerylow]
@@ -323,7 +323,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                 (devm := base.setMach
                   ⟨[selector], Mem.empty,
                     G + right.dispatchMissGas selector +
-                      pushCost pivot.toBytes.sig + 19⟩)
+                      pushCost pivot.toBytes.sig + 19, base.stateGas⟩)
                 (n := 0) (w := selector)
                 (G := G + childGas + pushCost pivot.toBytes.sig + 16)
                 rfl (by
@@ -333,7 +333,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                   List.length_nil]; omega))
         let afterPush := base.setMach
           ⟨[pivot, selector, selector], Mem.empty,
-            G + childGas + 16⟩
+            G + childGas + 16, base.stateGas⟩
         have hpush : Ninst.RunCompiled sevm afterDup
             (pushB256 pivot) afterPush := by
           simpa only [afterDup, afterPush, Devm.setMach_setMach,

@@ -233,7 +233,7 @@ private theorem constructorPairStage_storageEffectRun
     (tail : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨heightWord :: stack,
-          constructorPairMemory memory (zeroHash Bytes.sha256 height), K⟩)
+          constructorPairMemory memory (zeroHash Bytes.sha256 height), K, base.stateGas⟩)
       rest ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨heightWord :: stack, memory, K + 24, base.stateGas⟩)
@@ -276,7 +276,7 @@ private theorem constructorPairStage_storageEffectRun
       (Ninst.runCompiled_mload_of
         (sevm := sevm)
         (devm := base.setMach
-          ⟨64 :: heightWord :: stack, memory, K + 21⟩)
+          ⟨64 :: heightWord :: stack, memory, K + 21, base.stateGas⟩)
         (i := 64) (v := node) (s := heightWord :: stack)
         (c := 3) (G := K + 18) (M := memory) rfl
         (by
@@ -323,7 +323,7 @@ private theorem constructorPairStage_storageEffectRun
           (Ninst.runCompiled_mload_of
             (sevm := sevm)
             (devm := base.setMach
-              ⟨64 :: heightWord :: stack, M0, K + 9⟩)
+              ⟨64 :: heightWord :: stack, M0, K + 9, base.stateGas⟩)
             (i := 64) (v := node) (s := heightWord :: stack)
             (c := 3) (G := K + 6) (M := M0) rfl
             (by
@@ -467,7 +467,7 @@ private theorem constructorZeroHashContinuation_storageEffectRun
       (base.setMach
         ⟨[Nat.toB256 height], memory,
           K + 45 + sstoreCost sevm base (zeroHashSlot (height + 1))
-            (zeroHash Bytes.sha256 (height + 1))⟩)
+            (zeroHash Bytes.sha256 (height + 1)), base.stateGas⟩)
       (.call constructorZeroHashContinuationSlot) ex
       ((sevm.currentTarget, zeroHashSlot (height + 1),
           zeroHash Bytes.sha256 (height + 1)) :: effects) := by
@@ -518,7 +518,7 @@ private theorem constructorZeroHashContinuation_storageEffectRun
     have hmload := Ninst.runCompiled_mload_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨[64, Nat.toB256 height], memory, K + 30 + C⟩)
+        ⟨[64, Nat.toB256 height], memory, K + 30 + C, base.stateGas⟩)
       (i := 64) (v := node) (s := [Nat.toB256 height])
       (c := 3) (G := K + 27 + C) (M := memory) rfl
       (by
@@ -641,13 +641,13 @@ theorem constructorSha64_success_storageEffectRun_ext
         Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨stack, base.memory,
-              K + constructorSha64SuccessCost + ext⟩)
+              K + constructorSha64SuccessCost + ext, base.stateGas⟩)
           (constructorSha64 inputWord outputWord success) ex effects := by
   let callPre := base.setMach
     ⟨Nat.toB256 (K + 221 + ext) :: (2 : B256) ::
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
-      base.memory, K + 221 + ext⟩
+      base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, hrefund, hdelete, houtput, herror, stmid, hsub, hstate⟩ :=
@@ -796,7 +796,7 @@ theorem constructorSha64_success_storageEffectRun_ext
             · simp only [Devm.stack_setMach, List.length_cons]
               omega
             · have hpost : callPost.setMach
-                  ⟨1 :: stack, callPost.memory, K + 37⟩ = callPost := by
+                  ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩ = callPost := by
                 apply Devm.ext
                 · apply Mach.ext
                   · exact hstack.symm
@@ -859,7 +859,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
           (base.setMach
             ⟨[Nat.toB256 height], memory,
               K + 333 + sstoreCost sevm base (zeroHashSlot (height + 1))
-                (zeroHash Bytes.sha256 (height + 1))⟩)
+                (zeroHash Bytes.sha256 (height + 1)), base.stateGas⟩)
           (constructorZeroHashLoop constructorRuntimeOffset codeSize)
           ex
           ((sevm.currentTarget, zeroHashSlot (height + 1),
@@ -973,7 +973,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
     have continuation : Func.StorageEffectRun fs sevm
         (shaPost.setMach
           ⟨[Nat.toB256 height], shaPost.memory,
-            K + 45 + C⟩)
+            K + 45 + C, shaPost.stateGas⟩)
         (.call constructorZeroHashContinuationSlot) ex
         ((sevm.currentTarget, key, node) :: effects) := by
       have sentryPost : gCallStipend <
@@ -999,14 +999,14 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
     have shaRun : Func.StorageEffectRun fs sevm
         (shaBase.setMach
           ⟨[Nat.toB256 height], pair,
-            K + 45 + C + constructorSha64SuccessCost⟩)
+            K + 45 + C + constructorSha64SuccessCost, shaBase.stateGas⟩)
         (constructorSha64 0 constructorNodeWord
           (.call constructorZeroHashContinuationSlot)) ex
         ((sevm.currentTarget, key, node) :: effects) := by
       exact shaLift continuation
     have pairRun : Func.StorageEffectRun fs sevm
         (base.setMach
-          ⟨[Nat.toB256 height], memory, K + 307 + C⟩)
+          ⟨[Nat.toB256 height], memory, K + 307 + C, base.stateGas⟩)
         ((constructorLoadWord constructorNodeWord ++ constructorStoreWord 0 ++
           constructorLoadWord constructorNodeWord ++ constructorStoreWord 1) +++
           constructorSha64 0 constructorNodeWord
@@ -1014,15 +1014,15 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
         ((sevm.currentTarget, key, node) :: effects) := by
       have shaRun' : Func.StorageEffectRun fs sevm
           (base.setMach
-            ⟨[Nat.toB256 height], pair, K + 283 + C⟩)
+            ⟨[Nat.toB256 height], pair, K + 283 + C, base.stateGas⟩)
           (constructorSha64 0 constructorNodeWord
             (.call constructorZeroHashContinuationSlot)) ex
           ((sevm.currentTarget, key, node) :: effects) := by
         have shaState : shaBase.setMach
               ⟨[Nat.toB256 height], pair,
-                K + 45 + C + constructorSha64SuccessCost⟩ =
+                K + 45 + C + constructorSha64SuccessCost, shaBase.stateGas⟩ =
             base.setMach
-              ⟨[Nat.toB256 height], pair, K + 283 + C⟩ := by
+              ⟨[Nat.toB256 height], pair, K + 283 + C, base.stateGas⟩ := by
           apply Devm.ext
           · apply Mach.ext
             · rfl
@@ -1115,7 +1115,7 @@ theorem constructorFinish_storageEffectRun
         Devm.getStor base sevm.currentTarget ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
-          ⟨[Nat.toB256 31], memory, K + constructorFinishGas base memory⟩)
+          ⟨[Nat.toB256 31], memory, K + constructorFinishGas base memory, base.stateGas⟩)
         (constructorFinish constructorRuntimeOffset codeSize)
         (.ok post) [] := by
   set copied := memory.write 0 code with copiedDef
@@ -1158,7 +1158,7 @@ theorem constructorFinish_storageEffectRun
           (base.setMach
             ⟨[0, Nat.toB256 constructorRuntimeOffset,
               Nat.toB256 codeSize, Nat.toB256 31],
-              memory, K + 6 + copyCost⟩).extCost
+              memory, K + 6 + copyCost, base.stateGas⟩).extCost
             [⟨(0 : B256).toNat, (Nat.toB256 codeSize).toNat⟩] =
         copyCost := by
     rw [B256.toNat_toB256_of_lt codeSizeBound]
@@ -1216,7 +1216,7 @@ theorem constructorFinish_storageEffectRun
           (devm := base.setMach
             ⟨[0, Nat.toB256 constructorRuntimeOffset,
               Nat.toB256 codeSize, Nat.toB256 31],
-              memory, K + 6 + copyCost⟩)
+              memory, K + 6 + copyCost, base.stateGas⟩)
           (di := 0) (si := Nat.toB256 constructorRuntimeOffset)
           (sz := Nat.toB256 codeSize) (s := [Nat.toB256 31])
           (c := copyCost) (G := K + 6) (M := copied) rfl copyCostEq
@@ -1246,17 +1246,17 @@ theorem constructorFinish_storageEffectRun
               Devm.memory_setMach]
             have extZero :
                 (base.setMach
-                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩).extCost
+                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K, base.stateGas⟩).extCost
                   [⟨0, codeSize⟩] = 0 := by
               exact Devm.extCost_zero_of_le copiedMod (by omega)
             have returnRun : Func.RunCompiled fs sevm
                 (base.setMach
-                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩)
+                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K, base.stateGas⟩)
                 (.last .return_) post := by
               have raw := Func.runCompiled_return_word
                 (fs := fs) (sevm := sevm)
                 (devm := base.setMach
-                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K⟩)
+                  ⟨[0, Nat.toB256 codeSize, Nat.toB256 31], copied, K, base.stateGas⟩)
                 (i := 0) (sz := Nat.toB256 codeSize)
                 (s := [Nat.toB256 31]) (out := code) (G := K) (e := 0)
                 rfl
@@ -1364,7 +1364,7 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
       Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[Nat.toB256 height], memory,
-            constructorLoopGas slack remaining⟩)
+            constructorLoopGas slack remaining, base.stateGas⟩)
         (constructorZeroHashLoop constructorRuntimeOffset codeSize)
         (.ok post)
         (constructorStorageEffectTriplesFrom
@@ -1548,7 +1548,7 @@ theorem constructorZeroHashLoop_storageEffectRun_withSlack
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
-          ⟨[0], constructorInitialMemory, constructorLoopGas slack 31⟩)
+          ⟨[0], constructorInitialMemory, constructorLoopGas slack 31, base.stateGas⟩)
         (constructorZeroHashLoop constructorRuntimeOffset codeSize)
         (.ok post) (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
@@ -1583,7 +1583,7 @@ theorem constructorZeroHashLoop_storageEffectRun
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
-          ⟨[0], constructorInitialMemory, constructorLoopGas 0 31⟩)
+          ⟨[0], constructorInitialMemory, constructorLoopGas 0 31, base.stateGas⟩)
         (constructorZeroHashLoop constructorRuntimeOffset codeSize)
         (.ok post) (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,

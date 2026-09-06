@@ -33,10 +33,10 @@ theorem getDepositCountEndpoint_warm_runCompiled
       base.getStorVal sevm.currentTarget depositCountSlot = word) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountEndpointWarmGas⟩)
+        ⟨[], Mem.empty, G + getDepositCountEndpointWarmGas, base.stateGas⟩)
       getDepositCountEndpoint
       ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
   have hreturn := getDepositCountReturn_runCompiled
     (fs := fs) (sevm := sevm) (base := base) word G
@@ -45,11 +45,11 @@ theorem getDepositCountEndpoint_warm_runCompiled
     (word := word) (G := G + 5) hreturn
   have hsuffix : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountHeaderMemory, G + 219⟩)
+        ⟨[], getDepositCountHeaderMemory, G + 219, base.stateGas⟩)
       (pushB256 depositCountSlot ::: sload :::
         storeLe64At 64 +++ returnMemoryRange 0 96)
       ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_pushB256
@@ -82,10 +82,10 @@ theorem getDepositCountEndpoint_cold_runCompiled
       addAccessedStorageKey base sevm.currentTarget depositCountSlot
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountEndpointColdGas⟩)
+        ⟨[], Mem.empty, G + getDepositCountEndpointColdGas, base.stateGas⟩)
       getDepositCountEndpoint
       ((moved.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
   let moved :=
     addAccessedStorageKey base sevm.currentTarget depositCountSlot
@@ -96,11 +96,11 @@ theorem getDepositCountEndpoint_cold_runCompiled
     (word := word) (G := G + 5) hreturn
   have hsuffix : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountHeaderMemory, G + 2219⟩)
+        ⟨[], getDepositCountHeaderMemory, G + 2219, base.stateGas⟩)
       (pushB256 depositCountSlot ::: sload :::
         storeLe64At 64 +++ returnMemoryRange 0 96)
       ((moved.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_pushB256
@@ -161,7 +161,7 @@ private theorem getDepositCountLeafRoute_runCompiled
       (nonpayableEndpoint getDepositCountEndpoint) post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute post := by
   unfold getDepositCountLeafRoute
   have hpushCost :
@@ -170,12 +170,12 @@ private theorem getDepositCountLeafRoute_runCompiled
     decide +kernel
   have hpushGas :
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩).gasLeft =
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩).gasLeft =
           G + 17 + gVerylow := by
     simp only [Devm.gasLeft_setMach, gVerylow]
   have hpushRoom :
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩).stack.length <
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩).stack.length <
           1024 := by
     simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
     omega
@@ -205,11 +205,11 @@ private theorem getDepositCountInnerDispatch_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hleaf : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch post := by
   unfold getDepositCountInnerDispatch
   refine Func.RunCompiled.next
@@ -261,11 +261,11 @@ private theorem getDepositCountMiddleDispatch_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hinner : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch post := by
   unfold getDepositCountMiddleDispatch
   refine Func.RunCompiled.next
@@ -316,11 +316,11 @@ private theorem getDepositCountRootDispatch_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hmiddle : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch post := by
   unfold getDepositCountRootDispatch
   refine Func.RunCompiled.next
@@ -371,7 +371,7 @@ private theorem getDepositCountMainRoute_runCompiled
     (hselector : Sevm.selector sevm = getDepositCountSelector)
     (hroot : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty, G + 98, base.stateGas⟩)
@@ -427,7 +427,7 @@ private theorem getDepositCountLeafRoute_runCompiledTo
       (nonpayableEndpoint getDepositCountEndpoint) out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute out := by
   unfold getDepositCountLeafRoute
   have hpushCost :
@@ -436,12 +436,12 @@ private theorem getDepositCountLeafRoute_runCompiledTo
     decide +kernel
   have hpushGas :
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩).gasLeft =
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩).gasLeft =
           G + 17 + gVerylow := by
     simp only [Devm.gasLeft_setMach, gVerylow]
   have hpushRoom :
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩).stack.length <
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩).stack.length <
           1024 := by
     simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
     omega
@@ -476,24 +476,24 @@ private theorem getDepositCountLeafRoute_runCompiledTo_with_path
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
         getDepositCountLeafRoute out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterPush := base.setMach
     ⟨[getDepositCountSelector, getDepositCountSelector],
-      Mem.empty, G + 17⟩
+      Mem.empty, G + 17, base.stateGas⟩
   have hpushCost :
       pushCost getDepositCountSelector.toBytes.sig = gVerylow := by
     rw [getDepositCountSelector_eq]
     decide +kernel
   have hpush : Ninst.RunCompiled sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       (pushB256 getDepositCountSelector) afterPush := by
     convert
       (Ninst.runCompiled_pushB256
         (devm := base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
         (G := G + 17) hpushCost
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by
@@ -532,7 +532,7 @@ private theorem getDepositCountLeafRoute_runCompiledTo_with_path
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute out := by
     unfold getDepositCountLeafRoute
     exact .next hpush (.next heq hbranch)
@@ -555,11 +555,11 @@ private theorem getDepositCountInnerDispatch_runCompiledTo
     {out : Execution} {G : Nat}
     (hleaf : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch out := by
   unfold getDepositCountInnerDispatch
   refine Func.RunCompiledTo.next
@@ -612,25 +612,25 @@ private theorem getDepositCountInnerDispatch_runCompiledTo_with_path
     {out : Execution} {G : Nat}
     {hleaf : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 20⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩)
       getDepositCountLeafRoute out}
     (hleafSafe : Func.RunCompiledTo.NoRawSstorePath hleaf) :
     ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
         getDepositCountInnerDispatch out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterDup := base.setMach
     ⟨[getDepositCountSelector, getDepositCountSelector],
-      Mem.empty, G + 40⟩
+      Mem.empty, G + 40, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       (dup 0) afterDup := by
     convert
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
         (n := 0) (w := getDepositCountSelector) (G := G + 40) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by
@@ -641,7 +641,7 @@ private theorem getDepositCountInnerDispatch_runCompiledTo_with_path
         Devm.memory_setMach]
   let afterPush := base.setMach
     ⟨[getDepositRootSelector, getDepositCountSelector,
-      getDepositCountSelector], Mem.empty, G + 37⟩
+      getDepositCountSelector], Mem.empty, G + 37, base.stateGas⟩
   have hpushCost :
       pushCost getDepositRootSelector.toBytes.sig = gVerylow := by
     rw [getDepositRootSelector_eq]
@@ -658,7 +658,7 @@ private theorem getDepositCountInnerDispatch_runCompiledTo_with_path
             List.length_nil]
           omega))
   let branchPre := base.setMach
-    ⟨[(1 : B256), getDepositCountSelector], Mem.empty, G + 34⟩
+    ⟨[(1 : B256), getDepositCountSelector], Mem.empty, G + 34, base.stateGas⟩
   have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
     convert
       (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
@@ -674,7 +674,7 @@ private theorem getDepositCountInnerDispatch_runCompiledTo_with_path
       simp only [afterPush, branchPre, Devm.setMach_setMach,
         Devm.memory_setMach]
   let leafPre := base.setMach
-    ⟨[getDepositCountSelector], Mem.empty, G + 20⟩
+    ⟨[getDepositCountSelector], Mem.empty, G + 20, base.stateGas⟩
   have hroom : branchPre.stack.length < 1024 := by
     simp only [branchPre, Devm.stack_setMach, List.length_cons,
       List.length_nil]
@@ -696,7 +696,7 @@ private theorem getDepositCountInnerDispatch_runCompiledTo_with_path
       simpa only [leafPre] using hleaf)
   let run : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch out := by
     unfold getDepositCountInnerDispatch
     exact .next hdup (.next hpush (.next hgt hbranch))
@@ -724,11 +724,11 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo
     {out : Execution} {G : Nat}
     (hinner : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch out := by
   unfold getDepositCountMiddleDispatch
   refine Func.RunCompiledTo.next
@@ -780,25 +780,25 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo_with_path
     {out : Execution} {G : Nat}
     {hinner : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 43⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩)
       getDepositCountInnerDispatch out}
     (hinnerSafe : Func.RunCompiledTo.NoRawSstorePath hinner) :
     ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
         getDepositCountMiddleDispatch out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterDup := base.setMach
     ⟨[getDepositCountSelector, getDepositCountSelector],
-      Mem.empty, G + 62⟩
+      Mem.empty, G + 62, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       (dup 0) afterDup := by
     convert
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
         (n := 0) (w := getDepositCountSelector) (G := G + 62) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by
@@ -809,7 +809,7 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo_with_path
         Devm.memory_setMach]
   let afterPush := base.setMach
     ⟨[getDepositCountSelector, getDepositCountSelector,
-      getDepositCountSelector], Mem.empty, G + 59⟩
+      getDepositCountSelector], Mem.empty, G + 59, base.stateGas⟩
   have hpushCost :
       pushCost getDepositCountSelector.toBytes.sig = gVerylow := by
     rw [getDepositCountSelector_eq]
@@ -826,7 +826,7 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo_with_path
             List.length_nil]
           omega))
   let branchPre := base.setMach
-    ⟨[(0 : B256), getDepositCountSelector], Mem.empty, G + 56⟩
+    ⟨[(0 : B256), getDepositCountSelector], Mem.empty, G + 56, base.stateGas⟩
   have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
     convert
       (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
@@ -842,7 +842,7 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo_with_path
       simp only [afterPush, branchPre, Devm.setMach_setMach,
         Devm.memory_setMach]
   let innerPre := base.setMach
-    ⟨[getDepositCountSelector], Mem.empty, G + 43⟩
+    ⟨[getDepositCountSelector], Mem.empty, G + 43, base.stateGas⟩
   have hroom : branchPre.stack.length < 1024 := by
     simp only [branchPre, Devm.stack_setMach, List.length_cons,
       List.length_nil]
@@ -861,7 +861,7 @@ private theorem getDepositCountMiddleDispatch_runCompiledTo_with_path
     .zero hroom hpop (by simpa only [innerPre] using hinner)
   let run : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch out := by
     unfold getDepositCountMiddleDispatch
     exact .next hdup (.next hpush (.next hgt hbranch))
@@ -888,11 +888,11 @@ private theorem getDepositCountRootDispatch_runCompiledTo
     {out : Execution} {G : Nat}
     (hmiddle : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch out := by
   unfold getDepositCountRootDispatch
   refine Func.RunCompiledTo.next
@@ -943,25 +943,25 @@ private theorem getDepositCountRootDispatch_runCompiledTo_with_path
     {out : Execution} {G : Nat}
     {hmiddle : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 65⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩)
       getDepositCountMiddleDispatch out}
     (hmiddleSafe : Func.RunCompiledTo.NoRawSstorePath hmiddle) :
     ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
         getDepositCountRootDispatch out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterDup := base.setMach
     ⟨[getDepositCountSelector, getDepositCountSelector],
-      Mem.empty, G + 84⟩
+      Mem.empty, G + 84, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       (dup 0) afterDup := by
     convert
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+          ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
         (n := 0) (w := getDepositCountSelector) (G := G + 84) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by
@@ -972,7 +972,7 @@ private theorem getDepositCountRootDispatch_runCompiledTo_with_path
         Devm.memory_setMach]
   let afterPush := base.setMach
     ⟨[depositSelector, getDepositCountSelector,
-      getDepositCountSelector], Mem.empty, G + 81⟩
+      getDepositCountSelector], Mem.empty, G + 81, base.stateGas⟩
   have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
     rw [depositSelector_eq]
     decide +kernel
@@ -988,7 +988,7 @@ private theorem getDepositCountRootDispatch_runCompiledTo_with_path
             List.length_nil]
           omega))
   let branchPre := base.setMach
-    ⟨[(0 : B256), getDepositCountSelector], Mem.empty, G + 78⟩
+    ⟨[(0 : B256), getDepositCountSelector], Mem.empty, G + 78, base.stateGas⟩
   have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
     convert
       (Ninst.runCompiled_binary (r := .gt) (f := B256.gtCheck)
@@ -1004,7 +1004,7 @@ private theorem getDepositCountRootDispatch_runCompiledTo_with_path
       simp only [afterPush, branchPre, Devm.setMach_setMach,
         Devm.memory_setMach]
   let middlePre := base.setMach
-    ⟨[getDepositCountSelector], Mem.empty, G + 65⟩
+    ⟨[getDepositCountSelector], Mem.empty, G + 65, base.stateGas⟩
   have hroom : branchPre.stack.length < 1024 := by
     simp only [branchPre, Devm.stack_setMach, List.length_cons,
       List.length_nil]
@@ -1025,7 +1025,7 @@ private theorem getDepositCountRootDispatch_runCompiledTo_with_path
     .zero hroom hpop (by simpa only [middlePre] using hmiddle)
   let run : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch out := by
     unfold getDepositCountRootDispatch
     exact .next hdup (.next hpush (.next hgt hbranch))
@@ -1053,7 +1053,7 @@ private theorem getDepositCountMainRoute_runCompiledTo
     (hselector : Sevm.selector sevm = getDepositCountSelector)
     (hroot : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch out) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], Mem.empty, G + 98, base.stateGas⟩)
@@ -1107,7 +1107,7 @@ private theorem getDepositCountMainRoute_runCompiledTo_with_path
     (hselector : Sevm.selector sevm = getDepositCountSelector)
     {hroot : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[getDepositCountSelector], Mem.empty, G + 87⟩)
+        ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩)
       getDepositCountRootDispatch out}
     (hrootSafe : Func.RunCompiledTo.NoRawSstorePath hroot) :
     ∃ run : Func.RunCompiledTo fs sevm
@@ -1116,7 +1116,7 @@ private theorem getDepositCountMainRoute_runCompiledTo_with_path
       Func.RunCompiledTo.NoRawSstorePath run := by
   simp only [getDepositCountMainRoute_eq]
   let afterPushZero := base.setMach
-    ⟨[(0 : B256)], Mem.empty, G + 96⟩
+    ⟨[(0 : B256)], Mem.empty, G + 96, base.stateGas⟩
   have hpushZero : Ninst.RunCompiled sevm
       (base.setMach ⟨[], Mem.empty, G + 98, base.stateGas⟩)
       (pushB256 0) afterPushZero := by
@@ -1130,7 +1130,7 @@ private theorem getDepositCountMainRoute_runCompiledTo_with_path
       simp only [afterPushZero, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach]
   let afterLoad := base.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 93⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 93, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
       calldataload afterLoad := by
     convert
@@ -1143,7 +1143,7 @@ private theorem getDepositCountMainRoute_runCompiledTo_with_path
       simp only [afterPushZero, afterLoad, Devm.setMach_setMach,
         Devm.memory_setMach]
   let afterPush224 := base.setMach
-    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + 90⟩
+    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + 90, base.stateGas⟩
   have hpush224Cost : pushCost (224 : B256).toBytes.sig = gVerylow := by
     decide +kernel
   have hpush224 : Ninst.RunCompiled sevm afterLoad
@@ -1158,7 +1158,7 @@ private theorem getDepositCountMainRoute_runCompiledTo_with_path
             List.length_nil]
           omega))
   let rootPre := base.setMach
-    ⟨[getDepositCountSelector], Mem.empty, G + 87⟩
+    ⟨[getDepositCountSelector], Mem.empty, G + 87, base.stateGas⟩
   have h224 : (224 : B256).toNat = 224 := by
     decide +kernel
   have hselector' :
@@ -1299,7 +1299,7 @@ private theorem getDepositCount_route_runCompiledTo_with_path
     ∃ mid : Devm,
       Devm.BurnBy gJumpdest
         (base.setMach
-          ⟨[], Mem.empty, K + getDepositCountRouteGas⟩) mid ∧
+          ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩) mid ∧
       ∃ mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)
           sevm mid runtime.main out,
         Func.RunCompiledTo.NoRawSstorePath mainRun := by
@@ -1314,10 +1314,10 @@ private theorem getDepositCount_route_runCompiledTo_with_path
   obtain ⟨hmain, hmainSafe⟩ :=
     getDepositCountMainRoute_runCompiledTo_with_path hselector hrootSafe
   let pre := base.setMach
-    ⟨[], Mem.empty, K + getDepositCountRouteGas⟩
+    ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, K + 114, base.stateGas⟩
   let afterSize := base.setMach
-    ⟨[sevm.data.length.toB256], Mem.empty, K + 112⟩
+    ⟨[sevm.data.length.toB256], Mem.empty, K + 112, base.stateGas⟩
   let afterBranch := base.setMach ⟨[], Mem.empty, K + 98, base.stateGas⟩
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,
@@ -1378,10 +1378,10 @@ private theorem getDepositCountRoute_exists_exec_noRawSstore
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, K + getDepositCountRouteGas⟩) out,
+          ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩) out,
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, K + getDepositCountRouteGas⟩)
+            ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩)
           runtime out ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
@@ -1392,7 +1392,7 @@ private theorem getDepositCountRoute_exists_exec_noRawSstore
       hnonempty hselector hbodySafe
   let programRun : Prog.RunCompiledTo sevm
       (base.setMach
-        ⟨[], Mem.empty, K + getDepositCountRouteGas⟩)
+        ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩)
       runtime out := ⟨mid, hentry, mainRun⟩
   have hcompiled : some sevm.code.toList = Prog.compile runtime := by
     rw [hcode, code_compile]
@@ -1419,10 +1419,10 @@ theorem getDepositCount_warm_runCompiled
     (hcode : sevm.code.toList = code) :
     Prog.RunCompiled sevm
       (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+        ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas, base.stateGas⟩)
       runtime
       ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) ∧
     some sevm.code.toList = Prog.compile runtime := by
   let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
@@ -1439,14 +1439,14 @@ theorem getDepositCount_warm_runCompiled
         (base.setMach ⟨[], Mem.empty, G + 268, base.stateGas⟩)
         (nonpayableEndpoint getDepositCountEndpoint)
         ((base.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat))) := by
     have hrun := nonpayableEndpoint_zero_runCompiled
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
       (base := routeBase)
       (post :=
         (base.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat)))
       (G := G + getDepositCountEndpointWarmGas)
       (body := getDepositCountEndpoint) hvalue
@@ -1493,16 +1493,16 @@ theorem getDepositCount_warm_runCompiled_noRawSstore
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+          ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas, base.stateGas⟩)
         (.ok ((base.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat)))),
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+            ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas, base.stateGas⟩)
           runtime
           (.ok ((base.setMach
-            ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+            ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
               (abiDynamicBytesReturn (le64 word.toNat)))) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
@@ -1521,7 +1521,7 @@ theorem getDepositCount_warm_runCompiled_noRawSstore
       (base.setMach ⟨[], Mem.empty, G + 268, base.stateGas⟩)
       (nonpayableEndpoint getDepositCountEndpoint)
       (.ok ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat)))) := by
     have hwrapped := nonpayableEndpoint_zero_runCompiledTo
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
@@ -1576,10 +1576,10 @@ theorem getDepositCount_cold_runCompiled
       addAccessedStorageKey base sevm.currentTarget depositCountSlot
     Prog.RunCompiled sevm
       (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas⟩)
+        ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas, base.stateGas⟩)
       runtime
       ((moved.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) ∧
     some sevm.code.toList = Prog.compile runtime := by
   let moved :=
@@ -1598,14 +1598,14 @@ theorem getDepositCount_cold_runCompiled
         (base.setMach ⟨[], Mem.empty, G + 2268, base.stateGas⟩)
         (nonpayableEndpoint getDepositCountEndpoint)
         ((moved.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat))) := by
     have hrun := nonpayableEndpoint_zero_runCompiled
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
       (base := routeBase)
       (post :=
         (moved.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat)))
       (G := G + getDepositCountEndpointColdGas)
       (body := getDepositCountEndpoint) hvalue
@@ -1656,16 +1656,16 @@ theorem getDepositCount_cold_runCompiled_noRawSstore
       addAccessedStorageKey base sevm.currentTarget depositCountSlot
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas⟩)
+          ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas, base.stateGas⟩)
         (.ok ((moved.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat)))),
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas⟩)
+            ⟨[], Mem.empty, G + getDepositCountColdRuntimeGas, base.stateGas⟩)
           runtime
           (.ok ((moved.setMach
-            ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+            ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
               (abiDynamicBytesReturn (le64 word.toNat)))) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
@@ -1686,7 +1686,7 @@ theorem getDepositCount_cold_runCompiled_noRawSstore
       (base.setMach ⟨[], Mem.empty, G + 2268, base.stateGas⟩)
       (nonpayableEndpoint getDepositCountEndpoint)
       (.ok ((moved.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, moved.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat)))) := by
     have hwrapped := nonpayableEndpoint_zero_runCompiledTo
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
@@ -1739,7 +1739,7 @@ theorem getDepositCount_nonzero_value_runCompiledTo
     (hcode : sevm.code.toList = code) :
     Prog.RunCompiledTo sevm
       (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas⟩)
+        ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas, base.stateGas⟩)
       runtime
       (.error (.revert,
         (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
@@ -1774,12 +1774,12 @@ theorem getDepositCount_nonzero_value_runCompiledTo_noRawSstore
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas⟩)
+          ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas, base.stateGas⟩)
         (.error (.revert,
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas⟩)
+            ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas, base.stateGas⟩)
           runtime
           (.error (.revert,
             (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
@@ -1790,7 +1790,7 @@ theorem getDepositCount_nonzero_value_runCompiledTo_noRawSstore
   let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
-        ⟨[], Mem.empty, G + nonpayableEndpointRevertGas⟩)
+        ⟨[], Mem.empty, G + nonpayableEndpointRevertGas, base.stateGas⟩)
       (nonpayableEndpoint getDepositCountEndpoint)
       (.error (.revert,
         (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by

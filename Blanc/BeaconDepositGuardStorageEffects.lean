@@ -252,7 +252,7 @@ theorem depositAmountUpperGuard_storageEffectRun
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (htail : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[], memory.write 672 amount.toBytes, G⟩) rest ex effects) :
+        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
@@ -309,7 +309,7 @@ theorem depositAmountUpperGuard_storageEffectRun
     (Ninst.runCompiled_mstore_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨amountWord * 32 :: amount :: amount :: [], memory, G + 70⟩)
+        ⟨amountWord * 32 :: amount :: amount :: [], memory, G + 70, base.stateGas⟩)
       (i := amountWord * 32) (v := amount) (s := amount :: [])
       (G := G + 19) (e := 48) rfl
       (by
@@ -369,7 +369,7 @@ theorem depositGuards_storageEffectRun
       (stageDepositEvent +++ depositAfterEvent) ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
       depositBody ex effects := by
   let memory := depositDecodedMemory sevm.data
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data :=

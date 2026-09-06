@@ -198,7 +198,7 @@ private theorem noMatchLeaf_runCompiledTo_with_path
     dsimp only [hbranch]
     exact .zero (room := hbranchRoom) (pop := hbranchPop) hrevSafe
   let afterPush := base.setMach
-    ⟨[getDepositRootSelector, noMatchSelector], Mem.empty, G + 20⟩
+    ⟨[getDepositRootSelector, noMatchSelector], Mem.empty, G + 20, base.stateGas⟩
   have hpushCost :
       pushCost getDepositRootSelector.toBytes.sig = gVerylow := by
     rw [getDepositRootSelector_eq]
@@ -210,7 +210,7 @@ private theorem noMatchLeaf_runCompiledTo_with_path
         Devm.memory_setMach] using
       (Ninst.runCompiled_pushB256
         (devm := base.setMach
-          ⟨[noMatchSelector], Mem.empty, G + 23⟩)
+          ⟨[noMatchSelector], Mem.empty, G + 23, base.stateGas⟩)
         (w := getDepositRootSelector) (G := G + 20) hpushCost
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by simp only [Devm.stack_setMach, List.length_cons,
@@ -291,7 +291,7 @@ private theorem noMatchInnerDispatch_runCompiledTo_with_path
     exact .zero (room := hbranchRoom) (pop := hbranchPop) (by
       simpa only [leafPre] using hleafSafe)
   let afterDup := base.setMach
-    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 42⟩
+    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 42, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach ⟨[noMatchSelector], Mem.empty, G + 45, base.stateGas⟩)
       (dup 0) afterDup := by
@@ -299,14 +299,14 @@ private theorem noMatchInnerDispatch_runCompiledTo_with_path
         Devm.memory_setMach] using
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[noMatchSelector], Mem.empty, G + 45⟩)
+          ⟨[noMatchSelector], Mem.empty, G + 45, base.stateGas⟩)
         (n := 0) (w := noMatchSelector) (G := G + 42) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by simp only [Devm.stack_setMach, List.length_cons,
           List.length_nil]; omega))
   let afterPush := base.setMach
     ⟨[getDepositRootSelector, noMatchSelector, noMatchSelector],
-      Mem.empty, G + 39⟩
+      Mem.empty, G + 39, base.stateGas⟩
   have hpushCost :
       pushCost getDepositRootSelector.toBytes.sig = gVerylow := by
     rw [getDepositRootSelector_eq]
@@ -409,7 +409,7 @@ private theorem noMatchMiddleDispatch_runCompiledTo_with_path
     exact .zero (room := hbranchRoom) (pop := hbranchPop) (by
       simpa only [innerPre] using hinnerSafe)
   let afterDup := base.setMach
-    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 64⟩
+    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 64, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach ⟨[noMatchSelector], Mem.empty, G + 67, base.stateGas⟩)
       (dup 0) afterDup := by
@@ -417,14 +417,14 @@ private theorem noMatchMiddleDispatch_runCompiledTo_with_path
         Devm.memory_setMach] using
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[noMatchSelector], Mem.empty, G + 67⟩)
+          ⟨[noMatchSelector], Mem.empty, G + 67, base.stateGas⟩)
         (n := 0) (w := noMatchSelector) (G := G + 64) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by simp only [Devm.stack_setMach, List.length_cons,
           List.length_nil]; omega))
   let afterPush := base.setMach
     ⟨[getDepositCountSelector, noMatchSelector, noMatchSelector],
-      Mem.empty, G + 61⟩
+      Mem.empty, G + 61, base.stateGas⟩
   have hpushCost :
       pushCost getDepositCountSelector.toBytes.sig = gVerylow := by
     rw [getDepositCountSelector_eq]
@@ -526,7 +526,7 @@ private theorem noMatchRootDispatch_runCompiledTo_with_path
     exact .zero (room := hbranchRoom) (pop := hbranchPop) (by
       simpa only [middlePre] using hmiddleSafe)
   let afterDup := base.setMach
-    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 86⟩
+    ⟨[noMatchSelector, noMatchSelector], Mem.empty, G + 86, base.stateGas⟩
   have hdup : Ninst.RunCompiled sevm
       (base.setMach ⟨[noMatchSelector], Mem.empty, G + 89, base.stateGas⟩)
       (dup 0) afterDup := by
@@ -534,14 +534,14 @@ private theorem noMatchRootDispatch_runCompiledTo_with_path
         Devm.memory_setMach] using
       (Ninst.runCompiled_dup
         (devm := base.setMach
-          ⟨[noMatchSelector], Mem.empty, G + 89⟩)
+          ⟨[noMatchSelector], Mem.empty, G + 89, base.stateGas⟩)
         (n := 0) (w := noMatchSelector) (G := G + 86) rfl
         (by simp only [Devm.gasLeft_setMach, gVerylow])
         (by simp only [Devm.stack_setMach, List.length_cons,
           List.length_nil]; omega))
   let afterPush := base.setMach
     ⟨[depositSelector, noMatchSelector, noMatchSelector],
-      Mem.empty, G + 83⟩
+      Mem.empty, G + 83, base.stateGas⟩
   have hpushCost :
       pushCost depositSelector.toBytes.sig = gVerylow := by
     rw [depositSelector_eq]
@@ -612,7 +612,7 @@ private theorem noMatchMain_runCompiledTo_with_path
         (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach, List.length_nil]; omega))
   let afterLoad := base.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 95⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 95, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
       calldataload afterLoad := by
     simpa only [afterPushZero, afterLoad, Devm.setMach_setMach,
@@ -623,7 +623,7 @@ private theorem noMatchMain_runCompiledTo_with_path
         (by simp only [afterPushZero, Devm.gasLeft_setMach, gVerylow])
         (by decide))
   let afterPush224 := base.setMach
-    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + 92⟩
+    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + 92, base.stateGas⟩
   have hpush224Cost : pushCost (224 : B256).toBytes.sig = gVerylow := by
     decide +kernel
   have hpush224 : Ninst.RunCompiled sevm afterLoad
@@ -703,7 +703,7 @@ theorem noMatchSelector_runCompiledTo
     base.setMach ⟨[], Mem.empty, G + noMatchSelectorRuntimeGas, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, G + 116, base.stateGas⟩
   let afterSize := base.setMach
-    ⟨[sevm.data.length.toB256], Mem.empty, G + 114⟩
+    ⟨[sevm.data.length.toB256], Mem.empty, G + 114, base.stateGas⟩
   let afterBranch := base.setMach ⟨[], Mem.empty, G + 100, base.stateGas⟩
   let out : Execution :=
     .error (.revert,
@@ -785,7 +785,7 @@ private theorem depositMalformedEndpoint_runCompiledTo_with_path
         (.error (.revert,
           (base.setMach
             ⟨failure.finalStack sevm.data,
-              failure.finalMemory sevm.data, G⟩).withOutput [])),
+              failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   let safeSource := validateDepositAbi Func.stop
   let safeRun : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
@@ -794,7 +794,7 @@ private theorem depositMalformedEndpoint_runCompiledTo_with_path
       (.error (.revert,
         (base.setMach
           ⟨failure.finalStack sevm.data,
-            failure.finalMemory sevm.data, G⟩).withOutput [])) :=
+            failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) :=
     validateDepositAbi_failure_runCompiledTo failure (by rfl)
       hdataBound hfailure
   have safePath : Func.RunCompiledTo.NoRawSstorePath safeRun := by
@@ -822,12 +822,12 @@ theorem deposit_malformed_row_runCompiledTo
     (hcode : sevm.code.toList = code) :
     Prog.RunCompiledTo sevm
       (base.setMach
-        ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+        ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
       runtime
       (.error (.revert,
         (base.setMach
           ⟨failure.finalStack sevm.data,
-            failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+            failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
     some sevm.code.toList = Prog.compile runtime := by
   have hendpoint := validateDepositAbi_failure_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
@@ -855,19 +855,19 @@ theorem deposit_malformed_row_noRawSstore
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
         (.error (.revert,
           (base.setMach
             ⟨failure.finalStack sevm.data,
-              failure.finalMemory sevm.data, G⟩).withOutput [])),
+              failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
         (base.setMach
-          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
         runtime
         (.error (.revert,
           (base.setMach
             ⟨failure.finalStack sevm.data,
-              failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+              failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
@@ -875,7 +875,7 @@ theorem deposit_malformed_row_noRawSstore
   let out : Execution := .error (.revert,
     (base.setMach
       ⟨failure.finalStack sevm.data,
-        failure.finalMemory sevm.data, G⟩).withOutput [])
+        failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])
   obtain ⟨hbody, hbodySafe⟩ :=
     depositMalformedEndpoint_runCompiledTo_with_path
       failure hdataBound hfailure
@@ -888,7 +888,7 @@ theorem deposit_malformed_row_noRawSstore
     Prog.exists_exec_noRawSstore hentry hmain hmainSafe hcompiled
   have hprogram : Prog.RunCompiledTo sevm
       (base.setMach
-        ⟨[], Mem.empty, (G + failure.endpointGas) + depositRouteGas⟩)
+        ⟨[], Mem.empty, (G + failure.endpointGas) + depositRouteGas, base.stateGas⟩)
       runtime out := ⟨mid, hentry, hmain⟩
   refine ⟨execution, ?_, executionSafe,
     executionSafe.retainedStorageWrites_eq_nil,
@@ -912,12 +912,12 @@ theorem deposit_malformed_runCompiledTo
       DepositAbiFailure.Holds sevm.data failure ∧
       Prog.RunCompiledTo sevm
         (base.setMach
-          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+          ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
         runtime
         (.error (.revert,
           (base.setMach
             ⟨failure.finalStack sevm.data,
-              failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+              failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
       some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨failure, hfailure⟩ := exists_depositAbiFailure hbad
   obtain ⟨hrun, hcompiled⟩ := deposit_malformed_row_runCompiledTo
@@ -937,19 +937,19 @@ theorem deposit_malformed_noRawSstore
       DepositAbiFailure.Holds sevm.data failure ∧
       ∃ execution : Exec 0 sevm
           (base.setMach
-            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
           (.error (.revert,
             (base.setMach
               ⟨failure.finalStack sevm.data,
-                failure.finalMemory sevm.data, G⟩).withOutput [])),
+                failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])),
         Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
           runtime
           (.error (.revert,
             (base.setMach
               ⟨failure.finalStack sevm.data,
-                failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+                failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
         Exec.NoRawSstore execution ∧
         Exec.retainedStorageWrites execution = [] ∧
         Exec.retainedStorageEffectTriples execution = [] ∧
@@ -1007,7 +1007,7 @@ theorem deposit_error_public_of_endpoint
     Prog.exists_exec_noRawSstore hentry hmain hmainSafe hcompiled
   have hprogram0 : Prog.RunCompiledTo sevm
       (base.setMach
-        ⟨[], Mem.empty, (G + endpointCost) + depositRouteGas⟩)
+        ⟨[], Mem.empty, (G + endpointCost) + depositRouteGas, base.stateGas⟩)
       runtime (.error (.revert, post)) := ⟨mid, hentry, hmain⟩
   have hprogram : Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty, G + runtimeCost, base.stateGas⟩)

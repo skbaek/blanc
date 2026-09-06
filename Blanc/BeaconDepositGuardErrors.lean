@@ -204,7 +204,7 @@ private theorem depositEndpointErrorWitness_of_safeBody
       signature depositDataRoot)
     (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + bodyCost⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + bodyCost, base.stateGas⟩)
       safeBody (.error (.revert, post)))
     (hsource :
       (validateDepositAbi safeBody).replaceStopWith replacement =
@@ -281,7 +281,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
       hcountValue hstatic
   let stagedBase := logged.setMach
-    ⟨[], depositEventMemory sevm.data amount oldCount, G⟩
+    ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hsource : ReconstructSourceMemoryCarrier stagedBase.memory
       (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
       withdrawalCredentials (le64 amount.toNat ++ zeros 24)
@@ -330,7 +330,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
       (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
-          (K + 1779) + 5799 + sloadCost sevm base depositCountSlot⟩)
+          (K + 1779) + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent)
       (.error (.revert, post)) [] := by
     apply heventLift
@@ -353,7 +353,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
     omega
   have hbody : Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + bodyCost⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + bodyCost, base.stateGas⟩)
       depositBody (.error (.revert, post)) [] := by
     simpa only [hgas] using hguards
   have hendpoint := validateDepositAbi_success_storageEffectRun
@@ -861,7 +861,7 @@ theorem deposit_signatureLength_error_endpoint_runCompiledTo
       (errorData (reasonString ReachableReason.signatureLength.reason))
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
-        ⟨[], memory, (((G + guardCost) + 15) + 28) + 28⟩)
+        ⟨[], memory, (((G + guardCost) + 15) + 28) + 28, base.stateGas⟩)
       signatureLengthSafeBody (.error (.revert, post)) := by
     unfold signatureLengthSafeBody
     refine depositLengthGuard_runCompiledTo
@@ -987,7 +987,7 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
       ReachableReason.valueNotGweiMultiple.reason))
   have hguard : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
-        ⟨[], memory, (((G + guardCost) + 10) + 21) + 84⟩)
+        ⟨[], memory, (((G + guardCost) + 10) + 21) + 84, base.stateGas⟩)
       valueNotGweiSafeBody (.error (.revert, post)) := by
     unfold valueNotGweiSafeBody
     refine depositLengthGuards_runCompiledTo hcarrier hdec

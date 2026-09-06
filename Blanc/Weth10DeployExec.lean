@@ -337,7 +337,7 @@ private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
 private def weth10InitReturnPre
     (base : Devm) (M : Mem) (g : Nat) : Devm :=
   base.setMach
-    ⟨[(0 : B256), (6313 : B256)], M, g - 1471⟩
+    ⟨[(0 : B256), (6313 : B256)], M, g - 1471, base.stateGas⟩
 
 private def weth10InitReturnRead
     (base : Devm) (M : Mem) (g : Nat) : Bytes × Devm :=
@@ -524,7 +524,7 @@ private theorem weth10InitPreHashType_runCompiled
     {M : Mem} {rest : Func} (h_gas : 13 ≤ g) (h_size : M.size = 6336)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6336 DOMAIN_TYPEHASH.toBytes, g - 13⟩)
+        ⟨[], M.write 6336 DOMAIN_TYPEHASH.toBytes, g - 13, base.stateGas⟩)
       (weth10InitPreHashTail1 +++ rest) post) :
     Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashLine 6313 +++ rest) post := by
@@ -564,7 +564,7 @@ private theorem weth10InitPreHashChain_runCompiled
     {M : Mem} {rest : Func} (h_gas : 12 ≤ g) (h_size : M.size = 6432)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6432 sevm.benvStat.chainId.toB256.toBytes, g - 12⟩)
+        ⟨[], M.write 6432 sevm.benvStat.chainId.toB256.toBytes, g - 12, base.stateGas⟩)
       (weth10InitPreHashTail4 +++ rest) post) :
     Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail3 +++ rest) post := by
@@ -578,7 +578,7 @@ private theorem weth10InitPreHashAddress_runCompiled
     {M : Mem} {rest : Func} (h_gas : 12 ≤ g) (h_size : M.size = 6464)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6464 sevm.currentTarget.toB256.toBytes, g - 12⟩)
+        ⟨[], M.write 6464 sevm.currentTarget.toB256.toBytes, g - 12, base.stateGas⟩)
       (weth10InitPreHashTail5 +++ rest) post) :
     Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail4 +++ rest) post := by
@@ -720,7 +720,7 @@ private def weth10InitBeforeSeparator (base : Devm) (M : Mem)
 private def weth10InitAfterSeparator (base : Devm) (M : Mem)
     (separator : B256) (g : Nat) : Devm :=
   base.setMach
-    ⟨[], weth10InitSeparatorMemory M separator, g - 1466⟩
+    ⟨[], weth10InitSeparatorMemory M separator, g - 1466, base.stateGas⟩
 
 private def weth10InitAfterReturnArgs (base : Devm) (M : Mem)
     (g : Nat) : Devm :=

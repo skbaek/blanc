@@ -322,7 +322,7 @@ private lemma of_run_revert_window {sevm : Sevm} {devm : Devm} {i sz : B256}
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.gasLeft_setMach]
       have h_ext : (devm.setMach
-          ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
       rw [h_ext]
       have hcg : chargeGas (devm.extCost [⟨i.toNat, sz.toNat⟩])
@@ -331,7 +331,7 @@ private lemma of_run_revert_window {sevm : Sevm} {devm : Devm} {i sz : B256}
               devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
         rw [chargeGas_def]
         have hs : safeSub (devm.setMach
-            ⟨s, devm.memory, devm.gasLeft⟩).gasLeft
+            ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
             (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
           unfold safeSub
           rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
@@ -495,11 +495,11 @@ theorem of_run_revert_window_frame
       simp only [bind, Except.bind]
       rw [Devm.popToNat_eq_ok
         (devm := devm.setMach
-          ⟨sz :: tail, devm.memory, devm.gasLeft⟩) rfl]
+          ⟨sz :: tail, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.gasLeft_setMach]
       have hext : (devm.setMach
-          ⟨tail, devm.memory, devm.gasLeft⟩).extCost
+          ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨i.toNat, sz.toNat⟩] =
             devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
       rw [hext]
