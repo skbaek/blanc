@@ -140,10 +140,10 @@ if path_lexists "$UV_ALIAS_BACKUP" || path_lexists "$UV_BASE_BACKUP"; then
   exit 1
 fi
 if path_lexists "$UV_ALIAS"; then
-  mv "$UV_ALIAS" "$UV_ALIAS_BACKUP"
+  mv "$UV_ALIAS" "$UV_ALIAS_BACKUP" || exit 1
 fi
 if path_lexists "$UV_BASE"; then
-  mv "$UV_BASE" "$UV_BASE_BACKUP"
+  mv "$UV_BASE" "$UV_BASE_BACKUP" || exit 1
 fi
 ```
 
@@ -162,16 +162,16 @@ if path_lexists "$UV_ALIAS_FAILED" || path_lexists "$UV_BASE_FAILED"; then
   exit 1
 fi
 if path_lexists "$UV_ALIAS"; then
-  mv "$UV_ALIAS" "$UV_ALIAS_FAILED"
+  mv "$UV_ALIAS" "$UV_ALIAS_FAILED" || exit 1
 fi
 if path_lexists "$UV_BASE"; then
-  mv "$UV_BASE" "$UV_BASE_FAILED"
+  mv "$UV_BASE" "$UV_BASE_FAILED" || exit 1
 fi
 if path_lexists "$UV_BASE_BACKUP"; then
-  mv "$UV_BASE_BACKUP" "$UV_BASE"
+  mv "$UV_BASE_BACKUP" "$UV_BASE" || exit 1
 fi
 if path_lexists "$UV_ALIAS_BACKUP"; then
-  mv "$UV_ALIAS_BACKUP" "$UV_ALIAS"
+  mv "$UV_ALIAS_BACKUP" "$UV_ALIAS" || exit 1
 fi
 ```
 
