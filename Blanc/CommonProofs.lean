@@ -7854,6 +7854,91 @@ lemma lift_core
   intro pc' sevm'' devm'' exn' child hdepth _hleg' hat
   exact hfa pc' sevm'' devm'' exn' child hdepth hat
 
+/-- Fork-uniform successful-execution lifting.  Unlike the compatibility
+`lift`, the recursive hypothesis and conclusion do not assume legacy state-gas
+rules. -/
+lemma lift_any
+    (R : Sevm → Devm → Devm → Prop)
+    (ca : Adr) -- contract address
+    (p : Prog)
+    ( depth_ind :
+      ∀ {sevm pre post},
+        Prog.Run sevm pre p post →
+        sevm.currentTarget = ca →
+        ForallSubExecAny sevm.depth ca p R →
+        R sevm pre post )
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter} {post},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {evm'}
+        {exn' : Execution} {inter} {post},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n
+          (.some ⟨evm', exn'⟩)
+          (.ok inter) →
+        Exec evm'.pc evm'.sta evm'.dyna exn' →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        ifOk (R evm'.sta evm'.dyna) exn' →
+        R sevm inter post →
+        R sevm pre post )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter} {post},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        Exec pc' sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        Linst.At sevm.code pc l →
+        Linst.Run sevm pre l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm pre post ) :
+    ∀ pc sevm pre post,
+      Exec pc sevm pre (.ok post) →
+      Prog.At p ca pc sevm pre →
+      R sevm pre post := by
+  intro pc sevm pre post h_exc h_at
+  refine lift_core_any (fun _ sevm pre exn => ifOk (R sevm pre) exn) R
+    (fun h => h) ca p ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+    pc sevm pre (.ok post) h_exc h_at
+  · intro sevm' pre' post' h_run h_eq h_fa
+    apply depth_ind h_run h_eq
+    intro pc_ sevm_ devm_ post_ h_exc' h_lt h_at'
+    exact h_fa pc_ sevm_ devm_ (.ok post_) h_exc' h_lt h_at'
+  · intro pc' sevm' devm' err devm'' h_eq; exact trivial
+  · intro pc' sevm' devm' h_get h_ne; exact trivial
+  · intro pc' sevm' devm' n err devm'' h_at' h_run h_ne; exact trivial
+  · intro pc' sevm' devm' n evm_ exn_ err devm'' h_at' h_run ex_sub h_ne h_ih
+    exact trivial
+  · intro pc' sevm' devm' n devm'' exn h_at' h_run ex h_ne h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact nextNone h_at' h_run ex h_ne h_ih
+  · intro pc' sevm' devm' n evm_ exn_ devm'' exn h_at' h_run ex_sub ex h_ne
+      h_ih_sub h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact nextSome h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
+  · intro pc' sevm' devm' j err devm'' h_at' h_run h_ne; exact trivial
+  · intro pc' sevm' devm' j pc_ devm'' exn h_at' h_run ex h_ne h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact jump h_at' h_run ex h_ne h_ih
+  · intro pc' sevm' devm' l exn h_at' h_run h_ne
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact last h_at' h_run h_ne
+
+/-- Compatibility successful-execution lifting for legacy state-gas rules. -/
 lemma lift
     (R : Sevm → Devm → Devm → Prop)
     (ca : Adr) -- contract address
@@ -7989,6 +8074,73 @@ lemma lift_inv
   · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
     exact h_ih (nextNone h_at h_run h_ne h_pi)
   · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk h_ih h_pi
+    rcases nextSome h_at h_run ex_sub h_ne h_pi with ⟨h_pi_sub, h_imp⟩
+    apply h_ih; apply h_imp
+    cases exn' with
+    | error e => exact trivial
+    | ok post' => exact h_ifOk h_pi_sub
+  · intro pc sevm pre j pc' inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (jump h_at h_run h_ne h_pi)
+  · intro pc sevm pre l post h_at h_run h_ne h_pi
+    exact last h_at h_run h_ne h_pi
+
+/-- Fork-uniform invariant lifting, derived from `lift_any`. -/
+lemma lift_inv_any
+    (ca : Adr) (p : Prog)
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Devm → Prop)
+    ( with_depth_ind :
+      ∀ {sevm pre post},
+        Prog.Run sevm pre p post →
+        sevm.currentTarget = ca →
+        ( ∀ pc' sevm' pre' post',
+            Exec pc' sevm' pre' (.ok post') →
+            sevm'.depth < sevm.depth →
+            Prog.At p ca pc' sevm' pre' →
+            σ sevm' pre' →
+            ρ sevm' post' ) →
+        σ sevm pre →
+        ρ sevm post )
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ sevm inter )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {evm'} {exn'} {inter},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
+        Exec evm'.pc evm'.sta evm'.dyna exn' →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ evm'.sta evm'.dyna ∧ (ifOk (ρ evm'.sta) exn' → σ sevm inter) )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ sevm inter )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        Linst.At sevm.code pc l →
+        Linst.Run sevm pre l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        ρ sevm post ) :
+    ∀ pc sevm devm post,
+      Exec pc sevm devm (.ok post) →
+      Prog.At p ca pc sevm devm →
+      σ sevm devm →
+      ρ sevm post := by
+  apply @Blanc.lift_any (fun sevm pre post => σ sevm pre → ρ sevm post) ca p
+    with_depth_ind
+  · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (nextNone h_at h_run h_ne h_pi)
+  · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk
+      h_ih h_pi
     rcases nextSome h_at h_run ex_sub h_ne h_pi with ⟨h_pi_sub, h_imp⟩
     apply h_ih; apply h_imp
     cases exn' with
