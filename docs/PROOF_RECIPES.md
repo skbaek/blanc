@@ -19,6 +19,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/TaggedStorage.lean`, `declaration:Blanc.TaggedStorage.encode`, `declaration:Blanc.TaggedStorage.encode_eq_of_payload_lt`, `declaration:Blanc.TaggedStorage.encode_injective_of_payload_lt`, `declaration:Blanc.TaggedStorage.encode_ne_of_region_ne`
 - Review: `proof-infrastructure` on `2026-09-09`
 
+## `same-frame-stack-certificate`
+
+- Status: `active`
+- Triggers: `goal-head:CompiledStackSafety.StepSafe`, `goal-head:CompiledStackSafety.ResumeSafe`
+- Preferred path: Use CompiledStackSafety.Certificate.at_parentPrefix for a checked certificate and an actual same-frame prefix, deriving the exact root entry invariant first. Use resume_call_safe to close an actual CALL resumption from parent headroom and its continuation stack invariant; call_resumes_of_room constructs the actual status-word result.
+- Boundary: The certificate requires local proofs for actual decoded steps; a symbolic PC/height table alone is insufficient. The theorem covers arbitrary raw parent outcomes but does not assert safety of arbitrary entered child code. Fatal child errors are distinguished from newly generated parent stack faults.
+- Owner module: [Blanc/CompiledStackSafety.lean](../Blanc/CompiledStackSafety.lean)
+- Canonical example: [Blanc/CompiledStackSafety.lean](../Blanc/CompiledStackSafety.lean) — `Certificate.at_parentPrefix`
+- Registered symbols: `declaration:Blanc.CompiledStackSafety.Certificate`, `declaration:Blanc.CompiledStackSafety.Certificate.parentStep`, `declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix`, `declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix`, `declaration:Blanc.CompiledStackSafety.call_resumes_of_room`, `declaration:Blanc.CompiledStackSafety.resume_call_safe`
+- Review: `proof-infrastructure` on `2026-09-06`
+
 ## `runcompiled-construction`
 
 - Status: `active`

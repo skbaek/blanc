@@ -177,6 +177,7 @@
           "docs/PROOF_RECIPES.md",
           "Blanc/ProofRecipesGenerated.lean",
           "Blanc/ProofRecipeTactic.lean",
+          "scripts/ProofRecipeStackSafety.lean",
           "Blanc/Tactics.lean",
           "Blanc.lean",
           ".gitignore",
