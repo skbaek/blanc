@@ -15,6 +15,7 @@ import math
 import copy
 import os
 import shutil
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -107,6 +108,51 @@ def cost_tools(root: Path, names: list[str], engine: Any) -> str:
             raise engine.Unresolvable(f"cost executable is absent: {name}")
         detail[name] = {"path": str(path.resolve()), "sha256": engine.file_digest(path.resolve())}
     return digest(detail)
+
+
+def integrity_envelope(roots: tuple[Path, ...]) -> dict[str, int]:
+    """Conservatively census the verifier's retained paths without executing it.
+
+    Lean walkDir retains directories as well as files and follows aliases. We
+    support regular files/directories only, refusing aliases and cycles instead
+    of undercounting their traversal. Include roots and all absolute path bytes
+    to overbound the path population; counts are not memory estimates.
+    """
+    pending = [iter(root.absolute() for root in roots)]
+    seen_directories = set()
+    entries = path_bytes = largest_file = 0
+    try:
+        while pending:
+            try:
+                entry = next(pending[-1])
+            except StopIteration:
+                iterator = pending.pop()
+                if hasattr(iterator, "close"):
+                    iterator.close()
+                continue
+            path = entry if isinstance(entry, Path) else Path(entry.path)
+            metadata = path.lstat()
+            entries += 1
+            path_bytes += len(os.fsencode(str(path)))
+            if stat.S_ISDIR(metadata.st_mode):
+                identity = (metadata.st_dev, metadata.st_ino)
+                if identity in seen_directories:
+                    raise ValueError(f"integrity census refuses repeated directory identity: {path}")
+                seen_directories.add(identity)
+                pending.append(os.scandir(path))
+            elif stat.S_ISREG(metadata.st_mode):
+                largest_file = max(largest_file, metadata.st_size)
+            else:
+                raise ValueError(f"integrity census supports only regular files/directories; alias or special entry: {path}")
+    finally:
+        for iterator in pending:
+            if hasattr(iterator, "close"):
+                iterator.close()
+    def envelope(value):
+        return 1 << max(0, value - 1).bit_length()
+    return {"cache_entry_count_bound": envelope(entries),
+            "cache_path_bytes_bound": envelope(path_bytes),
+            "cache_largest_file_bytes_bound": envelope(largest_file)}
 
 
 def load_selector(root: Path) -> Any:
@@ -276,18 +322,10 @@ class ExecutionContext:
             if key == "elab/body":
                 extras["complete_modules"] = elab_identity(self.root, self.engine)["traces"]
             if role == "integrity":
-                # The checker materializes one file at a time and inventories
-                # file names. Bind conservative size/population envelopes so
-                # adding a small cache artifact does not invalidate every gate
-                # estimate. No memory estimate is inferred from these bounds.
                 cache = os.environ.get("LAKE_CACHE_DIR")
                 if not cache or not Path(cache).is_dir():
                     raise self.engine.Unresolvable("active LAKE_CACHE_DIR is unavailable; owned build bootstrap required")
-                sizes = [path.stat().st_size for base in (Path(cache), self.root / ".lake") for path in base.rglob("*") if path.is_file()]
-                def envelope(value):
-                    return 1 << max(0, value - 1).bit_length()
-                extras["cache_file_count_bound"] = envelope(len(sizes))
-                extras["cache_largest_file_bytes_bound"] = envelope(max(sizes, default=0))
+                extras.update(integrity_envelope((Path(cache), self.root / ".lake")))
             identity = digest({"fingerprint": fingerprint, "resource_class": resource, "role": role, "tools": tools, "envelope": extras})
             return {**row, "identity": identity, "envelope": extras,
                     "contention": "exclusive" if resource == "exclusive" else "sensitive"}

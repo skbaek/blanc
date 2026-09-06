@@ -48,6 +48,7 @@ class ManagedTests(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         (self.root / "scripts").mkdir()
         (self.root / ".gitignore").write_text(".lake/\n")
+        (self.root / ".lake").mkdir()
         self.gate = {"id": "fixture", "order": 1, "command": ["scripts/check-fixture.sh"], "kind": "cacheable",
                      "inputs": {"files": ["input.txt"], "material_output": [
                          {"id": "bytes", "command": ["fixture-evaluator"], "authority": ["input.txt"], "resource_class": "elaboration"}]},
@@ -252,7 +253,7 @@ class ManagedTests(unittest.TestCase):
             result = subprocess.run(["bash", *argv], cwd=self.root, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("certificate", result.stderr)
-            self.assertFalse((self.root / ".lake").exists())
+            self.assertEqual(list((self.root / ".lake").iterdir()), [])
 
     def test_actual_standalone_weth_keeps_internal_build(self):
         shutil.copyfile(Path(__file__).with_name("check-weth10-current-mainnet.sh"), self.root / "scripts/check-weth10-current-mainnet.sh")
@@ -352,7 +353,7 @@ class ManagedTests(unittest.TestCase):
         context = self.context([gate])
         key = "lake-build/integrity"
         initial = context.requirement(key)
-        count = initial["envelope"]["cache_file_count_bound"]
+        count = initial["envelope"]["cache_entry_count_bound"]
         largest = initial["envelope"]["cache_largest_file_bytes_bound"]
         self.assertGreater(count, 0)
         self.assertGreater(largest, 0)
@@ -363,7 +364,7 @@ class ManagedTests(unittest.TestCase):
         self.assertGreater(grown["envelope"]["cache_largest_file_bytes_bound"], largest)
         (cache / "large").unlink()
         for n in range(count + 1): (cache / str(n)).write_bytes(b"x")
-        self.assertGreater(context.requirement(key)["envelope"]["cache_file_count_bound"], count)
+        self.assertGreater(context.requirement(key)["envelope"]["cache_entry_count_bound"], count)
         gc.forget_digests()
         before = context.requirement(key)
         (self.root / "scripts/check-lake-artifact-cache.lean").write_text("changed checker")
@@ -372,6 +373,50 @@ class ManagedTests(unittest.TestCase):
         with patch.object(ge, "cost_tools", return_value="different toolchain"):
             self.assertNotEqual(before["identity"], context.requirement(key)["identity"])
         self.assertFalse(self.fake.calls)
+
+    def test_integrity_census_counts_empty_directories_and_retained_paths(self):
+        lake = self.root / ".lake"
+        cache = self.root / ".cache"
+        before = ge.integrity_envelope((cache, lake))
+        for index in range(128):
+            (lake / str(index)).mkdir()
+        after = ge.integrity_envelope((cache, lake))
+        self.assertGreater(after["cache_entry_count_bound"], before["cache_entry_count_bound"])
+        self.assertGreater(after["cache_path_bytes_bound"], before["cache_path_bytes_bound"])
+        self.assertEqual(after["cache_largest_file_bytes_bound"], 1)
+        for path in lake.iterdir(): path.rmdir()
+        self.assertEqual(ge.integrity_envelope((cache, lake)), before)
+        short = lake / "a"
+        short.mkdir()
+        short_bound = ge.integrity_envelope((lake,))["cache_path_bytes_bound"]
+        short.rename(lake / ("long" * 50))
+        self.assertGreater(ge.integrity_envelope((lake,))["cache_path_bytes_bound"], short_bound)
+
+    def test_integrity_aliases_cycles_and_special_entries_refuse_before_capture(self):
+        self.prepare_modules()
+        gate = {"id": "lake-build", "order": 1, "command": ["lake", "build"], "kind": "composition", "reason": "refresh", "prerequisite": True,
+                "managed_execution": ge.RECIPES["lake-build"], "verdict": {"expect_exit": 0, "summary_patterns": []}}
+        context = self.context([gate])
+        external = Path(self.stack.enter_context(tempfile.TemporaryDirectory(prefix="integrity-alias-control-")))
+        (external / "large").write_bytes(b"x" * 1024)
+        link = self.root / ".lake/alias"
+        for target in (external, self.root / ".lake", external / "large", external / "missing"):
+            link.symlink_to(target)
+            requirement = context.requirement("lake-build/integrity")
+            self.assertIsNone(requirement["identity"])
+            self.assertIn("alias or special entry", requirement["unresolved"])
+            with self.assertRaises(ge.FatalOperationError):
+                context.capture(gate, "prerequisite", "lake-build/integrity")
+            self.assertEqual(self.fake.calls, [])
+            link.unlink()
+        os.mkfifo(link)
+        with self.assertRaises(ValueError): ge.integrity_envelope((self.root / ".lake",))
+        link.unlink()
+        with self.assertRaisesRegex(ValueError, "repeated directory"):
+            ge.integrity_envelope((self.root / ".lake", self.root / ".lake"))
+        with self.assertRaises(OSError): ge.integrity_envelope((external / "missing",))
+        link.symlink_to(external)
+        with self.assertRaises(ValueError): ge.integrity_envelope((link,))
 
     def test_missing_or_malformed_support_cannot_default(self):
         context = self.context()

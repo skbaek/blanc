@@ -291,11 +291,19 @@ binds each operation's declared inputs independently of the whole-candidate
 source snapshot used to reject changes during execution. Material cost identity
 uses producer source and imported traces without evaluating the producer.
 Missing traces are an unresolved prerequisite, never a guessed identity.
+Integrity cost descriptors include all visited regular-file/directory entries,
+empty directories, retained path bytes and largest file size. The managed
+nonexecuting census refuses symlinks, special entries, missing roots and repeated
+directory identities before admission instead of omitting alias traversal. These
+are cost descriptors requiring a justified whole-envelope memory basis; the
+existing integrity helper and its complete content verdict are unchanged.
 
 Admission refusal, cancellation, uncertain cleanup and managed source drift are
 fatal through planning, post-run fingerprinting and reused-row revalidation.
-None can become an unidentified-input fallback or cache credit. Child stdout
-and stderr remain separate bytes; only child stdout identifies material output.
+None can become an unidentified-input fallback or cache credit.
+Known direct-child signal termination must likewise stay fatal after cleanup;
+ordinary positive input failures retain their permitted fallback semantics.
+Child stdout and stderr remain separate bytes; only child stdout identifies material output.
 Gate summaries use the original text decoding and exactly-once rules. The
 existing owned-build API's combined text is recorded separately as a full
 build/wrapper receipt under `.lake/managed-gate-receipts/`, with empty pure
