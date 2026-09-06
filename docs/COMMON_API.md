@@ -335,6 +335,22 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   leaf-only `proofRecipeLeafTriggerMatches` dispatch in `ProofRecipeTactic`, reusing
   the shared raw-head helper. Unmatched triggers retain the original matcher;
   the generator validates both fixed inventories and rejects duplicate owners.
+- Forward primitive stack safety, including failure arms, is in
+  [`Blanc/AbstractStackSafety.lean`](../Blanc/AbstractStackSafety.lean).
+  `AbstractStackSafety.Matches` matches the entire operand stack against
+  exact literals or arbitrary words; `Matches.length`, `getElem?`, `set`,
+  and `swap` preserve its structural information. `SafeResult` permits
+  non-stack errors while requiring the supplied successful postcondition.
+  Compose it with `SafeResult.bind` and `mono`. `chargeGas_safe`, `push_safe`,
+  `pop_safe`, `pushItem_safe`, `applyUnary_safe`, `applyBinary_safe`,
+  `dup_safe`, and `swap_safe` cover the named actual primitive semantics.
+  `ninst_push_safe` includes exact next-PC equality;
+  `step_ofExecution_safe` and `call_resume_safe` connect to the existing
+  `StepSafe`/`ResumeSafe` obligations. None requires sufficient gas or a
+  successful terminal outcome. These lemmas do not yet implement a decoded
+  table checker or construct a concrete program certificate. The generic
+  `SafeResult` head alone does not identify an instruction/transfer, so this
+  primitive inventory is registry-only until that selection interface exists.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
