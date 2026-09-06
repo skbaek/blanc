@@ -71,7 +71,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 59 | `scripts/check-cycle-write-free.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 60 | `scripts/check-transient-settlement.sh --semantic-only` | yes | — | yes | `lake-build` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
 | 61 | `scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites` | yes | — | yes | `lake-build`, `layering` | files, lean_entries, tools | not expensive | unmeasured after split | elaboration | none known |
-| 62 | `scripts/check-drip.sh` | yes | yes | yes | — | files, tools | not expensive | sub-second | light | a nominal underfunded fixture whose floored payout still fit the target balance |
+| 62 | `scripts/check-drip.sh` | yes | yes | yes | `lake-build` | external, files, populations, tools | already precise: complete fixture JSON, literal/parser/verifier, pinned runner bytes and clean Jaune source identity bind replay; real replay remains unmeasured | real replay unmeasured; contained exclusive execution | exclusive | a nominal underfunded fixture whose floored payout still fit the target balance |
 | 63 | `scripts/check-drip-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, populations, tools | already precise: generated fixture sources, complete fixture population, target and native runtime closure are direct inputs | unavailable until the generated population exists | exclusive | none known |
 
 ## Population reconciliation
