@@ -26,20 +26,27 @@ def Frame.settlementCommits (frame : Frame) (raw : Execution) : Bool :=
   | .error _ => false
   | .ok post => post.error.isNone
 
+/-- Tracks Jaune's rules-keyed settlement: both arms of
+`executeCode.handleErrorWith` set an error on every non-`ok` raw outcome, so a
+clean settled machine can only have come from a raw outcome that committed.
+The Amsterdam arm restores the state-gas reservoir first, which changes the
+machine but not whether an error was set. -/
 private theorem execution_commits_of_handleError_clean
-    {raw : Execution} {post : Devm}
-    (hresult : executeCode.handleError raw = .ok post)
+    {stateGas : Option StateGasRules} {raw : Execution} {post : Devm}
+    (hresult : executeCode.handleErrorWith stateGas raw = .ok post)
     (hclean : post.error.isNone = true) :
     Execution.commits raw = true := by
   cases raw with
   | ok rawPost =>
-      simp only [executeCode.handleError, Except.ok.injEq] at hresult
-      subst post
-      exact hclean
+      cases stateGas <;>
+        simp only [executeCode.handleErrorWith, executeCode.handleError,
+          executeCode.handleErrorAmsterdam, Except.ok.injEq] at hresult <;>
+        subst post <;> exact hclean
   | error error =>
       rcases error with ⟨error, rawPost⟩
-      cases error <;>
-        simp [executeCode.handleError, Devm.withError,
+      cases stateGas <;> cases error <;>
+        simp [executeCode.handleErrorWith, executeCode.handleError,
+          executeCode.handleErrorAmsterdam, Devm.withError,
           Devm.setMeta] at hresult
       all_goals subst post
       all_goals change (some _).isNone = true at hclean
@@ -237,7 +244,8 @@ theorem Exec.descendantFrames_runOk_create_codeDepositRollback
     (_rawCommits : Execution.commits raw = true)
     (hcreate : f.isCreate = true)
     (hsettled : processCreateMessage.settle f.outer
-      (processMessage.settle f.inner (executeCode.handleError raw)) =
+      (processMessage.settle f.inner
+        (executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw)) =
         .ok settled)
     (herror : settled.error.isSome = true) :
     Exec.descendantFrames (Exec.runOk hstep henter child hr next) =
@@ -296,9 +304,15 @@ theorem Frame.settlementCommits_ofCall_of_raw_commits
   | ok post =>
       cases herror : post.error with
       | none =>
+          -- Both arms of the rules-keyed settlement leave a committed raw
+          -- outcome exactly as it is, so the frame's settlement is clean
+          -- whatever the fork.
+          have hid : executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+              (.ok post) = .ok post := by
+            cases msg.benv.stat.rules.stateGas <;> rfl
           simp [Frame.settlementCommits, Frame.settle, Frame.settleMsg,
-            Frame.ofCall, executeCode.handleError,
-            processMessage.settle, Bind.bind, Except.bind, herror]
+            Frame.ofCall, hid, processMessage.settle, Bind.bind, Except.bind,
+            herror]
       | some error =>
           simp [Execution.commits, herror] at hraw
 
@@ -370,17 +384,32 @@ theorem processCreateMessage.chargeCodeGas_bal_eq
     post.state.bal = pre.state.bal := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
+  -- The deposit charge is now rules-keyed: the legacy arm charges per byte of
+  -- execution gas, the Amsterdam arm charges keccak words of execution gas and
+  -- state bytes of state gas. Both are machine-only.
   split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
-    split at hrest
-    · cases hrest
-    · cases hrest
-      rw [chargeGas_def] at hcharge
-      split at hcharge
-      · contradiction
-      · cases hcharge
-        rfl
+  · split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+      split at hrest
+      · cases hrest
+      · cases hrest
+        rw [chargeGas_def] at hcharge
+        split at hcharge
+        · contradiction
+        · cases hcharge
+          rfl
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+        rw [chargeStateGas_state_eq hrest]
+        rw [chargeGas_def] at hcharge
+        split at hcharge
+        · contradiction
+        · cases hcharge
+          rfl
 
 /-- A clean successful CREATE settlement exposes its successful inner message
 and preserves that inner result's complete balance map. -/
@@ -411,8 +440,12 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
             | halt reason =>
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
+                -- Both arms of the rules-keyed halt settlement set the error;
+                -- only the machine they set it on differs.
+                simp only [processCreateMessage.exceptionalHalt,
+                  processCreateMessage.exceptionalHaltAmsterdam,
                   Devm.error, Devm.setMeta] at herror
+                split at herror <;> simp at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle

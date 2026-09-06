@@ -513,6 +513,14 @@ def Ninst.toBytes : Ninst → Bytes
   | .reg o => [Rinst.toUInt8 o]
   | .exec o => [Xinst.toUInt8 o]
   | .push bs _ => pushToB8L bs
+  -- EIP-8024's three stack-access instructions carry one immediate byte and
+  -- are encoded and sized fork-independently, exactly as Jaune's decoder
+  -- reads them back (`ByteArray.getInst`, bytes 0xE6-0xE8). Blanc's own
+  -- programs never emit them; the arms exist so the encoder stays total and
+  -- stays the inverse of the decoder.
+  | .dupn b => [0xE6, b]
+  | .swapn b => [0xE7, b]
+  | .exchange b => [0xE8, b]
 
 def compsize : Func → Nat
   | .last _ => 1
@@ -873,7 +881,12 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     split <;>
     try { rename (UInt8.toInstType _ = _) => h
           rw [rw, Rinst.toInstType_toUInt8] at h; cases h }
-    rw [rw, toUInt8_toRinst]; rfl
+    -- The decoder now branches on EIP-8024's three bytes before falling
+    -- through to `toRinst`; `Rinst.toUInt8` never produces 0xE6-0xE8
+    -- (`Rinst.toUInt8_ne_stackAccess`), so the fall-through is the only
+    -- reachable arm and the original `toUInt8_toRinst` closes it.
+    obtain ⟨h6, h7, h8⟩ := Rinst.toUInt8_ne_stackAccess r
+    split <;> (simp_all [toUInt8_toRinst]; try rfl)
   case exec x =>
     simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
@@ -886,6 +899,67 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           rw [rw, Xinst.toInstType_toUInt8] at h; cases h }
     rw [rw, toUInt8_toXinst]; rfl
   case push xs le => apply (pushAt_of_slice le slice).2
+  -- EIP-8024: opcode byte then one immediate byte, read back by `byteD`.
+  case dupn d =>
+    simp only [Ninst.toBytes] at slice
+    obtain ⟨eq, slice'⟩ := List.slice_cons_iff.mp slice
+    obtain ⟨eq2, -⟩ := List.slice_cons_iff.mp slice'
+    have lt := ByteArray.lt_size_of_getElem?_eq_some eq
+    have rw := ByteArray.getElem_of_getElem?_eq_some eq lt
+    have lt2 := ByteArray.lt_size_of_getElem?_eq_some eq2
+    have rw2 := ByteArray.getElem_of_getElem?_eq_some eq2 lt2
+    have hbyte : code.byteD (pc + 1) = d := by
+      simp only [ByteArray.byteD, dif_pos lt2, rw2]
+    have hR : UInt8.toInstType 230 = InstType.R := by rfl
+    simp only [Ninst.At, ByteArray.getInst, dif_pos lt]
+    split <;> first
+      | (split <;> simp_all
+         done)
+      | (simp_all
+         done)
+      | (rename_i h
+         simp only [rw, hR] at h
+         cases h)
+  case swapn d =>
+    simp only [Ninst.toBytes] at slice
+    obtain ⟨eq, slice'⟩ := List.slice_cons_iff.mp slice
+    obtain ⟨eq2, -⟩ := List.slice_cons_iff.mp slice'
+    have lt := ByteArray.lt_size_of_getElem?_eq_some eq
+    have rw := ByteArray.getElem_of_getElem?_eq_some eq lt
+    have lt2 := ByteArray.lt_size_of_getElem?_eq_some eq2
+    have rw2 := ByteArray.getElem_of_getElem?_eq_some eq2 lt2
+    have hbyte : code.byteD (pc + 1) = d := by
+      simp only [ByteArray.byteD, dif_pos lt2, rw2]
+    have hR : UInt8.toInstType 231 = InstType.R := by rfl
+    simp only [Ninst.At, ByteArray.getInst, dif_pos lt]
+    split <;> first
+      | (split <;> simp_all
+         done)
+      | (simp_all
+         done)
+      | (rename_i h
+         simp only [rw, hR] at h
+         cases h)
+  case exchange d =>
+    simp only [Ninst.toBytes] at slice
+    obtain ⟨eq, slice'⟩ := List.slice_cons_iff.mp slice
+    obtain ⟨eq2, -⟩ := List.slice_cons_iff.mp slice'
+    have lt := ByteArray.lt_size_of_getElem?_eq_some eq
+    have rw := ByteArray.getElem_of_getElem?_eq_some eq lt
+    have lt2 := ByteArray.lt_size_of_getElem?_eq_some eq2
+    have rw2 := ByteArray.getElem_of_getElem?_eq_some eq2 lt2
+    have hbyte : code.byteD (pc + 1) = d := by
+      simp only [ByteArray.byteD, dif_pos lt2, rw2]
+    have hR : UInt8.toInstType 232 = InstType.R := by rfl
+    simp only [Ninst.At, ByteArray.getInst, dif_pos lt]
+    split <;> first
+      | (split <;> simp_all
+         done)
+      | (simp_all
+         done)
+      | (rename_i h
+         simp only [rw, hR] at h
+         cases h)
 
 
 lemma of_subcode {cd k} :

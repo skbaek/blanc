@@ -45,7 +45,8 @@ theorem frameEnter_eq_run_afterTransfer_of_notPrecompile
       .inl (initEvm (msg.withBenv afterTransfer)) := by
     unfold executeCode.enter
     rw [hcode']
-    simp [hnotPrecompile']
+    simp
+    exact fun _ => hnotPrecompile
   unfold Frame.enter Frame.ofCall
   rw [hentry]
   simp only
@@ -158,17 +159,39 @@ theorem processMessage_eq_settle_exec
     processMessage_eq_settle_exec_afterTransfer
       msg msg.benv hentry hdisable
 
-/-- The message-settled machine produced by a raw REVERT outcome. -/
-def settledRevert (msg : Msg) (raw : Devm) : Devm :=
-  (raw.withError (some .revert)).rollback
-    msg.benv.state msg.tenv.transientStorage
+/-- The message-settled machine produced by a raw REVERT outcome, under the
+settlement `msg`'s own rules select.
 
-/-- The message-settled machine produced by a raw exceptional halt. -/
+These two definitions mirror the arms of Jaune's `executeCode.handleErrorWith`,
+so they track it rather than hard-coding one of its branches: the `none` arm
+below is textually the Prague form these definitions have always had, and the
+`some` arm restores the state-gas reservoir first, exactly as
+`executeCode.handleErrorAmsterdam` does. Every theorem stated over them keeps
+its statement and becomes true for every fork instead of for the legacy arm
+alone. -/
+def settledRevert (msg : Msg) (raw : Devm) : Devm :=
+  match msg.benv.stat.rules.stateGas with
+  | none =>
+    (raw.withError (some .revert)).rollback
+      msg.benv.state msg.tenv.transientStorage
+  | some _ =>
+    (raw.restoreStateGas.withError (some .revert)).rollback
+      msg.benv.state msg.tenv.transientStorage
+
+/-- The message-settled machine produced by a raw exceptional halt, under the
+settlement `msg`'s own rules select. See `settledRevert`. -/
 def settledHalt
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) : Devm :=
-  (((raw.withGasLeft 0).setMeta
-      {raw.meta with output := [], error := some (.halt reason)}).rollback
-    msg.benv.state msg.tenv.transientStorage)
+  match msg.benv.stat.rules.stateGas with
+  | none =>
+    (((raw.withGasLeft 0).setMeta
+        {raw.meta with output := [], error := some (.halt reason)}).rollback
+      msg.benv.state msg.tenv.transientStorage)
+  | some _ =>
+    (let evm := raw.restoreStateGas.forfeitRemainingGas
+     (evm.setMeta
+        {evm.meta with output := [], error := some (.halt reason)}).rollback
+      msg.benv.state msg.tenv.transientStorage)
 
 /-- A clean execution from the actual post-transfer environment settles to the
 same clean machine. -/
@@ -182,12 +205,15 @@ theorem processMessage_clean_of_exec_afterTransfer
   rw [processMessage_eq_settle_exec_afterTransfer
     msg afterTransfer hentry hdisable, hexec]
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleError, processMessage.settle]
-  change (if post.error.isSome = true then
-    Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
-    else Except.ok post) = Except.ok post
-  rw [herror]
-  rfl
+    executeCode.handleError, executeCode.handleErrorWith,
+    executeCode.handleErrorAmsterdam, processMessage.settle]
+  cases msg.benv.stat.rules.stateGas
+  all_goals
+    change (if post.error.isSome = true then
+      Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
+      else Except.ok post) = Except.ok post
+    rw [herror]
+    rfl
 
 /-- A clean raw execution settles to the same clean machine. -/
 theorem processMessage_clean_of_exec
@@ -215,7 +241,8 @@ theorem processMessage_revert_of_exec_afterTransfer
     processMessage msg = .ok (settledRevert msg raw) := by
   rw [processMessage_eq_settle_exec_afterTransfer
     msg afterTransfer hentry hdisable, hexec]
-  rfl
+  unfold settledRevert Frame.settle Frame.ofCall executeCode.handleErrorWith
+  cases msg.benv.stat.rules.stateGas <;> rfl
 
 /-- A raw REVERT from creation code with no separate code address settles to
 `settledRevert`, without requiring the message to disable precompiles. -/
@@ -228,7 +255,8 @@ theorem processMessage_revert_of_exec_afterTransfer_of_noCodeAddress
     processMessage msg = .ok (settledRevert msg raw) := by
   rw [processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress
     msg afterTransfer hentry hcodeAddress, hexec]
-  rfl
+  unfold settledRevert Frame.settle Frame.ofCall executeCode.handleErrorWith
+  cases msg.benv.stat.rules.stateGas <;> rfl
 
 /-- A clean raw execution from an exact post-transfer interpreter entry
 settles successfully to the same clean machine. -/
@@ -243,12 +271,15 @@ theorem processMessage_clean_of_exec_afterTransfer_of_codeEntry
   rw [processMessage_eq_settle_exec_afterTransfer_of_codeEntry
     msg benv hentry hcodeEntry, hexec]
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleError, processMessage.settle]
-  change (if post.error.isSome = true then
-    Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
-    else Except.ok post) = Except.ok post
-  rw [herror]
-  rfl
+    executeCode.handleError, executeCode.handleErrorWith,
+    executeCode.handleErrorAmsterdam, processMessage.settle]
+  cases msg.benv.stat.rules.stateGas
+  all_goals
+    change (if post.error.isSome = true then
+      Except.ok (post.rollback msg.benv.state msg.tenv.transientStorage)
+      else Except.ok post) = Except.ok post
+    rw [herror]
+    rfl
 
 /-- A raw REVERT settles to `settledRevert`. -/
 theorem processMessage_revert_of_exec
@@ -276,7 +307,8 @@ theorem processMessage_halt_of_exec_afterTransfer
     processMessage msg = .ok (settledHalt msg reason raw) := by
   rw [processMessage_eq_settle_exec_afterTransfer
     msg afterTransfer hentry hdisable, hexec]
-  rfl
+  unfold settledHalt Frame.settle Frame.ofCall executeCode.handleErrorWith
+  cases msg.benv.stat.rules.stateGas <;> rfl
 
 /-- A raw exceptional halt settles to `settledHalt`. -/
 theorem processMessage_halt_of_exec
@@ -293,41 +325,51 @@ theorem processMessage_halt_of_exec
       (by simpa only [hself] using hexec)
 
 @[simp] theorem settledRevert_error (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).error = some .revert := rfl
+    (settledRevert msg raw).error = some .revert := by
+  unfold settledRevert; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledRevert_output (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).output = raw.output := rfl
+    (settledRevert msg raw).output = raw.output := by
+  unfold settledRevert; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledRevert_logs (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).logs = raw.logs := rfl
+    (settledRevert msg raw).logs = raw.logs := by
+  unfold settledRevert; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledRevert_state (msg : Msg) (raw : Devm) :
-    (settledRevert msg raw).state = msg.benv.state := rfl
+    (settledRevert msg raw).state = msg.benv.state := by
+  unfold settledRevert; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledRevert_transientStorage (msg : Msg) (raw : Devm) :
     (settledRevert msg raw).transientStorage =
-      msg.tenv.transientStorage := rfl
+      msg.tenv.transientStorage := by
+  unfold settledRevert; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledHalt_error
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).error = some (.halt reason) := rfl
+    (settledHalt msg reason raw).error = some (.halt reason) := by
+  unfold settledHalt; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledHalt_output
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).output = [] := rfl
+    (settledHalt msg reason raw).output = [] := by
+  unfold settledHalt; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledHalt_logs
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).logs = raw.logs := rfl
+    (settledHalt msg reason raw).logs = raw.logs := by
+  unfold settledHalt; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledHalt_state
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
-    (settledHalt msg reason raw).state = msg.benv.state := rfl
+    (settledHalt msg reason raw).state = msg.benv.state := by
+  unfold settledHalt; cases msg.benv.stat.rules.stateGas <;> rfl
 
 @[simp] theorem settledHalt_transientStorage
     (msg : Msg) (reason : ExceptionalHalt) (raw : Devm) :
     (settledHalt msg reason raw).transientStorage =
-      msg.tenv.transientStorage := rfl
+      msg.tenv.transientStorage := by
+  unfold settledHalt; cases msg.benv.stat.rules.stateGas <;> rfl
 
 end MessageExecution
 

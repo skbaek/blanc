@@ -105,6 +105,33 @@ def Rinst.toUInt8 : Rinst → UInt8
   | .swap n       => 0x90 + n.val.toUInt8
   | .log n        => 0xA0 + n.val.toUInt8
 
+/-- Charging state gas is a machine-only operation: it moves the state-gas
+reservoir and may spill into `gasLeft`, and it touches the world not at all.
+The `chargeGas` sibling of this fact is Jaune's `chargeGas_def`; this one has
+no Jaune counterpart, so Blanc owns it here, beside the frame layer that needs
+it and below every consumer. -/
+theorem chargeStateGas_state_eq {amount : Nat} {pre post : Devm}
+    (h : chargeStateGas amount pre = .ok post) : post.state = pre.state := by
+  rcases pre with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+/-- No ordinary instruction's opcode byte is one of EIP-8024's three
+stack-access bytes. Jaune's decoder branches on `0xE6`-`0xE8` *inside* its
+`.R` case before falling through to `toRinst`, so every proof that reads an
+ordinary instruction back out of code needs to know the fall-through is the
+only reachable arm. The `dup`/`swap`/`log` families are decided over their
+own finite index. -/
+theorem Rinst.toUInt8_ne_stackAccess (r : Rinst) :
+    Rinst.toUInt8 r ≠ 0xE6 ∧ Rinst.toUInt8 r ≠ 0xE7 ∧
+      Rinst.toUInt8 r ≠ 0xE8 := by
+  cases r
+  case dup a => revert a; decide
+  case swap a => revert a; decide
+  case log a => revert a; decide
+  all_goals decide
+
 abbrev Stack : Type := List B256
 
 def Stack.Push (x y xy : Stack) : Prop := x <++ xy ++> y
