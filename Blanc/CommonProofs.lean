@@ -5720,6 +5720,12 @@ def XStep.CodeEffect (pre : Devm) (step : XStep) : Prop :=
   ∀ {xl exn}, xl.InvGetCode → XStep.Run step xl exn →
     Execution.CodePreserve pre exn
 
+/-- Code-frame relation between a recursive step's input and every frame it
+can spawn. This is the pre-settlement companion to `XStep.CodeEffect`. -/
+def XStep.SpawnFrame (pre : Devm) (step : XStep) : Prop :=
+  ∀ {f rsm}, step = .spawn f rsm →
+    ∀ a : Adr, f.inner.benv.state.getCode a = pre.getCode a
+
 lemma XStep.CodeEffect.trans_left {a b : Devm} {step : XStep}
     (hab : Devm.CodeFrame a b) (h : XStep.CodeEffect b step) :
     XStep.CodeEffect a step := by
@@ -5728,6 +5734,61 @@ lemma XStep.CodeEffect.trans_left {a b : Devm} {step : XStep}
     rw [hab adr]
     exact ha
   exact (h inv run adr hb).trans (hab adr)
+
+lemma XStep.SpawnFrame.trans_left {a b : Devm} {step : XStep}
+    (hab : Devm.CodeFrame a b) (h : XStep.SpawnFrame b step) :
+    XStep.SpawnFrame a step := by
+  intro f rsm hs
+  intro adr
+  exact (h hs adr).trans (hab adr)
+
+lemma XStep.spawnFrame_bind
+    {pre : Devm} {out : Except (EvmError × Devm) (α × Devm)}
+    {next : α × Devm → Except (EvmError × Devm) XStep}
+    (hout : Outcome.Rel Prod.snd Prod.snd Devm.CodeFrame pre out)
+    (hnext : ∀ p : α × Devm,
+      XStep.SpawnFrame p.2 (XStep.ofExcept (next p))) :
+    XStep.SpawnFrame pre (XStep.ofExcept (out >>= next)) := by
+  intro f rsm hs
+  cases out with
+  | error err => cases hs
+  | ok p =>
+      intro adr
+      exact (hnext p hs adr).trans (hout adr)
+
+lemma XStep.spawnFrame_bindE
+    {pre : Devm} {out : Execution}
+    {next : Devm → Except (EvmError × Devm) XStep}
+    (hout : Execution.Rel Devm.CodeFrame pre out)
+    (hnext : ∀ d : Devm, XStep.SpawnFrame d (XStep.ofExcept (next d))) :
+    XStep.SpawnFrame pre (XStep.ofExcept (out >>= next)) := by
+  intro f rsm hs
+  cases out with
+  | error err => cases hs
+  | ok d =>
+      intro adr
+      exact (hnext d hs adr).trans (hout adr)
+
+lemma XStep.spawnFrame_assert
+    {pre : Devm} {p : Prop} [Decidable p] {err : EvmError × Devm}
+    {next : Unit → Except (EvmError × Devm) XStep}
+    (hnext : XStep.SpawnFrame pre (XStep.ofExcept (next ()))) :
+    XStep.SpawnFrame pre
+      (XStep.ofExcept (Except.assert p err >>= next)) := by
+  unfold Except.assert
+  split
+  · exact hnext
+  · intro f rsm hs
+    cases hs
+
+lemma XStep.spawnFrame_assertDynamic
+    {sevm : Sevm} {pre : Devm}
+    {next : Unit → Except (EvmError × Devm) XStep}
+    (hnext : XStep.SpawnFrame pre (XStep.ofExcept (next ()))) :
+    XStep.SpawnFrame pre
+      (XStep.ofExcept (assertDynamic sevm pre >>= next)) := by
+  unfold assertDynamic
+  exact XStep.spawnFrame_assert hnext
 
 lemma XStep.codeEffect_done {pre : Devm} {exn : Execution}
     (h : Execution.CodePreserve pre exn) :
@@ -5808,6 +5869,91 @@ lemma genericCallAmsterdam.codeEffect
         target codeAddress stv isSt ii isz oi osz code dp nac ib) := by
   intro xl exn inv run
   exact genericCallAmsterdam.codePreserve inv run
+
+lemma genericCreateAmsterdam.spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat} :
+    XStep.SpawnFrame devm
+      (genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms) := by
+  intro f rsm hs
+  exact (genericCreateAmsterdam.step_spawn_frame hs).1
+
+lemma genericCallAmsterdam.spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool} :
+    XStep.SpawnFrame devm
+      (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+        target codeAddress stv isSt ii isz oi osz code dp nac ib) := by
+  intro f rsm hs
+  exact (genericCallAmsterdam.step_spawn_frame hs).1
+
+lemma genericCallAmsterdam.meteredPrelude_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {d : Devm}
+    {gas value : B256} {gasValue transferCost : Nat}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat}
+    {newAccountCharged insufficientBalance : Bool} :
+    XStep.SpawnFrame d
+      (XStep.ofExcept do
+        let gasRules := sevm.benvStat.rules.gas
+        let extendCost :=
+          d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        let accessGas := gasRules.accessCost codeAddress d.accessedAddresses
+        Except.assert (accessGas + extendCost + transferCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := addAccessedAddress d codeAddress
+        let ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩ :=
+          gasRules.delegationCost d codeAddress
+        let d := d.balReadAccount sevm.benvStat.rules codeAddress
+        let extraGas := accessGas + transferCost + delegatedAccessGasCost
+        Except.assert (extraGas + extendCost ≤ d.gasLeft)
+          ⟨.halt (.outOfGas .none), d⟩
+        let d := d.balReadAccount sevm.benvStat.rules newCodeAddress
+        let ⟨code, d⟩ :=
+          completeDelegationAccess d disablePrecompiles newCodeAddress
+        let ⟨msgCallCost, msgCallStipend⟩ :=
+          calculateMsgCallGas gasValue gas.toNat d.gasLeft extendCost extraGas
+        let d ← chargeGas (msgCallCost + extendCost) d
+        let ⟨reservoir, d⟩ := d.drainStateGasReservoir
+        let d :=
+          d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
+        return genericCallAmsterdam.step
+          sevm state d msgCallStipend reservoir value caller target
+          newCodeAddress stv isSt inputIndex inputSize outputIndex outputSize
+          code disablePrecompiles newAccountCharged insufficientBalance) := by
+  apply XStep.spawnFrame_assert
+  let d₁ := addAccessedAddress d codeAddress
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ codeAddress with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  simp only [d₁] at hdelegation
+  simp only [hdelegation]
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules codeAddress
+  apply XStep.SpawnFrame.trans_left
+    (Devm.codeFrame_trans (addAccessedAddress_codeFrame d codeAddress)
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules codeAddress d₁))
+  apply XStep.spawnFrame_assert
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles newCodeAddress with
+    ⟨code, d₄⟩
+  simp only [d₁, d₂, d₃] at hcomplete
+  have hcomplete_snd :
+      (completeDelegationAccess d₃ disablePrecompiles newCodeAddress).2 = d₄ := by
+    rw [hcomplete]
+  apply XStep.SpawnFrame.trans_left
+    (Devm.codeFrame_trans
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules newCodeAddress d₂)
+      (completeDelegationAccess_codeFrame d₃ disablePrecompiles newCodeAddress))
+  rw [hcomplete_snd]
+  apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d₄)
+  intro d₅
+  exact XStep.SpawnFrame.trans_left
+    (Devm.codeFrame_trans
+      (Devm.drainStateGasReservoir_codeFrame d₅)
+      (Devm.memExtends_codeFrame d₅.drainStateGasReservoir.2
+        [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+    genericCallAmsterdam.spawnFrame
 
 /-- The common Amsterdam CALL-family suffix, after its constructor-specific
 stack reads have fixed the value, target, and memory ranges. -/
@@ -6099,6 +6245,238 @@ lemma Xinst.staticcallAmsterdam_codeEffect
     (outputSize := outputSize) (newAccountCharged := false)
     (insufficientBalance := false)
 
+lemma Xinst.createAmsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .create) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_assertDynamic
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨endowment, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memoryIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memorySize, d⟩
+  apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d)
+  intro d'
+  apply XStep.spawnFrame_assert
+  exact XStep.SpawnFrame.trans_left
+    (Devm.memExtends_codeFrame d' [⟨memoryIndex, memorySize⟩])
+    genericCreateAmsterdam.spawnFrame
+
+lemma Xinst.create2Amsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .create2) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_assertDynamic
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨endowment, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memoryIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨memorySize, d⟩
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨salt, d⟩
+  apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d)
+  intro d'
+  apply XStep.spawnFrame_assert
+  exact XStep.SpawnFrame.trans_left
+    (Devm.memExtends_codeFrame d' [⟨memoryIndex, memorySize⟩])
+    genericCreateAmsterdam.spawnFrame
+
+lemma Xinst.callAmsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .call) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨callee, d⟩
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨value, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  apply XStep.spawnFrame_assert
+  apply XStep.spawnFrame_assert
+  let d₁ := addAccessedAddress d callee
+  rcases hdelegation : sevm.benvStat.rules.gas.delegationCost d₁ callee with
+    ⟨disablePrecompiles, newCodeAddress, delegatedAccessGasCost⟩
+  let d₂ := d₁.balReadAccount sevm.benvStat.rules callee
+  apply XStep.SpawnFrame.trans_left
+    (Devm.codeFrame_trans (addAccessedAddress_codeFrame d callee)
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules callee d₁))
+  apply XStep.spawnFrame_assert
+  let d₃ := d₂.balReadAccount sevm.benvStat.rules newCodeAddress
+  rcases hcomplete : completeDelegationAccess d₃ disablePrecompiles newCodeAddress with
+    ⟨code, d₄⟩
+  apply XStep.SpawnFrame.trans_left
+    (Devm.codeFrame_trans
+      (Devm.balReadAccount_codeFrame sevm.benvStat.rules newCodeAddress d₂)
+      (by simpa [hcomplete] using
+        completeDelegationAccess_codeFrame d₃ disablePrecompiles newCodeAddress))
+  apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d₄)
+  intro d₅
+  dsimp only
+  split
+  · apply XStep.spawnFrame_bindE (chargeStateGas_codeFrame state.newAccount d₅)
+    intro d₆
+    apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d₆)
+    intro d₇
+    exact XStep.SpawnFrame.trans_left
+      (Devm.codeFrame_trans
+        (Devm.drainStateGasReservoir_codeFrame d₇)
+        (Devm.memExtends_codeFrame d₇.drainStateGasReservoir.2
+          [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+      genericCallAmsterdam.spawnFrame
+  · apply XStep.spawnFrame_bindE (chargeGas_codeFrame _ d₅)
+    intro d₇
+    exact XStep.SpawnFrame.trans_left
+      (Devm.codeFrame_trans
+        (Devm.drainStateGasReservoir_codeFrame d₇)
+        (Devm.memExtends_codeFrame d₇.drainStateGasReservoir.2
+          [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]))
+      genericCallAmsterdam.spawnFrame
+
+lemma Xinst.callcodeAmsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .callcode) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame d)
+  intro p
+  rcases p with ⟨value, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_spawnFrame
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := value) (gasValue := value.toNat)
+    (transferCost := if value = 0 then 0 else sevm.benvStat.rules.gas.callValue)
+    (caller := sevm.currentTarget) (target := sevm.currentTarget)
+    (codeAddress := codeAddress) (stv := true) (isSt := false)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false)
+    (insufficientBalance := decide ((d.getAcct sevm.currentTarget).bal < value))
+
+lemma Xinst.delegatecallAmsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .delegatecall) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_spawnFrame
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := sevm.value) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.caller) (target := sevm.currentTarget)
+    (codeAddress := codeAddress) (stv := false) (isSt := false)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false) (insufficientBalance := false)
+
+lemma Xinst.staticcallAmsterdam_spawnFrame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = some state) :
+    XStep.SpawnFrame devm (Xinst.step sevm devm .staticcall) := by
+  simp only [Xinst.step, hsg]
+  apply XStep.spawnFrame_bind (Devm.pop_codeFrame devm)
+  intro p
+  rcases p with ⟨gas, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToAdr_codeFrame d)
+  intro p
+  rcases p with ⟨codeAddress, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨inputSize, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputIndex, d⟩
+  apply XStep.spawnFrame_bind (Devm.popToNat_codeFrame d)
+  intro p
+  rcases p with ⟨outputSize, d⟩
+  dsimp only
+  exact genericCallAmsterdam.meteredPrelude_spawnFrame
+    (sevm := sevm) (state := state) (d := d) (gas := gas)
+    (value := 0) (gasValue := 0) (transferCost := 0)
+    (caller := sevm.currentTarget) (target := codeAddress)
+    (codeAddress := codeAddress) (stv := true) (isSt := true)
+    (inputIndex := inputIndex) (inputSize := inputSize)
+    (outputIndex := outputIndex) (outputSize := outputSize)
+    (newAccountCharged := false) (insufficientBalance := false)
+
+lemma Xinst.step_spawn_getCode_any {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (a : Adr) : f.inner.benv.state.getCode a = devm.getCode a := by
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Xinst.step_spawn_getCode hs hsg a
+  | some state =>
+      cases x with
+      | create => exact Xinst.createAmsterdam_spawnFrame hsg hs a
+      | create2 => exact Xinst.create2Amsterdam_spawnFrame hsg hs a
+      | call => exact Xinst.callAmsterdam_spawnFrame hsg hs a
+      | callcode => exact Xinst.callcodeAmsterdam_spawnFrame hsg hs a
+      | delegatecall => exact Xinst.delegatecallAmsterdam_spawnFrame hsg hs a
+      | staticcall => exact Xinst.staticcallAmsterdam_spawnFrame hsg hs a
+
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
   intro pc sevm pre out hrun
@@ -6127,6 +6505,7 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
     cases exn with
     | error e => exact fun a ha => key a ha
     | ok d' => exact fun a ha => key a ha
+
   unfold Xinst.Run at run
   rcases Xinst.step_shape sevm devm x hleg with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
