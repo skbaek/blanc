@@ -186,6 +186,121 @@ did not wrap.  A successful run therefore *proves* Jaune's two word-level
 premises rather than assuming them, and leaves exactly `B256.mulr` in the
 output slot. -/
 
+private theorem of_run_roundedMulRecovery {fs : List Func} {e : Sevm}
+    {entry s r : Devm} {image : Bytes} {tail : Stack}
+    {leftWord rightWord : B256} {next : Func}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s (roundedMulRecovery leftWord rightWord +++ next) r) :
+    ∃ t, Frame image entry t ∧
+      (((scratch image leftWord =?
+        ((scratch image rightWord * scratch image leftWord) / scratch image rightWord)) =? 0) ::
+        scratch image rightWord * scratch image leftWord :: tail <<+ t.stack) ∧
+      Func.Run fs e t next r := by
+  by_cases same : leftWord = rightWord
+  · subst rightWord
+    simp only [roundedMulRecovery] at run
+    refine run_prepend_elim _ (loadWord leftWord) ?_ run
+    intro s1 hline1 run
+    obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
+    refine run_prepend_elim _
+      [dup 0, dup 0, mul, dup 0, dup 2, swap 0, div, swap 0, swap 1, eq, iszero] ?_ run
+    intro s2 hline2 run
+    have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+    let x := scratch image leftWord
+    let p := x * x
+    have hp2 : ((x =? (p / x)) =? 0) :: p :: tail <<+ s2.stack := by
+      rcases Line.of_run_cons hline2 with ⟨t1, hd1, rest⟩
+      rcases Line.of_run_cons rest with ⟨t2, hd2, rest⟩
+      rcases Line.of_run_cons rest with ⟨t3, hm, rest⟩
+      rcases Line.of_run_cons rest with ⟨t4, hd3, rest⟩
+      rcases Line.of_run_cons rest with ⟨t5, hd4, rest⟩
+      rcases Line.of_run_cons rest with ⟨t6, hs1, rest⟩
+      rcases Line.of_run_cons rest with ⟨t7, hv, rest⟩
+      rcases Line.of_run_cons rest with ⟨t8, hs2, rest⟩
+      rcases Line.of_run_cons rest with ⟨t9, hs3, rest⟩
+      rcases Line.of_run_cons rest with ⟨t10, he, rest⟩
+      rcases Line.of_run_cons rest with ⟨t11, hz, hnil⟩
+      cases hnil
+      have h1 : x :: x :: tail <<+ t1.stack := prefix_of_dup_val hd1 (by show_nth) hp1
+      have h2 : x :: x :: x :: tail <<+ t2.stack := prefix_of_dup_val hd2 (by show_nth) h1
+      have h3 : p :: x :: tail <<+ t3.stack := prefix_of_mul hm h2
+      have h4 : p :: p :: x :: tail <<+ t4.stack := prefix_of_dup_val hd3 (by show_nth) h3
+      have h5 : x :: p :: p :: x :: tail <<+ t5.stack := prefix_of_dup_val hd4 (by show_nth) h4
+      have h6 : p :: x :: p :: x :: tail <<+ t6.stack :=
+        Stack.prefix_of_swap (show Stack.Swap 0
+          (x :: p :: p :: x :: tail) (p :: x :: p :: x :: tail)
+          from Stack.swapCore_zero) (of_run_swap hs1) h5
+      have h7 : (p / x) :: p :: x :: tail <<+ t7.stack := prefix_of_div hv h6
+      have h8 : p :: (p / x) :: x :: tail <<+ t8.stack :=
+        Stack.prefix_of_swap (show Stack.Swap 0
+          ((p / x) :: p :: x :: tail) (p :: (p / x) :: x :: tail)
+          from Stack.swapCore_zero) (of_run_swap hs2) h7
+      have h9 : x :: (p / x) :: p :: tail <<+ t9.stack :=
+        Stack.prefix_of_swap (show Stack.Swap 1
+          (p :: (p / x) :: x :: tail) (x :: (p / x) :: p :: tail)
+          from Stack.swapCore_succ Stack.swapCore_zero) (of_run_swap hs3) h8
+      exact prefix_of_iszero hz (prefix_of_eq he h9)
+    exact ⟨s2, frame2, hp2, run⟩
+  · simp only [roundedMulRecovery, if_neg same] at run
+    refine run_prepend_elim _ (loadWord leftWord) ?_ run
+    intro s1 hline1 run
+    obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
+    refine run_prepend_elim _ (loadWord rightWord) ?_ run
+    intro s2 hline2 run
+    obtain ⟨hp2, frame2⟩ := frame1.loadWord hp1 hline2
+    refine run_prepend_elim _ [mul, dup 0] ?_ run
+    intro s3 hline3 run
+    have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
+    have hp3 : scratch image rightWord * scratch image leftWord ::
+        scratch image rightWord * scratch image leftWord :: tail <<+ s3.stack := by
+      rcases Line.of_run_cons hline3 with ⟨u, hmul, hrest⟩
+      rcases Line.of_run_cons hrest with ⟨v, hdup, hnil⟩
+      cases hnil
+      exact prefix_of_dup_val hdup (by show_nth) (prefix_of_mul hmul hp2)
+    refine run_prepend_elim _ (loadWord rightWord) ?_ run
+    intro s4 hline4 run
+    obtain ⟨hp4, frame4⟩ := frame3.loadWord hp3 hline4
+    refine run_prepend_elim _ [swap 0, div] ?_ run
+    intro s5 hline5 run
+    have frame5 := frame4.line (by line_inv) (by line_inv) (by line_inv) hline5
+    have hp5 : (scratch image rightWord * scratch image leftWord) /
+          scratch image rightWord ::
+        scratch image rightWord * scratch image leftWord :: tail <<+ s5.stack := by
+      rcases Line.of_run_cons hline5 with ⟨u, hswap, hrest⟩
+      rcases Line.of_run_cons hrest with ⟨v, hdiv, hnil⟩
+      cases hnil
+      have hswapped :
+          scratch image rightWord * scratch image leftWord ::
+            scratch image rightWord ::
+              scratch image rightWord * scratch image leftWord :: tail <<+
+            u.stack :=
+        Stack.prefix_of_swap
+          (show Stack.Swap 0
+              (scratch image rightWord ::
+                scratch image rightWord * scratch image leftWord ::
+                  scratch image rightWord * scratch image leftWord :: tail)
+              (scratch image rightWord * scratch image leftWord ::
+                scratch image rightWord ::
+                  scratch image rightWord * scratch image leftWord :: tail)
+            from Stack.swapCore_zero)
+          (of_run_swap hswap) hp4
+      exact prefix_of_div hdiv hswapped
+    refine run_prepend_elim _ (loadWord leftWord) ?_ run
+    intro s6 hline6 run
+    obtain ⟨hp6, frame6⟩ := frame5.loadWord hp5 hline6
+    refine run_prepend_elim _ [eq, iszero] ?_ run
+    intro s7 hline7 run
+    have frame7 := frame6.line (by line_inv) (by line_inv) (by line_inv) hline7
+    have hp7 : ((scratch image leftWord =?
+          ((scratch image rightWord * scratch image leftWord) /
+            scratch image rightWord)) =? 0) ::
+        scratch image rightWord * scratch image leftWord :: tail <<+ s7.stack := by
+      rcases Line.of_run_cons hline7 with ⟨u, heq, hrest⟩
+      rcases Line.of_run_cons hrest with ⟨v, hiszero, hnil⟩
+      cases hnil
+      exact prefix_of_iszero hiszero (prefix_of_eq heq hp6)
+    exact ⟨s7, frame7, hp7, run⟩
+
 theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
     {entry s r : Devm} {image : Bytes} {tail : Stack}
     {leftWord rightWord outputWord : B256} {next : Func}
@@ -202,63 +317,7 @@ theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
         entry t ∧
       Func.Run fs e t next r := by
   unfold guardedRoundedMul at run
-  refine run_prepend_elim _ (loadWord leftWord) ?_ run
-  intro s1 hline1 run
-  obtain ⟨hp1, frame1⟩ := frame.loadWord hp hline1
-  refine run_prepend_elim _ (loadWord rightWord) ?_ run
-  intro s2 hline2 run
-  obtain ⟨hp2, frame2⟩ := frame1.loadWord hp1 hline2
-  refine run_prepend_elim _ [mul, dup 0] ?_ run
-  intro s3 hline3 run
-  have frame3 := frame2.line (by line_inv) (by line_inv) (by line_inv) hline3
-  have hp3 : scratch image rightWord * scratch image leftWord ::
-      scratch image rightWord * scratch image leftWord :: tail <<+ s3.stack := by
-    rcases Line.of_run_cons hline3 with ⟨u, hmul, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨v, hdup, hnil⟩
-    cases hnil
-    exact prefix_of_dup_val hdup (by show_nth) (prefix_of_mul hmul hp2)
-  refine run_prepend_elim _ (loadWord rightWord) ?_ run
-  intro s4 hline4 run
-  obtain ⟨hp4, frame4⟩ := frame3.loadWord hp3 hline4
-  refine run_prepend_elim _ [swap 0, div] ?_ run
-  intro s5 hline5 run
-  have frame5 := frame4.line (by line_inv) (by line_inv) (by line_inv) hline5
-  have hp5 : (scratch image rightWord * scratch image leftWord) /
-        scratch image rightWord ::
-      scratch image rightWord * scratch image leftWord :: tail <<+ s5.stack := by
-    rcases Line.of_run_cons hline5 with ⟨u, hswap, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨v, hdiv, hnil⟩
-    cases hnil
-    have hswapped :
-        scratch image rightWord * scratch image leftWord ::
-          scratch image rightWord ::
-            scratch image rightWord * scratch image leftWord :: tail <<+
-          u.stack :=
-      Stack.prefix_of_swap
-        (show Stack.Swap 0
-            (scratch image rightWord ::
-              scratch image rightWord * scratch image leftWord ::
-                scratch image rightWord * scratch image leftWord :: tail)
-            (scratch image rightWord * scratch image leftWord ::
-              scratch image rightWord ::
-                scratch image rightWord * scratch image leftWord :: tail)
-          from Stack.swapCore_zero)
-        (of_run_swap hswap) hp4
-    exact prefix_of_div hdiv hswapped
-  refine run_prepend_elim _ (loadWord leftWord) ?_ run
-  intro s6 hline6 run
-  obtain ⟨hp6, frame6⟩ := frame5.loadWord hp5 hline6
-  refine run_prepend_elim _ [eq, iszero] ?_ run
-  intro s7 hline7 run
-  have frame7 := frame6.line (by line_inv) (by line_inv) (by line_inv) hline7
-  have hp7 : ((scratch image leftWord =?
-        ((scratch image rightWord * scratch image leftWord) /
-          scratch image rightWord)) =? 0) ::
-      scratch image rightWord * scratch image leftWord :: tail <<+ s7.stack := by
-    rcases Line.of_run_cons hline7 with ⟨u, heq, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨v, hiszero, hnil⟩
-    cases hnil
-    exact prefix_of_iszero hiszero (prefix_of_eq heq hp6)
+  obtain ⟨s7, frame7, hp7, run⟩ := of_run_roundedMulRecovery frame hp run
   obtain ⟨hflag1, s8, hp8, hpop8, run⟩ := of_run_guard hp7 run
   have frame8 := frame7.of_popBurn hpop8
   have hrecover := eq_of_iszero_eqCheck_eq_zero hflag1

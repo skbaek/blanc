@@ -47,18 +47,18 @@ def exactCalldata (size : B256) (body : Func) : Func :=
 def stageRoute (route : B256) : Line :=
   [pushB256 route] ++ mstoreAt routeWord
 
+/-- Recovery prefix specialized at definition time for equal scratch operands. -/
+def roundedMulRecovery (leftWord rightWord : B256) : Line :=
+  if leftWord = rightWord then
+    loadWord leftWord ++
+      [dup 0, dup 0, mul, dup 0, dup 2, swap 0, div, swap 0, swap 1, eq, iszero]
+  else
+    loadWord leftWord ++ loadWord rightWord ++ [mul, dup 0] ++
+      loadWord rightWord ++ [swap 0, div] ++ loadWord leftWord ++ [eq, iszero]
+
 def guardedRoundedMul
     (leftWord rightWord outputWord : B256) (next : Func) : Func :=
-  loadWord leftWord +++
-  loadWord rightWord +++
-  mul :::
-  dup 0 :::
-  loadWord rightWord +++
-  swap 0 :::
-  div :::
-  loadWord leftWord +++
-  eq :::
-  iszero :::
+  roundedMulRecovery leftWord rightWord +++
   (.revert <?>
     (dup 0 :::
       pushB256 half :::
@@ -199,7 +199,14 @@ def returnScratch (word : B256) : Func :=
   loadWord word +++ mstoreAt 0 +++ returnMemoryRange 0 32
 
 def afterDrip : Func :=
-  commitFresh +++ returnScratch freshChiWord
+  loadWord freshChiWord +++
+  dup 0 :::
+  pushB256 chiSlot :::
+  sstore :::
+  loadWord nowWord +++
+  pushB256 rhoSlot :::
+  sstore :::
+  mstoreAt 0 +++ returnMemoryRange 0 32
 
 def afterConvertToAssets : Func :=
   loadWord argumentWord +++
@@ -208,8 +215,8 @@ def afterConvertToAssets : Func :=
   pushB256 scale :::
   swap 0 :::
   div :::
-  mstoreAt resultWord +++
-  returnScratch resultWord
+  mstoreAt 0 +++
+  returnMemoryRange 0 32
 
 def afterConvertToUnits : Func :=
   loadWord argumentWord +++
@@ -218,25 +225,23 @@ def afterConvertToUnits : Func :=
   loadWord freshChiWord +++
   swap 0 :::
   div :::
-  mstoreAt resultWord +++
-  returnScratch resultWord
+  mstoreAt 0 +++
+  returnMemoryRange 0 32
 
 def afterJoin : Func :=
   let commit : Func :=
     commitFresh +++
-    loadWord newRowWord +++
+    swap 0 :::
     caller :::
     sstore :::
-    loadWord newTotalWord +++
     pushB256 totalUnitsSlot :::
     sstore :::
-    returnScratch resultWord
+    mstoreAt 0 +++ returnMemoryRange 0 32
   let checkTotal : Func :=
     loadWord totalWord +++
-    loadWord resultWord +++
+    dup 2 :::
     add :::
     dup 0 :::
-    mstoreAt newTotalWord +++
     pushB256 maxPie :::
     lt :::
     (.revert <?> commit)
@@ -247,11 +252,9 @@ def afterJoin : Func :=
   swap 0 :::
   div :::
   dup 0 :::
-  mstoreAt resultWord +++
   loadWord rowWord +++
   add :::
   dup 0 :::
-  mstoreAt newRowWord +++
   pushB256 maxUnits :::
   lt :::
   (.revert <?> checkTotal)
@@ -261,9 +264,9 @@ def sendToCaller : Line :=
   swap 3 :: caller :: gas :: call :: []
 
 def afterExit : Func :=
-  let returnOnSuccess : Func := returnScratch resultWord
+  let returnOnSuccess : Func := mstoreAt 0 +++ returnMemoryRange 0 32
   let callRecipient : Func :=
-    loadWord resultWord +++
+    dup 0 :::
     sendToCaller +++
     (returnOnSuccess <?> .revert)
   let commit : Func :=
@@ -285,7 +288,6 @@ def afterExit : Func :=
   pushB256 scale :::
   swap 0 :::
   div :::
-  mstoreAt resultWord +++
   commit
 
 def freshRoute : Func :=
