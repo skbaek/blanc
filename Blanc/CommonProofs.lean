@@ -2667,25 +2667,62 @@ lemma chargeGas_getCode_gen {cost devm exn} (h : chargeGas cost devm = exn) (a :
   | error err => exact (chargeGas_worldEq_of_error h).getCode a |>.symm
   | ok devm' => exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
 
+/-- Charging state gas is a machine operation, so it moves no account's code. -/
+lemma chargeStateGas_getCode_gen {amount devm exn}
+    (h : chargeStateGas amount devm = exn) (a : Adr) :
+    Execution.getCode exn a = devm.getCode a := by
+  cases exn with
+  | error err =>
+      exact (liftMachExecution_worldEq_of_error
+        (core := Mach.chargeStateGas amount) h).getCode a |>.symm
+  | ok devm' =>
+      exact (liftMachExecution_worldEq_of_ok
+        (core := Mach.chargeStateGas amount) h).getCode a |>.symm
+
+/-- Charging state gas leaves the frame's error marker alone: like every
+machine operation it rewrites `mach` and copies `meta` and `world` through. -/
+lemma chargeStateGas_error_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    devm'.error = devm.error := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+lemma chargeStateGas_getCode_eq {amount devm devm'}
+    (h : chargeStateGas amount devm = .ok devm') (a : Adr) :
+    devm'.getCode a = devm.getCode a :=
+  chargeStateGas_getCode_gen h a
+
 lemma processCreateMessage.chargeCodeGas_getCode_gen {rules : ForkRules}
     {evm : Devm} {exn : Execution}
     (h : processCreateMessage.chargeCodeGas rules evm = exn) (a : Adr) :
     Execution.getCode exn a = evm.getCode a := by
   simp only [processCreateMessage.chargeCodeGas] at h
+  -- The deposit charge is rules-keyed since goal B; both arms are machine-only.
   split at h
-  · subst h; rfl
-  · dsimp [Bind.bind, Except.bind] at h
-    split at h
-    · rename_i eq_err; subst h
-      have h_charge := chargeGas_getCode_gen eq_err a
-      exact h_charge
-    · rename_i eq_ok; split at h
-      · subst h
-        have h_charge := chargeGas_getCode_eq eq_ok a
-        exact h_charge
-      · subst h
-        have h_charge := chargeGas_getCode_eq eq_ok a
-        exact h_charge
+  · split at h
+    · subst h; rfl
+    · dsimp [Bind.bind, Except.bind] at h
+      split at h
+      · rename_i eq_err; subst h
+        exact chargeGas_getCode_gen eq_err a
+      · rename_i eq_ok; split at h
+        · subst h
+          exact chargeGas_getCode_eq eq_ok a
+        · subst h
+          exact chargeGas_getCode_eq eq_ok a
+  · split at h
+    · subst h; rfl
+    · split at h
+      · subst h; rfl
+      · dsimp [Bind.bind, Except.bind] at h
+        split at h
+        · rename_i eq_err; subst h
+          exact chargeGas_getCode_gen eq_err a
+        · rename_i eq_ok; subst h
+          exact (chargeStateGas_getCode_gen rfl a).trans
+            (chargeGas_getCode_eq eq_ok a)
 
 lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
   subst h
@@ -2748,6 +2785,22 @@ lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
   | error p =>
     rcases p with ⟨err, evm⟩
     cases err <;> rfl
+
+/-- The same, for the settlement the rules select. Neither arm installs code:
+the Amsterdam arm restores the state-gas reservoir before forfeiting gas, which
+is a machine move. -/
+lemma executeCode.handleErrorWith_getCode
+    (stateGas : Option StateGasRules) (exn : Execution) (a : Adr) :
+    MsgResult.getCode (executeCode.handleErrorWith stateGas exn) a =
+      Execution.getCode exn a := by
+  cases stateGas with
+  | none => exact executeCode.handleError_getCode exn a
+  | some _ =>
+      cases exn with
+      | ok d => rfl
+      | error p =>
+        rcases p with ⟨err, evm⟩
+        cases err <;> rfl
 
 /-- Writer leaf: rollback installs the selected state, so its code map is that
 state's code map. -/
@@ -2815,8 +2868,11 @@ theorem ProcessMessage.ok_state_eq_committedPost
       simp only [Execution.commits] at hcommit
       cases herr : raw.error with
       | none =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleError, processMessage.settle, herr] at hsettle
+          have hid : executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+              (.ok raw) = .ok raw := by
+            cases msg.benv.stat.rules.stateGas <;> rfl
+          simp [Frame.ofCall, Frame.settle, Frame.settleMsg, hid,
+            processMessage.settle, herr] at hsettle
           exact congrArg Devm.state hsettle
       | some error =>
           simp [herr] at hcommit
@@ -2837,10 +2893,13 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
       cases error with
       | halt reason =>
           rcases (show ∃ handled : Devm,
-              executeCode.handleError (.error (.halt reason, raw)) =
+              executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+                  (.error (.halt reason, raw)) =
                 .ok handled ∧ handled.error.isSome = true by
-                simp [executeCode.handleError, Devm.error,
-                  Devm.setMeta]) with ⟨handled, hhandle, hhandled⟩
+                cases msg.benv.stat.rules.stateGas <;>
+                  simp [executeCode.handleErrorWith, executeCode.handleError,
+                    executeCode.handleErrorAmsterdam, Devm.error,
+                    Devm.setMeta]) with ⟨handled, hhandle, hhandled⟩
           have hsettle' :
               (.ok post) = processMessage.settle msg (.ok handled) := by
             simpa [Frame.ofCall, Frame.settle, Frame.settleMsg,
@@ -2857,10 +2916,13 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
             _ = msg.benv.state := rfl
       | revert =>
           rcases (show ∃ handled : Devm,
-              executeCode.handleError (.error (.revert, raw)) =
+              executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+                  (.error (.revert, raw)) =
                 .ok handled ∧ handled.error.isSome = true by
-                simp [executeCode.handleError, Devm.error,
-                  Devm.withError, Devm.setMeta]) with
+                cases msg.benv.stat.rules.stateGas <;>
+                  simp [executeCode.handleErrorWith, executeCode.handleError,
+                    executeCode.handleErrorAmsterdam, Devm.error,
+                    Devm.withError, Devm.setMeta]) with
             ⟨handled, hhandle, hhandled⟩
           have hsettle' :
               (.ok post) = processMessage.settle msg (.ok handled) := by
@@ -2877,18 +2939,33 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
               congrArg Devm.state heq
             _ = msg.benv.state := rfl
       | crypto reason =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleError, processMessage.settle] at hsettle
+          -- Both arms of the rules-keyed settlement propagate a crypto error
+          -- unchanged, so the settlement cannot be an `.ok`.
+          have hid : executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+              (.error (.crypto reason, raw)) =
+              .error ⟨.crypto reason, raw.state, raw.createdAccounts,
+                raw.transientStorage⟩ := by
+            cases msg.benv.stat.rules.stateGas <;> rfl
+          simp [Frame.ofCall, Frame.settle, Frame.settleMsg, hid,
+            processMessage.settle] at hsettle
       | internal reason =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleError, processMessage.settle] at hsettle
+          have hid : executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+              (.error (.internal reason, raw)) =
+              .error ⟨.internal reason, raw.state, raw.createdAccounts,
+                raw.transientStorage⟩ := by
+            cases msg.benv.stat.rules.stateGas <;> rfl
+          simp [Frame.ofCall, Frame.settle, Frame.settleMsg, hid,
+            processMessage.settle] at hsettle
   | ok raw =>
       cases herr : raw.error with
       | none =>
           simp [Execution.commits, herr] at hnot
       | some error =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleError, processMessage.settle, herr] at hsettle
+          have hid : executeCode.handleErrorWith msg.benv.stat.rules.stateGas
+              (.ok raw) = .ok raw := by
+            cases msg.benv.stat.rules.stateGas <;> rfl
+          simp [Frame.ofCall, Frame.settle, Frame.settleMsg, hid,
+            processMessage.settle, herr] at hsettle
           exact congrArg Devm.state hsettle
 
 /-- Handling a synchronous precompile result preserves the message-entry world
@@ -2917,16 +2994,27 @@ theorem processCreateMessage.chargeCodeGas_error_eq
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
-    split at hrest
-    · cases hrest
-    · cases hrest
-      rw [chargeGas_def] at hcharge
-      split at hcharge
-      · cases hcharge
-      · cases hcharge
-        rfl
+  · split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+      split at hrest
+      · cases hrest
+      · cases hrest
+        rw [chargeGas_def] at hcharge
+        split at hcharge
+        · cases hcharge
+        · cases hcharge
+          rfl
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+        rw [chargeGas_def] at hcharge
+        split at hcharge
+        · cases hcharge
+        · cases hcharge
+          exact (chargeStateGas_error_eq hrest).trans rfl
 
 /-- A CREATE frame that settles with its error marker set restores the world
 saved at CREATE-message entry, including code-deposit failure. -/
@@ -2953,13 +3041,13 @@ theorem ProcessCreateMessage.rollback_of_error
             rcases error with ⟨error, charged⟩
             cases error with
             | halt reason =>
+                -- Both arms of the rules-keyed halt settlement roll the world
+                -- back to the message's entry state before forfeiting gas.
                 have heq := Except.ok.inj hsettle
-                calc
-                  post.state =
-                      (processCreateMessage.exceptionalHalt charged reason
-                        msg.benv.state msg.tenv.transientStorage).state :=
-                    congrArg Devm.state heq
-                  _ = msg.benv.state := rfl
+                have : post.state = msg.benv.state := by
+                  rw [heq]
+                  cases msg.benv.stat.rules.stateGas <;> rfl
+                exact this
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -3017,14 +3105,14 @@ lemma ExecuteCode.codePreserve
   rcases henter : executeCode.enter msg with evm | raw <;> rw [henter] at run
   · rcases run with ⟨raw, h_xl, h_err⟩
     subst h_err
-    rw [executeCode.handleError_getCode]
+    rw [executeCode.handleErrorWith_getCode]
     rw [h_xl] at inv
     dsimp [Xlot.InvGetCode] at inv
     rw [executeCode.enter_inl henter] at inv
     exact (inv a ha).symm
   · rcases run with ⟨h_xl, h_err⟩
     subst h_err
-    rw [executeCode.handleError_getCode]
+    rw [executeCode.handleErrorWith_getCode]
     obtain ⟨adr, hraw⟩ := executeCode.enter_inr henter
     rw [hraw]
     exact executePrecomp_preserves_getCode (initEvm msg) adr _ rfl a
@@ -3119,10 +3207,15 @@ lemma ProcessCreateMessage.codePreserve
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
         change err_evm.state.getCode a = evm.state.getCode a at h_getCode
         cases err_msg <;>
-          simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt] <;>
+          simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt,
+            processCreateMessage.exceptionalHaltAmsterdam] <;>
           first
             | rfl
             | (rw [h_getCode]; exact h_exec_cond)
+            | (split <;>
+                first
+                  | rfl
+                  | (rw [h_getCode]; exact h_exec_cond))
       | ok devm_charge =>
         dsimp only [MsgResult.getCode]
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
