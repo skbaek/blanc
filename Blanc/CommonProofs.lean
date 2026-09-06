@@ -3324,22 +3324,29 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
           exact congrArg Devm.state hsettle
 
 /-- Handling a synchronous precompile result preserves the message-entry world
-state; precompiles only determine gas, output, and error metadata. -/
+state; precompiles only determine gas, output, and error metadata.
+
+Definition-tracked to the rules-keyed settlement: neither arm of
+`executeCode.handleErrorWith` touches the world, so this holds on every fork
+and the statement needs no premise about the lane. -/
 theorem executeCode.handle_precompile_ok_state
-    {msg : Msg} {address : Adr} {post : Devm}
-    (h : executeCode.handleError
+    {msg : Msg} {address : Adr} {post : Devm} {st : Option StateGasRules}
+    (h : executeCode.handleErrorWith st
         (executePrecomp (initEvm msg) address) = .ok post) :
     post.state = msg.benv.state := by
   unfold executePrecomp applyPrecompResult at h
   cases hpre : precompileRun (initEvm msg) address with
   | error error cost =>
       simp only [hpre] at h
-      cases error <;> simp [executeCode.handleError] at h
-      · exact (congrArg Devm.state h).symm.trans rfl
-      · exact (congrArg Devm.state h).symm.trans rfl
+      cases st <;> cases error <;>
+        simp [executeCode.handleErrorWith, executeCode.handleError,
+          executeCode.handleErrorAmsterdam] at h <;>
+        exact (congrArg Devm.state h).symm.trans rfl
   | ok cost output =>
-      simp [hpre, executeCode.handleError] at h
-      exact (congrArg Devm.state h).symm.trans rfl
+      cases st <;>
+        simp [hpre, executeCode.handleErrorWith, executeCode.handleError,
+          executeCode.handleErrorAmsterdam] at h <;>
+        exact (congrArg Devm.state h).symm.trans rfl
 
 /-- Successful CREATE code-gas charging preserves the frame error marker. -/
 theorem processCreateMessage.chargeCodeGas_error_eq
@@ -9196,26 +9203,30 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
 lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
-    {exn : Execution} (run : Linst.Run sevm devm .selfdestruct exn)
+    {exn : Execution} (hleg : sevm.benvStat.rules.stateGas = none)
+    (run : Linst.Run sevm devm .selfdestruct exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
+  have hbal := BenvStat.bal_none_of_stateGas_none hleg
+  simp only [Linst.Run, Linst.run, hleg,
+    Devm.balReadAccount_eq_of_bal_none hbal] at run
   dsimp [Linst.Run, Linst.run] at run
   revert run
   dsimp [bind, Except.bind]
   cases h1 : devm.popToAdr <;> dsimp
   case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
   case ok res1 =>
-    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
+    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
       split
       · exact addAccessedAddress_getCode
       · rfl
     have h_acc_ds : Devm.delSets
         (if res1.1 ∉ res1.2.accessedAddresses then
-          (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
+          (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
         else (res1.2, gasSelfDestruct)).1 = Devm.delSets res1.2 := by
       split
       · rfl
       · rfl
-    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
     case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
     case ok res2 =>
       cases h3 : assertDynamic sevm res2
@@ -9280,10 +9291,12 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               rw [h_add]; exact hd3.code
 
 theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
-    {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
+    {l : Linst} {exn : Execution}
+    (hleg : sevm.benvStat.rules.stateGas = none)
+    (run : Linst.Run sevm devm l exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
-  · exact Linst.selfdestruct_preserves_noDel run h
+  · exact Linst.selfdestruct_preserves_noDel hleg run h
   · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
     rw [run] at hf
     cases exn <;>
@@ -9291,9 +9304,10 @@ theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
 
 lemma Linst.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution}
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (run : Linst.Run sevm devm l exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  exact Linst.run_noDel run h
+  exact Linst.run_noDel hleg run h
 
 lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
     {x : EvmError × State × AdrSet × Tra}
@@ -9314,17 +9328,47 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
     rw [if_neg h_stv] at h_run
     contradiction
 
+/-- Charging state gas is a machine operation, so it moves neither
+deletion-relevant set. -/
+lemma chargeStateGas_delSets_eq {amount : Nat} {devm devm' : Devm}
+    (h : chargeStateGas amount devm = .ok devm') :
+    Devm.delSets devm' = Devm.delSets devm := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+lemma chargeStateGas_delSets_err {amount : Nat} {devm : Devm}
+    {err : EvmError × Devm} (h : chargeStateGas amount devm = .error err) :
+    Devm.delSets err.2 = Devm.delSets devm := by
+  rcases devm with ⟨mach, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome, Devm.setMach] at h
+  split_ifs at h with h1 h2 <;> cases h <;> rfl
+
+/-- Both code-deposit algorithms leave the deletion-relevant sets alone: the
+legacy one charges per byte of execution gas, Amsterdam's charges keccak words
+of execution gas and state bytes of state gas, and every one of those is a
+machine write. -/
 lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
     (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
     Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
-    split_ifs at h_rest
-    cases h_rest
-    exact chargeGas_delSets_eq h_charge
+  · split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+      split_ifs at h_rest
+      cases h_rest
+      exact chargeGas_delSets_eq h_charge
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+        exact (chargeStateGas_delSets_eq h_rest).trans
+          (chargeGas_delSets_eq h_charge)
 
 lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : EvmError}
     (h : processCreateMessage.chargeCodeGas rules d = .error ⟨err, d'⟩) :
@@ -9332,16 +9376,29 @@ lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : EvmErro
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
-  · cases h; rfl
-  · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
-    · rw [hcg] at h
-      dsimp only [Bind.bind, Except.bind] at h
-      cases h
-      exact chargeGas_delSets_err hcg
-    · rw [hcg] at h
-      dsimp only [Bind.bind, Except.bind] at h
-      split_ifs at h
-      cases h; exact chargeGas_delSets_eq hcg
+  · split at h
+    · cases h; rfl
+    · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+      · rw [hcg] at h
+        dsimp only [Bind.bind, Except.bind] at h
+        cases h
+        exact chargeGas_delSets_err hcg
+      · rw [hcg] at h
+        dsimp only [Bind.bind, Except.bind] at h
+        split_ifs at h
+        cases h; exact chargeGas_delSets_eq hcg
+  · split at h
+    · cases h; rfl
+    · split at h
+      · cases h; rfl
+      · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+        · rw [hcg] at h
+          dsimp only [Bind.bind, Except.bind] at h
+          cases h
+          exact chargeGas_delSets_err hcg
+        · rw [hcg] at h
+          dsimp only [Bind.bind, Except.bind] at h
+          exact (chargeStateGas_delSets_err h).trans (chargeGas_delSets_eq hcg)
 
 lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
     (heq : Devm.push x d = exn) (h : Devm.NoDel wa d) : Execution.NoDel wa exn := by
@@ -9719,7 +9776,8 @@ theorem ProcessMessage.none_ok_state_cases
           hrollback | ⟨clean, hclean, _hcleanError, hpost⟩
         · exact Or.inl hrollback
         · have hhandled :
-              executeCode.handleError
+              executeCode.handleErrorWith
+                (msg.withBenv benv).benv.stat.rules.stateGas
                 (executePrecomp (initEvm (msg.withBenv benv)) address) =
                   .ok clean := by
             rw [← hraw, ← hexecute.2, hclean]
@@ -9771,7 +9829,10 @@ lemma Ninst.push_balance_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
 
 lemma Linst.selfdestruct_balance_effect :
     Linst.Effect Devm.BalNoninc .selfdestruct := by
-  intro sevm pre out run
+  intro sevm pre out hleg run
+  have hbal := BenvStat.bal_none_of_stateGas_none hleg
+  simp only [Linst.Run, Linst.run, hleg,
+    Devm.balReadAccount_eq_of_bal_none hbal] at run
   dsimp [Linst.Run, Linst.run] at run
   revert run
   dsimp [bind, Except.bind]
@@ -9787,28 +9848,28 @@ lemma Linst.selfdestruct_balance_effect :
       exact Devm.popToAdr_getBal_eq h1 a
     have hacc :
         (if res1.1 ∉ res1.2.accessedAddresses then
-            (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
+            (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
           else (res1.2, gasSelfDestruct)).1.getBal = res1.2.getBal := by
       funext a
       split <;> rfl
     cases h2 : chargeGas
         (if ((if res1.1 ∉ res1.2.accessedAddresses then
                     (addAccessedAddress res1.2 res1.1,
-                      gasSelfDestruct + gasColdAccountAccess)
+                      gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
                   else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧
               ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then
           (if res1.1 ∉ res1.2.accessedAddresses then
                 (addAccessedAddress res1.2 res1.1,
-                  gasSelfDestruct + gasColdAccountAccess)
+                  gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
               else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount
         else
           (if res1.1 ∉ res1.2.accessedAddresses then
               (addAccessedAddress res1.2 res1.1,
-                gasSelfDestruct + gasColdAccountAccess)
+                gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
             else (res1.2, gasSelfDestruct)).2)
         (if res1.1 ∉ res1.2.accessedAddresses then
             (addAccessedAddress res1.2 res1.1,
-              gasSelfDestruct + gasColdAccountAccess)
+              gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess)
           else (res1.2, gasSelfDestruct)).1 <;> dsimp
     case error err =>
       intro run
