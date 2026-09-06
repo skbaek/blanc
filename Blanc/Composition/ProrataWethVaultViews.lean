@@ -126,9 +126,94 @@ private theorem staticGasAvailable_of_runCompiled
   · rename_i charged charge
     exact chargeGas_le charge
 
--- Retain the resource argument for existing callers; the proof derives its
--- needed depth and gas facts from successful execution.
-set_option linter.unusedVariables false in
+/-- The fixed `balanceOf` staging line reaches one exact call pre-state. -/
+private theorem balanceOfStaging_run_eq
+    {sevm : Sevm} {pre post₁ post₂ : Devm}
+    (left : Line.Run sevm pre balanceOfStaging post₁)
+    (right : Line.Run sevm pre balanceOfStaging post₂) :
+    post₁ = post₂ := by
+  have ninstUnique : ∀ {pre post₁ post₂ : Devm} {n : Ninst},
+      Blanc.Ninst.pcFree n = true →
+      (∀ x, n ≠ .exec x) →
+      Ninst.Run sevm pre n post₁ →
+      Ninst.Run sevm pre n post₂ →
+      post₁ = post₂ := by
+    intro pre post₁ post₂ n pcFree nonexec left right
+    cases n with
+    | push xs le =>
+        have leftEq := Ninst.run_push_eq left
+        have rightEq := Ninst.run_push_eq right
+        rw [rightEq] at leftEq
+        exact (Except.ok.inj leftEq).symm
+    | reg r =>
+        have notPc : r ≠ .pc := by
+          rintro rfl
+          simp [Blanc.Ninst.pcFree] at pcFree
+        obtain ⟨leftPc, leftEq⟩ := of_run_reg left
+        obtain ⟨rightPc, rightEq⟩ := of_run_reg right
+        change Rinst.runCore leftPc pre sevm r = .ok post₁ at leftEq
+        change Rinst.runCore rightPc pre sevm r = .ok post₂ at rightEq
+        rw [Rinst.runCore_pc_irrel notPc leftPc rightPc, rightEq] at leftEq
+        exact (Except.ok.inj leftEq).symm
+    | exec x =>
+        exact (nonexec x rfl).elim
+  have lineUnique : ∀ {line : Line} {pre post₁ post₂ : Devm},
+      (∀ n ∈ line,
+        Blanc.Ninst.pcFree n = true ∧ ∀ x, n ≠ .exec x) →
+      Line.Run sevm pre line post₁ →
+      Line.Run sevm pre line post₂ →
+      post₁ = post₂ := by
+    intro line
+    induction line with
+    | nil =>
+        intro pre post₁ post₂ _ left right
+        cases left
+        cases right
+        rfl
+    | cons head tail ih =>
+        intro pre post₁ post₂ safe left right
+        cases left with
+        | cons leftHead leftTail =>
+          cases right with
+          | cons rightHead rightTail =>
+            have headSafe := safe head (by simp)
+            have middleEq := ninstUnique headSafe.1 headSafe.2
+              leftHead rightHead
+            subst middleEq
+            exact ih (fun n member => safe n (by simp [member]))
+              leftTail rightTail
+  refine lineUnique ?_ left right
+  intro n member
+  simp [balanceOfStaging, mstoreAt, pushList] at member
+  rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  all_goals simp [Ninst.pushB256, Blanc.Ninst.pcFree]
+
+/-- Successful execution of a vault balance query supplies its complete
+depth-and-gas package for every exact run of the fixed staging line. -/
+private theorem totalAssetsResources_of_run
+    {fs : List Func} {sevm : Sevm} {entry final : Devm} {body : Func}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (run : Func.RunCompiledTo fs sevm entry
+      (Blanc.ProrataWethVault.readTotalAssets body) (.ok final)) :
+    TotalAssetsResources sevm entry := by
+  refine ⟨readTotalAssets_depth_ne_zero memoryWf run, ?_⟩
+  obtain ⟨callPre, _, staging, crossing, _⟩ := readTotalAssets_trace run
+  have stagingCode : Devm.getCode entry = Devm.getCode callPre :=
+    Line.of_inv Devm.getCode (by
+      unfold balanceOfStaging mstoreAt pushList
+      simp only [List.map, List.cons_append, List.nil_append]
+      line_inv) staging
+  have callConfig :
+      DirectWethConfiguration sevm.currentTarget sevm callPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← congrFun stagingCode wethAccount]
+    exact config.code
+  intro otherPre otherStaging
+  rw [balanceOfStaging_run_eq otherStaging staging]
+  exact staticGasAvailable_of_runCompiled callConfig crossing
+
 /-- Exact body effect of `totalAssets`: the configured WETH program is read at
 the vault address, every account's storage and the parent log frame are
 preserved, and the returned ABI word is that pre-call WETH balance. -/
@@ -136,7 +221,6 @@ theorem totalAssets_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : TotalAssetsResources sevm entry)
     (run : Func.RunCompiledTo fs sevm entry
       Blanc.ProrataWethVault.totalAssets (.ok post)) :
     Blanc.ProrataWethVault.WordViewEffect
@@ -146,7 +230,7 @@ theorem totalAssets_body_effect
     refine ⟨memoryWf, ?_⟩
     intro index
     simp
-  have depth := readTotalAssets_depth_ne_zero memoryWf run
+  have actualResources := totalAssetsResources_of_run config memoryWf run
   unfold Blanc.ProrataWethVault.totalAssets at run
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
@@ -162,8 +246,8 @@ theorem totalAssets_body_effect
     exact config.code
   obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
       wordPrefix, -, -, -, returnRun⟩ :=
-    readTotalAssets_exactEffect callConfig memory staging depth
-      (staticGasAvailable_of_runCompiled callConfig crossing) crossing suffix
+    readTotalAssets_exactEffect callConfig memory staging actualResources.1
+      (actualResources.2 callPre staging) crossing suffix
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
   have stagingLogs : entry.logs = callPre.logs :=
@@ -209,7 +293,6 @@ theorem totalAssets_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (memoryWf : Mem.Wf pre.memory)
-    (resources : TotalAssetsCompiledResources sevm post)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (hselector : Sevm.selector sevm = selector "totalAssets" []) :
     sevm.value = 0 ∧
@@ -233,8 +316,7 @@ theorem totalAssets_compiled_effect
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
     rw [← entryMemory]
     exact memoryWf
-  have bodyEffect := totalAssets_body_effect bodyConfig bodyMemoryWf
-    (resources bodyPre bodyRun) bodyRun
+  have bodyEffect := totalAssets_body_effect bodyConfig bodyMemoryWf bodyRun
   rcases bodyEffect with ⟨output, storage, logs⟩
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
