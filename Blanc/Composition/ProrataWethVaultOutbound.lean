@@ -485,7 +485,6 @@ theorem outboundQuoteStaging_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : QuoteReadResources sevm)
     (stack : [] <<+ entry.stack)
     (run : Func.RunCompiledTo fs sevm entry
       (Blanc.arg 0 +++ mstoreAt Blanc.ProrataWethVault.amountWord +++
@@ -544,7 +543,7 @@ theorem outboundQuoteStaging_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
       quoteRun⟩ :=
-    quoteSnapshot_effect readConfig readWf readReads resources readRun
+    quoteSnapshot_effect readConfig readWf readReads readRun
   have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
     argStorage.trans snapStorage
   refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
@@ -791,7 +790,6 @@ theorem withdraw_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : QuoteReadResources sevm)
     (childResources : OutboundChildResources sevm
       Blanc.ProrataWethVault.amountWord)
     (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
@@ -839,7 +837,7 @@ theorem withdraw_body_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, ownerAt, assetsAt, supplyAt, quoteStack,
       quoteStorage, quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    outboundQuoteStaging_effect config memoryWf readResources stack run
+    outboundQuoteStaging_effect config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.withdrawQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -900,7 +898,6 @@ theorem redeem_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : QuoteReadResources sevm)
     (childResources : OutboundChildResources sevm
       Blanc.ProrataWethVault.quoteWord)
     (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
@@ -941,7 +938,7 @@ theorem redeem_body_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, ownerAt, assetsAt, supplyAt, quoteStack,
       quoteStorage, quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    outboundQuoteStaging_effect config memoryWf readResources stack run
+    outboundQuoteStaging_effect config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.redeemQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -1040,7 +1037,7 @@ private theorem redeem_mem_vaultFuncs :
 /-- Resources for a compiled outbound endpoint, tied to the exact selector's
 body rather than asserted for every state. -/
 def OutboundCompiledResources (sevm : Sevm) (assetsSel : B256) : Prop :=
-  QuoteReadResources sevm ∧ OutboundChildResources sevm assetsSel
+  OutboundChildResources sevm assetsSel
 
 /-- Public compiled `withdraw(amount, receiver, owner)`.
 
@@ -1106,7 +1103,7 @@ theorem withdraw_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
-    withdraw_body_effect bodyConfig bodyWf resources.1 resources.2
+    withdraw_body_effect bodyConfig bodyWf resources
       withdrawAfterQuote_lookup withdrawBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1191,7 +1188,7 @@ theorem redeem_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect⟩ :=
-    redeem_body_effect bodyConfig bodyWf resources.1 resources.2
+    redeem_body_effect bodyConfig bodyWf resources
       redeemAfterQuote_lookup redeemBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)

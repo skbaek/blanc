@@ -262,7 +262,6 @@ theorem inboundQuoteStaging_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (resources : QuoteReadResources sevm)
     (stack : [] <<+ entry.stack)
     (run : Func.RunCompiledTo fs sevm entry
       (Blanc.arg 0 +++ mstoreAt Blanc.ProrataWethVault.amountWord +++
@@ -316,7 +315,7 @@ theorem inboundQuoteStaging_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
       quoteRun⟩ :=
-    quoteSnapshot_effect readConfig readWf readReads resources readRun
+    quoteSnapshot_effect readConfig readWf readReads readRun
   have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
     argStorage.trans snapStorage
   refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
@@ -505,7 +504,6 @@ theorem deposit_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : QuoteReadResources sevm)
     (childResources :
       InboundChildResources sevm Blanc.ProrataWethVault.amountWord)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
@@ -542,7 +540,7 @@ theorem deposit_body_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
       quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    inboundQuoteStaging_effect config memoryWf readResources stack run
+    inboundQuoteStaging_effect config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.depositQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -583,7 +581,6 @@ theorem mint_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
-    (readResources : QuoteReadResources sevm)
     (childResources :
       InboundChildResources sevm Blanc.ProrataWethVault.quoteWord)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
@@ -618,7 +615,7 @@ theorem mint_body_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
       quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    inboundQuoteStaging_effect config memoryWf readResources stack run
+    inboundQuoteStaging_effect config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.mintQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -710,7 +707,7 @@ private theorem mint_mem_vaultFuncs :
 /-- Resources for a compiled inbound endpoint, tied to the exact selector's
 body rather than asserted for every state. -/
 def InboundCompiledResources (sevm : Sevm) (assetsSourceWord : B256) : Prop :=
-  QuoteReadResources sevm ∧ InboundChildResources sevm assetsSourceWord
+  InboundChildResources sevm assetsSourceWord
 
 /-- Public compiled `deposit(assets, receiver)`.
 
@@ -768,7 +765,7 @@ theorem deposit_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect⟩ :=
-    deposit_body_effect bodyConfig bodyWf resources.1 resources.2
+    deposit_body_effect bodyConfig bodyWf resources
       depositAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, ?_, ?_⟩
@@ -832,7 +829,7 @@ theorem mint_compiled_effect
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect⟩ :=
-    mint_body_effect bodyConfig bodyWf resources.1 resources.2
+    mint_body_effect bodyConfig bodyWf resources
       mintAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, roomFits, ?_⟩
