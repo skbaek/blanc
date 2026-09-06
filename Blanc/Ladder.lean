@@ -5356,6 +5356,42 @@ lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
       · rw [hsf] at hst; cases hst
       · exact absurd ht h_ne
 
+/-- Fork-uniform preservation across a recursive executable instruction. -/
+lemma Xinst.some_preserves_precond_any
+    {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+    {evm' : Evm} {exn' : Execution}
+    (h_run : Xinst.Run sevm devm x (.some ⟨evm', exn'⟩) (.ok inter))
+    (ex_sub : Exec evm'.pc evm'.sta evm'.dyna exn')
+    (h_ne : sevm.currentTarget ≠ wa)
+    (h_pc : c.Pre wa sevm devm) :
+    c.Pre wa evm'.sta evm'.dyna ∧
+      (ifOk (c.Post wa evm'.sta) exn' → c.Pre wa sevm inter) := by
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Xinst.some_preserves_precond hsg h_run ex_sub h_ne h_pc
+  | some state =>
+    unfold Xinst.Run at h_run
+    rcases Xinst.step_shapeAmsterdam sevm state devm x hsg with
+      ⟨ex, hs, hframe⟩ |
+      ⟨d, e, na, mi, ms, hfr, hs⟩ |
+      ⟨d, d₀, g, reservoir, v, caller, target, cadr, stv, isSt, ii,
+        isz, oi, osz, code, dp, nac, ib, hfr, -, hcal, -, hs⟩ <;>
+      rw [hs] at h_run
+    · cases h_run.1
+    · exact GenericCreateAmsterdam.some_preserves_precond h_run ex_sub h_ne
+        (h_pc.state_eq hfr.state.symm)
+    · refine GenericCallAmsterdam.some_preserves_precond h_run ex_sub h_ne
+        ?_ ?_ (h_pc.state_eq hfr.state.symm)
+      · rintro hstv
+        rcases hcal with ⟨-, rfl⟩ | ⟨hsf, -⟩
+        · exact h_ne
+        · rw [hsf] at hstv
+          cases hstv
+      · rintro hsf ht
+        rcases hcal with ⟨hst, -⟩ | ⟨-, rfl⟩
+        · rw [hsf] at hst
+          cases hst
+        · exact absurd ht h_ne
+
 
 lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
     (h_ne : sevm.currentTarget ≠ ca) (h_pc : c.Pre ca sevm devm) :
@@ -5480,6 +5516,126 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       exact Post.selfdestruct_delete h_ne h_pc3
     · rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
+
+/-- Fork-uniform terminal-instruction preservation. -/
+lemma Linst.inv_postcond_any
+    {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (h_run : Linst.Run sevm pre l (.ok post))
+    (h_ne : sevm.currentTarget ≠ wa)
+    (h_pc : c.Pre wa sevm pre) :
+    c.Post wa sevm post := by
+  cases hsg : sevm.benvStat.rules.stateGas with
+  | none => exact Linst.inv_postcond hsg h_run h_ne h_pc
+  | some state =>
+    cases l
+    case stop =>
+      dsimp [Linst.Run, Linst.run] at h_run
+      injection h_run with h_eq
+      subst h_eq
+      exact post_of_pre h_pc
+    case return_ =>
+      have h_bal : pre.getBal = post.getBal :=
+        ((inferInstance : Linst.Hinv Devm.getBal Devm.getBal Linst.return_)).inv
+          h_run
+      have h_stor : Devm.getStor pre = Devm.getStor post :=
+        ((inferInstance : Linst.Hinv Devm.getStor Devm.getStor Linst.return_)).inv
+          h_run
+      constructor
+      · rw [← h_bal]
+        exact h_pc.side
+      · show c.Inv (Devm.getStor post wa) 0 (post.getBal wa)
+        have hb : post.getBal wa = pre.getBal wa := (congr_fun h_bal wa).symm
+        have hs : Devm.getStor post wa = Devm.getStor pre wa :=
+          (congr_fun h_stor wa).symm
+        rw [hb, hs]
+        exact h_pc.inv.right h_ne
+    case revert =>
+      dsimp [Linst.Run, Linst.run] at h_run
+      rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
+      rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
+      rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
+      contradiction
+    case selfdestruct =>
+      simp only [Linst.Run, Linst.run, hsg] at h_run
+      dsimp only [bind, Except.bind] at h_run
+      rcases Except.bind_eq_ok h_run with ⟨_, h_static, h_run1⟩
+      rcases Except.bind_eq_ok h_run1 with ⟨⟨donee, d1⟩, h_pop, h_run2⟩
+      let cold := donee ∉ d1.accessedAddresses
+      let gasCost := gasSelfDestruct +
+        (if cold then sevm.benvStat.rules.gas.coldAccountAccess else 0)
+      let warm : Devm := if cold then addAccessedAddress d1 donee else d1
+      let read : Devm :=
+        (warm.balReadAccount sevm.benvStat.rules donee).balReadAccount
+          sevm.benvStat.rules sevm.currentTarget
+      let donorBal := (read.getAcct sevm.currentTarget).bal
+      let creating := (read.getAcct donee).Empty ∧ donorBal ≠ 0
+      change (Except.assert (gasCost ≤ d1.gasLeft)
+          ⟨.halt (.outOfGas .none), d1⟩ >>= fun _ =>
+        chargeGas (gasCost + if creating then state.accountWrite else 0) read
+          >>= fun d2 =>
+        chargeStateGas (if creating then state.newAccount else 0) d2
+          >>= fun d3 =>
+        (d3.subBal sevm.currentTarget donorBal).toExcept
+          ⟨.internal (.invariant (.text "InsufficientBalanceError")), d3⟩
+          >>= fun d4 =>
+        let moved := d4.addBal donee donorBal
+        let logged := moved.emitTransferLog sevm.currentTarget donee donorBal
+        if sevm.currentTarget ∈ logged.createdAccounts then
+          .ok (addAccountToDelete logged sevm.currentTarget)
+        else .ok logged) = .ok post at h_run2
+      rcases Except.bind_eq_ok h_run2 with ⟨_, h_gas, h_run3⟩
+      rcases Except.bind_eq_ok h_run3 with ⟨d2, h_charge, h_run4⟩
+      rcases Except.bind_eq_ok h_run4 with ⟨d3, h_stateCharge, h_run5⟩
+      rcases Except.bind_eq_ok h_run5 with ⟨d4, h_sub, h_run6⟩
+      have hpopFrame := Devm.popToAdr_instructionFrame pre
+      rw [h_pop] at hpopFrame
+      have h_pc1 : c.Pre wa sevm d1 := h_pc.state_eq hpopFrame.state.symm
+      have h_state2 : d2.state = d1.state := by
+        rw [← (Devm.burn_of_chargeGas h_charge).state]
+        dsimp only [read]
+        rw [Devm.balReadAccount_state, Devm.balReadAccount_state]
+        dsimp only [warm]
+        split
+        · exact addAccessedAddress_state
+        · rfl
+      have h_pc2 : c.Pre wa sevm d2 := h_pc1.state_eq h_state2
+      have h_pc3 : c.Pre wa sevm d3 :=
+        h_pc2.state_eq (chargeStateGas_state_eq h_stateCharge)
+      have h_sub_some : d3.subBal sevm.currentTarget donorBal = some d4 := by
+        cases hs : d3.subBal sevm.currentTarget donorBal
+        · simp only [hs, Option.toExcept] at h_sub
+          contradiction
+        · simp only [hs, Option.toExcept] at h_sub
+          injection h_sub with heq
+          subst heq
+          rfl
+      have h_sub_st : d3.state.subBal sevm.currentTarget donorBal =
+          some d4.state := by
+        dsimp [Devm.subBal, Option.bind] at h_sub_some
+        cases hs : d3.state.subBal sevm.currentTarget donorBal
+        · rw [hs] at h_sub_some
+          contradiction
+        · rw [hs] at h_sub_some
+          injection h_sub_some with heq
+          subst heq
+          rfl
+      let moved := d4.addBal donee donorBal
+      let logged := moved.emitTransferLog sevm.currentTarget donee donorBal
+      have h_pc_moved : c.Pre wa sevm moved := by
+        exact Pre.transfer_state h_pc3 h_ne h_sub_st rfl
+      have h_pc_logged : c.Pre wa sevm logged := by
+        apply h_pc_moved.state_eq
+        dsimp only [logged, moved]
+        unfold Devm.emitTransferLog
+        split <;> rfl
+      change (if sevm.currentTarget ∈ logged.createdAccounts then
+          (.ok (addAccountToDelete logged sevm.currentTarget) : Execution)
+        else .ok logged) = .ok post at h_run6
+      split at h_run6
+      · rw [← Except.ok.inj h_run6]
+        exact post_of_pre (h_pc_logged.state_eq rfl)
+      · rw [← Except.ok.inj h_run6]
+        exact post_of_pre h_pc_logged
 
 /-! ### The contract's obligation, and the frame-level result it yields -/
 
