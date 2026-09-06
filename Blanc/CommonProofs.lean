@@ -10274,6 +10274,25 @@ lemma ProcessMessage.balance_effect {msg : Msg} {xl : Xlot}
       · exact balNoninc_refl_trans.1.1 _
       · exact Nat.le_trans hexec htransfer
 
+/-- **Both halt settlements roll the world back to the message's own state.**
+
+Jaune's Amsterdam series keyed `processCreateMessage.settle`'s halt branch on
+the rules -- `exceptionalHalt` under `none`, `exceptionalHaltAmsterdam` under
+`some`, the latter refilling the state-gas meter before forfeiting execution
+gas. Neither touches the world it rolls back to, so the settled state is the
+same on both forks. Stating it once is also what keeps the elaborator from
+having to see through the `match` while inferring an implicit argument. -/
+lemma processCreateMessage.settle_halt_state (msg : Msg)
+    (reason : ExceptionalHalt) (evm : Devm) :
+    (match msg.benv.stat.rules.stateGas with
+     | none =>
+       processCreateMessage.exceptionalHalt evm reason msg.benv.state
+         msg.tenv.transientStorage
+     | some _ =>
+       processCreateMessage.exceptionalHaltAmsterdam evm reason msg.benv.state
+         msg.tenv.transientStorage).state = msg.benv.state := by
+  split <;> rfl
+
 lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
     {out : MessageExecution}
     (hxl : Xlot.Rel Devm.BalNoninc xl)
@@ -10301,7 +10320,13 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
         dsimp only [id] at h_charge
         dsimp only [MessageExecution.state] at h_pm
         cases err_msg
-        case halt => exact balNoninc_refl_trans.1.1 _
+        case halt reason =>
+          -- With the outer `match` reduced, the goal's head is the rules-keyed
+          -- settlement itself, so splitting it leaves two shallow reflexivity
+          -- goals. `processCreateMessage.settle_halt_state` states the same
+          -- fact standalone, for readers rather than for this proof.
+          simp only [MessageExecution.Rel, MessageExecution.state]
+          split <;> exact balNoninc_refl_trans.1.1 _
         all_goals exact Nat.le_trans h_charge h_pm
       | ok devm_charge =>
         dsimp only []
@@ -10676,6 +10701,68 @@ lemma setDelegationLoop_bal_eq {auths : List Auth} {msg msg' : Msg}
       obtain ⟨msgS, rcS⟩ := p
       exact (ih h).trans (setDelegationStep_bal_eq h_step)
 
+/-- **Delegation installation does not change the fork.** EIP-7702's set-up
+writes delegation code and bumps nonces; it never touches `benv.stat`, so the
+message the top frame actually runs meters in the same lane the transaction's
+own message does. This is the last link in the chain that lets a single
+legacy-lane premise, fixed at the transaction's fork, reach every frame. -/
+lemma setDelegationStep_benvStat_eq {auth : Auth} {msg msg' : Msg}
+    {rc rc' : B256} (h : setDelegationStep auth msg rc = .ok ⟨msg', rc'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  unfold setDelegationStep at h
+  dsimp only at h
+  split at h
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    rcases h with ⟨rfl, _⟩; rfl
+  · split at h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩; rfl
+    · split at h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩; rfl
+      · cases h
+      · split at h
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, _⟩; rfl
+        · split at h
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩; rfl
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩; rfl
+
+lemma setDelegationLoop_benvStat_eq {auths : List Auth} {msg msg' : Msg}
+    {rc rc' : B256} (h : setDelegationLoop auths msg rc = .ok ⟨msg', rc'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  induction auths generalizing msg rc with
+  | nil =>
+    unfold setDelegationLoop at h
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    rcases h with ⟨rfl, _⟩; rfl
+  | cons auth auths ih =>
+    unfold setDelegationLoop at h
+    simp only [bind, Except.bind] at h
+    split at h
+    · cases h
+    · rename_i p h_step
+      obtain ⟨msgS, rcS⟩ := p
+      exact (ih h).trans (setDelegationStep_benvStat_eq h_step)
+
+lemma setDelegation_benvStat_eq {msg msg' : Msg} {refund : B256}
+    (h : setDelegation msg = .ok ⟨msg', refund⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  unfold setDelegation at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  · rename_i p h_loop
+    obtain ⟨msgL, rcL⟩ := p
+    have h_stat := setDelegationLoop_benvStat_eq h_loop
+    split at h
+    · cases h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      exact h_stat
+
 lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
     (h : setDelegation msg = .ok ⟨msg', refund⟩) :
     State.balSum msg'.benv.state = State.balSum msg.benv.state := by
@@ -10697,10 +10784,11 @@ lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
 
 lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.call at h
-  dsimp only at h
+  simp only [hleg] at h
   split at h
   · simp only [bind, Except.bind] at h
     unfold Except.bimap at h
@@ -10712,7 +10800,7 @@ lemma processMessageCall.call_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processMessage_balance_noninc h_pm
+        have hbal := processMessage_balance_noninc (by split <;> exact hleg) h_pm
         have hpre : State.BalNoninc msg.benv.state evm'.state := by
           split at hbal <;> exact hbal
         split at h
@@ -10738,7 +10826,9 @@ lemma processMessageCall.call_balance_noninc
         · rename_i evm' h_pm
           simp only [id_eq, Except.ok.injEq] at h_evm
           subst h_evm
-          have hbal := processMessage_balance_noninc h_pm
+          have hbal := processMessage_balance_noninc
+            (by split <;> (rw [setDelegation_benvStat_eq h_del]; exact hleg))
+            h_pm
           have hpre : State.BalNoninc msg.benv.state evm'.state := by
             have hD : State.BalNoninc msgD.benv.state evm'.state := by
               split at hbal <;> exact hbal
@@ -10756,10 +10846,11 @@ lemma processMessageCall.call_balance_noninc
 
 lemma processMessageCall.create_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall.create msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.create at h
-  dsimp only at h
+  simp only [hleg] at h
   split at h
   · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     rcases h with ⟨rfl, _⟩
@@ -10774,7 +10865,7 @@ lemma processMessageCall.create_balance_noninc
       · rename_i evm' h_pm
         simp only [id_eq, Except.ok.injEq] at h_evm
         subst h_evm
-        have hbal := processCreateMessage_balance_noninc h_pm
+        have hbal := processCreateMessage_balance_noninc hleg h_pm
         split at h
         · split at h
           · injection h
@@ -10787,18 +10878,20 @@ lemma processMessageCall.create_balance_noninc
 
 lemma processMessageCall_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall at h
   split at h
-  · exact processMessageCall.create_balance_noninc h
-  · exact processMessageCall.call_balance_noninc h
+  · exact processMessageCall.create_balance_noninc hleg h
+  · exact processMessageCall.call_balance_noninc hleg h
 
 lemma processMessageCall_sum_le
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hleg : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
-  exact processMessageCall_balance_noninc h
+  exact processMessageCall_balance_noninc hleg h
 
 
 /-! ## The shared ERC-20 proof layer
@@ -11527,32 +11620,42 @@ lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
   rw [h]
 
 
+/-! The no-overflow projections of the balance family. Each is
+`Nat.lt_of_le_of_lt` on the corresponding `Devm.BalNoninc` fact, so each carries
+the same legacy-lane premise that fact does -- discharged at a concrete fork by
+every consumer. -/
+
 lemma Exec.preserves_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
-    (run : Exec pc sevm devm exn) :
+    (run : Exec pc sevm devm exn)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     ∀ r : Devm, exn = .ok r →
       sum devm.getBal < 2 ^ 256 → sum r.getBal < 2 ^ 256 := by
   intro r h_eq h_nof
   subst h_eq
-  exact Nat.lt_of_le_of_lt (Exec.balance_effect run) h_nof
+  exact Nat.lt_of_le_of_lt (Exec.balance_effect run hleg) h_nof
 
 lemma Xinst.preserves_nof {sevm : Sevm} {s r : Devm} {x : Xinst} {xl : Xlot}
     (h : Xinst.Run sevm s x xl (.ok r)) (h_nof : sum s.getBal < 2 ^ 256)
-    (h_fill : xl.Filled) :
+    (h_fill : xl.Filled) (hleg : sevm.benvStat.rules.stateGas = none)
+    (hxleg : xl.Legacy) :
     sum r.getBal < 2 ^ 256 := by
   have hxl : Xlot.Rel Devm.BalNoninc xl :=
     Xlot.rel_of_filled balNoninc_refl_trans.2.1 balNoninc_refl_trans.2.2
       Ninst.balance_effectRec Jinst.balance_effect Linst.balance_effect h_fill
-  exact Nat.lt_of_le_of_lt (Xinst.balance_effectRec x hxl h) h_nof
+      hxleg
+  exact Nat.lt_of_le_of_lt (Xinst.balance_effectRec x hleg hxl h) h_nof
 
 lemma Ninst.preserves_nof {sevm : Sevm} {s r : Devm} {i : Ninst}
-    (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256) :
+    (h : Ninst.Run sevm s i r) (h_nof : sum s.getBal < 2 ^ 256)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     sum r.getBal < 2 ^ 256 :=
-  Nat.lt_of_le_of_lt (Ninst.balance_effect i h) h_nof
+  Nat.lt_of_le_of_lt (Ninst.balance_effect i hleg h) h_nof
 
 lemma Func.preserves_nof {c : List Func} {sevm : Sevm} {s r : Devm} {f : Func}
-    (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256) :
+    (run : Func.Run c sevm s f r) (h_nof : sum s.getBal < 2 ^ 256)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     sum r.getBal < 2 ^ 256 :=
-  Nat.lt_of_le_of_lt (Func.balance_effect run) h_nof
+  Nat.lt_of_le_of_lt (Func.balance_effect run hleg) h_nof
 
 /-! ## Memory as a byte image
 
