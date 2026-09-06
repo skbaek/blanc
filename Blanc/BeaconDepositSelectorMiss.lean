@@ -70,7 +70,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
           ⟨[], Mem.empty, G + tree.dispatchMissGas selector + 11⟩)
         (Func.main tree)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   have htreeMiss : ¬ tree.HasSelector selector := by
     intro member
@@ -80,14 +80,14 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
       (program := runtime) (sevm := sevm) (base := base) G htreeMiss
   let D := tree.dispatchMissGas selector
   let afterPushZero :=
-    base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9⟩
+    base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9, base.stateGas⟩
   have hpushZero : Ninst.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+      (base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
       (pushB256 0) afterPushZero := by
     simpa only [afterPushZero, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm)
-        (devm := base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+        (devm := base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
         (w := (0 : B256)) (c := gBase) (G := G + D + 9)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
@@ -118,7 +118,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
           gVerylow])
         (by simp only [afterLoad, Devm.stack_setMach, List.length_cons,
           List.length_nil]; omega))
-  let afterShr := base.setMach ⟨[selector], Mem.empty, G + D⟩
+  let afterShr := base.setMach ⟨[selector], Mem.empty, G + D, base.stateGas⟩
   have h224 : (224 : B256).toNat = 224 := by decide +kernel
   have hselector' :
       Sevm.dataWord sevm 0 >>> (224 : B256).toNat = selector := by
@@ -133,10 +133,10 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         gVerylow])
       (by simp only [List.length_nil]; omega)
   let run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+      (base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
       (Func.main tree)
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
     unfold Func.main fsig shiftRight cdl
     exact .next hpushZero (.next hload (.next hpush224 (.next hshr (by
       simpa only [afterShr, D, prepend] using hdispatch))))
@@ -177,26 +177,26 @@ theorem unmatched_selector_noRawSstore
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
         runtime
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   let D := tree.dispatchMissGas selector
-  let pre := base.setMach ⟨[], Mem.empty, G + D + 28⟩
-  let mid := base.setMach ⟨[], Mem.empty, G + D + 27⟩
+  let pre := base.setMach ⟨[], Mem.empty, G + D + 28, base.stateGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, G + D + 27, base.stateGas⟩
   let afterSize := base.setMach
     ⟨[sevm.data.length.toB256], Mem.empty, G + D + 25⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, G + D + 11⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩
   let out : Execution :=
     .error (.revert,
-      (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
     unmatchedSelectorMain_runCompiledTo_with_path
       (sevm := sevm) (base := base) (G := G) hselector hmiss
@@ -220,10 +220,10 @@ theorem unmatched_selector_noRawSstore
       (⟨hmain, hmainSafe⟩ :
         ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
             (base.setMach ⟨[], Mem.empty,
-              G + tree.dispatchMissGas selector + 11⟩)
+              G + tree.dispatchMissGas selector + 11, base.stateGas⟩)
             (Func.main tree)
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
           Func.RunCompiledTo.NoRawSstorePath run)
   obtain ⟨hmain', hmainSafe'⟩ := mainPack
   let hbranch : Func.RunCompiledTo

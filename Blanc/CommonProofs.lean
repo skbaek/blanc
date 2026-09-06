@@ -9795,7 +9795,7 @@ lemma Devm.setCode_accountsToDelete (devm : Devm) (address : Adr)
 /-- A `setMach`/`memRead`/`withOutput` return post preserves the base world. -/
 lemma Devm.returnPost_world (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
-    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+    ((((devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩).memRead index size).2
         ).withOutput output).world = devm.world := rfl
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves persistent
@@ -9803,11 +9803,11 @@ storage reads. -/
 lemma Devm.returnPost_getStorVal (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) (adr : Adr) (key : B256) :
     Devm.getStorVal
-        ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+        ((((devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩).memRead index size).2
           ).withOutput output) adr key =
       devm.getStorVal adr key := by
   unfold Devm.getStorVal Devm.getAcct
-  rw [show (((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+  rw [show (((((devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩).memRead index size).2
       ).withOutput output).state) = devm.state from
         congrArg World.state
           (Devm.returnPost_world devm stack gas index size output)]
@@ -9816,7 +9816,7 @@ lemma Devm.returnPost_getStorVal (devm : Devm) (stack : List B256)
 storage. -/
 lemma Devm.returnPost_transientStorage (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
-    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+    ((((devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩).memRead index size).2
         ).withOutput output).transientStorage = devm.transientStorage :=
   congrArg World.transientStorage
     (Devm.returnPost_world devm stack gas index size output)
@@ -9825,7 +9825,7 @@ lemma Devm.returnPost_transientStorage (devm : Devm) (stack : List B256)
 storage-key set. -/
 lemma Devm.returnPost_accessedStorageKeys (devm : Devm) (stack : List B256)
     (gas index size : Nat) (output : Bytes) :
-    ((((devm.setMach ⟨stack, devm.memory, gas⟩).memRead index size).2
+    ((((devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩).memRead index size).2
         ).withOutput output).accessedStorageKeys =
       devm.accessedStorageKeys := by
   rfl

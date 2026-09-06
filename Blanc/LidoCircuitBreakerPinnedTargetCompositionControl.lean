@@ -2523,7 +2523,7 @@ private theorem stubPauseWorld_productionRun :
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
 
 private def stubPauseWorldAfterSetEntry : Devm :=
-  stubRunAfterSetBase.setMach ⟨[], stubRunMemoryLast, 67693⟩
+  stubRunAfterSetBase.setMach ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩
 
 private theorem stubPauseWorldAfterSetEntry_memory :
     stubPauseWorldAfterSetEntry.memory = stubRunMemoryLast := by

@@ -16,16 +16,16 @@ theorem Func.runCompiledTo_return_word_at_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (memory : Mem) (gas : Nat) (output : Bytes)
     (hext :
-      (base.setMach ⟨[0, 32], memory, gas⟩).extCost [⟨0, 32⟩] = 0)
+      (base.setMach ⟨[0, 32], memory, gas, base.stateGas⟩).extCost [⟨0, 32⟩] = 0)
     (hread : (memory.read 0 32).1 = output) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[0, 32], memory, gas⟩)
+      (base.setMach ⟨[0, 32], memory, gas, base.stateGas⟩)
       (Func.last .return_)
-      (.ok (((base.setMach ⟨[], memory, gas⟩).memRead 0 32).2.withOutput
+      (.ok (((base.setMach ⟨[], memory, gas, base.stateGas⟩).memRead 0 32).2.withOutput
         output)) := by
   have hrun := Func.runCompiledTo_return_word
     (fs := fs) (sevm := sevm)
-    (devm := base.setMach ⟨[0, 32], memory, gas⟩)
+    (devm := base.setMach ⟨[0, 32], memory, gas, base.stateGas⟩)
     (i := 0) (sz := 32) (s := []) (e := 0) (G := gas) (out := output)
     rfl hext rfl (by
       simpa only [Devm.setMach_setMach, Devm.memory_setMach,
@@ -42,18 +42,18 @@ theorem Func.runCompiledTo_revert_empty_at_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (memory : Mem) (gas : Nat) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[0, 0], memory, gas⟩)
+      (base.setMach ⟨[0, 0], memory, gas, base.stateGas⟩)
       (Func.last .revert)
       (.error (.revert,
-        (base.setMach ⟨[], memory, gas⟩).withOutput [])) := by
+        (base.setMach ⟨[], memory, gas, base.stateGas⟩).withOutput [])) := by
   have hrun := Func.runCompiledTo_revert
     (fs := fs) (sevm := sevm)
-    (devm := base.setMach ⟨[0, 0], memory, gas⟩)
+    (devm := base.setMach ⟨[0, 0], memory, gas, base.stateGas⟩)
     (i := 0) (sz := 0) (s := []) (out := []) (G := gas)
-    (d' := base.setMach ⟨[], memory, gas⟩)
+    (d' := base.setMach ⟨[], memory, gas, base.stateGas⟩)
     rfl (by
       change gas = gas +
-        (base.setMach ⟨[0, 0], memory, gas⟩).extCost [⟨0, 0⟩]
+        (base.setMach ⟨[0, 0], memory, gas, base.stateGas⟩).extCost [⟨0, 0⟩]
       rw [Devm.extCost_empty_window]
       simp) (by exact Devm.memRead_zero)
   simpa only [Devm.setMach_setMach,

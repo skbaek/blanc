@@ -357,7 +357,7 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
     (h_room : devm.stack.length < 1023)
     (h_bound : ∀ iw ∈ iws, 32 * iw.2 < 2 ^ 256)
     (h_next : Func.RunCompiledTo fs sevm
-      (devm.setMach ⟨devm.stack, Mem.writeStoresRev M iws, G⟩) rest ex) :
+      (devm.setMach ⟨devm.stack, Mem.writeStoresRev M iws, G, devm.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (prependStoresRev iws rest) ex := by
   induction iws generalizing devm G rest with
   | nil =>
@@ -457,7 +457,7 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
     Func.RunCompiledTo fs sevm devm (Func.revertSelector data hlen)
       (.error (.revert,
         (devm.setMach ⟨devm.stack,
-          devm.memory.write 0 data.toB256.toBytes, G⟩).withOutput data)) := by
+          devm.memory.write 0 data.toB256.toBytes, G, devm.stateGas⟩).withOutput data)) := by
   let w := data.toB256
   let M' := devm.memory.write 0 w.toBytes
   let e := devm.extCost [⟨0, 32⟩]
@@ -540,17 +540,17 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
       have himg : (M'.read 28 4).2 = M' :=
         Mem.read_snd_eq_self (memExtSize_of_le ha hcover)
       have hread :
-          (devm.setMach ⟨devm.stack, M', G⟩).memRead 28 4 =
-            ⟨data, devm.setMach ⟨devm.stack, M', G⟩⟩ := by
+          (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).memRead 28 4 =
+            ⟨data, devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩⟩ := by
         apply Prod.ext hout
-        show (devm.setMach ⟨devm.stack, M', G⟩).withMemory
-            (M'.read 28 4).2 = devm.setMach ⟨devm.stack, M', G⟩
+        show (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).withMemory
+            (M'.read 28 4).2 = devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩
         rw [himg]
         apply Devm.eq_of_proj <;> rfl
       exact Func.runCompiledTo_revert_of
         (i := Nat.toB256 28) (sz := Nat.toB256 4) (s := devm.stack)
         (G := G) (e := 0) (out := data)
-        (d' := devm.setMach ⟨devm.stack, M', G⟩)
+        (d' := devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩)
         rfl
         (by
           simp only [h28nat, h4nat, Devm.extCost, Devm.memory_setMach,
@@ -723,7 +723,7 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
     Func.RunCompiledTo fs sevm devm (Func.revertData blob)
       (.error (.revert,
         (devm.setMach ⟨devm.stack,
-          Mem.writeStoresRev devm.memory (bytesWords blob).zipIdx, G⟩).withOutput
+          Mem.writeStoresRev devm.memory (bytesWords blob).zipIdx, G, devm.stateGas⟩).withOutput
             blob)) := by
   let ws := bytesWords blob
   let M' := Mem.writeStoresRev devm.memory ws.zipIdx
@@ -765,11 +765,11 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
       devm.memory blob halign
     have hext0 :
         (devm.setMach ⟨(0 : B256) :: Nat.toB256 blob.length :: devm.stack,
-          M', G⟩).extCost [⟨0, (Nat.toB256 blob.length).toNat⟩] = 0 := by
+          M', G, devm.stateGas⟩).extCost [⟨0, (Nat.toB256 blob.length).toNat⟩] = 0 := by
       simp only [Devm.extCost, Devm.memory_setMach, memExtsSize, hlen]
       exact he0
     have hout :
-        ((devm.setMach ⟨devm.stack, M', G⟩).memRead 0 blob.length).1 = blob := by
+        ((devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).memRead 0 blob.length).1 = blob := by
       show (M'.read 0 blob.length).1 = blob
       exact Mem.read_writeStoresRev_bytesWords hwf hr
     have ha : M'.size % 32 = 0 :=
@@ -793,18 +793,18 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
     have himg : (M'.read 0 blob.length).2 = M' :=
       Mem.read_snd_eq_self (memExtSize_of_le ha (by omega))
     have hread :
-        (devm.setMach ⟨devm.stack, M', G⟩).memRead 0 blob.length =
-          ⟨blob, devm.setMach ⟨devm.stack, M', G⟩⟩ := by
+        (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).memRead 0 blob.length =
+          ⟨blob, devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩⟩ := by
       apply Prod.ext hout
-      show (devm.setMach ⟨devm.stack, M', G⟩).withMemory
+      show (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).withMemory
           (M'.read 0 blob.length).2 =
-        devm.setMach ⟨devm.stack, M', G⟩
+        devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩
       rw [himg]
       apply Devm.eq_of_proj <;> rfl
     exact Func.runCompiledTo_revert_of
       (i := 0) (sz := Nat.toB256 blob.length) (s := devm.stack)
       (G := G) (e := 0) (out := blob)
-      (d' := devm.setMach ⟨devm.stack, M', G⟩)
+      (d' := devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩)
       rfl hext0 rfl (by simpa only [hlen, B256.toNat_zero,
         Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using hread)
@@ -825,7 +825,7 @@ lemma Func.runCompiledTo_revertWith {fs : List Func} {sevm : Sevm}
       (.error (.revert,
         (devm.setMach ⟨devm.stack,
           Mem.writeStoresRev devm.memory (bytesWords (errorData s)).zipIdx,
-          G⟩).withOutput (errorData s))) := by
+          G, devm.stateGas⟩).withOutput (errorData s))) := by
   simpa only [Func.revertWith] using
     Func.runCompiledTo_revertData hwf hr halign h_blob h_words h_gas h_room
 
@@ -850,7 +850,7 @@ theorem Func.runCompiledTo_errorGuard {fs : List Func} {sevm : Sevm}
       (.error (.revert,
         (devm.setMach ⟨stack,
           Mem.writeStoresRev devm.memory
-            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+            (bytesWords (errorData reason)).zipIdx, G, devm.stateGas⟩).withOutput
               (errorData reason))) := by
   have h_room_tail : stack.length < 1023 := by
     rw [h_stack] at h_room
@@ -890,7 +890,7 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
     Func.RunCompiledTo fs sevm devm Func.revertReturnData
       (.error (.revert,
         (devm.setMach ⟨devm.stack,
-          devm.memory.write 0 devm.returnData, G⟩).withOutput
+          devm.memory.write 0 devm.returnData, G, devm.stateGas⟩).withOutput
             devm.returnData)) := by
   let n := devm.returnData.length
   let w := Nat.toB256 n
@@ -996,18 +996,18 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
       have himg : (M'.read 0 n).2 = M' :=
         Mem.read_snd_eq_self (memExtSize_of_le ha (by omega))
       have hread :
-          (devm.setMach ⟨devm.stack, M', G⟩).memRead 0 n =
-            ⟨devm.returnData, devm.setMach ⟨devm.stack, M', G⟩⟩ := by
+          (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).memRead 0 n =
+            ⟨devm.returnData, devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩⟩ := by
         apply Prod.ext hout
-        show (devm.setMach ⟨devm.stack, M', G⟩).withMemory
+        show (devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩).withMemory
             (M'.read 0 n).2 =
-          devm.setMach ⟨devm.stack, M', G⟩
+          devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩
         rw [himg]
         apply Devm.eq_of_proj <;> rfl
       exact Func.runCompiledTo_revert_of
         (i := 0) (sz := w) (s := devm.stack)
         (G := G) (e := 0) (out := devm.returnData)
-        (d' := devm.setMach ⟨devm.stack, M', G⟩)
+        (d' := devm.setMach ⟨devm.stack, M', G, devm.stateGas⟩)
         rfl hext rfl
         (by simpa only [hw, B256.toNat_zero, Devm.setMach_setMach,
           Devm.memory_setMach] using hread)
@@ -1073,7 +1073,7 @@ private lemma of_run_revert {sevm : Sevm} {devm : Devm} {i sz : B256}
     with h_gas | h_gas
   · have h_oog : Linst.run sevm devm .revert
         = .error ⟨.halt (.outOfGas .none),
-            devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+            devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
       show (do
         let ⟨index, d⟩ ← devm.popToNat
         let ⟨size, d⟩ ← d.popToNat
@@ -1085,13 +1085,13 @@ private lemma of_run_revert {sevm : Sevm} {devm : Devm} {i sz : B256}
       rw [Devm.popToNat_eq_ok h_stk]
       simp only [bind, Except.bind]
       rw [Devm.popToNat_eq_ok
-        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
         Devm.gasLeft_setMach]
-      have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
       rw [h_ext, chargeGas_eq_outOfGas
-        (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+        (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     exact Or.inl ⟨_, h_eq.symm.trans h_oog⟩
   · exact Or.inr ⟨_, h_eq.symm.trans (Linst.run_revert_eq_error h_stk h_gas rfl),
       rfl⟩

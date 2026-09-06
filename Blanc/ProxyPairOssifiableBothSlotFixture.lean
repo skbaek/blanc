@@ -114,7 +114,7 @@ theorem setupMain_runCompiledTo
       base.getStorVal sevm.currentTarget adminSlotLit = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + setupBodyGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + setupBodyGas, base.stateGas⟩)
         setupMain (.ok post) ∧
       post.error = base.error ∧
       post.output = [] ∧

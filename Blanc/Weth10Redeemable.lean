@@ -1230,11 +1230,11 @@ theorem withdrawTo_runCompiledTo_callPrefix
         (b.setMach ⟨[
           Nat.toB256 G, Sevm.argWord e 0, Sevm.argWord e 1,
           0, 0, 0, 0],
-          Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G⟩)
+          Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G, b.stateGas⟩)
         (Ninst.call ::: (Ninst.iszero :::
           (.call ethTransferErrorSlot) <?> Func.stop)) out) :
     Func.RunCompiledTo fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdrawTo out := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdrawTo out := by
   simp only [withdrawTo]
   func_run (2)
   refine Func.runCompiledTo_sload_step rfl (by simp)
@@ -1303,12 +1303,12 @@ lemma callSuccessTail_runCompiled {fs : List Func} {e : Sevm} {d : Devm}
       out.refundCounter = d.refundCounter ∧
       out.accountsToDelete = d.accountsToDelete ∧
       out.state = d.state := by
-  have hd : d = d.setMach ⟨[1], d.memory, d.gasLeft⟩ := by
+  have hd : d = d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩ := by
     apply Devm.eq_of_proj
     · exact hstack
     all_goals rfl
   rw [hd]
-  let out := d.setMach ⟨[], d.memory, d.gasLeft - 16⟩
+  let out := d.setMach ⟨[], d.memory, d.gasLeft - 16, d.stateGas⟩
   refine ⟨out, ?_, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   func_run [0]
   · simp [out]
@@ -1331,14 +1331,14 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       Ninst.RunCompiled e
         (b.setMach ⟨[
           Nat.toB256 G, recipient.toB256, value, 0, 0, 0, 0],
-          Mem.empty.write 0 value.toBytes, G⟩)
+          Mem.empty.write 0 value.toBytes, G, b.stateGas⟩)
         (.exec .call) post ∧ post.stack = [1] ∧ 16 ≤ post.gasLeft ∧
         RedemptionCallEffect e b post recipient value := by
   let d := b.setMach ⟨[
     Nat.toB256 G, recipient.toB256, value, 0, 0, 0, 0],
-    Mem.empty.write 0 value.toBytes, G⟩
+    Mem.empty.write 0 value.toBytes, G, b.stateGas⟩
   let d0 := addAccessedAddress
-    (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient
+    (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient
   rcases hdel : accessDelegation d0 recipient with ⟨dp, dadr, code, dgc, d1⟩
   obtain ⟨_hd1s, _hd1m, hd1g, hdgc⟩ := accessDelegation_inv hdel
   have hd1g' : d1.gasLeft = G := by
@@ -1379,7 +1379,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     rw [hdel] at hd
     exact hd
   have hext :
-      (d.setMach ⟨[], d.memory, d.gasLeft⟩).extCost
+      (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).extCost
         [⟨(0 : B256).toNat, (0 : B256).toNat⟩,
           ⟨(0 : B256).toNat, (0 : B256).toNat⟩] = 0 := by
     rw [show (0 : B256).toNat = 0 from by decide]
@@ -1388,14 +1388,14 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       calculateMemoryGasCost d.memory.size = 0
     simp [memExtsSize, memExtSize]
   let acc := accessCost recipient
-    (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses + dgc
+    (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses + dgc
   have hacc :
       accessCost recipient
-        (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses + dgc = acc := rfl
+        (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses + dgc = acc := rfl
   have hacc_le : acc ≤ 5200 := by
     have ha := accessCost_le
       (x := recipient)
-      (a := (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses)
+      (a := (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses)
     have hsum : acc ≤ gasColdAccountAccess + gasColdAccountAccess := by
       exact Nat.add_le_add ha hdgc
     norm_num [gasColdAccountAccess] at hsum
@@ -1416,7 +1416,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     have hret := le_retained_of_calculateMsgCallGas_zero hafford hsplit
     have hdel' : accessDelegation
         (addAccessedAddress
-          (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient.toB256.toAdr)
+          (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient.toB256.toAdr)
           recipient.toB256.toAdr = ⟨dp, dadr, code, dgc, d1⟩ := by
       simpa only [toAdr_toB256] using hdel
     rcases Ninst.runCompiled_call_zero_value_codeFree
@@ -1486,7 +1486,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       norm_num [gCallStipend]
     have hdel' : accessDelegation
         (addAccessedAddress
-          (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient.toB256.toAdr)
+          (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient.toB256.toAdr)
           recipient.toB256.toAdr = ⟨dp, dadr, code, dgc, d1⟩ := by
       simpa only [toAdr_toB256] using hdel
     rcases Ninst.runCompiled_call_nonzero_codeFree
@@ -1539,7 +1539,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       RedemptionCodeOutcome e pre post e.caller recipient
         (Sevm.argWord e 1) → P (.ok post)) :
     Func.ExecSat fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdrawTo P := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdrawTo P := by
   simp only [withdrawTo]
   apply Func.execSat_segment
   · intro ex hex
@@ -1613,7 +1613,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
           (b₃.setMach ⟨[
             Nat.toB256 (G₃ - 24), Sevm.argWord e 0, Sevm.argWord e 1,
             0, 0, 0, 0],
-            Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G₃ - 24⟩)
+            Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G₃ - 24, b₃.stateGas⟩)
           (.exec .call) callPost := by
         simpa only [h_recipient] using hcall
       refine Func.execSat_next hcall' ?_
@@ -1663,7 +1663,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 1], Mem.empty, G₁ - 37⟩).getStorVal
+                Sevm.argWord e 1], Mem.empty, G₁ - 37, b₁.stateGas⟩).getStorVal
                 e.currentTarget e.caller.toB256 =
               pre.getStorVal e.currentTarget e.caller.toB256 := by
           change b₁.getStorVal e.currentTarget e.caller.toB256 =
@@ -1674,7 +1674,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 1], Mem.empty, G₁ - 37⟩).refundCounter = 0 := by
+                Sevm.argWord e 1], Mem.empty, G₁ - 37, b₁.stateGas⟩).refundCounter = 0 := by
           change b₁.refundCounter = 0
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
@@ -1741,7 +1741,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       RedemptionCodeOutcome e pre post e.caller e.caller
         (Sevm.argWord e 0) → P (.ok post)) :
     Func.ExecSat fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdraw P := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdraw P := by
   simp only [withdraw]
   apply Func.execSat_segment
   · intro ex hex
@@ -1856,7 +1856,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 0], Mem.empty, G₁ - 37⟩).getStorVal
+                Sevm.argWord e 0], Mem.empty, G₁ - 37, b₁.stateGas⟩).getStorVal
                 e.currentTarget e.caller.toB256 =
               pre.getStorVal e.currentTarget e.caller.toB256 := by
           change b₁.getStorVal e.currentTarget e.caller.toB256 =
@@ -1867,7 +1867,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 0], Mem.empty, G₁ - 37⟩).refundCounter = 0 := by
+                Sevm.argWord e 0], Mem.empty, G₁ - 37, b₁.stateGas⟩).refundCounter = 0 := by
           change b₁.refundCounter = 0
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
@@ -2059,7 +2059,7 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
   simp only [redemptionExecutionGasFloor, redemptionSelectorDispatchGas,
     redemptionMechanizedBodyGas] at h_gas
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem]) ?_
   apply Func.execSat_segment
@@ -2086,7 +2086,7 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
       simpa only [weth10Main_eq_withdrawTo] using hex
   have hbody := withdrawTo_execSat
     (fs := withdrawToMain dp :: (weth10 dp).aux) (e := e)
-    (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩)
+    (pre := pre.setMach ⟨[], Mem.empty, g - 182, pre.stateGas⟩)
     (recipient := recipient) (P := P) h_recipient
     (by simpa only [Devm.getStorVal_setMach] using h_amount)
     h_static h_depth h_nonprecompile
@@ -2131,7 +2131,7 @@ theorem withdraw_progExecSat (dp : DeployParams)
   simp only [redemptionExecutionGasFloor, redemptionSelectorDispatchGas,
     redemptionMechanizedBodyGas] at h_gas
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem]) ?_
   apply Func.execSat_segment
@@ -2158,7 +2158,7 @@ theorem withdraw_progExecSat (dp : DeployParams)
       simpa only [weth10Main_eq_withdraw] using hex
   have hbody := withdraw_execSat
     (fs := withdrawMain dp :: (weth10 dp).aux) (e := e)
-    (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩) (P := P)
+    (pre := pre.setMach ⟨[], Mem.empty, g - 182, pre.stateGas⟩) (P := P)
     (by simpa only [Devm.getStorVal_setMach] using h_amount)
     h_static h_depth h_nonprecompile
     (by simpa only [Devm.getCode_setMach] using h_code)

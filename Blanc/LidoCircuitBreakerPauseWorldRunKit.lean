@@ -70,36 +70,36 @@ private theorem pushZero_targetIndexKey_prepend_runCompiled
     (hcovered : (targetWord * 32).toNat + 32 ≤ M.size)
     (hroom : stack.length < 1021)
     (htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨indexSlot target :: 0 :: stack, M, G⟩) tail post) :
+      (base.setMach ⟨indexSlot target :: 0 :: stack, M, G, base.stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 14⟩)
+      (base.setMach ⟨stack, M, G + 14, base.stateGas⟩)
       (pushB256 0 ::: targetIndexKey +++ tail) post := by
   have htag : Func.RunCompiled fs sevm
-      (base.setMach ⟨target :: 0 :: stack, M, G + 6⟩)
+      (base.setMach ⟨target :: 0 :: stack, M, G + 6, base.stateGas⟩)
       (tagTop indexRegion +++ tail) post := by
     func_run (2) [indexSlot target]
     case a =>
       have hg : G + 6 - 6 = G := by omega
       rw [hg]
       change Func.RunCompiled fs sevm
-        (base.setMach ⟨indexSlot target :: 0 :: stack, M, G⟩) tail post
+        (base.setMach ⟨indexSlot target :: 0 :: stack, M, G, base.stateGas⟩) tail post
       exact htail
     all_goals simp only [Devm.stack_setMach, List.length_cons]
     all_goals omega
   have hload : Func.RunCompiled fs sevm
-      (base.setMach ⟨0 :: stack, M, G + 12⟩)
+      (base.setMach ⟨0 :: stack, M, G + 12, base.stateGas⟩)
       (loadWord targetWord +++ tagTop indexRegion +++ tail) post := by
     exact targetWord_prepend_runCompiled hvalue hmemory halign hcovered
       (by simp only [List.length_cons]; omega) htag
   have hload' : Func.RunCompiled fs sevm
-      (base.setMach ⟨0 :: stack, M, G + 12⟩)
+      (base.setMach ⟨0 :: stack, M, G + 12, base.stateGas⟩)
       (targetIndexKey +++ tail) post := by
     simpa only [targetIndexKey, prepend_append] using hload
   apply Func.RunCompiled.next
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
       Devm.memory_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm)
-        (devm := base.setMach ⟨stack, M, G + 14⟩)
+        (devm := base.setMach ⟨stack, M, G + 14, base.stateGas⟩)
         (w := 0) (c := gBase) (G := G + 12) rfl
         (by simp only [Devm.gasLeft_setMach]; norm_num [gBase])
         (by simp only [Devm.stack_setMach]; omega))
@@ -143,11 +143,11 @@ private theorem removeTarget_restoreTail_runCompiled
     (hfinish :
       let removePost := indexClearPost sevm base target oldLength
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (removePost.setMach ⟨stack, M, G + finishGas⟩)
+        (removePost.setMach ⟨stack, M, G + finishGas, removePost.stateGas⟩)
         finishSetPauser post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
-        G + finishGas + 44 + indexClearCost + lengthRestoreCost⟩)
+        G + finishGas + 44 + indexClearCost + lengthRestoreCost, base.stateGas⟩)
       (loadWord arrayLengthWord +++ pushB256 1 ::: swap 0 ::: sub :::
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
@@ -197,7 +197,7 @@ private theorem removeTarget_restoreTail_runCompiled
   have hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser := by
     simp [fs, runtime, aux, finishSetPauserSlot]
   have hfinishCall : Func.RunCompiled fs sevm
-      (removePost.setMach ⟨stack, M, G + finishGas + 12⟩)
+      (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩)
       (.call finishSetPauserSlot)
       post := by
     apply Func.RunCompiled.call hfinishLookup (by
@@ -224,7 +224,7 @@ private theorem removeTarget_restoreTail_runCompiled
           ⟨indexKey :: 0 :: stack, M,
             G + finishGas + 12 + indexClearCost⟩)
         Ninst.sstore
-        (removePost.setMach ⟨stack, M, G + finishGas + 12⟩) := by
+        (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩) := by
       exact temporal_sstore_runCompiled hindexPost hindexOrig hindexCost
         hwarmIndexPost hgasFinal hstatic
     exact Func.RunCompiled.next hsstore hfinishCall
@@ -332,12 +332,12 @@ private theorem removeTarget_storePrefix_runCompiled
       let tailPost := entryClearPost sevm base target next
       let removePost := indexClearPost sevm tailPost target oldLength
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (removePost.setMach ⟨stack, M, G + finishGas⟩)
+        (removePost.setMach ⟨stack, M, G + finishGas, removePost.stateGas⟩)
         finishSetPauser post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
         G + finishGas + 94 + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+          lengthRestoreCost + indexClearCost, base.stateGas⟩)
       (loadWord lastTargetWord +++ loadWord removedIndexWord +++
         tagTop arrayRegion +++ Ninst.sstore :::
         loadWord removedIndexWord +++ lastTargetIndexKey +++
@@ -769,7 +769,7 @@ theorem temporal_sstore_cold_runCompiled
     (hgas : gCallStipend < G + gasColdSload + cost)
     (hstatic : sevm.isStatic = false) :
     Ninst.RunCompiled sevm
-      (base.setMach ⟨key :: value :: stack, M, G + gasColdSload + cost⟩)
+      (base.setMach ⟨key :: value :: stack, M, G + gasColdSload + cost, base.stateGas⟩)
       Ninst.sstore
       ((temporalSstorePost sevm
           (addAccessedStorageKey base sevm.currentTarget key) key
@@ -874,14 +874,14 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       let tailPost := entryClearPost sevm coldBase target next
       let removePost := indexClearPost sevm tailPost target oldLength
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (removePost.setMach ⟨stack, MLast, G + finishGas⟩)
+        (removePost.setMach ⟨stack, MLast, G + finishGas, removePost.stateGas⟩)
         finishSetPauser post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
         G + finishGas + 139 + lastExtCost + indexExtCost + lengthExtCost +
           idxSloadCost + lenSloadCost + arrSloadCost + holeCost +
           movedIndexCost + tailClearCost + lengthRestoreCost +
-          indexClearCost⟩)
+          indexClearCost, base.stateGas⟩)
       removeTarget post := by
   dsimp only at hfinish
   let arrayKey := arrayEntrySlot next
@@ -1580,7 +1580,7 @@ private theorem removeTarget_holeStorePrefix_runCompiled
         ⟨arrayEntrySlot idx :: lastTarget :: stack, M, G⟩)
       (Ninst.sstore ::: tail) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 18⟩)
+      (base.setMach ⟨stack, M, G + 18, base.stateGas⟩)
       (loadWord lastTargetWord +++ loadWord removedIndexWord +++
         tagTop arrayRegion +++ Ninst.sstore ::: tail)
       post := by
@@ -1720,14 +1720,14 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         lastTarget.toBytes
       let removePost := indexClearPost sevm tailPost target oldLength
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (removePost.setMach ⟨stack, MLast, G + finishGas⟩)
+        (removePost.setMach ⟨stack, MLast, G + finishGas, removePost.stateGas⟩)
         finishSetPauser post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
         G + finishGas + 139 + lastExtCost + indexExtCost + lengthExtCost +
           idxSloadCost + lenSloadCost + arrSloadCost + gasColdSload +
           gasColdSload + holeCost + movedIndexCost + tailClearCost +
-          lengthRestoreCost + indexClearCost⟩)
+          lengthRestoreCost + indexClearCost, base.stateGas⟩)
       removeTarget post := by
   dsimp only at hfinish
   let holeKey := arrayEntrySlot idx

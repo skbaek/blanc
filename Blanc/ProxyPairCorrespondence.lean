@@ -1046,12 +1046,12 @@ private theorem proxy_success_tail
   let base := incorporateChildOnSuccess parent childPost childPost.output
   let final :=
     (((base.setMach ⟨[], parent.memory.write 0
-        implReturnWord.toBytes, finalGas⟩).memRead 0 32).2.withOutput
+        implReturnWord.toBytes, finalGas, base.stateGas⟩).memRead 0 32).2.withOutput
       implReturnWord.toBytes)
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         proxySuccessResume m atCallGas callCost childPost =
-          base.setMach ⟨[1], parent.memory, resumeGas⟩ := by
+          base.setMach ⟨[1], parent.memory, resumeGas, base.stateGas⟩ := by
       simp [proxySuccessResume, base, parent, resumeGas, hgas]
       rw [Devm.memWrite_nil]
     rw [hstart]
@@ -1064,7 +1064,7 @@ private theorem proxy_success_tail
       exact proxyCopiedMemory_size m premises.dataLength
     have hext :
         (base.setMach ⟨[0, 0, 32, 0, 1], parent.memory,
-          resumeGas - 8⟩).extCost [⟨0, 32⟩] = 0 := by
+          resumeGas - 8, base.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
       apply Devm.extCost_covered
       rw [hpmem]
       decide
@@ -1108,7 +1108,7 @@ private theorem proxy_success_tail
         decide
       have hfinalext :
           (base.setMach ⟨[0, 32], parent.memory.write 0
-            implReturnWord.toBytes, finalGas⟩).extCost [⟨0, 32⟩] = 0 := by
+            implReturnWord.toBytes, finalGas, base.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
         apply Devm.extCost_covered
         rw [hm]
         decide
@@ -1153,11 +1153,11 @@ private theorem proxy_error_tail
   have hsum : finalGas + proxyErrorTailGas32 = resumeGas :=
     Nat.sub_add_cancel htail
   let base := incorporateChildOnError parent childPost childPost.output
-  let final := (base.setMach ⟨[], parent.memory, finalGas⟩).withOutput []
+  let final := (base.setMach ⟨[], parent.memory, finalGas, base.stateGas⟩).withOutput []
   refine ⟨final, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         proxyErrorResume m atCallGas callCost childPost =
-          base.setMach ⟨[0], parent.memory, resumeGas⟩ := by
+          base.setMach ⟨[0], parent.memory, resumeGas, base.stateGas⟩ := by
       simp [proxyErrorResume, base, parent, resumeGas, hout]
       rw [Devm.memWrite_nil]
     rw [hstart]

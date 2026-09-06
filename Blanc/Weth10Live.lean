@@ -301,7 +301,7 @@ the split merely keeps the accessed-key successor from being normalized
 through the whole dispatcher at once. -/
 
 private def returnWordPre (base : Devm) (word : B256) (gas : Nat) : Devm :=
-  base.setMach ⟨[], Mem.empty.write 0 word.toBytes, gas⟩
+  base.setMach ⟨[], Mem.empty.write 0 word.toBytes, gas, base.stateGas⟩
 
 private theorem returnWord_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {word : B256}
@@ -315,7 +315,7 @@ private theorem returnWord_runCompiled
   let M := Mem.empty.write 0 word.toBytes
   let returnPre := base.setMach
     ⟨[(0 : B256), (32 : B256)], M, g - 5⟩
-  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, ?_, ?_⟩
   · simp only [returnWordPre, returnMemoryRange, pushList]
@@ -328,7 +328,7 @@ private theorem returnWord_runCompiled
       simpa only [returnPre, M] using
         (Devm.extCost_word_word Mem.size_write_word)
     have h_read :
-        (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32 =
+        (returnPre.setMach ⟨[], returnPre.memory, g - 5, returnPre.stateGas⟩).memRead 0 32 =
           ⟨word.toBytes, d.2⟩ := by
       exact Prod.ext
         (Devm.memRead_word_fst
@@ -355,7 +355,7 @@ private theorem balanceOfBody_cold_runCompiled
     (h_gas : 2116 ≤ g) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[(32 * 0 + 4 : B256)], Mem.empty, g⟩)
+        (base.setMach ⟨[(32 * 0 + 4 : B256)], Mem.empty, g, base.stateGas⟩)
         balanceOfBodyTail post ∧
       post.gasLeft = g - 2116 ∧
       Devm.output post =
@@ -474,7 +474,7 @@ private theorem totalSupplyBody_cold_runCompiled
     (h_gas : 2126 ≤ g) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, g⟩) totalSupply post ∧
+        (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩) totalSupply post ∧
       post.gasLeft = g - 2126 ∧
       Devm.output post =
         (Devm.getStorVal base sevm.currentTarget flashMintedSlot +
@@ -534,7 +534,7 @@ private theorem totalSupplyBody_cold_runCompiled
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm)
-        (devm := base.setMach ⟨[], Mem.empty, g⟩)
+        (devm := base.setMach ⟨[], Mem.empty, g, base.stateGas⟩)
         (r := .selfbalance) (x := base.getBal sevm.currentTarget)
         (cost := gLow) (G := g - 5) (by rintro ⟨⟩) rfl
         (by
@@ -686,14 +686,14 @@ private theorem maxFlashLoanSelfBody_cold_runCompiled
     (h_gas : 2124 ≤ g) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, g⟩) maxFlashLoanSelfBody post ∧
+        (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩) maxFlashLoanSelfBody post ∧
       post.gasLeft = g - 2124 ∧
       Devm.output post =
         (Nat.toB256 maxFlashMinted -
           Devm.getStorVal base sevm.currentTarget flashMintedSlot).toBytes := by
   have h_cold_at_load :
       (⟨sevm.currentTarget, flashMintedSlot⟩ : Adr × B256) ∉
-        (base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5⟩).accessedStorageKeys :=
+        (base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5, base.stateGas⟩).accessedStorageKeys :=
     h_cold
   have h_slot_push_gas : g = g - 2 + gBase := by
     change g = g - 2 + 2
@@ -740,22 +740,22 @@ private theorem maxFlashLoanSelfBody_cold_runCompiled
   refine ⟨post, ?_, h_post_gas, h_out⟩
   simp only [maxFlashLoanSelfBody, pushFlashMintedSlot]
   refine Func.RunCompiled.next
-    (devm' := base.setMach ⟨[(0 : B256)], Mem.empty, g - 2⟩) ?_ ?_
+    (devm' := base.setMach ⟨[(0 : B256)], Mem.empty, g - 2, base.stateGas⟩) ?_ ?_
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm)
-        (devm := base.setMach ⟨[], Mem.empty, g⟩)
+        (devm := base.setMach ⟨[], Mem.empty, g, base.stateGas⟩)
         (w := 0) (c := gBase) (G := g - 2) rfl
         (by
           change g = g - 2 + gBase
           exact h_slot_push_gas)
         (by simp only [Devm.stack_setMach, List.length_nil]; omega))
   · refine Func.RunCompiled.next
-      (devm' := base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5⟩) ?_ ?_
+      (devm' := base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5, base.stateGas⟩) ?_ ?_
     · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach] using
         (Ninst.runCompiled_unary (sevm := sevm)
-          (devm := base.setMach ⟨[(0 : B256)], Mem.empty, g - 2⟩)
+          (devm := base.setMach ⟨[(0 : B256)], Mem.empty, g - 2, base.stateGas⟩)
           (r := .not) (f := (~~~ ·)) (cost := gVerylow)
           (x := 0) (v := flashMintedSlot) (s := []) (G := g - 5)
           (by rintro ⟨⟩) rfl rfl rfl
@@ -771,7 +771,7 @@ private theorem maxFlashLoanSelfBody_cold_runCompiled
       · simpa only [Devm.addAccessedStorageKey_setMach_setMach,
             Devm.getStorVal_setMach, Devm.memory_setMach] using
           (Ninst.runCompiled_sload_cold (sevm := sevm)
-            (devm := base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5⟩)
+            (devm := base.setMach ⟨[flashMintedSlot], Mem.empty, g - 5, base.stateGas⟩)
             (k := flashMintedSlot)
             (v := Devm.getStorVal base sevm.currentTarget flashMintedSlot)
             (s := []) (G := g - 2105) rfl h_cold_at_load
@@ -900,7 +900,7 @@ theorem flashFee_runCompiled (dp : DeployParams) {sevm : Sevm} {pre : Devm}
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -968,7 +968,7 @@ theorem balanceOf_cold_runCompiled (dp : DeployParams)
   refine
     ⟨post,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1019,7 +1019,7 @@ theorem balanceOf_warm_runCompiled (dp : DeployParams)
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1081,7 +1081,7 @@ theorem totalSupply_cold_runCompiled (dp : DeployParams)
   refine
     ⟨post,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1134,7 +1134,7 @@ theorem totalSupply_warm_runCompiled (dp : DeployParams)
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1205,7 +1205,7 @@ theorem maxFlashLoan_cold_runCompiled (dp : DeployParams)
   refine
     ⟨post,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1263,7 +1263,7 @@ theorem maxFlashLoan_warm_runCompiled (dp : DeployParams)
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -1327,7 +1327,7 @@ theorem maxFlashLoan_other_runCompiled (dp : DeployParams)
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by

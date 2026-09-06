@@ -63,7 +63,7 @@ theorem getDepositRoot_zero_runCompiled
       post.logs = base.logs ∧
       post.error = base.error ∧
       some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   obtain ⟨post, hendpoint, hstack, hgas, houtput, houtputWord,
       hreturnData, hpostStor, hpostCode, hpostAddresses,
       hpostKeys, hpostLogs, hpostError⟩ :=
@@ -221,7 +221,7 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
         Exec.retainedStorageWrites execution = [] ∧
         Exec.retainedStorageEffectTriples execution = [] ∧
         some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   obtain ⟨post, hendpoint, hstack, hgas, houtput, houtputWord,
       hreturnData, hpostStor, hpostCode, hpostAddresses,
       hpostKeys, hpostLogs, hpostError⟩ :=

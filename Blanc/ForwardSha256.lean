@@ -54,14 +54,14 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     (h_stk : devm.stack =
       gw :: (2 : B256) :: iiw :: (64 : B256) ::
         oiw :: (32 : B256) :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (h_del : accessDelegation
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) 2) 2 =
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) 2) 2 =
         ⟨false, 2, code, dgc, d1⟩)
     (h_acc : accessCost 2
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses +
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses +
         dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
@@ -153,14 +153,14 @@ theorem Ninst.runCompiled_staticcall_sha256_64
     (h_stk : devm.stack =
       gw :: (2 : B256) :: iiw :: (64 : B256) ::
         oiw :: (32 : B256) :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (h_del : accessDelegation
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) 2) 2 =
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) 2) 2 =
         ⟨false, 2, code, dgc, d1⟩)
     (h_acc : accessCost 2
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses +
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses +
         dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
@@ -378,7 +378,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       ∃ stmid,
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal 2 0 := by
-  let base := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩
+  let base := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
   have hextBase : base.extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext := by
     simpa only [base] using hext

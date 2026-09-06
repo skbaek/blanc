@@ -27,9 +27,9 @@ theorem depositRootGuard_runCompiledTo
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 31⟩)
+      (base.setMach ⟨[], memory, G + 31, base.stateGas⟩)
       (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
         ((.call rootMismatchErrorSlot) <?> rest)) ex := by
   have hmod : memory.size % 32 = 0 := by
@@ -63,9 +63,9 @@ theorem depositCapGuard_runCompiledTo
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
         loadWord oldCountWord +++ lt ::: iszero :::
         ((.call treeFullErrorSlot) <?> rest)) ex := by
@@ -103,9 +103,9 @@ theorem depositSuccessGuards_runCompiledTo
     (hroot : Sevm.argWord sevm 3 = node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) commitDeposit ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) commitDeposit ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 59⟩)
+      (base.setMach ⟨[], memory, G + 59, base.stateGas⟩)
       depositSuccessGuards ex := by
   have hcapRun := depositCapGuard_runCompiledTo hmem hcap htail
   have hrootRun := depositRootGuard_runCompiledTo hmem hroot hcapRun
@@ -144,9 +144,9 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (finalPost.setMach ⟨[], finalPost.memory, G⟩) commitDeposit ex →
+          (finalPost.setMach ⟨[], finalPost.memory, G, finalPost.stateGas⟩) commitDeposit ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], base.memory, G + 1838⟩)
+          (base.setMach ⟨[], base.memory, G + 1838, base.stateGas⟩)
           (reconstructDepositDataNode depositSuccessGuards) ex := by
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature amountLE hwithdrawal hamount hsignature

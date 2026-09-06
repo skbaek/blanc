@@ -650,7 +650,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
     (hroom : tail.length < 1022)
     (hget : fs[fallback]? = some fallbackBody)
     (hbody : Func.ExecWitness fs sevm
-      (entry.setMach ⟨tail, entry.memory, G⟩) fallbackBody ex) :
+      (entry.setMach ⟨tail, entry.memory, G, entry.stateGas⟩) fallbackBody ex) :
     Func.ExecWitness fs sevm entry
       (Blanc.linearDispatchWith fallback entries) ex := by
   induction entries generalizing entry G with

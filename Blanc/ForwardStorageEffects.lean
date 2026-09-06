@@ -334,7 +334,7 @@ lemma Func.storageEffectRun_branch_zero
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
     (h_arm : Func.StorageEffectRun fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) f ex effects) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) f ex effects) :
     Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
   .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 
@@ -347,7 +347,7 @@ lemma Func.storageEffectRun_branch_succ
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
     (h_arm : Func.StorageEffectRun fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) g ex effects) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) g ex effects) :
     Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
   .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 

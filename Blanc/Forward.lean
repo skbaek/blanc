@@ -14,7 +14,8 @@
 --
 -- Two conventions make the chaining work and are worth stating once.
 --
--- * **Every successor state is `devm.setMach ⟨stack, memory, gasLeft⟩`.**  The
+-- * **Every successor state is `devm.setMach ⟨stack, memory, gasLeft,
+--   devm.stateGas⟩`.**  The
 --   three machine fields are the only ones any instruction on a call-free path
 --   moves, and `Devm.setMach_setMach` collapses a chain of them, so the state
 --   after `n` steps is again one `setMach` over the *original* `devm`.  This is
@@ -59,7 +60,7 @@ as a `Nat`. -/
 lemma Devm.popToNat_eq_ok {x : B256} {s : List B256} {devm : Devm}
     (h : devm.stack = x :: s) :
     devm.popToNat =
-      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
   rw [Devm.popToNat_def, Devm.pop_eq_ok h]
   rfl
 
@@ -97,7 +98,7 @@ lemma Ninst.runCompiled_push {sevm : Sevm} {devm : Devm} {xs : Bytes}
     (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.push xs le)
       (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory,
-        devm.gasLeft - pushCost xs⟩) := by
+        devm.gasLeft - pushCost xs, devm.stateGas⟩) := by
   refine ⟨.none, trivial, fun pc => ?_⟩
   rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution]
   refine ⟨rfl, ?_⟩
@@ -105,7 +106,7 @@ lemma Ninst.runCompiled_push {sevm : Sevm} {devm : Devm} {xs : Bytes}
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - pushCost xs⟩)
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - pushCost xs, devm.stateGas⟩)
     h_room]
   rfl
 
@@ -135,15 +136,15 @@ lemma applyUnary_eq_ok {f : B256 → B256} {cost : Nat} {devm : Devm}
     {x : B256} {s : List B256} (h_stk : devm.stack = x :: s)
     (h_gas : cost ≤ devm.gasLeft) (h_room : s.length < 1024) :
     applyUnary f cost devm =
-      .ok (devm.setMach ⟨f x :: s, devm.memory, devm.gasLeft - cost⟩) := by
+      .ok (devm.setMach ⟨f x :: s, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) := by
   rw [applyUnary_def, Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind, pushItem_def]
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - cost⟩) h_room]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) h_room]
   rfl
 
 /-- `applyBinary`, evaluated forward.  The operand order is the machine's: the
@@ -152,19 +153,19 @@ lemma applyBinary_eq_ok {f : B256 → B256 → B256} {cost : Nat} {devm : Devm}
     {x y : B256} {s : List B256} (h_stk : devm.stack = x :: y :: s)
     (h_gas : cost ≤ devm.gasLeft) (h_room : s.length < 1024) :
     applyBinary f cost devm =
-      .ok (devm.setMach ⟨f x y :: s, devm.memory, devm.gasLeft - cost⟩) := by
+      .ok (devm.setMach ⟨f x y :: s, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) := by
   rw [applyBinary_def, Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
-    (devm := devm.setMach ⟨y :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨y :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [bind, Except.bind, pushItem_def, Devm.setMach_setMach,
     Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - cost⟩) h_room]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) h_room]
   rfl
 
 /-- `pushItem`, evaluated forward.  `Jaune/Machine.lean`'s `pushItem_def` gives
@@ -182,11 +183,11 @@ lemma pushItem_eq_ok {x : B256} {cost : Nat} {devm : Devm}
     (h_gas : cost ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
     pushItem x cost devm =
       .ok (devm.setMach ⟨x :: devm.stack, devm.memory,
-        devm.gasLeft - cost⟩) := by
+        devm.gasLeft - cost, devm.stateGas⟩) := by
   rw [pushItem_def, chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost⟩) h_room]
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) h_room]
   rfl
 
 /-- `DUP n`, evaluated forward.  The duplicated word is read off the *charged*
@@ -212,9 +213,9 @@ lemma Rinst.runCore_dup_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     | some word => Devm.push word _) = _
   rw [h_get]
   show Devm.push w
-    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow⟩) = _
+    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) = _
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow⟩)
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩)
     h_room]
   rfl
 
@@ -226,17 +227,17 @@ lemma Rinst.runCore_calldataload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_gas : gVerylow ≤ devm.gasLeft) (h_room : s.length < 1024) :
     Rinst.runCore pc devm sevm .calldataload =
       .ok (devm.setMach ⟨Sevm.dataWord sevm x :: s, devm.memory,
-        devm.gasLeft - gVerylow⟩) := by
+        devm.gasLeft - gVerylow, devm.stateGas⟩) := by
   show (devm.pop >>= fun p => chargeGas gVerylow p.2 >>= fun d =>
     d.push (Bytes.toB256 <| sevm.data.sliceD p.1.toNat 32 0)) = _
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gVerylow⟩) h_room]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) h_room]
   rfl
 
 /-- `EXTCODESIZE` on a cold account.  The queried address joins the frame's
@@ -250,7 +251,7 @@ lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
     (h_room : s.length < 1024) :
     Rinst.runCore pc devm sevm .extcodesize =
       .ok ((addAccessedAddress
-              (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) x.toAdr).setMach
+              (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) x.toAdr).setMach
         ⟨(devm.getCode x.toAdr).size.toB256 :: s, devm.memory,
           devm.gasLeft - gasColdAccountAccess⟩) := by
   rw [show Rinst.runCore pc devm sevm .extcodesize = (do
@@ -265,11 +266,11 @@ lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
   have h_addresses :
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses =
         devm.accessedAddresses := rfl
   rw [if_neg (by rw [h_addresses]; exact h_cold)]
   set d0 : Devm := addAccessedAddress
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) x.toAdr with hd0
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) x.toAdr with hd0
   have h_d0_gas : d0.gasLeft = devm.gasLeft := rfl
   have h_d0_stack : d0.stack = s := rfl
   have h_d0_mem : d0.memory = devm.memory := rfl
@@ -311,11 +312,11 @@ lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
   have h_addresses :
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses =
         devm.accessedAddresses := rfl
   rw [if_pos (by rw [h_addresses]; exact h_warm)]
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
@@ -337,7 +338,7 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_gas : gasColdSload ≤ devm.gasLeft) (h_room : s.length < 1024) :
     Rinst.runCore pc devm sevm .sload =
       .ok ((addAccessedStorageKey
-              (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+              (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
               sevm.currentTarget k).setMach
         ⟨devm.getStorVal sevm.currentTarget k :: s, devm.memory,
           devm.gasLeft - gasColdSload⟩) := by
@@ -352,11 +353,11 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       d.push (d.getStorVal sevm.currentTarget key)) from rfl]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
-  have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
+  have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
       = devm.accessedStorageKeys := rfl
   rw [if_neg (by rw [h_keys]; exact h_cold)]
   set d0 : Devm := addAccessedStorageKey
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) sevm.currentTarget k with hd0
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) sevm.currentTarget k with hd0
   have h_d0_gas : d0.gasLeft = devm.gasLeft := rfl
   have h_d0_stack : d0.stack = s := rfl
   have h_d0_mem : d0.memory = devm.memory := rfl
@@ -365,7 +366,7 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [chargeGas_eq_ok (devm := d0) (by rw [h_d0_gas]; exact h_gas)]
   dsimp only
   rw [Devm.push_eq_ok
-    (devm := d0.setMach ⟨d0.stack, d0.memory, d0.gasLeft - gasColdSload⟩)
+    (devm := d0.setMach ⟨d0.stack, d0.memory, d0.gasLeft - gasColdSload, d0.stateGas⟩)
     (by rw [Devm.stack_setMach, h_d0_stack]; exact h_room)]
   rw [h_d0_gas, h_d0_stack, h_d0_mem, Devm.getStorVal_setMach, h_d0_stor]
   simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
@@ -404,15 +405,15 @@ lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       d.push (d.getStorVal sevm.currentTarget key)) from rfl]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
-  have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
+  have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
       = devm.accessedStorageKeys := rfl
   rw [if_pos (by rw [h_keys]; exact h_warm)]
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gasWarmAccess⟩) h_room]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft - gasWarmAccess, devm.stateGas⟩) h_room]
   rw [Devm.getStorVal_setMach]
   simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
@@ -425,7 +426,7 @@ lemma Rinst.runCore_mstore_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_gas : gVerylow + devm.extCost [⟨i.toNat, 32⟩] ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm .mstore =
       .ok ((devm.setMach ⟨s, devm.memory,
-              devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩])⟩).memWrite
+              devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]), devm.stateGas⟩).memWrite
         i.toNat v.toBytes) := by
   show (devm.popToNat >>= fun p => p.2.pop >>= fun q =>
     chargeGas (gVerylow + q.2.extCost [⟨p.1, 32⟩]) q.2 >>= fun d =>
@@ -433,12 +434,12 @@ lemma Rinst.runCore_mstore_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
-    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, 32⟩] = devm.extCost [⟨i.toNat, 32⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
 
@@ -470,12 +471,12 @@ lemma Rinst.runCore_pop_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {x : B256} {s : List B256} (h_stk : devm.stack = x :: s)
     (h_gas : gBase ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm .pop =
-      .ok (devm.setMach ⟨s, devm.memory, devm.gasLeft - gBase⟩) := by
+      .ok (devm.setMach ⟨s, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩) := by
   show ((devm.pop <&> Prod.snd) >>= chargeGas gBase) = _
   rw [Devm.pop_eq_ok h_stk]
-  show chargeGas gBase (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) = _
+  show chargeGas gBase (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) = _
   rw [chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   rfl
 
 /-- `SWAP n`, evaluated forward.  The charge comes *first*, and `List.swap` is
@@ -486,7 +487,7 @@ lemma Rinst.runCore_swap_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {n : Fin 16} {S : List B256} (h_swap : List.swap devm.stack n.val = some S)
     (h_gas : gVerylow ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm (.swap n) =
-      .ok (devm.setMach ⟨S, devm.memory, devm.gasLeft - gVerylow⟩) := by
+      .ok (devm.setMach ⟨S, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) := by
   show (chargeGas gVerylow devm >>= fun d =>
     match List.swap d.stack n.val with
     | none => .error ⟨.halt (.stackUnderflow .none), d⟩
@@ -502,14 +503,14 @@ lemma Rinst.runCore_gas_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_gas : gBase ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
     Rinst.runCore pc devm sevm .gas =
       .ok (devm.setMach ⟨(devm.gasLeft - gBase).toB256 :: devm.stack,
-        devm.memory, devm.gasLeft - gBase⟩) := by
+        devm.memory, devm.gasLeft - gBase, devm.stateGas⟩) := by
   show (chargeGas gBase devm >>= fun d => d.push d.gasLeft.toB256) = _
   rw [chargeGas_eq_ok h_gas]
   show Devm.push
-    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩).gasLeft.toB256
-    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩) = _
+    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩).gasLeft.toB256
+    (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩) = _
   rw [Devm.push_eq_ok
-    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩)
+    (devm := devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩)
     (by rw [Devm.stack_setMach]; exact h_room)]
   rfl
 
@@ -530,15 +531,15 @@ lemma Rinst.runCore_mload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       (d.memRead p.1 32).2.push (Bytes.toB256 (d.memRead p.1 32).1)) = _
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, 32⟩] = devm.extCost [⟨i.toNat, 32⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
-      devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩])⟩).memRead
+      devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]), devm.stateGas⟩).memRead
         i.toNat 32 |>.2) h_room]
   rfl
 
@@ -563,19 +564,19 @@ lemma Rinst.runCore_keccak256_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
       devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
-        + devm.extCost [⟨i.toNat, sz.toNat⟩])⟩).memRead
+        + devm.extCost [⟨i.toNat, sz.toNat⟩]), devm.stateGas⟩).memRead
           i.toNat sz.toNat |>.2) h_room]
   rfl
 
@@ -599,17 +600,17 @@ lemma Rinst.runCore_calldatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rfl
@@ -634,17 +635,17 @@ lemma Rinst.runCore_codecopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨si :: sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rfl
@@ -673,17 +674,17 @@ lemma Rinst.runCore_returndatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨ri :: sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨ri :: sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨di.toNat, sz.toNat⟩] = devm.extCost [⟨di.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rw [if_neg (by
@@ -698,7 +699,7 @@ uses it, and it uses it for the topics. -/
 lemma Devm.popN_eq_ok {xs : List B256} : ∀ {s : List B256} {devm : Devm},
     devm.stack = xs ++ s →
     devm.popN xs.length =
-      .ok ⟨xs, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+      .ok ⟨xs, devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
   induction xs with
   | nil =>
     intro s devm h
@@ -715,7 +716,7 @@ lemma Devm.popN_eq_ok {xs : List B256} : ∀ {s : List B256} {devm : Devm},
     rw [Devm.pop_eq_ok (x := x) (s := xs ++ s) h]
     simp only [bind, Except.bind]
     rw [ih (s := s)
-      (devm := devm.setMach ⟨xs ++ s, devm.memory, devm.gasLeft⟩) rfl]
+      (devm := devm.setMach ⟨xs ++ s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
     simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
 
 /-- `LOG n`, evaluated forward.  The topics come off the stack below the window
@@ -734,7 +735,7 @@ lemma Rinst.runCore_log_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     Rinst.runCore pc devm sevm (.log n) =
       .ok ((devm.setMach ⟨s, (devm.memory.read i.toNat sz.toNat).2,
           devm.gasLeft - (gLog + gLogdata * sz.toNat + gLogtopic * n.val
-            + devm.extCost [⟨i.toNat, sz.toNat⟩])⟩).addLog
+            + devm.extCost [⟨i.toNat, sz.toNat⟩]), devm.stateGas⟩).addLog
         ⟨sevm.currentTarget, topics,
           (devm.memory.read i.toNat sz.toNat).1⟩) := by
   show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q =>
@@ -747,17 +748,17 @@ lemma Rinst.runCore_log_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: (topics ++ s), devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: (topics ++ s), devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [← h_len, Devm.popN_eq_ok (xs := topics) (s := s)
-    (devm := devm.setMach ⟨topics ++ s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨topics ++ s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
   rw [h_ext, h_len, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach, assertDynamic, Except.assert, h_static]
   rfl
@@ -840,24 +841,24 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
-    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
   simp only []
   rw [if_pos (show ⟨sevm.currentTarget, k⟩ ∉
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
     from h_cold)]
   simp only [sstoreValueCost_add]
   -- The popped state's world projections are the pre-state's; naming them so
   -- lets `chargeGas_eq_ok` match syntactically rather than only up to `rfl`.
-  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
-    show (addAccessedStorageKey (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+    show (addAccessedStorageKey (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         sevm.currentTarget k).refundCounter = devm.refundCounter from rfl]
   rw [chargeGas_eq_ok
     (devm := ((addAccessedStorageKey
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) sevm.currentTarget
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) sevm.currentTarget
         k).withRefundCounter
       (sstoreNewRefundCounter v (getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter)))
@@ -910,21 +911,21 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
-    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
   simp only []
   rw [if_neg (show ¬ (⟨sevm.currentTarget, k⟩ ∉
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys)
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys)
     from fun h => h h_warm)]
   simp only [Nat.zero_add]
-  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
-    show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).refundCounter
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).refundCounter
         = devm.refundCounter from rfl]
   rw [chargeGas_eq_ok
-    (devm := (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).withRefundCounter
+    (devm := (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).withRefundCounter
       (sstoreNewRefundCounter v (getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter))
     (by
@@ -964,14 +965,14 @@ lemma Mem.read_write_word {w : B256} :
 /-- Expanding empty memory to one word costs `gMemory`: the quadratic term is
 `1 / 512`. -/
 lemma Devm.extCost_empty_word {devm : Devm} {S : List B256} {G : Nat} :
-    (devm.setMach ⟨S, Mem.empty, G⟩).extCost [⟨0, 32⟩] = gMemory := by
+    (devm.setMach ⟨S, Mem.empty, G, devm.stateGas⟩).extCost [⟨0, 32⟩] = gMemory := by
   simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
     calculateMemoryGasCost, ceilDiv, Mem.empty, gMemory]
 
 /-- Reading a window memory already covers is free. -/
 lemma Devm.extCost_word_word {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     (h : N.size = 32) :
-    (devm.setMach ⟨S, N, G⟩).extCost [⟨0, 32⟩] = 0 := by
+    (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
   simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
     calculateMemoryGasCost, ceilDiv, h, gMemory]
 
@@ -987,8 +988,8 @@ makes the unifier reduce `Devm.memory devm` to weak head normal form, which
 runs the whole 32-byte `Mem.write` symbolically. -/
 lemma Devm.memRead_word_fst {devm : Devm} {S : List B256} {G : Nat} {w : B256}
     (hm : devm.memory = Mem.empty.write 0 w.toBytes) :
-    ((devm.setMach ⟨S, devm.memory, G⟩).memRead 0 32).1 = w.toBytes := by
-  show ((devm.setMach ⟨S, devm.memory, G⟩).memory.read 0 32).1 = w.toBytes
+    ((devm.setMach ⟨S, devm.memory, G, devm.stateGas⟩).memRead 0 32).1 = w.toBytes := by
+  show ((devm.setMach ⟨S, devm.memory, G, devm.stateGas⟩).memory.read 0 32).1 = w.toBytes
   rw [Devm.memory_setMach]
   show ((devm.memory).read 0 32).1 = w.toBytes
   rw [hm]
@@ -1019,7 +1020,7 @@ lemma Ninst.runCompiled_pushB256 {sevm : Sevm} {devm : Devm} {w : B256}
     {c G : Nat} (h_cost : pushCost (w.toBytes.sig) = c)
     (h_gas : devm.gasLeft = G + c) (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (Ninst.pushB256 w)
-      (devm.setMach ⟨w :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   subst h_cost
   have h_eq : devm.gasLeft - pushCost (w.toBytes.sig) = G := by omega
   rw [← h_eq]
@@ -1037,7 +1038,7 @@ lemma Ninst.runCompiled_pushBytes {sevm : Sevm} {devm : Devm}
     (h_gas : devm.gasLeft = G + c)
     (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.push xs le)
-      (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   subst c
   have h_eq : devm.gasLeft - pushCost xs = G := by omega
   rw [← h_eq]
@@ -1059,7 +1060,7 @@ lemma Ninst.runCompiled_pushB256Full {sevm : Sevm} {devm : Devm} {w : B256}
     (h_gas : devm.gasLeft = G + gVerylow)
     (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.push w.toBytes le)
-      (devm.setMach ⟨w :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   have h := Ninst.runCompiled_pushBytes
     (sevm := sevm) (devm := devm) (xs := w.toBytes) (le := le)
     (c := gVerylow) (G := G) (pushCost_toBytes w) h_gas h_room
@@ -1073,7 +1074,7 @@ lemma Ninst.runCompiled_binary {sevm : Sevm} {devm : Devm} {r : Rinst}
     (h_stk : devm.stack = x :: y :: s) (h_val : f x y = v)
     (h_gas : devm.gasLeft = G + cost) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg r)
-      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (devm.setMach ⟨v :: s, devm.memory, G, devm.stateGas⟩) := by
   subst h_val
   have h_eq : devm.gasLeft - cost = G := by omega
   rw [← h_eq]
@@ -1088,7 +1089,7 @@ lemma Ninst.runCompiled_unary {sevm : Sevm} {devm : Devm} {r : Rinst}
     (h_stk : devm.stack = x :: s) (h_val : f x = v)
     (h_gas : devm.gasLeft = G + cost) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg r)
-      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (devm.setMach ⟨v :: s, devm.memory, G, devm.stateGas⟩) := by
   subst h_val
   have h_eq : devm.gasLeft - cost = G := by omega
   rw [← h_eq]
@@ -1101,7 +1102,7 @@ lemma Ninst.runCompiled_dup {sevm : Sevm} {devm : Devm} {n : Fin 16} {w : B256}
     (h_gas : devm.gasLeft = G + gVerylow)
     (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg (.dup n))
-      (devm.setMach ⟨w :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   have h_eq : devm.gasLeft - gVerylow = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1113,7 +1114,7 @@ lemma Ninst.runCompiled_calldataload {sevm : Sevm} {devm : Devm} {x v : B256}
     (h_val : Sevm.dataWord sevm x = v) (h_gas : devm.gasLeft = G + gVerylow)
     (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .calldataload)
-      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (devm.setMach ⟨v :: s, devm.memory, G, devm.stateGas⟩) := by
   subst h_val
   have h_eq : devm.gasLeft - gVerylow = G := by omega
   rw [← h_eq]
@@ -1136,7 +1137,7 @@ lemma Ninst.runCompiled_pushItem {sevm : Sevm} {devm : Devm} {r : Rinst}
     (h_def : Rinst.runCore 0 devm sevm r = pushItem x cost devm)
     (h_gas : devm.gasLeft = G + cost) (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg r)
-      (devm.setMach ⟨x :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨x :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   have h_eq : devm.gasLeft - cost = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg h_ne
@@ -1169,7 +1170,7 @@ lemma Ninst.runCompiled_extcodesize_warm {sevm : Sevm} {devm : Devm}
     (h_gas : devm.gasLeft = G + gasWarmAccess)
     (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .extcodesize)
-      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (devm.setMach ⟨v :: s, devm.memory, G, devm.stateGas⟩) := by
   subst h_val
   have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
   rw [← h_eq]
@@ -1208,7 +1209,7 @@ lemma Ninst.runCompiled_sload_warm {sevm : Sevm} {devm : Devm} {k v : B256}
     (h_val : devm.getStorVal sevm.currentTarget k = v)
     (h_gas : devm.gasLeft = G + gasWarmAccess) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .sload)
-      (devm.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (devm.setMach ⟨v :: s, devm.memory, G, devm.stateGas⟩) := by
   subst h_val
   have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
   rw [← h_eq]
@@ -1222,7 +1223,7 @@ lemma Ninst.runCompiled_mstore {sevm : Sevm} {devm : Devm} {i v : B256}
     (h_gas : devm.gasLeft = G + (gVerylow + devm.extCost [⟨i.toNat, 32⟩]))
     (h_write : devm.memory.write i.toNat v.toBytes = M) :
     Ninst.RunCompiled sevm devm (.reg .mstore)
-      (devm.setMach ⟨s, M, G⟩) := by
+      (devm.setMach ⟨s, M, G, devm.stateGas⟩) := by
   subst h_write
   have h_eq :
       devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]) = G := by omega
@@ -1240,7 +1241,7 @@ lemma Ninst.runCompiled_mstore_of {sevm : Sevm} {devm : Devm} {i v : B256}
     (h_ext : devm.extCost [⟨i.toNat, 32⟩] = e)
     (h_gas : devm.gasLeft = G + (gVerylow + e))
     (h_write : devm.memory.write i.toNat v.toBytes = M) :
-    Ninst.RunCompiled sevm devm (.reg .mstore) (devm.setMach ⟨s, M, G⟩) := by
+    Ninst.RunCompiled sevm devm (.reg .mstore) (devm.setMach ⟨s, M, G, devm.stateGas⟩) := by
   subst h_ext
   exact Ninst.runCompiled_mstore h_stk h_gas h_write
 
@@ -1257,7 +1258,7 @@ number.  One hint per instruction, one obligation per instruction.
 Each successor is written with the `setMach` **outermost**, including the two
 whose base moves (`LOG`'s `addLog`, `SSTORE`'s accessed-set, refund-counter and
 storage writes).  That is not cosmetic either: the walk reads the state it is
-standing on with `parseState`, which recognises `base.setMach ⟨_, _, _⟩` and
+standing on with `parseState`, which recognises `base.setMach ⟨_, _, _, base.stateGas⟩` and
 nothing else, so a successor written the other way round would break the chain
 at the next instruction.  The two orders are definitionally equal — `setMach`
 touches `mach`, the others touch `meta` or `world`. -/
@@ -1267,7 +1268,7 @@ lemma Ninst.runCompiled_pop {sevm : Sevm} {devm : Devm} {x : B256}
     {s : List B256} {G : Nat} (h_stk : devm.stack = x :: s)
     (h_gas : devm.gasLeft = G + gBase) :
     Ninst.RunCompiled sevm devm (.reg .pop)
-      (devm.setMach ⟨s, devm.memory, G⟩) := by
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) := by
   have h_eq : devm.gasLeft - gBase = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1279,7 +1280,7 @@ lemma Ninst.runCompiled_swap {sevm : Sevm} {devm : Devm} {n : Fin 16}
     {S : List B256} {G : Nat} (h_swap : List.swap devm.stack n.val = some S)
     (h_gas : devm.gasLeft = G + gVerylow) :
     Ninst.RunCompiled sevm devm (.reg (.swap n))
-      (devm.setMach ⟨S, devm.memory, G⟩) := by
+      (devm.setMach ⟨S, devm.memory, G, devm.stateGas⟩) := by
   have h_eq : devm.gasLeft - gVerylow = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1292,7 +1293,7 @@ remaining gas as a name it already has. -/
 lemma Ninst.runCompiled_gas {sevm : Sevm} {devm : Devm} {G : Nat}
     (h_gas : devm.gasLeft = G + gBase) (h_room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .gas)
-      (devm.setMach ⟨G.toB256 :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨G.toB256 :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   have h_eq : devm.gasLeft - gBase = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1307,7 +1308,7 @@ lemma Ninst.runCompiled_mload_of {sevm : Sevm} {devm : Devm} {i v : B256}
     (h_mem : (devm.memory.read i.toNat 32).2 = M)
     (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .mload)
-      (devm.setMach ⟨v :: s, M, G⟩) := by
+      (devm.setMach ⟨v :: s, M, G, devm.stateGas⟩) := by
   subst h_cost; subst h_val; subst h_mem
   have h_eq :
       devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]) = G := by omega
@@ -1325,7 +1326,7 @@ lemma Ninst.runCompiled_keccak256_of {sevm : Sevm} {devm : Devm} {i sz v : B256}
     (h_mem : (devm.memory.read i.toNat sz.toNat).2 = M)
     (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .keccak256)
-      (devm.setMach ⟨v :: s, M, G⟩) := by
+      (devm.setMach ⟨v :: s, M, G, devm.stateGas⟩) := by
   subst h_cost; subst h_val; subst h_mem
   have h_eq : devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
       + devm.extCost [⟨i.toNat, sz.toNat⟩]) = G := by omega
@@ -1343,7 +1344,7 @@ lemma Ninst.runCompiled_calldatacopy_of {sevm : Sevm} {devm : Devm}
       (sevm.data.sliceD si.toNat sz.toNat 0) = M)
     (h_gas : devm.gasLeft = G + c) :
     Ninst.RunCompiled sevm devm (.reg .calldatacopy)
-      (devm.setMach ⟨s, M, G⟩) := by
+      (devm.setMach ⟨s, M, G, devm.stateGas⟩) := by
   subst h_cost; subst h_write
   have h_eq : devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
       + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
@@ -1361,7 +1362,7 @@ lemma Ninst.runCompiled_codecopy_of {sevm : Sevm} {devm : Devm}
       (sevm.code.sliceD si.toNat sz.toNat (Linst.toUInt8 .stop)) = M)
     (h_gas : devm.gasLeft = G + c) :
     Ninst.RunCompiled sevm devm (.reg .codecopy)
-      (devm.setMach ⟨s, M, G⟩) := by
+      (devm.setMach ⟨s, M, G, devm.stateGas⟩) := by
   subst h_cost; subst h_write
   have h_eq : devm.gasLeft - (gVerylow + gasCopy * ceilDiv sz.toNat 32
       + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
@@ -1380,7 +1381,7 @@ lemma Ninst.runCompiled_returndatacopy_of {sevm : Sevm} {devm : Devm}
       (devm.returnData.sliceD ri.toNat sz.toNat 0) = M)
     (h_gas : devm.gasLeft = G + c) :
     Ninst.RunCompiled sevm devm (.reg .returndatacopy)
-      (devm.setMach ⟨s, M, G⟩) := by
+      (devm.setMach ⟨s, M, G, devm.stateGas⟩) := by
   subst h_cost; subst h_write
   have h_eq : devm.gasLeft - (gVerylow + gReturnDataCopy * ceilDiv sz.toNat 32
       + devm.extCost [⟨di.toNat, sz.toNat⟩]) = G := by omega
@@ -1473,7 +1474,7 @@ lemma Linst.run_return_eq_ok {sevm : Sevm} {devm : Devm} {i sz : B256}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_read : (devm.setMach ⟨s, devm.memory,
-        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩], devm.stateGas⟩).memRead
           i.toNat sz.toNat = ⟨out, d'⟩) :
     Linst.run sevm devm .return_ = .ok (d'.withOutput out) := by
   show (do
@@ -1486,12 +1487,12 @@ lemma Linst.run_return_eq_ok {sevm : Sevm} {devm : Devm} {i sz : B256}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
   rw [h_read]
@@ -1503,7 +1504,7 @@ lemma Func.runCompiled_return {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.gasLeft = G + devm.extCost [⟨i.toNat, sz.toNat⟩])
-    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+    (h_read : (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
     Func.RunCompiled fs sevm devm (.last .return_) (d'.withOutput out) := by
   have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
@@ -1520,7 +1521,7 @@ lemma Func.runCompiled_return_of {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
-    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+    (h_read : (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
     Func.RunCompiled fs sevm devm (.last .return_) (d'.withOutput out) := by
   subst h_ext
@@ -1535,10 +1536,10 @@ lemma Func.runCompiled_return_word {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
-    (h_out : ((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).1
+    (h_out : ((devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat).1
       = out) :
     Func.RunCompiled fs sevm devm (.last .return_)
-      (((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).2.withOutput
+      (((devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat).2.withOutput
         out) :=
   Func.runCompiled_return_of h_stk h_ext h_gas (Prod.ext h_out rfl)
 
@@ -1553,7 +1554,7 @@ what would otherwise be a fourteen-field record literal at every jump. -/
 account. -/
 lemma Devm.burnBy_setMach_gas {devm : Devm} {cost G : Nat}
     (h : devm.gasLeft = G + cost) :
-    Devm.BurnBy cost devm (devm.setMach ⟨devm.stack, devm.memory, G⟩) :=
+    Devm.BurnBy cost devm (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩) :=
   { stack := rfl, memory := rfl, gasLeft := h,
     logs := rfl, refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
@@ -1565,7 +1566,7 @@ same state cut down to `s` with `cost` off the gas account. -/
 lemma Devm.popBurnBy_setMach {devm : Devm} {x : B256} {s : List B256}
     {cost G : Nat} (h_stk : devm.stack = x :: s)
     (h : devm.gasLeft = G + cost) :
-    Devm.PopBurnBy [x] cost devm (devm.setMach ⟨s, devm.memory, G⟩) :=
+    Devm.PopBurnBy [x] cost devm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) :=
   { stack := h_stk, memory := rfl, gasLeft := h,
     logs := rfl, refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
@@ -1587,7 +1588,7 @@ lemma Func.runCompiled_branch_zero {fs : List Func} {sevm : Sevm} {devm : Devm}
     {f g : Func} {devm' : Devm} {s : List B256} {G : Nat}
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
-    (h_arm : Func.RunCompiled fs sevm (devm.setMach ⟨s, devm.memory, G⟩)
+    (h_arm : Func.RunCompiled fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩)
       f devm') :
     Func.RunCompiled fs sevm devm (.branch f g) devm' :=
   .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
@@ -1599,7 +1600,7 @@ lemma Func.runCompiled_branch_succ {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
-    (h_arm : Func.RunCompiled fs sevm (devm.setMach ⟨s, devm.memory, G⟩)
+    (h_arm : Func.RunCompiled fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩)
       g devm') :
     Func.RunCompiled fs sevm devm (.branch f g) devm' :=
   .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
@@ -1612,7 +1613,7 @@ lemma Func.runCompiled_call' {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
     (h_body : Func.RunCompiled fs sevm
-      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f devm') :
+      (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩) f devm') :
     Func.RunCompiled fs sevm devm (.call k) devm' :=
   .call h_get h_room (Devm.burnBy_setMach_gas h_gas) h_body
 
@@ -1625,7 +1626,7 @@ makes a construction's first premise its own rather than a projection chain
 over `devm`. -/
 lemma Prog.runCompiled_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     {devm' : Devm} {G : Nat} (h_gas : devm.gasLeft = G + gJumpdest)
-    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩)
     (h_main : Func.RunCompiled (p.main :: p.aux) sevm mid p.main devm') :
     Prog.RunCompiled sevm devm p devm' := by
   subst h_mid
@@ -2085,7 +2086,7 @@ applying `Func.RunCompiled`'s constructors to a goal.
 
 The walk carries the machine state forward itself rather than reading it back
 out of each lemma's conclusion.  Every state it writes is
-`base.setMach ⟨stack, memory, gasBase - n⟩` for a single numeral `n`, so gas
+`base.setMach ⟨stack, memory, gasBase - n, base.stateGas⟩` for a single numeral `n`, so gas
 premises come out in `Devm.BurnBy`'s own additive shape and each one is a single
 `omega`.  Threading the subtractive shape instead would make the `n`-th state
 carry `pre.gasLeft - c₁ - … - cₙ`.
@@ -2505,7 +2506,7 @@ partial def whnfUntilHead (heads : List Name) : Nat → Expr → MetaM Expr
       | some e'' => whnfUntilHead heads fuel e''
       | none => return e'
 
-/-- Build `base.setMach ⟨stack, memory, gas⟩`. -/
+/-- Build `base.setMach ⟨stack, memory, gas, base.stateGas⟩`. -/
 def mkState (base stack memory gas : Expr) : MetaM Expr := do
   mkAppM ``Jaune.Devm.setMach #[base, ← mkAppM ``Jaune.Mach.mk #[stack, memory, gas]]
 

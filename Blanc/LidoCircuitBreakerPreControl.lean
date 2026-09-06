@@ -424,7 +424,7 @@ theorem removeTarget_pauseAfterSet_runCompiled
       (base.setMach ⟨stack, M,
         G + finishGas + 439 + lastExtCost + indexExtCost + lengthExtCost +
           holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
-          indexClearCost⟩)
+          indexClearCost, base.stateGas⟩)
       removeTarget post := by
   refine removeTarget_swapPop_toFinish_runCompiled dp sevm base M img target
     lastTarget idx len oldLength stack hstack holeCurrent movedCurrent
@@ -482,7 +482,7 @@ theorem pause_body_runCompiledTo_error_of_locked
     (hlocked : base.getTransVal sevm.currentTarget lockKey ≠ 0) :
     ∃ post,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + pauseReentrantGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + pauseReentrantGas, base.stateGas⟩)
         pause (.error (.revert, post)) ∧
       post.output = customErrorData "ReentrantCall" ∧
       post.logs = base.logs ∧
@@ -505,12 +505,12 @@ theorem pause_body_runCompiledTo_error_of_locked
       func_run (1)
       set total := G + 202 with htotal
       have htload : Ninst.RunCompiled sevm
-          (base.setMach ⟨[lockKey], Mem.empty, total - 57⟩) Ninst.tload
+          (base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩) Ninst.tload
           (base.setMach
             ⟨[base.getTransVal sevm.currentTarget lockKey], Mem.empty,
               total - 157⟩) := by
         have h := runCompiled_tload_of (sevm := sevm)
-          (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57⟩)
+          (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩)
           (key := lockKey)
           (value := base.getTransVal sevm.currentTarget lockKey)
           (stack := []) (G := total - 157) rfl rfl
@@ -562,7 +562,7 @@ theorem pause_runCompiledTo_error_of_locked
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + pauseDispatchGas + pauseReentrantGas⟩)
+          G + pauseDispatchGas + pauseReentrantGas, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) ∧
       post.output = customErrorData "ReentrantCall" ∧

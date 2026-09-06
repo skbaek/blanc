@@ -342,13 +342,13 @@ private lemma callEdge_step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
@@ -394,27 +394,27 @@ private lemma callEdge_step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨cw :: 0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   simp only [if_pos (Or.inr trivial), if_pos trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
@@ -510,16 +510,16 @@ theorem pauseCall_boundary_with_execution
   have hta : (target.toB256).toAdr = target := toAdr_toB256 target
   rcases hdel : accessDelegation
       (addAccessedAddress
-        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft⟩) target)
+        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft, callPre.stateGas⟩) target)
       target with ⟨dp, dadr, code, dgc, d1⟩
   have h_del : accessDelegation
       (addAccessedAddress
-        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft⟩)
+        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         (target.toB256).toAdr) (target.toB256).toAdr =
       ⟨dp, dadr, code, dgc, d1⟩ := by rw [hta]; exact hdel
   obtain ⟨ext, hext⟩ :
       ∃ n : Nat,
-        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft⟩).extCost
+        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft, callPre.stateGas⟩).extCost
           [⟨(0x11c : B256).toNat, (36 : B256).toNat⟩,
             ⟨(0 : B256).toNat, (0 : B256).toNat⟩] = n := ⟨_, rfl⟩
   obtain ⟨acc, hacc⟩ :
@@ -544,7 +544,7 @@ theorem pauseCall_boundary_with_execution
     obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
     have hifr := accessDelegation_instructionFrame
       (addAccessedAddress
-        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft⟩) target) target
+        (callPre.setMach ⟨rest, callPre.memory, callPre.gasLeft, callPre.stateGas⟩) target) target
     rw [hdel] at hifr
     have hstk1 : d1.stack = rest := hd1stk
     have hmem1 : d1.memory = callPre.memory := hd1mem
@@ -656,13 +656,13 @@ private lemma statEdge_step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
@@ -696,22 +696,22 @@ private lemma statEdge_step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   simp only [h_del, h_split]
   rw [callEdge_chargeGas_eq_error (devm := d1) h_gas]
@@ -765,16 +765,16 @@ theorem pauseStat_boundary_with_execution
   have hta : (target.toB256).toAdr = target := toAdr_toB256 target
   rcases hdel : accessDelegation
       (addAccessedAddress
-        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩) target)
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft, statPre.stateGas⟩) target)
       target with ⟨dp, dadr, code, dgc, d1⟩
   have h_del : accessDelegation
       (addAccessedAddress
-        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩)
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft, statPre.stateGas⟩)
         (target.toB256).toAdr) (target.toB256).toAdr =
       ⟨dp, dadr, code, dgc, d1⟩ := by rw [hta]; exact hdel
   obtain ⟨ext, hext⟩ :
       ∃ n : Nat,
-        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩).extCost
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft, statPre.stateGas⟩).extCost
           [⟨(0x11c : B256).toNat, (4 : B256).toNat⟩,
             ⟨(0 : B256).toNat, (32 : B256).toNat⟩] = n := ⟨_, rfl⟩
   obtain ⟨acc, hacc⟩ :
@@ -799,7 +799,7 @@ theorem pauseStat_boundary_with_execution
     obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
     have hifr := accessDelegation_instructionFrame
       (addAccessedAddress
-        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft⟩) target)
+        (statPre.setMach ⟨rest, statPre.memory, statPre.gasLeft, statPre.stateGas⟩) target)
       target
     rw [hdel] at hifr
     have hstk1 : d1.stack = rest := hd1stk
@@ -1143,16 +1143,16 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
   rcases hdel : accessDelegation
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr)
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr)
       cw.toAdr with ⟨dp, dadr, code, dgc, d1⟩
   obtain ⟨ext, hext⟩ :
       ∃ n : Nat,
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = n := ⟨_, rfl⟩
   obtain ⟨acc, hacc⟩ :
       ∃ n : Nat,
         accessCost cw.toAdr
-          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
             + dgc = n := ⟨_, rfl⟩
   rcases hsplit : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc
     with ⟨mcc, mcs⟩

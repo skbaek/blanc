@@ -98,7 +98,7 @@ private lemma gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
 
 private def returnWordPre
     (base : Devm) (word : B256) (gas : Nat) : Devm :=
-  base.setMach ⟨[], Mem.empty.write 0 word.toBytes, gas⟩
+  base.setMach ⟨[], Mem.empty.write 0 word.toBytes, gas, base.stateGas⟩
 
 private theorem returnWord_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {word : B256}
@@ -114,7 +114,7 @@ private theorem returnWord_runCompiled
   let M := Mem.empty.write 0 word.toBytes
   let returnPre := base.setMach
     ⟨[(0 : B256), (32 : B256)], M, g - 5⟩
-  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, g - 5, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, ?_, rfl, ?_, rfl⟩
   · simp only [returnWordPre, returnMemoryRange, pushList]
@@ -127,7 +127,7 @@ private theorem returnWord_runCompiled
       simpa only [returnPre, M] using
         (Devm.extCost_word_word Mem.size_write_word)
     have hread :
-        (returnPre.setMach ⟨[], returnPre.memory, g - 5⟩).memRead 0 32 =
+        (returnPre.setMach ⟨[], returnPre.memory, g - 5, returnPre.stateGas⟩).memRead 0 32 =
           ⟨word.toBytes, d.2⟩ := by
       exact Prod.ext
         (Devm.memRead_word_fst
@@ -147,7 +147,7 @@ private theorem supportsInterfaceStoreReturn_runCompiled
     (word : B256) (G : Nat) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[word], Mem.empty, G + 13⟩)
+        (base.setMach ⟨[word], Mem.empty, G + 13, base.stateGas⟩)
         (mstoreAt 0 +++ returnMemoryRange 0 32) post ∧
       post.gasLeft = G ∧
       Devm.output post = word.toBytes ∧
@@ -174,7 +174,7 @@ private theorem supportsInterfaceBody_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 46⟩)
+        (base.setMach ⟨[], Mem.empty, G + 46, base.stateGas⟩)
         supportsInterfaceBody post ∧
       post.gasLeft = G ∧
       Devm.output post = (supportsInterfaceResultWord sevm).toBytes ∧
@@ -244,7 +244,7 @@ theorem supportsInterfaceEndpoint_short_runCompiledTo
         ⟨base.stack, base.memory, G + supportsInterfaceEndpointShortGas⟩)
       supportsInterfaceEndpoint
       (.error (.revert,
-        (base.setMach ⟨base.stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   have hlt : B256.ltCheck sevm.data.length.toB256 36 = 1 := by
     simp only [B256.ltCheck]
     rw [if_pos]
@@ -276,7 +276,7 @@ theorem nonpayableEndpoint_zero_runCompiled
     (hvalue : sevm.value = 0)
     (hroom : base.stack.length < 1023)
     (hbody : Func.RunCompiled fs sevm
-      (base.setMach ⟨base.stack, base.memory, G⟩) body post) :
+      (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩) body post) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨base.stack, base.memory, G + nonpayableEndpointZeroGas⟩)
@@ -298,7 +298,7 @@ theorem nonpayableEndpoint_zero_runCompiledTo
     (hvalue : sevm.value = 0)
     (hroom : base.stack.length < 1023)
     (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨base.stack, base.memory, G⟩) body out) :
+      (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩) body out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨base.stack, base.memory, G + nonpayableEndpointZeroGas⟩)
@@ -326,7 +326,7 @@ theorem nonpayableEndpoint_nonzero_runCompiledTo
         ⟨base.stack, base.memory, G + nonpayableEndpointRevertGas⟩)
       (nonpayableEndpoint body)
       (.error (.revert,
-        (base.setMach ⟨base.stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   unfold nonpayableEndpoint nonpayableEndpointRevertGas
   func_run (1) []
   · simp only [Devm.stack_setMach]
@@ -338,7 +338,7 @@ theorem nonpayableEndpoint_nonzero_runCompiledTo
     · simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
       omega
     · exact Func.runCompiledTo_revert_func
-        (devm := base.setMach ⟨base.stack, base.memory, G + 4⟩)
+        (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩)
         (G := G) (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach]; exact hroom)
 
@@ -374,7 +374,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) out) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -408,12 +408,12 @@ private theorem supportsInterfaceLeaf_runCompiledTo
       (by decide)) ?_
   simp only [Devm.setMach_setMach]
   have hbranchRoom :
-      (base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩).stack.length <
+      (base.setMach ⟨[(1 : B256)], Mem.empty, G + 14, base.stateGas⟩).stack.length <
         1024 := by
     simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
     omega
   have hbranchGas :
-      (base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩).gasLeft =
+      (base.setMach ⟨[(1 : B256)], Mem.empty, G + 14, base.stateGas⟩).gasLeft =
         G + (gVerylow + gHigh + gJumpdest) := by
     simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
   exact Func.runCompiledTo_branch_succ (w := (1 : B256)) (s := [])
@@ -425,7 +425,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     {hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) out}
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ run : Func.RunCompiledTo fs sevm
@@ -456,7 +456,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
     all_goals
       simp only [afterPush, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach]
-  let branchPre := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩
+  let branchPre := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14, base.stateGas⟩
   have heq : Ninst.RunCompiled sevm afterPush eq branchPre := by
     convert
       (Ninst.runCompiled_binary (r := .eq) (f := B256.eqCheck)
@@ -474,7 +474,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
     omega
   have hpop : Devm.PopBurnBy [(1 : B256)]
       (gVerylow + gHigh + gJumpdest) branchPre
-      (base.setMach ⟨[], Mem.empty, G⟩) := by
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) := by
     simpa only [branchPre, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
       Devm.popBurnBy_setMach (devm := branchPre) (G := G)
@@ -485,7 +485,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
       ((nonpayableEndpoint supportsInterfaceEndpoint) <?> Func.revert) out :=
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[supportsInterfaceSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[supportsInterfaceSelector], Mem.empty, G + 20, base.stateGas⟩)
       supportsInterfaceLeaf out := by
     unfold supportsInterfaceLeaf
     exact .next hpush (.next heq hbranch)
@@ -506,7 +506,7 @@ private theorem supportsInterfaceLeaf_runCompiledTo_with_path
 private theorem supportsInterfaceLeaf_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hbody : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) post) :
     Func.RunCompiled fs sevm
       (base.setMach
@@ -698,7 +698,7 @@ private theorem supportsInterfaceMain_runCompiledTo
         ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
       supportsInterfaceRootDispatch out) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G + supportsInterfaceDispatchGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + supportsInterfaceDispatchGas, base.stateGas⟩)
       (Func.main tree) out := by
   rw [supportsInterfaceMain_eq]
   unfold supportsInterfaceMain supportsInterfaceDispatchGas fsig shiftRight cdl
@@ -751,18 +751,18 @@ private theorem supportsInterfaceMain_runCompiledTo_with_path
       supportsInterfaceRootDispatch out}
     (hrootSafe : Func.RunCompiledTo.NoRawSstorePath hroot) :
     ∃ run : Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 54⟩)
+        (base.setMach ⟨[], Mem.empty, G + 54, base.stateGas⟩)
         (Func.main tree) out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   simp only [supportsInterfaceMain_eq]
   let afterPushZero := base.setMach
     ⟨[(0 : B256)], Mem.empty, G + 52⟩
   have hpushZero : Ninst.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + 54⟩)
+      (base.setMach ⟨[], Mem.empty, G + 54, base.stateGas⟩)
       (pushB256 0) afterPushZero := by
     convert
       (Ninst.runCompiled_pushB256 (c := gBase) (G := G + 52)
-        (devm := base.setMach ⟨[], Mem.empty, G + 54⟩)
+        (devm := base.setMach ⟨[], Mem.empty, G + 54, base.stateGas⟩)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach, List.length_nil]; omega)) using 1
@@ -820,7 +820,7 @@ private theorem supportsInterfaceMain_runCompiledTo_with_path
       simp only [afterPush224, rootPre, Devm.setMach_setMach,
         Devm.memory_setMach]
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 54⟩)
+      (base.setMach ⟨[], Mem.empty, G + 54, base.stateGas⟩)
       supportsInterfaceMain out := by
     unfold supportsInterfaceMain fsig shiftRight cdl
     exact .next hpushZero (.next hload (.next hpush224 (.next hshr (by
@@ -854,7 +854,7 @@ private theorem supportsInterfaceMain_runCompiled
         ⟨[supportsInterfaceSelector], Mem.empty, G + 43⟩)
       supportsInterfaceRootDispatch post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + supportsInterfaceDispatchGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + supportsInterfaceDispatchGas, base.stateGas⟩)
       (Func.main tree) post :=
   Func.RunCompiled.of_runCompiledTo_ok
     (supportsInterfaceMain_runCompiledTo hselector
@@ -867,7 +867,7 @@ private theorem supportsInterfaceRoute_runCompiledTo
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = supportsInterfaceSelector)
     (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩)
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) out) :
     Prog.RunCompiledTo sevm
       (base.setMach
@@ -878,7 +878,7 @@ private theorem supportsInterfaceRoute_runCompiledTo
   have hmain := supportsInterfaceMain_runCompiledTo
     (G := K) hselector hroot
   refine Prog.runCompiledTo_intro
-    (mid := base.setMach ⟨[], Mem.empty, K + 70⟩)
+    (mid := base.setMach ⟨[], Mem.empty, K + 70, base.stateGas⟩)
     (G := K + 70) ?_ rfl ?_
   · simp only [Devm.gasLeft_setMach, supportsInterfaceRouteGas,
       gJumpdest]
@@ -906,7 +906,7 @@ private theorem supportsInterfaceRoute_runCompiledTo_with_path
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = supportsInterfaceSelector)
     {hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩)
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) out}
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ mid : Devm,
@@ -924,10 +924,10 @@ private theorem supportsInterfaceRoute_runCompiledTo_with_path
     supportsInterfaceMain_runCompiledTo_with_path hselector hrootSafe
   let pre := base.setMach
     ⟨[], Mem.empty, K + supportsInterfaceRouteGas⟩
-  let mid := base.setMach ⟨[], Mem.empty, K + 70⟩
+  let mid := base.setMach ⟨[], Mem.empty, K + 70, base.stateGas⟩
   let afterSize := base.setMach
     ⟨[sevm.data.length.toB256], Mem.empty, K + 68⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, K + 54⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, K + 54, base.stateGas⟩
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
@@ -982,7 +982,7 @@ private theorem supportsInterfaceRoute_exists_exec_noRawSstore
     (hselector : Sevm.selector sevm = supportsInterfaceSelector)
     (hcode : sevm.code.toList = code)
     {hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩)
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint) out}
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ execution : Exec 0 sevm
@@ -1041,7 +1041,7 @@ theorem supportsInterface_runCompiled
     ⟨post, hendpoint, hgas, houtput, hworld, hlogs⟩
   have hwrapped :
       Func.RunCompiled (runtime.main :: runtime.aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 82⟩)
+        (base.setMach ⟨[], Mem.empty, G + 82, base.stateGas⟩)
         (nonpayableEndpoint supportsInterfaceEndpoint) post := by
     have hboundary :
         G + supportsInterfaceEndpointGas + nonpayableEndpointZeroGas =
@@ -1051,7 +1051,7 @@ theorem supportsInterface_runCompiled
         Devm.memory_setMach, hboundary] using
       (nonpayableEndpoint_zero_runCompiled
         (fs := runtime.main :: runtime.aux) (sevm := sevm)
-        (base := base.setMach ⟨[], Mem.empty, base.gasLeft⟩) (post := post)
+        (base := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩) (post := post)
         (G := G + supportsInterfaceEndpointGas)
         (body := supportsInterfaceEndpoint) hvalue
         (by simp only [Devm.stack_setMach, List.length_nil]; omega)
@@ -1072,7 +1072,7 @@ theorem supportsInterface_runCompiled
     omega
   refine ⟨post, ?_, hgas, houtput, hworld, hlogs, ?_⟩
   · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 152⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 152, base.stateGas⟩)
       (G := G + 152) ?_ rfl ?_
     · simp only [Devm.gasLeft_setMach, supportsInterfaceRuntimeGas,
         gJumpdest]
@@ -1124,10 +1124,10 @@ theorem supportsInterface_runCompiled_noRawSstore
   rcases supportsInterfaceEndpoint_runCompiled
       (runtime.main :: runtime.aux) sevm base G hdataLength hdataBound with
     ⟨post, hendpoint, hgas, houtput, hworld, hlogs⟩
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hbody :
       Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 82⟩)
+        (base.setMach ⟨[], Mem.empty, G + 82, base.stateGas⟩)
         (nonpayableEndpoint supportsInterfaceEndpoint) (.ok post) := by
     have hwrapped := nonpayableEndpoint_zero_runCompiledTo
       (fs := runtime.main :: runtime.aux) (sevm := sevm)
@@ -1181,9 +1181,9 @@ theorem supportsInterface_nonzero_value_runCompiledTo
         ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas⟩)
       runtime
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
     some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hbody := nonpayableEndpoint_nonzero_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm)
     (base := routeBase) (G := G)
@@ -1215,24 +1215,24 @@ theorem supportsInterface_nonzero_value_runCompiledTo_noRawSstore
         (base.setMach
           ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
           (base.setMach
             ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas⟩)
           runtime
           (.error (.revert,
-            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+            (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], Mem.empty, G + nonpayableEndpointRevertGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint)
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
     simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
       (nonpayableEndpoint_nonzero_runCompiledTo
@@ -1274,9 +1274,9 @@ theorem supportsInterface_short_calldata_runCompiledTo
         ⟨[], Mem.empty, G + supportsInterfaceShortCalldataRuntimeGas⟩)
       runtime
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
     some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hendpoint := supportsInterfaceEndpoint_short_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm)
     (base := routeBase) (G := G) hshort
@@ -1321,18 +1321,18 @@ theorem supportsInterface_short_calldata_runCompiledTo_noRawSstore
         (base.setMach
           ⟨[], Mem.empty, G + supportsInterfaceShortCalldataRuntimeGas⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
           (base.setMach
             ⟨[], Mem.empty, G + supportsInterfaceShortCalldataRuntimeGas⟩)
           runtime
           (.error (.revert,
-            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+            (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   have hendpoint := supportsInterfaceEndpoint_short_runCompiledTo
     (fs := runtime.main :: runtime.aux) (sevm := sevm)
     (base := routeBase) (G := G) hshort
@@ -1344,7 +1344,7 @@ theorem supportsInterface_short_calldata_runCompiledTo_noRawSstore
             nonpayableEndpointZeroGas⟩)
       (nonpayableEndpoint supportsInterfaceEndpoint)
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
     simpa only [routeBase, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
       (nonpayableEndpoint_zero_runCompiledTo
@@ -1531,9 +1531,9 @@ private theorem depositLeafRoute_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) depositEndpoint out) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) depositEndpoint out) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out := by
   unfold depositLeafRoute
   have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
@@ -1570,10 +1570,10 @@ private theorem depositLeafRoute_runCompiledTo_with_path
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     {hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) depositEndpoint out}
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) depositEndpoint out}
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ run : Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+        (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
         depositLeafRoute out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterPush := base.setMach
@@ -1582,7 +1582,7 @@ private theorem depositLeafRoute_runCompiledTo_with_path
     rw [depositSelector_eq]
     decide +kernel
   have hpush : Ninst.RunCompiled sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       (pushB256 depositSelector) afterPush := by
     convert
       (Ninst.runCompiled_pushB256
@@ -1596,7 +1596,7 @@ private theorem depositLeafRoute_runCompiledTo_with_path
     all_goals
       simp only [afterPush, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach]
-  let branchPre := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩
+  let branchPre := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14, base.stateGas⟩
   have heq : Ninst.RunCompiled sevm afterPush eq branchPre := by
     convert
       (Ninst.runCompiled_binary (r := .eq) (f := B256.eqCheck)
@@ -1614,7 +1614,7 @@ private theorem depositLeafRoute_runCompiledTo_with_path
     omega
   have hpop : Devm.PopBurnBy [(1 : B256)]
       (gVerylow + gHigh + gJumpdest) branchPre
-      (base.setMach ⟨[], Mem.empty, G⟩) := by
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) := by
     simpa only [branchPre, Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
       Devm.popBurnBy_setMach (devm := branchPre) (G := G)
@@ -1625,7 +1625,7 @@ private theorem depositLeafRoute_runCompiledTo_with_path
       (depositEndpoint <?> Func.revert) out :=
     .succ (by decide) hroom hpop hbody
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out := by
     unfold depositLeafRoute
     exact .next hpush (.next heq hbranch)
@@ -1647,10 +1647,10 @@ private theorem depositMiddleDispatch_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     (hleaf : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out := by
   unfold depositMiddleDispatch
   refine Func.RunCompiledTo.next
@@ -1701,17 +1701,17 @@ private theorem depositMiddleDispatch_runCompiledTo_with_path
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     {hleaf : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out}
     (hleafSafe : Func.RunCompiledTo.NoRawSstorePath hleaf) :
     ∃ run : Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+        (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
         depositMiddleDispatch out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterDup := base.setMach
     ⟨[depositSelector, depositSelector], Mem.empty, G + 40⟩
   have hdup : Ninst.RunCompiled sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       (dup 0) afterDup := by
     convert
       (Ninst.runCompiled_dup
@@ -1778,7 +1778,7 @@ private theorem depositMiddleDispatch_runCompiledTo_with_path
     .succ (by decide) hroom hpop (by
       simpa only [leafPre] using hleaf)
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out := by
     unfold depositMiddleDispatch
     exact .next hdup (.next hpush (.next hgt hbranch))
@@ -1805,10 +1805,10 @@ private theorem depositRootDispatch_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     (hmiddle : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out := by
   unfold depositRootDispatch
   refine Func.RunCompiledTo.next
@@ -1856,17 +1856,17 @@ private theorem depositRootDispatch_runCompiledTo_with_path
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {G : Nat}
     {hmiddle : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out}
     (hmiddleSafe : Func.RunCompiledTo.NoRawSstorePath hmiddle) :
     ∃ run : Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+        (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
         depositRootDispatch out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   let afterDup := base.setMach
     ⟨[depositSelector, depositSelector], Mem.empty, G + 62⟩
   have hdup : Ninst.RunCompiled sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       (dup 0) afterDup := by
     convert
       (Ninst.runCompiled_dup
@@ -1932,7 +1932,7 @@ private theorem depositRootDispatch_runCompiledTo_with_path
     .zero hroom hpop (by
       simpa only [middlePre] using hmiddle)
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out := by
     unfold depositRootDispatch
     exact .next hdup (.next hpush (.next hgt hbranch))
@@ -1959,10 +1959,10 @@ private theorem depositMainRoute_runCompiledTo
     {out : Execution} {G : Nat}
     (hselector : Sevm.selector sevm = depositSelector)
     (hroot : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 76⟩)
+      (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
       (Func.main tree) out := by
   rw [depositMainRoute_eq]
   unfold depositMainRoute fsig shiftRight cdl
@@ -2011,22 +2011,22 @@ private theorem depositMainRoute_runCompiledTo_with_path
     {out : Execution} {G : Nat}
     (hselector : Sevm.selector sevm = depositSelector)
     {hroot : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out}
     (hrootSafe : Func.RunCompiledTo.NoRawSstorePath hroot) :
     ∃ run : Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 76⟩)
+        (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
         (Func.main tree) out,
       Func.RunCompiledTo.NoRawSstorePath run := by
   simp only [depositMainRoute_eq]
   let afterPushZero := base.setMach
     ⟨[(0 : B256)], Mem.empty, G + 74⟩
   have hpushZero : Ninst.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + 76⟩)
+      (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
       (pushB256 0) afterPushZero := by
     convert
       (Ninst.runCompiled_pushB256 (c := gBase) (G := G + 74)
-        (devm := base.setMach ⟨[], Mem.empty, G + 76⟩)
+        (devm := base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach, List.length_nil]; omega)) using 1
@@ -2083,7 +2083,7 @@ private theorem depositMainRoute_runCompiledTo_with_path
       simp only [afterPush224, rootPre, Devm.setMach_setMach,
         Devm.memory_setMach]
   let run : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 76⟩)
+      (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
       depositMainRoute out := by
     unfold depositMainRoute fsig shiftRight cdl
     exact .next hpushZero (.next hload (.next hpush224 (.next hshr (by
@@ -2120,9 +2120,9 @@ theorem deposit_route_runCompiledTo
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = depositSelector)
     (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint out) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out) :
     Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩)
+      (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩)
       runtime out := by
   have hleaf :=
     depositLeafRoute_runCompiledTo (G := K) hbody
@@ -2133,7 +2133,7 @@ theorem deposit_route_runCompiledTo
   have hmain :=
     depositMainRoute_runCompiledTo (G := K) hselector hroot
   refine Prog.runCompiledTo_intro
-    (mid := base.setMach ⟨[], Mem.empty, K + 92⟩)
+    (mid := base.setMach ⟨[], Mem.empty, K + 92, base.stateGas⟩)
     (G := K + 92) ?_ rfl ?_
   · simp only [Devm.gasLeft_setMach, depositRouteGas, gJumpdest]
   · unfold runtime
@@ -2159,11 +2159,11 @@ theorem deposit_route_runCompiledTo_with_path
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = depositSelector)
     {hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint out}
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out}
     (hbodySafe : Func.RunCompiledTo.NoRawSstorePath hbody) :
     ∃ mid : Devm,
       Devm.BurnBy gJumpdest
-        (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩) mid ∧
+        (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) mid ∧
       ∃ mainRun : Func.RunCompiledTo (runtime.main :: runtime.aux)
           sevm mid runtime.main out,
         Func.RunCompiledTo.NoRawSstorePath mainRun := by
@@ -2175,11 +2175,11 @@ theorem deposit_route_runCompiledTo_with_path
     depositRootDispatch_runCompiledTo_with_path hmiddleSafe
   obtain ⟨hmain, hmainSafe⟩ :=
     depositMainRoute_runCompiledTo_with_path hselector hrootSafe
-  let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩
-  let mid := base.setMach ⟨[], Mem.empty, K + 92⟩
+  let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, K + 92, base.stateGas⟩
   let afterSize := base.setMach
     ⟨[sevm.data.length.toB256], Mem.empty, K + 90⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, K + 76⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, K + 76, base.stateGas⟩
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
@@ -2233,9 +2233,9 @@ theorem deposit_route_runCompiled
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = depositSelector)
     (hbody : Func.RunCompiled (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint post) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint post) :
     Prog.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩)
+      (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩)
       runtime post := by
   rcases deposit_route_runCompiledTo hnonempty hselector
       (Func.RunCompiledTo.of_runCompiled hbody) with

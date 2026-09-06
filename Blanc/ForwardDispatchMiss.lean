@@ -66,7 +66,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector⟩)
         (dispatch tree)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   induction tree with
   | leaf leafSelector body =>
@@ -75,10 +75,10 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
         apply hmiss
         exact (DispatchTree.hasSelector_leaf_iff
           leafSelector selector body).2 heq.symm
-      let revertPre := base.setMach ⟨[], Mem.empty, G + 4⟩
+      let revertPre := base.setMach ⟨[], Mem.empty, G + 4, base.stateGas⟩
       let out : Execution :=
         .error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
       have hrev : Func.RunCompiledTo (program.main :: program.aux) sevm
           revertPre Func.revert out := by
         simpa only [revertPre, out, Devm.setMach_setMach,
@@ -94,7 +94,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           (by simp [Func.revert, Ninst.pushB256, funcExecFree])
           (by simp [Func.revert, Ninst.pushB256,
             Func.LocalSstoreFree])
-      let branchPre := base.setMach ⟨[(0 : B256)], Mem.empty, G + 17⟩
+      let branchPre := base.setMach ⟨[(0 : B256)], Mem.empty, G + 17, base.stateGas⟩
       have hroom : branchPre.stack.length < 1024 := by
         simp only [branchPre, Devm.stack_setMach, List.length_cons,
           List.length_nil]
@@ -192,7 +192,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (program.main :: program.aux) sevm branchPre
             (dispatch left <?> dispatch right)
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) :=
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) :=
           .succ (by decide) hroom hpop (by
             simpa only [childPre, childGas] using hchild)
         let afterDup := base.setMach
@@ -242,10 +242,10 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
         let run0 : Func.RunCompiledTo (program.main :: program.aux) sevm
             (base.setMach ⟨[selector], Mem.empty,
               G + left.dispatchMissGas selector +
-                pushCost pivot.toBytes.sig + 20⟩)
+                pushCost pivot.toBytes.sig + 20, base.stateGas⟩)
             (dispatch (.fork left right))
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
           unfold dispatch
           exact .next hdup (.next hpush (.next hgt hbranch))
         have hbranchSafe :
@@ -272,10 +272,10 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
                 (base.setMach ⟨[selector], Mem.empty,
                   G + left.dispatchMissGas selector +
-                    pushCost pivot.toBytes.sig + 20⟩)
+                    pushCost pivot.toBytes.sig + 20, base.stateGas⟩)
                 (dispatch (.fork left right))
                 (.error (.revert,
-                  (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+                  (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
               Func.RunCompiledTo.NoRawSstorePath run :=
           ⟨run0, run0Safe⟩
         simpa [DispatchTree.dispatchMissGas, pivot, hpivot,
@@ -304,7 +304,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (program.main :: program.aux) sevm branchPre
             (dispatch left <?> dispatch right)
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) :=
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) :=
           .zero hroom hpop (by
             simpa only [childPre, childGas] using hchild)
         let afterDup := base.setMach
@@ -354,10 +354,10 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
         let run0 : Func.RunCompiledTo (program.main :: program.aux) sevm
             (base.setMach ⟨[selector], Mem.empty,
               G + right.dispatchMissGas selector +
-                pushCost pivot.toBytes.sig + 19⟩)
+                pushCost pivot.toBytes.sig + 19, base.stateGas⟩)
             (dispatch (.fork left right))
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
           unfold dispatch
           exact .next hdup (.next hpush (.next hgt hbranch))
         have hbranchSafe :
@@ -383,10 +383,10 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
                 (base.setMach ⟨[selector], Mem.empty,
                   G + right.dispatchMissGas selector +
-                    pushCost pivot.toBytes.sig + 19⟩)
+                    pushCost pivot.toBytes.sig + 19, base.stateGas⟩)
                 (dispatch (.fork left right))
                 (.error (.revert,
-                  (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+                  (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
               Func.RunCompiledTo.NoRawSstorePath run :=
           ⟨run0, run0Safe⟩
         simpa [DispatchTree.dispatchMissGas, pivot, hpivot,

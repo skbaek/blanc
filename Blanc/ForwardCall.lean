@@ -191,7 +191,7 @@ elaboration row is the one this arc may not raise. -/
 lemma Devm.popToAdr_eq_ok {x : B256} {s : List B256} {devm : Devm}
     (h : devm.stack = x :: s) :
     devm.popToAdr =
-      .ok ⟨x.toAdr, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+      .ok ⟨x.toAdr, devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h]
   rfl
 
@@ -227,7 +227,7 @@ lemma Ninst.runCompiled_sload_of {sevm : Sevm} {devm base : Devm} {k v : B256}
     (h_val : devm.getStorVal sevm.currentTarget k = v)
     (h_gas : devm.gasLeft = G + c) (h_room : s.length < 1024) :
     Ninst.RunCompiled sevm devm (.reg .sload)
-      (base.setMach ⟨v :: s, devm.memory, G⟩) := by
+      (base.setMach ⟨v :: s, devm.memory, G, base.stateGas⟩) := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
   · rw [if_pos h] at h_base h_cost
     subst h_base; subst h_cost
@@ -491,7 +491,7 @@ lemma Func.runCompiledTo_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       base.logs = devm.logs →
       gasWarmAccess ≤ c → c ≤ gasColdSload →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (base.setMach ⟨v :: s, M, G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (base.setMach ⟨v :: s, M, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next Ninst.sload rest) ex := by
   subst h_val; subst h_mem
   set base : Devm :=
@@ -539,7 +539,7 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
       base.logs = devm.logs →
       c ≤ gasStorageSet →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M, G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next Ninst.sstore rest) ex := by
   subst h_mem
   have h_bound : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
@@ -625,7 +625,7 @@ lemma Devm.extCost_of_size {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     {i sz n e : Nat} (h : N.size = n)
     (he : calculateMemoryGasCost (memExtSize n i sz)
       - calculateMemoryGasCost n = e) :
-    (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = e := by
+    (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost [⟨i, sz⟩] = e := by
   simp only [Devm.extCost, Devm.memory_setMach, memExtsSize, h, he]
 
 /-- The same, summed with the instruction's fixed part — the shape every charge
@@ -634,7 +634,7 @@ lemma Devm.extCost_add_of_size {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     {i sz n a e : Nat} (h : N.size = n)
     (he : a + (calculateMemoryGasCost (memExtSize n i sz)
       - calculateMemoryGasCost n) = e) :
-    a + (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = e := by
+    a + (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost [⟨i, sz⟩] = e := by
   simp only [Devm.extCost, Devm.memory_setMach, memExtsSize, h, he]
 
 /-- Reading a window the image already covers returns the image unchanged. -/
@@ -665,7 +665,7 @@ symbolic-image sibling of `Devm.extCost_of_size`, for walks over a memory
 *variable* whose size is only bounded, never computed. -/
 lemma Devm.extCost_zero_of_le {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     {i sz : Nat} (h32 : N.size % 32 = 0) (hw : i + sz ≤ N.size) :
-    (devm.setMach ⟨S, N, G⟩).extCost [⟨i, sz⟩] = 0 := by
+    (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost [⟨i, sz⟩] = 0 := by
   simp only [Devm.extCost, Devm.memory_setMach, memExtsSize,
     memExtSize_of_le h32 hw, Nat.sub_self]
 
@@ -803,10 +803,10 @@ lemma Func.runCompiledTo_return_word {fs : List Func} {sevm : Sevm} {devm : Devm
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
-    (h_out : ((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat).1
+    (h_out : ((devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat).1
       = out) :
     Func.RunCompiledTo fs sevm devm (.last .return_)
-      (.ok ((((devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat
+      (.ok ((((devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat
         sz.toNat).2).withOutput out)) := by
   subst h_ext
   have h_eq : devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩] = G := by omega
@@ -854,7 +854,7 @@ lemma Func.runCompiledTo_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm
     (h_gas : c ≤ devm.gasLeft)
     (h_next : ∀ (M' : Mem) (G : Nat), M.write i.toNat v.toBytes = M' →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G, devm.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next Ninst.mstore rest) ex := by
   subst h_mem
   refine Func.RunCompiledTo.next
@@ -872,7 +872,7 @@ lemma Func.runCompiledTo_mstoreAt
     (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
     (hroom : stack.length < 1023)
     (hext : ∀ (S : List B256) (G' : Nat),
-      (base.setMach ⟨S, memory, G'⟩).extCost
+      (base.setMach ⟨S, memory, G', base.stateGas⟩).extCost
         [⟨(word * 32).toNat, 32⟩] = extGas)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
@@ -924,7 +924,7 @@ lemma Func.runCompiledTo_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       (∀ a : Adr, base.getCode a = devm.getCode a) →
       base.accessedStorageKeys = devm.accessedStorageKeys →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
   subst h_mem
   refine Func.RunCompiledTo.next
@@ -947,7 +947,7 @@ lemma Func.runCompiledTo_calldatacopy_step {fs : List Func} {sevm : Sevm}
     (h_next : ∀ (M' : Mem) (G : Nat),
       M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M' →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (devm.setMach ⟨s, M', G, devm.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next (.reg .calldatacopy) rest) ex := by
   subst h_mem
   refine Func.RunCompiledTo.next
@@ -1077,19 +1077,19 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) :
     Xinst.step sevm devm .call =
       genericCall.step sevm
-        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
         mcs 0 sevm.currentTarget cw.toAdr dadr true false
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
@@ -1133,27 +1133,27 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨cw :: 0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   -- `value = 0` closes the new-account and transfer charges, and the
   -- static-context assertion, on their right disjuncts.  `simp only` rather
@@ -1183,13 +1183,13 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     {ext acc create mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -1201,7 +1201,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     (h_sender : ¬ (d1.getAcct sevm.currentTarget).bal < vw) :
     Xinst.step sevm devm .call =
       genericCall.step sevm
-        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
         mcs vw sevm.currentTarget cw.toAdr dadr true false
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
@@ -1282,7 +1282,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
           ⟨d1.stack, d1.memory,
             d1.gasLeft -
               (mcc +
-                (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+                (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
                   [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])⟩).memExtends
             [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).getAcct
           sevm.currentTarget).bal < vw := by
@@ -1312,13 +1312,13 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
     {ext acc create mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -1379,7 +1379,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
       post.returnData = [] ∧
       post.gasLeft = d1.gasLeft -
         (mcc +
-          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
             [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]) + mcs
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
@@ -1423,7 +1423,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
           ⟨d1.stack, d1.memory,
             d1.gasLeft -
               (mcc +
-                (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+                (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
                   [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])⟩).memExtends
             [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).getAcct
           sevm.currentTarget).bal < vw := by
@@ -1465,19 +1465,19 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) :
     Xinst.step sevm devm .staticcall =
       genericCall.step sevm
-        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
         mcs 0 sevm.currentTarget tw.toAdr dadr true true
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
@@ -1510,21 +1510,21 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   simp only [h_del, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
@@ -1559,19 +1559,19 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) :
     Xinst.step sevm devm .delegatecall =
       genericCall.step sevm
-        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+        ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
         mcs sevm.value sevm.caller sevm.currentTarget dadr false false
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
@@ -1604,21 +1604,21 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨cw :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   simp only [h_del, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
@@ -1637,7 +1637,7 @@ can build. -/
 /-- The parent state a `CALL` suspends on: charged, window-extended and with
 its return data cleared.  The term is shared by zero- and nonzero-value calls. -/
 def callSpawnParent (d1 : Devm) (charge ii is oi os : Nat) : Devm :=
-  ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - charge⟩).memExtends
+  ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - charge, d1.stateGas⟩).memExtends
     [⟨ii, is⟩, ⟨oi, os⟩]).withReturnData []
 
 /-- The message a `value = 0` `CALL` builds: the callee owns the storage, the
@@ -1693,13 +1693,13 @@ lemma Xinst.step_call_nonzero_spawn {sevm : Sevm} {devm : Devm}
     {ext acc create mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -1730,13 +1730,13 @@ lemma Xinst.step_call_zero_value_spawn {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -1758,13 +1758,13 @@ lemma Xinst.step_staticcall_spawn {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -1786,13 +1786,13 @@ lemma Xinst.step_delegatecall_spawn {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -1823,13 +1823,13 @@ lemma Ninst.runCompiled_call_zero_value {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -1859,13 +1859,13 @@ lemma Ninst.runCompiled_call_nonzero {sevm : Sevm} {devm : Devm}
     {ext acc create mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -1910,13 +1910,13 @@ lemma Ninst.runCompiled_delegatecall {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -1997,13 +1997,13 @@ lemma Ninst.childlessRunCompiled_staticcall_doneFrame
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -2028,13 +2028,13 @@ lemma Ninst.runCompiled_staticcall_doneFrame {sevm : Sevm} {devm : Devm}
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -2061,13 +2061,13 @@ lemma Ninst.runCompiled_delegatecall_doneFrame {sevm : Sevm} {devm : Devm}
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -2104,13 +2104,13 @@ theorem delegatecall_enters_with_parent_as_storage_owner {sevm : Sevm} {devm : D
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
@@ -2256,7 +2256,7 @@ theorem delegatecall_child_observes_outer_caller_and_value
     rw [pushItem_def, chargeGas_eq_ok h_gas]
     simp only [bind, Except.bind]
     rw [Devm.push_eq_ok
-      (devm := d.setMach ⟨d.stack, d.memory, d.gasLeft - gBase⟩)
+      (devm := d.setMach ⟨d.stack, d.memory, d.gasLeft - gBase, d.stateGas⟩)
       (by show d.stack.length < 1024; exact h_room)]
     exact ⟨_, rfl, rfl⟩
   obtain ⟨dc, hdc, hdcs⟩ := step sevm.caller.toB256
@@ -2541,7 +2541,7 @@ lemma Func.execTo_branch_zero {fs : List Func} {sevm : Sevm} {devm : Devm}
     {f g : Func} {ex : Execution} {s : List B256} {G : Nat}
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
-    (h_arm : Func.ExecTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) f ex) :
+    (h_arm : Func.ExecTo fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.ExecTo fs sevm devm (.branch f g) ex := by
   intro f₀ fs' hFS h_eq pc sub hb
   rcases subcode_compile_branch_jumpable sub hb with
@@ -2558,7 +2558,7 @@ lemma Func.execTo_branch_succ {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
-    (h_arm : Func.ExecTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) g ex) :
+    (h_arm : Func.ExecTo fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) g ex) :
     Func.ExecTo fs sevm devm (.branch f g) ex := by
   intro f₀ fs' hFS h_eq pc sub hb
   rcases subcode_compile_branch_jumpable sub hb with
@@ -2575,7 +2575,7 @@ lemma Func.execTo_call' {fs : List Func} {sevm : Sevm} {devm : Devm} {k : Nat}
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
     (h_body : Func.ExecTo fs sevm
-      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f ex) :
+      (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.ExecTo fs sevm devm (.call k) ex := by
   intro f₀ fs' hFS h_eq pc sub hb
   subst hFS
@@ -2772,7 +2772,7 @@ theorem Prog.execSat_out {sevm : Sevm} {pre : Devm} {p : Prog}
 lemma Prog.execSat_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     {P : Execution → Prop} {G : Nat}
     (h_gas : devm.gasLeft = G + gJumpdest)
-    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩)
     (h_main : Func.ExecSat (p.main :: p.aux) sevm mid p.main P) :
     Prog.ExecSat sevm devm p P := by
   rcases h_main with ⟨ex, hw, hp⟩
@@ -2788,7 +2788,7 @@ the eventual outcome. -/
 lemma Prog.ExecWitness.intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     {ex : Execution} {G : Nat}
     (h_gas : devm.gasLeft = G + gJumpdest)
-    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩)
     (h_main : Func.ExecWitness (p.main :: p.aux) sevm mid p.main ex) :
     Prog.ExecWitness sevm devm p ex := by
   subst h_mid
@@ -2833,7 +2833,7 @@ theorem Func.ExecWitness.prepend_fsig
     (hgas : entry.gasLeft = G + fsigCost)
     (hroom : tail.length < 1023)
     (hbody : Func.ExecWitness fs sevm
-      (entry.setMach ⟨Sevm.selector sevm :: tail, entry.memory, G⟩)
+      (entry.setMach ⟨Sevm.selector sevm :: tail, entry.memory, G, entry.stateGas⟩)
       body ex) :
     Func.ExecWitness fs sevm entry (fsig +++ body) ex := by
   let push224Cost := pushCost (224 : B256).toBytes.sig
@@ -2910,7 +2910,7 @@ lemma Func.execWitness_branch_zero {fs : List Func} {sevm : Sevm}
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
     (h_arm : Func.ExecWitness fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) f ex) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.ExecWitness fs sevm devm (.branch f g) ex := by
   cases ex with
   | ok post => exact Func.runCompiled_branch_zero h_stk h_room h_gas h_arm
@@ -2923,7 +2923,7 @@ lemma Func.execWitness_branch_succ {fs : List Func} {sevm : Sevm}
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
     (h_arm : Func.ExecWitness fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) g ex) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) g ex) :
     Func.ExecWitness fs sevm devm (.branch f g) ex := by
   cases ex with
   | ok post => exact Func.runCompiled_branch_succ h_ne h_stk h_room h_gas h_arm
@@ -2935,7 +2935,7 @@ lemma Func.execWitness_call' {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
     (h_body : Func.ExecWitness fs sevm
-      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f ex) :
+      (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.ExecWitness fs sevm devm (.call k) ex := by
   cases ex with
   | ok post => exact Func.runCompiled_call' h_get h_room h_gas h_body
@@ -2999,7 +2999,7 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       base.accountsToDelete = devm.accountsToDelete →
       gasWarmAccess ≤ c → c ≤ gasColdSload →
       devm.gasLeft = G + c →
-      Func.ExecSat fs sevm (base.setMach ⟨v :: s, M, G⟩) rest P) :
+      Func.ExecSat fs sevm (base.setMach ⟨v :: s, M, G, base.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next Ninst.sload rest) P := by
   subst h_val; subst h_mem
   set base : Devm :=
@@ -3051,7 +3051,7 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter →
       c ≤ gasStorageSet →
       devm.gasLeft = G + c →
-      Func.ExecSat fs sevm (base.setMach ⟨s, M, G⟩) rest P) :
+      Func.ExecSat fs sevm (base.setMach ⟨s, M, G, base.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next Ninst.sstore rest) P := by
   subst h_mem
   have h_bound : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
@@ -3122,7 +3122,7 @@ lemma Func.execSat_mstore_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_gas : c ≤ devm.gasLeft)
     (h_next : ∀ (M' : Mem) (G : Nat), M.write i.toNat v.toBytes = M' →
       devm.gasLeft = G + c →
-      Func.ExecSat fs sevm (devm.setMach ⟨s, M', G⟩) rest P) :
+      Func.ExecSat fs sevm (devm.setMach ⟨s, M', G, devm.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next Ninst.mstore rest) P := by
   subst h_mem
   rcases h_next _ (devm.gasLeft - c) rfl (by omega) with ⟨ex, hto, hp⟩
@@ -3154,7 +3154,7 @@ lemma Func.execSat_log_step {fs : List Func} {sevm : Sevm} {devm : Devm}
       base.error = devm.error →
       base.accountsToDelete = devm.accountsToDelete →
       devm.gasLeft = G + c →
-      Func.ExecSat fs sevm (base.setMach ⟨s, M', G⟩) rest P) :
+      Func.ExecSat fs sevm (base.setMach ⟨s, M', G, base.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next (.reg (.log n)) rest) P := by
   subst h_mem
   rcases h_next (devm.addLog ⟨sevm.currentTarget, topics, payload⟩)
@@ -3178,7 +3178,7 @@ lemma Func.execSat_calldatacopy_step {fs : List Func} {sevm : Sevm}
     (h_next : ∀ (M' : Mem) (G : Nat),
       M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M' →
       devm.gasLeft = G + c →
-      Func.ExecSat fs sevm (devm.setMach ⟨s, M', G⟩) rest P) :
+      Func.ExecSat fs sevm (devm.setMach ⟨s, M', G, devm.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next (.reg .calldatacopy) rest) P := by
   subst h_mem
   rcases h_next _ (devm.gasLeft - c) rfl (by omega) with ⟨ex, hto, hp⟩
@@ -3270,13 +3270,13 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     {ext acc create mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -3430,13 +3430,13 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
@@ -3585,19 +3585,19 @@ lemma Ninst.runCompiled_call_zero_value_zero_depth {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth = 0)
     (h_room : d1.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (.exec .call)
-      ((((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+      ((((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
           [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).withReturnData
             []).setMach
         ⟨0 :: d1.stack,
@@ -3606,7 +3606,7 @@ lemma Ninst.runCompiled_call_zero_value_zero_depth {sevm : Sevm} {devm : Devm}
   refine Ninst.runCompiled_exec_done ?_
   rw [Xinst.step_call_zero_value h_stk h_ext h_del h_acc h_split h_gas,
     genericCall.step_zero_depth h_depth (by
-      show ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext)⟩).memExtends
+      show ((d1.setMach ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).stack.length < 1024
       exact h_room)]
   rfl
@@ -3622,7 +3622,7 @@ lemma Mem.extends_covered {N : Mem} {ps : List (Nat × Nat)}
 /-- An access window the image already covers costs nothing. -/
 lemma Devm.extCost_covered {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     {ws : List (Nat × Nat)} (h : memExtsSize N.size ws = N.size) :
-    (devm.setMach ⟨S, N, G⟩).extCost ws = 0 := by
+    (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost ws = 0 := by
   simp only [Devm.extCost, Devm.memory_setMach, h]
   omega
 

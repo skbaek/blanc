@@ -154,7 +154,7 @@ theorem temporal_extcodesize_runCompiled
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
       (base.setMach ⟨x :: stack, M,
-        G + temporalAccountAccessCost base x.toAdr⟩)
+        G + temporalAccountAccessCost base x.toAdr, base.stateGas⟩)
       Ninst.extcodesize
       ((temporalAccountAccessBase base x.toAdr).setMach ⟨v :: stack, M, G⟩) := by
   by_cases hwarm : x.toAdr ∈ base.accessedAddresses
@@ -162,13 +162,13 @@ theorem temporal_extcodesize_runCompiled
       if_pos hwarm]
     simpa only [Devm.setMach_setMach, Devm.memory_setMach] using
       Ninst.runCompiled_extcodesize_warm
-        (devm := base.setMach ⟨x :: stack, M, G + gasWarmAccess⟩)
+        (devm := base.setMach ⟨x :: stack, M, G + gasWarmAccess, base.stateGas⟩)
         rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
   · simp only [temporalAccountAccessBase, temporalAccountAccessCost,
       if_neg hwarm]
     simpa only [addAccessedAddress_setMach_setMach, Devm.memory_setMach] using
       Ninst.runCompiled_extcodesize_cold
-        (devm := base.setMach ⟨x :: stack, M, G + gasColdAccountAccess⟩)
+        (devm := base.setMach ⟨x :: stack, M, G + gasColdAccountAccess, base.stateGas⟩)
         rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
 
 /-! ## The two crossings, resolved at a warm code-carrying callee
@@ -218,31 +218,31 @@ private lemma responder_call_crossing
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal target.toAdr 0 := by
   have hnodel : getDelegatedCodeAddress
-      ((devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
-    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
     decide
   have hdel : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
       ⟨false, target.toAdr,
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
           target.toAdr, 0,
-        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
           target.toAdr⟩ := by
     unfold accessDelegation
     simp only [show (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr).state.getCode target.toAdr =
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr from rfl, hnodel]
-  set d0 := addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+  set d0 := addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
     target.toAdr with hd0
   have hd0gas : d0.gasLeft = G := by
     rw [show d0.gasLeft = devm.gasLeft from rfl, hgas]
   have hacc : accessCost target.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses + 0 =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
@@ -271,10 +271,10 @@ private lemma responder_call_crossing
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
     runCompiled_call_zero_value_responder (gw := Nat.toB256 G) (cw := target)
-      hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = calleeCode from hcode) hmcs17 hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, ?_, stmid, hsub, hstate⟩
@@ -325,31 +325,31 @@ private lemma responder_staticcall_crossing
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal target.toAdr 0 := by
   have hnodel : getDelegatedCodeAddress
-      ((devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
-    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
     decide
   have hdel : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
       ⟨false, target.toAdr,
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
           target.toAdr, 0,
-        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
           target.toAdr⟩ := by
     unfold accessDelegation
     simp only [show (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr).state.getCode target.toAdr =
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr from rfl, hnodel]
-  set d0 := addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+  set d0 := addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
     target.toAdr with hd0
   have hd0gas : d0.gasLeft = G := by
     rw [show d0.gasLeft = devm.gasLeft from rfl, hgas]
   have hacc : accessCost target.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses + 0 =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
@@ -378,10 +378,10 @@ private lemma responder_staticcall_crossing
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
     runCompiled_staticcall_responder (gw := Nat.toB256 G) (tw := target)
-      hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = calleeCode from hcode) hmcs17 hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, ?_, stmid, hsub, hstate⟩
@@ -428,7 +428,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     (hstipend : gCallStipend < G + 1496 + storeCost)
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[value], M, G + 1512 + storeCost⟩) pauseExpiryFinish
+      (base.setMach ⟨[value], M, G + 1512 + storeCost, base.stateGas⟩) pauseExpiryFinish
       ((((temporalSstorePost sevm base (expirySlot pauser) value).addLog
           ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser],
             value.toBytes⟩).setMach
@@ -469,7 +469,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     simpa only [Devm.setMach_setMach, Devm.memory_setMach] using h
   -- the heartbeat event and the lock words
   have hlogTail : Func.RunCompiled fs sevm
-      (storePost.setMach ⟨[], M', G + 1496⟩)
+      (storePost.setMach ⟨[], M', G + 1496, storePost.stateGas⟩)
       (Ninst.caller ::: pushB256 heartbeatUpdatedEvent :::
         pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
         pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop)
@@ -491,7 +491,7 @@ theorem pauseExpiryFinish_ok_runCompiled
   -- the expiry `SSTORE`
   have hstore : Func.RunCompiled fs sevm
       (base.setMach ⟨[expirySlot pauser, value], M',
-        G + 1496 + storeCost⟩)
+        G + 1496 + storeCost, base.stateGas⟩)
       (Ninst.sstore ::: Ninst.caller :::
         pushB256 heartbeatUpdatedEvent :::
         pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
@@ -504,7 +504,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     exact hlogTail
   -- the store key and the scratch write
   show Func.RunCompiled fs sevm
-    (base.setMach ⟨[value], M, G + 1512 + storeCost⟩)
+    (base.setMach ⟨[value], M, G + 1512 + storeCost, base.stateGas⟩)
     (Ninst.dup 0 ::: pushB256 (0 * 32) ::: Ninst.mstore :::
       Ninst.caller ::: pushB256 (regionWord expiryRegion) ::: Ninst.or :::
       Ninst.sstore ::: Ninst.caller ::: pushB256 heartbeatUpdatedEvent :::
@@ -581,7 +581,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     (hstipend : gCallStipend < G + 1496 + storeCost)
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M, G + 3322 + countCost + storeCost⟩) pauseSuccess
+      (base.setMach ⟨[], M, G + 3322 + countCost + storeCost, base.stateGas⟩) pauseSuccess
       ((((temporalSstorePost sevm
             (temporalSloadBase sevm
               (base.addLog ⟨sevm.currentTarget,
@@ -648,7 +648,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
   -- the finish, entered from the zero push
   have hfinish : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[(0 : B256)], M.write 0 duration.toBytes,
-        G + 1512 + storeCost⟩)
+        G + 1512 + storeCost, countBase.stateGas⟩)
       pauseExpiryFinish
       ((((temporalSstorePost sevm countBase (expirySlot pauser) 0).addLog
           ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser],
@@ -669,7 +669,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
   -- the count test, the taken branch, and the zero push
   have harm : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[(0 : B256)], M.write 0 duration.toBytes,
-        G + 1531 + storeCost⟩)
+        G + 1531 + storeCost, countBase.stateGas⟩)
       (Ninst.iszero :::
         ((pushB256 0 ::: pauseExpiryFinish) <?>
           (checkedHeartbeatExpiry <| pauseExpiryFinish)))
@@ -686,10 +686,10 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
   -- the count read
   have hsload : Ninst.RunCompiled sevm
       (eventBase.setMach ⟨[countSlot pauser], M.write 0 duration.toBytes,
-        G + 1531 + storeCost + countCost⟩)
+        G + 1531 + storeCost + countCost, eventBase.stateGas⟩)
       Ninst.sload
       (countBase.setMach ⟨[(0 : B256)], M.write 0 duration.toBytes,
-        G + 1531 + storeCost⟩) := by
+        G + 1531 + storeCost, countBase.stateGas⟩) := by
     have h := temporal_sload_runCompiled (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := 0) (stack := [])
       (M := M.write 0 duration.toBytes)
@@ -768,7 +768,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
-        G + 3351 + countCost + intervalCost + storeCost⟩) pauseSuccess
+        G + 3351 + countCost + intervalCost + storeCost, base.stateGas⟩) pauseSuccess
       ((((temporalSstorePost sevm
             (temporalSloadBase sevm
               (temporalSloadBase sevm
@@ -838,7 +838,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   -- the finish, entered with the checked sum
   have hfinish : Func.RunCompiled fs sevm
       (intervalBase.setMach ⟨[interval + sevm.benvStat.time],
-        M.write 0 duration.toBytes, G + 1512 + storeCost⟩)
+        M.write 0 duration.toBytes, G + 1512 + storeCost, intervalBase.stateGas⟩)
       pauseExpiryFinish
       ((((temporalSstorePost sevm intervalBase (expirySlot pauser)
             (interval + sevm.benvStat.time)).addLog
@@ -868,7 +868,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   -- the checked addition and its overflow probe
   have hsum : Func.RunCompiled fs sevm
       (intervalBase.setMach ⟨[interval, sevm.benvStat.time],
-        M.write 0 duration.toBytes, G + 1539 + storeCost⟩)
+        M.write 0 duration.toBytes, G + 1539 + storeCost, intervalBase.stateGas⟩)
       (Ninst.add ::: Ninst.dup 0 ::: Ninst.timestamp ::: Ninst.swap 0 :::
         Ninst.lt :::
         ((Func.call arithmeticPanicSlot) <?> pauseExpiryFinish))
@@ -888,10 +888,10 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   have hintervalSload : Ninst.RunCompiled sevm
       (countBase.setMach ⟨[heartbeatIntervalSlot, sevm.benvStat.time],
         M.write 0 duration.toBytes,
-        G + 1539 + storeCost + intervalCost⟩)
+        G + 1539 + storeCost + intervalCost, countBase.stateGas⟩)
       Ninst.sload
       (intervalBase.setMach ⟨[interval, sevm.benvStat.time],
-        M.write 0 duration.toBytes, G + 1539 + storeCost⟩) := by
+        M.write 0 duration.toBytes, G + 1539 + storeCost, intervalBase.stateGas⟩) := by
     have hvalue : countBase.getStorVal sevm.currentTarget
         heartbeatIntervalSlot = interval := by
       rw [show countBase.getStorVal sevm.currentTarget
@@ -915,7 +915,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   -- the count test, the fall-through branch, and the checked-arm prefix
   have harm : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[count], M.write 0 duration.toBytes,
-        G + 1560 + intervalCost + storeCost⟩)
+        G + 1560 + intervalCost + storeCost, countBase.stateGas⟩)
       (Ninst.iszero :::
         ((pushB256 0 ::: pauseExpiryFinish) <?>
           (checkedHeartbeatExpiry <| pauseExpiryFinish)))
@@ -935,10 +935,10 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   -- the count read
   have hsload : Ninst.RunCompiled sevm
       (eventBase.setMach ⟨[countSlot pauser], M.write 0 duration.toBytes,
-        G + 1560 + intervalCost + storeCost + countCost⟩)
+        G + 1560 + intervalCost + storeCost + countCost, eventBase.stateGas⟩)
       Ninst.sload
       (countBase.setMach ⟨[count], M.write 0 duration.toBytes,
-        G + 1560 + intervalCost + storeCost⟩) := by
+        G + 1560 + intervalCost + storeCost, countBase.stateGas⟩) := by
     have h := temporal_sload_runCompiled (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := count) (stack := [])
       (M := M.write 0 duration.toBytes)
@@ -1051,7 +1051,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       ∀ post : Devm,
         Func.RunCompiled fs sevm mid pauseSuccess post →
         Func.RunCompiled fs sevm
-          (base.setMach ⟨[], M, Gb + 427 + codeCost⟩) pauseAfterSet post := by
+          (base.setMach ⟨[], M, Gb + 427 + codeCost, base.stateGas⟩) pauseAfterSet post := by
   have halign : M.size % 32 = 0 := by omega
   -- the staged images and their windows
   have hwf1 : Mem.Wf (M.write 256 pauseForSelector.toBytes) := hwf.write _ _
@@ -1207,7 +1207,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     rfl
   have heta1 : post1 = post1.setMach ⟨[1],
       (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-      Gb + 242⟩ := by
+      Gb + 242, post1.stateGas⟩ := by
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   -- the second crossing
@@ -1253,7 +1253,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       Mem.extends_covered (by rw [hsize3]; decide)]
     rfl
   have heta2 : post2 = post2.setMach ⟨[1], pauseDecodedMemory M duration,
-      Gb + 81⟩ := by
+      Gb + 81, post2.stateGas⟩ := by
     rw [← hstk2, ← hmem2', ← hgas2']
     rfl
   -- the boundary state's facts, chained through both crossings
@@ -1313,13 +1313,13 @@ theorem pauseAfterSet_toSuccess_runCompiled
       some st₂ := by
     rw [← hstate1]
     exact hsub2
-  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb⟩,
+  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb, post2.stateGas⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
     haskB, haaB, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
   intro post hwalk
   -- segment C: the decode, from the second crossing to the boundary
   have hC : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 81⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 81, post2.stateGas⟩)
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult)) post := by
     have hisz : ((pauseDecodedMemory M duration).read 0 32).1.toB256 =? 0 =
@@ -1343,7 +1343,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
   have hB : Func.RunCompiled fs sevm
       (post1.setMach ⟨[1],
         (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-        Gb + 242⟩)
+        Gb + 242, post1.stateGas⟩)
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?>
           (pushB256 isPausedSelector ::: mstoreAt 8 +++
@@ -1413,7 +1413,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       exact hB
   -- the entry: the target load and the code-size guard
   have hextStep : Ninst.RunCompiled sevm
-      (base.setMach ⟨[target, target], M, Gb + 418 + codeCost⟩)
+      (base.setMach ⟨[target, target], M, Gb + 418 + codeCost, base.stateGas⟩)
       Ninst.extcodesize
       ((temporalAccountAccessBase base target.toAdr).setMach
         ⟨[calleeCode.size.toB256, target], M, Gb + 418⟩) := by

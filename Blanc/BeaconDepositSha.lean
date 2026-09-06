@@ -34,10 +34,10 @@ private theorem sha64_success_suffix_runCompiledTo
     {stack : List B256} {success : Func} {ex : Execution}
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_tail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨stack, base.memory, K⟩) success ex)
+      (base.setMach ⟨stack, base.memory, K, base.stateGas⟩) success ex)
     (h_room : stack.length < 1019) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨1 :: stack, base.memory, K + 37⟩)
+      (base.setMach ⟨1 :: stack, base.memory, K + 37, base.stateGas⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
         (returnDataShorterThan 32 +++
@@ -95,7 +95,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
         callPost.state = stmid.addBal 2 0) ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,
@@ -181,7 +181,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
     rw [hreturn', B256.length_toBytes]
     decide +kernel
   have hsuffix : Func.RunCompiledTo fs sevm
-      (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37⟩)
+      (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
         (returnDataShorterThan 32 +++
@@ -307,7 +307,7 @@ theorem sha64_success_prefix_runCompiledTo
         callPost.state = stmid.addBal 2 0) ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,

@@ -227,7 +227,7 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
     {slot G : Nat} {w : B256} {stack : List B256} {otherwise : Func}
     {run : Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
-        (devm.setMach ⟨stack, devm.memory, G⟩).withOutput []))}
+        (devm.setMach ⟨stack, devm.memory, G, devm.stateGas⟩).withOutput []))}
     (h_get : fs[slot]? = some Func.revert)
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack) :
     Func.RunCompiledTo.NoRawSstorePath run := by

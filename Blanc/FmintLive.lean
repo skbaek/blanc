@@ -81,7 +81,7 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
   exact
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by

@@ -197,10 +197,10 @@ theorem reconstructPubkeySha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 238⟩)
+          (base.setMach ⟨stack, base.memory, K + 238, base.stateGas⟩)
           (sha64 6 nodeWord success) ex effects := by
   have hinput : ((6 : B256) * 32).toNat = 192 := by
     decide +kernel
@@ -279,10 +279,10 @@ theorem reconstructSignatureFirstSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 242⟩)
+          (base.setMach ⟨stack, base.memory, K + 242, base.stateGas⟩)
           (sha64 13 intermediateWord success) ex effects := by
   have hinput : ((13 : B256) * 32).toNat = 416 := by
     decide +kernel
@@ -373,17 +373,17 @@ theorem reconstructSignatureSecondSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 259⟩)
+          (base.setMach ⟨stack, base.memory, K + 259, base.stateGas⟩)
           (loadWord 15 +++ mstoreAt 0 +++
             Ninst.pushB256 0 ::: mstoreAt 1 +++
             sha64 0 secondIntermediateWord success) ex effects := by
   let tailWord := Bytes.toB256 signatureTail
   let stagedMemory :=
     reconstructSignatureSecondStagedMemory base.memory signatureTail
-  let shaBase := base.setMach ⟨stack, stagedMemory, K⟩
+  let shaBase := base.setMach ⟨stack, stagedMemory, K, base.stateGas⟩
   have hpair : ReconstructIntermediatePairMemoryCarrier stagedMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate tailWord 0 736 := by
@@ -400,7 +400,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
       hzero, houtput, hpair.intermediate.node.source.size_eq]
     decide +kernel
   have hmetaSha : ReconstructMetaCarrier sevm origin shaBase := by
-    exact hmetaBase.setMach ⟨stack, stagedMemory, K⟩
+    exact hmetaBase.setMach ⟨stack, stagedMemory, K, hmetaBase.stateGas⟩
   have hnodelegSha :
       getDelegatedCodeAddress (shaBase.getCode 2) = none := by
     rw [hmetaSha.code 2]
@@ -456,7 +456,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
   intro ex htail
   have hshaBase := hlift htail
   have hsha : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨stack, stagedMemory, K + 240⟩)
+      (base.setMach ⟨stack, stagedMemory, K + 240, base.stateGas⟩)
       (sha64 0 secondIntermediateWord success) ex effects := by
     simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach,
       sha64SuccessCost_zero_secondIntermediate] using hshaBase
@@ -471,7 +471,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   have hzeroStage : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨stack, firstMemory, K + 248⟩)
+      (base.setMach ⟨stack, firstMemory, K + 248, base.stateGas⟩)
       (Ninst.pushB256 0 ::: mstoreAt 1 +++
         sha64 0 secondIntermediateWord success) ex effects := by
     have h := reconstructPushStore_storageEffectRun
@@ -534,7 +534,7 @@ theorem reconstructPairSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
           (base.setMach
@@ -546,7 +546,7 @@ theorem reconstructPairSha_storageEffectRun
             loadWord rightWord +++ mstoreAt 1 +++
             sha64 0 outputWord success) ex effects := by
   let stagedMemory := reconstructPairStagedMemory base.memory left right
-  let shaBase := base.setMach ⟨stack, stagedMemory, K⟩
+  let shaBase := base.setMach ⟨stack, stagedMemory, K, base.stateGas⟩
   have hpair : ReconstructPairMemoryCarrier stagedMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second left right 768 := by
@@ -566,7 +566,7 @@ theorem reconstructPairSha_storageEffectRun
       hpair.registers.intermediate.node.source.size_eq, memExtsSize]
     rw [hinputCovered, houtputCovered]
   have hmetaSha : ReconstructMetaCarrier sevm origin shaBase := by
-    exact hmetaBase.setMach ⟨stack, stagedMemory, K⟩
+    exact hmetaBase.setMach ⟨stack, stagedMemory, K, hmetaBase.stateGas⟩
   have hnodelegSha :
       getDelegatedCodeAddress (shaBase.getCode 2) = none := by
     rw [hmetaSha.code 2]
@@ -676,10 +676,10 @@ theorem reconstructSignatureRootSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord intermediateWord +++ mstoreAt 0 +++
             loadWord secondIntermediateWord +++ mstoreAt 1 +++
             sha64 0 intermediateWord success) ex effects := by
@@ -745,10 +745,10 @@ theorem reconstructPubkeyWithdrawalSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord 9 +++ mstoreAt 1 +++
             sha64 0 nodeWord success) ex effects := by
@@ -816,10 +816,10 @@ theorem reconstructAmountSignatureSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord 11 +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
             sha64 0 intermediateWord success) ex effects := by
@@ -889,10 +889,10 @@ theorem reconstructFinishSha_storageEffectRun
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
             sha64 0 nodeWord success) ex effects := by
@@ -967,10 +967,10 @@ theorem reconstructDepositDataNode_storageEffectRun
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (finalPost.setMach ⟨stack, finalPost.memory, K⟩)
+          (finalPost.setMach ⟨stack, finalPost.memory, K, finalPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨stack, base.memory, K + 1779⟩)
+          (base.setMach ⟨stack, base.memory, K + 1779, base.stateGas⟩)
           (reconstructDepositDataNode success) ex effects := by
   let pubkeyNode := Bytes.sha256 pubkeyInput
   let signatureFirstNode := Bytes.sha256 signatureFirst

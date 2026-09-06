@@ -51,9 +51,9 @@ private theorem constructorNonpayable_zero_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hvalue : sevm.value = 0)
     (tail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) body ex effects) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) body ex effects) :
   Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, K + 19⟩)
+      (base.setMach ⟨[], Mem.empty, K + 19, base.stateGas⟩)
       (nonpayable body) ex effects := by
   unfold nonpayable
   storage_effect_run (3) [1]
@@ -86,7 +86,7 @@ theorem constructorMain_storageEffectRun_withSlack
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun
         (constructorProgram.main :: constructorProgram.aux) sevm
-        (base.setMach ⟨[], Mem.empty, constructorMainGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorMainGas + slack, base.stateGas⟩)
         constructorProgram.main (.ok post)
         (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
@@ -122,7 +122,7 @@ theorem constructorMain_storageEffectRun
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun
         (constructorProgram.main :: constructorProgram.aux) sevm
-        (base.setMach ⟨[], Mem.empty, constructorMainGas⟩)
+        (base.setMach ⟨[], Mem.empty, constructorMainGas, base.stateGas⟩)
         constructorProgram.main (.ok post)
         (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,
@@ -150,7 +150,7 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
         (.ok post),
       post.output = code ∧
       post.error = none ∧
@@ -162,7 +162,7 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
         constructorProgram (.ok post) ∧
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples sevm.currentTarget := by
@@ -173,15 +173,15 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
       postRefund, postStorage, mainRun⟩ :=
     constructorMain_storageEffectRun_withSlack slack hgasBound hvalue world
       hstatic hdepth hpre hcode
-  let mid := base.setMach ⟨[], Mem.empty, constructorMainGas + slack⟩
+  let mid := base.setMach ⟨[], Mem.empty, constructorMainGas + slack, base.stateGas⟩
   have entryBurn : Devm.BurnBy gJumpdest
-      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩) mid := by
+      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩) mid := by
     dsimp only [mid]
     apply Devm.burnBy_setMach_gas
     simp only [constructorProgramGas, Devm.gasLeft_setMach]
     omega
   have programRun : Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
       constructorProgram (.ok post) := by
     exact ⟨mid, entryBurn, mainRun.run⟩
   have committed : Execution.commits (.ok post) = true := by
@@ -213,13 +213,13 @@ theorem constructor_success_retainedStorageEffectTriples
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩) (.ok post),
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩) (.ok post),
       post.output = code ∧
       post.error = none ∧
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩)
         constructorProgram (.ok post) ∧
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples sevm.currentTarget := by

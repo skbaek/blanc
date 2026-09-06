@@ -343,7 +343,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
         let loaded := afterSload sevm base s.key
         let staged :=
           (memory.write 0 left.toBytes).write 32 s.node.toBytes
-        let shaBase := loaded.setMach ⟨[], staged, 0⟩
+        let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
         have hpair : RootPairMemoryCarrier shaBase.memory
             oldCount s.size left s.node := by
           simpa only [shaBase, staged, Devm.memory_setMach] using
@@ -451,7 +451,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
         let loaded := afterSload sevm base s.key
         let staged :=
           (memory.write 0 s.node.toBytes).write 32 right.toBytes
-        let shaBase := loaded.setMach ⟨[], staged, 0⟩
+        let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
         have hpair : RootPairMemoryCarrier shaBase.memory
             oldCount s.size s.node right := by
           simpa only [shaBase, staged, Devm.memory_setMach] using
@@ -895,7 +895,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (stack := []) (memory := Mem.empty) (G := K + 100)
       hvalue (by simp only [List.length_nil]; omega)) ?_
   change Func.RunCompiledTo fs sevm
-    (loaded.setMach ⟨[count], Mem.empty, K + 100⟩)
+    (loaded.setMach ⟨[count], Mem.empty, K + 100, loaded.stateGas⟩)
     _ ex
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup

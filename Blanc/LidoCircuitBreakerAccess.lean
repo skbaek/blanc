@@ -76,9 +76,9 @@ theorem checkedHeartbeatExpiry_runCompiled
       base.accessedStorageKeys)
     (extension : CheckedHeartbeatExtension timestamp interval expiry) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + checkedHeartbeatExpiryGasWarm⟩)
+      (base.setMach ⟨[], Mem.empty, G + checkedHeartbeatExpiryGasWarm, base.stateGas⟩)
       (checkedHeartbeatExpiry Func.stop)
-      (base.setMach ⟨[expiry], Mem.empty, G⟩) := by
+      (base.setMach ⟨[expiry], Mem.empty, G, base.stateGas⟩) := by
   rcases extension with ⟨bound, hexpiry⟩
   have hsum : timestamp + interval = expiry :=
     CheckedHeartbeatExtension.add_eq ⟨bound, hexpiry⟩
@@ -202,7 +202,7 @@ private theorem heartbeat_countLoad_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
         G + 8 + heartbeatSloadCost sevm base
-          (countSlot sevm.caller.toB256)⟩)
+          (countSlot sevm.caller.toB256), base.stateGas⟩)
       (Ninst.caller ::: tagTop countRegion +++ Ninst.sload ::: Func.stop)
       ((heartbeatAfterCountLoad sevm base).setMach
         ⟨[count], Mem.empty, G⟩) := by
@@ -240,7 +240,7 @@ private theorem heartbeat_countLoad_runCompiled_then
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
         G + 8 + heartbeatSloadCost sevm base
-          (countSlot sevm.caller.toB256)⟩)
+          (countSlot sevm.caller.toB256), base.stateGas⟩)
       (Ninst.caller ::: tagTop countRegion +++ Ninst.sload ::: tail)
       post := by
   have hload := heartbeat_countLoad_runCompiled fs sevm base count G hcount
@@ -603,7 +603,7 @@ private theorem heartbeat_storeLogTail_runCompiled_update
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[expiry], Mem.empty,
-          G + heartbeatStoreLogTailGasWarmUpdate⟩)
+          G + heartbeatStoreLogTailGasWarmUpdate, base.stateGas⟩)
         (storeHeartbeatExpiryFromStack +++ Func.stop) post ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget
@@ -674,7 +674,7 @@ private theorem heartbeat_storeLogTail_runCompiled_other
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[expiry], Mem.empty,
-          G + heartbeatStoreLogTailGasWarmOther⟩)
+          G + heartbeatStoreLogTailGasWarmOther, base.stateGas⟩)
         (storeHeartbeatExpiryFromStack +++ Func.stop) post ∧
       post.gasLeft = G + 2800 ∧
       post.getStorVal sevm.currentTarget
@@ -742,7 +742,7 @@ private theorem heartbeat_storeLogTail_runCompiled_partition
     (holdLive : timestamp < oldExpiry) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[expiry], Mem.empty, G + 4310⟩)
+        (base.setMach ⟨[expiry], Mem.empty, G + 4310, base.stateGas⟩)
         (storeHeartbeatExpiryFromStack +++ Func.stop) post ∧
       post.gasLeft = G +
         ((gasStorageUpdate - gasColdSload) -
@@ -787,7 +787,7 @@ private theorem heartbeat_body_runCompiled_generic
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatBodySuccessGas sevm base⟩)
+          G + heartbeatBodySuccessGas sevm base, base.stateGas⟩)
         heartbeat post ∧
       post.gasLeft = G +
         ((gasStorageUpdate - gasColdSload) -
@@ -893,7 +893,7 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatBodySuccessGasWarmUpdate⟩)
+          G + heartbeatBodySuccessGasWarmUpdate, base.stateGas⟩)
         heartbeat post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -976,18 +976,18 @@ private theorem temporalReturnWord_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
+        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩)
         Func.return_ post ∧
       Devm.output post = word.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
   let returnPre := base.setMach
     ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
-  let d := (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32
+  let d := (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, rfl, ?_, rfl⟩
   have hread :
-      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
+      (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 32 =
         ⟨word.toBytes, d.2⟩ := by
     exact Prod.ext
       (Devm.memRead_word_fst
@@ -1015,7 +1015,7 @@ theorem isPauserLive_body_runCompiled_at_expiry
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + temporalLiveBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + temporalLiveBodyGasWarm, base.stateGas⟩)
         isPauserLive post ∧
       Devm.output post = (0 : B256).toBytes ∧
       Devm.WorldEq base post ∧
@@ -1070,7 +1070,7 @@ theorem isPauserLive_runCompiled_at_expiry
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = (0 : B256).toBytes ∧
       Devm.WorldEq base post ∧
@@ -1086,7 +1086,7 @@ theorem isPauserLive_runCompiled_at_expiry
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 167 + temporalLiveBodyGasWarm⟩)
+        G + 167 + temporalLiveBodyGasWarm, base.stateGas⟩)
       (G := G + 167 + temporalLiveBodyGasWarm) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, isPauserLiveDispatchGas, gJumpdest]
       omega
@@ -1140,7 +1140,7 @@ theorem isPauserLive_body_runCompiled
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + temporalLiveBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + temporalLiveBodyGasWarm, base.stateGas⟩)
         isPauserLive post ∧
       Devm.output post =
         (pauserLiveWord sevm.benvStat.time expiry).toBytes ∧
@@ -1195,7 +1195,7 @@ theorem isPauserLive_runCompiled
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post =
         (pauserLiveWord sevm.benvStat.time expiry).toBytes ∧
@@ -1212,7 +1212,7 @@ theorem isPauserLive_runCompiled
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 167 + temporalLiveBodyGasWarm⟩)
+        G + 167 + temporalLiveBodyGasWarm, base.stateGas⟩)
       (G := G + 167 + temporalLiveBodyGasWarm) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, isPauserLiveDispatchGas,
         gJumpdest]
@@ -1256,7 +1256,7 @@ theorem heartbeatInterval_body_runCompiled
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + heartbeatIntervalBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + heartbeatIntervalBodyGasWarm, base.stateGas⟩)
         heartbeatInterval post ∧
       Devm.output post = interval.toBytes ∧
       Devm.WorldEq base post ∧
@@ -1292,7 +1292,7 @@ theorem heartbeatInterval_runCompiled
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatIntervalDispatchGas + heartbeatIntervalBodyGasWarm⟩)
+          G + heartbeatIntervalDispatchGas + heartbeatIntervalBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = interval.toBytes ∧
       Devm.WorldEq base post ∧
@@ -1304,7 +1304,7 @@ theorem heartbeatInterval_runCompiled
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 151 + heartbeatIntervalBodyGasWarm⟩)
+        G + 151 + heartbeatIntervalBodyGasWarm, base.stateGas⟩)
       (G := G + 151 + heartbeatIntervalBodyGasWarm) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, heartbeatIntervalDispatchGas,
         gJumpdest]
@@ -1351,7 +1351,7 @@ theorem heartbeatExpiry_body_runCompiled
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + heartbeatExpiryBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + heartbeatExpiryBodyGasWarm, base.stateGas⟩)
         heartbeatExpiry post ∧
       Devm.output post = expiry.toBytes ∧
       Devm.WorldEq base post ∧
@@ -1397,7 +1397,7 @@ theorem heartbeatExpiry_runCompiled
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatExpiryDispatchGas + heartbeatExpiryBodyGasWarm⟩)
+          G + heartbeatExpiryDispatchGas + heartbeatExpiryBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = expiry.toBytes ∧
       Devm.WorldEq base post ∧
@@ -1413,7 +1413,7 @@ theorem heartbeatExpiry_runCompiled
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 128 + heartbeatExpiryBodyGasWarm⟩)
+        G + 128 + heartbeatExpiryBodyGasWarm, base.stateGas⟩)
       (G := G + 128 + heartbeatExpiryBodyGasWarm) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, heartbeatExpiryDispatchGas,
         gJumpdest]
@@ -1466,7 +1466,7 @@ theorem isPauserLive_runCompiled_of_live
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = (1 : B256).toBytes ∧
       Devm.WorldEq base post ∧
@@ -1497,7 +1497,7 @@ theorem isPauserLive_runCompiled_of_later
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = (0 : B256).toBytes ∧
       Devm.WorldEq base post ∧
@@ -1572,7 +1572,7 @@ private theorem setHeartbeatInterval_load_runCompiled
       heartbeatIntervalSlot = old) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
-        G + 3 + setHeartbeatIntervalLoadCost sevm base⟩)
+        G + 3 + setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalSlot ::: Ninst.sload ::: Func.stop)
       ((setHeartbeatIntervalAfterLoad sevm base).setMach
         ⟨[old], Mem.empty, G⟩) := by
@@ -1608,7 +1608,7 @@ private theorem setHeartbeatInterval_load_runCompiled_then
         ⟨[old], Mem.empty, G⟩) tail post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
-        G + 3 + setHeartbeatIntervalLoadCost sevm base⟩)
+        G + 3 + setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalSlot ::: Ninst.sload ::: tail)
       post := by
   have hload := setHeartbeatInterval_load_runCompiled fs sevm base old G hold
@@ -1687,7 +1687,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory,
-          G + setHeartbeatIntervalStoreTailGasWarmUpdate⟩)
+          G + setHeartbeatIntervalStoreTailGasWarmUpdate, base.stateGas⟩)
         setHeartbeatIntervalStoreTail post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -1738,7 +1738,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory,
-          G + setHeartbeatIntervalStoreTailGasWarmSet⟩)
+          G + setHeartbeatIntervalStoreTailGasWarmSet, base.stateGas⟩)
         setHeartbeatIntervalStoreTail post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -1790,7 +1790,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_noop
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], memory,
-          G + setHeartbeatIntervalStoreTailGasWarmUpdate⟩)
+          G + setHeartbeatIntervalStoreTailGasWarmUpdate, base.stateGas⟩)
         setHeartbeatIntervalStoreTail post ∧
       post.gasLeft = G + 2800 ∧
       Devm.getStorVal post sevm.currentTarget
@@ -1840,7 +1840,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_generic
     (hstatic : sevm.isStatic = false) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], memory, G + 20009⟩)
+        (base.setMach ⟨[], memory, G + 20009, base.stateGas⟩)
         setHeartbeatIntervalStoreTail post ∧
       post.gasLeft = G +
         (gasStorageSet - sstoreValueCost original old newInterval) ∧
@@ -1928,10 +1928,10 @@ private theorem heartbeatIntervalEventTopic_prepend_runCompiled
     {topic : B256} {G : Nat} {tail : Func} {post : Devm}
     (htopic : topic ≠ 0)
     (htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨[topic], memory, G⟩)
+      (base.setMach ⟨[topic], memory, G, base.stateGas⟩)
       tail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 3⟩)
+      (base.setMach ⟨[], memory, G + 3, base.stateGas⟩)
       (Ninst.pushB256 topic ::: tail)
       post := by
   exact .next
@@ -1967,7 +1967,7 @@ the log was appended; the base effects and the appended log are identical. -/
 private theorem heartbeatIntervalEventLog_setMach
     {base : Devm} {stack : List B256} {memory : Mem}
     {beforeGas afterGas : Nat} {event : Log} :
-    (((base.setMach ⟨stack, memory, beforeGas⟩).addLog event).setMach
+    (((base.setMach ⟨stack, memory, beforeGas, base.stateGas⟩).addLog event).setMach
       ⟨[], memory, afterGas⟩) =
       ((base.addLog event).setMach ⟨[], memory, afterGas⟩) := by
   rfl
@@ -2026,7 +2026,7 @@ private theorem setHeartbeatIntervalEventPrefix_runCompiled_then
         ⟨[], memory, tailGas⟩)
       tail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, tailGas + 1270⟩)
+      (base.setMach ⟨[], memory, tailGas + 1270, base.stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalUpdatedEvent :::
         logWith 0 0 2 +++ tail)
       post := by
@@ -2051,7 +2051,7 @@ private theorem setHeartbeatIntervalMemoryStage_runCompiled_then
         ⟨[], (Mem.empty.write 0 old.toBytes).write 32 newInterval.toBytes, G⟩)
       tail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[old], Mem.empty, G + 23⟩)
+      (base.setMach ⟨[old], Mem.empty, G + 23, base.stateGas⟩)
       (mstoreAt 0 +++ arg 0 +++ mstoreAt 1 +++ tail)
       post := by
   unfold mstoreAt arg
@@ -2084,7 +2084,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
         ⟨[], (Mem.empty.write 0 old.toBytes).write 32 newInterval.toBytes, G⟩)
       tail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 126⟩)
+      (base.setMach ⟨[], Mem.empty, G + 126, base.stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalSlot ::: Ninst.sload :::
         mstoreAt 0 +++ arg 0 +++ mstoreAt 1 +++ tail)
       post := by
@@ -2417,7 +2417,7 @@ private theorem setHeartbeatIntervalUpdateTail_runCompiled_generic
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + 21305 + setHeartbeatIntervalLoadCost sevm base⟩)
+          G + 21305 + setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         setHeartbeatIntervalUpdateTail post ∧
       post.gasLeft = G +
         (gasStorageSet - sstoreValueCost original old newInterval) ∧
@@ -2462,7 +2462,7 @@ private theorem setHeartbeatIntervalUpdateTail_runCompiled
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalUpdateTailGasWarmUpdate⟩)
+          G + setHeartbeatIntervalUpdateTailGasWarmUpdate, base.stateGas⟩)
         setHeartbeatIntervalUpdateTail post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2502,7 +2502,7 @@ private theorem setHeartbeatIntervalUpdateTail_runCompiled_zero
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalUpdateTailGasWarmSet⟩)
+          G + setHeartbeatIntervalUpdateTailGasWarmSet, base.stateGas⟩)
         setHeartbeatIntervalUpdateTail post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2541,7 +2541,7 @@ private theorem setHeartbeatIntervalUpdateTail_runCompiled_noop
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalUpdateTailGasWarmUpdate⟩)
+          G + setHeartbeatIntervalUpdateTailGasWarmUpdate, base.stateGas⟩)
         setHeartbeatIntervalUpdateTail post ∧
       post.gasLeft = G + 2800 ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2577,10 +2577,10 @@ private theorem setHeartbeatIntervalBodyPrefix_runCompiled_then
     (hmin : dp.minHeartbeatInterval ≤ newInterval)
     (hmax : newInterval ≤ dp.maxHeartbeatInterval)
     (htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       setHeartbeatIntervalUpdateTail post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 93⟩)
+      (base.setMach ⟨[], Mem.empty, G + 93, base.stateGas⟩)
       (setHeartbeatInterval dp) post := by
   unfold setHeartbeatInterval requireStaticArgs onlyAdmin arg cdl
   unfold pushDeployWord
@@ -2596,7 +2596,7 @@ private theorem setHeartbeatIntervalBodyPrefix_runCompiled_then
     simp [B256.gtCheck, B256.not_lt.mpr hmax] }
   case h_arm =>
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       setHeartbeatIntervalUpdateTail post
     exact htail
 
@@ -2618,7 +2618,7 @@ theorem setHeartbeatInterval_body_runCompiled_of_inclusive_generic
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + 21398 + setHeartbeatIntervalLoadCost sevm base⟩)
+          G + 21398 + setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (setHeartbeatInterval dp) post ∧
       post.gasLeft = G +
         (gasStorageSet - sstoreValueCost original old newInterval) ∧
@@ -2668,7 +2668,7 @@ theorem setHeartbeatInterval_body_runCompiled_of_inclusive
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalBodyGasWarmUpdate⟩)
+          G + setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
         (setHeartbeatInterval dp) post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2712,7 +2712,7 @@ theorem setHeartbeatInterval_body_runCompiled_zero_of_inclusive
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalBodyGasWarmSet⟩)
+          G + setHeartbeatIntervalBodyGasWarmSet, base.stateGas⟩)
         (setHeartbeatInterval dp) post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2756,7 +2756,7 @@ theorem setHeartbeatInterval_body_runCompiled_noop_of_inclusive
     ∃ post,
       Func.RunCompiled fs sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalBodyGasWarmUpdate⟩)
+          G + setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
         (setHeartbeatInterval dp) post ∧
       post.gasLeft = G + 2800 ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2810,7 +2810,7 @@ theorem setHeartbeatInterval_runCompiled_of_inclusive
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas +
-            setHeartbeatIntervalBodyGasWarmUpdate⟩)
+            setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
         (runtime dp) post ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -2833,7 +2833,7 @@ theorem setHeartbeatInterval_runCompiled_of_inclusive
   refine ⟨post, ?_, hgas, hstore, hlogs, hexpiries, ?_⟩
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 168 + setHeartbeatIntervalBodyGasWarmUpdate⟩)
+        G + 168 + setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
       (G := G + 168 + setHeartbeatIntervalBodyGasWarmUpdate) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach,
         setHeartbeatIntervalDispatchGas, gJumpdest]
@@ -2877,7 +2877,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
     (hnotAdmin : sevm.caller.toB256 ≠ dp.admin) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 71⟩)
+        (base.setMach ⟨[], Mem.empty, G + 71, base.stateGas⟩)
         (setHeartbeatInterval dp) (.error (.revert, post)) ∧
       post.output = customErrorData "SenderNotAdmin" ∧
       post.logs = base.logs ∧
@@ -2913,7 +2913,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_below_min
     (hbelow : newInterval < dp.minHeartbeatInterval) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 98⟩)
+        (base.setMach ⟨[], Mem.empty, G + 98, base.stateGas⟩)
         (setHeartbeatInterval dp) (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatIntervalBelowMin" ∧
       post.logs = base.logs ∧
@@ -2952,7 +2952,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
     (habove : dp.maxHeartbeatInterval < newInterval) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 123⟩)
+        (base.setMach ⟨[], Mem.empty, G + 123, base.stateGas⟩)
         (setHeartbeatInterval dp) (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatIntervalAboveMax" ∧
       post.logs = base.logs ∧
@@ -2997,16 +2997,16 @@ theorem setHeartbeatInterval_dispatch_runCompiledTo
     (_hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩)
       (setHeartbeatInterval dp) out) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setHeartbeatIntervalDispatchGas + bodyGas⟩)
+        G + setHeartbeatIntervalDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 168 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 168 + bodyGas, base.stateGas⟩)
       (G := G + 168 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach,
         setHeartbeatIntervalDispatchGas, gJumpdest]
@@ -3062,7 +3062,7 @@ theorem setHeartbeatInterval_runCompiledTo_of_inclusive_generic
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G +
         (gasStorageSet - sstoreValueCost original old newInterval) ∧
@@ -3089,7 +3089,7 @@ theorem setHeartbeatInterval_runCompiledTo_of_inclusive_generic
     omega
   have hbodyTo' : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
       (base.setMach ⟨[], Mem.empty,
-        G + (21398 + setHeartbeatIntervalLoadCost sevm base)⟩)
+        G + (21398 + setHeartbeatIntervalLoadCost sevm base), base.stateGas⟩)
       (setHeartbeatInterval dp) (.ok post) := by
     simpa only [hbodyEntry] using hbodyTo
   rcases setHeartbeatInterval_dispatch_runCompiledTo dp sevm base
@@ -3131,7 +3131,7 @@ theorem setHeartbeatInterval_runCompiledTo_zero_of_inclusive
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas +
-            setHeartbeatIntervalBodyGasWarmSet⟩)
+            setHeartbeatIntervalBodyGasWarmSet, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G ∧
       Devm.getStorVal post sevm.currentTarget
@@ -3152,7 +3152,7 @@ theorem setHeartbeatInterval_runCompiledTo_zero_of_inclusive
     ⟨post, hbody, hgas, hstore, hlogs, hexpiries⟩
   have hbodyTo : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setHeartbeatIntervalBodyGasWarmSet⟩)
+        G + setHeartbeatIntervalBodyGasWarmSet, base.stateGas⟩)
       (setHeartbeatInterval dp) (.ok post) :=
     Func.RunCompiledTo.of_runCompiled hbody
   rcases setHeartbeatInterval_dispatch_runCompiledTo dp sevm base
@@ -3188,7 +3188,7 @@ theorem setHeartbeatInterval_runCompiledTo_noop_of_inclusive
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas +
-            setHeartbeatIntervalBodyGasWarmUpdate⟩)
+            setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G + 2800 ∧
       Devm.getStorVal post sevm.currentTarget
@@ -3209,7 +3209,7 @@ theorem setHeartbeatInterval_runCompiledTo_noop_of_inclusive
     ⟨post, hbody, hgas, hstore, hlogs, hexpiries⟩
   have hbodyTo : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setHeartbeatIntervalBodyGasWarmUpdate⟩)
+        G + setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
       (setHeartbeatInterval dp) (.ok post) :=
     Func.RunCompiledTo.of_runCompiled hbody
   rcases setHeartbeatInterval_dispatch_runCompiledTo dp sevm base
@@ -3231,7 +3231,7 @@ theorem setHeartbeatInterval_runCompiledTo_error_of_not_admin
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalDispatchGas + 71⟩)
+          G + setHeartbeatIntervalDispatchGas + 71, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = customErrorData "SenderNotAdmin" ∧
       post.logs = base.logs ∧
@@ -3263,7 +3263,7 @@ theorem setHeartbeatInterval_runCompiledTo_error_of_below_min
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalDispatchGas + 98⟩)
+          G + setHeartbeatIntervalDispatchGas + 98, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatIntervalBelowMin" ∧
       post.logs = base.logs ∧
@@ -3296,7 +3296,7 @@ theorem setHeartbeatInterval_runCompiledTo_error_of_above_max
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + setHeartbeatIntervalDispatchGas + 123⟩)
+          G + setHeartbeatIntervalDispatchGas + 123, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatIntervalAboveMax" ∧
       post.logs = base.logs ∧
@@ -3330,7 +3330,7 @@ theorem setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive
     (hrun : Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
         G + setHeartbeatIntervalDispatchGas + 21398 +
-          setHeartbeatIntervalLoadCost sevm base⟩)
+          setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
       (runtime dp) (.ok post)) :
     sevm.caller.toB256 = dp.admin ∧
       dp.minHeartbeatInterval ≤ newInterval ∧
@@ -3340,33 +3340,33 @@ theorem setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive
   have hsuccessEq : exec ⟨0, sevm,
       base.setMach ⟨[], Mem.empty,
         G + setHeartbeatIntervalDispatchGas + 21398 +
-          setHeartbeatIntervalLoadCost sevm base⟩⟩ = .ok post :=
+          setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩⟩ = .ok post :=
     Prog.exec_of_runCompiledTo hrun hcompile
   obtain ⟨hsuccessExec⟩ :=
     (exec_iff_exec_eq 0 sevm
       (base.setMach ⟨[], Mem.empty,
         G + setHeartbeatIntervalDispatchGas + 21398 +
-          setHeartbeatIntervalLoadCost sevm base⟩)
+          setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
       (.ok post)).mpr hsuccessEq
   have noRevertAtSuccessEntry {errorPost : Devm}
       (herrorRun : Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (runtime dp) (.error (.revert, errorPost)))
       (herrorCompile : some sevm.code.toList =
         Prog.compile (runtime dp)) : False := by
     have herrorEq : exec ⟨0, sevm,
         base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩⟩ =
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩⟩ =
         .error (.revert, errorPost) :=
       Prog.exec_of_runCompiledTo herrorRun herrorCompile
     obtain ⟨herrorExec⟩ :=
       (exec_iff_exec_eq 0 sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (.error (.revert, errorPost))).mpr herrorEq
     have hunique : (.ok post : Execution) =
         .error (.revert, errorPost) :=
@@ -3389,7 +3389,7 @@ theorem setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive
     have herrorRun' : Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (runtime dp) (.error (.revert, errorPost)) := by
       simpa only [hentry] using herrorRun
     exact noRevertAtSuccessEntry herrorRun' herrorCompile
@@ -3412,7 +3412,7 @@ theorem setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive
     have herrorRun' : Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (runtime dp) (.error (.revert, errorPost)) := by
       simpa only [hentry] using herrorRun
     exact noRevertAtSuccessEntry herrorRun' herrorCompile
@@ -3435,7 +3435,7 @@ theorem setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive
     have herrorRun' : Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
           G + setHeartbeatIntervalDispatchGas + 21398 +
-            setHeartbeatIntervalLoadCost sevm base⟩)
+            setHeartbeatIntervalLoadCost sevm base, base.stateGas⟩)
         (runtime dp) (.error (.revert, errorPost)) := by
       simpa only [hentry] using herrorRun
     exact noRevertAtSuccessEntry herrorRun' herrorCompile
@@ -3670,7 +3670,7 @@ theorem heartbeat_body_runCompiledTo_error_of_count_zero
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 154⟩)
+        (base.setMach ⟨[], Mem.empty, G + 154, base.stateGas⟩)
         heartbeat (.error (.revert, post)) ∧
       post.output = customErrorData "SenderNotPauser" ∧
       post.logs = base.logs ∧
@@ -3720,7 +3720,7 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
     (hexpired : oldExpiry ≤ timestamp) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 279⟩)
+        (base.setMach ⟨[], Mem.empty, G + 279, base.stateGas⟩)
         heartbeat (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatExpired" ∧
       post.logs = base.logs ∧
@@ -3767,15 +3767,15 @@ theorem heartbeat_dispatch_runCompiledTo
     (_hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩) heartbeat out) :
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩) heartbeat out) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
-        G + heartbeatDispatchGas + bodyGas⟩)
+        G + heartbeatDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 191 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 191 + bodyGas, base.stateGas⟩)
       (G := G + 191 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, heartbeatDispatchGas, gJumpdest]
       omega
@@ -3833,7 +3833,7 @@ theorem heartbeat_runCompiledTo_of_checkedExtension_generic
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatDispatchGas + heartbeatBodySuccessGas sevm base⟩)
+          G + heartbeatDispatchGas + heartbeatBodySuccessGas sevm base, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G +
         ((gasStorageUpdate - gasColdSload) -
@@ -3889,7 +3889,7 @@ theorem heartbeat_runCompiledTo_of_checkedExtension
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate⟩)
+          G + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget
@@ -3921,7 +3921,7 @@ theorem heartbeat_runCompiledTo_error_of_count_zero
     (hwarm : (⟨sevm.currentTarget,
       countSlot sevm.caller.toB256⟩ : Adr × B256) ∈ base.accessedStorageKeys) :
     ∃ post, Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 154⟩)
+        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 154, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = customErrorData "SenderNotPauser" ∧
       post.logs = base.logs ∧
@@ -3953,7 +3953,7 @@ theorem heartbeat_runCompiledTo_error_of_expired
       expirySlot sevm.caller.toB256⟩ : Adr × B256) ∈ base.accessedStorageKeys)
     (hexpired : oldExpiry ≤ timestamp) :
     ∃ post, Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 279⟩)
+        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 279, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = customErrorData "HeartbeatExpired" ∧
       post.logs = base.logs ∧
@@ -3996,13 +3996,13 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
     (hwrap : timestamp + interval < timestamp) :
     ∃ post,
       Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-        (base.setMach ⟨[], Mem.empty, G + 424⟩)
+        (base.setMach ⟨[], Mem.empty, G + 424, base.stateGas⟩)
         heartbeat (.error (.revert, post)) ∧
       post.output = heartbeatArithmeticPanicData ∧
       post.logs = base.logs ∧
       ∀ a k, post.getStorVal a k = base.getStorVal a k := by
   let post := (base.setMach ⟨[timestamp + interval], Mem.writeStoresRev Mem.empty
-    (bytesWords heartbeatArithmeticPanicData).zipIdx, G⟩).withOutput
+    (bytesWords heartbeatArithmeticPanicData).zipIdx, G, base.stateGas⟩).withOutput
       heartbeatArithmeticPanicData
   refine ⟨post, ?_, rfl, rfl, ?_⟩
   · unfold heartbeat checkedHeartbeatExpiry tagTop
@@ -4036,7 +4036,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
               (Nat.toB256 heartbeatArithmeticPanicData.length).toBytes.sig +
             gBase +
             (base.setMach ⟨[timestamp + interval], Mem.empty,
-              G + 424 - 396⟩).extCost
+              G + 424 - 396, base.stateGas⟩).extCost
               [(0, 32 * (bytesWords heartbeatArithmeticPanicData).length)])
         have hfixed : storesFixedCost
               (bytesWords heartbeatArithmeticPanicData).zipIdx +
@@ -4046,7 +4046,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
           decide +kernel
         have hext :
             (base.setMach ⟨[timestamp + interval], Mem.empty,
-              G + 424 - 396⟩).extCost
+              G + 424 - 396, base.stateGas⟩).extCost
                 [(0, 32 * (bytesWords heartbeatArithmeticPanicData).length)] =
               6 := by
           apply Devm.extCost_of_size rfl
@@ -4083,7 +4083,7 @@ theorem heartbeat_runCompiledTo_error_of_add_wrap
     (hwrap : timestamp + interval < timestamp) :
     ∃ post,
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 424⟩)
+        (base.setMach ⟨[], Mem.empty, G + heartbeatDispatchGas + 424, base.stateGas⟩)
         (runtime dp) (.error (.revert, post)) ∧
       post.output = heartbeatArithmeticPanicData ∧
       post.logs = base.logs ∧

@@ -424,6 +424,18 @@ lemma Ninst.stepRun_pc_irrel {n : Ninst} (h : Ninst.pcFree n = true)
   | exec x =>
     rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hs ⊢
     exact hs
+  -- EIP-8024's three stack-access instructions read the machine and the rules,
+  -- never the counter, so their outcome is the same `Step.ofExecution` body at
+  -- every `pc`.
+  | dupn d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hs ⊢
+    exact hs
+  | swapn d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hs ⊢
+    exact hs
+  | exchange d =>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hs ⊢
+    exact hs
 
 /-- On a pc-free instruction the weak instruction premise upgrades to the
 strong one used by `Func.RunCompiled`. -/
@@ -1173,7 +1185,7 @@ lemma Devm.gasLeft_setMach {devm : Devm} {m : Mach} :
 whole account is the decrement. -/
 lemma chargeGas_eq_ok {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft) :
     chargeGas cost devm =
-      .ok (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost⟩) := by
+      .ok (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) := by
   rw [chargeGas_def]
   have hs : safeSub devm.gasLeft cost = some (devm.gasLeft - cost) := by
     unfold safeSub; rw [if_pos h]
@@ -1183,7 +1195,7 @@ lemma chargeGas_eq_ok {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft) :
 /-- `Devm.push`, evaluated forward: with headroom, it succeeds. -/
 lemma Devm.push_eq_ok {x : B256} {devm : Devm} (h : devm.stack.length < 1024) :
     Devm.push x devm =
-      .ok (devm.setMach ⟨x :: devm.stack, devm.memory, devm.gasLeft⟩) := by
+      .ok (devm.setMach ⟨x :: devm.stack, devm.memory, devm.gasLeft, devm.stateGas⟩) := by
   rw [Devm.push_def]
   simp only [Except.assert, bind, Except.bind, if_pos h]
   rfl
@@ -1191,7 +1203,7 @@ lemma Devm.push_eq_ok {x : B256} {devm : Devm} (h : devm.stack.length < 1024) :
 /-- `Devm.pop`, evaluated forward: on a cons-shaped stack, it succeeds. -/
 lemma Devm.pop_eq_ok {x : B256} {s : List B256} {devm : Devm}
     (h : devm.stack = x :: s) :
-    Devm.pop devm = .ok ⟨x, devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+    Devm.pop devm = .ok ⟨x, devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
   rw [Devm.pop_def, h]
   rfl
 
@@ -1219,7 +1231,7 @@ lemma Evm.jumpdest_cont {pc : Nat} {sevm : Sevm} {devm tgt : Devm}
     (h_burn : Devm.BurnBy gJumpdest devm tgt) :
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1) tgt := by
   have h_gas : gJumpdest ≤ devm.gasLeft := by have := h_burn.gasLeft; omega
-  have h_tgt : devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest⟩
+  have h_tgt : devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest, devm.stateGas⟩
       = tgt := by
     refine Devm.eq_of_proj h_burn.stack h_burn.memory ?_ h_burn.logs
       h_burn.refundCounter h_burn.output h_burn.accountsToDelete
@@ -1245,19 +1257,19 @@ lemma Evm.jumpi_cont_zero {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
     (h_stk : devm.stack = x :: 0 :: s)
     (h_gas : gHigh ≤ devm.gasLeft) :
     Evm.step ⟨pc, sevm, devm⟩ =
-      .cont (pc + 1) (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩) := by
+      .cont (pc + 1) (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh, devm.stateGas⟩) := by
   rw [Evm.step_jump h_at]
   have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpi =
-      .ok ⟨pc + 1, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩⟩ := by
+      .ok ⟨pc + 1, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh, devm.stateGas⟩⟩ := by
     show Jinst.runCore pc devm sevm .jumpi = _
     unfold Jinst.runCore
     rw [Devm.pop_eq_ok h_stk]
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
-      (devm := devm.setMach ⟨(0 : B256) :: s, devm.memory, devm.gasLeft⟩) rfl]
+      (devm := devm.setMach ⟨(0 : B256) :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
     simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
     rw [chargeGas_eq_ok
-      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     simp only [if_true]
     rfl
   rw [hrun]
@@ -1272,19 +1284,19 @@ lemma Evm.jumpi_cont_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {x w : B256}
     (h_gas : gHigh ≤ devm.gasLeft)
     (h_jp : jumpable sevm.code x.toNat = true) :
     Evm.step ⟨pc, sevm, devm⟩ =
-      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩) := by
+      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh, devm.stateGas⟩) := by
   rw [Evm.step_jump h_at]
   have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpi =
-      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh⟩⟩ := by
+      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gHigh, devm.stateGas⟩⟩ := by
     show Jinst.runCore pc devm sevm .jumpi = _
     unfold Jinst.runCore
     rw [Devm.pop_eq_ok h_stk]
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
-      (devm := devm.setMach ⟨w :: s, devm.memory, devm.gasLeft⟩) rfl]
+      (devm := devm.setMach ⟨w :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
     simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
     rw [chargeGas_eq_ok
-      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     simp only [if_neg h_ne, Except.assert, if_pos h_jp]
     rfl
   rw [hrun]
@@ -1298,16 +1310,16 @@ lemma Evm.jump_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
     (h_gas : gMid ≤ devm.gasLeft)
     (h_jp : jumpable sevm.code x.toNat = true) :
     Evm.step ⟨pc, sevm, devm⟩ =
-      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid⟩) := by
+      .cont x.toNat (devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid, devm.stateGas⟩) := by
   rw [Evm.step_jump h_at]
   have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jump =
-      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid⟩⟩ := by
+      .ok ⟨x.toNat, devm.setMach ⟨s, devm.memory, devm.gasLeft - gMid, devm.stateGas⟩⟩ := by
     show Jinst.runCore pc devm sevm .jump = _
     unfold Jinst.runCore
     rw [Devm.pop_eq_ok h_stk]
     simp only [bind, Except.bind]
     rw [chargeGas_eq_ok
-      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+      (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
     simp only [Except.assert, if_pos h_jp]
     rfl
   rw [hrun]

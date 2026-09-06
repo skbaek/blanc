@@ -2238,7 +2238,7 @@ private theorem pauseLastWorld_master :
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
       (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes) pauseWorldDuration,
-      0 + 3322 + 100 + 2900⟩ = mid := by
+      0 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (0 + 3322 + 100 + 2900 : Nat) = 6322 from by norm_num, ← hgas,
       ← hmem, ← hstk]
     rfl
@@ -2384,7 +2384,7 @@ private theorem pauseLastWorld_master :
       pauseLastWorldGas)
     (pauseWorld_codeBytes pauseLastWorldStor pauseLastWorldGas) hbodyTo
   have hentry : pauseLastPre.setMach ⟨[], Mem.empty,
-      0 + pauseDispatchGas + 41548⟩ = pauseLastPre := by
+      0 + pauseDispatchGas + 41548, pauseLastPre.stateGas⟩ = pauseLastPre := by
     rw [show (0 + pauseDispatchGas + 41548 : Nat) = pauseLastWorldGas from by
       norm_num [pauseDispatchGas, pauseLastWorldGas]]
     rfl
@@ -4315,7 +4315,7 @@ private theorem pauseRetainedWorld_master :
       (removedIndexWord * 32).toNat (1 : B256).toBytes).write
       (arrayLengthWord * 32).toNat (2 : B256).toBytes).write
       (lastTargetWord * 32).toNat pauseWorldT2.toBytes) pauseWorldDuration,
-      0 + 3351 + 100 + 2100 + 2900⟩ = mid := by
+      0 + 3351 + 100 + 2100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (0 + 3351 + 100 + 2100 + 2900 : Nat) = 8451 from by norm_num,
       ← hgas, ← hmem, ← hstk]
     rfl
@@ -4466,7 +4466,7 @@ private theorem pauseRetainedWorld_master :
     (pauseWorld_codeAddress_currentTarget pauseRetainedWorldStor pauseRetainedWorldGas)
     (pauseWorld_codeBytes pauseRetainedWorldStor pauseRetainedWorldGas) hbodyTo
   have hentry : pauseRetainedPre.setMach ⟨[], Mem.empty,
-      0 + pauseDispatchGas + 53477⟩ = pauseRetainedPre := by
+      0 + pauseDispatchGas + 53477, pauseRetainedPre.stateGas⟩ = pauseRetainedPre := by
     rw [show (0 + pauseDispatchGas + 53477 : Nat) = pauseRetainedWorldGas from by
       norm_num [pauseDispatchGas, pauseRetainedWorldGas]]
     rfl

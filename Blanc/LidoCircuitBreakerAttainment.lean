@@ -2467,7 +2467,7 @@ theorem setPauseDuration_body_runCompiledTo
     (hstatic : sevm.isStatic = false) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 21498⟩)
+        (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
   have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
@@ -2514,16 +2514,16 @@ theorem setPauseDuration_dispatch_runCompiledTo
     (hselector : Sevm.selector sevm = selector "setPauseDuration" [.uint256])
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩)
       (setPauseDuration dp) out) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setPauseDurationDispatchGas + bodyGas⟩)
+        G + setPauseDurationDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas, base.stateGas⟩)
       (G := G + 150 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, setPauseDurationDispatchGas, gJumpdest]
       omega
@@ -2572,7 +2572,7 @@ theorem configWorld_run :
       configWorld_selector configWorld_codeBytes hbody
   have hentry :
       configWorldPre.setMach ⟨[], Mem.empty,
-        0 + setPauseDurationDispatchGas + 21498⟩ = configWorldPre := rfl
+        0 + setPauseDurationDispatchGas + 21498, configWorldPre.stateGas⟩ = configWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -2883,7 +2883,7 @@ theorem intervalWorld_run :
   have hentry :
       intervalWorldPre.setMach ⟨[], Mem.empty,
         0 + setHeartbeatIntervalDispatchGas +
-          setHeartbeatIntervalBodyGasWarmSet⟩ = intervalWorldPre := rfl
+          setHeartbeatIntervalBodyGasWarmSet, intervalWorldPre.stateGas⟩ = intervalWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -3311,7 +3311,7 @@ theorem heartbeatWorld_run :
       heartbeatWorld_extension
   have hentry :
       heartbeatWorldPre.setMach ⟨[], Mem.empty,
-        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate⟩ =
+        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate, heartbeatWorldPre.stateGas⟩ =
         heartbeatWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩

@@ -12,9 +12,9 @@ private theorem exactDepositLeafRoute_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hbody : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) depositEndpoint out effects) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) depositEndpoint out effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out effects := by
   unfold depositLeafRoute
   have hpushCost : pushCost depositSelector.toBytes.sig = gVerylow := by
@@ -48,7 +48,7 @@ private theorem exactDepositLeafRoute_storageEffectRun
       simpa only [Devm.setMach_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using
         Devm.popBurnBy_setMach
-          (devm := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14⟩)
+          (devm := base.setMach ⟨[(1 : B256)], Mem.empty, G + 14, base.stateGas⟩)
           (G := G) rfl
           (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
             gJumpdest]))
@@ -58,10 +58,10 @@ private theorem exactDepositMiddleDispatch_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hleaf : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 20⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out effects := by
   unfold depositMiddleDispatch
   apply Func.StorageEffectRun.next_effectNeutral
@@ -121,10 +121,10 @@ private theorem exactDepositRootDispatch_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hmiddle : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 43⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out effects := by
   unfold depositRootDispatch
   apply Func.StorageEffectRun.next_effectNeutral
@@ -179,10 +179,10 @@ private theorem exactDepositMainRoute_storageEffectRun
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hselector : Sevm.selector sevm = depositSelector)
     (hroot : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[depositSelector], Mem.empty, G + 65⟩)
+      (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 76⟩)
+      (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
       (Func.main tree) out effects := by
   rw [depositMainRoute_eq]
   unfold depositMainRoute fsig shiftRight cdl
@@ -207,10 +207,10 @@ theorem deposit_route_storageEffectRun
     (hselector : Sevm.selector sevm = depositSelector)
     (hbody : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint out effects) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out effects) :
     ∃ mid : Devm,
       Devm.BurnBy gJumpdest
-        (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩) mid ∧
+        (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) mid ∧
       Func.StorageEffectRun (runtime.main :: runtime.aux)
         sevm mid runtime.main out effects := by
   have hleaf :=
@@ -221,11 +221,11 @@ theorem deposit_route_storageEffectRun
     exactDepositRootDispatch_storageEffectRun (G := K) hmiddle
   have hmain :=
     exactDepositMainRoute_storageEffectRun (G := K) hselector hroot
-  let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩
-  let mid := base.setMach ⟨[], Mem.empty, K + 92⟩
+  let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, K + 92, base.stateGas⟩
   let afterSize := base.setMach
     ⟨[sevm.data.length.toB256], Mem.empty, K + 90⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, K + 76⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, K + 76, base.stateGas⟩
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
@@ -275,19 +275,19 @@ theorem deposit_route_retainedStorageEffectTriples
     (hselector : Sevm.selector sevm = depositSelector)
     (hbody : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) depositEndpoint out effects)
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out effects)
     (hcommits : Execution.commits out = true)
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩) out,
+        (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) out,
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩) runtime out ∧
+        (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) runtime out ∧
       Exec.retainedStorageEffectTriples execution = effects ∧
       some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨mid, hentry, hmain⟩ :=
     deposit_route_storageEffectRun hnonempty hselector hbody
   have hprogram : Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, K + depositRouteGas⟩) runtime out :=
+      (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) runtime out :=
     ⟨mid, hentry, hmain.run⟩
   have hcompiled : some sevm.code.toList = Prog.compile runtime := by
     rw [hcode, code_compile]

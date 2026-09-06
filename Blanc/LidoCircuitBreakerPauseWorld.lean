@@ -75,7 +75,7 @@ theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
     (G : Nat) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 16⟩) calleeMain (.ok post) ∧
+        (base.setMach ⟨[], Mem.empty, G + 16, base.stateGas⟩) calleeMain (.ok post) ∧
       post.error = base.error ∧
       post.output = (1 : B256).toBytes ∧
       post.gasLeft = G ∧
@@ -183,13 +183,13 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
@@ -354,13 +354,13 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)

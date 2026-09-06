@@ -23,7 +23,7 @@ private theorem insertionLoopBit_runCompiledTo
         ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K⟩)
       (insertionLive <?> insertionDead) ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 12⟩)
+      (base.setMach ⟨height :: stack, memory, K + 12, base.stateGas⟩)
       insertionLoop ex := by
   have hoff : (shiftedSizeWord * 32).toNat = 608 := by
     decide +kernel
@@ -91,10 +91,10 @@ theorem insertionLoopLive_dispatch_runCompiledTo
     (hbit : ((1 : B256) &&& shiftedSize) ≠ 0)
     (hroom : stack.length < 1022)
     (harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K⟩)
+      (base.setMach ⟨height :: stack, memory, K, base.stateGas⟩)
       insertionLive ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 26⟩)
+      (base.setMach ⟨height :: stack, memory, K + 26, base.stateGas⟩)
       insertionLoop ex := by
   apply insertionLoopBit_runCompiledTo hmem hroom
   exact Func.runCompiledTo_branch_succ
@@ -115,10 +115,10 @@ theorem insertionLoopDead_dispatch_runCompiledTo
     (hbit : ((1 : B256) &&& shiftedSize) = 0)
     (hroom : stack.length < 1022)
     (harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K⟩)
+      (base.setMach ⟨height :: stack, memory, K, base.stateGas⟩)
       insertionDead ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 25⟩)
+      (base.setMach ⟨height :: stack, memory, K + 25, base.stateGas⟩)
       insertionLoop ex := by
   apply insertionLoopBit_runCompiledTo hmem hroom
   exact Func.runCompiledTo_branch_zero
@@ -141,7 +141,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
           (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨left :: height :: stack, memory, K + 17⟩)
+      (base.setMach ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
       (mstoreAt 0 +++ loadWord nodeWord +++ mstoreAt 1 +++ rest) ex := by
   let M1 := memory.write 0 left.toBytes
   have hmem1 : InsertionMemoryCarrier M1 oldCount shiftedSize node := by
@@ -182,7 +182,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       rfl) ?_
   simp only [Devm.setMach_setMach, Devm.memory_setMach]
   change Func.RunCompiledTo fs sevm
-    (base.setMach ⟨height :: stack, M1, K + 12⟩) _ ex
+    (base.setMach ⟨height :: stack, M1, K + 12, base.stateGas⟩) _ ex
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 640) (c := 3) (G := K + 9)
       (by decide +kernel)
@@ -321,7 +321,7 @@ theorem insertionLoopDead_runCompiledTo
       insertionLoop ex := by
   let C := sloadCost sevm base (branchBase + height)
   have harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 26 + C⟩)
+      (base.setMach ⟨height :: stack, memory, K + 26 + C, base.stateGas⟩)
       insertionDead ex :=
     insertionDeadStage_runCompiledTo hmem hval hroom htail
   have hdispatch :=
@@ -344,7 +344,7 @@ theorem insertionContinuation_runCompiledTo
         ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K⟩)
       insertionLoop ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[height], memory, K + 36⟩)
+      (base.setMach ⟨[height], memory, K + 36, base.stateGas⟩)
       insertionContinuation ex := by
   have hoff : (shiftedSizeWord * 32).toNat = 608 := by
     decide +kernel
@@ -496,7 +496,7 @@ theorem insertionShaTail_runCompiledTo
               callPost.memory.write 608 (size >>> 1).toBytes, K⟩)
           insertionLoop ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[height], base.memory, K + 285⟩)
+          (base.setMach ⟨[height], base.memory, K + 285, base.stateGas⟩)
           (sha64 0 nodeWord (.call insertionContinuationSlot)) ex := by
   have hzero : ((0 : B256) * 32).toNat = 0 := by
     decide +kernel
@@ -675,7 +675,7 @@ theorem insertionLoopLive_runCompiledTo
         ⟨[], memory, K⟩)) := by
   let C := sstoreCost sevm base (branchBase + height) node
   have harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[height], memory, K + 20 + C⟩)
+      (base.setMach ⟨[height], memory, K + 20 + C, base.stateGas⟩)
       insertionLive
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
         ⟨[], memory, K⟩)) :=

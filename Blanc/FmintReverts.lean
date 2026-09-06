@@ -135,7 +135,7 @@ theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
   exact
     ⟨_,
       Prog.runCompiledTo_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
@@ -251,7 +251,7 @@ theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
   exact
     ⟨_,
       Prog.runCompiledTo_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by

@@ -270,7 +270,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
       let loaded := afterSload sevm base s.key
       let staged :=
         (memory.write 0 left.toBytes).write 32 s.node.toBytes
-      let shaBase := loaded.setMach ⟨[], staged, 0⟩
+      let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
       have hpair : InsertionPairMemoryCarrier shaBase.memory
           oldCount s.size left s.node := by
         simpa only [shaBase, staged, Devm.memory_setMach] using
@@ -450,7 +450,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
       let loaded := afterSload sevm base s.key
       let staged :=
         (memory.write 0 left.toBytes).write 32 s.node.toBytes
-      let shaBase := loaded.setMach ⟨[], staged, 0⟩
+      let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
       have hpair : InsertionPairMemoryCarrier shaBase.memory
           oldCount s.size left s.node := by
         simpa only [shaBase, staged, Devm.memory_setMach] using

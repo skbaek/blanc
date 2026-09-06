@@ -53,7 +53,7 @@ private theorem proxyRootedRun_branch_zero
     (room : devm.stack.length < 1024)
     (gasEq : devm.gasLeft = gas + (gVerylow + gHigh))
     (arm : proxyRootedRun FS sevm
-      (devm.setMach ⟨stack, devm.memory, gas⟩) f ex) :
+      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) f ex) :
     proxyRootedRun FS sevm devm (.branch f g) ex := by
   rcases arm with ⟨armRun, armRooted⟩
   let pop := Devm.popBurnBy_setMach stackEq gasEq
@@ -72,7 +72,7 @@ private theorem proxyRootedRun_branch_succ
     (room : devm.stack.length < 1024)
     (gasEq : devm.gasLeft = gas + (gVerylow + gHigh + gJumpdest))
     (arm : proxyRootedRun FS sevm
-      (devm.setMach ⟨stack, devm.memory, gas⟩) g ex) :
+      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) g ex) :
     proxyRootedRun FS sevm devm (.branch f g) ex := by
   rcases arm with ⟨armRun, armRooted⟩
   let pop := Devm.popBurnBy_setMach stackEq gasEq
@@ -89,7 +89,7 @@ private theorem proxyRootedRun_call
     (room : devm.stack.length < 1024)
     (gasEq : devm.gasLeft = gas + (gVerylow + gMid + gJumpdest))
     (body : proxyRootedRun FS sevm
-      (devm.setMach ⟨devm.stack, devm.memory, gas⟩) f ex) :
+      (devm.setMach ⟨devm.stack, devm.memory, gas, devm.stateGas⟩) f ex) :
     proxyRootedRun FS sevm devm (.call index) ex := by
   rcases body with ⟨bodyRun, bodyRooted⟩
   let burn := Devm.burnBy_setMach_gas gasEq
@@ -650,14 +650,14 @@ private theorem proxy_success_tail (childPost : Devm)
   let base := incorporateChildOnSuccess proxySuccessParent childPost childPost.output
   let final :=
     (((base.setMach ⟨[], proxySuccessParent.memory.write 0
-        implReturnWord.toBytes, 318⟩).memRead 0 32).2.withOutput
+        implReturnWord.toBytes, 318, base.stateGas⟩).memRead 0 32).2.withOutput
       implReturnWord.toBytes)
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         (((incorporateChildOnSuccess proxySuccessParent childPost childPost.output).setMach
             ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory, 351⟩).memWrite
           0 (childPost.output.take 0)) =
-        base.setMach ⟨[1], proxySuccessParent.memory, 351⟩ := by
+        base.setMach ⟨[1], proxySuccessParent.memory, 351, base.stateGas⟩ := by
       simp [base, Devm.memWrite, Mach.memWrite, liftMachPure,
         Mem.write, hout]
       rw [Devm.setMach_setMach]
@@ -669,7 +669,7 @@ private theorem proxy_success_tail (childPost : Devm)
     have hpmem : proxySuccessParent.memory.size = 32 := by
       decide
     have hext :
-        (base.setMach ⟨[0, 0, 32, 0, 1], proxySuccessParent.memory, 343⟩).extCost
+        (base.setMach ⟨[0, 0, 32, 0, 1], proxySuccessParent.memory, 343, base.stateGas⟩).extCost
           [⟨0, 32⟩] = 0 := by
       apply Devm.extCost_covered
       rw [hpmem]
@@ -705,7 +705,7 @@ private theorem proxy_success_tail (childPost : Devm)
           (Mem.read_write_zero proxySuccessParent.memory hne)
       have hfinalext :
           (base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
-            implReturnWord.toBytes, 318⟩).extCost [⟨0, 32⟩] = 0 := by
+            implReturnWord.toBytes, 318, base.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
         apply Devm.extCost_covered
         have hm : (proxySuccessParent.memory.write 0 implReturnWord.toBytes).size = 32 := by
           decide
@@ -714,7 +714,7 @@ private theorem proxy_success_tail (childPost : Devm)
       have hrun := Func.runCompiledTo_return_word
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgSuccess)
         (devm := base.setMach ⟨[0, 32], proxySuccessParent.memory.write 0
-          implReturnWord.toBytes, 318⟩)
+          implReturnWord.toBytes, 318, base.stateGas⟩)
         (i := 0) (sz := 32) (s := []) (e := 0) (G := 318)
         (out := implReturnWord.toBytes) rfl hfinalext rfl hread
       simpa only [Devm.setMach_setMach, Devm.memory_setMach,
@@ -1253,13 +1253,13 @@ private theorem proxy_revert_tail (childPost : Devm)
       final.transientStorage = proxyCallPreRevert.transientStorage ∧
       final.logs = proxyCallPreRevert.logs := by
   let base := incorporateChildOnError proxyRevertParent childPost childPost.output
-  let final := (base.setMach ⟨[], proxyRevertParent.memory, 22439⟩).withOutput []
+  let final := (base.setMach ⟨[], proxyRevertParent.memory, 22439, base.stateGas⟩).withOutput []
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         (((incorporateChildOnError proxyRevertParent childPost childPost.output).setMach
           ⟨0 :: proxyRevertParent.stack, proxyRevertParent.memory, 22468⟩).memWrite
             0 (childPost.output.take 0)) =
-        base.setMach ⟨[0], proxyRevertParent.memory, 22468⟩ := by
+        base.setMach ⟨[0], proxyRevertParent.memory, 22468, base.stateGas⟩ := by
       simp [base, Devm.memWrite, Mach.memWrite, liftMachPure, Mem.write, hout]
       rw [Devm.setMach_setMach]
       rfl
@@ -1278,12 +1278,12 @@ private theorem proxy_revert_tail (childPost : Devm)
       dsimp [final]
       have hrun := Func.runCompiledTo_revert
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgRevert)
-        (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439⟩)
+        (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439, base.stateGas⟩)
         (i := 0) (sz := 0) (s := []) (out := []) (G := 22439)
-        (d' := base.setMach ⟨[], proxyRevertParent.memory, 22439⟩)
+        (d' := base.setMach ⟨[], proxyRevertParent.memory, 22439, base.stateGas⟩)
         (by rfl) (by
           change (22439 : Nat) = 22439 +
-            (base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439⟩).extCost
+            (base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439, base.stateGas⟩).extCost
               [⟨0, 0⟩]
           rw [Devm.extCost_empty_window]) (by exact Devm.memRead_zero)
       have hslice :

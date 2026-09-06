@@ -226,12 +226,12 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     simp only [ossifiableFullCreateInput, ossifiableCreationTemplate,
       List.append_assoc]
   have hstart : initEvm seeded =
-      ⟨0, sevm, base.setMach ⟨[], Mem.empty, 526248⟩⟩ := by
+      ⟨0, sevm, base.setMach ⟨[], Mem.empty, 526248, base.stateGas⟩⟩ := by
     rfl
   have hexec : exec (initEvm seeded) = .ok raw := by
     rw [hstart]
     have hrun' : Prog.RunCompiled sevm
-        (base.setMach ⟨[], Mem.empty, 526248⟩)
+        (base.setMach ⟨[], Mem.empty, 526248, base.stateGas⟩)
         creationBaseline raw := by
       rw [creationBaseline_eq_numericProgram]
       exact hrun

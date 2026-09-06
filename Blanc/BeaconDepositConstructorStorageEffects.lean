@@ -36,7 +36,7 @@ theorem Func.StorageEffectRun.next_constructorPushWord
     (gas : devm.gasLeft = G + gVerylow)
     (room : devm.stack.length < 1024)
     (tail : Func.StorageEffectRun fs sevm
-      (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩)
+      (devm.setMach ⟨word :: devm.stack, devm.memory, G, devm.stateGas⟩)
       body out effects) :
     Func.StorageEffectRun fs sevm devm
       (.next (constructorPushWord word) body) out effects := by
@@ -236,7 +236,7 @@ private theorem constructorPairStage_storageEffectRun
           constructorPairMemory memory (zeroHash Bytes.sha256 height), K⟩)
       rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨heightWord :: stack, memory, K + 24⟩)
+      (base.setMach ⟨heightWord :: stack, memory, K + 24, base.stateGas⟩)
       ((constructorLoadWord constructorNodeWord ++ constructorStoreWord 0 ++
         constructorLoadWord constructorNodeWord ++ constructorStoreWord 1) +++
         rest) ex effects := by
@@ -311,7 +311,7 @@ private theorem constructorPairStage_storageEffectRun
       simp only [Devm.setMach_setMach,
         show (0 : B256).toNat = 0 by decide +kernel]
       change Func.StorageEffectRun fs sevm
-        (base.setMach ⟨heightWord :: stack, M0, K + 12⟩) _ ex effects
+        (base.setMach ⟨heightWord :: stack, M0, K + 12, base.stateGas⟩) _ ex effects
       refine Func.StorageEffectRun.next_constructorPushWord
         (G := K + 9) ?_ ?_ ?_
       · simp only [Devm.gasLeft_setMach, gVerylow]
@@ -367,13 +367,13 @@ private theorem constructorZeroHashLoop_succ_dispatch_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hheight : height < 31)
     (tail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[Nat.toB256 height], memory, K⟩)
+      (base.setMach ⟨[Nat.toB256 height], memory, K, base.stateGas⟩)
       ((constructorLoadWord constructorNodeWord ++ constructorStoreWord 0 ++
         constructorLoadWord constructorNodeWord ++ constructorStoreWord 1) +++
         constructorSha64 0 constructorNodeWord
           (.call constructorZeroHashContinuationSlot)) ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[Nat.toB256 height], memory, K + 26⟩)
+      (base.setMach ⟨[Nat.toB256 height], memory, K + 26, base.stateGas⟩)
       (constructorZeroHashLoop runtimeOffset runtimeLength) ex effects := by
   simp only [constructorZeroHashLoop]
   apply Func.StorageEffectRun.next_effectNeutral
@@ -636,7 +636,7 @@ theorem constructorSha64_success_storageEffectRun_ext
         callPost.state = stmid.addBal 2 0) ∧
       ∀ {ex : Execution} {effects : List (Adr × B256 × B256)},
         Func.StorageEffectRun fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩)
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
           success ex effects →
         Func.StorageEffectRun fs sevm
           (base.setMach
@@ -732,7 +732,7 @@ theorem constructorSha64_success_storageEffectRun_ext
     rw [hreturn', B256.length_toBytes]
     decide +kernel
   have suffix : Func.StorageEffectRun fs sevm
-      (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37⟩)
+      (callPost.setMach ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩)
       (iszero :::
         (.call constructorBubbleRevertSlot) <?>
         (constructorReturnDataShorterThan 32 +++
@@ -869,7 +869,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
   let C := sstoreCost sevm base key node
   let pair := constructorPairMemory memory
     (zeroHash Bytes.sha256 height)
-  let shaBase := base.setMach ⟨[], pair, 0⟩
+  let shaBase := base.setMach ⟨[], pair, 0, base.stateGas⟩
   have pairSize : pair.size = 96 := by
     simpa only [pair] using memoryCarrier.pairSize
   have pairMod : pair.size % 32 = 0 := by
@@ -1050,7 +1050,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
 /-- Exact CODECOPY charge used by the constructor terminal arm. -/
 def constructorFinishCopyCost (base : Devm) (memory : Mem) : Nat :=
   gVerylow + gasCopy * ceilDiv codeSize 32 +
-    (base.setMach ⟨[], memory, 0⟩).extCost [⟨0, codeSize⟩]
+    (base.setMach ⟨[], memory, 0, base.stateGas⟩).extCost [⟨0, codeSize⟩]
 
 /-- Exact gas needed from the terminal-arm entry through RETURN. -/
 def constructorFinishGas (base : Devm) (memory : Mem) : Nat :=
@@ -1089,7 +1089,7 @@ private theorem constructorFinishGas_eq
     (carrier : ConstructorLoopMemory memory 31) :
     constructorFinishGas base memory = 571 := by
   have extCost :
-      (base.setMach ⟨[], memory, 0⟩).extCost [⟨0, codeSize⟩] = 280 := by
+      (base.setMach ⟨[], memory, 0, base.stateGas⟩).extCost [⟨0, codeSize⟩] = 280 := by
     exact Devm.extCost_of_size carrier.size_eq (by
       rw [codeSize_exact]
       decide +kernel)
@@ -1120,7 +1120,7 @@ theorem constructorFinish_storageEffectRun
         (.ok post) [] := by
   set copied := memory.write 0 code with copiedDef
   let copyCost := constructorFinishCopyCost base memory
-  set returnBase := base.setMach ⟨[Nat.toB256 31], copied, K⟩ with returnBaseDef
+  set returnBase := base.setMach ⟨[Nat.toB256 31], copied, K, base.stateGas⟩ with returnBaseDef
   set post := (returnBase.memRead 0 codeSize).2.withOutput code with postDef
   have codeLength : code.length = codeSize := rfl
   have codeSizeBound : codeSize < 2 ^ 256 := by
@@ -1163,7 +1163,7 @@ theorem constructorFinish_storageEffectRun
         copyCost := by
     rw [B256.toNat_toB256_of_lt codeSizeBound]
     change gVerylow + gasCopy * ceilDiv codeSize 32 +
-        (base.setMach ⟨[], memory, 0⟩).extCost [⟨0, codeSize⟩] = copyCost
+        (base.setMach ⟨[], memory, 0, base.stateGas⟩).extCost [⟨0, codeSize⟩] = copyCost
     rfl
   have postOutput : post.output = code := by
     rw [postDef, Devm.withOutput_output]
@@ -1285,10 +1285,10 @@ private theorem constructorZeroHashLoop_finish_dispatch_storageEffectRun
     {K : Nat} {ex : Execution}
     {effects : List (Adr × B256 × B256)}
     (tail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[Nat.toB256 31], memory, K⟩)
+      (base.setMach ⟨[Nat.toB256 31], memory, K, base.stateGas⟩)
       (constructorFinish constructorRuntimeOffset codeSize) ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[Nat.toB256 31], memory, K + 25⟩)
+      (base.setMach ⟨[Nat.toB256 31], memory, K + 25, base.stateGas⟩)
       (constructorZeroHashLoop constructorRuntimeOffset codeSize) ex effects := by
   simp only [constructorZeroHashLoop]
   apply Func.StorageEffectRun.next_effectNeutral
@@ -1602,11 +1602,11 @@ theorem constructorStart_storageEffectRun
     (hloop : fs[constructorZeroHashLoopSlot]? = some
       (constructorZeroHashLoop constructorRuntimeOffset codeSize))
     (tail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[0], constructorInitialMemory, K⟩)
+      (base.setMach ⟨[0], constructorInitialMemory, K, base.stateGas⟩)
       (constructorZeroHashLoop constructorRuntimeOffset codeSize)
       ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, K + 33⟩)
+      (base.setMach ⟨[], Mem.empty, K + 33, base.stateGas⟩)
       constructorStart ex effects := by
   simp only [constructorStart, constructorStoreWord, constructorNodeWord]
   refine Func.StorageEffectRun.next_constructorPushWord
@@ -1625,7 +1625,7 @@ theorem constructorStart_storageEffectRun
         Devm.memory_setMach]
       have storeRun := Ninst.runCompiled_mstore_of
         (sevm := sevm)
-        (devm := base.setMach ⟨[64, 0], Mem.empty, K + 27⟩)
+        (devm := base.setMach ⟨[64, 0], Mem.empty, K + 27, base.stateGas⟩)
         (i := 64) (v := 0) (s := []) (G := K + 15) (e := 9)
         (M := constructorInitialMemory) rfl
         (Devm.extCost_of_size (n := 0) rfl (by decide +kernel))

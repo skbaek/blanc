@@ -2988,7 +2988,7 @@ theorem erc677_codelessCallback_runCompiledTo
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
       (base.setMach ⟨0 :: stack, base.memory,
-        G + codelessCallbackCost⟩)
+        G + codelessCallbackCost, base.stateGas⟩)
       (iszero ::: Func.revert <?>
         (pop ::: value +++ storeTokenCallbackHead sel +++
           pushList [0, 0] +++ forwardArgTail dataArg 4 +++
@@ -2996,7 +2996,7 @@ theorem erc677_codelessCallback_runCompiledTo
           pushB256 callbackArgsOffset ::: pushB256 0 :::
           arg targetArg +++ gas ::: call ::: .call boolReturnSlot))
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   exact codelessCallback_runCompiledTo h_room
 
 /-- All three ERC-677 endpoints use the same Boolean auxiliary, so a failed
@@ -3027,10 +3027,10 @@ theorem erc677_shortReturn_runCompiledTo
     (h_short : base.returnData.length < 32)
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost⟩)
+      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost, base.stateGas⟩)
       boolReturn
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   exact boolReturn_short_runCompiledTo h_short h_room
 
 end Weth10

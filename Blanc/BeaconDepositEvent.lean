@@ -278,7 +278,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
         ⟨stack, storeLe64Memory memory 352 amount, G⟩)
       body ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨stack, memory, G + 117⟩)
+      (base.setMach ⟨stack, memory, G + 117, base.stateGas⟩)
       (loadWord amountWord +++ storeLe64At 352 +++ body) ex := by
   have hamountAddress : (amountWord * 32 : B256).toNat = 672 := by
     decide +kernel
@@ -559,7 +559,7 @@ private theorem stageEventPayloads_runCompiledTo
         show (36 : B256).toNat = 36 by decide +kernel]
       omega
   have htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], M4, G⟩) body ex := by
+      (base.setMach ⟨[], M4, G, base.stateGas⟩) body ex := by
     simpa only [eventPayloadMemory, M4, M3, M2, M1, M0] using hbody
   apply pushMstoreAt_runCompiledTo
       (valueGas := 2) (wordGas := 3)
@@ -781,7 +781,7 @@ private theorem stageEventHeaders_runCompiledTo
     · rw [c13.size_eq]
     · rw [c13.size_eq]
   have htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], M17, G⟩) body ex := by
+      (base.setMach ⟨[], M17, G, base.stateGas⟩) body ex := by
     simpa only [eventBeforeCountMemory, M17, M16, M15, M14, M13, M12,
       M11, M10, M9, M8, M7, M6, M5, M4] using hbody
   apply pushMstoreAt_runCompiledTo
@@ -932,9 +932,9 @@ private theorem emitDepositEvent_runCompiledTo
       logged.error = base.error ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (logged.setMach ⟨[], memory, G⟩) body ex →
+          (logged.setMach ⟨[], memory, G, logged.stateGas⟩) body ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], memory, G + 5366⟩)
+          (base.setMach ⟨[], memory, G + 5366, base.stateGas⟩)
           (([pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hlift⟩ :=

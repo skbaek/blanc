@@ -127,7 +127,7 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
     (h_cur : Devm.getStorVal base sevm.currentTarget implSlot = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implBodyGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implBodyGas, base.stateGas⟩)
           implSuccess (.ok post) ∧
       post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
@@ -192,7 +192,7 @@ theorem implGuarded_runCompiledTo_nonzero
     (h_data : Sevm.dataWord sevm 0 ≠ 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implGuardedSuccessGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implGuardedSuccessGas, base.stateGas⟩)
           implGuarded (.ok post) ∧
       post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
@@ -243,7 +243,7 @@ theorem implGuarded_runCompiledTo_zero
     (h_data : Sevm.dataWord sevm 0 = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implGuardedRevertGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implGuardedRevertGas, base.stateGas⟩)
           implGuarded (.error (.revert, post)) ∧
       post.error = base.error ∧
       post.output = [] ∧
@@ -251,7 +251,7 @@ theorem implGuarded_runCompiledTo_zero
       post.state = base.state ∧
       post.transientStorage = base.transientStorage ∧
       post.logs = base.logs := by
-  let post := (base.setMach ⟨[], Mem.empty, G⟩).withOutput []
+  let post := (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput []
   refine ⟨post, ?_, ?_, rfl, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl implRevert post
     rw [implGuardedRevertGas_eq]
@@ -310,18 +310,18 @@ private lemma static_sstore_run
       .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs
-  have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft⟩).pop =
-      .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft⟩⟩ := by rfl
+  have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩).pop =
+      .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩⟩ := by rfl
   have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
       else gasColdSload + gasStorageSet) = gasColdSload + gasStorageSet := by
     decide
-  let d0 := d.setMach ⟨[], d.memory, d.gasLeft⟩
+  let d0 := d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩
   let d1 := addAccessedStorageKey d0 sevm.currentTarget implSlot
   let d2 := d1.withRefundCounter
     (sstoreNewRefundCounter 1 0 0 d1.refundCounter)
   have h_charge : chargeGas (gasColdSload + gasStorageSet) d2 =
       .ok (d2.setMach ⟨d2.stack, d2.memory,
-        d.gasLeft - (gasColdSload + gasStorageSet)⟩) := by
+        d.gasLeft - (gasColdSload + gasStorageSet), d2.stateGas⟩) := by
     exact chargeGas_eq_ok h_cost
   have hd0 : Devm.WorldEq d d0 := Devm.worldEq_setMach d _
   have hd1 : Devm.WorldEq d0 d1 :=
@@ -334,7 +334,7 @@ private lemma static_sstore_run
   have hlogs1 : d1.logs = d0.logs := by rfl
   have hlogs2 : d2.logs = d1.logs := by rfl
   let post := d2.setMach ⟨d2.stack, d2.memory,
-    d.gasLeft - (gasColdSload + gasStorageSet)⟩
+    d.gasLeft - (gasColdSload + gasStorageSet), d2.stateGas⟩
   refine ⟨post, ?_, ?_, ?_, ?_⟩
   rw [Devm.pop_eq_ok h_stack]
   simp [h_pop, h_if, assertDynamic, Except.assert,
@@ -410,11 +410,11 @@ theorem implGuarded_static_halt_exec
     ∃ post,
       Nonempty (Exec 0 sevm
         (base.setMach ⟨[], Mem.empty,
-          G + implGuardedSuccessEntryGas⟩)
+          G + implGuardedSuccessEntryGas, base.stateGas⟩)
         (.error ⟨.halt (.writeInStaticContext .none), post⟩)) ∧
       exec ⟨0, sevm,
         (base.setMach ⟨[], Mem.empty,
-          G + implGuardedSuccessEntryGas⟩)⟩ =
+          G + implGuardedSuccessEntryGas, base.stateGas⟩)⟩ =
         .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
       post.state = base.state ∧
       post.transientStorage = base.transientStorage ∧

@@ -35,9 +35,9 @@ theorem depositLengthGuard_runCompiledTo
     (hwordPush : pushCost (word * 32).toBytes.sig = 3)
     (hexpectedPush : pushCost expected.toBytes.sig = 3)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (loadWord word +++ pushB256 expected ::: eq ::: iszero :::
         ((.call slot) <?> rest)) ex := by
   have hmod : memory.size % 32 = 0 := by
@@ -89,9 +89,9 @@ theorem depositLengthGuards_runCompiledTo
     (hwithdrawal : withdrawalCredentials.length = 32)
     (hsignature : signature.length = 96)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 84⟩)
+      (base.setMach ⟨[], memory, G + 84, base.stateGas⟩)
       (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
         ((.call pubkeyLengthErrorSlot) <?>
           (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
@@ -134,9 +134,9 @@ theorem depositValueLowerGuard_runCompiledTo
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hlower : Nat.toB256 oneEther ≤ sevm.value)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 21⟩)
+      (base.setMach ⟨[], memory, G + 21, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
         ((.call slot) <?> rest)) ex := by
   func_run (4) [0]
@@ -150,9 +150,9 @@ theorem depositGweiMultipleGuard_runCompiledTo
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 23⟩)
+      (base.setMach ⟨[], memory, G + 23, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
         ((.call slot) <?> rest)) ex := by
   func_run (4) [0]
@@ -172,7 +172,7 @@ theorem depositAmountUpperGuard_runCompiledTo
       (base.setMach
         ⟨[], memory.write 672 amount.toBytes, G⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 86⟩)
+      (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
         mstoreAt amountWord +++
         pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
@@ -204,7 +204,7 @@ theorem depositGuards_runCompiledTo
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G⟩)
+      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -214,7 +214,7 @@ theorem depositGuards_runCompiledTo
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data := by
     exact depositDecodedMemory_carrier sevm.data
   have hbody' : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory.write 672 amount.toBytes, G⟩)
+      (base.setMach ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex := by
     simpa only [memory, depositEventInputMemory] using hbody
   have hupperRun := depositAmountUpperGuard_runCompiledTo

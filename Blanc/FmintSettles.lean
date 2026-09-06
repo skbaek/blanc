@@ -257,7 +257,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
       b.logs = pre.logs →
       pre.gasLeft - flashLoanMintGas ≤ G → G ≤ pre.gasLeft →
       Func.RunCompiledTo (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[amount, receiver], Mem.empty, G⟩) flashLoanFromMintLog out) :
+        (b.setMach ⟨[amount, receiver], Mem.empty, G, b.stateGas⟩) flashLoanFromMintLog out) :
     Prog.RunCompiledTo sevm pre fmint out := by
   have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
   have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
@@ -268,7 +268,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   set g := pre.gasLeft with hg
   refine
     Prog.runCompiledTo_intro (G := g - 1)
-      (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+      (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
       (by simp only [gJumpdest]; omega)
       (by rw [h_stack, h_mem])
       ?_
@@ -496,7 +496,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
       Func.RunCompiledTo (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
             flashLoanArgsSize data.length, 0, 0, amount, receiver],
-          flashLoanCallMem sevm amount data, G⟩) flashLoanFromCall out) :
+          flashLoanCallMem sevm amount data, G, b.stateGas⟩) flashLoanFromCall out) :
     Prog.RunCompiledTo sevm pre fmint out := by
   have h_len_lt : data.length < 2 ^ 256 := by
     have := Nat.le_ceil32 data.length; omega
@@ -704,7 +704,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       b.error = pre.error →
       pre.gasLeft - flashLoanMintGas ≤ G → G ≤ pre.gasLeft →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[amount, receiver], Mem.empty, G⟩) flashLoanFromMintLog P) :
+        (b.setMach ⟨[amount, receiver], Mem.empty, G, b.stateGas⟩) flashLoanFromMintLog P) :
     Prog.ExecSat sevm pre fmint P := by
   have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
   have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
@@ -714,7 +714,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   rw [flashLoanMintGas_eq] at h_gas h_cont
   set g := pre.gasLeft with hg
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem])
     ?_
@@ -860,7 +860,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
             flashLoanArgsSize data.length, 0, 0, amount, receiver],
-          flashLoanCallMem sevm amount data, G⟩) flashLoanFromCall P) :
+          flashLoanCallMem sevm amount data, G, b.stateGas⟩) flashLoanFromCall P) :
     Prog.ExecSat sevm pre fmint P := by
   have h_len_lt : data.length < 2 ^ 256 := by
     have := Nat.le_ceil32 data.length; omega
@@ -1161,11 +1161,11 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     (h_flag0 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨0 :: [amount, receiver],
-          flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P)
+          flashLoanCallMem sevm amount data, Gc, d.stateGas⟩) flashLoanFromFlag P)
     (h_flag1 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc → d.error = pre.error →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨1 :: [amount, receiver],
-          flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P) :
+          flashLoanCallMem sevm amount data, Gc, d.stateGas⟩) flashLoanFromFlag P) :
     Prog.ExecSat sevm pre fmint P := by
   refine flashLoan_execSat_call h_sel h_dec h_size h_token h_addr h_nof h_static
     h_stack h_mem (by omega) ?_
@@ -1176,9 +1176,9 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     (data := data) h_size
   set st := b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
     flashLoanArgsSize data.length, 0, 0, amount, receiver],
-    flashLoanCallMem sevm amount data, G⟩ with hst
+    flashLoanCallMem sevm amount data, G, b.stateGas⟩ with hst
   rcases hdel : accessDelegation (addAccessedAddress
-      (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩) receiver.toAdr)
+      (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩) receiver.toAdr)
       receiver.toAdr with ⟨dp, dadr, dcode, dgc, d1⟩
   obtain ⟨hd1s, hd1m, hd1g, hdgc⟩ := accessDelegation_inv hdel
   have hd1e : d1.error = pre.error := by
@@ -1189,12 +1189,12 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   have hd1s' : d1.stack = [amount, receiver] := hd1s
   have hd1m' : d1.memory = flashLoanCallMem sevm amount data := hd1m
   have hd1g' : d1.gasLeft = G := hd1g
-  have h_ext : (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩).extCost
+  have h_ext : (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).extCost
       [⟨callbackArgsOffset.toNat, (flashLoanArgsSize data.length).toNat⟩,
         ⟨(0 : B256).toNat, (0 : B256).toNat⟩] = 0 :=
     Devm.extCost_covered h_cov
   set acc := accessCost receiver.toAdr
-    (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩).accessedAddresses
+    (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).accessedAddresses
     + dgc with hacc
   have h_acc_le : acc ≤ 2 * gasColdAccountAccess := by
     have h1 := accessCost_le (x := receiver.toAdr)
@@ -1329,7 +1329,7 @@ lemma execSat_flagZero_leaf {sevm : Sevm} {d : Devm} {amount receiver : B256}
     (h_gas : 21 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨0 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨0 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (2) [1]
     exact Func.runCompiledTo_revert_func (G := Gc - 21)
@@ -1347,7 +1347,7 @@ lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1 := by
     show (if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0) = 1
     refine if_pos ?_
@@ -1385,7 +1385,7 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 82 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_len : B256.toNat 0 + B256.toNat 32 ≤ d.returnData.length := by
     have h1 : ¬ Nat.toB256 d.returnData.length < (32 : B256) := by
       intro hc
@@ -1471,10 +1471,10 @@ lemma execSat_spend_step {sevm : Sevm} {d : Devm}
     (h_gas : 77 ≤ Gc)
     (h_next : ∀ M' : Mem, M'.size = M.size →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (d.setMach ⟨[amount, receiver], M', Gc - 77⟩)
+        (d.setMach ⟨[amount, receiver], M', Gc - 77, d.stateGas⟩)
           spendAllowanceThenBurn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_len := returnData_bound_of_not_short h_ge
   have h_eq' : (erc3156Magic =?
       ((M.write ((0 * 32 : B256)).toNat
@@ -1545,9 +1545,9 @@ lemma execSat_spendGuard_step {sevm : Sevm} {d : Devm}
     (h_gas : 108 ≤ Gc)
     (h_next : ∀ M'' : Mem, M''.size = M.size →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (d.setMach ⟨[h, wad, receiver], M'', Gc - 108⟩) spendFromHash P) :
+        (d.setMach ⟨[h, wad, receiver], M'', Gc - 108, d.stateGas⟩) spendFromHash P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+      (d.setMach ⟨[wad, receiver], M, Gc, d.stateGas⟩) spendAllowanceThenBurn P := by
   have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
       = M.size := by
     apply Mem.size_write_of_le
@@ -1605,7 +1605,7 @@ lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 113 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+      (d.setMach ⟨[wad, receiver], M, Gc, d.stateGas⟩) spendAllowanceThenBurn P := by
   have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
       = M.size := by
     apply Mem.size_write_of_le
@@ -1651,7 +1651,7 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 2152 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
@@ -1692,9 +1692,9 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
       b.error = d.error →
       Gc - 2142 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+        (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
@@ -1739,9 +1739,9 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
       b.error = d.error →
       Gc - 22171 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+        (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
@@ -1794,7 +1794,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
     (h_gas : 2130 ≤ G)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+      (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 1) (G := G - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
@@ -1835,7 +1835,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
     (h_gas : 46046 ≤ G)
     (hP : ∀ post : Devm, post.error = b.error → P (.ok post)) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+      (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P := by
   have hs1 : (M.write ((0 * 32 : B256)).toNat wad.toBytes).size = M.size := by
     apply Mem.size_write_of_le
     rw [B256.length_toBytes,
@@ -2031,7 +2031,7 @@ lemma execSat_returnDataShort_leaf' {sevm : Sevm} {d : Devm}
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
     exact Func.runCompiledTo_revert_func (G := Gc - 42)
@@ -2329,7 +2329,7 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
   exact
     ⟨_,
       Prog.runCompiledTo_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
@@ -2431,7 +2431,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
   refine Prog.execSat_out (P := fun ex => ∃ post, ex = .error (.revert, post))
     ?_ h_code
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+    (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
   apply Func.execSat_segment
   · intro ex hex

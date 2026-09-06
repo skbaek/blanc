@@ -171,7 +171,7 @@ order: the canonical-address mask check, then the nine
 structure OfficialValidationCheckpoints
     (sevm : Sevm) (base post : Devm) (G : Nat) : Prop where
   run : Prog.RunCompiled sevm
-    (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+    (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩)
     lidoCircuitBreakerConstructorProgram post
   effectEntry : Func.RunCompiled
     (lidoCircuitBreakerConstructorProgram.main ::

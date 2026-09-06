@@ -24,9 +24,9 @@ theorem depositRootGuard_storageEffectRun
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 31⟩)
+      (base.setMach ⟨[], memory, G + 31, base.stateGas⟩)
       (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
         ((.call rootMismatchErrorSlot) <?> rest)) ex effects := by
   have hmod : memory.size % 32 = 0 := by
@@ -51,7 +51,7 @@ theorem depositRootGuard_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mload_of
       (sevm := sevm)
-      (devm := base.setMach ⟨[640], memory, G + 28⟩)
+      (devm := base.setMach ⟨[640], memory, G + 28, base.stateGas⟩)
       (i := 640) (v := node) (s := []) (c := gVerylow)
       (G := G + 25) (M := memory) rfl
       (by
@@ -76,7 +76,7 @@ theorem depositRootGuard_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_calldataload
       (sevm := sevm)
-      (devm := base.setMach ⟨100 :: node :: [], memory, G + 22⟩)
+      (devm := base.setMach ⟨100 :: node :: [], memory, G + 22, base.stateGas⟩)
       (x := 100) (v := Sevm.argWord sevm 3) (s := node :: [])
       (G := G + 19) rfl
       (by rfl)
@@ -100,7 +100,7 @@ theorem depositRootGuard_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_unary
       (sevm := sevm)
-      (devm := base.setMach ⟨[1], memory, G + 16⟩)
+      (devm := base.setMach ⟨[1], memory, G + 16, base.stateGas⟩)
       (r := .iszero) (f := (B256.eqCheck · 0))
       (cost := gVerylow) (x := 1) (v := 0) (s := [])
       (G := G + 13) (by rintro ⟨⟩) rfl rfl rfl
@@ -126,9 +126,9 @@ theorem depositCapGuard_storageEffectRun
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (Ninst.pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
         loadWord oldCountWord +++ lt ::: iszero :::
         ((.call treeFullErrorSlot) <?> rest)) ex effects := by
@@ -196,7 +196,7 @@ theorem depositCapGuard_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_unary
       (sevm := sevm)
-      (devm := base.setMach ⟨[1], memory, G + 16⟩)
+      (devm := base.setMach ⟨[1], memory, G + 16, base.stateGas⟩)
       (r := .iszero) (f := (B256.eqCheck · 0))
       (cost := gVerylow) (x := 1) (v := 0) (s := [])
       (G := G + 13) (by rintro ⟨⟩) rfl rfl rfl
@@ -223,9 +223,9 @@ theorem depositSuccessGuards_storageEffectRun
     (hroot : Sevm.argWord sevm 3 = node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) commitDeposit ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) commitDeposit ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 59⟩)
+      (base.setMach ⟨[], memory, G + 59, base.stateGas⟩)
       depositSuccessGuards ex effects := by
   have hcapRun := depositCapGuard_storageEffectRun hmem hcap htail
   have hrootRun := depositRootGuard_storageEffectRun hmem hroot hcapRun
@@ -262,10 +262,10 @@ theorem reconstructDepositDataNode_successGuards_storageEffectRun
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
-          (finalPost.setMach ⟨[], finalPost.memory, G⟩)
+          (finalPost.setMach ⟨[], finalPost.memory, G, finalPost.stateGas⟩)
           commitDeposit ex effects →
         Func.StorageEffectRun fs sevm
-          (base.setMach ⟨[], base.memory, G + 1838⟩)
+          (base.setMach ⟨[], base.memory, G + 1838, base.stateGas⟩)
           (reconstructDepositDataNode depositSuccessGuards) ex effects := by
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature amountLE hwithdrawal hamount hsignature

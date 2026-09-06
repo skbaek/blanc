@@ -103,7 +103,7 @@ theorem decimals_runCompiled {sevm : Sevm} {pre : Devm}
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -198,7 +198,7 @@ theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
     ⟨_,
       Prog.exec_of_runCompiled
         (Prog.runCompiled_intro (G := g - 1)
-          (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+          (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
           (by simp only [gJumpdest]; omega)
           (by rw [h_stack, h_mem])
           (by
@@ -294,7 +294,7 @@ theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by

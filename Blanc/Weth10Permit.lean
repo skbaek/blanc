@@ -3808,13 +3808,13 @@ theorem permitExpiredGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: Expired permit"⟩)
+        G + errorGuardCost base "WETH: Expired permit", base.stateGas⟩)
       ((.call expiredPermitErrorSlot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: Expired permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
   simpa only [LockedError.reason, LockedError.slot] using
     (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
       (base := base) (G := G) (w := w) (stack := stack) (img := img)
@@ -3835,13 +3835,13 @@ theorem permitInvalidGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: invalid permit"⟩)
+        G + errorGuardCost base "WETH: invalid permit", base.stateGas⟩)
       ((.call invalidPermitErrorSlot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: invalid permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
   simpa only [LockedError.reason, LockedError.slot] using
     (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
       (base := base) (G := G) (w := w) (stack := stack) (img := img)
@@ -3868,13 +3868,13 @@ theorem permitExpired_selected_runCompiledTo
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, base.memory,
-        (G + errorGuardCost base "WETH: Expired permit") + 11⟩)
+        (G + errorGuardCost base "WETH: Expired permit") + 11, base.stateGas⟩)
       (permit dp)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: Expired permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
   rw [permit_eq_deadlineGuard]
   func_run (4) [1]
   all_goals try {
@@ -3906,13 +3906,13 @@ theorem permitSignerZero_runCompiledTo
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨0 :: stack, base.memory,
-        (G + errorGuardCost base "WETH: invalid permit") + 6⟩)
+        (G + errorGuardCost base "WETH: invalid permit") + 6, base.stateGas⟩)
       permitSignerGuards
       (.error (.revert,
         (base.setMach ⟨0 :: stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: invalid permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
   unfold permitSignerGuards
   func_run (2) [1]
   all_goals try {
