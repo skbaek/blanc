@@ -26,9 +26,9 @@ SCALE = 10**27
 CHI_SLOT = WORD_MODULUS - 1
 RHO_SLOT = WORD_MODULUS - 2
 TOTAL_UNITS_SLOT = WORD_MODULUS - 3
-RUNTIME_SIZE = 1884
+RUNTIME_SIZE = 1872
 PREFIX_SIZE = 239
-CREATION_SIZE = 2123
+CREATION_SIZE = 2111
 INITCODE_LIMIT = 49152
 
 
@@ -279,8 +279,8 @@ def main(argv: list[str]) -> int:
             print(f"OK — DRIP artifact self-test: {rejected}/6 corruptions rejected")
         else:
             print(
-                "OK — DRIP artifacts: runtime=1884, prefix=239, creation=2123, "
-                "EIP-3860 headroom=47029; constructor semantics exact"
+                "OK — DRIP artifacts: runtime=1872, prefix=239, creation=2111, "
+                "EIP-3860 headroom=47041; constructor semantics exact"
             )
         return 0
     except ArtifactError as exc:

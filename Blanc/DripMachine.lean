@@ -197,10 +197,7 @@ theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
       B256.Nof (scratch image rightWord * scratch image leftWord) half ∧
       (tail <<+ t.stack) ∧
       Frame
-        (setScratch
-          (setScratch image roundedWord
-            (half + scratch image rightWord * scratch image leftWord))
-          outputWord
+        (setScratch image outputWord
           ((half + scratch image rightWord * scratch image leftWord) / scale))
         entry t ∧
       Func.Run fs e t next r := by
@@ -287,14 +284,47 @@ theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
     have h2 := prefix_of_push (of_run_pushB256 hpush) h1
     have h3 := prefix_of_add hadd h2
     exact prefix_of_dup_val hdup2 (by show_nth) h3
-  refine run_prepend_elim _ (mstoreAt roundedWord) ?_ run
+  -- Keep the rounded sum beneath the overflow flag without a scratch write.
+  refine run_prepend_elim _ [swap 1, swap 0] ?_ run
   intro s10 hline10 run
-  obtain ⟨hp10, frame10⟩ := frame9.mstoreAt hp9 hline10
+  have frame10 := frame9.line (by line_inv) (by line_inv) (by line_inv) hline10
+  have hp10 : (half + scratch image rightWord * scratch image leftWord) ::
+      (scratch image rightWord * scratch image leftWord) ::
+      (half + scratch image rightWord * scratch image leftWord) :: tail <<+
+      s10.stack := by
+    rcases Line.of_run_cons hline10 with ⟨u, hswap1, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨v, hswap0, hnil⟩
+    cases hnil
+    have h1 : (scratch image rightWord * scratch image leftWord) ::
+        (half + scratch image rightWord * scratch image leftWord) ::
+        (half + scratch image rightWord * scratch image leftWord) :: tail <<+
+        u.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap 1
+          ((half + scratch image rightWord * scratch image leftWord) ::
+            (half + scratch image rightWord * scratch image leftWord) ::
+            (scratch image rightWord * scratch image leftWord) :: tail)
+          ((scratch image rightWord * scratch image leftWord) ::
+            (half + scratch image rightWord * scratch image leftWord) ::
+            (half + scratch image rightWord * scratch image leftWord) :: tail)
+          from Stack.swapCore_succ Stack.swapCore_zero)
+        (of_run_swap hswap1) hp9
+    exact Stack.prefix_of_swap
+      (show Stack.Swap 0
+        ((scratch image rightWord * scratch image leftWord) ::
+          (half + scratch image rightWord * scratch image leftWord) ::
+          (half + scratch image rightWord * scratch image leftWord) :: tail)
+        ((half + scratch image rightWord * scratch image leftWord) ::
+          (scratch image rightWord * scratch image leftWord) ::
+          (half + scratch image rightWord * scratch image leftWord) :: tail)
+        from Stack.swapCore_zero)
+      (of_run_swap hswap0) h1
   refine run_prepend_elim _ [lt] ?_ run
   intro s11 hline11 run
   have frame11 := frame10.line (by line_inv) (by line_inv) (by line_inv) hline11
   have hp11 : ((half + scratch image rightWord * scratch image leftWord) <?
-      (scratch image rightWord * scratch image leftWord)) :: tail <<+ s11.stack :=
+      (scratch image rightWord * scratch image leftWord)) ::
+      (half + scratch image rightWord * scratch image leftWord) :: tail <<+ s11.stack :=
     prefix_of_lt (of_run_singleton hline11) hp10
   obtain ⟨hflag2, s12, hp12, hpop12, run⟩ := of_run_guard hp11 run
   have frame12 := frame11.of_popBurn hpop12
@@ -302,20 +332,16 @@ theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
     by_contra hcontra
     exact B256.not_lt_of_ltCheck_eq_zero hflag2
       (by rw [B256.add_comm]; exact (B256.add_lt_iff_not_nof _ _).2 hcontra)
-  refine run_prepend_elim _ (loadWord roundedWord) ?_ run
-  intro s13 hline13 run
-  obtain ⟨hp13, frame13⟩ := frame12.loadWord hp12 hline13
-  rw [scratch_setScratch_self] at hp13
   refine run_prepend_elim _ [pushB256 scale, swap 0, div] ?_ run
   intro s14 hline14 run
-  have frame14 := frame13.line (by line_inv) (by line_inv) (by line_inv) hline14
+  have frame14 := frame12.line (by line_inv) (by line_inv) (by line_inv) hline14
   have hp14 : (((half + scratch image rightWord * scratch image leftWord) /
       scale)) :: tail <<+ s14.stack := by
     rcases Line.of_run_cons hline14 with ⟨u1, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u2, hswap, hrest⟩
     rcases Line.of_run_cons hrest with ⟨u3, hdiv, hnil⟩
     cases hnil
-    have h1 := prefix_of_push (of_run_pushB256 hpush) hp13
+    have h1 := prefix_of_push (of_run_pushB256 hpush) hp12
     have h2 : (half + scratch image rightWord * scratch image leftWord) ::
         scale :: tail <<+ u2.stack :=
       Stack.prefix_of_swap
@@ -677,13 +703,10 @@ private theorem of_run_rpowAfterSquare {fs : List Func} (hlookup : AuxLookup fs)
           (scratch image baseWord * scratch image accumulatorWord),
         B256.mul_comm (scratch image baseWord)]
     · rw [scratch_setScratch_of_disjoint _ _ exponent_base.symm,
-        scratch_setScratch_of_disjoint _ _ base_accumulator,
-        scratch_setScratch_of_disjoint _ _ base_rounded]
+        scratch_setScratch_of_disjoint _ _ base_accumulator]
     · rw [scratch_setScratch_self,
-        scratch_setScratch_of_disjoint _ _ exponent_accumulator,
-        scratch_setScratch_of_disjoint _ _ exponent_rounded]
-    · exact ((LoopOnly.rounded image _).trans
-        (LoopOnly.accumulator _ _)).trans (LoopOnly.exponent _ _)
+        scratch_setScratch_of_disjoint _ _ exponent_accumulator]
+    · exact (LoopOnly.accumulator image _).trans (LoopOnly.exponent _ _)
 
 /-! ## The square-and-multiply loop
 
@@ -755,10 +778,8 @@ theorem of_run_rpowLoop {fs : List Func} (hlookup : AuxLookup fs) {e : Sevm}
     obtain ⟨t1, image2, hcond, hacc2, hbase2, hexp2, hloop12, framet1, hpt1,
       run⟩ := of_run_rpowAfterSquare hlookup frameU1 hpU1 run
     rw [scratch_setScratch_self] at hcond hacc2 hbase2
-    rw [scratch_setScratch_of_disjoint _ _ exponent_base,
-      scratch_setScratch_of_disjoint _ _ exponent_rounded] at hcond hacc2 hexp2
-    rw [scratch_setScratch_of_disjoint _ _ base_accumulator.symm,
-      scratch_setScratch_of_disjoint _ _ accumulator_rounded] at hcond hacc2
+    rw [scratch_setScratch_of_disjoint _ _ exponent_base] at hcond hacc2 hexp2
+    rw [scratch_setScratch_of_disjoint _ _ base_accumulator.symm] at hcond hacc2
     have hxx : (half + scratch image baseWord * scratch image baseWord) / scale =
         B256.mulr scale half (scratch image baseWord)
           (scratch image baseWord) := by
@@ -784,8 +805,7 @@ theorem of_run_rpowLoop {fs : List Func} (hlookup : AuxLookup fs) {e : Sevm}
         trivial
     · rw [B256.rpowLoop, dif_neg hn]
       exact hacc3
-    · exact (((LoopOnly.rounded image _).trans
-        (LoopOnly.base _ _)).trans hloop12).trans hloop23
+    · exact ((LoopOnly.base image _).trans hloop12).trans hloop23
 
 /-! ## Floor composition onto the stored index
 

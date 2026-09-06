@@ -64,11 +64,11 @@ def guardedRoundedMul
       pushB256 half :::
       add :::
       dup 0 :::
-      mstoreAt roundedWord +++
+      swap 1 :::
+      swap 0 :::
       lt :::
       (.revert <?>
-        (loadWord roundedWord +++
-          pushB256 scale :::
+        (pushB256 scale :::
           swap 0 :::
           div :::
           mstoreAt outputWord +++
