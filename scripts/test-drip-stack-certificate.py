@@ -49,6 +49,28 @@ class StackCertificateTests(unittest.TestCase):
         self.assertFalse(GEN.covers((3, None), (3,)))
         self.assertFalse(GEN.covers((None,), (3,)))
 
+    def test_named_subtrees_preserve_every_balanced_row(self):
+        parts = GEN.subtrees(self.states)
+        seen = set()
+
+        def expanded(part):
+            if part.left is None:
+                self.assertIsNone(part.right)
+                self.assertLessEqual(len(part.rows), GEN.SUBTREE_ROWS)
+                return list(part.rows)
+            self.assertIn(part.left.name, seen)
+            self.assertIn(part.right.name, seen)
+            return expanded(part.left) + [part.root] + expanded(part.right)
+
+        for part in parts:
+            self.assertNotIn(part.name, seen)
+            self.assertEqual(expanded(part), list(part.rows))
+            seen.add(part.name)
+        self.assertEqual(expanded(parts[-1]), list(self.states.items()))
+        self.assertEqual(sum(len(part.rows) if part.left is None else 1 for part in parts), 735)
+        self.assertEqual(len(seen), len(parts))
+        self.assertEqual(GEN.render(self.raw, dict(reversed(list(self.states.items())))), self.rendered)
+
     def test_runtime_underflow_mutation_and_restore(self):
         raw = bytearray(self.raw)
         raw[0] = 0x50

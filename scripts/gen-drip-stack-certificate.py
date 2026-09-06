@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "Blanc/DripCode.lean"
 OUTPUT = ROOT / "Blanc/DripStackSafetyData.lean"
 MAXIMUM = 8
+# A representation boundary, not a bound on program/table size or proof resources.
+SUBTREE_ROWS = 15
 WORD_LIMIT = 1 << 256
 Pattern = tuple[Optional[int], ...]
 BINARY = {0x01, 0x02, 0x03, 0x04, 0x10, 0x11, 0x14, 0x16, 0x1C}
@@ -181,17 +183,55 @@ def analyze(raw: bytes) -> dict[int, Pattern]:
     return dict(sorted(states.items()))
 
 
-def render(raw: bytes, states: dict[int, Pattern]) -> str:
-    rows = list(states.items())
+@dataclass(frozen=True)
+class Subtree:
+    """A named piece of the original balanced tree, in dependency order."""
 
-    def tree(entries: list[tuple[int, Pattern]], indent: int) -> list[str]:
+    rows: tuple[tuple[int, Pattern], ...]
+    left: Subtree | None = None
+    right: Subtree | None = None
+
+    @property
+    def root(self) -> tuple[int, Pattern]:
+        return self.rows[len(self.rows) // 2]
+
+    @property
+    def name(self) -> str:
+        return f"subtree{self.root[0]}"
+
+
+def subtrees(states: dict[int, Pattern]) -> list[Subtree]:
+    """Name small leaves and every composing node without changing any row."""
+    rows = tuple(sorted(states.items()))
+    require(bool(rows), "empty table")
+    parts: list[Subtree] = []
+
+    def visit(entries: tuple[tuple[int, Pattern], ...]) -> Subtree:
+        if len(entries) <= SUBTREE_ROWS:
+            part = Subtree(entries)
+        else:
+            middle = len(entries) // 2
+            part = Subtree(entries, visit(entries[:middle]), visit(entries[middle + 1:]))
+        parts.append(part)
+        return part
+
+    visit(rows)
+    return parts
+
+
+def render(raw: bytes, states: dict[int, Pattern]) -> str:
+    parts = subtrees(states)
+
+    def pattern(words: Pattern) -> str:
+        return "[" + ", ".join("none" if word is None else f"some {word}" for word in words) + "]"
+
+    def tree(entries: tuple[tuple[int, Pattern], ...], indent: int) -> list[str]:
         prefix = " " * indent
         if not entries:
             return [prefix + ".empty"]
         middle = len(entries) // 2
         pc, words = entries[middle]
-        pattern = "[" + ", ".join("none" if word is None else f"some {word}" for word in words) + "]"
-        lines = [prefix + f"(.node {pc} {pattern}"]
+        lines = [prefix + f"(.node {pc} {pattern(words)}"]
         lines.extend(tree(entries[:middle], indent + 2))
         lines.extend(tree(entries[middle + 1:], indent + 2))
         lines[-1] += ")"
@@ -201,14 +241,25 @@ def render(raw: bytes, states: dict[int, Pattern]) -> str:
         "-- GENERATED FILE — do not edit by hand.",
         "-- Regenerate: python3 scripts/gen-drip-stack-certificate.py --write",
         f"-- Runtime SHA-256: {hashlib.sha256(raw).hexdigest()}",
-        f"-- {len(rows)} decoded instructions across {len(raw)} bytes; abstract maximum {MAXIMUM}.",
+        f"-- {len(states)} decoded instructions across {len(raw)} bytes; abstract maximum {MAXIMUM}.",
         "-- Data only: semantic validity is checked against actual Drip.code in Lean.",
         "", "import Blanc.AbstractStackCertificate", "", "namespace Blanc.Drip.StackSafety",
         "", "open AbstractStackSafety", "",
-        "/-- Conservative whole-stack patterns, including both conditional arms. -/",
-        "def table : Table :=",
     ]
-    return "\n".join(header + tree(rows, 2) + ["", "end Blanc.Drip.StackSafety", ""])
+    for part in parts:
+        first, last = part.rows[0][0], part.rows[-1][0]
+        header.extend([f"/-- Exact balanced subtree: {len(part.rows)} rows, PCs {first} through {last}. -/",
+                       f"def {part.name} : Table :="])
+        if part.left is None:
+            header.extend(tree(part.rows, 2))
+        else:
+            pc, words = part.root
+            header.append(f"  .node {pc} {pattern(words)} {part.left.name} {part.right.name}")
+        header.append("")
+    header.extend(["/-- Conservative whole-stack patterns, including both conditional arms.",
+                   "Every successor check uses this complete table across named subtrees. -/",
+                   "def table : Table := " + parts[-1].name])
+    return "\n".join(header + ["", "end Blanc.Drip.StackSafety", ""])
 
 
 def expected_output(source: Path = SOURCE) -> str:
