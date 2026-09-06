@@ -2844,6 +2844,8 @@
         "files": [
           "scripts/check-drip-current-mainnet.sh",
           "scripts/gen-drip-fixtures.py",
+          "scripts/drip_cost_measurements.py",
+          "scripts/test-drip-cost-measurements.py",
           "scripts/drip_fixture_blocks.py",
           "scripts/drip_fixture_observers.py",
           "scripts/check-current-mainnet.sh",
