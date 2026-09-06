@@ -5507,6 +5507,21 @@ def Ninst.EffectRec (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
     sevm.benvStat.rules.stateGas = none →
       Xlot.Rel R xl → Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
 
+/-- Outcome-aware terminal effect which is uniform across execution forks. -/
+def Linst.EffectAny (R : Devm → Devm → Prop) (l : Linst) : Prop :=
+  ∀ {sevm pre out},
+    Linst.Run sevm pre l out → Execution.Rel R pre out
+
+/-- Recursive external-instruction effect which is uniform across forks. -/
+def Xinst.EffectRecAny (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
+  ∀ {sevm pre xl out},
+    Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
+
+/-- Recursive nonterminal effect which is uniform across execution forks. -/
+def Ninst.EffectRecAny (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
+  ∀ {pc sevm pre xl out},
+    Xlot.Rel R xl → Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
+
 /-- Successful-run relational projection used by `Func.effect`. -/
 def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {sevm pre post},
@@ -6130,8 +6145,7 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
 reuses the established shape theorem; every Amsterdam arm is discharged by
 its concrete metered `CodeEffect`. -/
 lemma Xinst.codePreserve_effectRec_any (x : Xinst) :
-    ∀ {sevm pre xl out}, Xlot.Rel Devm.CodePreserve xl →
-      Xinst.Run sevm pre x xl out → Execution.Rel Devm.CodePreserve pre out := by
+    Xinst.EffectRecAny Devm.CodePreserve x := by
   intro sevm pre xl out hxl run
   cases hsg : sevm.benvStat.rules.stateGas with
   | none => exact Xinst.codePreserve_effectRec x hsg hxl run
@@ -6308,6 +6322,110 @@ lemma Ninst.codePreserve_effectRec (n : Ninst) :
     exact (Ninst.stackAccess_effectRec_of_instructionFrame
       (R := Devm.CodePreserve) (fun _ _ hf a _ => (hf.getCode a).symm)).2.2
 
+lemma Ninst.push_instructionFrame_effectRec_any
+    {xs : Bytes} {hxs : xs.length ≤ 32} :
+    Ninst.EffectRecAny Devm.InstructionFrame (.push xs hxs) := by
+  intro pc sevm pre xl out hxl hRun
+  simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  apply Execution.Rel.bind Devm.instructionFrame_trans
+    (chargeGas_instructionFrame (if xs = [] then gBase else gVerylow) pre)
+  exact Devm.push_instructionFrame xs.toB256
+
+lemma Ninst.stackAccess_instructionFrame_effectRec_any {imm : UInt8} :
+    Ninst.EffectRecAny Devm.InstructionFrame (.dupn imm) ∧
+      Ninst.EffectRecAny Devm.InstructionFrame (.swapn imm) ∧
+      Ninst.EffectRecAny Devm.InstructionFrame (.exchange imm) := by
+  refine ⟨?_, ?_, ?_⟩ <;>
+    intro pc sevm pre xl out hxl hRun <;>
+    simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hRun <;>
+    obtain ⟨-, rfl⟩ := hRun
+  · split
+    · apply Execution.Rel.bind Devm.instructionFrame_trans
+        (chargeGas_instructionFrame gVerylow pre)
+      intro d
+      split
+      · exact Devm.instructionFrame_refl d
+      · split
+        · exact Devm.instructionFrame_refl d
+        · exact Devm.push_instructionFrame _ _
+    · exact Devm.instructionFrame_refl pre
+  · split
+    · apply Execution.Rel.bind Devm.instructionFrame_trans
+        (chargeGas_instructionFrame gVerylow pre)
+      intro d
+      split
+      · exact Devm.instructionFrame_refl d
+      · split
+        · exact Devm.instructionFrame_refl d
+        · exact Devm.withStack_instructionFrame d _
+    · exact Devm.instructionFrame_refl pre
+  · split
+    · apply Execution.Rel.bind Devm.instructionFrame_trans
+        (chargeGas_instructionFrame gVerylow pre)
+      intro d
+      split
+      · exact Devm.instructionFrame_refl d
+      · split
+        · exact Devm.instructionFrame_refl d
+        · exact Devm.withStack_instructionFrame d _
+    · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.codePreserve_effectRec_any (n : Ninst) :
+    Ninst.EffectRecAny Devm.CodePreserve n := by
+  cases n with
+  | reg r =>
+      intro pc sevm pre xl out hxl hrun
+      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
+      obtain ⟨-, rfl⟩ := hrun
+      exact Rinst.codePreserve_effect r rfl
+  | exec x =>
+      intro pc sevm pre xl out hxl hrun
+      simp only [Ninst.StepRun, Ninst.step_exec] at hrun
+      exact Xinst.codePreserve_effectRec_any x hxl (XStep.run_toStep.mp hrun)
+  | push xs hxs =>
+      intro pc sevm pre xl out hxl hrun
+      have h0 : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst h0
+      exact Outcome.Rel.mono
+        (fun _ _ hf a _ => (hf.getCode a).symm)
+        (Ninst.push_instructionFrame_effectRec_any (xl := .none) trivial hrun)
+  | dupn d =>
+      intro pc sevm pre xl out hxl hrun
+      have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_dupn (evm := ⟨pc, sevm, pre⟩) (d := d)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst h0
+      exact Outcome.Rel.mono
+        (fun _ _ hf a _ => (hf.getCode a).symm)
+        ((Ninst.stackAccess_instructionFrame_effectRec_any (imm := d)).1
+          (xl := .none) trivial hrun)
+  | swapn d =>
+      intro pc sevm pre xl out hxl hrun
+      have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_swapn (evm := ⟨pc, sevm, pre⟩) (d := d)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst h0
+      exact Outcome.Rel.mono
+        (fun _ _ hf a _ => (hf.getCode a).symm)
+        ((Ninst.stackAccess_instructionFrame_effectRec_any (imm := d)).2.1
+          (xl := .none) trivial hrun)
+  | exchange d =>
+      intro pc sevm pre xl out hxl hrun
+      have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_exchange (evm := ⟨pc, sevm, pre⟩) (d := d)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst h0
+      exact Outcome.Rel.mono
+        (fun _ _ hf a _ => (hf.getCode a).symm)
+        ((Ninst.stackAccess_instructionFrame_effectRec_any (imm := d)).2.2
+          (xl := .none) trivial hrun)
+
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
   intro evm out hrun
@@ -6331,6 +6449,89 @@ lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
   have h := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
     Ninst.codePreserve_effectRec Jinst.codePreserve_effect
     Linst.codePreserve_effect run hleg
+  cases exn with
+  | error e => exact h a ha
+  | ok d => exact h a ha
+
+lemma Linst.codePreserve_effect_any (l : Linst) :
+    Linst.EffectAny Devm.CodePreserve l := by
+  intro sevm pre out hrun
+  have hf := Linst.run_codeFrame_any hrun
+  cases out <;> exact fun a _ => hf a
+
+lemma Evm.step_effect_any {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R)
+    (hn : ∀ n, Ninst.EffectRecAny R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.EffectAny R l)
+    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel R xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel R devm out := by
+  rcases hgi : Evm.getInst ⟨pc, sevm, devm⟩ with _ | i
+  · rw [Evm.step_invOp hgi] at hrun
+    obtain ⟨-, rfl⟩ := hrun
+    exact hrefl _
+  · cases i with
+    | next n =>
+        rw [Evm.step_next (n := n) hgi] at hrun
+        exact hn n hxl hrun
+    | jump j =>
+        rw [Evm.step_jump (j := j) hgi] at hrun
+        obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
+        have hjr := hj j (evm := ⟨pc, sevm, devm⟩)
+          (out := j.run ⟨pc, sevm, devm⟩) rfl
+        rcases hcase with ⟨e, hje, rfl⟩ | ⟨pc', d, hje, rfl⟩ <;>
+          rw [hje] at hjr <;> exact hjr
+    | last l =>
+        rw [Evm.step_last (l := l) hgi] at hrun
+        obtain ⟨-, rfl⟩ := hrun
+        exact hl l rfl
+
+theorem Exec.effect_any {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
+    (hn : ∀ n, Ninst.EffectRecAny R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.EffectAny R l)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : Execution.Rel R pre out := by
+  have hcomp : ∀ {a b : Devm} {o : Execution},
+      R a b → Execution.Rel R b o → Execution.Rel R a o := by
+    intro a b o hab hbo
+    cases o <;> exact htrans hab hbo
+  induction run with
+  | halt hstep =>
+      exact Evm.step_effect_any hrefl hn hj hl (xl := .none) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+  | cont hstep _ ih =>
+      refine hcomp (?_ : R _ _) ih
+      exact Evm.step_effect_any hrefl hn hj hl (xl := .none) (out := .ok _) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+  | doneErr hstep henter hr =>
+      exact Evm.step_effect_any hrefl hn hj hl (xl := .none) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+  | doneOk hstep henter hr _ ih =>
+      refine hcomp (?_ : R _ _) ih
+      exact Evm.step_effect_any hrefl hn hj hl (xl := .none) (out := .ok _) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+  | @runErr _ _ _ _ _ _ cevm _ _ hstep henter _ hr ihc =>
+      exact Evm.step_effect_any hrefl hn hj hl (xl := .some ⟨_, _⟩) ihc
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+  | @runOk _ _ _ _ _ _ cevm _ _ _ hstep henter _ hr _ ihc ih =>
+      refine hcomp (?_ : R _ _) ih
+      exact Evm.step_effect_any hrefl hn hj hl
+        (xl := .some ⟨cevm, _⟩) (out := .ok _) ihc
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+
+lemma Exec.preserves_getCode_any {pc} {sevm} {devm} {exn}
+    (run : Exec pc sevm devm exn) :
+    ∀ a : Adr,
+      (devm.getCode a).toList ≠ [] →
+      Execution.getCode exn a = devm.getCode a := by
+  intro a ha
+  have h := Exec.effect_any codePreserve_refl_trans.1
+    codePreserve_refl_trans.2 Ninst.codePreserve_effectRec_any
+    Jinst.codePreserve_effect Linst.codePreserve_effect_any run
   cases exn with
   | error e => exact h a ha
   | ok d => exact h a ha
