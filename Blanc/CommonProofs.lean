@@ -3786,6 +3786,7 @@ lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Na
       · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
         rw [hmw]
         exact hp.trans h
+
     · rcases hpush : (incorporateChildOnSuccess parent child child.output).push 1 with
         e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
       · exact hp.trans h
@@ -3793,6 +3794,127 @@ lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Na
         rw [hmw]
         exact hp.trans h
 
+@[simp] lemma incorporateChildAmsterdamOnError_getCode
+    (parent child : Devm) (returnData : Bytes) (a : Adr) :
+    (incorporateChildAmsterdamOnError parent child returnData).getCode a =
+      child.getCode a := by
+  rfl
+
+@[simp] lemma incorporateChildAmsterdamOnSuccess_getCode
+    (parent child : Devm) (returnData : Bytes) (a : Adr) :
+    (incorporateChildAmsterdamOnSuccess parent child returnData).getCode a =
+      child.getCode a := by
+  rfl
+
+@[simp] lemma Devm.creditStateGasRefund_getCode
+    (amount : Nat) (devm : Devm) (a : Adr) :
+    (devm.creditStateGasRefund amount).getCode a = devm.getCode a := by
+  rfl
+
+/-- Amsterdam call resumption preserves every account's code when the child
+did. The settlement assertions can only return the child as their error state;
+both incorporation branches install the child's world, while refund credit,
+status push, and output copying are machine/meta operations. -/
+lemma Resume.callAmsterdam_getCode
+    {state : StateGasRules} {parent : Devm} {a : Adr}
+    {outputIndex outputSize : Nat} {newAccountCharged : Bool}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode
+      ((Resume.callAmsterdam state parent outputIndex outputSize
+        newAccountCharged).run r) a = parent.getCode a := by
+  have hmw : ∀ (d : Devm) (o : Bytes),
+      (d.memWrite outputIndex o).getCode a = d.getCode a := fun d o =>
+    (liftMachPure_worldEq (Mach.memWrite · outputIndex o) d).getCode a |>.symm
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, world, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind]
+  · dsimp only [MsgResult.getCode] at h
+    dsimp only [Execution.getCode]
+    change world.getCode a = parent.getCode a
+    exact h
+  · dsimp only [MsgResult.getCode] at h
+    repeat' split
+    · rename_i _ _ _ heq
+      unfold Except.assert at heq
+      split at heq <;> cases heq
+      exact h
+    · rename_i _ _ _ _ _ _ heq
+      have hp := Devm.push_getCode_gen heq a
+      apply hp.trans
+      apply Eq.trans _ h
+      split <;> rfl
+    · rename_i _ _ _ _ _ d heq
+      have hp := Devm.push_getCode_gen heq a
+      show (d.memWrite outputIndex _).getCode a = parent.getCode a
+      rw [hmw]
+      apply hp.trans
+      apply Eq.trans _ h
+      split <;> rfl
+    · rename_i _ _ _ heq
+      unfold Except.assert at heq
+      split at heq <;> cases heq
+      exact h
+    · rename_i _ _ _ _ _ _ heq
+      exact (Devm.push_getCode_gen heq a).trans
+        ((incorporateChildAmsterdamOnSuccess_getCode
+          parent child child.output a).trans h)
+    · rename_i _ _ _ _ _ d heq
+      show (d.memWrite outputIndex _).getCode a = parent.getCode a
+      rw [hmw]
+      exact (Devm.push_getCode_gen heq a).trans
+        ((incorporateChildAmsterdamOnSuccess_getCode
+          parent child child.output a).trans h)
+
+/-- Amsterdam create resumption has the same code-preservation boundary as
+the legacy path. The extra settlement assertions and refund credit do not
+write the world. -/
+lemma Resume.createAmsterdam_getCode
+    {state : StateGasRules} {parent : Devm} {newAddress a : Adr}
+    {newAccountCharged : Bool}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode
+      ((Resume.createAmsterdam state parent newAddress
+        newAccountCharged).run r) a = parent.getCode a := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, world, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind]
+  · dsimp only [MsgResult.getCode] at h
+    dsimp only [Execution.getCode]
+    change world.getCode a = parent.getCode a
+    exact h
+  · dsimp only [MsgResult.getCode] at h
+    split
+    · rcases ha : Except.assert child.AmsterdamFailedChildSettled _ with e | u
+      · rcases e with ⟨ee, d⟩
+        dsimp only [Execution.getCode]
+        unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h
+      · rcases hp : Devm.push 0
+            (if newAccountCharged = true then
+              Devm.creditStateGasRefund state.newAccount
+                (incorporateChildAmsterdamOnError parent child child.output)
+            else incorporateChildAmsterdamOnError parent child child.output) with e | d
+        · exact (Devm.push_getCode_gen hp a).trans (by
+            split <;> simp only [Devm.creditStateGasRefund_getCode,
+              incorporateChildAmsterdamOnError_getCode, h])
+        · exact (Devm.push_getCode_gen hp a).trans (by
+            split <;> simp only [Devm.creditStateGasRefund_getCode,
+              incorporateChildAmsterdamOnError_getCode, h])
+    · rcases ha : Except.assert child.AmsterdamChildUncommitted _ with e | u
+      · rcases e with ⟨ee, d⟩
+        dsimp only [Execution.getCode]
+        unfold Except.assert at ha
+        split at ha <;> cases ha
+        exact h
+      · rcases hp : Devm.push newAddress.toB256
+            (incorporateChildAmsterdamOnSuccess parent child []) with e | d
+        · exact (Devm.push_getCode_gen hp a).trans
+            ((incorporateChildAmsterdamOnSuccess_getCode parent child [] a).trans h)
+        · exact (Devm.push_getCode_gen hp a).trans
+            ((incorporateChildAmsterdamOnSuccess_getCode parent child [] a).trans h)
 /-- On the successful path the CREATE-family return installs the child's
 world; the status push leaves it alone. -/
 lemma Resume.create_state {parent child : Devm} {newAddress : Adr} {sf : Devm}
@@ -4250,6 +4372,81 @@ lemma genericCreate.step_spawn_frame
   · push Not at h_collision
     rw [← hpar newAddress]
     exact ByteArray.eq_empty_of_size_eq_zero h_collision.2.1
+
+@[simp] lemma Devm.withholdCreateGas_getCode (devm : Devm) (a : Adr) :
+    devm.withholdCreateGas.2.getCode a = devm.getCode a := by
+  rfl
+
+@[simp] lemma Devm.drainStateGasReservoir_getCode (devm : Devm) (a : Adr) :
+    devm.drainStateGasReservoir.2.getCode a = devm.getCode a := by
+  rfl
+
+@[simp] lemma Devm.withReturnData_getCode (devm : Devm) (a : Adr) :
+    (devm.withReturnData []).getCode a = devm.getCode a := by
+  rfl
+
+lemma genericCreateAmsterdam.step_spawn_frame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms
+      = .spawn f rsm) :
+    (∀ a : Adr, f.inner.benv.state.getCode a = devm.getCode a) ∧
+      f.inner.currentTarget = newAddress ∧
+      devm.getCode newAddress = .empty := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind,
+    Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  case h_2.isFalse =>
+    rename_i _ _ _ charged hcharge hcollision
+    have hchargeCode : ∀ a : Adr, charged.getCode a = devm.getCode a := by
+      intro a
+      exact (chargeStateGas_getCode_gen hcharge a).trans (by
+        simp only [Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.withReturnData_getCode])
+    have hpar : ∀ a : Adr,
+        ((charged.withholdCreateGas.2.drainStateGasReservoir.2).incrNonce
+          sevm.currentTarget).getCode a = devm.getCode a := by
+      intro a
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode]
+      exact hchargeCode a
+    refine ⟨fun a => ?_, rfl, ?_⟩
+    · simp only [Frame.ofCreate]
+      rw [processCreateMessage.msg_getCode, createMsg_benv_state_getCode]
+      exact hpar a
+    · push Not at hcollision
+      rw [← hchargeCode newAddress]
+      apply ByteArray.eq_empty_of_size_eq_zero
+      have hzero :
+          (charged.withholdCreateGas.2.getCode newAddress).size = 0 :=
+        hcollision.2.1
+      rwa [Devm.withholdCreateGas_getCode] at hzero
+  case isFalse.isFalse.isFalse =>
+    rename_i _ _ hcollision
+    have hpar : ∀ a : Adr,
+        (((Devm.balReadAccount sevm.benvStat.rules newAddress
+            (addAccessedAddress
+              (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+                (devm.withReturnData [])) newAddress)).withholdCreateGas.2.drainStateGasReservoir.2
+            ).incrNonce sevm.currentTarget).getCode a =
+          devm.getCode a := by
+      intro a
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode, Devm.balReadAccount_getCode,
+        addAccessedAddress_getCode, Devm.balReadAccount_getCode,
+        Devm.withReturnData_getCode]
+    refine ⟨fun a => ?_, rfl, ?_⟩
+    · simp only [Frame.ofCreate]
+      rw [processCreateMessage.msg_getCode, createMsg_benv_state_getCode]
+      exact hpar a
+    · push Not at hcollision
+      rw [← hpar newAddress]
+      apply ByteArray.eq_empty_of_size_eq_zero
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode]
+      exact hcollision.2.1
 
 lemma genericCall.step_spawn_frame
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
