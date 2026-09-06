@@ -69,12 +69,115 @@ has the pinned public origin, upstream parent, overlay, tree and commit.
 | Failure | Action |
 |---|---|
 | Existing destination | Choose a new root; preserve the failed environment. |
-| Missing Python | Use `--install-python` on a host with no existing base/alias. A partial or mismatching base is retained for diagnosis; compare it with the recipe's exact archive and executable identities before separately replacing it. |
+| Missing Python | Use `--install-python` on a host with no existing base/alias. For a partial or mismatching shared base/alias, follow the preservation and restoration procedure below. |
 | Missing offline artifact or dependency wheel | Populate the selected cache with an online construction using the same recipe, then retry at a new root. |
 | Artifact, source, export, or installed-file mismatch | Preserve the reported path and digest. Verify the pinned inputs and reconstruct a new root; do not relax the check or select newer dependencies. |
 | Dirty target, wrong interpreter, entrypoint or import origin | Select the newly reconstructed root with `JAUNE_T8N_TARGET`; the ordinary verifier explains the failed identity. |
 | Historical platform representation | Native reconstruction evidence and a reviewed generator update are still required for that platform. The verifier refuses to reinterpret the historical digest. |
 | Runtime lock mismatch after construction | Keep the construction receipt and report the mismatch. Do **not** run the lock writer merely to accept the current environment. |
+
+### Recovering a partial or mismatching shared Python
+
+The base and alias are shared uv paths outside the reconstructed target. Stop
+every current-mainnet gate and every other process or venv using them before a
+rename. Moving them temporarily breaks any dependent runtime until the pinned
+installation succeeds or the backups are restored.
+
+Select the native row and its pinned executable digest:
+
+| platform | `UV_ALIAS` | `UV_BASE` | `EXPECTED_PYTHON_SHA256` |
+|---|---|---|---|
+| macOS arm64 | `$HOME/.local/share/uv/python/cpython-3.11-macos-aarch64-none` | `$HOME/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none` | `ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884` |
+| Linux x86_64 | `$HOME/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu` | `$HOME/.local/share/uv/python/cpython-3.11.9-linux-x86_64-gnu` | `d1483a82342508f2ec2b172b788d5b676a59eaf70ed01ae846a0f84f63a3a82a` |
+
+Set the exact native values. For macOS arm64:
+
+```sh
+UV_ALIAS="$HOME/.local/share/uv/python/cpython-3.11-macos-aarch64-none"
+UV_BASE="$HOME/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none"
+EXPECTED_PYTHON_SHA256="ab895074dda5049329134df966da39ab9501dc562e80c7b43aec1fa2d7207884"
+```
+
+For Linux x86_64:
+
+```sh
+UV_ALIAS="$HOME/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu"
+UV_BASE="$HOME/.local/share/uv/python/cpython-3.11.9-linux-x86_64-gnu"
+EXPECTED_PYTHON_SHA256="d1483a82342508f2ec2b172b788d5b676a59eaf70ed01ae846a0f84f63a3a82a"
+```
+
+Then inspect both paths without changing them:
+
+```sh
+python3 - "$UV_ALIAS" "$UV_BASE" "$EXPECTED_PYTHON_SHA256" <<'PY'
+import hashlib
+import os
+from pathlib import Path
+import sys
+
+for raw in sys.argv[1:3]:
+    path = Path(raw)
+    print(f"path={path} lexists={os.path.lexists(path)} symlink={path.is_symlink()}")
+    if path.is_symlink():
+        print(f"  link={os.readlink(path)} resolved={path.resolve(strict=False)}")
+    python = path / "bin/python3.11"
+    if python.is_file():
+        digest = hashlib.sha256(python.read_bytes()).hexdigest()
+        print(f"  python={python} sha256={digest} expected={sys.argv[3]}")
+PY
+```
+
+Choose unused sibling backup names. The following checks both destinations
+before moving either source, refuses a collision including a dangling symlink,
+and preserves each existing path by a same-filesystem rename:
+
+```sh
+UV_ALIAS_BACKUP="${UV_ALIAS}.blanc-recovery-backup"
+UV_BASE_BACKUP="${UV_BASE}.blanc-recovery-backup"
+path_lexists() { [ -e "$1" ] || [ -L "$1" ]; }
+if path_lexists "$UV_ALIAS_BACKUP" || path_lexists "$UV_BASE_BACKUP"; then
+  echo "backup path already exists; choose new explicit backup names" >&2
+  exit 1
+fi
+if path_lexists "$UV_ALIAS"; then
+  mv "$UV_ALIAS" "$UV_ALIAS_BACKUP"
+fi
+if path_lexists "$UV_BASE"; then
+  mv "$UV_BASE" "$UV_BASE_BACKUP"
+fi
+```
+
+Rerun setup with `--install-python` and a new target root. Keep the backups
+until the setup command and `scripts/check-current-mainnet.sh` both pass.
+
+If reconstruction fails, keep its new base, alias, and target for diagnosis
+under separate unused names, then restore the prior shared paths. This sequence
+again refuses every destination collision before moving anything:
+
+```sh
+UV_ALIAS_FAILED="${UV_ALIAS}.blanc-recovery-failed"
+UV_BASE_FAILED="${UV_BASE}.blanc-recovery-failed"
+if path_lexists "$UV_ALIAS_FAILED" || path_lexists "$UV_BASE_FAILED"; then
+  echo "failed-installation path already exists; choose new explicit names" >&2
+  exit 1
+fi
+if path_lexists "$UV_ALIAS"; then
+  mv "$UV_ALIAS" "$UV_ALIAS_FAILED"
+fi
+if path_lexists "$UV_BASE"; then
+  mv "$UV_BASE" "$UV_BASE_FAILED"
+fi
+if path_lexists "$UV_BASE_BACKUP"; then
+  mv "$UV_BASE_BACKUP" "$UV_BASE"
+fi
+if path_lexists "$UV_ALIAS_BACKUP"; then
+  mv "$UV_ALIAS_BACKUP" "$UV_ALIAS"
+fi
+```
+
+The restored alias has its original target spelling, and the restored base
+occupies the exact path that existing venvs already reference. Preserve the
+failed reconstruction and its setup receipt until its mismatch is understood.
 
 `gen-current-mainnet-runtime-lock.py --write` remains a reviewed maintainer
 operation after native construction evidence and controls. It refreshes only
