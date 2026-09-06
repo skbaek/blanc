@@ -1039,6 +1039,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect
+#print axioms Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance
 #print axioms Blanc.Composition.ProrataWethVault.totalAssetsResources_of_run
 #print axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
 #print axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
