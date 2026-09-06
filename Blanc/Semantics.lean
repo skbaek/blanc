@@ -183,12 +183,27 @@ structure Devm.Rels : Type where
   /-- The Amsterdam fields. `Mach` gained `stateGas` (goal B) and `Meta` gained
   the two read sets (goal C). A frame that does not relate them cannot identify
   two machines — `Devm.eq_of_proj` needs seventeen projections now, not
-  fourteen — so the frame vocabulary grows with the machine. They default to
-  equality: under Prague and BPO2 no Blanc frame moves them, so every existing
-  `Devm.Rels` literal keeps its text and its meaning. -/
+  fourteen — so the frame vocabulary grows with the machine.
+
+  `stateGas` defaults to equality: it is part of what a frame is about, and no
+  legacy-lane step moves it.
+
+  The two **read sets default to `True`**, deliberately.  They are EIP-7928's
+  block-access-list recording: pure observation metadata that `Devm.balRead*`
+  writes beside every account and storage read, and that no Blanc statement is
+  about.  Before the Amsterdam bump these fields did not exist, so a frame
+  literal said nothing about them; defaulting them to `True` is exactly what
+  keeps each existing statement as strong as it was, while defaulting them to
+  equality would silently *strengthen* every `Devm.Rels.eq` frame into a claim
+  about the read log — a claim that is false the moment `rules.bal` is `some`,
+  and that would put a `stateGas = none` premise on the whole instruction
+  inversion family and its thousands of call sites.
+
+  A frame that genuinely needs the read log pinned — `Devm.BurnBy` and
+  `Devm.PopBurnBy`, which feed `Devm.eq_of_proj` — says so explicitly. -/
   (stateGas : StateGasMeter → StateGasMeter → Prop := _root_.Eq)
-  (accountReads : AdrSet → AdrSet → Prop := _root_.Eq)
-  (storageReads : KeySet → KeySet → Prop := _root_.Eq)
+  (accountReads : AdrSet → AdrSet → Prop := fun _ _ => True)
+  (storageReads : KeySet → KeySet → Prop := fun _ _ => True)
 
 /-- Canonical relation between dynamic EVM states, assembled field by field. -/
 structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where

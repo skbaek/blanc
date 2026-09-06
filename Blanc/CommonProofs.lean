@@ -344,13 +344,16 @@ def ForallSubExec (k : Nat) (ca : Adr) (p : Prog)
 def Exec.Wkn (ca : Adr) (p : Prog)
     (π : Exec.Pred)
     (pc sevm devm exn) (ex : Exec pc sevm devm exn) : Prop :=
-  p.At ca pc sevm devm → π pc sevm devm exn ex
+  sevm.benvStat.rules.stateGas = none →
+    p.At ca pc sevm devm → π pc sevm devm exn ex
 
 def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
   ∀ pc sevm devm exn (ex : Exec pc sevm devm exn), sevm.depth < k → ε pc sevm devm exn ex
 
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
-  ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
+  ForallDeeper k (fun pc sevm devm exn ex =>
+    sevm.benvStat.rules.stateGas = none →
+      p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
 lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
   (st.setBal adr val).getCode a = st.getCode a := by
@@ -403,6 +406,18 @@ lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : be
     subst h2
     dsimp [Benv.withState]
     exact State.subBal_getCode h_sub
+
+/-- The static half of a block environment survives a debit. -/
+lemma Benv.subBal_stat {benv benv' : Benv} {adr : Adr} {val : B256}
+    (h : benv.subBal adr val = some benv') : benv'.stat = benv.stat := by
+  dsimp [Benv.subBal, Option.bind] at h
+  split at h
+  · contradiction
+  · rename_i st' h_sub
+    injection h with h2
+    subst h2
+    rfl
+
 
 /-! The solvency-facing world relation. -/
 
@@ -1050,8 +1065,8 @@ lemma Devm.machFrame_setMach (d : Devm) (mach : Mach) :
     createdAccounts := rfl
     transientStorage := rfl
     stateGas := trivial
-    accountReads := rfl
-    storageReads := rfl }
+    accountReads := trivial
+    storageReads := trivial }
 
 lemma Devm.instructionFrame_setMachMeta (d : Devm) (view : Mach × Meta)
     (h : Meta.InstructionFrame d.meta view.2) :
@@ -1148,6 +1163,13 @@ lemma Devm.pop_instructionFrame (d : Devm) :
 lemma Devm.push_machFrame (x : B256) (d : Devm) :
     Execution.Rel Devm.MachFrame d (Devm.push x d) := by
   exact liftMachExecution_machFrame (Mach.push x) d
+
+/-- Replacing the stack stays inside the instruction frame. -/
+lemma Devm.withStack_instructionFrame (d : Devm) (stack : List B256) :
+    Devm.InstructionFrame d (d.withStack stack) := by
+  unfold Devm.withStack
+  exact Devm.instructionFrame_setMachMeta d
+    ⟨{d.mach with stack := stack}, d.meta⟩ ⟨rfl, rfl⟩
 
 lemma Devm.push_instructionFrame (x : B256) (d : Devm) :
     Execution.Rel Devm.InstructionFrame d (Devm.push x d) := by
@@ -1282,6 +1304,18 @@ lemma accessDelegation_instructionFrame (d : Devm) (adr : Adr) :
   · exact Devm.instructionFrame_refl d
   · exact addAccessedAddress_instructionFrame d _
 
+/-- The same, for the schedule-keyed sibling goal A introduced. Jaune kept
+`accessDelegation`'s name and arity and added `GasSchedule.accessDelegation`
+beside it; the two differ only in where the cold-access price comes from, and
+neither touches the world. -/
+lemma GasSchedule.accessDelegation_instructionFrame
+    (gas : GasSchedule) (d : Devm) (adr : Adr) :
+    Devm.InstructionFrame d (gas.accessDelegation d adr).2.2.2.2 := by
+  rw [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (d.state.getCode adr)
+  · exact Devm.instructionFrame_refl d
+  · exact addAccessedAddress_instructionFrame d _
+
 lemma addAccessedStorageKey_instructionFrame
     (d : Devm) (a : Adr) (k : B256) :
     Devm.InstructionFrame d (addAccessedStorageKey d a k) := by
@@ -1312,6 +1346,38 @@ lemma Devm.balReadStorage_instructionFrame
   exact Devm.instructionFrame_setMachMeta d
     ⟨d.mach, if rules.bal.isSome then d.meta.readStorage a k else d.meta⟩
     (by split <;> exact ⟨rfl, rfl⟩)
+
+/-- **The two Amsterdam switches move together.**
+
+`ForkRules.Valid` does not tie `stateGas` to `bal`, but `BenvStat.rules` is
+`Fork.ruleSet` of a five-constructor `Fork`, and Amsterdam is the only fork
+carrying either.  So a machine in the one-dimensional metering lane also builds
+no block access list, and every EIP-7928 recorder on it is the identity.  This
+is what lets a single `stateGas = none` premise carry a whole proof through
+Jaune's Amsterdam-series insertions. -/
+lemma BenvStat.bal_none_of_stateGas_none {s : BenvStat}
+    (h : s.rules.stateGas = none) : s.rules.bal = none := by
+  have key : ∀ f : Fork,
+      (Fork.ruleSet f).stateGas = none → (Fork.ruleSet f).bal = none := by
+    intro f hf
+    cases f <;> first | rfl | exact absurd hf (by decide)
+  exact key s.fork h
+
+/-- Under `bal = none` the account-read recorder is the identity. -/
+@[simp] lemma Devm.balReadAccount_eq_of_bal_none
+    {rules : ForkRules} (h : rules.bal = none) (a : Adr) (d : Devm) :
+    Devm.balReadAccount rules a d = d := by
+  unfold Devm.balReadAccount
+  rw [h]
+  rfl
+
+/-- Under `bal = none` the storage-read recorder is the identity. -/
+@[simp] lemma Devm.balReadStorage_eq_of_bal_none
+    {rules : ForkRules} (h : rules.bal = none) (a : Adr) (k : B256) (d : Devm) :
+    Devm.balReadStorage rules a k d = d := by
+  unfold Devm.balReadStorage
+  rw [h]
+  rfl
 
 lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
     Devm.InstructionFrame d (Devm.memRead d index size).2 := by
@@ -3085,6 +3151,25 @@ lemma benvAfterTransfer_ok_getCode {msg : Msg} {benv : Benv}
       exact Benv.subBal_getCode h_sub
   · simp only [Except.ok.injEq] at h; subst benv; rfl
 
+/-- The endowment transfer moves balance only; the block environment's static
+half -- the fork index, and through it the whole rule record -- is untouched.
+
+This is the first half of the bridge that lets a legacy-lane premise travel
+into a child frame: whatever a frame's entry does to the world, it does not
+change which fork the machine runs under. -/
+lemma benvAfterTransfer_ok_stat {msg : Msg} {benv : Benv}
+    (h : msg.benvAfterTransfer = .ok benv) : benv.stat = msg.benv.stat := by
+  dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h
+  split at h
+  · cases h_sub : msg.benv.subBal msg.caller msg.value with
+    | none => simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
+    | some benv_sub =>
+      simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
+      subst benv
+      dsimp [Benv.addBal]
+      exact Benv.subBal_stat h_sub
+  · simp only [Except.ok.injEq] at h; subst benv; rfl
+
 /-- Writer leaf: create preparation (nonce bump, created-account marking, empty
 storage) preserves code. -/
 lemma processCreateMessage.msg_getCode (msg : Msg) (a : Adr) :
@@ -3596,11 +3681,36 @@ lemma accessDelegation_of_not_delegation {d : Devm} {adr : Adr}
   rw [hnone]
   rfl
 
-lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
+/-- The schedule-keyed sibling: the resolution is the identity for a callee that
+is not a delegating EOA, whichever schedule prices the access. -/
+lemma GasSchedule.accessDelegation_of_not_delegation {gas : GasSchedule}
+    {d : Devm} {adr : Adr} (h : ¬ isValidDelegation (d.getCode adr)) :
+    gas.accessDelegation d adr = ⟨false, adr, d.getCode adr, 0, d⟩ := by
+  have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+  dsimp only [GasSchedule.accessDelegation]
+  rw [hnone]
+  rfl
+
+/-- Every external-call step has one of `Xinst.Shape`'s three shapes.
+
+The `stateGas = none` premise is the Amsterdam series arriving. Each
+`Xinst.step` arm is now two algorithms, and the metered one spawns through
+`genericCreateAmsterdam.step` / `genericCallAmsterdam.step` — functions
+`Xinst.Shape` does not name. Blanc could learn them, but saying what a metered
+spawn does is exactly the Amsterdam reasoning this goal does not do, so instead
+the premise records which machine the shape describes. Every consumer that fixes
+concrete rules discharges it by computation, which at a contract is everywhere.
+
+A follow-up Blanc goal removes this premise by giving `Xinst.Shape` its two
+Amsterdam arms and teaching the consumers to dispatch them. -/
+lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     Xinst.Shape sevm devm (Xinst.step sevm devm x) := by
   cases x with
   | create =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
@@ -3609,7 +3719,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     exact Xinst.shape_create
       (Devm.instructionFrame_trans h4 (Devm.memExtends_instructionFrame d4 _))
   | create2 =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
@@ -3619,7 +3729,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     exact Xinst.shape_create
       (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
   | call =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
@@ -3632,8 +3742,10 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 callee) :=
       Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 callee)
     have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d7 callee) callee
-    rcases hdel : accessDelegation (addAccessedAddress d7 callee) callee with
+      GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+        (addAccessedAddress d7 callee) callee
+    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress d7 callee) callee with
       ⟨dpv, na, cd, dagc, d8⟩
     rw [hdel] at hacc
     have h8 : Devm.InstructionFrame devm d8 :=
@@ -3646,10 +3758,10 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     · refine Xinst.shape_call
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
         h7' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
-      rw [accessDelegation_of_not_delegation hnd] at hdel
+      rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
       exact (congrArg (fun t => t.2.2.1) hdel).symm
   | callcode =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
@@ -3662,8 +3774,10 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 cadr) :=
       Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 cadr)
     have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d7 cadr) cadr
-    rcases hdel : accessDelegation (addAccessedAddress d7 cadr) cadr with
+      GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+        (addAccessedAddress d7 cadr) cadr
+    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress d7 cadr) cadr with
       ⟨dpv, na, cd, dagc, d8⟩
     rw [hdel] at hacc
     have h8 : Devm.InstructionFrame devm d8 :=
@@ -3676,7 +3790,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
         (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
         h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
   | delegatecall =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
@@ -3688,8 +3802,10 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 cadr) :=
       Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 cadr)
     have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d6 cadr) cadr
-    rcases hdel : accessDelegation (addAccessedAddress d6 cadr) cadr with
+      GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+        (addAccessedAddress d6 cadr) cadr
+    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress d6 cadr) cadr with
       ⟨dpv, na, cd, dagc, d7⟩
     rw [hdel] at hacc
     have h7 : Devm.InstructionFrame devm d7 :=
@@ -3699,7 +3815,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
       (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
       h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
   | staticcall =>
-    simp only [Xinst.step]
+    simp only [Xinst.step, hleg]
     refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
       (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
     refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
@@ -3711,8 +3827,10 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 tgt) :=
       Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 tgt)
     have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d6 tgt) tgt
-    rcases hdel : accessDelegation (addAccessedAddress d6 tgt) tgt with
+      GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+        (addAccessedAddress d6 tgt) tgt
+    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress d6 tgt) tgt with
       ⟨dpv, na, cd, dagc, d7⟩
     rw [hdel] at hacc
     have h7 : Devm.InstructionFrame devm d7 :=
@@ -3721,7 +3839,7 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     refine Xinst.shape_call
       (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
       h6' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
-    rw [accessDelegation_of_not_delegation hnd] at hdel
+    rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
     exact (congrArg (fun t => t.2.2.1) hdel).symm
 
 /-! ### What a spawned child frame starts from
@@ -3760,6 +3878,14 @@ lemma Frame.enter_run_getCode {f : Frame} {cevm : Evm}
     cevm.dyna.getCode a = f.inner.benv.state.getCode a := by
   obtain ⟨benv, hbenv, rfl⟩ := Frame.enter_run_inv h
   exact benvAfterTransfer_ok_getCode hbenv a
+
+/-- Second half of the fork bridge: an entered frame's initial machine reads the
+block rules its message carried. -/
+lemma Frame.enter_run_benvStat {f : Frame} {cevm : Evm}
+    (h : f.enter = .run cevm) :
+    cevm.sta.benvStat = f.inner.benv.stat := by
+  obtain ⟨benv, hbenv, rfl⟩ := Frame.enter_run_inv h
+  exact benvAfterTransfer_ok_stat hbenv
 
 lemma genericCreate.step_spawn_frame
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
@@ -3807,10 +3933,41 @@ lemma genericCall.step_spawn_frame
   all_goals obtain ⟨rfl, -⟩ := hs
   exact ⟨fun _ => rfl, rfl, rfl⟩
 
+/-- A spawned create frame runs under its parent's block rules. -/
+lemma genericCreate.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {mi ms : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreate.step sevm devm endowment newAddress mi ms
+      = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- A spawned call frame runs under its parent's block rules. -/
+lemma genericCall.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCall.step sevm devm gas value caller target codeAddress stv
+      isSt ii isz oi osz code dp = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
 lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (a : Adr) : f.inner.benv.state.getCode a = devm.getCode a := by
-  rcases Xinst.step_shape sevm devm x with ⟨ex, hsh, -⟩ |
+  rcases Xinst.step_shape sevm devm x hleg with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
@@ -3818,12 +3975,40 @@ lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
   · rw [(genericCreate.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCall.step_spawn_frame hs).1 a, hf.getCode a]
 
+/-- **The fork travels into the child.**  Whatever an external-call step spawns,
+the child frame's message carries the parent's `BenvStat`, so the child machine
+runs under the same fork and therefore the same rule record.
+
+This is the bridge that lets a legacy-lane premise (`rules.stateGas = none`)
+descend through `Exec`'s recursion: the relational effect families below fix the
+lane once at the top of a message and re-derive it for every child. -/
+lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
+    f.inner.benv.stat = sevm.benvStat := by
+  rcases Xinst.step_shape sevm devm x hleg with ⟨ex, hsh, -⟩ |
+    ⟨d, e, na, mi, ms, hf, hsh⟩ |
+    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
+  · cases hs
+  · exact genericCreate.step_spawn_benvStat hs
+  · exact genericCall.step_spawn_benvStat hs
+
 /-- Delegation resolution is the identity on an address whose code carries no
 EIP-7702 designator, so the resolved code address is the queried address. -/
 private lemma accessDelegation_codeAddress_of_none {d : Devm} {adr : Adr}
     (h : getDelegatedCodeAddress (d.getCode adr) = none) :
     (accessDelegation d adr).2.1 = adr := by
   dsimp only [accessDelegation]
+  rw [show getDelegatedCodeAddress (d.state.getCode adr) = none from h]
+
+/-- The same for the schedule-keyed resolution goal A added beside the legacy
+one; the two agree on everything but the cold-access price. -/
+private lemma GasSchedule.accessDelegation_codeAddress_of_none
+    {gas : GasSchedule} {d : Devm} {adr : Adr}
+    (h : getDelegatedCodeAddress (d.getCode adr) = none) :
+    (gas.accessDelegation d adr).2.1 = adr := by
+  dsimp only [GasSchedule.accessDelegation]
   rw [show getDelegatedCodeAddress (d.state.getCode adr) = none from h]
 
 /-- An actual call-type spawn aimed away from the current account and at an
@@ -3836,6 +4021,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
     {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (hne : sevm.currentTarget ≠ f.inner.currentTarget)
     (hcode : devm.getCode f.inner.currentTarget ≠ .empty)
     (hnodel :
@@ -3844,7 +4030,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
   have horig := hs
   cases x with
   | create =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind] at hs
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3855,11 +4041,11 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
           calc
             devm.getCode f.inner.currentTarget =
                 f.inner.benv.state.getCode f.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horig _).symm
+              (Xinst.step_spawn_getCode horig hleg _).symm
             _ = _ := hfresh.1 _
             _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
   | create2 =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind] at hs
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3870,11 +4056,11 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
           calc
             devm.getCode f.inner.currentTarget =
                 f.inner.benv.state.getCode f.inner.currentTarget :=
-              (Xinst.step_spawn_getCode horig _).symm
+              (Xinst.step_spawn_getCode horig hleg _).symm
             _ = _ := hfresh.1 _
             _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
   | call =>
-      simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind, Except.assert] at hs
       split at hs
       · simp only [XStep.ofExcept, reduceCtorEq] at hs
       rename_i _ vgas hgas
@@ -3916,11 +4102,12 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
             simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
-            refine congrArg some (accessDelegation_codeAddress_of_none ?_)
+            refine congrArg some
+              (GasSchedule.accessDelegation_codeAddress_of_none ?_)
             rw [hgc]
             exact hnodel
   | callcode =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind] at hs
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3928,7 +4115,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
         | have htgt := (genericCall.step_spawn_frame hs).2.1
           exact False.elim (hne htgt.symm)
   | delegatecall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind] at hs
       repeat' split at hs
       all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
       all_goals first
@@ -3936,7 +4123,7 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
         | have htgt := (genericCall.step_spawn_frame hs).2.1
           exact False.elim (hne htgt.symm)
   | staticcall =>
-      simp only [Xinst.step, Bind.bind, Except.bind] at hs
+      simp only [Xinst.step, hleg, Bind.bind, Except.bind] at hs
       split at hs
       · simp only [XStep.ofExcept, reduceCtorEq] at hs
       rename_i _ vgas hgas
@@ -3973,7 +4160,8 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
             simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
-            refine congrArg some (accessDelegation_codeAddress_of_none ?_)
+            refine congrArg some
+              (GasSchedule.accessDelegation_codeAddress_of_none ?_)
             rw [hgc]
             exact hnodel
 
@@ -3981,12 +4169,13 @@ theorem Xinst.step_spawn_codeAddress_eq_currentTarget
 an address that had none; `CALLCODE`/`DELEGATECALL` keep the parent's target;
 the remaining call kinds load the callee's own code unless it delegates. -/
 lemma Xinst.step_spawn_source {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
     devm.getCode f.inner.currentTarget = .empty ∨
     f.inner.currentTarget = sevm.currentTarget ∨
     ( ¬ isValidDelegation (devm.getCode f.inner.currentTarget) →
         f.inner.code = devm.getCode f.inner.currentTarget ) := by
-  rcases Xinst.step_shape sevm devm x with ⟨ex, hsh, -⟩ |
+  rcases Xinst.step_shape sevm devm x hleg with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, hf₀, -, hsrc, hsh⟩ <;> rw [hsh] at hs
@@ -4002,10 +4191,95 @@ lemma Xinst.step_spawn_source {sevm : Sevm} {devm : Devm} {x : Xinst}
       rw [hcode]
       exact hsrc hnd
 
+/-- The block rules a suspended child slot runs under are its parent's. -/
+lemma Evm.step_spawn_benvStat {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
+    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
+    (hleg : sevm.benvStat.rules.stateGas = none)
+    (he : f.enter = .run cevm) :
+    cevm.sta.benvStat = sevm.benvStat := by
+  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
+  exact (Frame.enter_run_benvStat he).trans (Xinst.step_spawn_benvStat hx hleg)
+
+/-- The same, read off a suspended `Xinst` run rather than a step equation. -/
+lemma Xinst.run_slot_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {evm : Evm} {raw out : Execution}
+    (hrun : Xinst.Run sevm devm x (.some ⟨evm, raw⟩) out)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
+    evm.sta.benvStat = sevm.benvStat := by
+  unfold Xinst.Run XStep.Run at hrun
+  cases hst : Xinst.step sevm devm x with
+  | done e =>
+    rw [hst] at hrun
+    exact absurd hrun.1 (by simp)
+  | spawn f rsm =>
+    rw [hst] at hrun
+    obtain ⟨r, hframe, -⟩ := hrun
+    unfold RunFrame at hframe
+    cases he : f.enter with
+    | done r' =>
+      rw [he] at hframe
+      exact absurd hframe.1 (by simp)
+    | run cevm =>
+      rw [he] at hframe
+      obtain ⟨raw', hxl, -⟩ := hframe
+      have hev : evm = cevm := by
+        have h' : (⟨evm, raw⟩ : Evm × Execution) = ⟨cevm, raw'⟩ := by
+          injection hxl
+        exact congrArg Prod.fst h'
+      subst hev
+      exact (Frame.enter_run_benvStat he).trans (Xinst.step_spawn_benvStat hst hleg)
+
+/-! EIP-8024's three stack-access instructions never suspend: whatever the
+immediate decodes to, their step is an `ofExecution`.  Stated existentially so
+that no consumer has to restate the decode. -/
+
+lemma Ninst.step_dupn {evm : Evm} {d : UInt8} :
+    ∃ e : Execution,
+      Ninst.step evm (.dupn d) = Step.ofExecution (evm.pc + 2) e := ⟨_, rfl⟩
+
+lemma Ninst.step_swapn {evm : Evm} {d : UInt8} :
+    ∃ e : Execution,
+      Ninst.step evm (.swapn d) = Step.ofExecution (evm.pc + 2) e := ⟨_, rfl⟩
+
+lemma Ninst.step_exchange {evm : Evm} {d : UInt8} :
+    ∃ e : Execution,
+      Ninst.step evm (.exchange d) = Step.ofExecution (evm.pc + 2) e := ⟨_, rfl⟩
+
+/-- The slot a nonterminal step suspends on runs under the same fork. -/
+lemma Ninst.stepRun_slot_benvStat {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {n : Ninst} {evm : Evm} {raw out : Execution}
+    (hrun : Ninst.StepRun pc sevm devm n (.some ⟨evm, raw⟩) out)
+    (hleg : sevm.benvStat.rules.stateGas = none) :
+    evm.sta.benvStat = sevm.benvStat := by
+  cases n with
+  | reg r =>
+    simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
+    exact absurd hrun.1 (by simp)
+  | push xs hxs =>
+    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hrun
+    exact absurd hrun.1 (by simp)
+  | exec x =>
+    simp only [Ninst.StepRun, Ninst.step_exec] at hrun
+    exact Xinst.run_slot_benvStat (XStep.run_toStep.mp hrun) hleg
+  | dupn d =>
+    obtain ⟨e, he⟩ := Ninst.step_dupn (evm := ⟨pc, sevm, devm⟩) (d := d)
+    simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+    exact absurd hrun.1 (by simp)
+  | swapn d =>
+    obtain ⟨e, he⟩ := Ninst.step_swapn (evm := ⟨pc, sevm, devm⟩) (d := d)
+    simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+    exact absurd hrun.1 (by simp)
+  | exchange d =>
+    obtain ⟨e, he⟩ := Ninst.step_exchange (evm := ⟨pc, sevm, devm⟩) (d := d)
+    simp only [Ninst.StepRun, he, Step.run_ofExecution] at hrun
+    exact absurd hrun.1 (by simp)
+
 /-- Everything the child slot has to know about its own program location. -/
 lemma Evm.step_spawn_child {pc : Nat} {sevm : Sevm} {devm : Devm}
     {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
     (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (he : f.enter = .run cevm) :
     cevm.pc = 0 ∧
     (∀ a : Adr, cevm.dyna.getCode a = devm.getCode a) ∧
@@ -4018,10 +4292,10 @@ lemma Evm.step_spawn_child {pc : Nat} {sevm : Sevm} {devm : Devm}
   have hcode := Frame.enter_run_code he
   refine ⟨Frame.enter_run_pc he, fun a => ?_, fun hne hnotEmpty hnotDel => ?_⟩
   · rw [Frame.enter_run_getCode he a]
-    exact Xinst.step_spawn_getCode hx a
+    exact Xinst.step_spawn_getCode hx hleg a
   · rw [htgt] at hne hnotEmpty hnotDel ⊢
     rw [hcode]
-    rcases Xinst.step_spawn_source hx with hempty | hsame | hsrc
+    rcases Xinst.step_spawn_source hx hleg with hempty | hsame | hsrc
     · exact absurd hempty hnotEmpty
     · exact absurd hsame.symm hne
     · exact hsrc hnotDel
@@ -4077,9 +4351,13 @@ lemma Jinst.preserves_getCode_gen
   cases ex <;> exact (hf.getCode a).symm
 
 lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (run : Linst.Run sevm devm .selfdestruct exn) :
     ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
   intro adr
+  have hbal := BenvStat.bal_none_of_stateGas_none hleg
+  simp only [Linst.Run, Linst.run, hleg,
+    Devm.balReadAccount_eq_of_bal_none hbal] at run
   dsimp [Linst.Run, Linst.run] at run
   revert run
   dsimp [bind, Except.bind]
@@ -4087,11 +4365,11 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
   case error err =>
     intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
   case ok res1 =>
-    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode adr = res1.2.getCode adr := by
+    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode adr = res1.2.getCode adr := by
       split
       · exact addAccessedAddress_getCode
       · rfl
-    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
     case error err =>
       intro run; rw [← run]
       change err.2.getCode adr = devm.getCode adr
@@ -4146,10 +4424,11 @@ def Devm.CodeFrame (before after : Devm) : Prop :=
   ∀ a : Adr, after.getCode a = before.getCode a
 
 theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
-    {exn : Execution} (run : Linst.Run sevm devm l exn) :
+    {exn : Execution} (hleg : sevm.benvStat.rules.stateGas = none)
+    (run : Linst.Run sevm devm l exn) :
     Execution.Rel Devm.CodeFrame devm exn := by
   rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
-  · cases exn <;> exact Linst.selfdestruct_preserves_getCode run
+  · cases exn <;> exact Linst.selfdestruct_preserves_getCode hleg run
   · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
     rw [run] at hf
     cases exn <;> exact fun a => (hf.getCode a).symm
@@ -4170,37 +4449,58 @@ def Jinst.Effect (R : Devm → Devm → Prop) (j : Jinst) : Prop :=
     Jinst.Run evm j out →
       Outcome.Rel Prod.snd Prod.snd R evm.dyna out
 
+/-! ### The legacy lane, carried explicitly
+
+Jaune's Amsterdam series routes `SELFDESTRUCT` and the whole external-call
+family through second arms selected by `rules.stateGas`.  `Xinst.Shape` names
+the three shapes the *legacy* arms take, so every master that argues over it
+now fixes the lane it is about.  Rather than repeat the equation at each
+statement, the effect families below carry it once, and
+`Xinst.step_spawn_benvStat` re-derives it for every child frame, so a whole
+`Exec` derivation is covered by fixing the fork at its root -- which every
+Blanc contract theorem does.  A follow-up Blanc goal removes these premises by
+teaching `Xinst.Shape` the two Amsterdam dispatch targets. -/
+
+/-- A suspended child slot that runs under a legacy-lane fork. -/
+def Xlot.Legacy : Xlot → Prop
+  | .none => True
+  | .some ⟨evm, _⟩ => evm.sta.benvStat.rules.stateGas = none
+
 /-- Canonical outcome-aware effect of a terminal instruction. -/
 def Linst.Effect (R : Devm → Devm → Prop) (l : Linst) : Prop :=
   ∀ {sevm pre out},
-    Linst.Run sevm pre l out → Execution.Rel R pre out
+    sevm.benvStat.rules.stateGas = none →
+      Linst.Run sevm pre l out → Execution.Rel R pre out
 
 /-- Recursive-execution effect, parameterized by the relation on its child slot. -/
 def Xinst.EffectRec (R : Devm → Devm → Prop) (x : Xinst) : Prop :=
   ∀ {sevm pre xl out},
-    Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
+    sevm.benvStat.rules.stateGas = none →
+      Xlot.Rel R xl → Xinst.Run sevm pre x xl out → Execution.Rel R pre out
 
 /-- Nonterminal effect consumed by the mutual `Exec.effect` traversal. -/
 def Ninst.EffectRec (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {pc sevm pre xl out},
-    Xlot.Rel R xl → Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
+    sevm.benvStat.rules.stateGas = none →
+      Xlot.Rel R xl → Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
 
 /-- Successful-run relational projection used by `Func.effect`. -/
 def Ninst.Effect (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
-  ∀ {sevm pre post}, Ninst.Run sevm pre n post → R pre post
+  ∀ {sevm pre post},
+    sevm.benvStat.rules.stateGas = none → Ninst.Run sevm pre n post → R pre post
 
 lemma Ninst.effectRec_reg {R : Devm → Devm → Prop} {r : Rinst}
     (hr : Rinst.Effect R r) : Ninst.EffectRec R (.reg r) := by
-  intro pc sevm pre xl out hxl hrun
+  intro pc sevm pre xl out _ hxl hrun
   simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
   obtain ⟨-, rfl⟩ := hrun
   exact hr rfl
 
 lemma Ninst.effectRec_exec {R : Devm → Devm → Prop} {x : Xinst}
     (hx : Xinst.EffectRec R x) : Ninst.EffectRec R (.exec x) := by
-  intro pc sevm pre xl out hxl hrun
+  intro pc sevm pre xl out hleg hxl hrun
   simp only [Ninst.StepRun, Ninst.step_exec] at hrun
-  exact hx hxl (XStep.run_toStep.mp hrun)
+  exact hx hleg hxl (XStep.run_toStep.mp hrun)
 
 /-- One step of the driver, related through whichever instruction the program
 counter decodes to.  With the interpreter flattened this is the single place
@@ -4212,6 +4512,7 @@ lemma Evm.step_effect {R : Devm → Devm → Prop}
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (hxl : Xlot.Rel R xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
     Execution.Rel R devm out := by
@@ -4222,7 +4523,7 @@ lemma Evm.step_effect {R : Devm → Devm → Prop}
   · cases i with
     | next n =>
       rw [Evm.step_next (n := n) hgi] at hrun
-      exact hn n hxl hrun
+      exact hn n hleg hxl hrun
     | jump j =>
       rw [Evm.step_jump (j := j) hgi] at hrun
       obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
@@ -4232,7 +4533,7 @@ lemma Evm.step_effect {R : Devm → Devm → Prop}
     | last l =>
       rw [Evm.step_last (l := l) hgi] at hrun
       obtain ⟨-, rfl⟩ := hrun
-      exact hl l rfl
+      exact hl l hleg rfl
 
 /-- The load-bearing traversal: per-instruction canonical effects compose into
 `Execution.Rel` for a complete `Exec` derivation.  Where the old proof had one
@@ -4243,32 +4544,44 @@ theorem Exec.effect {R : Devm → Devm → Prop}
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : Execution.Rel R pre out := by
+    (run : Exec pc sevm pre out) :
+    sevm.benvStat.rules.stateGas = none → Execution.Rel R pre out := by
   have hcomp : ∀ {a b : Devm} {o : Execution},
       R a b → Execution.Rel R b o → Execution.Rel R a o := by
     intro a b o hab hbo
     cases o <;> exact htrans hab hbo
   induction run with
   | halt hstep =>
-    exact Evm.step_effect hrefl hn hj hl (xl := .none) trivial
+    intro hleg
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .none) trivial
       (by rw [hstep]; exact ⟨rfl, rfl⟩)
   | cont hstep _ ih =>
-    refine hcomp (?_ : R _ _) ih
-    exact Evm.step_effect hrefl hn hj hl (xl := .none) (out := .ok _) trivial
+    intro hleg
+    refine hcomp (?_ : R _ _) (ih hleg)
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .none) (out := .ok _) trivial
       (by rw [hstep]; exact ⟨rfl, rfl⟩)
   | doneErr hstep henter hr =>
-    exact Evm.step_effect hrefl hn hj hl (xl := .none) trivial
+    intro hleg
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .none) trivial
       (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
   | doneOk hstep henter hr _ ih =>
-    refine hcomp (?_ : R _ _) ih
-    exact Evm.step_effect hrefl hn hj hl (xl := .none) (out := .ok _) trivial
+    intro hleg
+    refine hcomp (?_ : R _ _) (ih hleg)
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .none) (out := .ok _) trivial
       (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
-  | runErr hstep henter _ hr ihc =>
-    exact Evm.step_effect hrefl hn hj hl (xl := .some ⟨_, _⟩) ihc
+  | @runErr _ _ _ _ _ _ cevm _ _ hstep henter _ hr ihc =>
+    intro hleg
+    have hchild : cevm.sta.benvStat.rules.stateGas = none := by
+      rw [Evm.step_spawn_benvStat hstep hleg henter]; exact hleg
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .some ⟨_, _⟩) (ihc hchild)
       (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
-  | runOk hstep henter _ hr _ ihc ih =>
-    refine hcomp (?_ : R _ _) ih
-    exact Evm.step_effect hrefl hn hj hl (xl := .some ⟨_, _⟩) (out := .ok _) ihc
+  | @runOk _ _ _ _ _ _ cevm _ _ _ hstep henter _ hr _ ihc ih =>
+    intro hleg
+    have hchild : cevm.sta.benvStat.rules.stateGas = none := by
+      rw [Evm.step_spawn_benvStat hstep hleg henter]; exact hleg
+    refine hcomp (?_ : R _ _) (ih hleg)
+    exact Evm.step_effect hrefl hn hj hl hleg (xl := .some ⟨_, _⟩) (out := .ok _)
+      (ihc hchild)
       (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
@@ -4276,13 +4589,13 @@ lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hn : ∀ n, Ninst.EffectRec R n)
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l)
-    {xl : Xlot} (hfilled : xl.Filled) : Xlot.Rel R xl := by
+    {xl : Xlot} (hfilled : xl.Filled) (hleg : xl.Legacy) : Xlot.Rel R xl := by
   cases xl with
   | none => trivial
   | some slot =>
     rcases slot with ⟨evm, out⟩
     rcases hfilled with ⟨hrun⟩
-    exact Exec.effect hrefl htrans hn hj hl hrun
+    exact Exec.effect hrefl htrans hn hj hl hrun hleg
 
 lemma Ninst.effect_of_effectRec {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
@@ -4290,10 +4603,18 @@ lemma Ninst.effect_of_effectRec {R : Devm → Devm → Prop}
     (hj : ∀ j, Jinst.Effect R j)
     (hl : ∀ l, Linst.Effect R l) :
     ∀ n, Ninst.Effect R n := by
-  intro n sevm pre post hrun
+  intro n sevm pre post hleg hrun
   rcases hrun with ⟨xl, hfilled, pc, hrun'⟩
-  have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled
-  exact hn n hrel hrun'
+  have hxleg : xl.Legacy := by
+    cases xl with
+    | none => trivial
+    | some slot =>
+      rcases slot with ⟨evm, raw⟩
+      show evm.sta.benvStat.rules.stateGas = none
+      rw [Ninst.stepRun_slot_benvStat hrun' hleg]
+      exact hleg
+  have hrel := Xlot.rel_of_filled hrefl htrans hn hj hl hfilled hxleg
+  exact hn n hleg hrel hrun'
 
 theorem Func.effect {R : Devm → Devm → Prop}
     (htrans : TransitiveRel R)
@@ -4302,18 +4623,24 @@ theorem Func.effect {R : Devm → Devm → Prop}
     (hn : ∀ n, Ninst.Effect R n)
     (hl : ∀ l, Linst.Effect R l)
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {p : Func}
-    (run : Func.Run fs sevm pre p post) : R pre post := by
+    (run : Func.Run fs sevm pre p post) :
+    sevm.benvStat.rules.stateGas = none → R pre post := by
   induction run with
   | zero pop run' ih =>
-    exact htrans (hpop _ _ _ pop) ih
+    intro hleg
+    exact htrans (hpop _ _ _ pop) (ih hleg)
   | succ neq pop burn run' ih =>
-    exact htrans (hpop _ _ _ pop) (htrans (hburn _ _ burn) ih)
+    intro hleg
+    exact htrans (hpop _ _ _ pop) (htrans (hburn _ _ burn) (ih hleg))
   | last run' =>
-    exact hl _ run'
+    intro hleg
+    exact hl _ hleg run'
   | next runi run' ih =>
-    exact htrans (hn _ runi) ih
+    intro hleg
+    exact htrans (hn _ hleg runi) (ih hleg)
   | call eq burn run' ih =>
-    exact htrans (hburn _ _ burn) ih
+    intro hleg
+    exact htrans (hburn _ _ burn) (ih hleg)
 
 -- Relational form of code preservation: nonempty code is never modified.
 def Devm.CodePreserve (pre post : Devm) : Prop :=
@@ -4363,7 +4690,7 @@ observation theorem `Xinst.preserves_getCode_gen` is a projection of this master
 the `Xlot.InvGetCode` / `Xlot.Rel Devm.CodePreserve` bridge. -/
 lemma Xinst.codePreserve_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.CodePreserve x := by
-  intro sevm devm xl exn hxl run
+  intro sevm devm xl exn hleg hxl run
   have inv : xl.InvGetCode := Xlot.invGetCode_of_rel hxl
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
       Execution.CodePreserve d exn →
@@ -4378,7 +4705,7 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
     | error e => exact fun a ha => key a ha
     | ok d' => exact fun a ha => key a ha
   unfold Xinst.Run at run
-  rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shape sevm devm x hleg with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hs⟩ <;>
@@ -4396,12 +4723,13 @@ the relational master `Xinst.codePreserve_effectRec` through the
 `Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
 lemma Xinst.preserves_getCode_gen
     {sevm devm x xl exn}
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (inv : xl.InvGetCode)
     (run : Xinst.Run sevm devm x xl exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
       Execution.getCode exn a = devm.getCode a := by
-  have h := Xinst.codePreserve_effectRec x (Xlot.rel_of_invGetCode inv) run
+  have h := Xinst.codePreserve_effectRec x hleg (Xlot.rel_of_invGetCode inv) run
   cases exn with
   | error e => exact fun a ha => h a ha
   | ok d => exact fun a ha => h a ha
@@ -4409,7 +4737,7 @@ lemma Xinst.preserves_getCode_gen
 lemma Ninst.push_instructionFrame_effectRec
     {xs : Bytes} {hxs : xs.length ≤ 32} :
     Ninst.EffectRec Devm.InstructionFrame (.push xs hxs) := by
-  intro pc sevm pre xl out hxl hRun
+  intro pc sevm pre xl out _ hxl hRun
   simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hRun
   obtain ⟨-, rfl⟩ := hRun
   apply Execution.Rel.bind Devm.instructionFrame_trans
@@ -4420,14 +4748,95 @@ lemma Ninst.push_effectRec_of_instructionFrame
     {R : Devm → Devm → Prop} {xs : Bytes} {hxs : xs.length ≤ 32}
     (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
     Ninst.EffectRec R (.push xs hxs) := by
-  intro pc sevm pre xl out hxl hRun
+  intro pc sevm pre xl out hleg hxl hRun
   have h0 : xl = .none := by
     simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hRun
     exact hRun.1
   subst h0
   exact Outcome.Rel.mono hIR
     (Ninst.push_instructionFrame_effectRec (hxs := hxs) (xl := .none)
-      trivial hRun)
+      hleg trivial hRun)
+
+/-! EIP-8024's three stack-access instructions charge `VERY_LOW` and rearrange
+the stack; like `PUSH` they never suspend and never leave the instruction
+frame, so every relation implied by `Devm.InstructionFrame` holds of them. -/
+
+lemma Ninst.dupn_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.dupn imm) := by
+  intro pc sevm pre xl out _ hxl hRun
+  simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gVerylow pre)
+    intro d
+    split
+    · exact Devm.instructionFrame_refl d
+    · split
+      · exact Devm.instructionFrame_refl d
+      · exact Devm.push_instructionFrame _ _
+  · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.swapn_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.swapn imm) := by
+  intro pc sevm pre xl out _ hxl hRun
+  simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gVerylow pre)
+    intro d
+    split
+    · exact Devm.instructionFrame_refl d
+    · split
+      · exact Devm.instructionFrame_refl d
+      · exact Devm.withStack_instructionFrame d _
+  · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.exchange_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.exchange imm) := by
+  intro pc sevm pre xl out _ hxl hRun
+  simp only [Ninst.StepRun, Ninst.step, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · apply Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame gVerylow pre)
+    intro d
+    split
+    · exact Devm.instructionFrame_refl d
+    · split
+      · exact Devm.instructionFrame_refl d
+      · exact Devm.withStack_instructionFrame d _
+  · exact Devm.instructionFrame_refl pre
+
+/-- The three stack-access instructions, for any relation implied by the
+instruction frame. -/
+lemma Ninst.stackAccess_effectRec_of_instructionFrame
+    {R : Devm → Devm → Prop} {imm : UInt8}
+    (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
+    Ninst.EffectRec R (.dupn imm) ∧ Ninst.EffectRec R (.swapn imm) ∧
+      Ninst.EffectRec R (.exchange imm) := by
+  refine ⟨?_, ?_, ?_⟩ <;>
+    intro pc sevm pre xl out hleg hxl hRun <;>
+    [ (have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_dupn (evm := ⟨pc, sevm, pre⟩) (d := imm)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hRun
+        exact hRun.1);
+      (have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_swapn (evm := ⟨pc, sevm, pre⟩) (d := imm)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hRun
+        exact hRun.1);
+      (have h0 : xl = .none := by
+        obtain ⟨e, he⟩ := Ninst.step_exchange (evm := ⟨pc, sevm, pre⟩) (d := imm)
+        simp only [Ninst.StepRun, he, Step.run_ofExecution] at hRun
+        exact hRun.1) ] <;>
+    subst h0
+  · exact Outcome.Rel.mono hIR
+      (Ninst.dupn_instructionFrame_effectRec (xl := .none) hleg trivial hRun)
+  · exact Outcome.Rel.mono hIR
+      (Ninst.swapn_instructionFrame_effectRec (xl := .none) hleg trivial hRun)
+  · exact Outcome.Rel.mono hIR
+      (Ninst.exchange_instructionFrame_effectRec (xl := .none) hleg trivial hRun)
 
 lemma Ninst.push_codePreserve_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
   Ninst.EffectRec Devm.CodePreserve (.push xs hxs) := by
@@ -4443,6 +4852,15 @@ lemma Ninst.codePreserve_effectRec (n : Ninst) :
     exact Ninst.effectRec_exec (Xinst.codePreserve_effectRec x)
   | push xs hxs =>
     exact Ninst.push_codePreserve_effectRec
+  | dupn d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.CodePreserve) (fun _ _ hf a _ => (hf.getCode a).symm)).1
+  | swapn d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.CodePreserve) (fun _ _ hf a _ => (hf.getCode a).symm)).2.1
+  | exchange d =>
+    exact (Ninst.stackAccess_effectRec_of_instructionFrame
+      (R := Devm.CodePreserve) (fun _ _ hf a _ => (hf.getCode a).symm)).2.2
 
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
@@ -4453,11 +4871,12 @@ lemma Jinst.codePreserve_effect (j : Jinst) :
 
 lemma Linst.codePreserve_effect (l : Linst) :
     Linst.Effect Devm.CodePreserve l := by
-  intro sevm pre out hrun
-  have hf := Linst.run_codeFrame hrun
+  intro sevm pre out hleg hrun
+  have hf := Linst.run_codeFrame hleg hrun
   cases out <;> exact fun a _ => hf a
 
 lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (run : Exec pc sevm devm exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
@@ -4465,7 +4884,7 @@ lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
   intro a ha
   have h := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
     Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-    Linst.codePreserve_effect run
+    Linst.codePreserve_effect run hleg
   cases exn with
   | error e => exact h a ha
   | ok d => exact h a ha
@@ -4522,6 +4941,7 @@ private lemma lift_core.atTarget
     {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
     (ex : Exec pc sevm devm exn)
     (h_fa : ForallDeeperAt sevm.depth ca p (fun pc s d e _ => ε pc s d e))
+    (hleg : sevm.benvStat.rules.stateGas = none)
     (h_at_p : p.At ca pc sevm devm) (h_eq : sevm.currentTarget = ca) :
     ε pc sevm devm exn := by
   cases exn with
@@ -4535,12 +4955,13 @@ private lemma lift_core.atTarget
 /-- Code preservation across one driver step, in the form the `Prog.At`
 bookkeeping needs. -/
 lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
-    {xl : Xlot} (hxl : Xlot.Rel Devm.CodePreserve xl)
+    {xl : Xlot} (hleg : sevm.benvStat.rules.stateGas = none)
+    (hxl : Xlot.Rel Devm.CodePreserve xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
     (a : Adr) (ha : (devm.getCode a).toList ≠ []) :
     devm'.getCode a = devm.getCode a :=
   Evm.step_effect codePreserve_refl_trans.1 Ninst.codePreserve_effectRec
-    Jinst.codePreserve_effect Linst.codePreserve_effect hxl hrun a ha
+    Jinst.codePreserve_effect Linst.codePreserve_effect hleg hxl hrun a ha
 
 /-- The eliminator every contract-level invariant proof runs on: strong
 induction on frame depth combined with the driver's case analysis, carrying the
@@ -4623,10 +5044,10 @@ lemma lift_core
   apply Exec.strong_rec
   apply @Exec.rec (Fortify (Exec.Wkn ca p (fun pc s d e _ => ε pc s d e)))
   -- halt
-  · intro pc sevm devm ex hstep h_fa h_at_p
+  · intro pc sevm devm ex hstep h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.halt hstep) h_fa h_at_p h_eq
+        (.halt hstep) h_fa hleg h_at_p h_eq
     · rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
       · rw [Evm.step_invOp hgi] at hstep
         cases hstep
@@ -4651,14 +5072,14 @@ lemma lift_core
           cases hstep
           exact last hgi rfl h_ne
   -- cont
-  · intro pc sevm devm pc' devm' exn hstep ex ih h_fa h_at_p
+  · intro pc sevm devm pc' devm' exn hstep ex ih h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.cont hstep ex) h_fa h_at_p h_eq
+        (.cont hstep ex) h_fa hleg h_at_p h_eq
     · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
         Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
       have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .none) trivial
+        lift_core.stepCode hleg (xl := .none) trivial
           (by rw [hstep]; exact ⟨rfl, rfl⟩) ca h_ne_code
       have h_at' : p.At ca pc' sevm devm' :=
         ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
@@ -4672,17 +5093,17 @@ lemma lift_core
           subst hpc
           have hrun : Ninst.StepRun pc sevm devm n .none (.ok devm') := by
             unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
-          exact nextNoneRec hgi hrun ex h_ne (ih h_fa h_at')
+          exact nextNoneRec hgi hrun ex h_ne (ih h_fa hleg h_at')
         | jump j =>
           rw [Evm.step_jump (j := j) hgi] at hstep
-          exact jumpRec hgi (Step.ofJump_cont hstep) ex h_ne (ih h_fa h_at')
+          exact jumpRec hgi (Step.ofJump_cont hstep) ex h_ne (ih h_fa hleg h_at')
         | last l =>
           rw [Evm.step_last (l := l) hgi] at hstep; cases hstep
   -- doneErr
-  · intro pc sevm devm f rsm pc' r e hstep henter hr h_fa h_at_p
+  · intro pc sevm devm f rsm pc' r e hstep henter hr h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.doneErr hstep henter hr) h_fa h_at_p h_eq
+        (.doneErr hstep henter hr) h_fa hleg h_at_p h_eq
     · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
       have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.error e) := by
         unfold Ninst.StepRun
@@ -4690,10 +5111,10 @@ lemma lift_core
         exact ⟨r, RunFrame.of_done henter, hr.symm⟩
       exact nextNoneErr hxat hrun h_ne
   -- doneOk
-  · intro pc sevm devm f rsm pc' r devm' exn hstep henter hr ex ih h_fa h_at_p
+  · intro pc sevm devm f rsm pc' r devm' exn hstep henter hr ex ih h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.doneOk hstep henter hr ex) h_fa h_at_p h_eq
+        (.doneOk hstep henter hr ex) h_fa hleg h_at_p h_eq
     · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
       subst hpc'
       have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
@@ -4703,20 +5124,22 @@ lemma lift_core
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨r, RunFrame.of_done henter, hr.symm⟩
       have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .none) trivial
+        lift_core.stepCode hleg (xl := .none) trivial
           (by rw [hstep]; exact ⟨r, RunFrame.of_done henter, hr.symm⟩) ca h_ne_code
       have h_at' : p.At ca (pc + 1) sevm devm' :=
         ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
-      exact nextNoneRec hxat hrun ex h_ne (ih h_fa h_at')
+      exact nextNoneRec hxat hrun ex h_ne (ih h_fa hleg h_at')
   -- runErr
-  · intro pc sevm devm f rsm pc' cevm raw e hstep henter child hr ihc h_fa h_at_p
+  · intro pc sevm devm f rsm pc' cevm raw e hstep henter child hr ihc h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.runErr hstep henter child hr) h_fa h_at_p h_eq
+        (.runErr hstep henter child hr) h_fa hleg h_at_p h_eq
     · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
-      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
+      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep hleg henter
       have hdepth : cevm.sta.depth < sevm.depth := by
         rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
+      have hchildleg : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [Evm.step_spawn_benvStat hstep hleg henter]; exact hleg
       have h_at_child : p.At ca cevm.pc cevm.sta cevm.dyna := by
         refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
         have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
@@ -4732,20 +5155,22 @@ lemma lift_core
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
       exact nextSomeErr hxat hrun child h_ne
-        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
+        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth hchildleg h_at_child)
   -- runOk
   · intro pc sevm devm f rsm pc' cevm raw devm' exn hstep henter child hr ex
-      ihc ih h_fa h_at_p
+      ihc ih h_fa hleg h_at_p
     rcases em (sevm.currentTarget = ca) with h_eq | h_ne
     · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.runOk hstep henter child hr ex) h_fa h_at_p h_eq
+        (.runOk hstep henter child hr ex) h_fa hleg h_at_p h_eq
     · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
       subst hpc'
-      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
+      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep hleg henter
       have hdepth : cevm.sta.depth < sevm.depth := by
         rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
       have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
         Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
+      have hchildleg : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [Evm.step_spawn_benvStat hstep hleg henter]; exact hleg
       have h_at_child : p.At ca cevm.pc cevm.sta cevm.dyna := by
         refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
         have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
@@ -4758,21 +5183,21 @@ lemma lift_core
       have hchild : Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
         Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
           Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-          Linst.codePreserve_effect child
+          Linst.codePreserve_effect child hchildleg
       have hrun :
           Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.ok devm') := by
         unfold Ninst.StepRun
         rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
         exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
       have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .some ⟨cevm, raw⟩) hchild
+        lift_core.stepCode hleg (xl := .some ⟨cevm, raw⟩) hchild
           (by rw [hstep]; exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩)
           ca h_ne_code
       have h_at' : p.At ca (pc + 1) sevm devm' :=
         ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
       exact nextSomeRec hxat hrun child ex h_ne
-        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
-        (ih h_fa h_at')
+        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth hchildleg h_at_child)
+        (ih h_fa hleg h_at')
 
 lemma lift
     (R : Sevm → Devm → Devm → Prop)
@@ -5003,6 +5428,9 @@ lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
   · exact Eq.trans burn.state push.state
   · exact Eq.trans burn.createdAccounts push.createdAccounts
   · exact Eq.trans burn.transientStorage push.transientStorage
+  · exact Eq.trans burn.stateGas push.stateGas
+  · trivial
+  · trivial
 
 lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
     (pop : Devm.Pop xs s s') (push : Devm.PushBurn ys s' s'') :
@@ -5022,6 +5450,9 @@ lemma Devm.diffBurn_of_pop_of_pushBurn {xs ys : List B256} {s s' s'' : Devm}
   · exact Eq.trans pop.state push.state
   · exact Eq.trans pop.createdAccounts push.createdAccounts
   · exact Eq.trans pop.transientStorage push.transientStorage
+  · exact Eq.trans pop.stateGas push.stateGas
+  · trivial
+  · trivial
 
 lemma Devm.pushBurn_of_pushItem {v : B256} {cost : Nat} {s s' : Devm}
     (h : pushItem v cost s = .ok s') : Devm.PushBurn [v] s s' := by

@@ -1260,6 +1260,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
           Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
           Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
           Devm.transientStorage, Devm.stateGas]
+      <;> trivial
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -1268,7 +1269,8 @@ lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
   simp only [Devm.pop_def] at pop
   split at pop; {cases pop}
   injection pop with eq; injection eq with eq eq'
-  constructor <;> simp <;> rw [← eq'] <;> try {rfl}
+  constructor <;> try trivial
+  all_goals simp <;> rw [← eq'] <;> try {rfl}
   rename (devm.stack = _) => rw; rw [rw, eq]; rfl
 
 lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
@@ -1283,7 +1285,8 @@ lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
     rw [h] at eq
     injection eq with eq'
     rw [← eq']
-    constructor <;> try {rfl}
+    constructor <;> try trivial
+    all_goals try {rfl}
     revert h
     unfold safeSub
     split
@@ -1300,7 +1303,8 @@ lemma Devm.pop_append {xs ys : List B256} {devm devm' devm'' : Devm} :
     Devm.Pop (xs ++ ys) devm devm'' := by
   rintro ⟨_⟩; rename Stack.Pop _ _ _ => pop1
   rintro ⟨_⟩; rename Stack.Pop _ _ _ => pop2
-  constructor <;> try {exact Eq.trans asm asm} -- h2_mem
+  constructor <;> try trivial
+  all_goals try {exact Eq.trans asm asm} -- h2_mem
   exact append_split pop1 pop2
 
 
@@ -1325,8 +1329,8 @@ lemma Devm.popBurn_of_pop_of_burn
   · exact Eq.trans pop.createdAccounts burn.createdAccounts
   · exact Eq.trans pop.transientStorage burn.transientStorage
   · exact Eq.trans pop.stateGas burn.stateGas
-  · exact Eq.trans pop.accountReads burn.accountReads
-  · exact Eq.trans pop.storageReads burn.storageReads
+  · trivial
+  · trivial
 
 lemma of_jumpi_run {pc sevm pre pc' inter}
     ( run :
@@ -1531,7 +1535,7 @@ lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
   rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_return, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans, h1_sg, h1_ar, h1_sr⟩
   rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_return, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans, h2_sg, h2_ar, h2_sr⟩
-  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_return h2_return, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans, Eq.trans h1_sg h2_sg, Eq.trans h1_ar h2_ar, Eq.trans h1_sr h2_sr⟩
+  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_return h2_return, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans, Eq.trans h1_sg h2_sg, trivial, trivial⟩
 
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
@@ -1553,8 +1557,8 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
   · exact Eq.trans burn.createdAccounts popBurn.createdAccounts
   · exact Eq.trans burn.transientStorage popBurn.transientStorage
   · exact Eq.trans burn.stateGas popBurn.stateGas
-  · exact Eq.trans burn.accountReads popBurn.accountReads
-  · exact Eq.trans burn.storageReads popBurn.storageReads
+  · trivial
+  · trivial
 
 lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
     (popBurn : Devm.PopBurn xs devm devm')
@@ -1576,8 +1580,8 @@ lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
   · exact Eq.trans popBurn.createdAccounts burn.createdAccounts
   · exact Eq.trans popBurn.transientStorage burn.transientStorage
   · exact Eq.trans popBurn.stateGas burn.stateGas
-  · exact Eq.trans popBurn.accountReads burn.accountReads
-  · exact Eq.trans popBurn.storageReads burn.storageReads
+  · trivial
+  · trivial
 
 
 

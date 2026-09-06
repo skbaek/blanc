@@ -42,6 +42,12 @@ def Devm.BurnBy (cost : Nat) : Devm → Devm → Prop :=
   Rel {
     Rels.eq with
     gasLeft := λ a b => a = b + cost
+    -- Pinned, not defaulted: these two frames are the ones `Devm.eq_of_proj`
+    -- reads seventeen projections off, so they must say the read log did not
+    -- move.  Every instruction they describe is one that performs no
+    -- EIP-7928 read.
+    accountReads := _root_.Eq
+    storageReads := _root_.Eq
   }
 
 /-- `Devm.PopBurn` with the gas decrement pinned to `cost`. -/
@@ -50,6 +56,8 @@ def Devm.PopBurnBy (xs : List B256) (cost : Nat) : Devm → Devm → Prop :=
     Rels.eq with
     stack := Stack.Pop xs
     gasLeft := λ a b => a = b + cost
+    accountReads := _root_.Eq
+    storageReads := _root_.Eq
   }
 
 /-! ## The instruction premise
