@@ -27,24 +27,6 @@ def TotalAssetsResources (sevm : Sevm) (entry : Devm) : Prop :=
       Line.Run sevm entry balanceOfStaging callPre →
       StaticGasAvailable callPre 36
 
-/-- The body-entry resource package for a selected compiled endpoint whose
-body contains one `totalAssets` crossing.  Quantifying over the body here
-keeps the gas premise tied to the exact selector occurrence rather than to a
-universal source function. -/
-def TotalAssetsCompiledResourcesFor
-    (sevm : Sevm) (post : Devm) (body : Func) : Prop :=
-  ∀ bodyPre,
-    Func.RunCompiledTo
-        (Blanc.ProrataWethVault.vault.main ::
-          Blanc.ProrataWethVault.vault.aux)
-        sevm bodyPre body (.ok post) →
-      TotalAssetsResources sevm bodyPre
-
-/-- Existing specialization for the public `totalAssets()` endpoint. -/
-def TotalAssetsCompiledResources (sevm : Sevm) (post : Devm) : Prop :=
-  TotalAssetsCompiledResourcesFor sevm post
-    Blanc.ProrataWethVault.totalAssets
-
 /-- A successful vault balance query had room to enter its STATICCALL child.
 The depth fact comes from the actual crossing and the executed zero-status
 guard, independently of the configured asset and any call-gas premise. -/
@@ -191,7 +173,7 @@ private theorem balanceOfStaging_run_eq
 
 /-- Successful execution of a vault balance query supplies its complete
 depth-and-gas package for every exact run of the fixed staging line. -/
-private theorem totalAssetsResources_of_run
+theorem totalAssetsResources_of_run
     {fs : List Func} {sevm : Sevm} {entry final : Devm} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
     (memoryWf : Mem.Wf entry.memory)
@@ -287,8 +269,8 @@ theorem totalAssets_body_effect
 
 /-- Compiled `totalAssets()` returns the exact pre-state WETH balance booked
 to the vault.  Direct code identity, non-precompile routing, distinct accounts,
-depth, and the actual staged-call gas obligation are explicit premises; the
-WETH behavior itself is derived from the inherited compiled program. -/
+and well-formed memory are explicit premises; depth and the actual staged-call
+gas obligation are derived from the successful inherited compiled program. -/
 theorem totalAssets_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
