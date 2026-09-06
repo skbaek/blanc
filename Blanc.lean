@@ -29,6 +29,7 @@ import Blanc.ExecutionOccurrence
 import Blanc.CompiledStackSafety
 import Blanc.AbstractStackSafety
 import Blanc.AbstractStackTransfer
+import Blanc.AbstractStackCertificate
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal

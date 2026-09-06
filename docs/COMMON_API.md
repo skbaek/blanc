@@ -393,6 +393,25 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   The existing stack-certificate recipe advises the `StepSafe` head; selecting
   a transfer wrapper additionally needs the exact instruction and successful
   check, so discovery remains in this registry.
+- For a finite table of actual decoded stack patterns, use
+  [`Blanc/AbstractStackCertificate.lean`](../Blanc/AbstractStackCertificate.lean).
+  `AbstractStackSafety.Table` stores full patterns in a finite search tree.
+  `checkTable_certificate` constructs `CompiledStackSafety.Certificate` from
+  the kernel-checked `checkTable` result. The checker reads the actual public
+  `ByteArray.getInst`, rejects out-of-code rows and truncated PUSH widths,
+  preserves exact PUSH literals, and checks both JUMPI successors and actual
+  `jumpable` destinations. `checkSuccessor` independently checks output and
+  destination bounds and full-pattern inclusion through `covers`;
+  `Matches.covered` proves that inclusion sound. The accepted transfer family
+  supports maximum bounds at most eight and rejects unsupported opcodes,
+  including SELFDESTRUCT. `stepSafe_mono` retains every child settlement and
+  fatal-error provenance while adapting the accepted opcode theorems.
+  `Table.checkOrder_sound`, `lookup_iff_row`, and `row_unique` connect checked
+  strict subtree ordering to exact structural-row lookup and unique patterns.
+  The checker itself does not establish entry, decoded-byte coverage outside
+  its rows, feasible-path reachability, or arbitrary child-frame stack safety.
+  This table-construction interface is registered here; the existing
+  same-frame recipe supplies the subsequent actual `ParentPrefix` transport.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
