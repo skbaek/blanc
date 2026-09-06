@@ -2789,7 +2789,18 @@
           "scripts/drip_fixture_observers.py",
           "scripts/current-mainnet-target.json",
           "lake-manifest.json",
-          ".lake/packages/jaune/.lake/build/bin/jaune"
+          ".lake/packages/jaune/.lake/build/bin/jaune",
+          "scripts/check-drip-receipts.py",
+          "scripts/test-drip-receipts.py",
+          "scripts/check-drip-arithmetic.py",
+          "scripts/test-drip-arithmetic.py",
+          "scripts/drip_evaluator.py",
+          "scripts/test-drip-evaluator.py",
+          "scripts/gate-cache.py",
+          "scripts/gate_cache_lock.py",
+          "scripts/gate_cache_t8n_root.py",
+          "lakefile.lean",
+          "lean-toolchain"
         ],
         "tools": [
           "python3",
@@ -2810,7 +2821,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "CI-safe exact-integer and artifact controls followed by fail-closed manifest-wide BPO2 replay through the existing pinned Jaune runner. Structural verification and mocked corruption controls precede real replay; missing fixtures or runner fail, and no build occurs implicitly. Exact binary, clean package pin, recursive fixture population, literal parser, observer definitions and target profile are verdict inputs. Successful direct replay checks signed block execution, genesis/final state and receipt roots; it does not independently authenticate the manifest receipt annotations or arithmetic claims. The preceding owned build supplies runner freshness; external BPO2 regeneration remains separately registered.",
+      "note": "CI-safe exact-integer and artifact controls followed by fail-closed manifest-wide BPO2 replay through the existing pinned Jaune runner. Structural verification and mocked corruption controls precede real replay; missing fixtures or runner fail, and no build occurs implicitly. Exact binary, clean package pin, recursive fixture population, literal parser, observer definitions and target profile are verdict inputs. Successful direct replay checks signed block execution, genesis/final state and receipt roots; it does not independently authenticate the manifest receipt annotations or arithmetic claims. The preceding owned build supplies runner freshness; external BPO2 regeneration remains separately registered. The three evaluator suites exercise mocked receipt/arithmetic protocols and shared transport with temporary compiler/cache/import prerequisites; they do not invoke either real Lean evaluator. Their Python sources, copied configuration and shared gate-cache helpers are explicit inputs.",
       "order": 62,
       "verdict": {
         "expect_exit": 0,

@@ -15,5 +15,8 @@ python3 -B scripts/check-drip-artifacts.py
 python3 -B scripts/check-drip-artifacts.py --self-test
 python3 -B scripts/test-check-drip-fixtures.py
 python3 -B scripts/test-check-drip-replay.py
+python3 -B scripts/test-drip-evaluator.py
+python3 -B scripts/test-drip-receipts.py
+python3 -B scripts/test-drip-arithmetic.py
 python3 -B scripts/check-drip-replay.py
-echo "OK — DRIP evidence: arithmetic, artifact controls and complete pinned Jaune BPO2 replay passed"
+echo "OK — DRIP evidence: arithmetic/artifact checks, mocked evaluator protocol controls and complete pinned Jaune BPO2 replay passed"
