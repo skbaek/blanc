@@ -245,8 +245,8 @@ lemma Devm.Burn.refl {devm : Devm} : Devm.Burn devm devm :=
     refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
-    transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl }
+    transientStorage := rfl, stateGas := rfl, accountReads := trivial,
+    storageReads := trivial }
 
 lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     (h : Devm.BurnBy cost devm devm') : Devm.Burn devm devm' :=
@@ -258,7 +258,7 @@ lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads }
+    accountReads := trivial, storageReads := trivial }
 
 lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') : Devm.PopBurn xs devm devm' :=
@@ -270,7 +270,7 @@ lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads }
+    accountReads := trivial, storageReads := trivial }
 
 lemma Ninst.Run.of_runCompiled {sevm : Sevm} {devm : Devm} {n : Ninst} {devm' : Devm}
     (h : Ninst.RunCompiled sevm devm n devm') : Ninst.Run sevm devm n devm' := by
@@ -336,7 +336,17 @@ So the two lemmas here take a loose frame and an exact gas equation and return
 the exact frame.  That keeps `runCompiled_of_exec_core` a thin accounting layer
 over `correct_core`'s structure instead of a second copy of it. -/
 
-/-- Upgrade a `Devm.Burn` to a `Devm.BurnBy` with the measured decrement. -/
+/-- Upgrade a `Devm.Burn` to a `Devm.BurnBy` with the measured decrement.
+
+**The upgrade has to be told what the frame does not say.**
+
+`Devm.Burn` leaves EIP-7928's two read sets unconstrained (DP-E3d), because a
+recorder is a burn that burns nothing and the instruction-inversion family walks
+through recorders premise-free. `Devm.BurnBy` pins them, because
+`Devm.eq_of_proj` reconstructs a whole machine from it and `Evm.jumpdest_cont`
+is false without that. So the upgrade genuinely gains information, and the two
+equations are supplied rather than invented. Every call site is a gas charge or
+a `JUMPDEST`, neither of which reads. -/
 lemma Devm.BurnBy.of_burn {cost : Nat} {devm devm' : Devm}
     (h : Devm.Burn devm devm') (hg : devm.gasLeft = devm'.gasLeft + cost) :
     Devm.BurnBy cost devm devm' :=
