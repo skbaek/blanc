@@ -554,6 +554,50 @@ def _canonical_json_sha256(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _shebang_precondition(first: bytes, paths: TargetPaths, relative: str) -> None:
+    """Require a console script to name the selected interpreter, by identity.
+
+    This is a precondition for canonicalization, not part of the hashed
+    representation: the caller emits the constant
+    ``#!$TARGET/.venv/bin/python`` whatever the real shebang spelled, so the
+    recorded digests never depend on this decision.
+
+    Byte equality against ``#!{paths.python}`` decided identity by spelling.
+    It rejected the ``python3``/``python3.11`` aliases every venv installs and
+    that console-script installers routinely emit, while accepting a spelling
+    whose interpreter is missing, dangling, or not a file. Identity is decided
+    here by where the shebang resolves: any name inside the selected venv that
+    resolves to the selected interpreter is accepted, and nothing else is.
+    """
+    where = f"{relative} shebang"
+    expectation = f"must name an interpreter inside {paths.venv} resolving to {paths.python}"
+    try:
+        spelled = first[2:].decode()
+    except UnicodeDecodeError:
+        _fail(f"{where} {expectation}, got undecodable {first!r}")
+    if not spelled or spelled.split() != [spelled]:
+        _fail(f"{where} {expectation}, got {first!r} (not a single bare path)")
+    candidate = Path(spelled)
+    if not candidate.is_absolute():
+        _fail(f"{where} {expectation}, got relative {first!r}")
+    try:
+        enclosing = candidate.parent.resolve()
+        venv = paths.venv.resolve()
+    except OSError as exc:
+        _fail(f"{where} {expectation}, got unresolvable {first!r}: {exc}")
+    if enclosing != venv and not enclosing.is_relative_to(venv):
+        _fail(f"{where} {expectation}, got out-of-venv {first!r}")
+    try:
+        interpreter = candidate.resolve(strict=True)
+        selected = paths.python.resolve(strict=True)
+    except OSError as exc:
+        _fail(f"{where} {expectation}, got unresolvable {first!r}: {exc}")
+    if not interpreter.is_file():
+        _fail(f"{where} {expectation}, got non-file {first!r}")
+    if interpreter != selected:
+        _fail(f"{where} {expectation}, got foreign interpreter {first!r} -> {interpreter}")
+
+
 def _portable_site_payloads(paths: TargetPaths, root: Path) -> dict[str, bytes]:
     """Validate installed bytes before normalizing only construction metadata.
 
@@ -632,7 +676,7 @@ def _portable_site_payloads(paths: TargetPaths, root: Path) -> dict[str, bytes]:
             elif target.parent == (paths.venv / "bin").resolve():
                 first, separator, body = actual.partition(b"\n")
                 if actual.startswith(b"#!"):
-                    _literal(first, f"#!{paths.python}".encode(), f"{relative} shebang")
+                    _shebang_precondition(first, paths, relative)
                     if not separator or not body:
                         _fail(f"empty entrypoint body: {relative}")
                     content = b"#!$TARGET/.venv/bin/python\n" + body
