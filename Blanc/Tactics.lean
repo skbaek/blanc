@@ -214,6 +214,10 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
   | "goal-head:Rinst.Inv" => return head == some `Blanc.Rinst.Inv
   | "goal-head:Func.Inv" => return head == some `Blanc.Func.Inv
   | "goal-head:Linst.Inv" => return head == some `Blanc.Linst.Inv
+  | "goal-head:MemWordAt" => return head == some `Blanc.MemWordAt
+  | "goal-head:MemImage" => return head == some `Blanc.MemImage
+  | "implication-premise:MemWordAt" =>
+      return proofRecipeHasPremiseHead `Blanc.MemWordAt target
   | "implication-premise:Line.Run" =>
       return proofRecipeHasPremiseHead `Blanc.Line.Run target
   | "implication-premise:Func.Run" =>

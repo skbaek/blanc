@@ -313,7 +313,7 @@ theorem pauseCall_targetWord_survives {sevm : Sevm} {target : Adr}
   have hmem : callPost.memory =
       (callPre.memory.extends [(284, 36), (0, 0)]).write 0
         (child.output.take 0) := by rw [hcmem, hpmem]
-  exact MemWordAt.acrossExtendsWrite hmem (Or.inr (by simp)) window
+  exact MemWordAt.extendsWrite hmem (Or.inr (by simp)) window
 
 /-! ## The CALL edge, inverted
 

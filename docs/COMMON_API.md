@@ -688,6 +688,45 @@ proof-carrying `Mem.Reads` image across that same fixed fragment.
 `of_logWith201_val` remains the convenient specialized form for the common
 ERC-20 three-topic, one-word event.
 
+### M3. The goal is carrying a known memory word across execution
+
+Use the shared carriers in
+[`Blanc/MemoryImage.lean`](../Blanc/MemoryImage.lean) rather than declaring a
+contract-local "this word survives that line" predicate.  Import it directly
+with `import Blanc.MemoryImage`; it is contract-neutral and its own only
+import is `Blanc.Ladder`.
+
+- `MemImage devm img` is the whole-image carrier: it keeps `Mem.Wf` beside the
+  reader image so the write algebra never re-derives it.  `MemImage.write`
+  advances it across a byte write; `MemImage.of_memory_eq` moves it across a
+  memory-preserving step.
+- `MemWordAt devm offset w` is the one-window carrier: the backing image
+  becomes existential, which keeps a large scratch region out of downstream
+  goals.  Move between the two with `MemWordAt.of_memImage` and
+  `MemWordAt.memImage`.
+- Establish a window by storing (`MemWordAt.of_write`, `of_run_mstoreAt_mem`)
+  and read one back onto the stack with `prefix_of_loadWord_window`.
+- Carry a window across a write that misses it with `MemWordAt.writeMiss`
+  (whole-word) or `MemWordAt.writeMissBytes` (arbitrary span); across logical
+  extension with `MemWordAt.extend` and `MemWordAt.extends`; across the
+  combined CALL-resume shape with `MemWordAt.extendsWrite`.
+- Cross whole instructions and lines with `MemWordAt.acrossLine`,
+  `acrossNinst`, `acrossMload`, `acrossLoadWord`, `acrossMstoreAt` and
+  `acrossLogWith`; cross a call boundary with `MemWordAt.acrossStaticcall` or
+  `MemWordAt.acrossSuccessfulCall`, whose only memory premise is
+  `outputOffset + outputSize ≤ offset`.
+- For a scratch trace whose writes are confined below a fixed boundary,
+  `Bytes.WordFrameFrom` is the compositional frame relation, with `refl`,
+  `trans`, and `MemWordAt.of_wordFrame` to apply it.
+
+Boundary: every theorem here is frame-shaped — it carries an already-known
+window and proves nothing about what the step computed.  The disjointness side
+condition is always the caller's explicit premise; this module never infers
+that a contract's scratch region sits below a window, and it supplies no
+multi-region layout, footprint or staging algebra.  For goals about the
+primitive update itself, stay in
+[M2](#m2-the-goal-is-an-evm-memory-update-or-read).
+
 ## T — settlement
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`

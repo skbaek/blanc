@@ -6,7 +6,7 @@ siblings" -- every contract's program, compiled-bytes and property modules sit
 at the same level of the import hierarchy, and no contract's module imports
 another contract's, in either direction, at any layer.
 
-Four checks, all falsifiable, all exercised by negative controls:
+Five checks, all falsifiable, all exercised by negative controls:
 
   1. Classification is total. Every Lean module in the repository appears in
      the table below, wherever it sits in the tree -- discovery is recursive
@@ -26,8 +26,28 @@ Four checks, all falsifiable, all exercised by negative controls:
      composition, and composition may not import a root. Roots aggregate
      composition, never the reverse.
 
+  5. A shared facility that an active proof recipe owns is reachable from the
+     need-first registry. `docs/COMMON_API.md` is the entry point an author is
+     told to consult before writing a contract-local helper, and
+     `scripts/proof-recipes.toml` is what `blanc_suggest` reads; a
+     contract-neutral module named by one and not the other is a facility that
+     exists without being findable, which is the defect S8 names. So every
+     active recipe whose `owner_module` this table classifies SHARED must have
+     its module path cited in `docs/COMMON_API.md` (missing entry), and every
+     `Blanc/*.lean` path `docs/COMMON_API.md` cites must exist on disk (stale
+     entry). Both directions fail closed, and both populations are non-empty by
+     assertion, so a registry or a registry section reworded out of this
+     check's sight FAILS rather than passing green over nothing.
+
+     This check is deliberately narrow. It asks whether a shared facility with
+     a recipe has a registry entry at all; it does not judge whether the entry
+     is a good one, and it is not a similarity detector over the corpus. It
+     lives here because the SHARED classification below is the repository's own
+     statement that a module is contract-neutral and reusable, and that is
+     exactly the population the obligation attaches to.
+
 Roots (Blanc.lean, Main.lean) exist to import everything and are exempt from 2,
-3 and 4 as importers, never from 1.
+3 and 4 as importers, never from 1, and are outside 5.
 
 Check 4 is what keeps 2 honest once a cross-family theorem exists: without an
 explicit downstream stratum the only ways to state one are an inverted import,
@@ -57,7 +77,9 @@ unambiguous verdict line.
 """
 
 import os
+import re
 import sys
+import tomllib
 
 # ---------------------------------------------------------------------------
 # The module classification. This is the part no script can infer, so it is
@@ -71,7 +93,7 @@ import sys
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
+          "BalanceAlgebra", "WordArithmetic", "MemoryImage", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
@@ -616,6 +638,90 @@ def imports_of(path):
         return [module for module in HeaderScanner(handle.read()).imports() if module]
 
 
+# ---------------------------------------------------------------------------
+# Check 5: discovery reachability of the shared stratum.
+# ---------------------------------------------------------------------------
+
+COMMON_API = os.path.join("docs", "COMMON_API.md")
+PROOF_RECIPES = os.path.join("scripts", "proof-recipes.toml")
+
+# A cited path looks like `Blanc/MemoryImage.lean` in backticks; the registry
+# also links them, and a Markdown link's label is the backticked form, so one
+# pattern covers both spellings.
+CITED_MODULE = re.compile(r"`(Blanc/[A-Za-z0-9_/]+\.lean)`")
+
+
+def module_name_of(relative_path):
+    """`Blanc/Composition/X.lean` -> `Composition.X`, as the table spells it."""
+    trimmed = relative_path[len("Blanc/"):-len(".lean")]
+    return trimmed.replace("/", ".")
+
+
+def discovery_failures(root, owner):
+    """Missing and stale discovery entries for the shared stratum.
+
+    Returns (failures, n_shared_recipes, n_citations). Absent or unreadable
+    inputs are failures, not skips.
+    """
+    failures = []
+    api_path = os.path.join(root, COMMON_API)
+    registry_path = os.path.join(root, PROOF_RECIPES)
+
+    try:
+        with open(api_path, encoding="utf-8") as handle:
+            api_text = handle.read()
+    except OSError as exc:
+        return ([f"cannot read the need-first registry {COMMON_API}: {exc}"], 0, 0)
+
+    try:
+        with open(registry_path, "rb") as handle:
+            registry = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return ([f"cannot read the proof-recipe registry {PROOF_RECIPES}: {exc}"], 0, 0)
+
+    citations = set(CITED_MODULE.findall(api_text))
+    for cited in sorted(citations):
+        if not os.path.isfile(os.path.join(root, cited)):
+            failures.append(
+                f"{COMMON_API} cites {cited}, which does not exist — the "
+                f"registry entry is stale"
+            )
+
+    shared_owned = []
+    for index, recipe in enumerate(registry.get("recipe", [])):
+        if not isinstance(recipe, dict) or recipe.get("status") != "active":
+            continue
+        owner_module = recipe.get("owner_module")
+        recipe_id = recipe.get("id", f"recipe[{index}]")
+        if not isinstance(owner_module, str) or not owner_module.startswith("Blanc/"):
+            failures.append(
+                f"{PROOF_RECIPES}: active recipe {recipe_id!r} has no usable "
+                f"owner_module — cannot judge its discoverability"
+            )
+            continue
+        if owner.get(module_name_of(owner_module)) != "shared":
+            continue
+        shared_owned.append(recipe_id)
+        if owner_module not in citations:
+            failures.append(
+                f"{owner_module} is a shared facility owned by active proof "
+                f"recipe {recipe_id!r} but {COMMON_API} never cites it — a "
+                f"reusable facility that the need-first registry cannot reach"
+            )
+
+    if not citations:
+        failures.append(
+            f"{COMMON_API} cites no Blanc module at all — the need-first "
+            f"registry has been reworded out of this check's sight"
+        )
+    if not shared_owned:
+        failures.append(
+            f"{PROOF_RECIPES} has no active recipe owned by a shared module — "
+            f"check 5 would pass over an empty population"
+        )
+    return (failures, len(shared_owned), len(citations))
+
+
 def main(argv):
     root = None
     args = list(argv[1:])
@@ -699,6 +805,9 @@ def main(argv):
                     f"— contracts are siblings; factor the shared part upstream"
                 )
 
+    discovery, n_shared_recipes, n_citations = discovery_failures(root, owner)
+    failures.extend(discovery)
+
     for line in failures:
         print(f"LAYERING — {line}")
     n_checked = sum(1 for m in found if owner.get(m) not in (None, "root"))
@@ -713,7 +822,9 @@ def main(argv):
         f"OK — layering: {len(CONTRACTS)} contract(s) are siblings; "
         f"{len(found)} module(s) classified, {n_checked} non-root checked, "
         f"{n_composition} composition module(s) downstream, "
-        f"no cross-contract, inverted or composition-inverted import"
+        f"no cross-contract, inverted or composition-inverted import; "
+        f"{n_shared_recipes} shared facility recipe(s) reachable from "
+        f"{n_citations} need-first registry citation(s), none stale"
     )
     return 0
 

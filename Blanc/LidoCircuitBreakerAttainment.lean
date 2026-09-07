@@ -1,4 +1,5 @@
 import Blanc.SourceAttainment
+import Blanc.MemoryImage
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerRegistrationWorld
 import Blanc.LidoCircuitBreakerReplacementWorld
@@ -359,164 +360,8 @@ Every memory write this route crosses after the staging one lands at
 `previousPauserWord`, `continuationWord` or `arrayLengthWord` — byte offsets
 576, 608 and 672 — and the window is `[544, 576)`, so the third fact applies
 every time and `Mem.Wf` is the only thing that has to be threaded beside the
-image itself. -/
-
-/-- A concrete memory image, with the structural invariant the write algebra
-needs.  `Mem.Wf` is what rules out `Array.copyD` truncation, so it travels
-beside the image rather than being re-derived at each write. -/
-def MemImage (devm : Devm) (img : Bytes) : Prop :=
-  Mem.Wf devm.memory ∧ Mem.Reads devm.memory img
-
-theorem MemImage.of_memory_eq {a b : Devm} {img : Bytes}
-    (h : b.memory = a.memory) (image : MemImage a img) : MemImage b img := by
-  obtain ⟨hwf, hreads⟩ := image
-  exact ⟨by rw [h]; exact hwf, by rw [h]; exact hreads⟩
-
-theorem MemImage.write {a b : Devm} {img ys : Bytes} {n : Nat}
-    (image : MemImage a img) (h : b.memory = a.memory.write n ys) :
-    MemImage b (Bytes.writeAt img n ys) := by
-  obtain ⟨hwf, hreads⟩ := image
-  exact ⟨by rw [h]; exact hwf.write n ys,
-    by rw [h]; exact Mem.Reads.write hwf hreads n ys⟩
-
-/-- Memory reads the word `w` at byte offset `offset`.  The image stays
-existential: no consumer of this predicate ever names the bytes, which is what
-keeps a 640-byte scratch area out of every goal. -/
-def MemWordAt (devm : Devm) (offset : Nat) (w : B256) : Prop :=
-  Mem.Wf devm.memory ∧
-    ∃ img : Bytes, Mem.Reads devm.memory img ∧
-      img.sliceD offset 32 0 = w.toBytes
-
-theorem MemWordAt.of_memImage {a : Devm} {img : Bytes} {offset : Nat}
-    {w : B256} (image : MemImage a img)
-    (hslice : img.sliceD offset 32 0 = w.toBytes) :
-    MemWordAt a offset w := ⟨image.1, img, image.2, hslice⟩
-
-/-- The window a write *creates*: reading a word straight back at the offset
-it was written to, whatever the image was before. -/
-theorem MemWordAt.of_write {a b : Devm} {img : Bytes} {n : Nat} {w : B256}
-    (image : MemImage a img) (h : b.memory = a.memory.write n w.toBytes) :
-    MemWordAt b n w := by
-  refine MemWordAt.of_memImage (image.write h) ?_
-  have slice := Bytes.sliceD_writeAt img w.toBytes n
-  rwa [B256.length_toBytes] at slice
-
-theorem MemWordAt.of_memory_eq {a b : Devm} {offset : Nat} {w : B256}
-    (h : b.memory = a.memory) (window : MemWordAt a offset w) :
-    MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  exact ⟨by rw [h]; exact hwf, img, by rw [h]; exact hreads, hslice⟩
-
-theorem MemWordAt.extend {a b : Devm} {offset : Nat} {w : B256} {i n : Nat}
-    (h : b.memory = a.memory.extend i n) (window : MemWordAt a offset w) :
-    MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  exact ⟨by rw [h]; exact hwf.extend i n, img,
-    by rw [h]; exact hreads.extend i n, hslice⟩
-
-/-- A whole-word write that misses the window -- landing entirely after it or
-entirely before it -- leaves the window alone.  Both directions are needed:
-this route stores at 576 with a window at 544 (after) and at 576 again with a
-window at 608 (before). -/
-theorem MemWordAt.writeMiss {a b : Devm} {offset : Nat} {w v : B256} {n : Nat}
-    (h : b.memory = a.memory.write n v.toBytes)
-    (miss : offset + 32 ≤ n ∨ n + 32 ≤ offset)
-    (window : MemWordAt a offset w) : MemWordAt b offset w := by
-  obtain ⟨hwf, img, hreads, hslice⟩ := window
-  refine ⟨by rw [h]; exact hwf.write n v.toBytes,
-    Bytes.writeAt img n v.toBytes,
-    by rw [h]; exact Mem.Reads.write hwf hreads n v.toBytes, ?_⟩
-  rcases miss with late | early
-  · rw [Bytes.sliceD_writeAt_before img v.toBytes offset 32 n late]
-    exact hslice
-  · rw [Bytes.sliceD_writeAt_after img v.toBytes offset 32 n
-      (by rw [B256.length_toBytes]; exact early)]
-    exact hslice
-
-/-- The window's own image, forgotten down to what a fresh write needs. -/
-theorem MemWordAt.memImage {a : Devm} {offset : Nat} {w : B256}
-    (window : MemWordAt a offset w) : ∃ img : Bytes, MemImage a img := by
-  obtain ⟨hwf, img, hreads, _⟩ := window
-  exact ⟨img, hwf, hreads⟩
-
-/-- `mstoreAt k` writes *somewhere*: the offset is the pushed constant and the
-value is forgotten.  `of_run_mstoreAt_val` names the value instead and needs a
-stack prefix for it; a crossing only needs the offset. -/
-theorem of_run_mstoreAt_mem {e : Sevm} {s s' : Devm} {k : B256}
-    (h : Line.Run e s (mstoreAt k) s') :
-    ∃ v : B256, s'.memory = s.memory.write (k * 32).toNat v.toBytes := by
-  rcases Line.of_run_cons h with ⟨_u, qp, h'⟩
-  rcases Line.of_run_cons h' with ⟨_u2, qm, hnil⟩
-  cases hnil
-  have hpb := of_run_pushB256 qp
-  rcases of_run_mstore_val qm with ⟨x, y, hpop, hm⟩
-  have hx : (k * 32) = x :=
-    (List.of_cons_pref_of_cons_pref (prefix_of_push hpb nil_pref)
-      (pref_of_split hpop)).left
-  exact ⟨y, by rw [hm, ← hx, ← hpb.memory]⟩
-
-/-- `loadWord k` only *extends* memory. -/
-theorem of_run_loadWord_mem {e : Sevm} {s s' : Devm} {k : B256}
-    (h : Line.Run e s (loadWord k) s') :
-    ∃ i : Nat, s'.memory = s.memory.extend i 32 := by
-  rcases Line.of_run_cons h with ⟨_u, qp, h'⟩
-  rcases Line.of_run_cons h' with ⟨_u2, qm, hnil⟩
-  cases hnil
-  have hpb := of_run_pushB256 qp
-  rcases of_run_mload_val qm with ⟨x, _, hm, _⟩
-  exact ⟨x.toNat, by rw [hm, ← hpb.memory]⟩
-
-/-- Cross a memory-silent line.  `line_inv` discharges the invariant for every
-line on this route that contains no `MLOAD` and no `MSTORE`, including the
-`SLOAD`s and `SSTORE`s. -/
-theorem MemWordAt.acrossLine {e : Sevm} {a b : Devm} {offset : Nat} {w : B256}
-    {l : Line} (inv : Line.Inv Devm.memory l) (run : Line.Run e a l b)
-    (window : MemWordAt a offset w) : MemWordAt b offset w :=
-  MemWordAt.of_memory_eq (Line.of_inv Devm.memory inv run).symm window
-
-/-- Cross `loadWord k`, forgetting the loaded value. -/
-theorem MemWordAt.acrossLoadWord {e : Sevm} {a b : Devm} {offset : Nat}
-    {w k : B256} (run : Line.Run e a (loadWord k) b)
-    (window : MemWordAt a offset w) : MemWordAt b offset w :=
-  let ⟨_, hm⟩ := of_run_loadWord_mem run
-  MemWordAt.extend hm window
-
-/-- Cross `mstoreAt k` when the write misses the window. -/
-theorem MemWordAt.acrossMstoreAt {e : Sevm} {a b : Devm} {offset : Nat}
-    {w k : B256}
-    (miss : offset + 32 ≤ (k * 32).toNat ∨ (k * 32).toNat + 32 ≤ offset)
-    (run : Line.Run e a (mstoreAt k) b) (window : MemWordAt a offset w) :
-    MemWordAt b offset w :=
-  let ⟨_, hm⟩ := of_run_mstoreAt_mem run
-  MemWordAt.writeMiss hm miss window
-
-/-- Cross one instruction that `line_inv` has an instance for. -/
-theorem MemWordAt.acrossNinst {e : Sevm} {a b : Devm} {offset : Nat} {w : B256}
-    {i : Ninst} [inst : Ninst.Hinv Devm.memory i] (run : Ninst.Run e a i b)
-    (window : MemWordAt a offset w) : MemWordAt b offset w :=
-  MemWordAt.of_memory_eq (inst.inv run).symm window
-
-/-- Cross one bare `MLOAD`. -/
-theorem MemWordAt.acrossMload {e : Sevm} {a b : Devm} {offset : Nat} {w : B256}
-    (run : Ninst.Run e a Ninst.mload b) (window : MemWordAt a offset w) :
-    MemWordAt b offset w := by
-  obtain ⟨_x, _, hm, _⟩ := of_run_mload_val run
-  exact MemWordAt.extend hm window
-
-/-- Cross a `LOG`: it reads a window and records it, and only *extends* the
-backing array.  `line_inv` has no instance for `LOG`, and correctly so. -/
-theorem MemWordAt.acrossLogWith {e : Sevm} {a b : Devm} {offset : Nat}
-    {w : B256} {k : Fin 4} {x y : B256}
-    (run : Line.Run e a (logWith k x y) b) (window : MemWordAt a offset w) :
-    MemWordAt b offset w := by
-  unfold logWith at run
-  rcases Line.of_run_cons run with ⟨_s1, q1, run⟩
-  rcases Line.of_run_cons run with ⟨_s2, q2, run⟩
-  rcases Line.of_run_cons run with ⟨_s3, q3, hnil⟩
-  cases hnil
-  obtain ⟨_mi, _sz, hm⟩ := of_run_log_mem q3
-  exact MemWordAt.extend hm (MemWordAt.of_memory_eq
-    ((of_run_pushB256 q1).memory.trans (of_run_pushB256 q2).memory).symm window)
+image itself. The contract-independent carrier and transports now live in
+`Blanc.MemoryImage`; only this route's zero-test combinator remains here. -/
 
 /-- `loadWord k` followed by `iszero`: the shape of every memory-valued test
 on this route.  Four branches read one, and the only thing that varies is
@@ -524,29 +369,13 @@ which word and what the image holds there. -/
 def memoryZeroCheck (k : B256) : Line := loadWord k ++ [Ninst.iszero]
 
 /-- Cross a memory-valued test. -/
-theorem MemWordAt.acrossMemoryZeroCheck {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossMemoryZeroCheck
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w k : B256} (run : Line.Run e a (memoryZeroCheck k) b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold memoryZeroCheck at run
   rcases of_run_append (loadWord k) run with ⟨_s1, r1, run⟩
   exact (window.acrossLoadWord r1).acrossLine (by line_inv) run
-
-/-- Read the window back: `MLOAD` at the window's own offset pushes exactly
-the word the image holds there. -/
-theorem prefix_of_loadWord_window {e : Sevm} {s s' : Devm} {k w : B256}
-    {xs : Stack} (window : MemWordAt s (k * 32).toNat w)
-    (hp : xs <<+ s.stack) (run : Line.Run e s (loadWord k) s') :
-    w :: xs <<+ s'.stack := by
-  rcases Line.of_run_cons run with ⟨u, qp, run'⟩
-  rcases Line.of_run_cons run' with ⟨_u2, qm, hnil⟩
-  cases hnil
-  have hpb := of_run_pushB256 qp
-  obtain ⟨_hwf, img, hreads, hslice⟩ := window
-  have hreads' : Mem.Reads u.memory img := by rw [← hpb.memory]; exact hreads
-  obtain ⟨hstack, _, _⟩ :=
-    prefix_of_mload_val qm (prefix_of_push hpb hp) hreads'
-  rw [hslice, B256.toB256_toBytes] at hstack
-  exact hstack
 
 /-- A memory-valued test's branch word: `iszero` of the word the image holds
 at the tested offset. -/
@@ -1270,7 +1099,8 @@ theorem freshWorld_stagedEntry {stage post : Devm}
     MemWordAt.of_write image7 hm8⟩
 
 /-- The kernel's zero-check reads memory and writes none. -/
-theorem MemWordAt.acrossZeroCheck {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossZeroCheck
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a setPauserKernelZeroCheck b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold setPauserKernelZeroCheck at run
@@ -1279,7 +1109,8 @@ theorem MemWordAt.acrossZeroCheck {e : Sevm} {a b : Devm} {offset : Nat}
 
 /-- The kernel's assignment line plus its previous-pauser test.  Its one write
 is `mstoreAt previousPauserWord`. -/
-theorem MemWordAt.acrossAppendPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossAppendPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256}
     (miss : offset + 32 ≤ (previousPauserWord * 32).toNat ∨
       (previousPauserWord * 32).toNat + 32 ≤ offset)
@@ -1299,7 +1130,8 @@ theorem MemWordAt.acrossAppendPrefix {e : Sevm} {a b : Devm} {offset : Nat}
 
 /-- `appendTarget`'s first fragment.  Its one write is
 `mstoreAt arrayLengthWord`. -/
-theorem MemWordAt.acrossArrayEntryPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossArrayEntryPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256}
     (miss : offset + 32 ≤ (arrayLengthWord * 32).toNat ∨
       (arrayLengthWord * 32).toNat + 32 ≤ offset)
@@ -1316,7 +1148,7 @@ theorem MemWordAt.acrossArrayEntryPrefix {e : Sevm} {a b : Devm} {offset : Nat}
     r2).acrossLoadWord r3).acrossLoadWord r4).acrossLine (by line_inv) run
 
 /-- `appendTarget`'s second fragment: reads only. -/
-theorem MemWordAt.acrossReverseIndexPrefix {e : Sevm} {a b : Devm}
+theorem _root_.Blanc.MemWordAt.acrossReverseIndexPrefix {e : Sevm} {a b : Devm}
     {offset : Nat} {w : B256}
     (run : Line.Run e a appendReverseIndexPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
@@ -1328,7 +1160,8 @@ theorem MemWordAt.acrossReverseIndexPrefix {e : Sevm} {a b : Devm}
     r2).acrossLoadWord r3).acrossLine (by line_inv) run
 
 /-- `appendTarget`'s third fragment: reads only. -/
-theorem MemWordAt.acrossArrayLengthPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossArrayLengthPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a appendArrayLengthPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold appendArrayLengthPrefix at run
@@ -1747,14 +1580,16 @@ def afterOldNewCountPath : Prog.SourcePath :=
   ⟨afterOldPauserSlot,
     sourceRests 3 ++ [Prog.SourceStep.branchLeft] ++ sourceRests 11⟩
 
-theorem MemWordAt.acrossNewCountKey {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossNewCountKey
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a newCountKey b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold newCountKey at run
   rcases of_run_append (loadWord newPauserWord) run with ⟨_s1, r1, run⟩
   exact (window.acrossLoadWord r1).acrossLine (by line_inv) run
 
-theorem MemWordAt.acrossNewCountPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossNewCountPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a afterOldNewCountPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold afterOldNewCountPrefix at run
@@ -1958,7 +1793,8 @@ def finishSetPauserPrefix : Line :=
     loadWord targetWord ++ [Ninst.pushB256 pauserSetEvent] ++ logWith 3 0 0 ++
     memoryZeroCheck continuationWord
 
-theorem MemWordAt.acrossFinishPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossFinishPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a finishSetPauserPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold finishSetPauserPrefix at run
@@ -3639,14 +3475,16 @@ def registerOldLastRecordPrefix : Line :=
     [Ninst.pushB256 heartbeatUpdatedEvent] ++ logWith 1 0 1 ++
     memoryZeroCheck newPauserWord
 
-theorem MemWordAt.acrossPreviousCountKey {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossPreviousCountKey
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a previousCountKey b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold previousCountKey at run
   rcases of_run_append (loadWord previousPauserWord) run with ⟨_s1, r1, run⟩
   exact (window.acrossLoadWord r1).acrossLine (by line_inv) run
 
-theorem MemWordAt.acrossDecrementPrefix {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossDecrementPrefix
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a setPauserKernelDecrementPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold setPauserKernelDecrementPrefix at run
@@ -3658,14 +3496,15 @@ theorem MemWordAt.acrossDecrementPrefix {e : Sevm} {a b : Devm} {offset : Nat}
   exact (((window.acrossPreviousCountKey r1).acrossLine (by line_inv)
     r2).acrossPreviousCountKey r3).acrossLine (by line_inv) run
 
-theorem MemWordAt.acrossNewCountLine {e : Sevm} {a b : Devm} {offset : Nat}
+theorem _root_.Blanc.MemWordAt.acrossNewCountLine
+    {e : Sevm} {a b : Devm} {offset : Nat}
     {w : B256} (run : Line.Run e a afterOldNewCountLine b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
   unfold afterOldNewCountLine at run
   rcases of_run_append afterOldNewCountPrefix run with ⟨_s1, r1, run⟩
   exact (window.acrossNewCountPrefix r1).acrossLine (by line_inv) run
 
-theorem MemWordAt.acrossPreviousCountCheck {e : Sevm} {a b : Devm}
+theorem _root_.Blanc.MemWordAt.acrossPreviousCountCheck {e : Sevm} {a b : Devm}
     {offset : Nat} {w : B256}
     (run : Line.Run e a registerPreviousCountCheck b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
@@ -3673,7 +3512,7 @@ theorem MemWordAt.acrossPreviousCountCheck {e : Sevm} {a b : Devm}
   rcases of_run_append previousCountKey run with ⟨_s1, r1, run⟩
   exact (window.acrossPreviousCountKey r1).acrossLine (by line_inv) run
 
-theorem MemWordAt.acrossOldLastClearPrefix {e : Sevm} {a b : Devm}
+theorem _root_.Blanc.MemWordAt.acrossOldLastClearPrefix {e : Sevm} {a b : Devm}
     {offset : Nat} {w : B256}
     (run : Line.Run e a registerOldLastClearPrefix b)
     (window : MemWordAt a offset w) : MemWordAt b offset w := by
@@ -3684,7 +3523,7 @@ theorem MemWordAt.acrossOldLastClearPrefix {e : Sevm} {a b : Devm}
 
 /-- The old-last record fragment.  Its one write is `mstoreAt 0`, the scratch
 word every expiry record is built in, which misses all four windows. -/
-theorem MemWordAt.acrossOldLastRecordPrefix {e : Sevm} {a b : Devm}
+theorem _root_.Blanc.MemWordAt.acrossOldLastRecordPrefix {e : Sevm} {a b : Devm}
     {offset : Nat} {w : B256}
     (miss : offset + 32 ≤ ((0 : B256) * 32).toNat ∨
       ((0 : B256) * 32).toNat + 32 ≤ offset)
@@ -4467,5 +4306,33 @@ theorem attainable_registerLastOldNewExpiry_adminExpiry :
   rw [replWorld_codeAddress, replWorld_currentTarget]
 
 end Replacement
+
+/-! Compatibility names retained after hoisting the generic memory-image
+carrier.  The implementations live in the carrier namespace so generalized
+field notation continues to find them. -/
+abbrev MemWordAt.acrossMemoryZeroCheck :=
+  @Blanc.MemWordAt.acrossMemoryZeroCheck
+abbrev MemWordAt.acrossZeroCheck := @Blanc.MemWordAt.acrossZeroCheck
+abbrev MemWordAt.acrossAppendPrefix := @Blanc.MemWordAt.acrossAppendPrefix
+abbrev MemWordAt.acrossArrayEntryPrefix :=
+  @Blanc.MemWordAt.acrossArrayEntryPrefix
+abbrev MemWordAt.acrossReverseIndexPrefix :=
+  @Blanc.MemWordAt.acrossReverseIndexPrefix
+abbrev MemWordAt.acrossArrayLengthPrefix :=
+  @Blanc.MemWordAt.acrossArrayLengthPrefix
+abbrev MemWordAt.acrossNewCountKey := @Blanc.MemWordAt.acrossNewCountKey
+abbrev MemWordAt.acrossNewCountPrefix := @Blanc.MemWordAt.acrossNewCountPrefix
+abbrev MemWordAt.acrossFinishPrefix := @Blanc.MemWordAt.acrossFinishPrefix
+abbrev MemWordAt.acrossPreviousCountKey :=
+  @Blanc.MemWordAt.acrossPreviousCountKey
+abbrev MemWordAt.acrossDecrementPrefix :=
+  @Blanc.MemWordAt.acrossDecrementPrefix
+abbrev MemWordAt.acrossNewCountLine := @Blanc.MemWordAt.acrossNewCountLine
+abbrev MemWordAt.acrossPreviousCountCheck :=
+  @Blanc.MemWordAt.acrossPreviousCountCheck
+abbrev MemWordAt.acrossOldLastClearPrefix :=
+  @Blanc.MemWordAt.acrossOldLastClearPrefix
+abbrev MemWordAt.acrossOldLastRecordPrefix :=
+  @Blanc.MemWordAt.acrossOldLastRecordPrefix
 
 end Blanc.LidoCircuitBreaker

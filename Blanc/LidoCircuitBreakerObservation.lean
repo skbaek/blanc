@@ -97,7 +97,7 @@ theorem pauseStat_stagedWord_survives {sevm : Sevm} {target : Adr}
   have hmem : statPost.memory =
       (statPre.memory.extends [(0x11c, 4), (0, 32)]).write 0
         (child.output.take 32) := by rw [hsmem, hpmem]
-  refine MemWordAt.acrossExtendsWrite hmem (Or.inr ?_) window
+  refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
   have hlen : (child.output.take 32).length ≤ 32 := by
     simp [List.length_take]
   omega
