@@ -9,13 +9,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 RUNTIMES="$(mktemp)"
-trap 'rm -f "$RUNTIMES"' EXIT
+trap 'gate_semaphore_release; rm -f "$RUNTIMES"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — WETH10 differential: pinned EELS python not found at $EELS_PY" >&2
   exit 1
 fi
+
+gate_semaphore_acquire "the WETH10 runtime evaluation" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-differential-code.lean >"$RUNTIMES"); then
   echo "REGRESSION — WETH10 differential: Blanc runtime evaluation failed" >&2

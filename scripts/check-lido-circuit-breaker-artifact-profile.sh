@@ -5,9 +5,10 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS"' EXIT
 
 MODE="--check"
 if [ "$#" -gt 1 ]; then
@@ -23,6 +24,8 @@ if [ "$#" -eq 1 ]; then
       ;;
   esac
 fi
+
+gate_semaphore_acquire "the Lido artifact profile" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.lean >"$ARTIFACTS" 2>"$ERRORS"); then
   echo "REGRESSION — Lido artifact profile: Blanc artifact evaluation failed"

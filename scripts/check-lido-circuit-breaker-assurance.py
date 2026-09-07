@@ -163,6 +163,8 @@ import subprocess
 import sys
 import tempfile
 
+import gate_semaphore
+
 VERDICT_SUBJECT = "lido-circuit-breaker-assurance"
 
 REGISTER_RELATIVE = "LIDO_CIRCUIT_BREAKER_ASSURANCE.md"
@@ -1040,6 +1042,7 @@ def probe_axioms(
         )
         return reports, problems
 
+    gate_semaphore.guard("the Lido assurance axiom probe")
     body = "\n".join(f"import {module}" for module in imports) + "\n\n"
     body += "\n".join(f"#print axioms {name}" for name in names) + "\n"
 

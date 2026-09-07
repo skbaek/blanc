@@ -5,17 +5,20 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
 GENERATOR_OUT="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — Lido CircuitBreaker differential: pinned EELS python not found at $EELS_PY"
   exit 1
 fi
+
+gate_semaphore_acquire "the Lido differential artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.lean >"$ARTIFACTS" 2>"$ERRORS"); then
   echo "REGRESSION — Lido CircuitBreaker differential: Blanc artifact evaluation failed"

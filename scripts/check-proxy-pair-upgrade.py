@@ -18,6 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import gate_semaphore
+
 SUBJECT = "proxy-pair-upgrade"
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -284,6 +286,7 @@ def static_errors(root: Path) -> list[str]:
 
 
 def run_lean(root: Path, relative: str) -> subprocess.CompletedProcess[str]:
+    gate_semaphore.guard("the proxy-pair upgrade witnesses")
     return subprocess.run(
         ["lake", "env", "lean", relative], cwd=root, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,

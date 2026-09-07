@@ -13,6 +13,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+trap gate_semaphore_release EXIT
 FIXTURES_DIR="$ROOT/scripts/fixtures/prorata"
 MANIFEST="$FIXTURES_DIR/manifest.json"
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
@@ -30,6 +32,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$BUILD" -eq 1 ]; then
+  gate_semaphore_acquire "the Jaune runner build" 8 || exit 2
   if ! (cd "$ROOT" && lake build jaune/jaune); then
     echo "REGRESSION — prorata fixtures: lake build jaune/jaune failed"
     exit 1
@@ -91,7 +94,7 @@ PYEOF
 if [ "$SELF_TEST" -eq 1 ]; then
   set -e
   SELF_TEST_DIR="$(mktemp -d)"
-  trap 'rm -rf "$SELF_TEST_DIR"' EXIT
+  trap 'gate_semaphore_release; rm -rf "$SELF_TEST_DIR"' EXIT
 
   cp -R "$FIXTURES_DIR" "$SELF_TEST_DIR/fixtures"
   python3 - "$SELF_TEST_DIR/fixtures/manifest.json" <<'PYEOF'
@@ -161,7 +164,7 @@ fi
 FAIL=0
 TOTAL=0
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
+trap 'gate_semaphore_release; rm -f "$OUT"' EXIT
 for fixture in "$FIXTURES_DIR"/*.json; do
   [ "$(basename "$fixture")" = "manifest.json" ] && continue
   TOTAL=$((TOTAL + 1))

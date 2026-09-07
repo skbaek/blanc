@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 : "${HOME:?HOME is required}"
 
 WRAPPER_SCHEMA=2
@@ -117,7 +118,8 @@ fi
 
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+gate_semaphore_acquire "the BeaconDeposit current-mainnet artifacts" || exit 2
 if ! (cd "$ROOT" && lake env lean \
   scripts/eval-beacon-deposit-differential-code.lean \
   >"$ARTIFACTS" 2>"$ERRORS"); then

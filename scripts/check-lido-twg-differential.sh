@@ -4,12 +4,13 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
 GENERATOR_OUT="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS" "$GENERATOR_OUT"' EXIT
 
 COMPOSED_PREREQUISITES=0
 if [ "${1:-}" = "--composed-prerequisites" ]; then
@@ -26,6 +27,8 @@ if [ "$COMPOSED_PREREQUISITES" -eq 0 ]; then
   PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-reference.sh" >/dev/null
   PYTHONDONTWRITEBYTECODE=1 "$SCRIPT_DIR/check-lido-twg-census.sh" >/dev/null
 fi
+
+gate_semaphore_acquire "the Lido TWG artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-twg-artifacts.lean >"$ARTIFACTS" 2>"$ERRORS"); then
   echo "REGRESSION — Lido TWG differential: Blanc artifact evaluation failed"

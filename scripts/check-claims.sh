@@ -6,6 +6,10 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+trap gate_semaphore_release EXIT
+
+gate_semaphore_acquire "the pinned claim statements" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   echo "REGRESSION — claim statements: a pinned statement changed"

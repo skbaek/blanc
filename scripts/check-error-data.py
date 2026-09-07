@@ -18,6 +18,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import gate_semaphore
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "scripts" / "weth10-reference.json"
@@ -91,6 +93,7 @@ def abi_error_data(reason: str, reference: ModuleType) -> bytes:
 
 def lean_outputs(reasons: list[str], harness: Path) -> list[bytes]:
     require(harness.is_file(), f"Lean evaluation harness is missing: {harness}")
+    gate_semaphore.guard("the errorData evaluation harness")
     command = ["lake", "env", "lean", "--run", str(harness), *reasons]
     try:
         completed = subprocess.run(command, cwd=ROOT, text=True,

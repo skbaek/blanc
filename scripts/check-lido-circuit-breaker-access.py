@@ -16,6 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import gate_semaphore
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # The six proof owners of this family.  `sites` classifies, `access` states the
@@ -1606,6 +1608,7 @@ def compile_fixture() -> None:
         if not olean.is_file():
             fail(f"compiled {key} owner is absent; run the approved elaboration "
                  "checkpoint before this fixture gate")
+    gate_semaphore.guard("the Lido access-control fixtures")
     run = subprocess.run(
         ["lake", "env", "lean", "scripts/LidoCircuitBreakerAccessControls.lean"],
         cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1619,6 +1622,7 @@ def qualified_role_name(key: str, name: str) -> str:
     return namespace + "." + name
 
 def axiom_checks() -> None:
+    gate_semaphore.guard("the Lido access-control axiom probe")
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="access-axioms-", dir=ROOT,
         encoding="utf-8", delete=False,

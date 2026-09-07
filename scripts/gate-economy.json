@@ -14,7 +14,8 @@
   "post_launch_gates": [
     "beacon-deposit-assurance",
     "beacon-deposit-deployment",
-    "weth10-current-mainnet"
+    "weth10-current-mainnet",
+    "keccak-rate-boundary"
   ],
   "rows": [
     {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
@@ -28,6 +29,7 @@
     {"id":"proof-residue","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"extraction-ownership","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"trust-surface","work":["static-corpus"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
+    {"id":"keccak-rate-boundary","work":["candidate-positive","static-corpus"],"resource_class":"light","prerequisites":[],"historical_catches":["eight of the nine independent pure-Python Keccak-256 sponges merged pad10*1 wrongly at every rate boundary until 2026-09-07; reverting only that repair reddens this row with 8 x 4 failures"]},
     {"id":"weth10-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"lido-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
     {"id":"lido-twg-census","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},

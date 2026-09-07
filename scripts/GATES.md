@@ -35,6 +35,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | the execution-occurrence substrate, source map, retained replay, WETH bridge, or fixtures | `scripts/check-execution-occurrence.sh` + `scripts/check-extraction-ownership.sh` | the **full set**, in the order below |
 | the cycle-safe same-frame source-level SSTORE-occurrence certificate, execution theorem, owner manifest, or fixtures | `scripts/check-cycle-write-free.sh` | the **full set**, in the order below |
 | transient-storage cells, static propagation, direct-call projections, settlement/reset theorems, owner manifest, or fixtures | `scripts/check-transient-settlement.sh` | the **full set**, in the order below |
+| any pure-Python Keccak-256 helper on an evidence surface, or a new sponge anywhere under `scripts/` | `scripts/check-keccak-rate-boundary.sh` | the **full set**, in the order below |
 | WETH10 deployed-reference inputs, lock, or checker | `scripts/check-weth10-reference.sh` | the **full set**, in the order below |
 | Lido CircuitBreaker reference inputs, lock, checker, or compatibility synchronization | `scripts/check-lido-circuit-breaker-reference.sh` | the **full set**, in the order below |
 | Lido TriggerableWithdrawalsGateway reference inputs, lock, vendored source/compiler closure, or checker | `scripts/check-lido-twg-reference.sh` | the **full set**, in the order below |
@@ -111,6 +112,7 @@ scripts/check-proof-duplication.sh
 scripts/check-proof-residue.sh
 scripts/check-extraction-ownership.sh
 scripts/check-trust-surface.sh
+scripts/check-keccak-rate-boundary.sh
 scripts/check-weth10-reference.sh
 scripts/check-lido-circuit-breaker-reference.sh
 scripts/check-lido-twg-census.sh
@@ -447,6 +449,7 @@ against the gate.
 | `scripts/check-execution-occurrence.sh --static-only` | corpus-wide occurrence owner, header, consumer, shadow, alias, export and proposition-copy controls | 10 moved-owner rows + exact headers and parser controls | unmeasured after split |
 | `scripts/check-cycle-write-free.sh --static-only` | exact owner/signature/exemption manifest and contract-wide shadow/alias/export controls | 22 positive proof pins; 19 owners; 7 signatures; parser controls | unmeasured after split |
 | `scripts/check-transient-settlement.sh --static-only` | sole shared owner, exact imports/signatures, donor moves, touched consumers and frozen predecessor assurances | 14 owners; 12 moved donors | unmeasured after split |
+| `scripts/check-keccak-rate-boundary.sh` | holds every independent in-repo pure-Python Keccak-256 sponge to rate-straddling digests derived from the pinned execution-specs oracle `ethereum.crypto.hash.keccak256` at `4198b9c5996713b268aed602739d5aa40e277694`, not from anything in this repository. The lengths bracket every `len % 136` boundary that a wrong `pad10*1` merge can hide (135, 271, 407, 543 and their neighbours) plus the two published selector digests; the declared enumeration is additionally reconciled against a static sponge scan of `scripts/**/*.py`, so a surface that grows or loses an implementation fails here rather than escaping the control. Reverting only the 2026-09-07 `pad10*1` repair reddens it with 8 x 4 rate-boundary failures | 9 implementations x 14 lengths + 2 selectors = 144 comparisons; 1 enumeration reconciliation | sub-second |
 | `scripts/check-weth10-reference.sh` | exact-schema validation and offline reconstruction of the deployed WETH10 lock: independently pinned deployment/compiler/source/RPC identities, installed runtime hex/codehash, exact template and immutable spans/values, full canonical 27-function + two-event + receive ABI, separate constructor boundary, source-derived branch-context guard/callback/event/storage inventories, exact drift evidence, deletion/mutation, wrong-type, coherent, deployment-derivation, and coordinated-input falsifiers, plus exact generated endpoint-key synchronization for the compatibility contract | schema v2; 27 selectors + receive; 9,975 runtime bytes; 23 falsifier families; 28 compatibility endpoint keys + 12 cross-cutting keys + deployment | ~25 s |
 | `scripts/check-lido-circuit-breaker-reference.sh` | fail-closed offline reconstruction and independent schema validation of the pinned Lido v1.0.0 source/compiler/deployment/report lock; derives both Solidity artifact worlds, exact runtime selectors, constructor/errors/events, source inventories and immutable spans, and runs deletion, wrong-type, digest, selector, event, immutable-span, deployment-derivation, coherent-edit, and coordinated-input falsifiers plus compatibility synchronization | schema v2; 17 functions; 7 constructor arguments; 15 errors; 6 indexed event families; 2 artifact worlds; 9 required falsifier categories | ~7 s |
 | `scripts/check-lido-twg-census.sh` | verifies the pinned TriggerableWithdrawalsGateway ABI census offline, including canonical selectors, event topics/indexing, gateway/Pausable/ExitLimitUtils custom errors, role and storage-slot hashes, and the exact `whenResumed` surface; its wrapper runs both the checker’s mutation/self-test and the normal manifest check | pinned source 1700571; 24 selectors, 6 events, 14 custom errors, 6 role/slot hashes, exact `whenResumed` surface | sub-second |
@@ -545,6 +548,8 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/check-lido-circuit-breaker-registry.py` | `check-lido-circuit-breaker-registry.sh` | fail-closed Registry RI7 owner/namespace and normalized-header pins, forbidden-trust scan, both fixture compilations, four exact standard-axiom checks, and eleven in-memory validator falsifiers |
 | `scripts/check-execution-raw-attribution-ownership.py` | `check-execution-occurrence.py` | strictly parses the 28-row common raw-attribution/chronology owner manifest, rejects forbidden contract-basename shadows across WETH10 and Lido modules, exactly pins the selected-root source-attribution and target-directed chronology theorem signatures plus the sole shared traversal kernel and public delegation, and runs eight common-owner, shadow, signature, kernel, and delegation falsifiers |
 | `scripts/check-trust-surface.py` | `check-trust-surface.sh` | traverses `Blanc.lean`'s transitive local import closure and compares every normalized forbidden-token occurrence against the exact fail-closed allowlist |
+| `scripts/test-keccak-rate-boundary.py` | `check-keccak-rate-boundary.sh` | enumerates every independent Keccak-256 sponge in `scripts/`, reconciles that enumeration against a static scan, and compares each implementation with the external rate-boundary vectors |
+| `scripts/keccak_rate_boundary_vectors.py` | `check-keccak-rate-boundary.sh` | owns the oracle pin, the message rule, and the rate-straddling digests; it contains no Keccak implementation, so no in-repo defect can be shared with what it checks |
 | `scripts/weth10-reference.py` | `check-weth10-reference.sh` | derives the schema-v2 target from vendored inputs, checks independent identity pins, and provides the explicit networked refresh |
 | `scripts/weth10_reference_schema.py` | `check-weth10-reference.sh` | validates the complete generated lock against a hand-maintained exact nested schema independent of the builder |
 | `scripts/test-weth10-reference-falsifiers.py` | `check-weth10-reference.sh` | deletes and mutates every required field family, fuzzes JSON types and coherent cross-field edits, checks deployment-state derivation, and attempts coordinated input edits to prove the ordinary checker rejects them |
@@ -798,6 +803,71 @@ already hold the cross-session hard semaphore through
 `python3 -m creme semaphore`; see `~/creme/docs/guides/execution.md` for the
 protocol. The gate lock is the last line of defense, not the coordination
 mechanism.
+
+### Elaborating gates ask the host before they elaborate
+
+Holding the semaphore was, until 2026-09-07, entirely the caller's job, and the
+gates gave the caller no help with it: every wrapper here that runs `lake env
+lean` or `lake build` did so without asking anything. On that day a gate that
+elaborates for minutes ran beside a live 8 GiB hard hold on a 24 GiB host, and
+neither side could see the other — the coordination record held no row for it
+at all, because attribution is poll-driven and nothing polled. The semaphore
+was not failing. Nothing was asking it.
+
+Every wrapper and driver here that can elaborate now asks, through
+`scripts/gate-semaphore.sh` for the shell wrappers and `scripts/gate_semaphore.py`
+for the drivers whose elaborating command is issued from Python. Both carry the
+same contract, and both files' headers are the authority on it:
+
+* **Lazily.** The hold is taken at the first point the run is about to
+  elaborate, so `--static-only`, `--no-build` and `--self-test` modes take
+  nothing. A gate that only reads committed text must not hold this host: one
+  such run held it for 22 minutes at under 0.6 GiB and locked out two proof
+  sessions.
+* **Per gate process, released when it exits.** `scripts/check-gates.sh` takes
+  no hold of its own; every row it executes is a separate process that
+  coordinates for itself and lets go when it is done, so a long selective run
+  leaves a window between rows rather than owning the host for hours.
+* **Inheriting rather than deadlocking.** The hold is named after the goal
+  worktree the gate is running in. A session that already holds this host for
+  that goal gets `ALREADY_HELD` back, immediately and without queueing, and
+  that answer is read as inheritance: the gate proceeds under the caller's hold
+  and releases nothing, so one unit is never charged twice and a suite cannot
+  block behind itself. `BLANC_GATE_SEMAPHORE=inherited` states the same thing
+  outright when the caller holds the host under some other name, and
+  `BLANC_GATE_SEMAPHORE_LABEL` states that name.
+* **Refusal is not failure.** A refusal that waiting cannot change is reported
+  the way `gate-lock.sh` reports its own — `REFUSED — ...`, exit 2. The gate
+  did not fail; it did not run, and no verdict of any kind may be read out of
+  it. Set `BLANC_GATE_SEMAPHORE_WAIT=SECS` to queue for admission instead of
+  taking the immediate verdict.
+* **Sized to what the gate does.** Admission charges a peak multiplier on the
+  estimate and keeps a host usability reserve on top, so a request that is too
+  large is refused while the host is two thirds free — a passing gate turned
+  into a REFUSED for no safety benefit. An ordinary gate elaborates one
+  evaluator against a tree that is already current, so it asks for the narrow
+  estimate; the wrappers that genuinely run `lake build` state a larger one at
+  their acquisition. `BLANC_GATE_SEMAPHORE_MEMORY_GIB` overrides both. Never
+  lower an estimate to get admitted.
+* **Blanc stays standalone.** Creme is not a build dependency and CI runners
+  have nothing to coordinate with. Where the coordination entry point is
+  absent, each affected gate says so once in a `NOTE — ...` line that no
+  verdict pattern matches, and runs. `BLANC_GATE_SEMAPHORE=off` says the same
+  deliberately.
+
+No gate's command, arguments, pass criteria, verdict line, exit codes,
+baselines or budgets change. What changes is that the elaboration inside them
+is now visible to everything else on the host, and that the host can serialize
+it. The registry declares the helper as an input of every gate that reads it,
+so editing either helper re-runs those gates rather than crediting them from
+evidence produced under different coordination.
+
+`check-elab.sh` keeps its own report and heavy locks; the semaphore hold is in
+addition to them, not a replacement. The hold it takes is the entry point's
+default class, which is weaker than the exclusivity a timing-authoritative run
+wants: a timing run should still be started by a session that has taken an
+`exclusive` hold itself, and it will then inherit that hold rather than take a
+second one.
 
 | gate | report lock | heavy lock |
 |---|---|---|

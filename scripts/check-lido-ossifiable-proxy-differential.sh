@@ -5,13 +5,14 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 EVALUATOR="$SCRIPT_DIR/eval-lido-ossifiable-proxy-artifacts.lean"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lido-ossifiable-proxy-differential.XXXXXX")"
 ARTIFACTS="$WORK_DIR/blanc-artifacts.txt"
 RESULT="$WORK_DIR/differential-result.json"
-trap 'rm -f "$ARTIFACTS" "$RESULT"; rmdir "$WORK_DIR"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$RESULT"; rmdir "$WORK_DIR"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — OssifiableProxy differential: pinned EELS python not found at $EELS_PY"
@@ -28,6 +29,8 @@ PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
 PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
   "$SCRIPT_DIR/test-lido-ossifiable-proxy-differential-falsifiers.py" \
   --repo-root "$REPO_ROOT"
+
+gate_semaphore_acquire "the OssifiableProxy artifacts" || exit 2
 
 (cd "$REPO_ROOT" && lake env lean \
   scripts/eval-lido-ossifiable-proxy-artifacts.lean >"$ARTIFACTS")

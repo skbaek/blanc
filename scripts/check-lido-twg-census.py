@@ -51,9 +51,11 @@ def keccak256(data: bytes) -> bytes:
     # Ethereum Keccak padding is 0x01, unlike NIST SHA3's 0x06.
     padded = bytearray(data)
     padded.append(0x01)
-    while len(padded) % RATE != RATE - 1:
+    # pad10*1: the two pad bits share one byte when the message ends
+    # one byte short of the rate, so merge 0x80 into the final byte.
+    while len(padded) % RATE != 0:
         padded.append(0)
-    padded.append(0x80)
+    padded[-1] ^= 0x80
     state = [0] * 25
     for off in range(0, len(padded), RATE):
         block = padded[off:off + RATE]
