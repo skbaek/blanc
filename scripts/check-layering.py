@@ -73,6 +73,7 @@ import sys
 SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "WordArithmetic", "BytesWrite", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
+          "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
           "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
