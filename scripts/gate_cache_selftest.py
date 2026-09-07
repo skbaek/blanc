@@ -20,6 +20,14 @@ The suite runs against scratch repositories, never against Blanc's own tree,
 so it is safe to run at any time and asserts on the real engine rather than on
 a reimplementation of it.
 
+Scratch means more than the tree.  The runner also asks the host for admission
+before it elaborates its build prerequisite, and these controls answer that
+request themselves (`Coordination`) instead of putting it to the machine.  A
+suite that consulted the live host would take a real hold sized for a real Lean
+build in order to run a shell script that echoes, and would inherit whatever
+else was running as a hidden input -- reddening at random and telling nobody
+why.  That is not hypothetical: it is the defect this stand-in was written for.
+
 NEGATIVE CONTROLS
 -----------------
 
@@ -51,6 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import importlib.util
 import gate_sampling as gs
+import gate_semaphore
 import worktree_seed as ws
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -77,8 +86,9 @@ def require(condition: bool, message: str) -> None:
 class Scratch:
     """A throwaway repository with real files, real traces and a real git."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, coordination: "Coordination") -> None:
         self.root = root
+        self.coordination = coordination
         self.output = ""
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         (root / "Blanc").mkdir(parents=True, exist_ok=True)
@@ -170,7 +180,16 @@ class Scratch:
         arguments = type("A", (), {"fresh": fresh, "echo": False})()
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = gc.run(self.root, arguments)
+            # The runner asks the host for admission before it elaborates the
+            # build prerequisite.  Pointed at the real entry point, every
+            # scratch run here would take a live host-wide hold sized for a
+            # Lean build in order to run a shell script that echoes: it would
+            # charge the host for work that is not Lean, starve whatever else
+            # was running, and redden this suite whenever the machine happened
+            # to be busy.  The exchange still happens in full; it happens
+            # against a stand-in that this control owns and can answer.
+            with patched(gate_semaphore, "ENTRY", self.coordination.entry):
+                code = gc.run(self.root, arguments)
         self.output = out.getvalue() + err.getvalue()
         return code
 
@@ -200,13 +219,63 @@ class Scratch:
         self.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "one")
 
 
+class Coordination:
+    """A scratch stand-in for the host coordination entry point.
+
+    It is a real executable answering the real protocol, not a patched-out
+    call: the runner still spawns it, still parses its answer, and still
+    releases against it.  What it removes is the dependency on the live host,
+    which is not an input this suite is entitled to depend on -- and what it
+    adds is a host whose answers a control can choose, which is what makes the
+    admission contract falsifiable at all.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+        self.directory = directory
+        self.calls = directory / "calls.log"
+        self.verdict = directory / "verdict"
+        self.entry = directory / "semaphore"
+        self.answer("admit")
+        self.entry.write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "$*" >> "{self.calls}"\n'
+            f'verdict=$(cat "{self.verdict}")\n'
+            'case "$1:$verdict" in\n'
+            "  adaptive-acquire:refuse)\n"
+            '    echo "REFUSED DEFER_HEAVY: another session holds the host"; exit 3 ;;\n'
+            "  adaptive-acquire:already-held)\n"
+            '    echo "ALREADY_HELD: this label already holds the host"; exit 4 ;;\n'
+            "esac\n"
+            "echo OK\n",
+            encoding="utf-8",
+        )
+        self.entry.chmod(0o755)
+
+    def answer(self, verdict: str) -> None:
+        """Choose what the host says to the next admission request."""
+        self.verdict.write_text(verdict + "\n", encoding="utf-8")
+
+    def calls_made(self) -> list[str]:
+        if not self.calls.is_file():
+            return []
+        return self.calls.read_text(encoding="utf-8").splitlines()
+
+    def forget(self) -> None:
+        self.calls.unlink(missing_ok=True)
+
+
 @contextmanager
 def scratch():
     directory = Path(tempfile.mkdtemp(prefix="gate-cache-control-"))
+    # Outside the scratch repository: a coordination trace inside it would be
+    # an input the controls digest.
+    coordination = Path(tempfile.mkdtemp(prefix="gate-cache-coordination-"))
     try:
-        yield Scratch(directory)
+        yield Scratch(directory, Coordination(coordination))
     finally:
         shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(coordination, ignore_errors=True)
 
 
 @contextmanager
@@ -215,7 +284,7 @@ def seed_pair():
     source = directory / "source"
     target = directory / "target"
     source.mkdir()
-    s = Scratch(source)
+    s = Scratch(source, Coordination(directory / "coordination"))
     s.write(".gitignore", ".lake/\nscripts/baseline-elab.txt\n")
     prepare_build_state(s)
     s.write(
@@ -1010,6 +1079,107 @@ def control_exact_build_certificate_skips_only_the_authoritative_build() -> None
             require(
                 s.disposition("lake-build", fresh=True) == "fresh",
                 "--fresh must still require the authoritative build",
+            )
+
+
+def control_build_prerequisite_coordinates_the_host_and_fails_closed() -> None:
+    """The build prerequisite is the one row this runner elaborates itself, so
+    it is the one row that has to ask the host for admission.  Three properties
+    of that exchange are load-bearing and none of them was falsifiable before
+    this control existed: a refusal must stop the build rather than let it
+    elaborate on a machine that just said no, an inherited hold must be used
+    and never released by the borrower, and the hold must be dropped before the
+    planned rows so a selective run does not own the host end to end.
+    """
+
+    with scratch() as s:
+        prepare_build_state(s)
+        build = s.passing_gate("build.sh", "build-ran.txt")
+        planned = s.gate(
+            "planned.sh",
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "planned-row-ran" >> "{s.coordination.calls}"\n'
+            'echo "OK — planned.sh: 1/1 fine"\n',
+        )
+        s.write("docs.md", "one\n")
+        s.registry(
+            [
+                {
+                    "id": "lake-build",
+                    "order": 1,
+                    "command": [build],
+                    "kind": "composition",
+                    "prerequisite": True,
+                    "reason": "authoritative build prerequisite",
+                    "inputs": {},
+                    "verdict": {"expect_exit": 0, "summary_patterns": ["^OK — build.sh: "]},
+                },
+                simple_gate(
+                    "planned", [planned], {"files": ["docs.md"]},
+                    "^OK — planned.sh: ", order=2,
+                ),
+            ]
+        )
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            # A refusal is a refusal to run, not a gate failure and not a
+            # licence to run anyway.
+            s.coordination.answer("refuse")
+            require(s.run() != 0, "a refused host must redden the run")
+            require(s.ran("build-ran.txt") == 0, "a refused host must elaborate nothing")
+            require(
+                "planned-row-ran" not in s.coordination.calls_made(),
+                "a refused prerequisite leaves no sound identity, so nothing may be planned",
+            )
+            require("REFUSED" in s.output, "the refusal must be reported, not swallowed")
+            require(
+                s.disposition("lake-build") == "fresh",
+                "a build that never ran must never be certified",
+            )
+
+            # Admitted: the request is made, and the hold is let go of before
+            # the planned rows rather than kept for the whole selective run.
+            s.coordination.forget()
+            s.coordination.answer("admit")
+            require(s.run() == 0, "an admitted host lets the build run")
+            require(s.ran("build-ran.txt") == 1, "an admitted prerequisite elaborates once")
+            trace = s.coordination.calls_made()
+            acquires = [i for i, line in enumerate(trace) if line.startswith("adaptive-acquire")]
+            releases = [i for i, line in enumerate(trace) if line.startswith("release")]
+            require(len(acquires) == 1, "the prerequisite must ask for admission exactly once")
+            require(
+                gate_semaphore.label() in trace[acquires[0]]
+                and "--memory-gib" in trace[acquires[0]],
+                "the request must name this goal and a peak estimate",
+            )
+            require(len(releases) == 1, "an admitted hold must be released")
+            require(
+                "planned-row-ran" in trace,
+                "the planned rows must still run after the prerequisite",
+            )
+            require(
+                releases[0] < trace.index("planned-row-ran"),
+                "the hold must be dropped before the planned rows, not held across the run",
+            )
+
+            # ALREADY_HELD: someone else's hold covers this elaboration.
+            # Proceed under it, charge nothing twice, release nothing.
+            s.coordination.forget()
+            s.write("Blanc/A.lean", "theorem a : True := by trivial\n")
+            s.coordination.answer("already-held")
+            require(s.run() == 0, "an inherited hold lets the build run")
+            require(s.ran("build-ran.txt") == 2, "the prerequisite still elaborates under it")
+            trace = s.coordination.calls_made()
+            require(
+                [line for line in trace if line.startswith("adaptive-acquire")] != [],
+                "an inherited hold is still asked for, not assumed",
+            )
+            require(
+                [line for line in trace if line.startswith("release")] == [],
+                "a hold this runner did not take must not be released by it",
             )
 
 
@@ -2293,6 +2463,47 @@ def control_negative_trusting_the_registry_at_run_time() -> None:
                   "run-time registry reconciliation removed")
 
 
+def control_negative_running_the_build_uncoordinated() -> None:
+    """If the prerequisite elaborated without asking the host -- or asked and
+    then ignored the answer -- a refusal would become an uncoordinated build on
+    a machine that had just said it had no room for one."""
+
+    @contextlib.contextmanager
+    def uncoordinated(what: str, memory_gib: int = 0):
+        yield
+
+    with patched(gate_semaphore, "admitted", uncoordinated):
+        must_fail(
+            control_build_prerequisite_coordinates_the_host_and_fails_closed,
+            "host admission removed from the build prerequisite",
+        )
+
+
+def control_negative_holding_the_host_across_the_selective_run() -> None:
+    """`admitted` exists so the runner drops the host between the build and the
+    rows it plans.  Acquiring for the process instead would still pass every
+    other assertion about the build while starving the machine for the length
+    of a selective run."""
+
+    @contextlib.contextmanager
+    def kept(what: str, memory_gib: int = 0):
+        completed = subprocess.run(
+            [str(gate_semaphore.ENTRY), "adaptive-acquire", gate_semaphore.label(),
+             "--note", what, "--memory-gib", str(memory_gib)],
+            capture_output=True, text=True, check=False,
+        )
+        detail = completed.stdout + completed.stderr
+        if completed.returncode != 0 and "ALREADY_HELD" not in detail:
+            raise gate_semaphore.Refused(detail.strip())
+        yield
+
+    with patched(gate_semaphore, "admitted", kept):
+        must_fail(
+            control_build_prerequisite_coordinates_the_host_and_fails_closed,
+            "the build hold kept across the planned rows",
+        )
+
+
 def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
     gs.self_test()
     policy, harness = gs.validate_policy()
@@ -2309,6 +2520,8 @@ NEGATIVE_CONTROLS = (
     control_negative_ignoring_population_membership,
     control_negative_lenient_import_parser,
     control_negative_trusting_the_registry_at_run_time,
+    control_negative_running_the_build_uncoordinated,
+    control_negative_holding_the_host_across_the_selective_run,
 )
 
 CONTROLS = (
@@ -2343,6 +2556,7 @@ CONTROLS = (
     control_tool_identity_invalidates,
     control_unknown_tool_is_a_registry_fault,
     control_exact_build_certificate_skips_only_the_authoritative_build,
+    control_build_prerequisite_coordinates_the_host_and_fails_closed,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
