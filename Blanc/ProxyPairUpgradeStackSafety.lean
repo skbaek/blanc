@@ -1,4 +1,4 @@
-import Blanc.AbstractStackCertificate
+import Blanc.ProxyPairUpgradeStackSafetyData
 import Blanc.ProxyPairUpgradePrograms
 
 /-!
@@ -40,9 +40,9 @@ namespace Blanc.ProxyPair.Upgrade
 
 open Jaune AbstractStackSafety CompiledStackSafety
 
-/-- One row per reachable program counter of `v1Code`, top-first, written as a
-right-leaning search tree so the rows read in program order against the
-disassembly. `none` forgets a literal, never an operand position.
+/-- One row per reachable program counter of `v1Code`, top-first. The generated
+balanced packs preserve these exact rows while bounding lookup depth. `none`
+forgets a literal, never an operand position.
 
 ```
   pc  instruction      row pattern
@@ -95,58 +95,30 @@ disassembly. `none` forgets a literal, never an operand position.
   69  RETURN           [some 0, some 32]
 ```
 -/
-def v1StackTable : AbstractStackSafety.Table :=
-  .node 0 [] .empty <|
-  .node 1 [] .empty <|
-  .node 2 [some 0] .empty <|
-  .node 3 [none] .empty <|
-  .node 5 [some 224, none] .empty <|
-  .node 6 [none] .empty <|
-  .node 7 [none, none] .empty <|
-  .node 12 [some valueSelector, none, none] .empty <|
-  .node 13 [none, none] .empty <|
-  .node 16 [some 49, none, none] .empty <|
-  .node 17 [none] .empty <|
-  .node 22 [some setValueSelector, none] .empty <|
-  .node 23 [none] .empty <|
-  .node 26 [some 31, none] .empty <|
-  .node 27 [] .empty <|
-  .node 30 [some 0] .empty <|
-  .node 31 [] .empty <|
-  .node 32 [] .empty <|
-  .node 33 [none] .empty <|
-  .node 34 [none] .empty <|
-  .node 37 [some 41, none] .empty <|
-  .node 38 [] .empty <|
-  .node 39 [some 0] .empty <|
-  .node 40 [some 0, some 0] .empty <|
-  .node 41 [] .empty <|
-  .node 42 [] .empty <|
-  .node 44 [some 4] .empty <|
-  .node 45 [none] .empty <|
-  .node 47 [some 7, none] .empty <|
-  .node 48 [] .empty <|
-  .node 49 [none] .empty <|
-  .node 50 [none] .empty <|
-  .node 51 [] .empty <|
-  .node 52 [none] .empty <|
-  .node 53 [none] .empty <|
-  .node 56 [some 60, none] .empty <|
-  .node 57 [] .empty <|
-  .node 58 [some 0] .empty <|
-  .node 59 [some 0, some 0] .empty <|
-  .node 60 [] .empty <|
-  .node 61 [] .empty <|
-  .node 63 [some 7] .empty <|
-  .node 64 [none] .empty <|
-  .node 65 [some 0, none] .empty <|
-  .node 66 [] .empty <|
-  .node 68 [some 32] .empty <|
-  .node 69 [some 0, some 32] .empty .empty
+def v1StackTable : AbstractStackSafety.Table := StackSafetyData.table
 
 /-- The whole obligation over the real compiled bytes: one finite evaluation
 against the public decoder, `jumpable`, and the accepted transfer family. -/
 theorem v1StackTable_checked : checkTable v1Code v1StackTable 3 = true := by
+  decide +kernel
+
+/-- The pack containing the fallback jump at PC30 succeeds only when its rows
+look up successors in the complete table, where entry row zero is in another
+pack. -/
+theorem v1FallbackPack_checked :
+    StackSafetyData.pack32.all (checkRow v1Code v1StackTable 3) = true := by
+  decide +kernel
+
+/-- Searching only the source pack cannot discharge PC30's successor at PC0. -/
+example :
+    StackSafetyData.pack32.all
+      (checkRow v1Code StackSafetyData.pack32 3) = false := by
+  decide +kernel
+
+/-- Removing only destination row zero from the otherwise complete table makes
+the global cycle check fail. -/
+example :
+    checkTable v1Code StackSafetyData.tableWithoutEntry 3 = false := by
   decide +kernel
 
 /-- ... and that evaluation is the certificate, for every machine running the

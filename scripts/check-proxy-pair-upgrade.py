@@ -29,6 +29,8 @@ PRODUCTION = (
     "Blanc/ProxyPairUpgradeRelation.lean",
     "Blanc/ProxyPairUpgradeExecution.lean",
     "Blanc/ProxyPairUpgradeRefinement.lean",
+    "Blanc/ProxyPairUpgradeStackSafetyData.lean",
+    "Blanc/ProxyPairUpgradeStackSafety.lean",
 )
 
 SUPPORT = (
@@ -37,6 +39,11 @@ SUPPORT = (
     "scripts/check-layering.py",
     "scripts/ProxyPairUpgradeWitness.lean",
     "scripts/ProxyPairUpgradeAxiomCheck.lean",
+    "scripts/eval-proxy-pair-stack-bytes.lean",
+    "scripts/stack_certificate.py",
+    "scripts/gen-proxy-pair-stack-certificate.py",
+    "scripts/test-stack-certificate.py",
+    "scripts/check-stack-certificate-producer.sh",
 )
 
 HEADLINES = {
@@ -322,6 +329,16 @@ def dynamic_errors(root: Path) -> list[str]:
         if rows != EXPECTED_WITNESS:
             errors.append("WITNESS — exact executable rows drifted\nexpected:\n  " +
                           "\n  ".join(EXPECTED_WITNESS) + "\nactual:\n  " + "\n  ".join(rows))
+
+    producer = subprocess.run(
+        ["scripts/check-stack-certificate-producer.sh"], cwd=root, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+    )
+    if producer.returncode != 0:
+        errors.append(
+            f"STACK — producer/generated-data check failed with exit {producer.returncode}:\n"
+            f"{producer.stdout.rstrip()}"
+        )
     return errors
 
 
@@ -428,9 +445,9 @@ def main(argv: list[str]) -> int:
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
-        print(f"OK — {SUBJECT} semantic: 13 axiom pins, 12 exact witness rows{suffix}")
+        print(f"OK — {SUBJECT} semantic: 13 axiom pins, 12 exact witness rows, compiler-bound stack data{suffix}")
     else:
-        print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows{suffix}")
+        print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows, compiler-bound stack data{suffix}")
     return 0
 
 

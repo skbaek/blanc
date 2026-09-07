@@ -504,9 +504,21 @@ program and check pieces with `Table.all_node`. `Table.count_le_one` and
 `Table.checkLayout` are available when a row-uniqueness or contiguous-layout
 argument is wanted.
 
-**Not supplied.** The checker validates a table; it does not produce one. There
-is no row synthesis, no candidate generation, and no coverage measurement here.
-Authoring the rows for a real program is the caller's work.
+**Untrusted producer.** `scripts/stack_certificate.py` accepts bytes and an
+explicit maximum, runs the conservative whole-stack worklist transfer, and
+emits deterministic sorted, balanced packs of at most 15 leaf rows. Its CLI is
+the generic entry point; import the module when a contract-specific extractor
+needs to name its source. The producer neither extends the accepted opcode
+family nor supplies a theorem. Its output becomes evidence only when the
+unchanged Lean `checkTable` accepts it against the actual code.
+
+The first working extraction route is
+`python3 scripts/gen-proxy-pair-stack-certificate.py`. It evaluates
+`Blanc.ProxyPair.Upgrade.v1Bytes`, which is the actual `Prog.compile` result,
+then byte-compares the generated owner. Add `--write` to regenerate that owner.
+This is also the registered stale/missing-output check. The fixed 15-row leaf
+size is inherited from the DRIP donor and is only a representation boundary;
+no packing optimum is claimed.
 
 **First real consumer.**
 [`Blanc/ProxyPairUpgradeStackSafety.lean`](../Blanc/ProxyPairUpgradeStackSafety.lean)
@@ -514,17 +526,14 @@ certifies `v1Code` — the 74-byte upgrade-witness runtime deployed at
 `v1Implementation` and executed by `ProxyPairUpgradeRefinement` — with 47 rows
 for its 47 reachable program counters, a ceiling of three words, one
 `decide +kernel`, and `Certificate.at_parentPrefix` for the transported
-conclusion. Two authoring facts generalize. First, the table there is a
-*right-leaning* tree, one `.node pc pattern .empty <| ...` per row: that
-satisfies `Table.checkOrder` exactly as a balanced tree does, and it reads in
-program order against a disassembly, so no hand-balancing is needed. Second,
-the rows come from a forward abstract interpretation of the same transfer
-functions the checker applies; nothing in the repository performs that
-interpretation, so a consumer still computes the fixpoint outside Lean and lets
-`checkTable` validate the result. Four negative controls live beside the
-certificate — the same table against the v2 bytes, a missing successor row, a
-literal destination that is not a `JUMPDEST`, and a ceiling below the deepest
-row.
+conclusion. Its former right-leaning handwritten table is now generated as four
+15-row-or-smaller leaves and three composing nodes. The 47 PCs, heights, and
+known words are unchanged; selector literals render as their numeric `B256`
+values, which the check validates against `v1Code`. The PC30 fallback jump and
+its PC0 destination lie in different packs: the source pack passes when it
+looks up successors in the full table, fails against itself, and removing only
+row zero makes the full check reject. The original four negative controls also
+remain beside the certificate.
 
 **What is in reach.** For Blanc-compiled code the binding constraint is the
 accepted opcode family, not the destination boundary. `Func.compile` emits a

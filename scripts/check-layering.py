@@ -218,6 +218,7 @@ CONTRACTS = {
                    "ProxyPairCorrespondence", "ProxyPairAuthority",
                    "ProxyPairUpgradePrograms", "ProxyPairUpgradeRelation",
                    "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement",
+                   "ProxyPairUpgradeStackSafetyData",
                    "ProxyPairUpgradeStackSafety"],
     "prorata": ["Prorata", "ProrataCode", "ProrataArithmetic", "ProrataAccounting",
                 "ProrataAccountingExec", "ProrataAccountingTransaction",

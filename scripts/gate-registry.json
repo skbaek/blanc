@@ -2667,8 +2667,15 @@
           "Blanc/ProxyPairUpgradeRelation.lean",
           "Blanc/ProxyPairUpgradeExecution.lean",
           "Blanc/ProxyPairUpgradeRefinement.lean",
+          "Blanc/ProxyPairUpgradeStackSafetyData.lean",
+          "Blanc/ProxyPairUpgradeStackSafety.lean",
           "scripts/ProxyPairUpgradeAxiomCheck.lean",
           "scripts/ProxyPairUpgradeWitness.lean",
+          "scripts/eval-proxy-pair-stack-bytes.lean",
+          "scripts/stack_certificate.py",
+          "scripts/gen-proxy-pair-stack-certificate.py",
+          "scripts/test-stack-certificate.py",
+          "scripts/check-stack-certificate-producer.sh",
           "docs/PROXY_PAIR_UPGRADE.md",
           "scripts/gate_semaphore.py"
         ],
@@ -2837,11 +2844,17 @@
         "files": [
           "scripts/check-proxy-pair-upgrade.sh",
           "scripts/check-proxy-pair-upgrade.py",
-          "scripts/gate_semaphore.py"
+          "scripts/gate_semaphore.py",
+          "scripts/stack_certificate.py",
+          "scripts/gen-proxy-pair-stack-certificate.py",
+          "scripts/test-stack-certificate.py",
+          "scripts/check-stack-certificate-producer.sh",
+          "Blanc/ProxyPairUpgradeStackSafetyData.lean"
         ],
         "lean_entries": [
           "scripts/ProxyPairUpgradeAxiomCheck.lean",
-          "scripts/ProxyPairUpgradeWitness.lean"
+          "scripts/ProxyPairUpgradeWitness.lean",
+          "scripts/eval-proxy-pair-stack-bytes.lean"
         ],
         "tools": [
           "lean",
