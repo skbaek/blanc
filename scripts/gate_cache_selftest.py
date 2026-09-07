@@ -1433,6 +1433,311 @@ def control_coordination_controls_declare_their_own_environment() -> None:
         control_build_prerequisite_coordinates_the_host_and_fails_closed()
 
 
+# --- the shell half of the same contract ------------------------------------
+#
+# `gate_semaphore.py` is one of two implementations of the admission contract.
+# The other is `scripts/gate-semaphore.sh`, sourced by twenty gate wrappers,
+# and until these controls existed the four mode controls above asserted the
+# contract only where the Python driver implements it.  A shell `case` arm is
+# exactly as easy to delete as a Python `if`, and its deletion turns the
+# supported CI setting into a red run on a machine with nothing to coordinate
+# with -- or, in the `inherited` direction, releases a hold the gate never took
+# out from under the session that owns it.
+
+GATE_SEMAPHORE_SHELL = Path(__file__).resolve().parent / "gate-semaphore.sh"
+
+
+def gate_semaphore_shell_source() -> str:
+    """`scripts/gate-semaphore.sh` exactly as committed.
+
+    Read through a function so that a negative control can hand the harness a
+    mutated shell half and require these controls to notice, which is the only
+    way to know they are asserting the branches and not the outcome.
+    """
+
+    return GATE_SEMAPHORE_SHELL.read_text(encoding="utf-8")
+
+
+class ShellAdmission:
+    """A disposable tree that sources the real `gate-semaphore.sh`.
+
+    What runs is the committed file, sourced by bash, spawning the same
+    `Coordination` stand-in host the Python controls use -- not a description
+    of it and not a re-implementation.
+
+    It is deliberately not a `Scratch`.  `Scratch` is built around the gate
+    runner's registry, report, build state and git history, none of which a
+    sourced shell function reads; reusing it would mean carrying that whole
+    apparatus in order to call one function, and every assertion would then be
+    about the runner rather than about the shell.  What is reused is what the
+    two halves genuinely share: the stand-in host, `declared_coordination`, and
+    the rule that a control states the mode it is about rather than inheriting
+    one.
+    """
+
+    #: The goal a gate run inside `<repo>/.worktrees/<goal>` belongs to.
+    GOAL = "blanc-shell-admission-control"
+
+    def __init__(self, root: Path, coordination: Coordination) -> None:
+        self.root = root
+        self.coordination = coordination
+        source = gate_semaphore_shell_source()
+        # Two placements, because the label the shell derives is a function of
+        # where the gate is: inside a goal worktree, and in a plain clone.
+        self.worktree = root / "blanc" / ".worktrees" / self.GOAL
+        self.clone = root / "blanc-clone"
+        for repository in (self.worktree, self.clone):
+            (repository / "scripts").mkdir(parents=True, exist_ok=True)
+            (repository / "scripts" / "gate-semaphore.sh").write_text(
+                source, encoding="utf-8")
+        # A Creme checkout whose entry point is the stand-in host, and one
+        # with no entry point at all.
+        self.creme = root / "creme"
+        (self.creme / ".semaphore").mkdir(parents=True, exist_ok=True)
+        entry = self.creme / ".semaphore" / "semaphore"
+        entry.write_text(coordination.entry.read_text(encoding="utf-8"), encoding="utf-8")
+        entry.chmod(0o755)
+        self.creme_without_entry = root / "creme-without-a-semaphore"
+        (self.creme_without_entry / ".semaphore").mkdir(parents=True, exist_ok=True)
+
+    @property
+    def absent_entry(self) -> Path:
+        return self.creme_without_entry / ".semaphore" / "semaphore"
+
+    def acquire(
+        self,
+        mode: str | None = None,
+        *,
+        clone: bool = False,
+        creme: Path | None = None,
+        extra: dict[str, str] | None = None,
+        what: str = "the control's elaboration",
+        estimate: str | None = None,
+    ) -> tuple[int, str]:
+        """Source the shell half in `mode` and take one hold through it.
+
+        Returns the acquire status and everything the shell wrote, stdout and
+        stderr together, the way an operator reading a gate's transcript sees
+        it.
+        """
+
+        scripts = (self.clone if clone else self.worktree) / "scripts"
+        script = (
+            'set -u\n'
+            f'. "{scripts / "gate-semaphore.sh"}"\n'
+            f'gate_semaphore_acquire "{what}"{"" if estimate is None else " " + estimate}\n'
+            'gs_status=$?\n'
+            'gate_semaphore_release\n'
+            'exit $gs_status\n'
+        )
+        with declared_coordination(mode):
+            environment = dict(os.environ, CREME_ROOT=str(self.creme if creme is None else creme))
+            environment.update(extra or {})
+            done = subprocess.run(
+                ["bash", "-c", script],
+                capture_output=True, text=True, env=environment, cwd=str(self.root),
+            )
+        return done.returncode, done.stdout + done.stderr
+
+    def requests(self) -> list[str]:
+        return [line for line in self.coordination.calls_made()
+                if line.startswith("adaptive-acquire")]
+
+    def releases(self) -> list[str]:
+        return [line for line in self.coordination.calls_made()
+                if line.startswith("release")]
+
+
+@contextmanager
+def shell_admission():
+    directory = Path(tempfile.mkdtemp(prefix="gate-semaphore-shell-control-"))
+    coordination = Path(tempfile.mkdtemp(prefix="gate-semaphore-shell-host-"))
+    try:
+        yield ShellAdmission(directory, Coordination(coordination))
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(coordination, ignore_errors=True)
+
+
+def control_shell_coordination_asks_the_host_and_fails_closed() -> None:
+    """The coordinated mode, in the half twenty wrappers actually source.
+
+    Three things are load-bearing and none of them was falsifiable before this
+    control existed.  A refusal must reach the caller as a non-zero status and
+    a `REFUSED` verdict -- the gate did not fail, it did not run -- and must
+    leave no release behind, because nothing was taken.  An admission must ask
+    once, naming the goal and a peak estimate, and must give the hold back.  And
+    `ALREADY_HELD` must be read as inheritance: asked for, proceeded under,
+    never released, because the hold belongs to the caller.
+    """
+
+    with shell_admission() as s:
+        s.coordination.answer("refuse")
+        status, output = s.acquire()
+        require(status != 0, "a refused host must stop the gate")
+        require("REFUSED — " in output, "the refusal must be reported as a verdict, not swallowed")
+        require(ShellAdmission.GOAL in output, "the refusal must name the goal it was refused for")
+        require(
+            "nothing was elaborated and nothing was written" in output,
+            "the refusal must say that the gate did not run rather than failed",
+        )
+        require(s.releases() == [], "a refused request holds nothing, so it releases nothing")
+
+        s.coordination.forget()
+        s.coordination.answer("admit")
+        status, output = s.acquire()
+        require(status == 0, "an admitted host lets the gate elaborate")
+        requests = s.requests()
+        require(len(requests) == 1, "the gate must ask for admission exactly once")
+        require(
+            ShellAdmission.GOAL in requests[0] and "--memory-gib" in requests[0],
+            "the request must name this goal and a peak estimate",
+        )
+        require(len(s.releases()) == 1, "an admitted hold must be released when the gate exits")
+        require("REFUSED" not in output, "an admitted gate must report no refusal")
+
+        s.coordination.forget()
+        s.coordination.answer("already-held")
+        status, output = s.acquire()
+        require(status == 0, "an inherited hold lets the gate elaborate")
+        require(len(s.requests()) == 1, "an inherited hold is still asked for, not assumed")
+        require(
+            s.releases() == [],
+            "a hold this process did not take must never be released by it",
+        )
+        require("REFUSED" not in output, "ALREADY_HELD is inheritance, not a refusal")
+
+
+def control_shell_coordination_off_never_asks_the_host_and_says_so() -> None:
+    """`BLANC_GATE_SEMAPHORE=off` in the shell half.
+
+    Same promise as the Python driver's, and the same way of stating it: the
+    host is made to answer `refuse`, so that a mode which merely ignored the
+    answer would be indistinguishable from one that never asked -- and only
+    the second is what `off` means.  A `REFUSED` reaching the caller here would
+    be a refusal nobody requested.
+
+    And it says so out loud, once, in a `NOTE` no gate's verdict pattern can
+    match, because an uncoordinated elaboration nobody can see is the failure
+    this file exists to end.
+    """
+
+    with shell_admission() as s:
+        s.coordination.answer("refuse")
+        status, output = s.acquire("off")
+        require(status == 0, "off must let the gate run without consulting the host")
+        require(s.coordination.calls_made() == [], "off must not spawn the entry point at all")
+        require("REFUSED" not in output, "off must not let in a refusal it never asked for")
+        notes = [line for line in output.splitlines() if "BLANC_GATE_SEMAPHORE=off" in line]
+        require(len(notes) == 1, "off must announce itself exactly once")
+        require(
+            notes[0].startswith("NOTE — ") and ShellAdmission.GOAL in notes[0],
+            "the announcement must name this goal and be shaped as a note, not a verdict",
+        )
+
+
+def control_shell_coordination_inherited_borrows_and_releases_nothing() -> None:
+    """`BLANC_GATE_SEMAPHORE=inherited` in the shell half.
+
+    The caller states that it already holds the host for this work.  Asking
+    again would charge one unit twice; releasing at the end would hand the host
+    away underneath its owner.  So the mode asks nothing and releases nothing,
+    and a host that would refuse proves the first half: the refusal must never
+    arrive.
+    """
+
+    with shell_admission() as s:
+        s.coordination.answer("refuse")
+        status, output = s.acquire("inherited")
+        require(status == 0, "an inherited hold must let the gate run")
+        require(s.coordination.calls_made() == [], "inherited must not ask for a second hold")
+        require("REFUSED" not in output, "inherited must not let in a refusal it never asked for")
+        require(
+            "BLANC_GATE_SEMAPHORE=off" not in output
+            and "no host coordination at" not in output,
+            "inherited is neither the off branch nor the absent-entry-point branch",
+        )
+
+
+def control_shell_absent_coordination_entry_point_announces_once_and_runs() -> None:
+    """Blanc is standalone, and that is a promise about clones, not a setting.
+
+    Where there is no Creme checkout there is nothing to ask, so the gate runs
+    rather than refusing -- but not quietly.  One announcement, naming the path
+    that was looked for, so that an uncoordinated elaboration is visible in the
+    transcript of the run that performed it.
+    """
+
+    with shell_admission() as s:
+        require(not s.absent_entry.exists(), "the control needs an entry point that is absent")
+        s.coordination.answer("refuse")
+        status, output = s.acquire(creme=s.creme_without_entry)
+        require(status == 0, "an absent entry point must not stop the gate")
+        require(
+            s.coordination.calls_made() == [],
+            "an absent entry point cannot have been asked anything",
+        )
+        require("REFUSED" not in output, "a missing Creme checkout is not a refusal")
+        notes = [line for line in output.splitlines() if "no host coordination at" in line]
+        require(len(notes) == 1, "the absence must be announced exactly once")
+        require(
+            notes[0].startswith("NOTE — ") and str(s.absent_entry) in notes[0],
+            "the announcement must name the path that was looked for",
+        )
+
+
+def control_shell_admission_request_states_the_goal_the_estimate_and_the_wait() -> None:
+    """What the shell half puts in the request, which is what the host sees.
+
+    The label is not cosmetic: the semaphore attributes a `lake`/`lean` process
+    to a hold by asking whether it is working inside that goal's worktrees, so
+    a hold named for anything else is one whose own work cannot be recognised
+    as its own.  It is derived from the worktree, stated by
+    `BLANC_GATE_SEMAPHORE_LABEL`, and falls back to `blanc-gates` in a plain
+    clone.  The estimate is the documented narrow default unless the caller
+    passes a larger one or the environment overrides it, and `--wait` appears
+    only when a caller asked to queue.
+    """
+
+    with shell_admission() as s:
+        s.coordination.answer("admit")
+        s.acquire()
+        request = s.requests()[0]
+        require(
+            f"adaptive-acquire {ShellAdmission.GOAL} " in request,
+            "a gate in a goal worktree must acquire under that goal's name",
+        )
+        require("--memory-gib 4" in request, "the default estimate is the documented narrow one")
+        require("--wait" not in request, "an unset wait must not queue")
+
+        s.coordination.forget()
+        s.acquire(clone=True)
+        require(
+            "adaptive-acquire blanc-gates " in s.requests()[0],
+            "a gate outside a goal worktree falls back to blanc-gates",
+        )
+
+        s.coordination.forget()
+        s.acquire(extra={"BLANC_GATE_SEMAPHORE_LABEL": "somebody-elses-goal"})
+        require(
+            "adaptive-acquire somebody-elses-goal " in s.requests()[0],
+            "an explicit label must be what is acquired under",
+        )
+
+        s.coordination.forget()
+        s.acquire(estimate="9", extra={"BLANC_GATE_SEMAPHORE_WAIT": "600"})
+        request = s.requests()[0]
+        require("--memory-gib 9" in request, "a caller that builds states its own estimate")
+        require("--wait 600" in request, "a caller that asked to queue must queue")
+
+        s.coordination.forget()
+        s.acquire(estimate="9", extra={"BLANC_GATE_SEMAPHORE_MEMORY_GIB": "2"})
+        require(
+            "--memory-gib 2" in s.requests()[0],
+            "the environment override must reach the request",
+        )
+
+
 def control_build_certificate_refuses_every_identity_and_trace_uncertainty() -> None:
     with scratch() as s:
         package = prepare_build_state(s)
@@ -2819,6 +3124,70 @@ def control_negative_ignoring_the_declared_coordination_mode() -> None:
                   "an absent entry point turned into a refusal")
 
 
+def control_negative_shell_ignoring_the_declared_coordination_mode() -> None:
+    """The shell half's mode branches, deleted one class at a time.
+
+    `off`, `inherited` and an absent entry point are decisions, not
+    conveniences: they are how Blanc stays standalone, how the supported CI
+    setting stays green on a runner with nothing to coordinate with, and how a
+    caller's own hold is honoured instead of being taken twice and then given
+    away.  A `case` arm is a line; this requires its deletion to be noticed.
+    """
+
+    committed = gate_semaphore_shell_source()
+
+    branches = (
+        '  case "${BLANC_GATE_SEMAPHORE:-}" in\n'
+        '    off)\n'
+        '      echo "NOTE — $gs_label: BLANC_GATE_SEMAPHORE=off; $gs_what elaborates without host admission"\n'
+        '      return 0\n'
+        '      ;;\n'
+        '    inherited)\n'
+        '      return 0\n'
+        '      ;;\n'
+        '  esac\n'
+    )
+    require(committed.count(branches) == 1,
+            "the negative control no longer matches the mode branches it deletes")
+    without_modes = committed.replace(branches, "  :\n")
+    with patched(sys.modules[__name__], "gate_semaphore_shell_source",
+                 lambda: without_modes):
+        must_fail(control_shell_coordination_off_never_asks_the_host_and_says_so,
+                  "the shell off branch removed")
+        must_fail(control_shell_coordination_inherited_borrows_and_releases_nothing,
+                  "the shell inherited branch removed")
+
+    standalone = (
+        '    echo "NOTE — $gs_label: no host coordination at $GATE_SEMAPHORE_ENTRY;'
+        ' $gs_what elaborates uncoordinated"\n'
+        '    return 0\n'
+    )
+    require(committed.count(standalone) == 1,
+            "the negative control no longer matches the standalone branch it breaks")
+    refusing = committed.replace(
+        standalone,
+        '    echo "REFUSED — $gs_label: no host coordination at $GATE_SEMAPHORE_ENTRY"\n'
+        '    return 1\n',
+    )
+    with patched(sys.modules[__name__], "gate_semaphore_shell_source",
+                 lambda: refusing):
+        must_fail(control_shell_absent_coordination_entry_point_announces_once_and_runs,
+                  "a missing Creme checkout turned into a refusal")
+
+    always_releases = committed.replace(
+        '  case "$gs_out" in\n    *ALREADY_HELD*) return 0 ;;\n  esac\n',
+        '  case "$gs_out" in\n'
+        '    *ALREADY_HELD*) GATE_SEMAPHORE_HELD="$gs_label"; return 0 ;;\n'
+        '  esac\n',
+    )
+    require(always_releases != committed,
+            "the negative control no longer matches the inheritance branch it breaks")
+    with patched(sys.modules[__name__], "gate_semaphore_shell_source",
+                 lambda: always_releases):
+        must_fail(control_shell_coordination_asks_the_host_and_fails_closed,
+                  "an inherited hold released by the process that never took it")
+
+
 def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
     gs.self_test()
     policy, harness = gs.validate_policy()
@@ -2839,6 +3208,7 @@ NEGATIVE_CONTROLS = (
     control_negative_never_releasing_the_build_hold,
     control_negative_holding_the_host_across_the_selective_run,
     control_negative_ignoring_the_declared_coordination_mode,
+    control_negative_shell_ignoring_the_declared_coordination_mode,
 )
 
 CONTROLS = (
@@ -2878,6 +3248,11 @@ CONTROLS = (
     control_coordination_inherited_borrows_and_releases_nothing,
     control_absent_coordination_entry_point_announces_once_and_runs,
     control_coordination_controls_declare_their_own_environment,
+    control_shell_coordination_asks_the_host_and_fails_closed,
+    control_shell_coordination_off_never_asks_the_host_and_says_so,
+    control_shell_coordination_inherited_borrows_and_releases_nothing,
+    control_shell_absent_coordination_entry_point_announces_once_and_runs,
+    control_shell_admission_request_states_the_goal_the_estimate_and_the_wait,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
