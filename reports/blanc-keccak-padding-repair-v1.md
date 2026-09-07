@@ -157,8 +157,20 @@ Selected from `scripts/GATES.md` by the changed paths.
 | `scripts/check-lido-ossifiable-proxy-performance.sh` | OK, exit 0 |
 | `scripts/check-lido-ossifiable-proxy-artifacts.sh` | OK, exit 0 |
 | `python3 scripts/check-fmint-borrower-source.py` | OK, exit 0 |
+| `scripts/check-error-data.sh` | OK, exit 0 — 11 lock reason strings, Lean and independent ABI derivations byte-identical |
+| `scripts/check-beacon-deposit-model.sh` | OK, exit 0 — 476 compared lines across both regimes |
+| `scripts/check-fmint.sh` | OK, exit 0 — 11/11 PASS, manifest cross-check clean |
 | `scripts/check-doc-counts.sh` | OK, exit 0 — 12/12 quotations agree at 1070 |
 | `scripts/check-layering.sh` | OK, exit 0 |
+
+The three Lean-touching gates needed built artifacts; the build ran through
+`~/creme/scripts/creme lake-build blanc-keccak-padding-repair-v1 --wait 900 --
+Blanc.RevertPayload Blanc.BeaconDepositCorrectness jaune/jaune` with no
+`--memory-gib`/`--contention`, and the wrapper classified it
+`NOT_REQUIRED_FRESH` (0 modules stale, 1 restored from cache, 1.53 s, no hold
+taken). `check-beacon-deposit-model.sh` additionally confirms the Jaune
+`Bytes.keccak` classification empirically: the Lean model's keccak-256 regime
+and the repaired Python oracle generator agree on all 476 compared lines.
 
 No gate was weakened, and no baseline, budget, allowlist, golden or timeout was
 touched.
