@@ -77,15 +77,15 @@ macro_rules
   | `(tactic| stores_structure) =>
     `(tactic| repeat' first
         | exact StoresOrHalts.store
-        | exact StoresOrHalts.never not_run_revert
         | apply StoresOrHalts.next
-        | apply StoresOrHalts.branch)
+        | apply StoresOrHalts.branch
+        | exact StoresOrHalts.never not_run_revert)
   | `(tactic| stores_structure with $d:tacticSeq) =>
     `(tactic| repeat' first
         | exact StoresOrHalts.store
-        | exact StoresOrHalts.never not_run_revert
         | apply StoresOrHalts.next
         | apply StoresOrHalts.branch
+        | exact StoresOrHalts.never not_run_revert
         | ($d))
 
 /-- Remove one explicitly supplied `Line` prefix from a `StoresOrHalts` goal. -/
