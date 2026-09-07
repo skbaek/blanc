@@ -31,17 +31,20 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 BLANC_ARTIFACTS="$(mktemp)"
 DISPATCH_ARTIFACTS="$(mktemp)"
 PROFILE="$(mktemp)"
-trap 'rm -f "$BLANC_ARTIFACTS" "$DISPATCH_ARTIFACTS" "$PROFILE"' EXIT
+trap 'gate_semaphore_release; rm -f "$BLANC_ARTIFACTS" "$DISPATCH_ARTIFACTS" "$PROFILE"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — Lido CircuitBreaker dispatcher: pinned EELS python not found"
   exit 1
 fi
+
+gate_semaphore_acquire "the Lido dispatcher artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.lean \
     >"$BLANC_ARTIFACTS"); then

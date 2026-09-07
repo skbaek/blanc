@@ -12,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 
+import gate_semaphore
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MANIFEST_PATH = ROOT / "scripts/transient-settlement-owner-manifest.json"
@@ -293,6 +295,7 @@ def audit_frozen(data: dict) -> None:
 
 
 def run_lean(path: pathlib.Path) -> subprocess.CompletedProcess[str]:
+    gate_semaphore.guard("the transient settlement fixtures")
     return subprocess.run(
         ["lake", "env", "lean", str(path)], cwd=ROOT, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,

@@ -174,6 +174,7 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 # command line so a refusal can name what is holding it.
 GATE_CMDLINE="$0 $*"
 . "$SCRIPT_DIR/gate-lock.sh"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 
 # One cleanup function, one EXIT trap, installed once: a second `trap ... EXIT`
 # would silently replace this one and leak a temporary file.
@@ -184,6 +185,7 @@ EXCLUDEFILE=""
 BASELINE_TMP=""
 cleanup() {
   gate_lock_release_all
+  gate_semaphore_release
   if [ -n "$RCFILE" ]; then rm -f "$RCFILE"; fi
   if [ -n "$PLANFILE" ]; then rm -f "$PLANFILE"; fi
   if [ -n "$MEASUREDFILE" ]; then rm -f "$MEASUREDFILE"; fi
@@ -361,6 +363,8 @@ gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
 # its number is meaningless, so every discovered module must be current before
 # we start. Explicit targets also give a newly added, not-yet-imported module a
 # Lake trace; the selector uses each trace's transitive dependency hash.
+gate_semaphore_acquire "the elaboration-time measurement" || exit 2
+
 if [ "$NO_BUILD" -eq 0 ]; then
   if ! MODULE_TARGETS="$(python3 "$SELECTOR" modules --root "$ROOT")"; then
     echo "SETUP — elab: could not discover local module build targets."

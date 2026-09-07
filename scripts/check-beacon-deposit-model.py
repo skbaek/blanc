@@ -53,6 +53,8 @@ import subprocess
 import sys
 import tempfile
 
+import gate_semaphore
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SOL_REL = "scripts/reference/beacon-deposit/inputs/deposit_contract.sol"
@@ -515,6 +517,7 @@ def run_evaluator(cwd):
     """Run the Lean evaluator in `cwd`; returns stdout or raises
     Regression. The gate does not build; a nonzero exit here means a stale
     or missing build (the caller's error) or a broken evaluator."""
+    gate_semaphore.guard("the BeaconDeposit model evaluator")
     r = subprocess.run(["lake", "env", "lean", EVAL_REL], cwd=cwd,
                        capture_output=True, text=True)
     if r.returncode != 0:
@@ -652,6 +655,7 @@ def falsify():
                             os.path.join(wt, EVAL_REL))
             apply_mutant(name, specs, wt)
             verdict["applied"] = True
+            gate_semaphore.guard("the BeaconDeposit mutation campaign")
             r = subprocess.run(["lake", "build"], cwd=wt,
                                capture_output=True, text=True)
             if r.returncode != 0:

@@ -6,6 +6,7 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
@@ -15,7 +16,7 @@ ARTIFACTS="$TMP_DIR/artifacts.txt"
 FIXTURE="$TMP_DIR/deployment.json"
 METADATA="$TMP_DIR/metadata.json"
 LOG="$TMP_DIR/gate.log"
-trap 'rm -rf "$TMP_DIR"' EXIT
+trap 'gate_semaphore_release; rm -rf "$TMP_DIR"' EXIT
 
 fail() {
   if [ -s "$LOG" ]; then
@@ -37,6 +38,8 @@ fi
 if [ -n "$(git -C "$EELS_ROOT" status --porcelain 2>"$LOG")" ]; then
   fail "EELS checkout is dirty"
 fi
+
+gate_semaphore_acquire "the BeaconDeposit deployment artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean \
     scripts/eval-beacon-deposit-deployment.lean \

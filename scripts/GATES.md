@@ -804,6 +804,63 @@ already hold the cross-session hard semaphore through
 protocol. The gate lock is the last line of defense, not the coordination
 mechanism.
 
+### Elaborating gates ask the host before they elaborate
+
+Holding the semaphore was, until 2026-09-07, entirely the caller's job, and the
+gates gave the caller no help with it: every wrapper here that runs `lake env
+lean` or `lake build` did so without asking anything. On that day a gate that
+elaborates for minutes ran beside a live 8 GiB hard hold on a 24 GiB host, and
+neither side could see the other — the coordination record held no row for it
+at all, because attribution is poll-driven and nothing polled. The semaphore
+was not failing. Nothing was asking it.
+
+Every wrapper and driver here that can elaborate now asks, through
+`scripts/gate-semaphore.sh` for the shell wrappers and `scripts/gate_semaphore.py`
+for the drivers whose elaborating command is issued from Python. Both carry the
+same contract, and both files' headers are the authority on it:
+
+* **Lazily.** The hold is taken at the first point the run is about to
+  elaborate, so `--static-only`, `--no-build` and `--self-test` modes take
+  nothing. A gate that only reads committed text must not hold this host: one
+  such run held it for 22 minutes at under 0.6 GiB and locked out two proof
+  sessions.
+* **Per gate process, released when it exits.** `scripts/check-gates.sh` takes
+  no hold of its own; every row it executes is a separate process that
+  coordinates for itself and lets go when it is done, so a long selective run
+  leaves a window between rows rather than owning the host for hours.
+* **Inheriting rather than deadlocking.** The hold is named after the goal
+  worktree the gate is running in. A session that already holds this host for
+  that goal gets `ALREADY_HELD` back, immediately and without queueing, and
+  that answer is read as inheritance: the gate proceeds under the caller's hold
+  and releases nothing, so one unit is never charged twice and a suite cannot
+  block behind itself. `BLANC_GATE_SEMAPHORE=inherited` states the same thing
+  outright when the caller holds the host under some other name, and
+  `BLANC_GATE_SEMAPHORE_LABEL` states that name.
+* **Refusal is not failure.** A refusal that waiting cannot change is reported
+  the way `gate-lock.sh` reports its own — `REFUSED — ...`, exit 2. The gate
+  did not fail; it did not run, and no verdict of any kind may be read out of
+  it. Set `BLANC_GATE_SEMAPHORE_WAIT=SECS` to queue for admission instead of
+  taking the immediate verdict.
+* **Blanc stays standalone.** Creme is not a build dependency and CI runners
+  have nothing to coordinate with. Where the coordination entry point is
+  absent, each affected gate says so once in a `NOTE — ...` line that no
+  verdict pattern matches, and runs. `BLANC_GATE_SEMAPHORE=off` says the same
+  deliberately.
+
+No gate's command, arguments, pass criteria, verdict line, exit codes,
+baselines or budgets change. What changes is that the elaboration inside them
+is now visible to everything else on the host, and that the host can serialize
+it. The registry declares the helper as an input of every gate that reads it,
+so editing either helper re-runs those gates rather than crediting them from
+evidence produced under different coordination.
+
+`check-elab.sh` keeps its own report and heavy locks; the semaphore hold is in
+addition to them, not a replacement. The hold it takes is the entry point's
+default class, which is weaker than the exclusivity a timing-authoritative run
+wants: a timing run should still be started by a session that has taken an
+`exclusive` hold itself, and it will then inherit that hold rather than take a
+second one.
+
 | gate | report lock | heavy lock |
 |---|---|---|
 | `scripts/check-elab.sh` | yes | yes |

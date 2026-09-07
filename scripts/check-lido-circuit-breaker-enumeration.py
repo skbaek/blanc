@@ -13,6 +13,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import gate_semaphore
+
 ROOT = Path(__file__).resolve().parent.parent
 OWNER = ROOT / "Blanc/LidoCircuitBreakerEnumeration.lean"
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerEnumerationControls.lean"
@@ -125,6 +127,7 @@ def compile_fixture() -> None:
     if not olean.is_file():
         fail("compiled enumeration owner is absent; run the approved elaboration "
              "checkpoint before this fixture gate")
+    gate_semaphore.guard("the Lido enumeration fixtures")
     run = subprocess.run(
         ["lake", "env", "lean", "scripts/LidoCircuitBreakerEnumerationControls.lean"],
         cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -133,6 +136,7 @@ def compile_fixture() -> None:
         fail("fixture failed to compile:\n" + run.stdout)
 
 def axiom_checks() -> None:
+    gate_semaphore.guard("the Lido enumeration axiom probe")
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="enumeration-axioms-", dir=ROOT,
         encoding="utf-8", delete=False,

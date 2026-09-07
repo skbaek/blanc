@@ -10,8 +10,9 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 ARTIFACTS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS"' EXIT
 
 if [ ! -x "$EELS_PY" ]; then
   echo "REGRESSION — WETH10 deployment: pinned EELS python not found at $EELS_PY" >&2
@@ -22,6 +23,8 @@ if [ ! -x "$JAUNE_BIN" ]; then
   echo "REGRESSION — WETH10 deployment: Jaune runner not found at $JAUNE_BIN" >&2
   exit 1
 fi
+
+gate_semaphore_acquire "the WETH10 deployment artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
     >"$ARTIFACTS" 2>&1); then

@@ -8,6 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 : "${HOME:?HOME is required}"
 
 COMPOSED_PREREQUISITES=0
@@ -85,11 +86,13 @@ if [ "$COMPOSED_PREREQUISITES" -eq 0 ] &&
 fi
 
 ARTIFACT_DIR="$(mktemp -d)"
-trap 'rm -rf "$ARTIFACT_DIR"' EXIT
+trap 'gate_semaphore_release; rm -rf "$ARTIFACT_DIR"' EXIT
 DEPLOYMENT_ARTIFACTS="$ARTIFACT_DIR/deployment.txt"
 RUNTIME_ARTIFACTS="$ARTIFACT_DIR/runtime.txt"
 DEPLOYMENT_ERRORS="$ARTIFACT_DIR/deployment.err"
 RUNTIME_ERRORS="$ARTIFACT_DIR/runtime.err"
+
+gate_semaphore_acquire "the WETH10 current-mainnet artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
     >"$DEPLOYMENT_ARTIFACTS" 2>"$DEPLOYMENT_ERRORS"); then

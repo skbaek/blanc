@@ -79,6 +79,8 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
+import gate_semaphore
+
 from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
@@ -1717,7 +1719,21 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
                 }
                 continue
         print(f"[fresh ] {command_text(gate)}   (prerequisite refresh)")
-        verdict, elapsed = execute(root, gate, echo=arguments.echo)
+        # The one row this runner elaborates itself, and the broadest
+        # elaboration in the catalogue.  Every other row coordinates inside its
+        # own process; this one has no wrapper to do it, so the hold is taken
+        # here and dropped again before the planned rows start -- a runner that
+        # kept it would own the host for the whole selective run.
+        try:
+            with gate_semaphore.admitted(f"the {gate['id']} prerequisite"):
+                verdict, elapsed = execute(root, gate, echo=arguments.echo)
+        except gate_semaphore.Refused as refusal:
+            for line in gate_semaphore.refusal_lines(
+                gate_semaphore.label(), f"the {gate['id']} prerequisite", refusal
+            ):
+                print(line, file=sys.stderr)
+            failures.append(f"{command_text(gate)}: host admission refused; nothing was run")
+            continue
         prerequisites[gate["id"]] = {
             "disposition": "fresh", "verdict": verdict, "elapsed": elapsed
         }

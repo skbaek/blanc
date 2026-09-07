@@ -281,6 +281,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+trap gate_semaphore_release EXIT
 
 BUILD=1
 while [ $# -gt 0 ]; do
@@ -290,6 +292,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+gate_semaphore_acquire "the audited build and axiom elaboration" || exit 2
 
 if [ "$BUILD" -eq 1 ]; then
   if ! (cd "$ROOT" && lake build); then

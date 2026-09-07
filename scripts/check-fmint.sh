@@ -47,6 +47,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+trap gate_semaphore_release EXIT
 FIXTURES_DIR="$ROOT/scripts/fixtures/fmint"
 MANIFEST="$FIXTURES_DIR/manifest.json"
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
@@ -62,6 +64,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$BUILD" -eq 1 ]; then
+  gate_semaphore_acquire "the Jaune runner build" || exit 2
   if ! (cd "$ROOT" && lake build jaune/jaune); then
     echo "REGRESSION — fmint fixtures: lake build jaune/jaune failed"
     exit 1
@@ -189,7 +192,7 @@ fi
 FAIL=0
 TOTAL=0
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
+trap 'gate_semaphore_release; rm -f "$OUT"' EXIT
 for f in "${RUN_FILES[@]}"; do
   TOTAL=$((TOTAL + 1))
   NAME="$(basename "$f")"

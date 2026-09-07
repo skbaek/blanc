@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import gate_semaphore
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "scripts" / "check-layering.py"
@@ -52,6 +54,7 @@ def check_imports(name: str, source: str, expected: list[str]) -> None:
 
 
 def elaborates(name: str, source: str, support_modules: list[tuple[str, str]] | None = None) -> None:
+    gate_semaphore.guard("the layering control elaborations")
     with tempfile.TemporaryDirectory(prefix="layering-lean-") as raw:
         root = Path(raw)
         for module_name, module_source in support_modules or []:
@@ -83,6 +86,7 @@ def elaborates(name: str, source: str, support_modules: list[tuple[str, str]] | 
 
 
 def is_rejected_by_lean(name: str, source: str) -> None:
+    gate_semaphore.guard("the layering control elaborations")
     with tempfile.TemporaryDirectory(prefix="layering-lean-") as raw:
         path = Path(raw) / f"{name}.lean"
         path.write_text(source, encoding="utf-8")

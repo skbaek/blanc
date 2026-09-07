@@ -8,11 +8,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS"' EXIT
 
 # This wrapper independently owns the public matrix contract.  The Python
 # runner must agree before Lean or EELS execution, so a self-consistent
@@ -76,6 +77,8 @@ if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
   echo "REGRESSION — beacon-deposit differential: wrapper/Python matrix contract failed" >&2
   exit 1
 fi
+
+gate_semaphore_acquire "the BeaconDeposit differential artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean \
   scripts/eval-beacon-deposit-differential-code.lean \

@@ -8,6 +8,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+trap gate_semaphore_release EXIT
 FIXTURES_DIR="$ROOT/scripts/fixtures/weth10-redemption"
 MANIFEST="$FIXTURES_DIR/manifest.json"
 BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
@@ -25,6 +27,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$BUILD" -eq 1 ]; then
+  gate_semaphore_acquire "the Jaune runner build" || exit 2
   if ! (cd "$ROOT" && lake build jaune/jaune); then
     echo "REGRESSION — WETH10 redemption fixtures: lake build jaune/jaune failed"
     exit 1
@@ -174,7 +177,7 @@ FILES=("$FIXTURES_DIR"/*.json)
 FAIL=0
 TOTAL=0
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
+trap 'gate_semaphore_release; rm -f "$OUT"' EXIT
 for file in "${FILES[@]}"; do
   [ "$(basename "$file")" = "manifest.json" ] && continue
   TOTAL=$((TOTAL + 1))

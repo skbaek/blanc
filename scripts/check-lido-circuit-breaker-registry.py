@@ -18,6 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Mapping
 
+import gate_semaphore
+
 
 ROOT = Path(__file__).resolve().parent.parent
 OWNER = "Blanc/LidoCircuitBreakerRegistry.lean"
@@ -489,10 +491,12 @@ def run(command: list[str]) -> str:
 
 
 def compile_fixture(relative: str) -> None:
+    gate_semaphore.guard("the Lido registry fixtures")
     run(["lake", "env", "lean", relative])
 
 
 def axiom_check(relative: str, qualified: str) -> None:
+    gate_semaphore.guard("the Lido registry axiom probe")
     source = (ROOT / relative).read_text()
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="registry-axioms-", dir=ROOT,

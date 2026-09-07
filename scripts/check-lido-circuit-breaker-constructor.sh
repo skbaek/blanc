@@ -5,14 +5,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS"' EXIT
 
 if [ "$#" -ne 0 ]; then
   echo "REGRESSION — Lido constructor byte schema: expected no arguments" >&2
   exit 1
 fi
+
+gate_semaphore_acquire "the Lido constructor artifacts" || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.lean \
     >"$ARTIFACTS" 2>"$ERRORS"); then

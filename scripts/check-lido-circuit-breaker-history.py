@@ -70,6 +70,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import gate_semaphore
+
 ROOT = Path(__file__).resolve().parent.parent
 
 VERDICT = "S7 Registry-history assurance"
@@ -1672,6 +1674,7 @@ def compiled_owners_present(root: Path) -> None:
 
 
 def axiom_checks(root: Path, sources: dict) -> int:
+    gate_semaphore.guard("the Lido history axiom probe")
     targets = probe_targets(sources)
     compiled_owners_present(root)
     # The probe file lives in a real temporary DIRECTORY, not in the
@@ -2504,6 +2507,7 @@ def mutations_dry_run(root: Path) -> int:
 
 
 def run_mutations(worktree: Path) -> int:
+    gate_semaphore.guard("the Lido history mutation campaign")
     """The campaign. Live confirmation first, then judgement.
 
     Each case is applied in the caller's isolated worktree, the owners are
