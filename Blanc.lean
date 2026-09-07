@@ -247,6 +247,7 @@ import Blanc.ProxyPairUpgradePrograms
 import Blanc.ProxyPairUpgradeRelation
 import Blanc.ProxyPairUpgradeExecution
 import Blanc.ProxyPairUpgradeRefinement
+import Blanc.ProxyPairUpgradeStackSafety
 import Blanc.LidoTriggerableWithdrawalsGatewayCore
 import Blanc.LidoTriggerableWithdrawalsGatewayTrigger
 import Blanc.LidoTriggerableWithdrawalsGateway
