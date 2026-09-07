@@ -51,6 +51,14 @@ def recipes : List Recipe := [
     boundary := "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it. The nonreturning-call inversion proves only that the successful walk selected the zero/fall-through arm; transport any stack or state observation separately from its returned `Devm.PopBurn`."
   },
   {
+    id := "static-store-exclusion"
+    status := "active"
+    triggers := ["implication-premise:Func.Run"]
+    preferredPath := "Prove `StoresOrHalts fs f`, then apply `StoresOrHalts.isStatic_eq_false` to the exact successful source run `Func.Run fs e s f r` to derive `e.isStatic = false`. Use `stores_structure` for instruction and branch structure. Before a long staging line, use `stores_line line` with the exact `Line` prefix supplied explicitly; the driver does not search for an arbitrary split. Handle contract-specific calls explicitly with `StoresOrHalts.call` or the `with` arm."
+    symbols := ["module:Blanc/StaticStores.lean", "declaration:Blanc.StoresOrHalts", "declaration:Blanc.StoresOrHalts.prepend", "declaration:Blanc.StoresOrHalts.isStatic_eq_false", "tactic:stores_structure", "tactic:stores_line"]
+    boundary := "Every successful path must reach `SSTORE` or be impossible under the universal non-run premise of `StoresOrHalts.never`; a body with an executable `Func.stop` arm is outside the relation. The theorem does not construct a run, identify the written key or value, or prove a storage effect."
+  },
+  {
     id := "stack-prefix-transport"
     status := "active"
     triggers := ["goal-shape:stack-prefix-line-run"]
