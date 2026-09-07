@@ -471,10 +471,29 @@ The accepted family is deliberately narrow and every rejection fails closed to
 `SSTORE`, `GAS`, and `DUP`/`SWAP`; every other regular opcode is rejected. Among
 the external instructions only `CALL` is accepted. `SELFDESTRUCT` is rejected.
 `checkRow` requires the row to sit inside actual code and refuses to rely on
-padded PUSH bytes; a jump destination must satisfy the public `jumpable`
-predicate; `Table.checkOrder` checks search order rather than assuming it. The
-table shape supplies no trusted premise: a wrong tree fails the check instead of
-weakening the theorem.
+padded PUSH bytes; a jump destination must be an exact literal *and* satisfy the
+public `jumpable` predicate, neither condition alone being enough (see the
+destination boundary below); `Table.checkOrder` checks search order rather than
+assuming it. The table shape supplies no trusted premise: a wrong tree fails the
+check instead of weakening the theorem.
+
+**Destination boundary.** The checker cannot certify a program whose `JUMP` or
+`JUMPI` destination is not a literal the table can name. `jumpable` is a
+necessary condition applied *after* the destination has already been pinned to a
+concrete `B256`, not an alternative to pinning it:
+`Blanc.AbstractStackSafety.jumpTransfer` matches only `some destination :: words`,
+so a destination the pattern has forgotten — the `none` entry that `Pattern` uses
+for an abstract word — falls through to the wildcard, returns `none`, and
+`checkInstruction` returns `false`. `jumpiTransfer` behaves the same way for the
+`JUMPI` destination, though its branch *condition* may stay abstract because the
+theorem covers both arms. So a computed or otherwise unpinned jump target is
+rejected; it is never certified on the strength of being jumpable. This is a
+boundary of the checker, not a defect: the rejection is the same fail-closed
+`false` as any other unaccepted shape, and no theorem is weakened by it. Lifting
+it needs a `jumpTransfer` soundness theorem that admits an abstract destination —
+one concluding safety for every value the forgotten word could take, and so
+obliged to relate an unknown target to the table's rows — not a change to the
+table format or a wider `jumpable` check.
 
 **Cost boundary.** `checkTable` hard-caps the stack ceiling at `maximum ≤ 8` —
 that is the limit of the accepted transfer family, not a tuning knob, and
