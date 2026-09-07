@@ -521,6 +521,52 @@ def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
 # scope and a Jaune rename is caught by the pin-move gates instead.
 DISPATCH_NAME_RE = re.compile(r"``?(Blanc\.[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z_][A-Za-z0-9_'!?]*)*)")
 
+# Any Lean name literal, whoever owns it. Used only to tell an arm that
+# dispatches on a name this repository cannot check from one that dispatches on
+# no name at all -- two different reasons to be outside the checked population,
+# and each has to be stated rather than inferred.
+ANY_DISPATCH_NAME_RE = re.compile(r"``?([A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z_][A-Za-z0-9_'!?]*)*)")
+
+# A call to one of this module's own trigger helper predicates. Several arms
+# state their whole condition as `proofRecipeIsByteSizeComposition target` and
+# name nothing themselves; the names they dispatch on live one level down, in
+# the helper. Following the call is what makes those arms checkable at all.
+DISPATCH_HELPER_RE = re.compile(r"\b(proofRecipe[A-Za-z0-9_']*[?!]?)")
+DISPATCH_HELPER_DEF_RE = re.compile(r"^def\s+(proofRecipe[A-Za-z0-9_']*[?!]?)\s*[:(]")
+
+# The dispatcher itself is not one of its own helpers: following it would put
+# every arm's names in every arm's closure and restore exactly the masking the
+# per-arm guard exists to remove.
+TRIGGER_MATCHER = "proofRecipeTriggerMatches"
+
+# Trigger arms that dispatch on no Blanc declaration even after their helper
+# predicates are followed, each with the reason it cannot be checked here. An
+# arm leaves the per-arm guard by being written down with a reason, never by
+# quietly contributing nothing; and the entries are themselves checked, so one
+# that becomes checkable, or stops matching its stated reason, fails.
+UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
+    "context-shape:intermediate-devm":
+        "counts local hypotheses headed by Jaune.Devm",
+    "goal-shape:devm-common-update-law":
+        "names Jaune.Devm and Jaune state updaters only",
+    "goal-shape:devm-update-projection":
+        "proofRecipeIsDevmProjectionBridge dispatches on Jaune.Devm projections "
+        "and updaters only",
+    "goal-shape:full-length-slice":
+        "names Jaune.List.sliceD only",
+    "goal-shape:message-execution-settlement":
+        "names Jaune.processMessage, Jaune.exec and Jaune.initEvm only",
+    "goal-shape:successor-projection":
+        "names Jaune.Devm updaters and reuses the same Jaune-only projection "
+        "bridge",
+    "goal-shape:shared-subject-kernel-decision":
+        "structural: proofRecipeHasRepeatedClosedLetSubject decides on the "
+        "shape of the term and names no declaration at all",
+}
+
+# The reasons above divide in two, and the division is checkable: a foreign arm
+# must still dispatch on some name, and a structural arm must dispatch on none.
+STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision"})
 
 CONSTRUCTOR_RE = re.compile(rf"^\s+\|\s*({LEAN_PART})(?=\s|:|\(|\{{|$)")
 
@@ -577,23 +623,91 @@ def constructor_inventory(root: Path) -> Set[str]:
     return found
 
 
-def validate_trigger_dispatch(arms: Dict[str, str], names: Set[str]) -> int:
-    """Every trigger must still be able to fire.
+def proof_recipe_helper_bodies(root: Path) -> Dict[str, str]:
+    """The source of every ``proofRecipe*`` helper predicate, by name.
+
+    An arm's condition is often a single call -- ``proofRecipeIsByteSizeComposition
+    target`` -- and the Lean names it really dispatches on are inside the
+    helper. ``blanc_suggest`` stops firing just as silently when one of those is
+    renamed, so the closure over these bodies, not the arm's own text, is the
+    population this check has to reason about.
+
+    The dispatcher itself is excluded: its body is every arm, and following it
+    would let each arm borrow every other arm's names.
+    """
+    path = root / TACTICS_PATH
+    try:
+        clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
+    except OSError as exc:
+        raise RecipeError(f"cannot read trigger matcher {TACTICS_PATH}: {exc}") from exc
+    lines = clean.splitlines()
+    bodies: Dict[str, str] = {}
+    index = 0
+    while index < len(lines):
+        definition = DISPATCH_HELPER_DEF_RE.match(lines[index])
+        if not definition:
+            index += 1
+            continue
+        end = index + 1
+        while end < len(lines) and (not lines[end] or lines[end][0].isspace()):
+            end += 1
+        name = definition.group(1)
+        if name in bodies:
+            raise RecipeError(
+                f"{TACTICS_PATH}: duplicate trigger helper definition {name!r}"
+            )
+        bodies[name] = "\n".join(lines[index:end])
+        index = end
+    bodies.pop(TRIGGER_MATCHER, None)
+    return bodies
+
+
+def arm_dispatch_closure(arm: str, helpers: Dict[str, str]) -> Set[str]:
+    """Every Lean name literal an arm dispatches on, through its helpers."""
+    names: Set[str] = set()
+    pending = [arm]
+    followed: Set[str] = set()
+    while pending:
+        text = pending.pop()
+        names.update(ANY_DISPATCH_NAME_RE.findall(text))
+        for helper in DISPATCH_HELPER_RE.findall(text):
+            if helper in helpers and helper not in followed:
+                followed.add(helper)
+                pending.append(helpers[helper])
+    return names
+
+
+def validate_trigger_dispatch(
+    arms: Dict[str, str], names: Set[str], helpers: Dict[str, str]
+) -> int:
+    """Every trigger must still be able to fire, and every arm must be checked.
 
     ``load_and_validate`` already rejects a registry trigger with no arm in
     ``Blanc/Tactics.lean``. That is not enough: an arm compares the goal against
     Lean *names*, and a renamed or deleted declaration leaves the arm compiling
     and comparing against a name nothing produces, so ``blanc_suggest`` silently
     stops firing and the recipe becomes decorative. This check reads the names
-    each arm dispatches on and requires them to be live.
+    each arm dispatches on -- through its helper predicates, because several
+    arms name nothing themselves -- and requires them to be live.
 
-    Returns the number of names checked; zero is a failure, so rewording the
-    arms out of this check's sight fails rather than passing over nothing.
+    The anti-vacuity guard is per arm, not per table. A guard over the whole
+    table is satisfied by the arms that do dispatch on live names, so rewording
+    one arm out of its sight leaves it masked by its neighbours; the arm this
+    check no longer covers is exactly the arm most likely to have gone quiet.
+    An arm outside the checked population is therefore listed by name in
+    ``UNCHECKED_DISPATCH_ARMS`` with the reason it cannot be checked here, and
+    those listings are checked too, so the population cannot drift by accident
+    in either direction.
+
+    Returns the number of names checked.
     """
     checked = 0
     failures: List[str] = []
+    vacuous: List[str] = []
+    closures = {trigger: arm_dispatch_closure(arms[trigger], helpers) for trigger in arms}
     for trigger in sorted(arms):
-        for name in sorted(set(DISPATCH_NAME_RE.findall(arms[trigger]))):
+        own = sorted(name for name in closures[trigger] if name.startswith("Blanc."))
+        for name in own:
             checked += 1
             if name not in names:
                 failures.append(
@@ -601,6 +715,14 @@ def validate_trigger_dispatch(arms: Dict[str, str], names: Set[str]) -> int:
                     f"which is not a declaration in this repository — the arm "
                     f"compiles but can never fire, so its recipe is decorative"
                 )
+        if not own and trigger not in UNCHECKED_DISPATCH_ARMS:
+            vacuous.append(
+                f"{TACTICS_PATH}: trigger {trigger!r} dispatches on no Blanc "
+                f"declaration, even through its helper predicates — it is outside "
+                f"this check entirely, so add it to UNCHECKED_DISPATCH_ARMS with "
+                f"the reason it cannot be checked here, or restore the name it "
+                f"used to compare against"
+            )
     if failures:
         raise RecipeError("; ".join(failures))
     if not checked:
@@ -609,6 +731,33 @@ def validate_trigger_dispatch(arms: Dict[str, str], names: Set[str]) -> int:
             f"Blanc declaration — the trigger dispatch has been reworded out of "
             f"this check's sight"
         )
+    for trigger, reason in sorted(UNCHECKED_DISPATCH_ARMS.items()):
+        if trigger not in arms:
+            vacuous.append(
+                f"{TACTICS_PATH}: UNCHECKED_DISPATCH_ARMS lists {trigger!r} "
+                f"({reason}), which is not an arm of proofRecipeTriggerMatches"
+            )
+            continue
+        closure = closures[trigger]
+        if any(name.startswith("Blanc.") for name in closure):
+            vacuous.append(
+                f"{TACTICS_PATH}: trigger {trigger!r} is listed as unchecked "
+                f"({reason}) but now dispatches on a Blanc declaration — remove "
+                f"it from UNCHECKED_DISPATCH_ARMS so the per-arm check covers it"
+            )
+        elif trigger in STRUCTURAL_DISPATCH_ARMS:
+            if closure:
+                vacuous.append(
+                    f"{TACTICS_PATH}: trigger {trigger!r} is listed as structural "
+                    f"but dispatches on {sorted(closure)}"
+                )
+        elif not closure:
+            vacuous.append(
+                f"{TACTICS_PATH}: trigger {trigger!r} is listed as dispatching on "
+                f"foreign names ({reason}) but dispatches on no name at all"
+            )
+    if vacuous:
+        raise RecipeError("; ".join(vacuous))
     return checked
 
 
@@ -686,7 +835,9 @@ def load_and_validate(root: Path) -> Registry:
     tactics = tactic_inventory(root)
     supported_triggers = proof_recipe_trigger_inventory(root)
     validate_trigger_dispatch(
-        supported_triggers, declarations | constructor_inventory(root)
+        supported_triggers,
+        declarations | constructor_inventory(root),
+        proof_recipe_helper_bodies(root),
     )
     seen_ids: Set[str] = set()
     recipes: List[Recipe] = []
@@ -1085,6 +1236,46 @@ def self_test(root: Path) -> None:
             tactics_original.replace("`Blanc.", "`Departed."),
             "reworded out of",
         )
+        # ... and the guard is per arm, not per table.  One arm reworded out of
+        # sight leaves forty-five neighbours dispatching on live names, which is
+        # everything a table-wide guard asks for, while the arm nobody is
+        # checking any more is exactly the arm most likely to have gone quiet.
+        rejected_tactics(
+            "vacuous-trigger-arm",
+            replace_once(
+                tactics_original,
+                '| "goal-head:MemImage" => return head == some `Blanc.MemImage',
+                '| "goal-head:MemImage" => return head == some `Departed.MemImage',
+                "vacuous-trigger-arm",
+            ),
+            "outside this check entirely",
+        )
+        # An arm whose whole condition is one helper call names nothing itself.
+        # Before the check followed the call, renaming what the helper compares
+        # against left the arm dead and this check silent.
+        rejected_tactics(
+            "dead-helper-dispatch",
+            replace_once(
+                tactics_original,
+                "`Blanc.Func.compileShape",
+                "`Blanc.Func.departedCompileShape",
+                "dead-helper-dispatch",
+            ),
+            "can never fire",
+        )
+        # The arms that are outside it are outside it by name and for a stated
+        # reason, and the statement is checked: an arm that becomes checkable
+        # must rejoin the population rather than keep its exemption.
+        rejected_tactics(
+            "stale-unchecked-dispatch-listing",
+            replace_once(
+                tactics_original,
+                "`Jaune.List.sliceD",
+                "`Blanc.Line.Run",
+                "stale-unchecked-dispatch-listing",
+            ),
+            "remove it from UNCHECKED_DISPATCH_ARMS",
+        )
         if load_and_validate(test_root) is None:
             raise RecipeError("self-test: trigger-dispatch restoration failed")
         rejected(
@@ -1161,8 +1352,8 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 11:
-        raise RecipeError(f"self-test accounting: expected 11 controls, ran {controls}")
+    if controls != 14:
+        raise RecipeError(f"self-test accounting: expected 14 controls, ran {controls}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1187,7 +1378,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         audit_census(Path(__file__).resolve().parents[1])
         if args.self_test:
             self_test(root)
-            print("OK — proof recipes self-test: 11/11 drift, schema, trigger, trigger-dispatch, and symbol controls live")
+            print("OK — proof recipes self-test: 14/14 drift, schema, trigger, trigger-dispatch, and symbol controls live")
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)

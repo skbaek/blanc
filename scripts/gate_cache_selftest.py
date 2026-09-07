@@ -80,6 +80,76 @@ def require(condition: bool, message: str) -> None:
         raise ControlFailure(message)
 
 
+# --- the coordination environment -------------------------------------------
+
+#: Every environment variable `gate-semaphore.sh` and `gate_semaphore.py` read.
+#: They are inputs to the admission exchange exactly as the host's answer is.
+SEMAPHORE_ENVIRONMENT = (
+    "BLANC_GATE_SEMAPHORE",
+    "BLANC_GATE_SEMAPHORE_LABEL",
+    "BLANC_GATE_SEMAPHORE_WAIT",
+    "BLANC_GATE_SEMAPHORE_MEMORY_GIB",
+)
+
+
+@contextmanager
+def environment(values: dict[str, str | None]):
+    """Set, or with ``None`` clear, environment variables for the block."""
+
+    saved = {name: os.environ.get(name) for name in values}
+    try:
+        for name, value in values.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+@contextmanager
+def declared_coordination(mode: str | None):
+    """Run under exactly the coordination mode a control declares.
+
+    `Coordination` took the live *host* out of this suite's inputs.  The
+    *environment* stayed in, and it is the same class of hidden input: with
+    `BLANC_GATE_SEMAPHORE=off` -- which `scripts/GATES.md` and
+    `gate-semaphore.sh` document as the supported CI setting -- `acquire_once`
+    returns before the entry point is ever spawned, so a suite that inherited
+    it would assert the coordinated contract while exercising the
+    uncoordinated branch: green on a developer's machine, red in CI, with
+    nothing in the suite naming what it was sensitive to.
+
+    So no control here reads the environment it was started with.  Each states
+    the mode it is about, and each of the four modes -- coordinated, `off`,
+    `inherited`, and no entry point at all -- has a control asserting what that
+    mode is supposed to do.  ``None`` is the coordinated mode: every variable
+    absent.
+    """
+
+    with environment(dict.fromkeys(SEMAPHORE_ENVIRONMENT, None)):
+        with environment({"BLANC_GATE_SEMAPHORE": mode} if mode is not None else {}):
+            yield
+
+
+def declared_label(mode: str | None = None) -> str:
+    """The goal label a run under `mode` acquires under.
+
+    Read inside the declared environment, never the ambient one: a control that
+    compared a request made under `declared_coordination` against a label
+    computed under whatever `BLANC_GATE_SEMAPHORE_LABEL` happened to be set to
+    would be asserting across two different environments.
+    """
+
+    with declared_coordination(mode):
+        return gate_semaphore.label()
+
+
 # --- scratch repository -----------------------------------------------------
 
 
@@ -90,6 +160,13 @@ class Scratch:
         self.root = root
         self.coordination = coordination
         self.output = ""
+        # The coordination mode this scratch's runs declare, and the entry
+        # point they see.  Stated per control rather than inherited: see
+        # `declared_coordination`.  `None` is the coordinated mode; a control
+        # about the absent-entry-point branch points `semaphore_entry` at a
+        # path that does not exist.
+        self.semaphore_mode: str | None = None
+        self.semaphore_entry: Path | None = None
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         (root / "Blanc").mkdir(parents=True, exist_ok=True)
         (root / ".lake/build/lib/lean/Blanc").mkdir(parents=True, exist_ok=True)
@@ -188,8 +265,10 @@ class Scratch:
             # was running, and redden this suite whenever the machine happened
             # to be busy.  The exchange still happens in full; it happens
             # against a stand-in that this control owns and can answer.
-            with patched(gate_semaphore, "ENTRY", self.coordination.entry):
-                code = gc.run(self.root, arguments)
+            entry = self.semaphore_entry or self.coordination.entry
+            with declared_coordination(self.semaphore_mode):
+                with patched(gate_semaphore, "ENTRY", entry):
+                    code = gc.run(self.root, arguments)
         self.output = out.getvalue() + err.getvalue()
         return code
 
@@ -1082,6 +1161,53 @@ def control_exact_build_certificate_skips_only_the_authoritative_build() -> None
             )
 
 
+def build_prerequisite_repository(s: Scratch) -> None:
+    """A scratch repository whose first row is the build prerequisite.
+
+    The prerequisite is the one row the runner elaborates itself, so it is the
+    one row whose admission exchange exists at all.  The planned row that
+    follows it writes into the coordination trace, which is what lets a control
+    read the acquire, the release and the planned execution as one ordered
+    sequence rather than three separate facts.
+    """
+
+    prepare_build_state(s)
+    build = s.passing_gate("build.sh", "build-ran.txt")
+    planned = s.gate(
+        "planned.sh",
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "planned-row-ran" >> "{s.coordination.calls}"\n'
+        'echo "OK — planned.sh: 1/1 fine"\n',
+    )
+    s.write("docs.md", "one\n")
+    s.registry(
+        [
+            {
+                "id": "lake-build",
+                "order": 1,
+                "command": [build],
+                "kind": "composition",
+                "prerequisite": True,
+                "reason": "authoritative build prerequisite",
+                "inputs": {},
+                "verdict": {"expect_exit": 0, "summary_patterns": ["^OK — build.sh: "]},
+            },
+            simple_gate(
+                "planned", [planned], {"files": ["docs.md"]},
+                "^OK — planned.sh: ", order=2,
+            ),
+        ]
+    )
+
+
+def admission_requests(s: Scratch) -> list[str]:
+    return [line for line in s.coordination.calls_made() if line.startswith("adaptive-acquire")]
+
+
+def admission_releases(s: Scratch) -> list[str]:
+    return [line for line in s.coordination.calls_made() if line.startswith("release")]
+
+
 def control_build_prerequisite_coordinates_the_host_and_fails_closed() -> None:
     """The build prerequisite is the one row this runner elaborates itself, so
     it is the one row that has to ask the host for admission.  Three properties
@@ -1093,33 +1219,7 @@ def control_build_prerequisite_coordinates_the_host_and_fails_closed() -> None:
     """
 
     with scratch() as s:
-        prepare_build_state(s)
-        build = s.passing_gate("build.sh", "build-ran.txt")
-        planned = s.gate(
-            "planned.sh",
-            "#!/bin/sh\n"
-            f'printf "%s\\n" "planned-row-ran" >> "{s.coordination.calls}"\n'
-            'echo "OK — planned.sh: 1/1 fine"\n',
-        )
-        s.write("docs.md", "one\n")
-        s.registry(
-            [
-                {
-                    "id": "lake-build",
-                    "order": 1,
-                    "command": [build],
-                    "kind": "composition",
-                    "prerequisite": True,
-                    "reason": "authoritative build prerequisite",
-                    "inputs": {},
-                    "verdict": {"expect_exit": 0, "summary_patterns": ["^OK — build.sh: "]},
-                },
-                simple_gate(
-                    "planned", [planned], {"files": ["docs.md"]},
-                    "^OK — planned.sh: ", order=2,
-                ),
-            ]
-        )
+        build_prerequisite_repository(s)
         with patched(
             gc,
             "component_tools",
@@ -1151,7 +1251,7 @@ def control_build_prerequisite_coordinates_the_host_and_fails_closed() -> None:
             releases = [i for i, line in enumerate(trace) if line.startswith("release")]
             require(len(acquires) == 1, "the prerequisite must ask for admission exactly once")
             require(
-                gate_semaphore.label() in trace[acquires[0]]
+                declared_label() in trace[acquires[0]]
                 and "--memory-gib" in trace[acquires[0]],
                 "the request must name this goal and a peak estimate",
             )
@@ -1181,6 +1281,156 @@ def control_build_prerequisite_coordinates_the_host_and_fails_closed() -> None:
                 [line for line in trace if line.startswith("release")] == [],
                 "a hold this runner did not take must not be released by it",
             )
+
+
+def control_coordination_off_never_asks_the_host_and_says_so() -> None:
+    """`BLANC_GATE_SEMAPHORE=off` is the setting CI runs under.
+
+    `scripts/GATES.md` and `gate-semaphore.sh` both name it: Creme is not a
+    Blanc build dependency and a dedicated runner has nothing to coordinate
+    with.  What `off` promises is not "ask and ignore the answer" but "do not
+    ask": the entry point is never spawned, whatever it would have said.  A
+    host answering `refuse` is therefore the sharpest way to state it -- under
+    `off` that refusal must never reach the run.
+
+    It promises one more thing.  An uncoordinated elaboration nobody can see is
+    the failure this coordination exists to end, so `off` says so out loud, in
+    a line shaped so that no gate's verdict pattern can match it.
+    """
+
+    with scratch() as s:
+        build_prerequisite_repository(s)
+        s.semaphore_mode = "off"
+        s.coordination.answer("refuse")
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            require(s.run() == 0, "off must run the prerequisite without consulting the host")
+            require(s.ran("build-ran.txt") == 1, "off must still elaborate the prerequisite once")
+            require(admission_requests(s) == [], "off must make no admission request at all")
+            require(admission_releases(s) == [], "off holds nothing, so it releases nothing")
+            require(
+                "planned-row-ran" in s.coordination.calls_made(),
+                "the planned rows must run under off like any other mode",
+            )
+            require("REFUSED" not in s.output, "off must not let a refusal it never asked for in")
+            notes = [
+                line for line in s.output.splitlines()
+                if "BLANC_GATE_SEMAPHORE=off" in line
+            ]
+            require(len(notes) == 1, "off must announce itself exactly once")
+            require(
+                notes[0].startswith("NOTE — ") and declared_label("off") in notes[0],
+                "the announcement must name this goal and be shaped as a note, not a verdict",
+            )
+
+
+def control_coordination_inherited_borrows_and_releases_nothing() -> None:
+    """`BLANC_GATE_SEMAPHORE=inherited` is a caller stating that it already
+    holds the host for this work.  Taking a second hold would charge one unit
+    twice; releasing at the end would drop a hold this process never took and
+    hand the host away underneath its owner.  So the mode asks nothing and
+    releases nothing, and a host that would refuse proves the first half.
+    """
+
+    with scratch() as s:
+        build_prerequisite_repository(s)
+        s.semaphore_mode = "inherited"
+        s.coordination.answer("refuse")
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            require(s.run() == 0, "an inherited hold must let the prerequisite run")
+            require(s.ran("build-ran.txt") == 1, "the prerequisite still elaborates under it")
+            require(admission_requests(s) == [], "inherited must not ask for a second hold")
+            require(
+                admission_releases(s) == [],
+                "a hold this process did not take must never be released by it",
+            )
+            require(
+                "BLANC_GATE_SEMAPHORE=off" not in s.output
+                and "no host coordination at" not in s.output,
+                "inherited is neither the off branch nor the absent-entry-point branch",
+            )
+
+
+def control_absent_coordination_entry_point_announces_once_and_runs() -> None:
+    """Blanc is standalone, and that is a promise about clones, not a setting.
+
+    Where there is no Creme checkout there is nothing to ask, and the gate must
+    run rather than refuse -- but it must not run quietly.  One announcement,
+    naming the path that was looked for, so an uncoordinated elaboration is
+    visible in the transcript of the run that performed it.
+    """
+
+    with scratch() as s:
+        build_prerequisite_repository(s)
+        s.semaphore_entry = s.coordination.directory / "no-semaphore-installed-here"
+        require(not s.semaphore_entry.exists(), "the control needs an entry point that is absent")
+        with patched(
+            gc,
+            "component_tools",
+            lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"}),
+        ):
+            require(s.run() == 0, "an absent entry point must not stop the prerequisite")
+            require(s.ran("build-ran.txt") == 1, "the prerequisite still elaborates without it")
+            require(
+                admission_requests(s) == [] and admission_releases(s) == [],
+                "an absent entry point cannot have been asked anything",
+            )
+            notes = [
+                line for line in s.output.splitlines()
+                if "no host coordination at" in line
+            ]
+            require(len(notes) == 1, "the absence must be announced exactly once")
+            require(
+                notes[0].startswith("NOTE — ") and str(s.semaphore_entry) in notes[0],
+                "the announcement must name the path that was looked for",
+            )
+
+
+def control_coordination_controls_declare_their_own_environment() -> None:
+    """The regression this whole group exists for.
+
+    The admission controls were written against a stand-in host and an
+    inherited environment, and `BLANC_GATE_SEMAPHORE=off` -- the supported CI
+    setting -- makes `acquire_once` return before the stand-in is ever spawned.
+    The result was a suite that passed 87/87 unset and failed 1/87 in CI while
+    naming no input it was sensitive to: exactly the defect its own
+    `Coordination` stand-in had just removed for the host.
+
+    So the controls above are run again here under an ambient environment that
+    sets every one of those variables to something hostile.  They must reach
+    the same verdicts, because each declares the mode it is about.
+    """
+
+    hostile = {
+        "BLANC_GATE_SEMAPHORE": "off",
+        "BLANC_GATE_SEMAPHORE_LABEL": "somebody-elses-goal",
+        "BLANC_GATE_SEMAPHORE_WAIT": "600",
+        "BLANC_GATE_SEMAPHORE_MEMORY_GIB": "64",
+    }
+    with environment(hostile):
+        with declared_coordination(None):
+            for name in SEMAPHORE_ENVIRONMENT:
+                require(
+                    name not in os.environ,
+                    f"{name} must not survive into a run that declared the coordinated mode",
+                )
+        with declared_coordination("inherited"):
+            require(
+                os.environ.get("BLANC_GATE_SEMAPHORE") == "inherited"
+                and "BLANC_GATE_SEMAPHORE_WAIT" not in os.environ,
+                "a declared mode must replace the ambient one, not be merged with it",
+            )
+        control_build_prerequisite_coordinates_the_host_and_fails_closed()
+        control_coordination_off_never_asks_the_host_and_says_so()
+    with environment(dict(hostile, BLANC_GATE_SEMAPHORE="inherited")):
+        control_build_prerequisite_coordinates_the_host_and_fails_closed()
 
 
 def control_build_certificate_refuses_every_identity_and_trace_uncertainty() -> None:
@@ -2479,14 +2729,14 @@ def control_negative_running_the_build_uncoordinated() -> None:
         )
 
 
-def control_negative_holding_the_host_across_the_selective_run() -> None:
-    """`admitted` exists so the runner drops the host between the build and the
-    rows it plans.  Acquiring for the process instead would still pass every
-    other assertion about the build while starving the machine for the length
-    of a selective run."""
+def control_negative_never_releasing_the_build_hold() -> None:
+    """An acquisition with no matching release leaves the host owned by a
+    process that has finished with it.  That is what the release *count*
+    requirement is for, and it is a different failure from keeping the hold too
+    long: here the hold is never given back at all."""
 
     @contextlib.contextmanager
-    def kept(what: str, memory_gib: int = 0):
+    def never_released(what: str, memory_gib: int = 0):
         completed = subprocess.run(
             [str(gate_semaphore.ENTRY), "adaptive-acquire", gate_semaphore.label(),
              "--note", what, "--memory-gib", str(memory_gib)],
@@ -2497,11 +2747,76 @@ def control_negative_holding_the_host_across_the_selective_run() -> None:
             raise gate_semaphore.Refused(detail.strip())
         yield
 
-    with patched(gate_semaphore, "admitted", kept):
+    with patched(gate_semaphore, "admitted", never_released):
+        must_fail(
+            control_build_prerequisite_coordinates_the_host_and_fails_closed,
+            "the build hold never released",
+        )
+
+
+def control_negative_holding_the_host_across_the_selective_run() -> None:
+    """`admitted` exists so the runner drops the host between the build and the
+    rows it plans.  The competing design -- one hold taken before the first row
+    and let go after the last -- is not a hold that leaks: it acquires once,
+    releases once, names the goal, states an estimate, and satisfies every
+    count.  What it does is own the host for the length of a selective run,
+    which is the 22-minute starvation this coordination exists to avoid, and
+    the *ordering* requirement is the only assertion that can see it.
+
+    So the mutation here is that design rather than a broken version of it: the
+    real `admitted` wrapped around the whole run, with the runner's own
+    per-build acquisition made inert inside it.  It fails on ordering alone.
+    """
+
+    real_run = gc.run
+    real_admitted = gate_semaphore.admitted
+
+    @contextlib.contextmanager
+    def already_covered(what: str, memory_gib: int = 0):
+        yield
+
+    def one_hold_for_the_whole_run(root: Path, arguments: Any) -> int:
+        what = "the whole selective run"
+        try:
+            with real_admitted(what, 8):
+                with patched(gate_semaphore, "admitted", already_covered):
+                    return real_run(root, arguments)
+        except gate_semaphore.Refused as refusal:
+            for line in gate_semaphore.refusal_lines(gate_semaphore.label(), what, refusal):
+                print(line, file=sys.stderr)
+            print("GATES FAILED: prerequisite refresh failed; nothing was planned",
+                  file=sys.stderr)
+            return 1
+
+    with patched(gc, "run", one_hold_for_the_whole_run):
         must_fail(
             control_build_prerequisite_coordinates_the_host_and_fails_closed,
             "the build hold kept across the planned rows",
         )
+
+
+def control_negative_ignoring_the_declared_coordination_mode() -> None:
+    """`off`, `inherited` and an absent entry point are decisions, not
+    conveniences: they are how Blanc stays standalone and how a caller's own
+    hold is honoured.  A helper that consulted the host regardless -- or that
+    treated a missing Creme checkout as a refusal -- would turn the supported
+    CI setting into a red run on a machine with nothing to coordinate with."""
+
+    real = gate_semaphore.acquire_once
+
+    def always_coordinates(what: str, memory_gib: int = gate_semaphore.NARROW_GIB) -> None:
+        if not os.access(gate_semaphore.ENTRY, os.X_OK):
+            raise gate_semaphore.Refused(f"no coordination entry point at {gate_semaphore.ENTRY}")
+        with declared_coordination(None):
+            real(what, memory_gib)
+
+    with patched(gate_semaphore, "acquire_once", always_coordinates):
+        must_fail(control_coordination_off_never_asks_the_host_and_says_so,
+                  "the off branch removed")
+        must_fail(control_coordination_inherited_borrows_and_releases_nothing,
+                  "the inherited branch removed")
+        must_fail(control_absent_coordination_entry_point_announces_once_and_runs,
+                  "an absent entry point turned into a refusal")
 
 
 def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
@@ -2521,7 +2836,9 @@ NEGATIVE_CONTROLS = (
     control_negative_lenient_import_parser,
     control_negative_trusting_the_registry_at_run_time,
     control_negative_running_the_build_uncoordinated,
+    control_negative_never_releasing_the_build_hold,
     control_negative_holding_the_host_across_the_selective_run,
+    control_negative_ignoring_the_declared_coordination_mode,
 )
 
 CONTROLS = (
@@ -2557,6 +2874,10 @@ CONTROLS = (
     control_unknown_tool_is_a_registry_fault,
     control_exact_build_certificate_skips_only_the_authoritative_build,
     control_build_prerequisite_coordinates_the_host_and_fails_closed,
+    control_coordination_off_never_asks_the_host_and_says_so,
+    control_coordination_inherited_borrows_and_releases_nothing,
+    control_absent_coordination_entry_point_announces_once_and_runs,
+    control_coordination_controls_declare_their_own_environment,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
@@ -2607,13 +2928,18 @@ CONTROLS = (
 
 def self_test() -> int:
     failures: list[str] = []
-    for control in CONTROLS:
-        name = control.__name__.removeprefix("control_")
-        try:
-            control()
-        except Exception as error:  # noqa: BLE001 - a control fault is a failure
-            failures.append(f"{name}: {error}")
-            print(f"  FAIL {name}: {error}", file=sys.stderr)
+    # Nothing in this suite is entitled to read the coordination environment it
+    # was started with: `BLANC_GATE_SEMAPHORE=off` is a supported setting, and
+    # a control that silently changed meaning under it would be reporting on a
+    # branch it never named.  Controls declare their own mode on top of this.
+    with declared_coordination(None):
+        for control in CONTROLS:
+            name = control.__name__.removeprefix("control_")
+            try:
+                control()
+            except Exception as error:  # noqa: BLE001 - a control fault is a failure
+                failures.append(f"{name}: {error}")
+                print(f"  FAIL {name}: {error}", file=sys.stderr)
     total = len(CONTROLS)
     if failures:
         print(
