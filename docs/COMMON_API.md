@@ -322,7 +322,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
 For settlement-retained wrappers, stable call-tree paths, or an exact ordered
-world-state replay, continue to E6, E7, or E8 respectively.
+world-state replay, continue to E6, E7, or E8 respectively.  To rule out an
+operand-stack fault along that same-frame chronology rather than inspect it, go
+to E9.
 
 ### E6. I need the exact successful wrapper trace, not only its final result
 
@@ -396,6 +398,96 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
 - [`Blanc/ExecutionHistoryStateTrace.lean`](../Blanc/ExecutionHistoryStateTrace.lean)
   for `ConfiguredBlockStateChronology` and
   `ConfiguredHistoryStateChronology` across schedule-parametric histories.
+
+### E9. I need to rule out an operand-stack fault over an actual walk
+
+Use [`Blanc/AbstractStackCertificate.lean`](../Blanc/AbstractStackCertificate.lean)
+and reach the whole chain with one import, `import Blanc.AbstractStackCertificate`.
+It is contract-neutral: nothing in it names a contract, and it rests only on
+[`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean) and
+[`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
+
+The need is to show that fixed compiled bytes never underflow or overflow the
+operand stack, over the *actual* decoded execution — including failing terminal
+outcomes and resumption after a child call — without an adequate-gas or
+successful-run premise. Do not hand-roll a per-contract stack-height counter for
+this; that is the argument the checker replaces.
+
+The four layers, bottom-up:
+
+- [`Blanc/CompiledStackSafety.lean`](../Blanc/CompiledStackSafety.lean) states
+  the local obligation. `StackFault` isolates the two operand-stack halts from
+  every other `EvmError`; `NoStackFault` and `InheritedStackFault` distinguish a
+  fault the parent generated from one a child settlement handed back;
+  `ResumeSafe` and `StepSafe` are the per-step obligations; `Certificate` bundles
+  them with a stack-height ceiling. `Certificate.parentStep`,
+  `.parentPrefix` and `.at_parentPrefix` transport the invariant along the
+  existing same-frame chronology, so no parallel execution relation is
+  introduced.
+- [`Blanc/AbstractStackSafety.lean`](../Blanc/AbstractStackSafety.lean) is the
+  abstraction: a `Pattern` is a whole-stack list of `Option B256`, `none`
+  forgetting a value but never an operand position, and `Matches` is exact
+  rather than a prefix. `SafeResult` carries a postcondition through the success
+  arm while keeping every error arm's stack-fault obligation.
+- [`Blanc/AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean)
+  proves forward safety of `regularTransfer`, `jumpTransfer`, `jumpiTransfer`,
+  `terminalTransfer` and `callTransfer` against the actual Jaune opcode
+  implementations.
+- [`Blanc/AbstractStackCertificate.lean`](../Blanc/AbstractStackCertificate.lean)
+  is the entry point. `Table` is a finite search tree of rows; `checkTable` runs
+  the complete finite validation and `checkTable_certificate` turns a successful
+  check into a `Certificate`.
+
+The whole minimal use is four declarations, kept live at the end of the owner
+module as `exampleCode`, `exampleTable`, `exampleTable_checked` and
+`exampleTable_certificate`:
+
+```lean
+def exampleCode : ByteArray := ByteArray.mk #[0x60, 0x01, 0x50, 0x00]
+
+def exampleTable : Table :=
+  .node 2 [none] (.node 0 [] .empty .empty) (.node 3 [] .empty .empty)
+
+theorem exampleTable_checked : checkTable exampleCode exampleTable 1 = true := by
+  decide
+
+theorem exampleTable_certificate {sevm : Sevm} (code : sevm.code = exampleCode) :
+    Certificate sevm exampleTable.Invariant 1 :=
+  checkTable_certificate (code ▸ exampleTable_checked)
+```
+
+**Semantic boundary.** The certificate is *local and same-frame*. It concludes
+that every reached same-frame node satisfies the checked invariant and that no
+step generates an operand-stack fault; it says nothing about gas, liveness,
+termination, whether any program counter is reached at all, or what the code of
+a spawned child frame does. A CALL's own child is arbitrary — only the parent's
+resumption is covered, and a stack fault arriving through the settlement is
+attributed to the child by `InheritedStackFault`, not excluded.
+
+The accepted family is deliberately narrow and every rejection fails closed to
+`false`, never to a silent pass. `regularTransfer` covers `ADD`, `MUL`, `SUB`,
+`DIV`, `LT`, `GT`, `EQ`, `ISZERO`, `AND`, `SHR`, `CALLER`, `CALLVALUE`,
+`CALLDATALOAD`, `CALLDATASIZE`, `TIMESTAMP`, `POP`, `MLOAD`, `MSTORE`, `SLOAD`,
+`SSTORE`, `GAS`, and `DUP`/`SWAP`; every other regular opcode is rejected. Among
+the external instructions only `CALL` is accepted. `SELFDESTRUCT` is rejected.
+`checkRow` requires the row to sit inside actual code and refuses to rely on
+padded PUSH bytes; a jump destination must satisfy the public `jumpable`
+predicate; `Table.checkOrder` checks search order rather than assuming it. The
+table shape supplies no trusted premise: a wrong tree fails the check instead of
+weakening the theorem.
+
+**Cost boundary.** `checkTable` hard-caps the stack ceiling at `maximum ≤ 8` —
+that is the limit of the accepted transfer family, not a tuning knob, and
+raising it needs new transfer theorems, not a larger literal. Validation is one
+kernel `decide` over the tree, so its cost grows with row count and pattern
+width and it is not the place for a table with thousands of rows; split the
+program and check pieces with `Table.all_node`. `Table.count_le_one` and
+`Table.checkLayout` are available when a row-uniqueness or contiguous-layout
+argument is wanted.
+
+**Not supplied.** The checker validates a table; it does not produce one. There
+is no row synthesis, no candidate generation, and no coverage measurement here.
+Authoring the rows for a real program is the caller's work.
 
 ## I — invariance and noninterference
 
