@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$BUILD" -eq 1 ]; then
-  gate_semaphore_acquire "the Jaune runner build" || exit 2
+  gate_semaphore_acquire "the Jaune runner build" 8 || exit 2
   if ! (cd "$ROOT" && lake build jaune/jaune); then
     echo "REGRESSION — WETH10 redemption fixtures: lake build jaune/jaune failed"
     exit 1

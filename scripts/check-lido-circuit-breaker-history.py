@@ -2507,7 +2507,7 @@ def mutations_dry_run(root: Path) -> int:
 
 
 def run_mutations(worktree: Path) -> int:
-    gate_semaphore.guard("the Lido history mutation campaign")
+    gate_semaphore.guard("the Lido history mutation campaign", 8)
     """The campaign. Live confirmation first, then judgement.
 
     Each case is applied in the caller's isolated worktree, the owners are

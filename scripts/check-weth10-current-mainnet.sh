@@ -92,7 +92,7 @@ RUNTIME_ARTIFACTS="$ARTIFACT_DIR/runtime.txt"
 DEPLOYMENT_ERRORS="$ARTIFACT_DIR/deployment.err"
 RUNTIME_ERRORS="$ARTIFACT_DIR/runtime.err"
 
-gate_semaphore_acquire "the WETH10 current-mainnet artifacts" || exit 2
+gate_semaphore_acquire "the WETH10 current-mainnet artifacts" 8 || exit 2
 
 if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
     >"$DEPLOYMENT_ARTIFACTS" 2>"$DEPLOYMENT_ERRORS"); then

@@ -293,7 +293,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-gate_semaphore_acquire "the audited build and axiom elaboration" || exit 2
+gate_semaphore_acquire "the audited build and axiom elaboration" 8 || exit 2
 
 if [ "$BUILD" -eq 1 ]; then
   if ! (cd "$ROOT" && lake build); then

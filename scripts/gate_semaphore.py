@@ -81,12 +81,24 @@ def _release() -> None:
     )
 
 
-def acquire_once(what: str) -> None:
+#: Peak estimate, in whole GiB, for one evaluator elaboration against an
+#: already-current tree.  `scripts/gate-semaphore.sh` carries the reasoning:
+#: the entry point's own 8 GiB default needs 16 GiB free on this host and would
+#: have ordinary gates refused at two thirds of it free, which turns a passing
+#: gate into a REFUSED for no safety benefit.  A caller that genuinely builds
+#: states a larger one; nobody lowers one to get admitted.
+NARROW_GIB = 4
+
+
+def acquire_once(what: str, memory_gib: int = NARROW_GIB) -> None:
     """Admit this process's Lean elaboration, once, or raise :class:`Refused`."""
     global _held, _settled
     if _settled:
         return
     goal = label()
+    override = os.environ.get("BLANC_GATE_SEMAPHORE_MEMORY_GIB")
+    if override:
+        memory_gib = int(override)
     mode = os.environ.get("BLANC_GATE_SEMAPHORE", "")
     if mode == "off":
         print(
@@ -106,7 +118,11 @@ def acquire_once(what: str) -> None:
         _settled = True
         return
 
-    request = [str(ENTRY), "adaptive-acquire", goal, "--note", f"Blanc gate: {what}"]
+    request = [
+        str(ENTRY), "adaptive-acquire", goal,
+        "--note", f"Blanc gate: {what}",
+        "--memory-gib", str(memory_gib),
+    ]
     wait = os.environ.get("BLANC_GATE_SEMAPHORE_WAIT")
     if wait:
         request += ["--wait", wait]
@@ -135,7 +151,7 @@ def refusal_lines(goal: str, what: str, error: Refused) -> list[str]:
 
 
 @contextlib.contextmanager
-def admitted(what: str) -> Iterator[None]:
+def admitted(what: str, memory_gib: int = NARROW_GIB) -> Iterator[None]:
     """Hold for exactly one elaborating command, then let go of it.
 
     `acquire_once` holds until the process exits, which is right for a gate:
@@ -150,17 +166,17 @@ def admitted(what: str) -> Iterator[None]:
     outer_held, outer_settled = _held, _settled
     _held, _settled = None, False
     try:
-        acquire_once(what)
+        acquire_once(what, memory_gib)
         yield
     finally:
         _release()
         _held, _settled = outer_held, outer_settled
 
 
-def guard(what: str) -> None:
+def guard(what: str, memory_gib: int = NARROW_GIB) -> None:
     """`acquire_once`, reporting a refusal and exiting 2 the way gates do."""
     try:
-        acquire_once(what)
+        acquire_once(what, memory_gib)
     except Refused as error:
         for line in refusal_lines(label(), what, error):
             print(line)

@@ -655,7 +655,7 @@ def falsify():
                             os.path.join(wt, EVAL_REL))
             apply_mutant(name, specs, wt)
             verdict["applied"] = True
-            gate_semaphore.guard("the BeaconDeposit mutation campaign")
+            gate_semaphore.guard("the BeaconDeposit mutation campaign", 8)
             r = subprocess.run(["lake", "build"], cwd=wt,
                                capture_output=True, text=True)
             if r.returncode != 0:

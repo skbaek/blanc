@@ -1725,7 +1725,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # here and dropped again before the planned rows start -- a runner that
         # kept it would own the host for the whole selective run.
         try:
-            with gate_semaphore.admitted(f"the {gate['id']} prerequisite"):
+            with gate_semaphore.admitted(f"the {gate['id']} prerequisite", 8):
                 verdict, elapsed = execute(root, gate, echo=arguments.echo)
         except gate_semaphore.Refused as refusal:
             for line in gate_semaphore.refusal_lines(

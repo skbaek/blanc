@@ -841,6 +841,14 @@ same contract, and both files' headers are the authority on it:
   did not fail; it did not run, and no verdict of any kind may be read out of
   it. Set `BLANC_GATE_SEMAPHORE_WAIT=SECS` to queue for admission instead of
   taking the immediate verdict.
+* **Sized to what the gate does.** Admission charges a peak multiplier on the
+  estimate and keeps a host usability reserve on top, so a request that is too
+  large is refused while the host is two thirds free — a passing gate turned
+  into a REFUSED for no safety benefit. An ordinary gate elaborates one
+  evaluator against a tree that is already current, so it asks for the narrow
+  estimate; the wrappers that genuinely run `lake build` state a larger one at
+  their acquisition. `BLANC_GATE_SEMAPHORE_MEMORY_GIB` overrides both. Never
+  lower an estimate to get admitted.
 * **Blanc stays standalone.** Creme is not a build dependency and CI runners
   have nothing to coordinate with. Where the coordination entry point is
   absent, each affected gate says so once in a `NOTE — ...` line that no

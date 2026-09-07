@@ -92,7 +92,24 @@
 #                                 goal worktree's name, else `blanc-gates`.
 #   BLANC_GATE_SEMAPHORE_WAIT     seconds to queue for admission (default: do
 #                                 not queue; take the immediate verdict).
+#   BLANC_GATE_SEMAPHORE_MEMORY_GIB  override the peak estimate below.
 #   CREME_ROOT                    canonical Creme checkout (default: ~/creme).
+#
+# THE ESTIMATE, AND WHY A LARGER ONE WOULD BE WORSE
+#
+# Admission charges `ceil(1.25 x estimate)` and keeps a host usability reserve
+# on top, so on a 24 GiB host an 8 GiB request needs 16 GiB free. The entry
+# point's own default is that 8 GiB, and it is the wrong size for what these
+# gates do: an ordinary gate elaborates one evaluator against a tree that is
+# already current, which has measured between 2 and 3 GiB here. Asking for 8
+# would have this gate refused at two thirds of the host free — turning a
+# passing gate into a REFUSED for no safety benefit, which is the failure a
+# large estimate reliably produces on this host.
+#
+# So the default here is the documented narrow default, and a caller states a
+# larger one only where the gate genuinely builds: `gate_semaphore_acquire`
+# takes the estimate as its second argument, and the wrappers that run
+# `lake build` pass it. Never lower one to get admitted.
 
 # The gate process's own hold, if it took one. Empty means release nothing:
 # either nothing was acquired, or what is held belongs to somebody else.
@@ -121,9 +138,14 @@ gate_semaphore_label() {
   printf 'blanc-gates\n'
 }
 
-# gate_semaphore_acquire <what>
+# The peak estimate, in whole GiB, for one evaluator elaboration against an
+# already-current tree. See THE ESTIMATE above before changing it.
+GATE_SEMAPHORE_NARROW_GIB=4
+
+# gate_semaphore_acquire <what> [memory-gib]
 #
-#   what  what is about to elaborate, named as the operator sees it
+#   what        what is about to elaborate, named as the operator sees it
+#   memory-gib  conservative whole-GiB peak; defaults to the narrow estimate
 #
 # Returns 0 when the gate may elaborate — because it took a hold, because it
 # inherited one, or because there is no coordination on this host to take.
@@ -131,6 +153,7 @@ gate_semaphore_label() {
 # did not fail, it did not run.
 gate_semaphore_acquire() {
   gs_what="$1"
+  gs_gib="${BLANC_GATE_SEMAPHORE_MEMORY_GIB:-${2:-$GATE_SEMAPHORE_NARROW_GIB}}"
   gs_label="$(gate_semaphore_label)"
 
   if [ -n "$GATE_SEMAPHORE_HELD" ]; then
@@ -150,7 +173,11 @@ gate_semaphore_acquire() {
     return 0
   fi
 
-  gs_request=(adaptive-acquire "$gs_label" --note "Blanc gate: $gs_what")
+  gs_request=(
+    adaptive-acquire "$gs_label"
+    --note "Blanc gate: $gs_what"
+    --memory-gib "$gs_gib"
+  )
   if [ -n "${BLANC_GATE_SEMAPHORE_WAIT:-}" ]; then
     gs_request+=(--wait "$BLANC_GATE_SEMAPHORE_WAIT")
   fi
