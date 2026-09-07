@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -121,6 +122,13 @@ def fixture() -> tempfile.TemporaryDirectory[str]:
     shutil.copytree(ROOT / "Blanc", target / "Blanc")
     shutil.copy2(ROOT / "Blanc.lean", target / "Blanc.lean")
     shutil.copy2(ROOT / "Main.lean", target / "Main.lean")
+    # Check 5 reads the two discovery surfaces relative to --root, so a mutated
+    # copy of the tree carries them too; the discovery controls mutate these.
+    (target / "docs").mkdir()
+    (target / "scripts").mkdir()
+    shutil.copy2(ROOT / "docs" / "COMMON_API.md", target / "docs" / "COMMON_API.md")
+    shutil.copy2(ROOT / "scripts" / "proof-recipes.toml",
+                 target / "scripts" / "proof-recipes.toml")
     return raw
 
 
@@ -272,6 +280,82 @@ def composition_edge_controls() -> None:
                               f"composition-to-{root_name} restoration", [probe])
 
 
+
+def discovery_controls() -> None:
+    """Check 5 bites in both directions, and is not vacuous.
+
+    The population is derived from the copied registry rather than named here,
+    so the controls survive a rename of whichever shared facility happens to be
+    first.
+    """
+    import tomllib
+
+    with (ROOT / "scripts" / "proof-recipes.toml").open("rb") as handle:
+        registry = tomllib.load(handle)
+    owner = layering.classify()
+    shared_owned = [
+        recipe["owner_module"]
+        for recipe in registry["recipe"]
+        if recipe.get("status") == "active"
+        and owner.get(layering.module_name_of(recipe["owner_module"])) == "shared"
+    ]
+    if not shared_owned:
+        fail("discovery controls: no active recipe owns a shared module to mutate")
+    subject = shared_owned[0]
+
+    # 1. Missing entry: the facility keeps its recipe and loses its registry
+    #    citation. This is the S8 defect -- a reusable facility that exists and
+    #    cannot be found from the entry point authors are told to consult.
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(api.read_text(encoding="utf-8").replace(f"`{subject}`", "`Blanc.lean`"),
+                       encoding="utf-8")
+        must_fail(root, "missing-discovery-entry mutation",
+                  f"{subject} is a shared facility owned by active proof recipe")
+    with fixture() as raw:
+        must_pass(Path(raw), "missing-discovery-entry restoration")
+
+    # 2. Stale entry: the registry points at a module that is not there.
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(api.read_text(encoding="utf-8")
+                       + "\n- Departed helper: `Blanc/NoSuchFacility.lean`.\n",
+                       encoding="utf-8")
+        must_fail(root, "stale-discovery-entry mutation",
+                  "cites Blanc/NoSuchFacility.lean, which does not exist")
+    with fixture() as raw:
+        must_pass(Path(raw), "stale-discovery-entry restoration")
+
+    # 3. Anti-vacuity: a registry reworded out of the check's sight fails
+    #    rather than passing green over an empty population.
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(re.sub(r"`Blanc/[A-Za-z0-9_/]+\.lean`", "a module",
+                              api.read_text(encoding="utf-8")),
+                       encoding="utf-8")
+        must_fail(root, "emptied-registry mutation",
+                  "cites no Blanc module at all")
+    with fixture() as raw:
+        must_pass(Path(raw), "emptied-registry restoration")
+
+    # 4. The other population: no shared-owned recipe is a vacuous pass too.
+    with fixture() as raw:
+        root = Path(raw)
+        registry_path = root / "scripts" / "proof-recipes.toml"
+        text = registry_path.read_text(encoding="utf-8")
+        for shared_module in set(shared_owned):
+            text = text.replace(f'owner_module = "{shared_module}"',
+                                'owner_module = "Blanc/Weth.lean"')
+        registry_path.write_text(text, encoding="utf-8")
+        must_fail(root, "no-shared-recipe mutation",
+                  "check 5 would pass over an empty population")
+    with fixture() as raw:
+        must_pass(Path(raw), "no-shared-recipe restoration")
+
+
 def main() -> int:
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
@@ -369,12 +453,15 @@ def main() -> int:
             must_pass(Path(raw), f"{name} restoration")
 
     composition_edge_controls()
+    discovery_controls()
 
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
         "3 rejected header forms, 3 legal non-imports, header boundary, 3 malformed-header "
         "and 3 architecture controls plus 1 category-agnostic control bite; "
-        "5 composition-edge controls bite around a classified positive witness"
+        "5 composition-edge controls bite around a classified positive witness; "
+        "4 discovery controls cover the missing and stale entry directions and "
+        "both empty-population escapes"
     )
     return 0
 

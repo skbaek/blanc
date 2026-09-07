@@ -114,7 +114,9 @@
           "scripts/check-layering.sh",
           "scripts/check-layering.py",
           "Blanc.lean",
-          "Main.lean"
+          "Main.lean",
+          "docs/COMMON_API.md",
+          "scripts/proof-recipes.toml"
         ],
         "populations": [
           {
@@ -127,6 +129,7 @@
         ]
       },
       "kind": "cacheable",
+      "note": "Check 5 reads the two discovery surfaces, so docs/COMMON_API.md and scripts/proof-recipes.toml are real inputs to this gate even though no Lean module moved.",
       "order": 4,
       "verdict": {
         "expect_exit": 0,
