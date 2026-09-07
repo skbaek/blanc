@@ -279,6 +279,11 @@
 # covers failing terminal nodes and the parent's resumption after a child
 # call, and it says nothing about gas, liveness, termination, whether any
 # program counter is reached, or what a spawned child frame does.
+# The following consumer row keeps that chain load-bearing on the first real
+# runtime: its transported entry-to-node result depends on the kernel-decided
+# 47-row table, the certificate over the exact 74-byte v1 implementation code,
+# and the entry-pattern lemma, so those intermediate declarations need no
+# redundant roots of their own.
 #
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
@@ -1405,7 +1410,8 @@ Blanc.CompiledStackSafety.Certificate.parentStep|$STANDARD
 Blanc.CompiledStackSafety.Certificate.parentPrefix|$STANDARD
 Blanc.CompiledStackSafety.Certificate.at_parentPrefix|$STANDARD
 Blanc.AbstractStackSafety.checkTable_certificate|$STANDARD
-Blanc.AbstractStackSafety.exampleTable_certificate|$STANDARD"
+Blanc.AbstractStackSafety.exampleTable_certificate|$STANDARD
+Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

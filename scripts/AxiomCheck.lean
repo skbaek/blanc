@@ -92,6 +92,7 @@ import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
 import Blanc.AbstractStackCertificate
+import Blanc.ProxyPairUpgradeStackSafety
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1168,3 +1169,4 @@ import Blanc.AbstractStackCertificate
 #print axioms Blanc.CompiledStackSafety.Certificate.at_parentPrefix
 #print axioms Blanc.AbstractStackSafety.checkTable_certificate
 #print axioms Blanc.AbstractStackSafety.exampleTable_certificate
+#print axioms Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry
