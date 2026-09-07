@@ -470,4 +470,30 @@ theorem checkTable_certificate {sevm : Sevm} {table : Table} {maximum : Nat}
     obtain ⟨input, found, matched⟩ := valid
     exact checkRow_safe checked.1.1 matched (Table.lookup_all checked.2 found)
 
+/-! ### A minimal worked example
+
+The smallest end-to-end use of the checker: a three-instruction program, a
+three-row table, one `decide`, and the resulting certificate. It is the
+documented entry route in `docs/COMMON_API.md`, and it is a live smoke test
+that the checker is reachable from an ordinary `Sevm` without any per-contract
+scaffolding. -/
+
+/-- `PUSH1 0x01; POP; STOP`. -/
+def exampleCode : ByteArray := ByteArray.mk #[0x60, 0x01, 0x50, 0x00]
+
+/-- One row per reachable program counter, top-first, with the pushed literal
+deliberately forgotten so the table stays a shape rather than a trace. -/
+def exampleTable : Table :=
+  .node 2 [none] (.node 0 [] .empty .empty) (.node 3 [] .empty .empty)
+
+/-- The whole obligation is one finite Boolean evaluation. -/
+theorem exampleTable_checked : checkTable exampleCode exampleTable 1 = true := by
+  decide
+
+/-- ... and that evaluation is the certificate, for every machine running
+these bytes. -/
+theorem exampleTable_certificate {sevm : Sevm} (code : sevm.code = exampleCode) :
+    Certificate sevm exampleTable.Invariant 1 :=
+  checkTable_certificate (code ▸ exampleTable_checked)
+
 end Blanc.AbstractStackSafety

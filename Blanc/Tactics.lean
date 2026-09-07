@@ -328,6 +328,15 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         head == some `Blanc.Func.RunCompiledTo
   | "goal-shape:shared-subject-kernel-decision" =>
       return proofRecipeHasRepeatedClosedLetSubject target
+  | "goal-head:CompiledStackSafety.StepSafe" =>
+      return head == some `Blanc.CompiledStackSafety.StepSafe
+  | "goal-head:CompiledStackSafety.Certificate" =>
+      return head == some `Blanc.CompiledStackSafety.Certificate
+  | "goal-shape:operand-stack-fault-free" =>
+      return proofRecipeContainsName `Jaune.ExceptionalHalt.stackUnderflow target ||
+        proofRecipeContainsName `Jaune.ExceptionalHalt.stackOverflow target ||
+        proofRecipeContainsName `Blanc.CompiledStackSafety.StackFault target ||
+        proofRecipeContainsName `Blanc.CompiledStackSafety.NoStackFault target
   | _ => return false
 
 def String.toSyntax (s : String) : Lean.Syntax :=

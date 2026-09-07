@@ -420,8 +420,13 @@ def validate_trigger(trigger: str, where: str) -> None:
         raise RecipeError(f"{where}: trigger {trigger!r} needs a lowercase kebab slug")
 
 
-def proof_recipe_trigger_inventory(root: Path) -> Set[str]:
-    """Read the explicit fail-closed trigger dispatch from Blanc/Tactics.lean."""
+def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
+    """Read the explicit fail-closed trigger dispatch from Blanc/Tactics.lean.
+
+    Maps each implemented trigger to the source text of its arm, so
+    ``validate_trigger_dispatch`` can check that the arm still dispatches on
+    live declarations.
+    """
     path = root / TACTICS_PATH
     try:
         clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
@@ -462,13 +467,17 @@ def proof_recipe_trigger_inventory(root: Path) -> Set[str]:
     match_index, indent = matches[0]
     arm_re = re.compile(rf"^{re.escape(indent)}\|\s*(.*?)\s*=>")
     literal_re = re.compile(r'"(?:[^"\\]|\\.)*"\Z')
-    triggers: Set[str] = set()
+    triggers: Dict[str, str] = {}
     wildcard_count = 0
     saw_wildcard = False
+    current: Optional[str] = None
     for line in body[match_index + 1 :]:
         arm = arm_re.match(line)
         if not arm:
+            if current is not None:
+                triggers[current] += "\n" + line
             continue
+        current = None
         pattern = arm.group(1)
         if saw_wildcard:
             raise RecipeError(
@@ -494,7 +503,8 @@ def proof_recipe_trigger_inventory(root: Path) -> Set[str]:
             raise RecipeError(
                 f"{TACTICS_PATH}: duplicate proofRecipeTriggerMatches arm {trigger!r}"
             )
-        triggers.add(trigger)
+        triggers[trigger] = line
+        current = trigger
     if wildcard_count != 1:
         raise RecipeError(
             f"{TACTICS_PATH}: proofRecipeTriggerMatches must have exactly one "
@@ -503,6 +513,103 @@ def proof_recipe_trigger_inventory(root: Path) -> Set[str]:
     if not triggers:
         raise RecipeError(f"{TACTICS_PATH}: proofRecipeTriggerMatches has no explicit triggers")
     return triggers
+
+
+# A Lean name literal inside a trigger arm: `Blanc.Foo.bar, or ``Blanc.Foo.bar.
+# Only this repository's own names are checkable here; Jaune's census is not
+# read by this generator, so `Jaune.*` dispatch names are deliberately out of
+# scope and a Jaune rename is caught by the pin-move gates instead.
+DISPATCH_NAME_RE = re.compile(r"``?(Blanc\.[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z_][A-Za-z0-9_'!?]*)*)")
+
+
+CONSTRUCTOR_RE = re.compile(rf"^\s+\|\s*({LEAN_PART})(?=\s|:|\(|\{{|$)")
+
+
+def constructors_in(path: Path) -> Set[str]:
+    """Inductive constructor names, qualified like ``declarations_in``.
+
+    Trigger arms legitimately dispatch on a constructor such as
+    ``Blanc.Func.branch``, which is not a top-level declaration. This is a
+    separate, additive census so the shared declaration inventory that symbol
+    validation uses keeps its exact meaning.
+    """
+    try:
+        clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
+    except OSError as exc:
+        raise RecipeError(f"cannot read Lean source {path}: {exc}") from exc
+    scopes: List[Tuple[str, List[str]]] = []
+    found: Set[str] = set()
+    owner: Optional[str] = None
+    for line in clean.splitlines():
+        if match := NAMESPACE_RE.match(line):
+            scopes.append(("namespace", match.group(1).split(".")))
+            owner = None
+        elif SECTION_RE.match(line):
+            scopes.append(("section", []))
+            owner = None
+        elif END_RE.match(line):
+            if scopes:
+                scopes.pop()
+            owner = None
+        elif match := DECL_RE.match(line):
+            namespace = [
+                part
+                for scope_kind, parts in scopes
+                if scope_kind == "namespace"
+                for part in parts
+            ]
+            owner = (
+                qualify(namespace, match.group(1))
+                if re.match(r"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*inductive\b", line)
+                else None
+            )
+        elif owner is not None and (match := CONSTRUCTOR_RE.match(line)):
+            found.add(f"{owner}.{match.group(1)}")
+        elif line.strip() and not line[0].isspace():
+            owner = None
+    return found
+
+
+def constructor_inventory(root: Path) -> Set[str]:
+    found: Set[str] = set()
+    for path in lean_sources(root):
+        found.update(constructors_in(path))
+    return found
+
+
+def validate_trigger_dispatch(arms: Dict[str, str], names: Set[str]) -> int:
+    """Every trigger must still be able to fire.
+
+    ``load_and_validate`` already rejects a registry trigger with no arm in
+    ``Blanc/Tactics.lean``. That is not enough: an arm compares the goal against
+    Lean *names*, and a renamed or deleted declaration leaves the arm compiling
+    and comparing against a name nothing produces, so ``blanc_suggest`` silently
+    stops firing and the recipe becomes decorative. This check reads the names
+    each arm dispatches on and requires them to be live.
+
+    Returns the number of names checked; zero is a failure, so rewording the
+    arms out of this check's sight fails rather than passing over nothing.
+    """
+    checked = 0
+    failures: List[str] = []
+    for trigger in sorted(arms):
+        for name in sorted(set(DISPATCH_NAME_RE.findall(arms[trigger]))):
+            checked += 1
+            if name not in names:
+                failures.append(
+                    f"{TACTICS_PATH}: trigger {trigger!r} dispatches on {name}, "
+                    f"which is not a declaration in this repository — the arm "
+                    f"compiles but can never fire, so its recipe is decorative"
+                )
+    if failures:
+        raise RecipeError("; ".join(failures))
+    if not checked:
+        raise RecipeError(
+            f"{TACTICS_PATH}: no proofRecipeTriggerMatches arm dispatches on a "
+            f"Blanc declaration — the trigger dispatch has been reworded out of "
+            f"this check's sight"
+        )
+    return checked
 
 
 def validate_symbol(
@@ -578,6 +685,9 @@ def load_and_validate(root: Path) -> Registry:
     declarations, per_file = declaration_inventory(root)
     tactics = tactic_inventory(root)
     supported_triggers = proof_recipe_trigger_inventory(root)
+    validate_trigger_dispatch(
+        supported_triggers, declarations | constructor_inventory(root)
+    )
     seen_ids: Set[str] = set()
     recipes: List[Recipe] = []
     for index, raw in enumerate(raw_recipes, 1):
@@ -933,6 +1043,50 @@ def self_test(root: Path) -> None:
             remove_first_scalar_field(original, "boundary", "missing-field"),
             "missing ['boundary']",
         )
+
+        tactics_path = test_root / TACTICS_PATH
+        tactics_original = tactics_path.read_text(encoding="utf-8")
+
+        def rejected_tactics(label: str, mutated: str, expected: str) -> None:
+            nonlocal controls
+            if mutated == tactics_original:
+                raise RecipeError(f"self-test {label}: mutation changed nothing")
+            tactics_path.write_text(mutated, encoding="utf-8")
+            try:
+                load_and_validate(test_root)
+            except RecipeError as exc:
+                if expected not in str(exc):
+                    raise RecipeError(
+                        f"self-test {label}: expected {expected!r}, got {str(exc)!r}"
+                    ) from exc
+            else:
+                raise RecipeError(f"self-test {label}: dead trigger dispatch passed")
+            finally:
+                tactics_path.write_text(tactics_original, encoding="utf-8")
+            controls += 1
+
+        # A trigger arm that compiles and can never fire: the declaration it
+        # compares against no longer exists, so blanc_suggest goes quiet and the
+        # recipe becomes decorative without any surface changing.
+        rejected_tactics(
+            "dead-trigger-dispatch",
+            replace_once(
+                tactics_original,
+                "`Blanc.Func.RunCompiled\n",
+                "`Blanc.Func.DepartedRunCompiled\n",
+                "dead-trigger-dispatch",
+            ),
+            "can never fire",
+        )
+        # ... and the check is not vacuous: dispatch reworded out of its sight
+        # fails rather than passing green over an empty population.
+        rejected_tactics(
+            "emptied-trigger-dispatch",
+            tactics_original.replace("`Blanc.", "`Departed."),
+            "reworded out of",
+        )
+        if load_and_validate(test_root) is None:
+            raise RecipeError("self-test: trigger-dispatch restoration failed")
         rejected(
             "missing-tactic",
             replace_once(original, "tactic:func_run", "tactic:no_such_tactic", "missing-tactic"),
@@ -1007,8 +1161,8 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 9:
-        raise RecipeError(f"self-test accounting: expected 9 controls, ran {controls}")
+    if controls != 11:
+        raise RecipeError(f"self-test accounting: expected 11 controls, ran {controls}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1033,7 +1187,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         audit_census(Path(__file__).resolve().parents[1])
         if args.self_test:
             self_test(root)
-            print("OK — proof recipes self-test: 9/9 drift, schema, trigger, and symbol controls live")
+            print("OK — proof recipes self-test: 11/11 drift, schema, trigger, trigger-dispatch, and symbol controls live")
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)
