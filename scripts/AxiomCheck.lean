@@ -91,6 +91,7 @@ import Blanc.BeaconDepositWriteSites
 import Blanc.BeaconDepositDeploymentRoot
 import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
+import Blanc.AbstractStackCertificate
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1162,3 +1163,8 @@ import Blanc.BeaconDepositHistoryChain
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises
+#print axioms Blanc.CompiledStackSafety.Certificate.parentStep
+#print axioms Blanc.CompiledStackSafety.Certificate.parentPrefix
+#print axioms Blanc.CompiledStackSafety.Certificate.at_parentPrefix
+#print axioms Blanc.AbstractStackSafety.checkTable_certificate
+#print axioms Blanc.AbstractStackSafety.exampleTable_certificate

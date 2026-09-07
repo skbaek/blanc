@@ -263,6 +263,23 @@
 # permutation of an admissible claim list has a successful redemption sequence,
 # NOT that any of those messages was included in a block or mined.
 #
+# Five rows pin the contract-neutral operand-stack certificate chain
+# (`docs/COMMON_API.md` E9). `Certificate.parentStep`, `.parentPrefix` and
+# `.at_parentPrefix` transport one local certificate along the existing
+# same-frame chronology; `checkTable_certificate` is the checker's soundness
+# theorem, turning a successful finite `checkTable` into that `Certificate`;
+# `exampleTable_certificate` is the module's live minimal use, and it is
+# audited because the whole value proposition is that the finite validation is
+# KERNEL-checked — a `decide` traded for a `native_decide` anywhere under it
+# adds that declaration's own `._native.native_decide.ax_*` axiom, and this
+# gate is what makes that fail rather than pass unnoticed. Measured on a
+# disposable copy: the trade adds one such axiom to this row and to no other
+# row in the audited set, so without this row the whole audit stays green.
+# Read the conclusion at its stated altitude: it is local and same-frame, it
+# covers failing terminal nodes and the parent's resumption after a child
+# call, and it says nothing about gas, liveness, termination, whether any
+# program counter is reached, or what a spawned child frame does.
+#
 # Each row carries its OWN pinned expected axiom set (see ROWS below), and a
 # theorem's axiom closure must equal its row's set exactly, order-insensitive.
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
@@ -1383,7 +1400,12 @@ Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode_compile|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises|$STANDARD
-Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises|$STANDARD"
+Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises|$STANDARD
+Blanc.CompiledStackSafety.Certificate.parentStep|$STANDARD
+Blanc.CompiledStackSafety.Certificate.parentPrefix|$STANDARD
+Blanc.CompiledStackSafety.Certificate.at_parentPrefix|$STANDARD
+Blanc.AbstractStackSafety.checkTable_certificate|$STANDARD
+Blanc.AbstractStackSafety.exampleTable_certificate|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
