@@ -12,8 +12,6 @@ import subprocess
 import sys
 import tempfile
 
-import gate_semaphore
-
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "ExecutionOccurrenceRegression.lean"
@@ -519,7 +517,6 @@ def check_direct_code_fixture(ownership, *, semantic: bool) -> int | None:
             )
 
     if semantic:
-        gate_semaphore.guard("the execution occurrence direct-code fixtures")
         positive = run(["lake", "env", "lean", str(DIRECT_CODE_FIXTURE)])
         if positive.returncode != 0:
             return fail("direct-code positive fixture did not compile", positive)
@@ -617,7 +614,6 @@ def main(argv: list[str]) -> int:
         return direct_code_error
 
     if semantic:
-        gate_semaphore.guard("the execution occurrence fixtures")
         positive = run(["lake", "env", "lean", str(FIXTURE)])
         if positive.returncode != 0:
             return fail("positive fixture did not compile", positive)

@@ -1128,7 +1128,7 @@
           "scripts/check-execution-settlement.sh",
           "scripts/check-execution-settlement.py",
           "scripts/check-extraction-ownership.py",
-          "scripts/gate_semaphore.py"
+          "scripts/gate-semaphore.sh"
         ],
         "lean_entries": [
           "scripts/ExecutionSettlementRegression.lean"
@@ -1166,7 +1166,7 @@
           "scripts/ExecutionOccurrenceControls.lean",
           "scripts/ExecutionOccurrenceRegression.lean",
           "Blanc.lean",
-          "scripts/gate_semaphore.py"
+          "scripts/gate-semaphore.sh"
         ],
         "populations": [
           {
@@ -1202,7 +1202,7 @@
           "scripts/cycle-write-free-owner-manifest.json",
           "scripts/CycleWriteFreeRegression.lean",
           "Blanc.lean",
-          "scripts/gate_semaphore.py"
+          "scripts/gate-semaphore.sh"
         ],
         "populations": [
           {
@@ -2736,7 +2736,7 @@
           "scripts/check-execution-occurrence.py",
           "scripts/check-extraction-ownership.py",
           "scripts/execution-occurrence-lift-manifest.json",
-          "scripts/gate_semaphore.py"
+          "scripts/gate-semaphore.sh"
         ],
         "lean_entries": [
           "scripts/ExecutionOccurrenceRegression.lean",
@@ -2769,7 +2769,7 @@
           "scripts/check-cycle-write-free.py",
           "scripts/check-layering.py",
           "scripts/cycle-write-free-owner-manifest.json",
-          "scripts/gate_semaphore.py"
+          "scripts/gate-semaphore.sh"
         ],
         "lean_entries": [
           "scripts/CycleWriteFreeRegression.lean"

@@ -9,8 +9,6 @@ import subprocess
 import sys
 import tempfile
 
-import gate_semaphore
-
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "ExecutionSettlementRegression.lean"
@@ -36,7 +34,6 @@ REQUIRED_POSITIVE_THEOREMS = {
 
 
 def run_lean(path: pathlib.Path) -> subprocess.CompletedProcess[str]:
-    gate_semaphore.guard("the execution settlement fixtures")
     return subprocess.run(
         ["lake", "env", "lean", str(path)],
         cwd=ROOT,

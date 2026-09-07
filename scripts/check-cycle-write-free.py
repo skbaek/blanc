@@ -14,8 +14,6 @@ import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 
-import gate_semaphore
-
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "CycleWriteFreeRegression.lean"
@@ -641,7 +639,6 @@ def main(argv: list[str]) -> int:
             return fail("required positive proofs missing/wrong-kind: " + ", ".join(absent))
 
     if not arguments.static_only:
-        gate_semaphore.guard("the cycle-write-free fixtures")
         positive = run(["lake", "env", "lean", str(FIXTURE)])
         if positive.returncode != 0:
             return fail("positive fixture did not compile", positive)
