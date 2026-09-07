@@ -508,6 +508,44 @@ argument is wanted.
 is no row synthesis, no candidate generation, and no coverage measurement here.
 Authoring the rows for a real program is the caller's work.
 
+**First real consumer.**
+[`Blanc/ProxyPairUpgradeStackSafety.lean`](../Blanc/ProxyPairUpgradeStackSafety.lean)
+certifies `v1Code` — the 74-byte upgrade-witness runtime deployed at
+`v1Implementation` and executed by `ProxyPairUpgradeRefinement` — with 47 rows
+for its 47 reachable program counters, a ceiling of three words, one
+`decide +kernel`, and `Certificate.at_parentPrefix` for the transported
+conclusion. Two authoring facts generalize. First, the table there is a
+*right-leaning* tree, one `.node pc pattern .empty <| ...` per row: that
+satisfies `Table.checkOrder` exactly as a balanced tree does, and it reads in
+program order against a disassembly, so no hand-balancing is needed. Second,
+the rows come from a forward abstract interpretation of the same transfer
+functions the checker applies; nothing in the repository performs that
+interpretation, so a consumer still computes the fixpoint outside Lean and lets
+`checkTable` validate the result. Four negative controls live beside the
+certificate — the same table against the v2 bytes, a missing successor row, a
+literal destination that is not a `JUMPDEST`, and a ceiling below the deepest
+row.
+
+**What is in reach.** For Blanc-compiled code the binding constraint is the
+accepted opcode family, not the destination boundary. `Func.compile` emits a
+jump only as `PUSH2 <literal>` before `JUMP`/`JUMPI`, and `Func.call` the same,
+so no program this compiler produces can carry a destination the table cannot
+name; the destination boundary above is real but unreachable from Blanc source.
+Every production runtime in the tree is instead rejected for an instruction
+outside the family: WETH and FMINT for `ADDRESS`/`BALANCE`/`SHL` (`Blanc/Weth.lean:115`,
+`Blanc/Fmint.lean:300`), PRORATA for `NOT`/`SELFBALANCE` (`Blanc/Prorata.lean:81`),
+BeaconDeposit for `CALLDATACOPY`/`MSTORE8`/`MOD`/`STATICCALL`
+(`Blanc/BeaconDeposit.lean:49`), Lido CircuitBreaker for
+`EXTCODESIZE`/`STATICCALL`/`TLOAD`/`TSTORE`
+(`Blanc/LidoCircuitBreaker.lean:330`), Lido TriggerableWithdrawalsGateway for
+`OR`/`XOR` (`Blanc/LidoTriggerableWithdrawalsGateway.lean:74`), WETH10 for
+`CHAINID`/`RETURNDATACOPY` and the WETH set (`Blanc/Weth10.lean:173`), and both
+proxies for `DELEGATECALL`/`RETURNDATASIZE`/`CALLDATACOPY`
+(`Blanc/ProxyPairProgram.lean:49`). Widening the transfer family is what admits
+them. `Blanc/ProxyPairImplementation.lean`'s 25-byte `implGuardedCode` is the
+one other runtime already inside the family, at a 19-row table and a ceiling of
+two.
+
 ## I — invariance and noninterference
 
 ### I1. One instruction/line/function preserves an observation
