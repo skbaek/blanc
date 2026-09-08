@@ -572,6 +572,7 @@
         "files": [
           "scripts/check-lido-twg-census.sh",
           "scripts/check-lido-twg-census.py",
+          "scripts/keccak.py",
           "scripts/lido-twg-census.json"
         ],
         "tools": [
@@ -1508,6 +1509,7 @@
           "@twglock",
           "scripts/check-lido-twg-census.sh",
           "scripts/check-lido-twg-census.py",
+          "scripts/keccak.py",
           "scripts/lido-twg-census.json",
           "scripts/lido-twg-compatibility.py",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md",
@@ -1779,6 +1781,7 @@
           "scripts/check-beacon-deposit-model.sh",
           "scripts/check-beacon-deposit-model.py",
           "scripts/gen-beacon-deposit-vectors.py",
+          "scripts/keccak.py",
           "scripts/reference/beacon-deposit/vectors.json",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/tests_deposit_contract.t.sol",

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Check every in-repo Keccak-256 implementation against independent vectors.
+"""Check Blanc's Keccak sponges and shared-helper adapters.
 
-Blanc keeps one Keccak-256 implementation per evidence surface on purpose.
-This control enumerates them all and holds each to the rate-boundary vectors in
+The canonical stdlib-only helper and every deliberately independent evidence
+sponge are held to the rate-boundary vectors in
 `keccak_rate_boundary_vectors`, which come from the pinned execution-specs
-oracle rather than from anything in this repository.  A surface that grows a
-new implementation, or loses one, fails here rather than silently escaping the
-control: the enumeration below is compared against a structural scan of
-`scripts/**/*.py` for sponge implementations.
+oracle rather than from anything in this repository.  The two migrated
+consumers are checked separately for their historical return shapes.  A
+surface that grows a new implementation, or loses one, fails here rather than
+silently escaping the control: the enumeration below is compared against a
+structural scan of `scripts/**/*.py` for sponge implementations.
 
 WHAT A SPONGE IS DETECTED BY, AND WHY IT IS NOT A NAME
 
@@ -64,11 +65,11 @@ sys.path.insert(0, str(SCRIPTS))
 
 import keccak_rate_boundary_vectors as vectors  # noqa: E402
 
-# (script file, attribute) for every independent Keccak-256 sponge in Blanc.
+# (script file, attribute) for the canonical helper and every remaining
+# independent Keccak-256 sponge in Blanc.  Consumer adapters are below.
 IMPLEMENTATIONS: Tuple[Tuple[str, str], ...] = (
-    ("gen-beacon-deposit-vectors.py", "keccak256"),
+    ("keccak.py", "keccak256"),
     ("gen-beacon-deposit-current-mainnet.py", "keccak256"),
-    ("check-lido-twg-census.py", "keccak256"),
     ("lido_circuit_breaker_reference_schema.py", "keccak_bytes"),
     ("lido_twg_reference_schema.py", "keccak_bytes"),
     ("lido_ossifiable_proxy_reference_schema.py", "keccak256"),
@@ -76,6 +77,8 @@ IMPLEMENTATIONS: Tuple[Tuple[str, str], ...] = (
     ("weth10_reference_schema.py", "keccak256"),
     ("weth10-reference.py", "keccak256"),
 )
+
+HISTORICAL_DEFECT_LENGTHS = (135, 271, 407, 543)
 
 # --- what a sponge is -------------------------------------------------------
 #
@@ -557,15 +560,18 @@ def self_test() -> List[str]:
         module = load("tenth_surface_schema.py", disposable)
         bad = vectors.failures(module.digest_of)
         require(bool(bad), "the planted pad10*1 defect passed the vectors")
-        for length in vectors.DEFECT_LENGTHS:
-            require(
-                any(line.startswith(f"length {length}:") for line in bad),
-                f"the planted defect was not caught at length {length}",
-            )
+        bad_lengths = tuple(sorted(
+            int(line.split(":", 1)[0].removeprefix("length "))
+            for line in bad if line.startswith("length ")
+        ))
         require(
-            not any(line.startswith("length 136:") for line in bad),
-            "a planted defect that disagrees away from the rate boundary is a"
-            " different defect from the historical one",
+            bad_lengths == HISTORICAL_DEFECT_LENGTHS,
+            "the historical padding mutant must fail exactly lengths"
+            f" {HISTORICAL_DEFECT_LENGTHS}, got {bad_lengths}",
+        )
+        require(
+            not any(line.startswith("b") for line in bad),
+            "the historical padding mutant changed a selector digest",
         )
 
         # A sponge that tabulates no round constants is still seen.
@@ -583,8 +589,22 @@ def self_test() -> List[str]:
             "the derived-constant sponge was not recognised structurally",
         )
         module = load("eleventh_surface_schema.py", disposable)
-        require(bool(vectors.failures(module.digest_of)),
+        derived_bad = vectors.failures(module.digest_of)
+        require(bool(derived_bad),
                 "the second planted defect passed the vectors")
+        derived_lengths = tuple(sorted(
+            int(line.split(":", 1)[0].removeprefix("length "))
+            for line in derived_bad if line.startswith("length ")
+        ))
+        require(
+            derived_lengths == HISTORICAL_DEFECT_LENGTHS,
+            "the derived-constant padding mutant did not isolate the four"
+            f" rate boundaries: got {derived_lengths}",
+        )
+        require(
+            not any(line.startswith("b") for line in derived_bad),
+            "the derived-constant padding mutant changed a selector digest",
+        )
 
         # The quiet file must stay quiet: a delegating helper is not a sponge.
         require(
@@ -601,6 +621,62 @@ def self_test() -> List[str]:
             " scripts/GATES.md and the registry note, and update this control",
         )
 
+    return failures
+
+
+def adapter_failures() -> List[str]:
+    """Hold the canonical API and both migrated consumer representations."""
+
+    failures: List[str] = []
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            failures.append(f"adapter: {message}")
+
+    helper = load("keccak.py")
+    beacon = load("gen-beacon-deposit-vectors.py")
+    census = load("check-lido-twg-census.py")
+    message = vectors.message(135)
+    expected_hex = vectors.VECTORS[135]
+    original = bytes(message)
+
+    raw = helper.keccak256(message)
+    require(isinstance(raw, bytes) and len(raw) == 32,
+            "keccak256 must return exactly 32 bytes")
+    require(raw.hex() == expected_hex, "canonical bytes digest disagrees")
+    require(message == original, "canonical helper mutated its input")
+    prefixed = helper.keccak256_hex(message)
+    require(isinstance(prefixed, str) and prefixed == "0x" + expected_hex,
+            "keccak256_hex must return lowercase 0x-prefixed hex")
+    require(helper.selector("Error(string)") == bytes.fromhex("08c379a0"),
+            "canonical selector must return four bytes")
+    try:
+        helper.selector("Error (string)")
+    except ValueError:
+        pass
+    else:
+        require(False, "canonical selector accepted a signature with spaces")
+
+    beacon_hex = beacon.keccak256(message)
+    require(
+        isinstance(beacon_hex, str)
+        and len(beacon_hex) == 64
+        and not beacon_hex.startswith("0x")
+        and beacon_hex == expected_hex,
+        "Beacon adapter must return bare 64-character lowercase hex",
+    )
+    require(
+        isinstance(beacon.keccak256_bytes(message), bytes)
+        and beacon.keccak256_bytes(message) == bytes.fromhex(expected_hex),
+        "Beacon bytes adapter must return the exact 32 digest bytes",
+    )
+    require(census.selector("Error(string)") == "0x08c379a0",
+            "TWG selector adapter must return 0x-prefixed text")
+    require(
+        census.digest("Transfer(address,address,uint256)")
+        == "0x" + vectors.SELECTORS[b"Transfer(address,address,uint256)"],
+        "TWG digest adapter must return 0x-prefixed 32-byte hex",
+    )
     return failures
 
 
@@ -624,8 +700,8 @@ def main() -> int:
             failures.extend(f"{filename}.{attribute} {line}" for line in bad)
         checked[filename] = len(vectors.VECTORS) + len(vectors.SELECTORS)
 
-    controls = self_test()
-    failures.extend(controls)
+    failures.extend(adapter_failures())
+    failures.extend(self_test())
 
     if failures:
         for line in failures:
@@ -635,11 +711,13 @@ def main() -> int:
         return 1
 
     total = sum(checked.values())
-    print(f"OK keccak rate-boundary control: {len(checked)} implementations"
+    print(f"OK keccak rate-boundary control: {len(checked)} sponges"
           f" x {len(vectors.VECTORS)} lengths + {len(vectors.SELECTORS)}"
           f" selectors = {total} comparisons against {vectors.ORACLE}"
-          f" @ {vectors.ORACLE_PIN}; structural sponge scan reconciled and"
-          f" shown to catch 2 planted implementations")
+          f" @ {vectors.ORACLE_PIN}; 2 migrated adapters retain exact return"
+          f" shapes; structural sponge scan reconciled and shown to catch 2"
+          f" planted implementations; historical padding mutant fails only"
+          f" at {HISTORICAL_DEFECT_LENGTHS}")
     return 0
 
 
