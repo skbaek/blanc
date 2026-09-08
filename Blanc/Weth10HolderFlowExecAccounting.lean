@@ -3192,43 +3192,6 @@ private theorem action_eq_of_primaryFlowAtom
     Option.map_some, Option.some.injEq] at haction
   exact haction.symm
 
-/-- Normalizing an ABI address word is exactly round-tripping it through
-`Adr`.  The compiled classifier keeps its equivalent lemma private, so the
-proof-indexed accounting layer records its own local algebraic copy. -/
-private theorem normalizedAddressArg_eq_toAdr_toB256_local
-    (e : Sevm) (k : B256) :
-    normalizedAddressArg e k = (Sevm.argWord e k).toAdr.toB256 := by
-  have lowMask (x : UInt64) :
-      (0x00000000ffffffff : UInt64) &&& x =
-        x.toUInt32.toUInt64 := by
-    apply UInt64.toNat_inj.mp
-    simp only [UInt64.toNat_and, UInt64.toNat_toUInt32,
-      UInt32.toNat_toUInt64]
-    rw [Nat.and_comm]
-    change x.toNat &&& 2 ^ 32 - 1 = x.toNat % 2 ^ 32
-    exact Nat.and_two_pow_sub_one_eq_mod _ _
-  have andMax (x : UInt64) : UInt64.max &&& x = x := by
-    apply UInt64.toBitVec_inj.mp
-    simp only [UInt64.toBitVec_and]
-    have hmax : UInt64.max.toBitVec = BitVec.allOnes 64 := by rfl
-    rw [hmax]
-    exact BitVec.allOnes_and
-  have b128AndMax (x : B128) : B128.max &&& x = x := by
-    apply Prod.ext <;> apply andMax
-  have hmask : (~~~ addressMask) =
-      (⟨⟨0, 0x00000000ffffffff⟩, B128.max⟩ : B256) := by
-    decide +kernel
-  unfold normalizedAddressArg
-  rw [hmask]
-  rcases Sevm.argWord e k with ⟨⟨high, middle⟩, low⟩
-  simp only [B256.toAdr, Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
-  apply Prod.ext
-  · apply Prod.ext
-    · rfl
-    · exact lowMask middle
-  · exact b128AndMax low
-
 /-- Executable evidence that a nonempty invocation selector belongs to none
 of the ten primary-flow families. -/
 structure SelectsNoPrimaryFlow (e : Sevm) : Prop where
@@ -4347,7 +4310,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
           have htarget : e.currentTarget = ca :=
             context.invocation.2.1
           rw [htarget,
-            normalizedAddressArg_eq_toAdr_toB256_local] at hstor
+            normalizedAddressArg_eq_toAdr_toB256] at hstor
           have hincrease : Increase (Sevm.argWord e 0).toAdr e.value
               (Stor.rest (Devm.getStor pre ca))
               (Stor.rest (Devm.getStor post ca)) := by
@@ -4404,7 +4367,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
       installedCallback hdeeper with ⟨callbackEffect⟩
   have htarget : frame.sevm.currentTarget = ca :=
     context.invocation.2.1
-  rw [htarget, normalizedAddressArg_eq_toAdr_toB256_local] at hstorage
+  rw [htarget, normalizedAddressArg_eq_toAdr_toB256] at hstorage
   have increase : Increase (Sevm.argWord frame.sevm 0).toAdr
       frame.sevm.value (Stor.rest (Devm.getStor frame.pre ca))
       (Stor.rest (Devm.getStor callbackPre ca)) := by
@@ -4515,7 +4478,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
       installedCallback hdeeper with ⟨callbackEffect⟩
   have hreceiverNorm : (normalizedAddressArg frame.sevm 0).toAdr =
       (Sevm.argWord frame.sevm 0).toAdr := by
-    rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+    rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
   rw [hreceiverNorm] at hcredit hcover hdecrease
   have hprimary : primaryFlowAtom frame.sevm = some
       (.flashPair (Sevm.argWord frame.sevm 0)
@@ -4856,7 +4819,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
           _hguardCode, _hguardLogs, chronology⟩
       have hsource : (normalizedAddressArg frame.sevm 0).toAdr =
           (Sevm.argWord frame.sevm 0).toAdr := by
-        rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+        rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
       have burn' : BurnCallPrefix frame.sevm ownPre callPre guardPost
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) frame.sevm.caller.toB256 := by
@@ -4917,7 +4880,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
           _hguardCode, _hguardLogs, chronology⟩
       have hsource : (normalizedAddressArg frame.sevm 0).toAdr =
           (Sevm.argWord frame.sevm 0).toAdr := by
-        rw [normalizedAddressArg_eq_toAdr_toB256_local, toAdr_toB256]
+        rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
       have burn' : BurnCallPrefix frame.sevm ownPre callPre guardPost
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 2) (Sevm.argWord frame.sevm 1) := by
@@ -5042,7 +5005,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
         (Sevm.argWord frame.sevm 0).toAdr := by
       apply Adr.toB256_inj
       rw [hrecipient]
-      exact normalizedAddressArg_eq_toAdr_toB256_local frame.sevm 0
+      exact normalizedAddressArg_eq_toAdr_toB256 frame.sevm 0
     subst recipient
     have hprimary : primaryFlowAtom frame.sevm = some
         (.transfer frame.sevm.caller.toB256
@@ -5249,7 +5212,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                 recipient = (Sevm.argWord e 0).toAdr := by
               apply Adr.toB256_inj
               rw [hrecipient]
-              exact normalizedAddressArg_eq_toAdr_toB256_local e 0
+              exact normalizedAddressArg_eq_toAdr_toB256 e 0
             subst recipient
             have hatom : primaryFlowAtom e = some
                 (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
@@ -5391,7 +5354,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
             callerAllowanceOutcome_rest_eq_accounting hallowance
           have hsource : (normalizedAddressArg e 0).toAdr =
               (Sevm.argWord e 0).toAdr := by
-            rw [normalizedAddressArg_eq_toAdr_toB256_local,
+            rw [normalizedAddressArg_eq_toAdr_toB256,
               toAdr_toB256]
           rcases hcore with hzero | hnonzero
           · exact (hto hzero.1).elim
@@ -5403,7 +5366,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                 recipient = (Sevm.argWord e 1).toAdr := by
               apply Adr.toB256_inj
               rw [hrecipient]
-              exact normalizedAddressArg_eq_toAdr_toB256_local e 1
+              exact normalizedAddressArg_eq_toAdr_toB256 e 1
             subst recipient
             have hatom : primaryFlowAtom e = some
                 (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)

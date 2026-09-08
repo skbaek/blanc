@@ -1601,41 +1601,6 @@ private theorem mintToPrefix_append_eq_sstoreSplit (continuation : Func) :
     prepend_append]
   rfl
 
-private theorem normalizedAddressArg_eq_toAdr_toB256_writeCompleteness
-    (e : Sevm) (k : B256) :
-    normalizedAddressArg e k = (Sevm.argWord e k).toAdr.toB256 := by
-  have lowMask (x : UInt64) :
-      (0x00000000ffffffff : UInt64) &&& x =
-        x.toUInt32.toUInt64 := by
-    apply UInt64.toNat_inj.mp
-    simp only [UInt64.toNat_and, UInt64.toNat_toUInt32,
-      UInt32.toNat_toUInt64]
-    rw [Nat.and_comm]
-    change x.toNat &&& 2 ^ 32 - 1 = x.toNat % 2 ^ 32
-    exact Nat.and_two_pow_sub_one_eq_mod _ _
-  have andMax (x : UInt64) : UInt64.max &&& x = x := by
-    apply UInt64.toBitVec_inj.mp
-    simp only [UInt64.toBitVec_and]
-    have hmax : UInt64.max.toBitVec = BitVec.allOnes 64 := by
-      rfl
-    rw [hmax]
-    exact BitVec.allOnes_and
-  have b128AndMax (x : B128) : B128.max &&& x = x := by
-    apply Prod.ext <;> apply andMax
-  have hmask : (~~~ addressMask) =
-      (⟨⟨0, 0x00000000ffffffff⟩, B128.max⟩ : B256) := by
-    decide +kernel +revert
-  unfold normalizedAddressArg
-  rw [hmask]
-  rcases Sevm.argWord e k with ⟨⟨high, middle⟩, low⟩
-  simp only [B256.toAdr, Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
-  apply Prod.ext
-  · apply Prod.ext
-    · rfl
-    · exact lowMask middle
-  · exact b128AndMax low
-
 /-- Reverse classification of the arbitrary retained occurrence in the shared
 `receive`/`deposit` mint body.  The immediate pre-stack, rather than an
 endpoint storage equation, identifies the stored caller credit. -/
@@ -1836,7 +1801,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
         context.invocation.2.1]
     have keyEq : normalizedAddressArg frame.sevm 0 =
         (Sevm.argWord frame.sevm 0).toAdr.toB256 :=
-      normalizedAddressArg_eq_toAdr_toB256_writeCompleteness _ _
+      normalizedAddressArg_eq_toAdr_toB256 _ _
     have storedWord :
         frame.sevm.value + recipientBalance =
           Stor.rest (Devm.getStor storeCursor.pre ca)
@@ -2611,7 +2576,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_creditAddressA
       rw [storLoad, storAmount, storAdd, storSwap]
     have normalizedEq : normalizedAddressArg frame.sevm ownerArg =
         (Sevm.argWord frame.sevm ownerArg).toAdr.toB256 :=
-      normalizedAddressArg_eq_toAdr_toB256_writeCompleteness _ _
+      normalizedAddressArg_eq_toAdr_toB256 _ _
     have targetGetEq :
         (Devm.getStor storeCursor.pre frame.sevm.currentTarget).get
             (Sevm.argWord frame.sevm ownerArg).toAdr.toB256 =
@@ -3126,7 +3091,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_argDebit
     have normalizedEq : runtimeKey =
         (Sevm.argWord frame.sevm ownerArg).toAdr.toB256 := by
       rw [runtimeKeyEq]
-      exact normalizedAddressArg_eq_toAdr_toB256_writeCompleteness _ _
+      exact normalizedAddressArg_eq_toAdr_toB256 _ _
     have debitPrefix :
         [balance, Sevm.argWord frame.sevm amountArg,
           (Sevm.argWord frame.sevm ownerArg).toAdr.toB256] <<+
@@ -4441,7 +4406,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
             Ninst.Hinv.inv (f := Devm.getStor) creditKeyDupStep
           have normalizedEq : normalizedAddressArg frame.sevm 0 =
               (Sevm.argWord frame.sevm 0).toAdr.toB256 :=
-            normalizedAddressArg_eq_toAdr_toB256_writeCompleteness _ _
+            normalizedAddressArg_eq_toAdr_toB256 _ _
           have recipientBalanceAtStore : recipientBalance =
               (Devm.getStor creditStoreCursor.pre ca).get
                 (Sevm.argWord frame.sevm 0).toAdr.toB256 := by

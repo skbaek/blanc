@@ -22,24 +22,12 @@ namespace Weth10
 
 open Jaune.Ninst Ninst
 
-private theorem pinnedJauneListCompare_eq_compareLex {α : Type u} [Ord α]
-    (xs ys : List α) :
-    Jaune.List.compare xs ys = List.compareLex compare xs ys := by
-  induction xs generalizing ys with
-  | nil => cases ys <;> rfl
-  | cons x xs ih =>
-      cases ys with
-      | nil => rfl
-      | cons y ys =>
-          cases h : compare x y <;>
-            simp [Jaune.List.compare, List.compareLex, h, ih]
-
 private instance : Std.TransCmp
     (compare : Bytes → Bytes → Ordering) := by
   rw [show (compare : Bytes → Bytes → Ordering) =
       List.compareLex (compare : UInt8 → UInt8 → Ordering) by
     funext xs ys
-    exact pinnedJauneListCompare_eq_compareLex xs ys]
+    exact jauneListCompare_eq_compareLex xs ys]
   infer_instance
 
 /-! ## Canonical natural-amount interface -/
@@ -448,18 +436,16 @@ def MessageRedemptionEnabled
 
 def redemptionTxPreludeBout
     (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
-  {bout with
-    transactionsTrie :=
-      bout.transactionsTrie.insert (BLT.bytes index.toBytes).toBytes tx}
+  Blanc.deploymentTxPreludeBout bout tx index
 
 def redemptionReceiptKey (index : Nat) : Bytes :=
-  BLT.toBytes (.bytes index.toBytes)
+  Blanc.deploymentReceiptKey index
 
 def redemptionIntrinsicGas (tx : Tx) : Nat :=
-  (calculateIntrinsicCost tx).1
+  Blanc.deploymentIntrinsicGas tx
 
 def redemptionCalldataFloorGas (tx : Tx) : Nat :=
-  (calculateIntrinsicCost tx).2
+  Blanc.deploymentCalldataFloorGas tx
 
 /-- The mandatory transaction budget: calldata-floor gas versus intrinsic gas
 plus the complete caller-paid runtime ceiling. -/
@@ -468,11 +454,7 @@ def redemptionTransactionGasBound (q : Nat) (tx : Tx) : Nat :=
     (redemptionIntrinsicGas tx + redemptionRuntimeCeiling q)
 
 def redemptionEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
-  match tx.type with
-  | .two _ maxPriorityFee maxFee _ _ =>
-      min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-        benv.stat.baseFeePerGas
-  | _ => 0
+  Blanc.deploymentEffectiveGasPrice benv tx
 
 def redemptionTxGasUsed (bout bout' : BlockOutput) : Nat :=
   bout'.blockGasUsed - bout.blockGasUsed

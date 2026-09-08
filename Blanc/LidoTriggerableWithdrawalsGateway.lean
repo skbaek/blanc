@@ -1,5 +1,6 @@
 import Blanc.LidoTriggerableWithdrawalsGatewayTrigger
 import Blanc.LinearDispatch
+import Blanc.SourceSiteCount
 
 /-!
   Source-level Blanc runtime for the Triggerable Withdrawals Gateway.
@@ -584,12 +585,10 @@ theorem runtime_compile (dp : DeployParams) :
   simpa [runtimeCode] using
     Prog.compile_eq_some_getD_of_compiles (runtime dp) (runtime_compiles dp)
 
-def sourceSstoreSiteCount : Func → Nat
-  | .last _ => 0
-  | .next (.reg .sstore) rest => 1 + sourceSstoreSiteCount rest
-  | .next _ rest => sourceSstoreSiteCount rest
-  | .branch left right => sourceSstoreSiteCount left + sourceSstoreSiteCount right
-  | .call _ => 0
+def sourceSstoreSiteCount : Func → Nat :=
+  Func.sourceSiteCount fun
+    | .reg .sstore => true
+    | _ => false
 
 def sourceSstoreCount (dp : DeployParams) : Nat :=
   (funcs dp).foldl (fun n p => n + sourceSstoreSiteCount p.2) 0

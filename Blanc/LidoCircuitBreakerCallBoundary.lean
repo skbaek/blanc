@@ -315,113 +315,6 @@ theorem pauseCall_targetWord_survives {sevm : Sevm} {target : Adr}
         (child.output.take 0) := by rw [hcmem, hpmem]
   exact MemWordAt.extendsWrite hmem (Or.inr (by simp)) window
 
-/-! ## The CALL edge, inverted
-
-The forward library evaluates the `.call` arm only on the branch that can pay
-its own charge, so the failing branch is named here: an arbitrary derivation
-carries no gas premise, and the insufficient branch has to be *refuted* rather
-than assumed away.  Both helpers below are private, and both are copies of
-`Blanc/LidoCircuitBreakerPauseJoin.lean`'s equally private siblings — that
-module's versions are not exported. -/
-
-/-- `chargeGas`, evaluated forward on its failing arm. -/
-private lemma callEdge_chargeGas_eq_error {cost : Nat} {devm : Devm}
-    (h : devm.gasLeft < cost) :
-    chargeGas cost devm = .error ⟨.halt (.outOfGas .none), devm⟩ := by
-  rw [chargeGas_def]
-  have hs : safeSub devm.gasLeft cost = none := by
-    unfold safeSub
-    rw [if_neg (by omega)]
-  rw [hs]
-
-/-- The `.call` arm at `value = 0` on a frame that cannot pay the call's own
-charge: `chargeGas` fails and the step is an out-of-gas halt.  The failing
-sibling of `Xinst.step_call_zero_value`. -/
-private lemma callEdge_step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
-    {gw cw iiw isw oiw osw : B256} {s : List B256}
-    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
-    {ext acc mcc mcs : Nat}
-    (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
-      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
-    (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
-        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
-    (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
-        + dgc = acc)
-    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
-    (h_gas : d1.gasLeft < mcc + ext) :
-    Xinst.step sevm devm .call =
-      .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
-  subst h_ext; subst h_acc
-  show XStep.ofExcept (do
-    let ⟨gas, d⟩ ← devm.pop
-    let ⟨callee, d⟩ ← d.popToAdr
-    let ⟨value, d⟩ ← d.pop
-    let ⟨inputIndex, d⟩ ← d.popToNat
-    let ⟨inputSize, d⟩ ← d.popToNat
-    let ⟨outputIndex, d⟩ ← d.popToNat
-    let ⟨outputSize, d⟩ ← d.popToNat
-    let extendCost :=
-      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
-    let preAccessCost := accessCost callee d.accessedAddresses
-    let d := addAccessedAddress d callee
-    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d callee
-    let accessCost := preAccessCost + delegatedAccessGasCost
-    let createCost :=
-      if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
-    let transferCost := if value = 0 then 0 else gasCallValue
-    let ⟨msgCallCost, msgCallStipend⟩ :=
-      calculateMsgCallGas value.toNat gas.toNat d.gasLeft extendCost
-        (accessCost + createCost + transferCost)
-    let d ← chargeGas (msgCallCost + extendCost) d
-    Except.assert (!sevm.isStatic ∨ value = 0)
-      ⟨.halt (.writeInStaticContext .none), d⟩
-    let d := d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
-    let senderBal := (d.getAcct sevm.currentTarget).bal
-    if senderBal < value then
-      let d ← d.push 0
-      return .done
-        (.ok ((d.withReturnData []).withGasLeft (d.gasLeft + msgCallStipend)))
-    else
-      return genericCall.step
-        sevm d msgCallStipend value sevm.currentTarget callee
-        newCodeAddress true false inputIndex inputSize outputIndex outputSize
-        code disablePrecompiles) = _
-  rw [Devm.pop_eq_ok h_stk]
-  simp only [bind, Except.bind]
-  rw [Devm.popToAdr_eq_ok
-    (devm := devm.setMach ⟨cw :: 0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
-  rw [Devm.pop_eq_ok
-    (devm := devm.setMach ⟨0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  simp only [if_pos (Or.inr trivial), if_pos trivial, Nat.add_zero,
-    show ((0 : B256).toNat) = 0 from rfl]
-  simp only [h_del, h_split]
-  rw [callEdge_chargeGas_eq_error (devm := d1) h_gas]
-  rfl
-
 /-- The EIP-7702 disjunct, read off a delegation resolution rather than
 excluded by a premise: either the account carries no designator and the code
 run is its own, or it carries one and the code run is the designated
@@ -532,7 +425,7 @@ theorem pauseCall_boundary_with_execution
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [callEdge_step_call_zero_value_outOfGas h_stk hext h_del hacc hsplit
+    rw [Xinst.step_call_zero_value_outOfGas h_stk hext h_del hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
@@ -640,84 +533,6 @@ theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
     PauseCallBoundary sevm target duration callPre callPost :=
   (pauseCall_boundary_with_execution h_stk h_window h_depth h_dynamic run).1
 
-/-! ## The STATICCALL edge, inverted
-
-The observation's edge is inverted the same way, and for the same reason: an
-arbitrary derivation carries no gas premise, so the branch that cannot pay the
-call's own charge is refuted rather than assumed away.  The helper below is a
-private copy of `Blanc/LidoCircuitBreakerPauseJoin.lean`'s equally private
-`.staticcall` sibling, which that module does not export. -/
-
-/-- The `.staticcall` arm on a frame that cannot pay the call's own charge:
-`chargeGas` fails and the step is an out-of-gas halt.  The failing sibling of
-`Xinst.step_staticcall_spawn`. -/
-private lemma statEdge_step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
-    {gw tw iiw isw oiw osw : B256} {s : List B256}
-    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
-    {ext acc mcc mcs : Nat}
-    (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
-      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
-    (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
-        tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
-    (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
-        + dgc = acc)
-    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
-    (h_gas : d1.gasLeft < mcc + ext) :
-    Xinst.step sevm devm .staticcall =
-      .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
-  subst h_ext; subst h_acc
-  show XStep.ofExcept (do
-    let ⟨gas, d⟩ ← devm.pop
-    let ⟨target, d⟩ ← d.popToAdr
-    let ⟨inputIndex, d⟩ ← d.popToNat
-    let ⟨inputSize, d⟩ ← d.popToNat
-    let ⟨outputIndex, d⟩ ← d.popToNat
-    let ⟨outputSize, d⟩ ← d.popToNat
-    let extendCost :=
-      d.extCost [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
-    let preAccessCost := accessCost target d.accessedAddresses
-    let d := addAccessedAddress d target
-    let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d target
-    let accessCost := preAccessCost + delegatedAccessGasCost
-    let ⟨msgCallCost, msgCallStipend⟩ :=
-      calculateMsgCallGas 0 gas.toNat d.gasLeft extendCost accessCost
-    let d ← chargeGas (msgCallCost + extendCost) d
-    let d :=
-      d.memExtends [⟨inputIndex, inputSize⟩, ⟨outputIndex, outputSize⟩]
-    return genericCall.step
-      sevm d msgCallStipend 0 sevm.currentTarget target newCodeAddress
-      true true inputIndex inputSize outputIndex outputSize code
-      disablePrecompiles) = _
-  rw [Devm.pop_eq_ok h_stk]
-  simp only [bind, Except.bind]
-  rw [Devm.popToAdr_eq_ok
-    (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  simp only [h_del, h_split]
-  rw [callEdge_chargeGas_eq_error (devm := d1) h_gas]
-  rfl
-
-
 /-- **The STATICCALL edge, inverted.**  Any derivation that crosses the pause's
 `.staticcall` instruction satisfies `PauseStatBoundary`: the six operands, the
 argument window's bytes, the suspended parent frame, the spawned message and
@@ -787,7 +602,7 @@ theorem pauseStat_boundary_with_execution
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [statEdge_step_staticcall_outOfGas h_stk hext h_del hacc hsplit
+    rw [Xinst.step_staticcall_outOfGas h_stk hext h_del hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
@@ -1158,7 +973,7 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [callEdge_step_call_zero_value_outOfGas h_stk hext hdel hacc hsplit
+    rw [Xinst.step_call_zero_value_outOfGas h_stk hext hdel hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra

@@ -5,6 +5,7 @@
 -- an ordinary successful `processMessage` result.
 
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionTrace
 import Init.Data.Ord.UInt
 
 namespace Blanc
@@ -117,7 +118,10 @@ def directCreateMessageOutputOf (post : Devm) : MsgCallOutput :=
 
 /-! ## Contract-neutral protocol-deployment plumbing -/
 
-private theorem deploymentListCompare_eq_compareLex {α : Type u} [Ord α]
+/-- Jaune's list comparator is the standard lexicographic comparator.  This
+bridge lets local trie instances share the proof without exporting those
+instances beyond their existing scopes. -/
+theorem jauneListCompare_eq_compareLex {α : Type u} [Ord α]
     (xs ys : List α) :
     Jaune.List.compare xs ys = List.compareLex compare xs ys := by
   induction xs generalizing ys with
@@ -134,7 +138,7 @@ private instance : Std.TransCmp
   rw [show (compare : Bytes → Bytes → Ordering) =
       List.compareLex (compare : UInt8 → UInt8 → Ordering) by
     funext xs ys
-    exact deploymentListCompare_eq_compareLex xs ys]
+    exact jauneListCompare_eq_compareLex xs ys]
   infer_instance
 
 /-- The small nonempty program used at mandatory protocol system addresses in
@@ -146,9 +150,7 @@ def deploymentReceiptKey (index : Nat) : Bytes :=
 
 def deploymentTxPreludeBout
     (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
-  {bout with
-    transactionsTrie :=
-      bout.transactionsTrie.insert (BLT.bytes index.toBytes).toBytes tx}
+  ExecutionTrace.transactionPreludeBout bout tx index
 
 def deploymentIntrinsicGas (tx : Tx) : Nat :=
   (calculateIntrinsicCost tx).1
