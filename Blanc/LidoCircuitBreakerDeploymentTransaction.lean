@@ -120,7 +120,8 @@ theorem canonicalDeploymentTransaction_succeeds
     simp only [bind, Except.bind]
     rw [hrules, henv.validated]
     simp only [Except.mapError]
-    simp only [deploymentTxPreludeBout] at hchecked
+    simp only [deploymentTxPreludeBout,
+      ExecutionTrace.transactionPreludeBout] at hchecked
     rw [hchecked]
     simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
       htype, Bool.false_eq_true, if_false, Nat.add_zero,
@@ -160,13 +161,16 @@ theorem canonicalDeploymentTransaction_succeeds
     ⟨hinstalled, by rw [hstor]; exact hmessage.stable.coherent⟩
   have hblockLogs : bout.blockLogs = officialConstructorLogs ca := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, hmessage.logs, BlockOutput.init]
+    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      hmessage.logs, BlockOutput.init]
   have hrequests : bout.requests = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, BlockOutput.init]
+    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init]
   have hreceiptKeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, BlockOutput.init]
+    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init]
   have hentry :
       Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) =
         some (makeReceipt tx messageOut.error
