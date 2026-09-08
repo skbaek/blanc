@@ -142,6 +142,13 @@ theorem MemWordAt.slice_eq {a : Devm} {img : Bytes} {offset : Nat}
   rw [← Mem.Reads.read reads, Mem.Reads.read sourceReads]
   exact sourceSlice
 
+/-- Read the selected word directly from the machine memory. -/
+theorem MemWordAt.readWord {a : Devm} {offset : Nat} {w : B256}
+    (window : MemWordAt a offset w) :
+    Bytes.toB256 (a.memory.read offset 32).1 = w := by
+  obtain ⟨_, img, reads, slice⟩ := window
+  rw [Mem.Reads.read reads, slice, B256.toB256_toBytes]
+
 /-- Transport a selected word to a new proof-carrying image whose relevant
 slice is known to agree with an image of the source memory. -/
 theorem MemWordAt.of_preserved_memImage
