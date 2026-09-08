@@ -7,6 +7,7 @@ import Blanc.ExecutionNoninterference
 import Blanc.LinearDispatchCorrectness
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.CompiledShape
+import Blanc.CreationArtifact
 
 namespace Blanc
 
@@ -221,7 +222,7 @@ example (locations : List Nat) (n i index : Nat) (d : UInt8) :
   blanc_suggest
   rfl
 
-private opaque proofRecipeOpaqueFunction : Func
+private opaque proofRecipeOpaqueFunction : Func := .last .stop
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (locations : List Nat) (n i : Nat) (d : UInt8) :
@@ -238,8 +239,9 @@ example {sevm : Sevm} {devm : Devm} {G : Nat}
     (gas : devm.gasLeft = G + gVerylow)
     (room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm
-      (CreationArtifact.pushB256AsPush2OrPush32 (2 ^ 16))
-      (devm.setMach ⟨(2 ^ 16) :: devm.stack, devm.memory, G⟩) := by
+      (CreationArtifact.pushB256AsPush2OrPush32 (Nat.toB256 (2 ^ 16)))
+      (devm.setMach
+        ⟨Nat.toB256 (2 ^ 16) :: devm.stack, devm.memory, G⟩) := by
   expect_recipe_trigger "goal-shape:bounded-creation-word-encoder"
   blanc_suggest
   exact Ninst.runCompiled_pushB256AsPush2OrPush32 gas room
@@ -255,12 +257,14 @@ example {sevm : Sevm} {devm post : Devm}
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example {sevm : Sevm} {devm post : Devm} {word : B256}
     (run : Ninst.RunCompiled sevm
-      (if CreationArtifact.pushB256AsPush2OrPush32 word = Ninst.sload then
-        devm else post)
+      (devm.setMach
+        ⟨devm.stack, devm.memory,
+          (CreationArtifact.pushB256AsPush2OrPush32 word).size⟩)
       Ninst.sload post) :
     Ninst.RunCompiled sevm
-      (if CreationArtifact.pushB256AsPush2OrPush32 word = Ninst.sload then
-        devm else post)
+      (devm.setMach
+        ⟨devm.stack, devm.memory,
+          (CreationArtifact.pushB256AsPush2OrPush32 word).size⟩)
       Ninst.sload post := by
   expect_no_recipe_trigger "goal-shape:bounded-creation-word-encoder"
   blanc_suggest

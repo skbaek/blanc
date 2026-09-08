@@ -2404,7 +2404,8 @@
           "scripts/gate-semaphore.sh"
         ],
         "lean_entries": [
-          "scripts/AxiomCheck.lean"
+          "scripts/AxiomCheck.lean",
+          "scripts/ProofRecipeSuggestions.lean"
         ],
         "tools": [
           "lean",
@@ -2412,7 +2413,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The 988-row expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean.",
+      "note": "The theorem expectation table lives inline in check.sh, so the wrapper's own bytes are a verdict input alongside the elaborated AxiomCheck.lean. ProofRecipeSuggestions.lean is separately elaborated before the axiom audit so its positive and negative matcher controls cannot remain unexecuted.",
       "order": 49,
       "verdict": {
         "expect_exit": 0,

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`,
-# then an axiom audit of the audited top theorems via scripts/AxiomCheck.lean.
+# Blanc verification gate (REFACTOR.md Phase 0, step 0.3): `lake build`, then
+# the proof-recipe suggestion controls and an axiom audit of the audited top
+# theorems via scripts/AxiomCheck.lean.
 # The row list below is the authority on what is audited, grouped by family:
 # WETH solvency, fmint conservation, the `flashLoan` spec and its
 # corollaries, the compile witnesses, frame-level restoration, the
@@ -315,13 +316,19 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-gate_semaphore_acquire "the audited build and axiom elaboration" 8 || exit 2
+gate_semaphore_acquire "the audited build, proof-recipe controls and axiom elaboration" 8 || exit 2
 
 if [ "$BUILD" -eq 1 ]; then
   if ! (cd "$ROOT" && lake build); then
     echo "REGRESSION — axiom audit: lake build failed"
     exit 1
   fi
+fi
+
+if ! SUGGEST_OUT="$(cd "$ROOT" && lake env lean scripts/ProofRecipeSuggestions.lean 2>&1)"; then
+  printf '%s\n' "$SUGGEST_OUT"
+  echo "REGRESSION — axiom audit: ProofRecipeSuggestions.lean failed to elaborate"
+  exit 1
 fi
 
 if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
