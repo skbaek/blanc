@@ -117,6 +117,11 @@ from ethereum.prague.state import (                              # noqa: E402
 )
 from ethereum.utils.hexadecimal import hex_to_bytes              # noqa: E402
 
+from prague_fixture import (                                     # noqa: E402
+    alloc_state_root, header_json, mk_header, norm_alloc,
+    run_t8n as run_prague_t8n,
+)
+
 OUT_DIR = os.path.join(REPO_ROOT, "scripts", "fixtures", "fmint")
 BORROWERS_PATH = os.path.join(REPO_ROOT, "scripts", "fmint-borrowers.json")
 SOLC_BORROWER_PATH = os.path.join(
@@ -1024,114 +1029,10 @@ def get_selectors():
     return {int(s, 16) for s in sels}
 
 
-# ---- genesis / header / t8n plumbing (copied from gen-weth-fixtures.py,
-# which is itself contract-agnostic plumbing) ------------------------------
-
-def norm_alloc(alloc):
-    out = {}
-    for addr, a in alloc.items():
-        out[addr] = {
-            "nonce": q(a.get("nonce", "0x0")),
-            "balance": q(a.get("balance", "0x0")),
-            "code": a.get("code", "0x"),
-            "storage": {q(k): q(v) for k, v in a.get("storage", {}).items()
-                        if int(v, 16) != 0},
-        }
-    return out
-
-
-def alloc_state_root(alloc):
-    st = State()
-    for addr, acct in alloc.items():
-        set_account(st, Address(hex_to_bytes(addr)), Account(
-            nonce=Uint(int(acct.get("nonce", "0x0"), 16)),
-            balance=U256(int(acct.get("balance", "0x0"), 16)),
-            code=Bytes(hex_to_bytes(acct.get("code", "0x"))),
-        ))
-        for k, v in acct.get("storage", {}).items():
-            val = U256(int(v, 16))
-            if val != 0:
-                set_storage(st, Address(hex_to_bytes(addr)),
-                            Bytes32(int(k, 16).to_bytes(32, "big")), val)
-    return "0x" + state_root(st).hex()
-
-
-def header_json(hdr, hsh):
-    return {
-        "parentHash": "0x" + hdr.parent_hash.hex(),
-        "uncleHash": "0x" + hdr.ommers_hash.hex(),
-        "coinbase": "0x" + hdr.coinbase.hex(),
-        "stateRoot": "0x" + hdr.state_root.hex(),
-        "transactionsTrie": "0x" + hdr.transactions_root.hex(),
-        "receiptTrie": "0x" + hdr.receipt_root.hex(),
-        "bloom": "0x" + hdr.bloom.hex(),
-        "difficulty": h(hdr.difficulty),
-        "number": h(hdr.number),
-        "gasLimit": h(hdr.gas_limit),
-        "gasUsed": h(hdr.gas_used),
-        "timestamp": h(hdr.timestamp),
-        "extraData": "0x" + hdr.extra_data.hex(),
-        "mixHash": "0x" + hdr.prev_randao.hex(),
-        "nonce": "0x" + hdr.nonce.hex(),
-        "baseFeePerGas": h(hdr.base_fee_per_gas),
-        "withdrawalsRoot": "0x" + hdr.withdrawals_root.hex(),
-        "blobGasUsed": h(hdr.blob_gas_used),
-        "excessBlobGas": h(hdr.excess_blob_gas),
-        "parentBeaconBlockRoot": "0x" + hdr.parent_beacon_block_root.hex(),
-        "requestsHash": "0x" + hdr.requests_hash.hex(),
-        "hash": "0x" + hsh.hex(),
-    }
-
-
-def mk_header(d):
-    hdr = Header(
-        parent_hash=hex_to_bytes(d["parentHash"]),
-        ommers_hash=hex_to_bytes(d["uncleHash"]),
-        coinbase=Address(hex_to_bytes(d["coinbase"])),
-        state_root=hex_to_bytes(d["stateRoot"]),
-        transactions_root=hex_to_bytes(d["transactionsTrie"]),
-        receipt_root=hex_to_bytes(d["receiptTrie"]),
-        bloom=Bytes256(hex_to_bytes(d["bloom"])),
-        difficulty=Uint(int(d["difficulty"], 16)),
-        number=Uint(int(d["number"], 16)),
-        gas_limit=Uint(int(d["gasLimit"], 16)),
-        gas_used=Uint(int(d["gasUsed"], 16)),
-        timestamp=U256(int(d["timestamp"], 16)),
-        extra_data=Bytes(hex_to_bytes(d["extraData"])),
-        prev_randao=Bytes32(hex_to_bytes(d["mixHash"])),
-        nonce=Bytes8(hex_to_bytes(d["nonce"])),
-        base_fee_per_gas=Uint(int(d["baseFeePerGas"], 16)),
-        withdrawals_root=hex_to_bytes(d["withdrawalsRoot"]),
-        blob_gas_used=U64(int(d["blobGasUsed"], 16)),
-        excess_blob_gas=U64(int(d["excessBlobGas"], 16)),
-        parent_beacon_block_root=hex_to_bytes(d["parentBeaconBlockRoot"]),
-        requests_hash=hex_to_bytes(d["requestsHash"]),
-    )
-    return hdr, keccak256(rlp.encode(hdr))
-
+# ---- shared genesis / header / t8n plumbing -------------------------------
 
 def run_t8n(env, alloc, txs):
-    with tempfile.TemporaryDirectory() as td:
-        p = lambda n: os.path.join(td, n)  # noqa: E731
-        json.dump(env, open(p("env.json"), "w"))
-        json.dump(alloc, open(p("alloc.json"), "w"))
-        json.dump(txs, open(p("txs.json"), "w"))
-        cmd = [sys.executable, "-m", "ethereum_spec_tools.evm_tools", "t8n",
-               "--input.env", p("env.json"), "--input.alloc", p("alloc.json"),
-               "--input.txs", p("txs.json"), "--output.basedir", td,
-               "--output.alloc", "out-alloc.json",
-               "--output.result", "out-result.json",
-               "--output.body", "out-body.txt",
-               "--state.fork", "Prague", "--state.chainid", "1",
-               "--state.reward", "0"]
-        subprocess.run(cmd, check=True, capture_output=True, text=True,
-                        env={**os.environ,
-                             "PYTHONPATH": os.path.join(EELS, "src")})
-        post = json.load(open(p("out-alloc.json")))
-        res = json.load(open(p("out-result.json")))
-        body = json.load(open(p("out-body.txt")))
-    return post, res, body
-
+    return run_prague_t8n(env, alloc, txs, eels_root=EELS)
 
 MANIFEST = []
 
