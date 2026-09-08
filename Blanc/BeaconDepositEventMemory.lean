@@ -1,6 +1,7 @@
 import Blanc.BeaconDepositAbiMemory
 import Blanc.BeaconDepositMemory
 import Blanc.BytesWrite
+import Blanc.MemoryImage
 
 /-!
 # Beacon deposit event memory
@@ -229,13 +230,12 @@ private theorem EventPayloadRegions.writeBefore
     (h : EventPayloadRegions image data)
     (n : Nat) (xs : Bytes) (hfit : n + xs.length ≤ 192) :
     EventPayloadRegions (Bytes.writeAt image n xs) data := by
+  have frame : Bytes.WordFrameFrom image (Bytes.writeAt image n xs) 192 :=
+    (Bytes.WordFrameFrom.refl image 192).writeBefore n xs hfit
   constructor
-  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hfit]
-    exact h.pubkey
-  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
-    exact h.withdrawal
-  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by omega)]
-    exact h.signature
+  · exact (frame.sliceD 192 64 (by omega)).trans h.pubkey
+  · exact (frame.sliceD 288 32 (by omega)).trans h.withdrawal
+  · exact (frame.sliceD 416 96 (by omega)).trans h.signature
 
 private theorem eventPayloadRegions_staged
     (image : Bytes) (data : Bytes) :

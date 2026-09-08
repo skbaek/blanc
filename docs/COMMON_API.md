@@ -920,8 +920,11 @@ import is `Blanc.Ladder`.
   `MemWordAt.acrossSuccessfulCall`, whose only memory premise is
   `outputOffset + outputSize ≤ offset`.
 - For a scratch trace whose writes are confined below a fixed boundary,
-  `Bytes.WordFrameFrom` is the compositional frame relation, with `refl`,
-  `trans`, and `MemWordAt.of_wordFrame` to apply it.
+  `Bytes.WordFrameFrom` is the compositional frame relation. It quantifies
+  every byte offset, so use `writeBefore` to compose a write whose end is at or
+  below the boundary and `sliceD` to observe any padded width in the preserved
+  suffix. Use `refl` and `trans` to compose frames, then
+  `MemWordAt.of_wordFrame` when only a 32-byte machine window remains.
 
 `constructorPairStage_storageEffectRun` in
 `Blanc/BeaconDepositConstructorStorageEffects.lean` is the scratch-layout
@@ -929,7 +932,9 @@ example: it carries the node window `[64,96)` across the disjoint constructor
 write `[0,32)`, then deliberately stops carrying it before SHA output
 overwrites `[64,96)`.
 
-Boundary: every theorem here is frame-shaped — it carries an already-known
+Boundary: `Bytes.WordFrameFrom.writeBefore` requires the explicit layout fact
+`n + ys.length ≤ start`; it does not support a write crossing the suffix. Every
+theorem here is frame-shaped — it carries an already-known
 window and proves nothing about what the step computed.  The disjointness side
 condition is always the caller's explicit premise; this module never infers
 that a contract's scratch region sits below a window, and it supplies no
