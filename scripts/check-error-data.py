@@ -3,22 +3,21 @@
 
 The lock supplies the strings.  Lean evaluates the landed definition; Python
 independently reconstructs Solidity's Error(string) ABI payload with the
-reference checker's in-repo Keccak implementation.  No expected payload is
+shared Keccak primitive.  No expected payload is
 stored, so this check cannot become stale by sharing an artifact with Lean.
 """
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import gate_semaphore
+from keccak import selector as abi_selector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,16 +33,6 @@ class CheckError(RuntimeError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise CheckError(message)
-
-
-def load_reference() -> ModuleType:
-    path = ROOT / "scripts" / "weth10-reference.py"
-    spec = importlib.util.spec_from_file_location("weth10_reference", path)
-    require(spec is not None and spec.loader is not None,
-            f"cannot load Keccak implementation from {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def reasons_from_lock(lock_path: Path) -> list[str]:
@@ -84,9 +73,9 @@ def reasons_from_lock(lock_path: Path) -> list[str]:
     return listed
 
 
-def abi_error_data(reason: str, reference: ModuleType) -> bytes:
+def abi_error_data(reason: str) -> bytes:
     data = reason.encode("ascii")
-    selector = bytes.fromhex(reference.keccak256(b"Error(string)"))[:4]
+    selector = abi_selector("Error(string)")
     pad = (-len(data)) % 32
     return selector + (32).to_bytes(32, "big") + len(data).to_bytes(32, "big") + data + bytes(pad)
 
@@ -116,9 +105,8 @@ def lean_outputs(reasons: list[str], harness: Path) -> list[bytes]:
 
 def check(lock_path: Path, harness: Path) -> str:
     reasons = reasons_from_lock(lock_path)
-    reference = load_reference()
     lean = lean_outputs(reasons, harness)
-    expected = [abi_error_data(reason, reference) for reason in reasons]
+    expected = [abi_error_data(reason) for reason in reasons]
     for index, (reason, actual, want) in enumerate(zip(reasons, lean, expected)):
         require(actual == want,
                 f"blob mismatch for lock reason {index} {reason!r}: "

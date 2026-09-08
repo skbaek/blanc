@@ -1,10 +1,9 @@
 """Independent Keccak-256 rate-boundary vectors.
 
-Blanc carries several deliberately independent pure-Python Keccak-256
-implementations, one per evidence surface, so that no single helper can make
-two surfaces agree by sharing a defect.  Independence only pays if each copy
-is checked against something outside the repository, and the checks have to
-straddle the sponge rate: a `pad10*1` implementation that appends the two pad
+The canonical pure-Python Keccak primitive is checked against expected digests
+from outside the repository. Consumer schemas and semantic models keep their
+independent checks while reusing that primitive. The vectors straddle the rate:
+a `pad10*1` implementation that appends the two pad
 bits as separate bytes agrees with the standard at every message length except
 `len % 136 == 135`, where the domain byte fills the block exactly and the two
 bits must merge into a single `0x81`.
@@ -50,7 +49,7 @@ VECTORS: Dict[int, str] = {
 
 # The lengths a byte-at-a-time pad10*1 defect gets wrong, kept explicit so a
 # reviewer can see the control actually straddles the boundary it is about.
-DEFECT_LENGTHS: Tuple[int, ...] = (135, 271, 407)
+DEFECT_LENGTHS: Tuple[int, ...] = (135, 271, 407, 543)
 
 # Signature preimages every Blanc surface already depends on, kept as a second
 # check that the implementation under test is Ethereum Keccak and not SHA3.

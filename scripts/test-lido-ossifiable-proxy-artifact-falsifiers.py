@@ -23,7 +23,7 @@ from typing import Callable, NoReturn, Sequence
 
 sys.dont_write_bytecode = True
 
-from lido_ossifiable_proxy_reference_schema import keccak256
+from keccak import keccak256_bare_hex as keccak256
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -31,16 +31,14 @@ GENERATOR = Path("scripts/lido-ossifiable-proxy-artifacts.py")
 MANIFEST = Path("scripts/lido-ossifiable-proxy-artifacts.json")
 LEAN_OWNER = Path("Blanc/ProxyPairOssifiableArtifacts.lean")
 EVALUATOR = Path("scripts/eval-lido-ossifiable-proxy-artifacts.lean")
-REFERENCE_SCHEMA = Path("scripts/lido_ossifiable_proxy_reference_schema.py")
-STRICT_JSON = Path("scripts/strict_json.py")
+KECCAK_HELPER = Path("scripts/keccak.py")
 
 COPY_SET = (
     GENERATOR,
     MANIFEST,
     LEAN_OWNER,
     EVALUATOR,
-    REFERENCE_SCHEMA,
-    STRICT_JSON,
+    KECCAK_HELPER,
 )
 
 EXPECTED_EVALUATOR_ROWS = (

@@ -460,7 +460,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "The driver reads every scripts/**/*.py to decide both which files carry a Keccak sponge and whether each one agrees with the external vectors, so the whole Python corpus is a content input. The sponge scan is structural — round constants, rho offsets, rate/lane/pad parameters read as values out of the syntax tree — and its self-test plants two idiomatically different tenth implementations and requires them to redden this row rather than escape it. A sponge that tabulates none of the three is a stated known limit with its own control.",
+      "note": "The whole scripts/**/*.py content population is structurally scanned and must contain exactly the canonical scripts/keccak.py sponge. External vectors check that owner; consumer representations are tested separately. Planted extra implementations must fail the single-owner reconciliation. Fully derived parameters remain a stated detection limit with its own control.",
       "order": 12,
       "verdict": {
         "expect_exit": 0,
@@ -500,7 +500,8 @@
           "@weth10ref/inputs/source/current-main.diff",
           "@weth10ref/inputs/source/comment-only-34d2712.diff",
           "@weth10ref/inputs/source/drift-provenance.json",
-          "@weth10doc"
+          "@weth10doc",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -543,7 +544,8 @@
           "@lidolock",
           "scripts/fixtures/lido-circuit-breaker/manifest.json",
           "LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md",
-          "LIDO_CIRCUIT_BREAKER_DEVIATIONS.md"
+          "LIDO_CIRCUIT_BREAKER_DEVIATIONS.md",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -574,6 +576,7 @@
         "files": [
           "scripts/check-lido-twg-census.sh",
           "scripts/check-lido-twg-census.py",
+          "scripts/keccak.py",
           "scripts/lido-twg-census.json"
         ],
         "tools": [
@@ -608,7 +611,8 @@
           "scripts/strict_json.py",
           "scripts/lido-twg-reference.py",
           "scripts/test-lido-twg-reference-falsifiers.py",
-          "@twglock"
+          "@twglock",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -651,7 +655,8 @@
           "scripts/test-lido-ossifiable-proxy-reference-falsifiers.py",
           "scripts/lido-ossifiable-proxy-compatibility.py",
           "@ossifiablelock",
-          "@ossifiabledoc"
+          "@ossifiabledoc",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -692,7 +697,8 @@
           "scripts/test-lido-ossifiable-proxy-performance-falsifiers.py",
           "@ossifiableperfmanifest",
           "@ossifiableperfroot/scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
-          "@ossifiableperfroot/scripts/lido-ossifiable-proxy-reference.json"
+          "@ossifiableperfroot/scripts/lido-ossifiable-proxy-reference.json",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -743,16 +749,15 @@
           "scripts/lido-ossifiable-proxy-artifacts.json",
           "scripts/test-lido-ossifiable-proxy-artifact-falsifiers.py",
           "scripts/eval-lido-ossifiable-proxy-artifacts.lean",
-          "scripts/lido_ossifiable_proxy_reference_schema.py",
-          "scripts/strict_json.py",
-          "Blanc/ProxyPairOssifiableArtifacts.lean"
+          "Blanc/ProxyPairOssifiableArtifacts.lean",
+          "scripts/keccak.py"
         ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "Network-free artifact ownership check. The independent falsifier copies the generator, generated manifest, Lean literal owner, evaluator source, and Keccak implementation into disposable trees, so each copied path is an explicit input. The gate never evaluates Lean; compiler evaluation belongs to the preceding build and the semantic consumers.",
+      "note": "Network-free artifact ownership check. The falsifier copies the generator, generated manifest, Lean literal owner, evaluator source and canonical Keccak module into disposable trees. The gate never evaluates Lean; compiler evaluation belongs to the build and semantic consumers.",
       "order": 20,
       "verdict": {
         "expect_exit": 0,
@@ -1518,6 +1523,7 @@
           "@twglock",
           "scripts/check-lido-twg-census.sh",
           "scripts/check-lido-twg-census.py",
+          "scripts/keccak.py",
           "scripts/lido-twg-census.json",
           "scripts/lido-twg-compatibility.py",
           "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md",
@@ -1760,11 +1766,9 @@
         "files": [
           "scripts/check-error-data.sh",
           "scripts/check-error-data.py",
-          "scripts/weth10-reference.py",
-          "scripts/weth10_reference_schema.py",
-          "scripts/strict_json.py",
           "scripts/weth10-reference.json",
-          "scripts/gate_semaphore.py"
+          "scripts/gate_semaphore.py",
+          "scripts/keccak.py"
         ],
         "lean_entries": [
           "scripts/eval-error-data.lean"
@@ -1775,7 +1779,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "weth10-reference.py is importlib-loaded only for its Keccak and drags weth10_reference_schema.py in with it; the WETH10_REFERENCE_* overrides those two read at import cannot move this gate's lock, which comes from its own constant, so they are not declared here. The harness is run with `lake env lean --run`, unlike the #eval evaluators elsewhere in this family.",
+      "note": "The checker imports the canonical Keccak primitive directly and reconstructs ABI payloads from its own frozen reason inventory. The harness is run with lake env lean --run; neither WETH generator nor schema is loaded.",
       "order": 40,
       "verdict": {
         "expect_exit": 0,
@@ -1794,6 +1798,7 @@
           "scripts/check-beacon-deposit-model.sh",
           "scripts/check-beacon-deposit-model.py",
           "scripts/gen-beacon-deposit-vectors.py",
+          "scripts/keccak.py",
           "scripts/reference/beacon-deposit/vectors.json",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/tests_deposit_contract.t.sol",
@@ -2038,7 +2043,8 @@
           "/bin/bash",
           "/usr/bin/env",
           "/usr/bin/git",
-          "scripts/gate-semaphore.sh"
+          "scripts/gate-semaphore.sh",
+          "scripts/keccak.py"
         ],
         "material_output": [
           {
@@ -2352,7 +2358,8 @@
           "@t8n_python_base/bin/python3.11",
           "/bin/bash",
           "/usr/bin/env",
-          "/usr/bin/git"
+          "/usr/bin/git",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -2501,14 +2508,13 @@
           "scripts/check-fmint-borrower-source.py",
           "scripts/strict_json.py",
           "scripts/check-runtime-bytes.py",
-          "scripts/weth10-reference.py",
-          "scripts/weth10_reference_schema.py",
           "scripts/fmint-borrower-solc.json",
           "scripts/fmint-borrower-solc.sol",
           "scripts/fixtures/fmint/manifest.json",
           "Blanc/FmintCode.lean",
           ".lake/packages/jaune/.lake/build/bin/jaune",
-          "scripts/gate-semaphore.sh"
+          "scripts/gate-semaphore.sh",
+          "scripts/keccak.py"
         ],
         "populations": [
           {
@@ -2521,7 +2527,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "--no-build skips `lake build jaune/jaune`, so the prebuilt Jaune runner binary is the thing that produces PASS/FAIL and is fingerprinted directly. weth10-reference.py and weth10_reference_schema.py are in the closure only because the borrower checker importlib-loads the former for its keccak256.",
+      "note": "--no-build skips lake build jaune/jaune; the prebuilt Jaune runner is fingerprinted directly. The borrower checker uses the canonical local Keccak primitive against the external-EELS-produced source identity and imports strict JSON parsing directly.",
       "order": 52,
       "verdict": {
         "expect_exit": 0,

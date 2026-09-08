@@ -31,7 +31,7 @@ from typing import NoReturn, Sequence
 # shared, network-free Keccak implementation.
 sys.dont_write_bytecode = True
 
-from lido_ossifiable_proxy_reference_schema import keccak256
+from keccak import keccak256_bare_hex as keccak256
 
 
 REPO = Path(__file__).resolve().parents[1]
