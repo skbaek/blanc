@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = Path(os.environ.get(
@@ -128,18 +130,12 @@ def require(condition: bool, message: str) -> None:
 
 
 def strict_json(data: bytes, what: str) -> Any:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in items:
-            require(key not in result, f"{what}: duplicate JSON key {key!r}")
-            result[key] = value
-        return result
-
-    def invalid(value: str) -> None:
-        raise SchemaError(f"{what}: non-finite JSON value {value}")
-
     try:
-        return json.loads(data, object_pairs_hook=pairs, parse_constant=invalid)
+        return strict_json_loads(data)
+    except DuplicateKeyError as exc:
+        raise SchemaError(f"{what}: duplicate JSON key {exc.key!r}") from exc
+    except NonFiniteNumberError as exc:
+        raise SchemaError(f"{what}: non-finite JSON value {exc.value}") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SchemaError(f"{what}: invalid JSON: {exc}") from exc
 

@@ -22,6 +22,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT = ROOT / "scripts" / "fmint-borrower-solc.json"
@@ -41,20 +43,13 @@ def require(condition: bool, message: str) -> None:
 
 
 def strict_json(path: Path) -> Any:
-    def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in pairs:
-            require(key not in result, f"{path}: duplicate JSON key {key!r}")
-            result[key] = value
-        return result
-
-    def invalid_constant(value: str) -> None:
-        raise CheckError(f"{path}: non-finite JSON value {value}")
-
     try:
         data = path.read_text(encoding="utf-8")
-        return json.loads(data, object_pairs_hook=object_pairs,
-                          parse_constant=invalid_constant)
+        return strict_json_loads(data)
+    except DuplicateKeyError as exc:
+        raise CheckError(f"{path}: duplicate JSON key {exc.key!r}") from exc
+    except NonFiniteNumberError as exc:
+        raise CheckError(f"{path}: non-finite JSON value {exc.value}") from exc
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CheckError(f"cannot read artifact {path}: {exc}") from exc
 

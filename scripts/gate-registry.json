@@ -483,6 +483,7 @@
         "files": [
           "scripts/check-weth10-reference.sh",
           "scripts/weth10_reference_schema.py",
+          "scripts/strict_json.py",
           "scripts/weth10-reference.py",
           "scripts/test-weth10-reference-falsifiers.py",
           "scripts/weth10-compatibility.py",
@@ -535,6 +536,7 @@
         "files": [
           "scripts/check-lido-circuit-breaker-reference.sh",
           "scripts/lido_circuit_breaker_reference_schema.py",
+          "scripts/strict_json.py",
           "scripts/lido-circuit-breaker-reference.py",
           "scripts/test-lido-circuit-breaker-reference-falsifiers.py",
           "scripts/lido-circuit-breaker-compatibility.py",
@@ -604,6 +606,7 @@
         "files": [
           "scripts/check-lido-twg-reference.sh",
           "scripts/lido_twg_reference_schema.py",
+          "scripts/strict_json.py",
           "scripts/lido-twg-reference.py",
           "scripts/test-lido-twg-reference-falsifiers.py",
           "@twglock"
@@ -644,6 +647,7 @@
         "files": [
           "scripts/check-lido-ossifiable-proxy-reference.sh",
           "scripts/lido_ossifiable_proxy_reference_schema.py",
+          "scripts/strict_json.py",
           "scripts/lido-ossifiable-proxy-reference.py",
           "scripts/test-lido-ossifiable-proxy-reference-falsifiers.py",
           "scripts/lido-ossifiable-proxy-compatibility.py",
@@ -684,6 +688,7 @@
         "files": [
           "scripts/check-lido-ossifiable-proxy-performance.sh",
           "scripts/lido_ossifiable_proxy_performance_schema.py",
+          "scripts/strict_json.py",
           "scripts/check-lido-ossifiable-proxy-performance.py",
           "scripts/test-lido-ossifiable-proxy-performance-falsifiers.py",
           "@ossifiableperfmanifest",
@@ -740,6 +745,7 @@
           "scripts/test-lido-ossifiable-proxy-artifact-falsifiers.py",
           "scripts/eval-lido-ossifiable-proxy-artifacts.lean",
           "scripts/lido_ossifiable_proxy_reference_schema.py",
+          "scripts/strict_json.py",
           "Blanc/ProxyPairOssifiableArtifacts.lean"
         ],
         "tools": [
@@ -1498,6 +1504,7 @@
           "scripts/check-lido-twg-differential.sh",
           "scripts/gen-lido-twg-differential.py",
           "scripts/lido_twg_differential_schema.py",
+          "scripts/strict_json.py",
           "scripts/test-lido-twg-differential-falsifiers.py",
           "scripts/eels_differential_common.py",
           "scripts/fixtures/lido-twg/manifest.json",
@@ -1750,6 +1757,7 @@
           "scripts/check-error-data.py",
           "scripts/weth10-reference.py",
           "scripts/weth10_reference_schema.py",
+          "scripts/strict_json.py",
           "scripts/weth10-reference.json",
           "scripts/gate_semaphore.py"
         ],
@@ -2310,6 +2318,7 @@
         "files": [
           "scripts/check-lido-ossifiable-proxy-current-mainnet.sh",
           "scripts/gen-lido-ossifiable-proxy-current-mainnet.py",
+          "scripts/strict_json.py",
           "scripts/check-current-mainnet.sh",
           "scripts/current-mainnet-target.json",
           "scripts/current-mainnet-runtime-lock.json",
@@ -2482,6 +2491,7 @@
         "files": [
           "scripts/check-fmint.sh",
           "scripts/check-fmint-borrower-source.py",
+          "scripts/strict_json.py",
           "scripts/check-runtime-bytes.py",
           "scripts/weth10-reference.py",
           "scripts/weth10_reference_schema.py",
