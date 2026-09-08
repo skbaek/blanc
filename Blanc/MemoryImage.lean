@@ -109,6 +109,36 @@ theorem Bytes.WordFrameFrom.trans
   intro offset after
   exact (secondToThird offset after).trans (firstToSecond offset after)
 
+/-- A write wholly below the preserved suffix extends an existing frame. The
+layout boundary remains an explicit caller premise. -/
+theorem Bytes.WordFrameFrom.writeBefore
+    {source target : Bytes} {start : Nat}
+    (frame : Bytes.WordFrameFrom source target start)
+    (n : Nat) (ys : Bytes) (hfit : n + ys.length ≤ start) :
+    Bytes.WordFrameFrom source (Bytes.writeAt target n ys) start := by
+  intro offset after
+  rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (hfit.trans after)]
+  exact frame offset after
+
+/-- Although the carrier records 32-byte windows, it quantifies over every
+byte offset. Those overlapping windows therefore determine any padded slice
+inside the preserved suffix. -/
+theorem Bytes.WordFrameFrom.sliceD
+    {source target : Bytes} {start : Nat}
+    (frame : Bytes.WordFrameFrom source target start)
+    (offset width : Nat) (after : start ≤ offset) :
+    target.sliceD offset width 0 = source.sliceD offset width 0 := by
+  induction width generalizing offset with
+  | zero => rfl
+  | succ width ih =>
+      have headEq : target.getD offset 0 = source.getD offset 0 := by
+        have word := congrArg (fun xs : Bytes => xs.getD 0 0)
+          (frame offset after)
+        simpa only [Bytes.getD_sliceD_of_lt _ offset 32 0 (by omega),
+          Nat.add_zero] using word
+      rw [List.sliceD_succ, List.sliceD_succ, headEq,
+        ih (offset + 1) (by omega)]
+
 theorem MemImage.of_memory_eq {a b : Devm} {img : Bytes}
     (h : b.memory = a.memory) (image : MemImage a img) : MemImage b img := by
   obtain ⟨hwf, hreads⟩ := image
