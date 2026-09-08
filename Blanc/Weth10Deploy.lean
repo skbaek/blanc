@@ -1550,7 +1550,7 @@ private theorem deploymentChainIdByteAt_word
         (deploymentChainId dp) (1 + j) 0 =
       dp.deploymentChainId.toBytes.getD j 0 := by
   unfold deploymentChainId returnDeployWord
-  simpa [Nat.add_comm] using
+  simpa [Nat.add_comm, pushDeployWord] using
     (byteAt_pushFullWord_data locations n
       (mstoreAt 0 +++ returnMemoryRange 0 32)
       (mstoreAt 0 +++ returnMemoryRange 0 32)
