@@ -44,7 +44,9 @@ VECTORS: Dict[int, str] = {
     406: "91130b41d6029c18c8b026e3727efa25f1b86df974114b114fbf541b8a82d744",
     407: "c2cf727c5f0699cf15e6f77663dcab48d640afd571abbed9cd29f459b50410d6",
     408: "4deeaefc26bf0becc5bf9603551584ca1d514238f2f84d0b6adb4bebde86ce61",
+    542: "61996156c897b51761e72024437af3db46567d41590771f9c8f53876f2b80b72",
     543: "681874fe2d0895f317f133fe94e5265bc4505262ed7a7d8de1ef32ed8b390742",
+    544: "47fd68a2a0ce04b9491d082a7faf239e5f8c223df74090edc8cec6caa5a4dbae",
 }
 
 # The lengths a byte-at-a-time pad10*1 defect gets wrong, kept explicit so a
