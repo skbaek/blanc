@@ -5,7 +5,7 @@
 `fmint-borrower-solc.json` while regenerating the compiled runtime.  This
 checker does not run that generator or trust the artifact to choose its input:
 it pins the repository source path and recomputes the digest with the existing
-pure-Python Keccak implementation used by Blanc's WETH10 reference checks.
+shared pure-Python Keccak implementation. The generator uses external EELS.
 
 This is source/artifact provenance only.  It deliberately does not claim to
 recompile Solidity or prove that the artifact runtime was produced by this
@@ -14,13 +14,13 @@ source; changing compiler inputs remains a reviewed regeneration operation.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import re
 import sys
 from pathlib import Path
-from types import ModuleType
 from typing import Any
+
+from keccak import keccak256_hex
 
 from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
 
@@ -54,22 +54,6 @@ def strict_json(path: Path) -> Any:
         raise CheckError(f"cannot read artifact {path}: {exc}") from exc
 
 
-def load_keccak() -> ModuleType:
-    path = ROOT / "scripts" / "weth10-reference.py"
-    spec = importlib.util.spec_from_file_location("weth10_reference", path)
-    require(spec is not None and spec.loader is not None,
-            f"cannot load independent Keccak implementation from {path}")
-    module = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(module)
-    except (ImportError, OSError) as exc:
-        raise CheckError(
-            f"cannot load independent Keccak implementation from {path}: {exc}") from exc
-    require(callable(getattr(module, "keccak256", None)),
-            f"{path}: no callable keccak256 implementation")
-    return module
-
-
 def check(artifact_path: Path, source_path: Path) -> str:
     artifact = strict_json(artifact_path)
     require(isinstance(artifact, dict), f"{artifact_path}: top level is not an object")
@@ -94,7 +78,7 @@ def check(artifact_path: Path, source_path: Path) -> str:
         raise CheckError(f"cannot read pinned borrower source {source_path}: {exc}") from exc
     require(bool(source), f"pinned borrower source {source_path} is empty")
 
-    actual = "0x" + load_keccak().keccak256(source)
+    actual = keccak256_hex(source)
     require(actual == expected,
             f"{source_path}: Keccak-256 mismatch; artifact records {expected}, "
             f"independent recomputation is {actual}")

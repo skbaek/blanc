@@ -15,6 +15,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from keccak import keccak256_bare_hex as keccak256
+
 from keccak import keccak256 as keccak_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,10 +131,6 @@ def digest(value: Any, label: str, prefix: bool = False) -> str:
 def section_digest(value: Any) -> str:
     encoded = json.dumps(value, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(encoded).hexdigest()
-
-
-def keccak256(data: bytes) -> str:
-    return keccak_bytes(data).hex()
 
 
 def validate_abi(root: dict[str, Any], label: str) -> None:

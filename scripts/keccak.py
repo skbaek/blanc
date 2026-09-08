@@ -67,10 +67,16 @@ def keccak256(data: bytes) -> bytes:
     return b"".join(x.to_bytes(8, "little") for x in state)[:32]
 
 
+def keccak256_bare_hex(data: bytes) -> str:
+    """Return the lowercase 64-character digest without a prefix."""
+
+    return keccak256(data).hex()
+
+
 def keccak256_hex(data: bytes) -> str:
     """Return a lowercase, ``0x``-prefixed Ethereum Keccak-256 digest."""
 
-    return "0x" + keccak256(data).hex()
+    return "0x" + keccak256_bare_hex(data)
 
 
 def selector(signature: str) -> bytes:

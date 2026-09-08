@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Check Blanc's Keccak sponges and shared-helper adapters.
 
-The canonical stdlib-only helper and every deliberately independent evidence
-sponge are held to the rate-boundary vectors in
-`keccak_rate_boundary_vectors`, which come from the pinned execution-specs
-oracle rather than from anything in this repository.  The two migrated
-consumers are checked separately for their historical return shapes.  A
-surface that grows a new implementation, or loses one, fails here rather than
-silently escaping the control: the enumeration below is compared against a
-structural scan of `scripts/**/*.py` for sponge implementations.
+One canonical stdlib-only implementation is checked against external vectors.
+Consumer aliases and representations are checked separately. The structural
+whole-scripts census must find exactly the canonical owner; there is no list
+of additional implementations to admit by merely updating an inventory.
 
 WHAT A SPONGE IS DETECTED BY, AND WHY IT IS NOT A NAME
 
@@ -18,9 +14,8 @@ happened to share it.  The cost of that class of pattern is measured, not
 hypothetical: the eighth defective sponge in this repository
 (`check-lido-twg-census.py`) was missed for a whole session by a scan of
 exactly this shape, and was found only because somebody enumerated the surfaces
-a second, independent way.  A repository whose doctrine is "one independent
-implementation per surface" should expect the tenth one to be written
-differently, because that is what independence means.
+a second, independent way. The single-owner policy must detect differently
+written extra implementations as well as familiar copies.
 
 So the scan now keys on what a Keccak-256 sponge cannot avoid *being*, read out
 of the file's syntax tree rather than its text:
@@ -65,20 +60,27 @@ sys.path.insert(0, str(SCRIPTS))
 
 import keccak_rate_boundary_vectors as vectors  # noqa: E402
 
-# (script file, attribute) for the canonical helper and every remaining
-# independent Keccak-256 sponge in Blanc.  Consumer adapters are below.
-IMPLEMENTATIONS: Tuple[Tuple[str, str], ...] = (
-    ("keccak.py", "keccak256"),
-    ("gen-beacon-deposit-current-mainnet.py", "keccak256"),
-    ("lido_circuit_breaker_reference_schema.py", "keccak_bytes"),
-    ("lido_twg_reference_schema.py", "keccak_bytes"),
+CANONICAL_IMPLEMENTATION = "keccak.py"
+
+# Consumer representations are not additional implementations. Keep their
+# higher-level semantic checks separate while sharing the hash primitive.
+BARE_HEX_ADAPTERS = (
+    ("gen-beacon-deposit-vectors.py", "keccak256"),
+    ("lido_circuit_breaker_reference_schema.py", "keccak256"),
+    ("lido_twg_reference_schema.py", "keccak256"),
     ("lido_ossifiable_proxy_reference_schema.py", "keccak256"),
     ("lido_ossifiable_proxy_performance_schema.py", "keccak256"),
     ("weth10_reference_schema.py", "keccak256"),
     ("weth10-reference.py", "keccak256"),
 )
+BYTE_ADAPTERS = (
+    ("gen-beacon-deposit-vectors.py", "keccak256_bytes"),
+    ("gen-beacon-deposit-current-mainnet.py", "keccak256"),
+    ("lido_circuit_breaker_reference_schema.py", "keccak_bytes"),
+    ("lido_twg_reference_schema.py", "keccak_bytes"),
+)
 
-HISTORICAL_DEFECT_LENGTHS = (135, 271, 407, 543)
+HISTORICAL_DEFECT_LENGTHS = vectors.DEFECT_LENGTHS
 
 # --- what a sponge is -------------------------------------------------------
 #
@@ -245,7 +247,7 @@ def reconcile(scripts: Path, declared: Sequence[str]) -> List[str]:
     for missing in sorted(set(scanned) - set(declared)):
         failures.append(
             f"{missing} contains a Keccak sponge ({'; '.join(scanned[missing])})"
-            " but is not in IMPLEMENTATIONS")
+            " but is not an allowed owner")
     for stale in sorted(set(declared) - set(scanned)):
         failures.append(
             f"{stale} is declared but no longer contains a Keccak sponge")
@@ -625,7 +627,7 @@ def self_test() -> List[str]:
 
 
 def adapter_failures() -> List[str]:
-    """Hold the canonical API and both migrated consumer representations."""
+    """Hold the canonical API and every migrated consumer representation."""
 
     failures: List[str] = []
 
@@ -634,7 +636,6 @@ def adapter_failures() -> List[str]:
             failures.append(f"adapter: {message}")
 
     helper = load("keccak.py")
-    beacon = load("gen-beacon-deposit-vectors.py")
     census = load("check-lido-twg-census.py")
     message = vectors.message(135)
     expected_hex = vectors.VECTORS[135]
@@ -657,19 +658,14 @@ def adapter_failures() -> List[str]:
     else:
         require(False, "canonical selector accepted a signature with spaces")
 
-    beacon_hex = beacon.keccak256(message)
-    require(
-        isinstance(beacon_hex, str)
-        and len(beacon_hex) == 64
-        and not beacon_hex.startswith("0x")
-        and beacon_hex == expected_hex,
-        "Beacon adapter must return bare 64-character lowercase hex",
-    )
-    require(
-        isinstance(beacon.keccak256_bytes(message), bytes)
-        and beacon.keccak256_bytes(message) == bytes.fromhex(expected_hex),
-        "Beacon bytes adapter must return the exact 32 digest bytes",
-    )
+    for filename, attribute in BARE_HEX_ADAPTERS:
+        value = getattr(load(filename), attribute)(message)
+        require(isinstance(value, str) and value == expected_hex,
+                f"{filename}.{attribute} must return bare lowercase hex")
+    for filename, attribute in BYTE_ADAPTERS:
+        value = getattr(load(filename), attribute)(message)
+        require(isinstance(value, bytes) and value == bytes.fromhex(expected_hex),
+                f"{filename}.{attribute} must return exactly 32 digest bytes")
     require(census.selector("Error(string)") == "0x08c379a0",
             "TWG selector adapter must return 0x-prefixed text")
     require(
@@ -681,24 +677,12 @@ def adapter_failures() -> List[str]:
 
 
 def main() -> int:
-    failures: List[str] = reconcile(SCRIPTS, [name for name, _ in IMPLEMENTATIONS])
-
-    checked: Dict[str, int] = {}
-    for filename, attribute in IMPLEMENTATIONS:
-        try:
-            module = load(filename)
-        except Exception as exc:  # pragma: no cover - loader diagnostics
-            failures.append(f"{filename}: cannot load ({exc})")
-            continue
-        implementation: Callable[[bytes], object] | None = getattr(
-            module, attribute, None)
-        if not callable(implementation):
-            failures.append(f"{filename}: no callable {attribute}")
-            continue
-        bad = vectors.failures(implementation)
-        if bad:
-            failures.extend(f"{filename}.{attribute} {line}" for line in bad)
-        checked[filename] = len(vectors.VECTORS) + len(vectors.SELECTORS)
+    failures: List[str] = reconcile(SCRIPTS, [CANONICAL_IMPLEMENTATION])
+    try:
+        helper = load(CANONICAL_IMPLEMENTATION)
+        failures.extend(vectors.failures(helper.keccak256))
+    except Exception as exc:
+        failures.append(f"canonical Keccak could not be checked: {exc}")
 
     failures.extend(adapter_failures())
     failures.extend(self_test())
@@ -710,11 +694,12 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    total = sum(checked.values())
-    print(f"OK keccak rate-boundary control: {len(checked)} sponges"
+    total = len(vectors.VECTORS) + len(vectors.SELECTORS)
+    print(f"OK keccak rate-boundary control: 1 canonical sponge"
           f" x {len(vectors.VECTORS)} lengths + {len(vectors.SELECTORS)}"
           f" selectors = {total} comparisons against {vectors.ORACLE}"
-          f" @ {vectors.ORACLE_PIN}; 2 migrated adapters retain exact return"
+          f" @ {vectors.ORACLE_PIN}; {len(BARE_HEX_ADAPTERS)} bare-hex and"
+          f" {len(BYTE_ADAPTERS)} byte aliases plus TWG text adapters retain return"
           f" shapes; structural sponge scan reconciled and shown to catch 2"
           f" planted implementations; historical padding mutant fails only"
           f" at {HISTORICAL_DEFECT_LENGTHS}")

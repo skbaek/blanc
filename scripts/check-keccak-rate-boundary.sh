@@ -3,10 +3,9 @@
 #
 # WHY
 #
-# Blanc has one canonical pure-Python helper for generators and primary
-# checkers, alongside independent schema/oracle sponges that must not depend on
-# it.  Every sponge is held to an oracle outside this repository, and the two
-# migrated consumers are checked for their exact historical return shapes.
+# Blanc has one canonical pure-Python implementation. Independent expected
+# digests come from the pinned external oracle; consumer schemas and semantic
+# models retain their own checks. Representation aliases use this same owner.
 # The comparison has to straddle the sponge rate:
 # a `pad10*1` that appends the two pad bits as separate bytes agrees with the
 # standard at every message length except `len % 136 == 135`, where the domain
@@ -14,12 +13,12 @@
 # Eight of the nine former implementations carried exactly that defect until
 # 2026-09-07; every surface that pinned a digest agreed with itself and with
 # the wrong answer.  Reverting only the repair reddens this control with
-# {135, 271, 407, 543} failures in each planted mutant, with adjacent
-# lengths and selector digests green, so it is shown to bite.
+# {135, 271, 407, 543} failures in each planted mutant; other frozen
+# lengths and selector digests remain green.
 #
 # The driver also compares its declared enumeration against a static scan of
-# `scripts/**/*.py`, so a surface that grows a tenth sponge, or loses one,
-# fails here rather than silently escaping the control.
+# `scripts/**/*.py` against the one canonical file, so an extra implementation
+# fails even if its digests are correct.
 #
 # This wrapper owns only the catalogue verdict line; the driver and the vectors
 # own the comparison.

@@ -15,6 +15,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from keccak import keccak256_bare_hex as keccak256
+
 from keccak import keccak256 as keccak_bytes
 
 
@@ -154,10 +156,6 @@ def digest(value: Any, label: str, prefixed: bool = False) -> str:
     pattern = r"0x[0-9a-f]{64}" if prefixed else r"[0-9a-f]{64}"
     require(isinstance(value, str) and re.fullmatch(pattern, value), f"{label}: invalid digest")
     return value
-
-
-def keccak256(data: bytes) -> str:
-    return keccak_bytes(data).hex()
 
 
 def section_digest(value: Any) -> str:

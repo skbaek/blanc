@@ -77,19 +77,11 @@ def expect(condition: bool, message: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Compatibility wrappers preserve this generator's historical return shapes.
-# Expected vectors remain frozen external data and do not import this helper.
-from keccak import keccak256 as _keccak256  # noqa: E402
-
-
-def keccak256(data: bytes) -> str:
-    """This generator's spelling: bare lowercase hex, without ``0x``."""
-
-    return _keccak256(data).hex()
-
-
-def keccak256_bytes(data: bytes) -> bytes:
-    return bytes.fromhex(keccak256(data))
+# Shared primitive aliases preserve this generator's historical representations.
+from keccak import (  # noqa: E402
+    keccak256 as keccak256_bytes,
+    keccak256_bare_hex as keccak256,
+)
 
 
 def sha256_bytes(data: bytes) -> bytes:
