@@ -155,6 +155,45 @@ STATIC_FRAGMENTS = {
     ),
 }
 
+STACK_SURFACES = (
+    (
+        "generated table binding",
+        re.compile(
+            r"^def\s+v1StackTable\s*:\s*AbstractStackSafety\.Table\s*:=\s*"
+            r"StackSafetyData\.table\s*$",
+            re.MULTILINE,
+        ),
+    ),
+    (
+        "complete-table fallback-pack theorem",
+        re.compile(
+            r"^theorem\s+v1FallbackPack_checked\s*:\s*"
+            r"StackSafetyData\.pack32\.all\s*"
+            r"\(\s*checkRow\s+v1Code\s+v1StackTable\s+3\s*\)\s*=\s*true\s*"
+            r":=\s*by\s*decide\s*\+kernel\s*$",
+            re.MULTILINE,
+        ),
+    ),
+    (
+        "self-pack rejection",
+        re.compile(
+            r"^example\s*:\s*StackSafetyData\.pack32\.all\s*"
+            r"\(\s*checkRow\s+v1Code\s+StackSafetyData\.pack32\s+3\s*\)\s*"
+            r"=\s*false\s*:=\s*by\s*decide\s*\+kernel\s*$",
+            re.MULTILINE,
+        ),
+    ),
+    (
+        "row-zero rejection",
+        re.compile(
+            r"^example\s*:\s*checkTable\s+v1Code\s+"
+            r"StackSafetyData\.tableWithoutEntry\s+3\s*=\s*false\s*"
+            r":=\s*by\s*decide\s*\+kernel\s*$",
+            re.MULTILINE,
+        ),
+    ),
+)
+
 FORBIDDEN = re.compile(
     r"\b(?:sorry|native_decide|axiom|unsafe|partial)\b|"
     r"set_option\s+(?:maxHeartbeats|maxRecDepth)"
@@ -216,10 +255,17 @@ def static_errors(root: Path) -> list[str]:
 
     root_imports = texts["Blanc.lean"]
     for module in ("Upgrade", "ProxyPairUpgradePrograms", "ProxyPairUpgradeRelation",
-                   "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement"):
+                   "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement",
+                   "ProxyPairUpgradeStackSafety"):
         line = f"import Blanc.{module}"
         if root_imports.splitlines().count(line) != 1:
             errors.append(f"ROOT — expected exactly one root import {line}")
+
+    stack_safety = texts["Blanc/ProxyPairUpgradeStackSafety.lean"]
+    for label, pattern in STACK_SURFACES:
+        count = len(pattern.findall(stack_safety))
+        if count != 1:
+            errors.append(f"STACK — expected exactly one {label}; found {count}")
 
     layering = texts["scripts/check-layering.py"]
     if '"Ladder", "Upgrade"' not in layering:
@@ -384,6 +430,39 @@ def self_test(root: Path) -> list[str]:
         ("stale-evidence", "docs/PROXY_PAIR_UPGRADE.md", "not full-surface R1", "full surface", "CLAIM"),
         ("missing-marker-effect", "Blanc/ProxyPairUpgradePrograms.lean", "def migrationMarkerSlot : B256 := 9", "def migrationMarkerSlot : B256 := 10", "PROGRAM"),
     )
+    deletions = (
+        (
+            "missing-stack-root-import",
+            "Blanc.lean",
+            "import Blanc.ProxyPairUpgradeStackSafety\n",
+            "ROOT",
+        ),
+        (
+            "missing-global-pack-theorem",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "theorem v1FallbackPack_checked :\n"
+            "    StackSafetyData.pack32.all (checkRow v1Code v1StackTable 3) = true := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+        (
+            "missing-self-pack-rejection",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "example :\n"
+            "    StackSafetyData.pack32.all\n"
+            "      (checkRow v1Code StackSafetyData.pack32 3) = false := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+        (
+            "missing-row-zero-rejection",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "example :\n"
+            "    checkTable v1Code StackSafetyData.tableWithoutEntry 3 = false := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+    )
     with tempfile.TemporaryDirectory(prefix="proxy-pair-upgrade-self-test-") as raw:
         target = Path(raw)
         copy_static_tree(root, target)
@@ -397,6 +476,20 @@ def self_test(root: Path) -> list[str]:
                 failures.append(f"{label}: mutation anchor is absent")
                 continue
             path.write_text(original.replace(old, new, 1), encoding="utf-8")
+            found = static_errors(target)
+            path.write_text(original, encoding="utf-8")
+            if not any(error.startswith(expected + " —") for error in found):
+                failures.append(f"{label}: expected {expected} failure, got {found}")
+
+        for label, relative, block, expected in deletions:
+            path = target / relative
+            original = path.read_text(encoding="utf-8")
+            if original.count(block) != 1:
+                failures.append(
+                    f"{label}: expected one deletion anchor, found {original.count(block)}"
+                )
+                continue
+            path.write_text(original.replace(block, "", 1), encoding="utf-8")
             found = static_errors(target)
             path.write_text(original, encoding="utf-8")
             if not any(error.startswith(expected + " —") for error in found):
@@ -441,7 +534,7 @@ def main(argv: list[str]) -> int:
             print(f"FAIL — {SUBJECT}: {error}")
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
-    suffix = "; 23 disposable controls bite" if args.self_test else ""
+    suffix = "; 27 disposable controls bite" if args.self_test else ""
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
