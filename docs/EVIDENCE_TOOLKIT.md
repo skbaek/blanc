@@ -26,13 +26,15 @@ except NonFiniteNumberError as exc:
 Do not move exact-key sets, type rules, frozen constants, or semantic policy
 into this module.  Those are independent checks, not parsing mechanics.
 
-## Strict RLP coverage decoding
+## Coverage RLP decoding
 
 Use `scripts/strict_rlp.py` for dependency-free decoding of committed block
-RLP in evidence gates.  `decode` rejects malformed and trailing data;
-`decode_legacy_block_transactions` additionally validates the legacy
-transaction list shape and returns normalized `(to, calldata)` pairs.  A gate
-should translate `RLPDecodeError` into its own top-level diagnostic.
+RLP in evidence gates.  `decode` rejects truncated declared lengths and bytes
+after the top-level item; `decode_legacy_block_transactions` additionally
+validates the legacy transaction list shape and returns normalized
+`(to, calldata)` pairs.  It deliberately preserves the former local decoders'
+acceptance of non-minimal encodings, so it is not a canonical-RLP validator.
+A gate should translate `RLPDecodeError` into its own top-level diagnostic.
 
 This helper is a decoder only.  Transaction encoding/signing remains owned by
 the independent fixture generators and their pinned EELS dependency.

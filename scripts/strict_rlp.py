@@ -1,4 +1,10 @@
-"""Small dependency-free strict RLP decoder for evidence tools."""
+"""Dependency-free bounded RLP decoder for fixture coverage tools.
+
+This preserves the former consumers' exact acceptance boundary: complete
+top-level consumption, declared-length bounds, and expected legacy transaction
+shape.  It does not add minimal/canonical RLP encoding checks; encodings such
+as ``0x8101`` that the former local decoders accepted remain accepted.
+"""
 
 from __future__ import annotations
 
