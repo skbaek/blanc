@@ -201,14 +201,6 @@ theorem Exec.Frame.CompiledCursor.ninstOccurrenceFromCursor_head_or_tail
         pc, current, continuation, tailActions, selected, rest, hat,
         filled, step, prec, edge⟩
 
-private theorem Ninst.At.false_of_jinstAt
-    {code : ByteArray} {pc : Nat} {n : Ninst} {j : Jinst}
-    (nextAt : Ninst.At code pc n) (jumpAt : Jinst.At code pc j) : False := by
-  unfold Ninst.At at nextAt
-  unfold Jinst.At at jumpAt
-  rw [nextAt] at jumpAt
-  cases jumpAt
-
 private theorem Ninst.At.eq_of_at
     {code : ByteArray} {pc : Nat} {left right : Ninst}
     (leftAt : Ninst.At code pc left) (rightAt : Ninst.At code pc right) :

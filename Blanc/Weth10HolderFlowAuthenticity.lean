@@ -21,7 +21,7 @@ mid-program continuation. -/
 def Exec.Frame.IsRoot (frame : Exec.Frame) : Prop :=
   frame.pc = 0 ∧ frame.pre.memory = Mem.empty
 
-private theorem frame_enter_run_memory
+theorem frame_enter_run_memory
     {frame : Frame} {child : Evm}
     (h : frame.enter = .run child) : child.dyna.memory = Mem.empty := by
   obtain ⟨benv, _, rfl⟩ := Frame.enter_run_inv h

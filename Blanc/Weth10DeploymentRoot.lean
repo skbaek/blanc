@@ -672,8 +672,8 @@ theorem canonicalDeploymentTransaction_succeeds
     simp only [bind, Except.bind]
     rw [hrules, henv.validated]
     simp only [Except.mapError]
-    simp only [deploymentTxPreludeBout, Blanc.deploymentTxPreludeBout]
-      at hchecked
+    simp only [deploymentTxPreludeBout, Blanc.deploymentTxPreludeBout,
+      ExecutionTrace.transactionPreludeBout] at hchecked
     rw [hchecked]
     simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
       htype, Bool.false_eq_true, if_false, Nat.add_zero,
@@ -710,10 +710,12 @@ theorem canonicalDeploymentTransaction_succeeds
   have hblockLogs : bout.blockLogs = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
     simp [Blanc.deploymentTxPreludeBout,
+      ExecutionTrace.transactionPreludeBout,
       hmessage.logs, BlockOutput.init]
   have hrequests : bout.requests = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
     simp [Blanc.deploymentTxPreludeBout,
+      ExecutionTrace.transactionPreludeBout,
       BlockOutput.init]
   have hwithdrawalCode :
       some (post.getCode withdrawalRequestPredeployAddress).toList =
@@ -754,7 +756,8 @@ theorem canonicalDeploymentTransaction_succeeds
     unfold parseDepositRequests
     have hkeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
       dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-      simp [Blanc.deploymentTxPreludeBout, deploymentReceiptKey,
+      simp [Blanc.deploymentTxPreludeBout,
+        ExecutionTrace.transactionPreludeBout, deploymentReceiptKey,
         BlockOutput.init]
     rw [hkeys]
     have hentry' := hentry

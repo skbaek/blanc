@@ -711,7 +711,8 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     have hgas :
         max floor (intrinsic + redemptionRuntimeCeiling q) ≤ tx.gas := by
       simpa [redemptionTransactionGasBound, redemptionCalldataFloorGas,
-        redemptionIntrinsicGas, hcost] using henv.gas_bound
+        redemptionIntrinsicGas, Blanc.deploymentCalldataFloorGas,
+        Blanc.deploymentIntrinsicGas, hcost] using henv.gas_bound
     have hfloor : floor ≤ tx.gas :=
       (Nat.le_max_left _ _).trans hgas
     have hintrinsic : intrinsic ≤ tx.gas := by
@@ -740,7 +741,9 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
       have hgasAvailable :
           tx.gas ≤ benv.beginTransaction.stat.blockGasLimit -
             prelude.blockGasUsed := by
-        simpa [prelude, redemptionTxPreludeBout, Benv.beginTransaction] using
+        simpa [prelude, redemptionTxPreludeBout,
+          Blanc.deploymentTxPreludeBout,
+          ExecutionTrace.transactionPreludeBout, Benv.beginTransaction] using
           henv.block_gas_room
       unfold checkTransactionGasLimits
       rw [if_neg (Nat.not_lt_of_ge hgasAvailable), hblobGas]
@@ -755,7 +758,8 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
       rw [if_neg (Nat.not_lt_of_ge henv.priority_fee_le_max)]
       rw [if_neg (Nat.not_lt_of_ge henv.base_fee_le_max)]
       rw [if_neg (Nat.not_lt_of_ge henv.max_fee_fits)]
-      simp [redemptionEffectiveGasPrice, henv.type_eq]
+      simp [redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
+        henv.type_eq]
     have hblob : checkTransactionBlobData benv.beginTransaction tx
         (tx.gas * maxFee) = .ok (tx.gas * maxFee, []) := by
       simp [checkTransactionBlobData, henv.type_eq]
@@ -796,7 +800,8 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
   have heffective_le_max :
       redemptionEffectiveGasPrice benv tx ≤ maxFee := by
     have hbase := henv.base_fee_le_max
-    simp only [redemptionEffectiveGasPrice, henv.type_eq]
+    simp only [redemptionEffectiveGasPrice,
+      Blanc.deploymentEffectiveGasPrice, henv.type_eq]
     omega
   refine {
     rules_eq := henv.rules_eq
@@ -824,7 +829,8 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     recipient_not_precompile := henv.recipient_not_precompile
     recipient_code_free := henv.recipient_code_free
     recipient_account := henv.recipient_account }
-  · simp only [redemptionEffectiveGasPrice, henv.type_eq]
+  · simp only [redemptionEffectiveGasPrice,
+      Blanc.deploymentEffectiveGasPrice, henv.type_eq]
     exact Nat.le_add_left _ _
   · exact (Nat.mul_le_mul_left tx.gas heffective_le_max).trans
       henv.max_fee_funded
@@ -3136,7 +3142,8 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rw [hrules, henv.validated]
   simp only [Except.mapError]
   have hchecked := henv.checked
-  simp only [redemptionTxPreludeBout] at hchecked
+  simp only [redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,
+    ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
   simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
     htype, Bool.false_eq_true, if_false, Nat.add_zero,
@@ -3145,7 +3152,7 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   simp only [Option.toExcept]
   have hprepare' := hprepare
   simp only [redemptionTenv, redemptionIntrinsicGas,
-    Benv.beginTransaction] at hprepare'
+    Blanc.deploymentIntrinsicGas, Benv.beginTransaction] at hprepare'
   simp only [List.map_nil, List.flatten_nil]
   rw [hprepare']
   simp only [Except.bind]
@@ -3191,7 +3198,8 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   rw [hrules, henv.validated]
   simp only [Except.mapError]
   have hchecked := henv.checked
-  simp only [redemptionTxPreludeBout] at hchecked
+  simp only [redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,
+    ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
   simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
     htype, Bool.false_eq_true, if_false, Nat.add_zero,
@@ -3200,7 +3208,7 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   simp only [Option.toExcept]
   have hprepare' := hprepare
   simp only [redemptionTenv, redemptionIntrinsicGas,
-    Benv.beginTransaction] at hprepare'
+    Blanc.deploymentIntrinsicGas, Benv.beginTransaction] at hprepare'
   simp only [List.map_nil, List.flatten_nil]
   rw [hprepare']
   simp only [Except.bind]
@@ -3268,6 +3276,7 @@ theorem redemptionFinalBout_gasUsed
     redemptionTxGasUsed bout
       (redemptionFinalBout bout tx index out usedGas) = usedGas := by
   unfold redemptionTxGasUsed redemptionFinalBout redemptionTxPreludeBout
+    Blanc.deploymentTxPreludeBout ExecutionTrace.transactionPreludeBout
   simp only
   omega
 
@@ -3467,7 +3476,8 @@ theorem Stable.transactionRedemption_enabled_of_le
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
     · rw [henv.rules_eq]
-      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
+      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas,
+        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas] using
         henv.validated
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
@@ -3700,7 +3710,8 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
     · rw [henv.rules_eq]
-      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas] using
+      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas,
+        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas] using
         henv.validated
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩

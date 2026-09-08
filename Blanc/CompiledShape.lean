@@ -62,6 +62,20 @@ theorem byteAt_prepend_to_tail
         omega)]
       simp only [prefixByteSize, Nat.add_assoc, Nat.sub_sub]
 
+/-- Once the byte index is past a reference instruction, continue in the
+tail even when the executed instruction has a different value or width. The
+caller remains responsible for relating the supplied shape to serialized
+instruction bytes where that matters. -/
+theorem byteAt_next_to_tail
+    (locations : List Nat) (n : Nat) (inst0 inst : Ninst) (p0 p : Func)
+    (i : Nat) (d : UInt8) (hlo : inst0.size ≤ i) :
+    Func.byteAtByShape locations n (inst0 ::: p0).compileShape
+        (inst ::: p) i d =
+      Func.byteAtByShape locations (n + inst0.size) p0.compileShape
+        p (i - inst0.size) d := by
+  rw [Func.compileShape, Func.byteAtByShape,
+    if_neg (Nat.not_lt_of_ge hlo)]
+
 theorem byteAt_branch_eq_header
     (locations : List Nat) (n : Nat)
     (left0 right0 left right : Func) (i : Nat) (d : UInt8)

@@ -90,12 +90,6 @@ private def transferNonzeroCreditLine : Line :=
 private def transferNonzeroEventPrep : Line :=
   [Ninst.caller] ++ arg 1 ++ addressArg 0
 
-private theorem dispatchSilent_of_popBurnBy
-    {words : List B256} {cost : Nat} {pre post : Devm}
-    (h : Devm.PopBurnBy words cost pre post) :
-    Devm.DispatchSilent pre post :=
-  ⟨h.state, h.memory, h.logs, h.output⟩
-
 private theorem dispatchSilent_trans
     {pre mid post : Devm}
     (left : Devm.DispatchSilent pre mid)
@@ -170,7 +164,7 @@ private theorem Exec.Frame.CompiledCursor.selectZeroArmSilent
       let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final :=
         ⟨cursor.pc + 4, _, armExec, cursor.actions, hpArm,
           hleft, hsubLeft, hboundLeft⟩
-      exact ⟨arm, hw.2, rfl, dispatchSilent_of_popBurnBy hpop⟩
+      exact ⟨arm, hw.2, rfl, Devm.DispatchSilent.of_popBurnBy hpop⟩
   | succ hne _hroom hpop _hright =>
       have hw := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hstack
       exact (hne hw.1).elim
@@ -211,7 +205,7 @@ private theorem Exec.Frame.CompiledCursor.selectNonzeroArmSilent
       let arm : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final :=
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
-      exact ⟨arm, hw.2, rfl, dispatchSilent_of_popBurnBy hpop⟩
+      exact ⟨arm, hw.2, rfl, Devm.DispatchSilent.of_popBurnBy hpop⟩
 
 /-- Follow the raw target test on the original cursor.  The returned arm and
 the raw-word fact are selected together; normalization plays no role in this

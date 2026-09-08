@@ -345,13 +345,7 @@ lemma RawFlashCallbackBoundary.exists_log_segment
 `CALL`.  It is named locally so the functional layer remains independent of
 the state-soundness proof's internal factoring. -/
 def flashLoanSuccessTail : Func :=
-  call ::: iszero :::
-  (.call bubbleRevertSlot) <?>
-  (returnDataShorterThan 32 +++
-    Func.revert <?>
-    (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero :::
-      (.call flashFailedErrorSlot) <?>
-      (pop ::: pop ::: .call flashSettleSlot)))
+  flashLoanFromCall
 
 /-- A clean callback frame entered with the canonical ERC-3156 calldata,
 returned WETH10's locked magic word, and contributed exactly its own log

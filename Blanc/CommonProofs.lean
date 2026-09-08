@@ -19,6 +19,14 @@ lemma prepend_append (left right : Line) (tail : Func) :
   | nil => rfl
   | cons head left ih => simp [prepend, ih]
 
+/-- Prepending the same instruction line preserves equality of compile shapes. -/
+theorem Func.compileShape_prepend_congr (l : Line) {p q : Func}
+    (h : p.compileShape = q.compileShape) :
+    (l +++ p).compileShape = (l +++ q).compileShape := by
+  induction l with
+  | nil => exact h
+  | cons i l ih => simp [prepend, Func.compileShape, ih]
+
 -- The statement is unchanged by the `.revert` normalization (`Func.revert` in
 -- `Blanc/CommonCore.lean`); only the walk is. `Func.revert` is now two `PUSH0`s
 -- ahead of the failing `.revert`, so the run is peeled through two `next` binds

@@ -278,10 +278,8 @@ private lemma read_prefix_of_chainid {e : Sevm} {s s' : Devm}
   exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
 
 private lemma read_memory_eq_of_chainid {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s chainid s') : s.memory = s'.memory := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).memory
+    (h : Ninst.Run e s chainid s') : s.memory = s'.memory :=
+  memory_eq_of_chainid h
 
 private lemma read_code_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.getCode = s'.getCode := by
@@ -293,10 +291,8 @@ private lemma read_code_eq_of_chainid {e : Sevm} {s s' : Devm}
 private lemma read_prefix_of_pushDeployWord {e : Sevm} {s s' : Devm}
     {w : B256} {xs : Stack} (hp : xs <<+ s.stack)
     (h : Ninst.Run e s (pushDeployWord w) s') :
-    w :: xs <<+ s'.stack := by
-  unfold pushDeployWord at h
-  rw [← B256.toB256_toBytes w]
-  exact prefix_of_push (of_run_push h) hp
+    w :: xs <<+ s'.stack :=
+  prefix_of_pushDeployWord hp h
 
 /-- `DOMAIN_SEPARATOR()` returns the cached deployment separator on the
 deployment chain and the exact recomputed EIP-712 image on every other chain.

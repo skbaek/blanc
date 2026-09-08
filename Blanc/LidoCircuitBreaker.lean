@@ -602,21 +602,14 @@ private theorem runtimeEntryShapes_eq (dp : DeployParams) :
       dispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by
   rfl
 
-private theorem prepend_compileShape_eq (l : Line) {p q : Func}
-    (h : p.compileShape = q.compileShape) :
-    (l +++ p).compileShape = (l +++ q).compileShape := by
-  induction l with
-  | nil => exact h
-  | cons i l ih => simp [prepend, Func.compileShape, ih]
-
 private theorem runtimeMain_compileShape_eq (dp : DeployParams) :
     (runtimeMain dp).compileShape =
       (runtimeMain ⟨0, 0, 0, 0, 0⟩).compileShape := by
   have hd := hybridDispatchWith_compileShape_eq (runtimeEntryShapes_eq dp)
     fallbackSlot
-  have hp := prepend_compileShape_eq fsig hd
+  have hp := Func.compileShape_prepend_congr fsig hd
   unfold runtimeMain
-  exact prepend_compileShape_eq
+  exact Func.compileShape_prepend_congr
     [callvalue, pushB256 4, calldatasize, lt, Ninst.or] <| by
       simp [Func.compileShape, hp]
 

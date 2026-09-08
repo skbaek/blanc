@@ -2357,7 +2357,7 @@ theorem registerPauser_settled_error_logs_eq_nil
     out.logs = [] :=
   processMessageCall_error_logs_eq_nil hrun herror
 
-private theorem pushZero_targetIndexKey_prepend_runCompiled
+theorem pushZero_targetIndexKey_prepend_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
     {target : B256} {stack : List B256} {G : Nat}
     {tail : Func} {post : Devm}

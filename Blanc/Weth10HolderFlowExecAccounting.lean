@@ -2864,7 +2864,7 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
 /-- The exact childless instruction line underlying both `receiveEther` and
 the payable `deposit` selector.  Naming it makes the terminal cursor shape
 explicit instead of relying on higher-order unification through aliases. -/
-private def mintCallerLine : Line :=
+def mintCallerLine : Line :=
   [caller, sload, callvalue, add, caller, sstore, callvalue] ++
   mstoreAt 0 ++
   [caller, pushB256 0, pushB256 Blanc.transferEvent] ++
@@ -2916,10 +2916,8 @@ theorem Exec.Frame.CompiledCursor.finishChildlessLine
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (line +++ Func.last i) final)
     (hchildless : ∀ n ∈ line, NinstIsChildless n) :
-    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
-  rcases cursor.peelChildlessLine hchildless with
-    ⟨lastCursor, _hline, hactions⟩
-  exact lastCursor.finishLast.trans hactions
+    Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions :=
+  cursor.finishTerminalChildlessLine hchildless
 
 /-- Finish a childless terminal line after exposing a concrete body through a
 small named source-shape equality. -/
@@ -3079,7 +3077,7 @@ private def transferSelectLine : Line := arg 0 ++ [iszero]
 private def transferBalanceCheckLine : Line :=
   loadCallerBalanceAmount 1 ++ balanceTooSmall
 
-private def transferNonzeroSuccessLine : Line :=
+def transferNonzeroSuccessLine : Line :=
   debitLoadedBalance ++
   addressArg 0 ++ [dup 0, sload] ++ arg 1 ++
   [add, swap 0, sstore, caller] ++ arg 1 ++ addressArg 0 ++
@@ -3187,10 +3185,8 @@ private theorem action_eq_of_primaryFlowAtom
         actualCaller := frame.sevm.caller
         currentTarget := frame.sevm.currentTarget
         codeAddress := frame.sevm.codeAddress
-        depth := frame.sevm.depth } := by
-  simp only [Blanc.Weth10.Exec.Frame.flowAction?, if_pos context.invocation, hatom,
-    Option.map_some, Option.some.injEq] at haction
-  exact haction.symm
+        depth := frame.sevm.depth } :=
+  action_eq_of_flowAction_eq context hatom haction
 
 /-- Executable evidence that a nonempty invocation selector belongs to none
 of the ten primary-flow families. -/
@@ -3623,7 +3619,7 @@ private theorem flashFeeSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xd9d
 
 private theorem allowanceSelector_noPrimaryFlow : SelectorWordNoPrimaryFlow 0xdd62ed3e := by constructor <;> decide +kernel
 
-private def nameLine : Line :=
+def nameLine : Line :=
   [pushB256 (Blanc.String.toBytes "Wrapped Ether v10").toB256,
     pushB256 120, shl] ++
   pushList [17, 32] ++ mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
@@ -3769,7 +3765,7 @@ private theorem flashMinted_childlessTerminal :
     simp [flashMintedLine, pushFlashMintedSlot, NinstIsChildless,
       Ninst.pushB256, mstoreAt, pushList]⟩
 
-private def symbolLine : Line :=
+def symbolLine : Line :=
   [pushB256 (Blanc.String.toBytes "WETH10").toB256,
     pushB256 208, shl] ++
   pushList [6, 32] ++ mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
@@ -5280,15 +5276,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approve
 
 private theorem rest_set_callerAllowanceRuntimeKey_accounting
     (e : Sevm) (s : Stor) (v : B256) :
-    Stor.rest (s.set (callerAllowanceRuntimeKey e) v) = Stor.rest s := by
-  funext a
-  unfold Stor.rest Function.comp
-  rw [Stor.get_set_ne]
-  intro heq
-  apply runtimeAllowanceKey_not_valid
-    (Bytes.keccak
-      ((Sevm.argWord e 0).toBytes ++ e.caller.toB256.toBytes))
-  exact ⟨a, heq.symm⟩
+    Stor.rest (s.set (callerAllowanceRuntimeKey e) v) = Stor.rest s :=
+  rest_set_callerAllowanceRuntimeKey e s v
 
 private theorem callerAllowanceOutcome_rest_eq_accounting
     {e : Sevm} {pre corePre : Devm} {amountArg : B256}

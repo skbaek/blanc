@@ -980,23 +980,8 @@ private theorem temporalReturnWord_runCompiled
         Func.return_ post ∧
       Devm.output post = word.toBytes ∧
       Devm.WorldEq base post ∧
-      post.logs = base.logs := by
-  let returnPre := base.setMach
-    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
-  let d := (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32
-  let post := d.2.withOutput word.toBytes
-  refine ⟨post, ?_, rfl, ?_, rfl⟩
-  have hread :
-      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
-        ⟨word.toBytes, d.2⟩ := by
-    exact Prod.ext
-      (Devm.memRead_word_fst
-        (by simp only [returnPre, Devm.memory_setMach]))
-      rfl
-  exact Func.runCompiled_return_of (devm := returnPre) (G := G) (e := 0)
-    (out := word.toBytes) (d' := d.2) rfl
-    (Devm.extCost_word_word Mem.size_write_word) rfl hread
-  · exact ⟨rfl, rfl⟩
+      post.logs = base.logs :=
+  registryScalarReturn_runCompiled fs sevm base word G
 
 def temporalLiveBodyGasWarm : Nat := 184
 

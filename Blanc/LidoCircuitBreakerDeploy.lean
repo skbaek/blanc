@@ -406,20 +406,24 @@ private theorem constructorFuncEffectCounts_eq (body : Func) :
           cases regular <;>
             simp [constructorFuncEffectCounts,
               constructorInstructionEffectCounts,
-              ConstructorEffectCounts.add, sourceSstoreSiteCount,
+              ConstructorEffectCounts.add, Func.sourceSiteCount,
+              sourceSstoreSiteCount,
               sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
       | exec execution =>
           simp [constructorFuncEffectCounts,
             constructorInstructionEffectCounts,
-            ConstructorEffectCounts.add, sourceSstoreSiteCount,
+            ConstructorEffectCounts.add, Func.sourceSiteCount,
+            sourceSstoreSiteCount,
             sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
       | push bytes bound =>
           simp [constructorFuncEffectCounts,
             constructorInstructionEffectCounts,
-            ConstructorEffectCounts.add, sourceSstoreSiteCount,
+            ConstructorEffectCounts.add, Func.sourceSiteCount,
+            sourceSstoreSiteCount,
             sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
   | branch left right ihLeft ihRight =>
       simp [constructorFuncEffectCounts, ConstructorEffectCounts.add,
+        Func.sourceSiteCount,
         sourceSstoreSiteCount, sourceTstoreSiteCount,
         sourceExternalCallSiteCount, ihLeft, ihRight]
   | call index => rfl

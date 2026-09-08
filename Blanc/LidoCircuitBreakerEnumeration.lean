@@ -1240,7 +1240,7 @@ theorem canonicalAddress_mask_zero {word : B256}
 
 def registryScalarBodyGasWarm : Nat := 179
 
-private theorem registryScalarReturn_runCompiled
+theorem registryScalarReturn_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
     ∃ post,
       Func.RunCompiled fs sevm

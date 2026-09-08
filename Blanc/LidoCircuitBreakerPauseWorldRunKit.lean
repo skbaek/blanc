@@ -21,10 +21,8 @@ consumed there directly, and this leaf carries the bridging material:
   read keys really are warm.  The swap-pop variant additionally stores its hole
   and moved-index cells through the cold `SSTORE` sibling, because those two
   cells are written but never read on the pause path and so stay cold.  The
-  private store-suffix lemmas they consume are file-scoped in
-  `Blanc/LidoCircuitBreakerRegistrySubstrate.lean` and are transcribed here
-  verbatim; they belong upstream, and should be deduplicated there the next
-  time that file is opened.
+  store-suffix lemmas they consume are shared from
+  `Blanc/LidoCircuitBreakerRegistrySubstrate.lean`.
 
 * **A cold `SSTORE` in the temporal convention.**
   `temporal_sstore_cold_runCompiled` is the cold sibling of the substrate's
@@ -50,60 +48,7 @@ namespace Blanc.LidoCircuitBreaker
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-! ## Verbatim transcriptions from the Registry substrate
-
-The three store-suffix lemmas below are word-for-word copies of the private
-`pushZero_targetIndexKey_prepend_runCompiled`,
-`removeTarget_restoreTail_runCompiled` and
-`removeTarget_storePrefix_runCompiled` in
-`Blanc/LidoCircuitBreakerRegistrySubstrate.lean`, which this module cannot
-name.  Keep them in sync with the originals; the right long-term home is the
-substrate. -/
-
-private theorem pushZero_targetIndexKey_prepend_runCompiled
-    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
-    {target : B256} {stack : List B256} {G : Nat}
-    {tail : Func} {post : Devm}
-    (hvalue : (M.read (targetWord * 32).toNat 32).1.toB256 = target)
-    (hmemory : (M.read (targetWord * 32).toNat 32).2 = M)
-    (halign : M.size % 32 = 0)
-    (hcovered : (targetWord * 32).toNat + 32 ≤ M.size)
-    (hroom : stack.length < 1021)
-    (htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨indexSlot target :: 0 :: stack, M, G⟩) tail post) :
-    Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 14⟩)
-      (pushB256 0 ::: targetIndexKey +++ tail) post := by
-  have htag : Func.RunCompiled fs sevm
-      (base.setMach ⟨target :: 0 :: stack, M, G + 6⟩)
-      (tagTop indexRegion +++ tail) post := by
-    func_run (2) [indexSlot target]
-    case a =>
-      have hg : G + 6 - 6 = G := by omega
-      rw [hg]
-      change Func.RunCompiled fs sevm
-        (base.setMach ⟨indexSlot target :: 0 :: stack, M, G⟩) tail post
-      exact htail
-    all_goals simp only [Devm.stack_setMach, List.length_cons]
-    all_goals omega
-  have hload : Func.RunCompiled fs sevm
-      (base.setMach ⟨0 :: stack, M, G + 12⟩)
-      (loadWord targetWord +++ tagTop indexRegion +++ tail) post := by
-    exact targetWord_prepend_runCompiled hvalue hmemory halign hcovered
-      (by simp only [List.length_cons]; omega) htag
-  have hload' : Func.RunCompiled fs sevm
-      (base.setMach ⟨0 :: stack, M, G + 12⟩)
-      (targetIndexKey +++ tail) post := by
-    simpa only [targetIndexKey, prepend_append] using hload
-  apply Func.RunCompiled.next
-  · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (sevm := sevm)
-        (devm := base.setMach ⟨stack, M, G + 14⟩)
-        (w := 0) (c := gBase) (G := G + 12) rfl
-        (by simp only [Devm.gasLeft_setMach]; norm_num [gBase])
-        (by simp only [Devm.stack_setMach]; omega))
-  · exact hload'
+/-! ## Shared Registry-substrate lemmas -/
 
 
 private theorem removeTarget_restoreTail_runCompiled
