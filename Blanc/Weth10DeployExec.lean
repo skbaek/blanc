@@ -234,25 +234,6 @@ theorem weth10InitMemory_reads (sevm : Sevm) :
   have r10 := Mem.Reads.write wf9 r9 3039 separator.toBytes
   simpa [weth10InitMemory, separator, hhash] using r10
 
-private lemma Bytes.sliceD_writeAt_after
-    (bs xs : Bytes) (start len n : Nat)
-    (h : start + len ≤ n) :
-    (Bytes.writeAt bs n xs).sliceD start len 0 =
-      bs.sliceD start len 0 := by
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt]
-  rw [if_neg]
-  omega
-
-private lemma Bytes.getD_sliceD_of_lt
-    (bs : Bytes) (start len i : Nat) (hi : i < len) :
-    (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by
-  rw [List.sliceD_eq_map]
-  simp [List.getD_eq_getElem?_getD, hi]
-
 private lemma Bytes.sliceD_writeAt_congr
     {bs cs xs : Bytes} {len n : Nat}
     (h : bs.sliceD 0 len 0 = cs.sliceD 0 len 0) :
@@ -304,11 +285,11 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
   have hpre :
       (weth10InitPreHashImage sevm).sliceD 0 6313 0 = I3 := by
     unfold weth10InitPreHashImage
-    rw [Bytes.sliceD_writeAt_after _ _ 0 6313 6464 (by omega),
-      Bytes.sliceD_writeAt_after _ _ 0 6313 6432 (by omega),
-      Bytes.sliceD_writeAt_after _ _ 0 6313 6400 (by omega),
-      Bytes.sliceD_writeAt_after _ _ 0 6313 6368 (by omega),
-      Bytes.sliceD_writeAt_after _ _ 0 6313 6336 (by omega)]
+    rw [Bytes.sliceD_writeAt_before _ _ 0 6313 6464 (by omega),
+      Bytes.sliceD_writeAt_before _ _ 0 6313 6432 (by omega),
+      Bytes.sliceD_writeAt_before _ _ 0 6313 6400 (by omega),
+      Bytes.sliceD_writeAt_before _ _ 0 6313 6368 (by omega),
+      Bytes.sliceD_writeAt_before _ _ 0 6313 6336 (by omega)]
     rw [weth10InitCode_slice_runtime h_code]
     rw [show Bytes.writeAt [] 0 weth10RuntimeTemplate =
       weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp)]

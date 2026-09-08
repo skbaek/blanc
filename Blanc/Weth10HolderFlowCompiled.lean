@@ -3417,7 +3417,7 @@ private theorem debitLoadedBalance_logOutput_compiled
       ((Ninst.Hinv.inv (f := Devm.output) hswap).trans
         (Ninst.Hinv.inv (f := Devm.output) hstore))⟩
 
-private theorem stop_getCode_inv :
+theorem stop_getCode_inv :
     Func.Inv Devm.getCode Devm.getCode Func.stop := by
   intro fs e pre post run
   cases run with
@@ -5287,7 +5287,7 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
           simp [B256.eqCheck, hnonempty]
         exact (hflagNonzero hflagZero).elim
 
-private theorem action_eq_of_flowAction_eq
+theorem action_eq_of_flowAction_eq
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     {atom : FlowAtom} {action : FlowAction}
     (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
@@ -5321,7 +5321,7 @@ private theorem debit_eq_of_flowAction_eq
       subst action
       rfl
 
-private theorem rest_set_callerAllowanceRuntimeKey
+theorem rest_set_callerAllowanceRuntimeKey
     (e : Sevm) (s : Stor) (v : B256) :
     Stor.rest (s.set (callerAllowanceRuntimeKey e) v) = Stor.rest s := by
   funext a
@@ -7696,15 +7696,14 @@ private theorem dispatchWith_sourceSstoreSiteCount
       dispatchTreeSourceSstoreSiteCount tree := by
   induction tree with
   | leaf selector body =>
-      simp only [dispatchWith, sourceSstoreSiteCount_next,
-        Ninst.pushB256, ninstSourceSstoreSiteCount, sourceSstoreSiteCount,
+      simp only [dispatchWith, Ninst.pushB256, sourceSstoreSiteCount,
         dispatchTreeSourceSstoreSiteCount]
-      omega
+      simp [Func.sourceSiteCount]
   | fork left right ihLeft ihRight =>
-      simp only [dispatchWith, sourceSstoreSiteCount_next,
-        Ninst.pushB256, ninstSourceSstoreSiteCount, sourceSstoreSiteCount,
-        dispatchTreeSourceSstoreSiteCount, ihLeft, ihRight]
-      omega
+      simp only [dispatchWith, Ninst.pushB256, sourceSstoreSiteCount,
+        dispatchTreeSourceSstoreSiteCount]
+      unfold sourceSstoreSiteCount at ihLeft ihRight
+      simp [Func.sourceSiteCount, ihLeft, ihRight, Nat.add_comm]
 
 private theorem dispatchTreeSourceSstoreSiteCount_build :
     ∀ (n : Nat) (entries : List (B256 × Func)),
@@ -7817,8 +7816,22 @@ private theorem deploymentChainId_public_sourceSstoreSiteCount
     sourceSstoreSiteCount (nonpayable (deploymentChainId dp)) = 0 := by rfl
 private theorem deposit_public_sourceSstoreSiteCount :
     sourceSstoreSiteCount deposit = 1 := by rfl
+private theorem nonpayable_sourceSstoreSiteCount (body : Func) :
+  sourceSstoreSiteCount (nonpayable body) =
+      sourceSstoreSiteCount body := by
+  unfold nonpayable Func.revert
+  simp [sourceSstoreSiteCount, Func.sourceSiteCount, Ninst.pushB256]
 private theorem permit_public_sourceSstoreSiteCount (dp : DeployParams) :
-    sourceSstoreSiteCount (nonpayable (permit dp)) = 1 := by rfl
+    sourceSstoreSiteCount (nonpayable (permit dp)) = 1 := by
+  rw [nonpayable_sourceSstoreSiteCount]
+  unfold permit
+  simp [sourceSstoreSiteCount_next, sourceSstoreSiteCount_prepend,
+    lineSourceSstoreSiteCount, ninstSourceSstoreSiteCount,
+    pushDeployWord, Ninst.pushB256, arg, addressArg, tagNonceKey,
+    mstoreAt, argCopy, pushList, calculateDomainSeparator, cdl, cdc,
+    normalizeAddress]
+  unfold sourceSstoreSiteCount
+  simp [Func.sourceSiteCount, prepend, pushAddressMask, Ninst.pushB256]
 private theorem flashFee_public_sourceSstoreSiteCount :
     sourceSstoreSiteCount (nonpayable flashFee) = 0 := by rfl
 private theorem allowance_public_sourceSstoreSiteCount :
@@ -7828,7 +7841,8 @@ private theorem prependStore_sourceSstoreSiteCount
     (w : B256) (i : Nat) (rest : Func) :
     sourceSstoreSiteCount (prependStore w i rest) =
       sourceSstoreSiteCount rest := by
-  rfl
+  simp [prependStore, sourceSstoreSiteCount_next,
+    ninstSourceSstoreSiteCount, Ninst.pushB256]
 
 private theorem prependStoresRev_sourceSstoreSiteCount
     (stores : List (B256 × Nat)) (rest : Func) :
@@ -7970,10 +7984,17 @@ private theorem weth10Main_sourceSstoreSiteCount (dp : DeployParams) :
   have hentry : lineSourceSstoreSiteCount
       [Ninst.calldatasize, Ninst.iszero] = 0 := by rfl
   rw [hentry]
-  simp only [sourceSstoreSiteCount, Nat.zero_add,
-    sourceSstoreSiteCount_prepend, dispatchWith_sourceSstoreSiteCount,
-    weth10Tree_sourceSstoreSiteCount, weth10Funcs_sourceSstoreSiteCounts,
+  simp only [Nat.zero_add]
+  change sourceSstoreSiteCount
+      (fsig +++ dispatchWith fallbackSlot (weth10Tree dp)) +
+      sourceSstoreSiteCount receiveEther = 19
+  rw [sourceSstoreSiteCount_prepend,
+    dispatchWith_sourceSstoreSiteCount,
+    weth10Tree_sourceSstoreSiteCount,
+    weth10Funcs_sourceSstoreSiteCounts,
     receiveEther_sourceSstoreSiteCount]
+  have hfsig : lineSourceSstoreSiteCount fsig = 0 := by rfl
+  rw [hfsig]
   decide
 
 /-- Literal total number of source `SSTORE` nodes in the generated WETH10

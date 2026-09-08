@@ -767,13 +767,6 @@ private theorem weth10Tree_compileShape_eq (dp : DeployParams) :
   rw [← hlen]
   exact dispatchCompileShape_build_eq (weth10EntryShapes_eq dp) _
 
-private theorem prepend_compileShape_eq (l : Line) {p q : Func}
-    (h : p.compileShape = q.compileShape) :
-    (l +++ p).compileShape = (l +++ q).compileShape := by
-  induction l with
-  | nil => exact h
-  | cons i l ih => simp [prepend, Func.compileShape, ih]
-
 def weth10Main (dp : DeployParams) : Func :=
   calldatasize ::: iszero :::
   (receiveEther <?> (fsig +++ dispatchWith fallbackSlot (weth10Tree dp)))
@@ -807,7 +800,7 @@ private theorem weth10Main_compileShape_eq (dp : DeployParams) :
       (weth10Main ⟨0, 0⟩).compileShape := by
   have hd :=
     dispatchWith_compileShape_eq (weth10Tree_compileShape_eq dp) fallbackSlot
-  have hp := prepend_compileShape_eq fsig hd
+  have hp := Func.compileShape_prepend_congr fsig hd
   simp [weth10Main, Func.compileShape, hp]
 
 private theorem weth10_compileShape_eq (dp : DeployParams) :

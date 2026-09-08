@@ -358,9 +358,8 @@ theorem ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions
 
 private theorem frame_enter_run_memory_empty
     {frame : Frame} {child : Evm}
-    (h : frame.enter = .run child) : child.dyna.memory = Mem.empty := by
-  obtain ⟨benv, _, rfl⟩ := Frame.enter_run_inv h
-  rfl
+    (h : frame.enter = .run child) : child.dyna.memory = Mem.empty :=
+  frame_enter_run_memory h
 
 /-- At a raw call-message boundary, an installed WETH10 code witness in the
 actual message state upgrades every retained action to an authentic compiled

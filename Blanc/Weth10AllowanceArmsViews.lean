@@ -26,25 +26,10 @@ open Jaune.Ninst Ninst
 
 namespace Weth10
 
-/-! ## Local copies of the compiled body lines
-
-`Weth10HolderFlowExecAccounting` keeps its per-selector line decompositions
-private, so this module re-declares the ones it needs, byte for byte. -/
+/-! ## Compiled body lines -/
 
 private def returnWordLine (w : B256) : Line :=
   [pushB256 w] ++ mstoreAt 0 ++ pushList [32, 0]
-
-private def nameLine : Line :=
-  [pushB256 (Blanc.String.toBytes "Wrapped Ether v10").toB256,
-    pushB256 120, shl] ++
-  pushList [17, 32] ++ mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
-  pushList [96, 0]
-
-private def symbolLine : Line :=
-  [pushB256 (Blanc.String.toBytes "WETH10").toB256,
-    pushB256 208, shl] ++
-  pushList [6, 32] ++ mstoreAt 0 ++ mstoreAt 1 ++ mstoreAt 2 ++
-  pushList [96, 0]
 
 private def totalSupplyLine : Line :=
   [selfbalance] ++ pushFlashMintedSlot ++ [sload, add] ++

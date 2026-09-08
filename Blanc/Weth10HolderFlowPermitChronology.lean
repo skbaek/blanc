@@ -859,12 +859,8 @@ private theorem permitNoncePrepare_observations
       line_inv) originalRun
 
 private theorem stop_getCode_inv_permit :
-    Func.Inv Devm.getCode Devm.getCode Func.stop := by
-  intro fs e pre post run
-  cases run with
-  | last h =>
-      simp only [Linst.Run, Linst.run] at h
-      exact congrArg Devm.getCode (Except.ok.inj h)
+    Func.Inv Devm.getCode Devm.getCode Func.stop :=
+  stop_getCode_inv
 
 /-- The successful approval tail writes only a tagged allowance key and is
 otherwise ETH-balance/code silent. -/

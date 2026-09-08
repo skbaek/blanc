@@ -3491,9 +3491,8 @@ private theorem returnMem_wf1 : Mem.Wf ((pauseMemory pauseWorldCallee.toB256 pau
 
 private theorem returnMem_reads1 : Mem.Reads ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) (Bytes.writeAt (pauseImage pauseWorldCallee.toB256 pauseWorldDuration)
-      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) := by
-  rcases pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration with ⟨hwf, hreads, -⟩
-  exact Mem.Reads.write hwf hreads _ _
+      (previousPauserWord * 32).toNat pauseWorldPauser.toBytes) :=
+  lastMem_reads1
 
 private theorem returnMem_size1 : ((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).size = 768 := by

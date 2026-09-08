@@ -138,19 +138,6 @@ theorem CompiledBodyAllowanceHandler.committedExecAllowanceSound
     exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
   exact (AllowanceTransported.of_getStor_eq hentryStor).append hbody
 
-/-- An uncommitted execution contributes no attribution stream.  The balance
-development's counterpart for `Exec.flowActions` is public, but the
-attribution counterpart is only available privately elsewhere, so it is
-reproved here. -/
-private theorem attributionStream_eq_nil_of_not_commits_history
-    {dp : DeployParams} {ca : Adr}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (hnot : Execution.commits out ≠ true) :
-    Exec.attributionStream dp ca run = [] := by
-  unfold Exec.attributionStream
-  rw [dif_neg hnot]
-
 /-- Allowance transport attached to the exact settled message trace. -/
 def MessageCallTrace.AllowanceAccounted
     (dp : DeployParams) (ca : Adr)
@@ -197,7 +184,7 @@ theorem ProcessMessage.allowanceTransported_of_committedExecSound
     exact htransport
   · have hstate :=
       ProcessMessage.ok_state_eq_of_not_commits hprocess hcommit
-    rw [attributionStream_eq_nil_of_not_commits_history run hcommit, hstate]
+    rw [Exec.attributionStream_eq_nil_of_not_commits run hcommit, hstate]
     exact AllowanceTransported.refl ca msg.benv.state
 
 theorem ProcessMessageTrace.allowanceTransported_of_committedExecSound
@@ -680,7 +667,7 @@ theorem ProcessMessage.allowanceTransportedSound_of_committedExecSound
     exact htransport
   · have hstate :=
       ProcessMessage.ok_state_eq_of_not_commits hprocess hcommit
-    rw [attributionStream_eq_nil_of_not_commits_history run hcommit, hstate]
+    rw [Exec.attributionStream_eq_nil_of_not_commits run hcommit, hstate]
     exact AllowanceTransportedSound.refl ca msg.benv.state
 
 theorem ProcessMessageTrace.allowanceTransportedSound_of_committedExecSound

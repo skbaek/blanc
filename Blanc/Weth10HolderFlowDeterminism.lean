@@ -82,8 +82,8 @@ instance ProcessCreateMessageTrace.instSubsingleton
 theorem MessageCallTrace.toResult
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out) :
-    processMessageCall msg = .ok (state, out) := by
-  cases trace <;> assumption
+    processMessageCall msg = .ok (state, out) :=
+  Blanc.ExecutionTrace.MessageCallTrace.result trace
 
 theorem MessageCallTrace.index_eq_of_same_input
     {msg : Msg} {leftState rightState : State}

@@ -559,18 +559,6 @@ private lemma sload_output {e : Sevm} {s s' : Devm}
   exact (houtput.trans (Devm.burn_of_chargeGas h2).output).trans
     (Devm.push_of_push run2).output
 
-private lemma add_logs {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s add s') : s.logs = s'.logs := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
-
-private lemma add_output {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s add s') : s.output = s'.output := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
-
 /-- Exact selected-body effect of the shared `depositTo` mint prefix: one
 normalized balance-key update, one mint log, and no balance, code, or outer
 return-data mutation. -/
@@ -691,7 +679,7 @@ theorem mintToPrefix_effect
         line_inv) harg1
       _ = s2.logs := sload_logs hload
       _ = s3.logs := (of_run_callvalue hvalue1).logs
-      _ = s4.logs := add_logs hadd
+      _ = s4.logs := Ninst.Hinv.inv hadd
       _ = s5.logs := Line.of_inv Devm.logs (by
         unfold addressArg normalizeAddress pushAddressMask
         line_inv) harg2
@@ -728,7 +716,7 @@ theorem mintToPrefix_effect
         line_inv) harg1
       _ = s2.output := sload_output hload
       _ = s3.output := (of_run_callvalue hvalue1).output
-      _ = s4.output := add_output hadd
+      _ = s4.output := Ninst.Hinv.inv hadd
       _ = s5.output := Line.of_inv Devm.output (by
         unfold addressArg normalizeAddress pushAddressMask
         line_inv) harg2
@@ -889,7 +877,7 @@ theorem mintCaller_effect
       s.logs = s1.logs := (of_run_caller hcaller1).logs
       _ = s2.logs := sload_logs hload
       _ = s3.logs := (of_run_callvalue hvalue1).logs
-      _ = s4.logs := add_logs hadd
+      _ = s4.logs := Ninst.Hinv.inv hadd
       _ = s5.logs := (of_run_caller hcaller2).logs
       _ = s6.logs := Ninst.Hinv.inv (f := Devm.logs) hstore
       _ = s7.logs := (of_run_callvalue hvalue2).logs
@@ -953,7 +941,7 @@ theorem mintCaller_effect
       s.output = s1.output := (of_run_caller hcaller1).output
       _ = s2.output := sload_output hload
       _ = s3.output := (of_run_callvalue hvalue1).output
-      _ = s4.output := add_output hadd
+      _ = s4.output := Ninst.Hinv.inv hadd
       _ = s5.output := (of_run_caller hcaller2).output
       _ = s6.output := Ninst.Hinv.inv (f := Devm.output) hstore
       _ = s7.output := (of_run_callvalue hvalue2).output

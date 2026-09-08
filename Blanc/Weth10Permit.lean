@@ -1697,14 +1697,14 @@ theorem of_calculateDomainSeparator {sevm : Sevm} {s t : Devm}
 
 /-! ## Nonce read and tentative increment -/
 
-private lemma prefix_of_chainid {e : Sevm} {s s' : Devm} {xs : Stack}
+lemma prefix_of_chainid {e : Sevm} {s s' : Devm} {xs : Stack}
     (hp : xs <<+ s.stack) (h : Ninst.Run e s chainid s') :
     e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
 
-private lemma memory_eq_of_chainid {e : Sevm} {s s' : Devm}
+lemma memory_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.memory = s'.memory := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
@@ -1759,18 +1759,6 @@ private lemma permit_sload_output {e : Sevm} {s s' : Devm}
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
   exact (houtput.trans (Devm.burn_of_chargeGas h2).output).trans
     (Devm.push_of_push run2).output
-
-private lemma permit_add_logs {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s add s') : s.logs = s'.logs := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
-
-private lemma permit_add_output {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s add s') : s.output = s'.output := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
 
 private lemma permit_normalizeAddress_owner (owner : Adr) :
     ((~~~ addressMask) &&& owner.toB256) = owner.toB256 := by
@@ -1983,7 +1971,7 @@ theorem of_permitNoncePrepare {sevm : Sevm} {s t : Devm}
       _ = s7.logs := Ninst.Hinv.inv (f := Devm.logs) q7
       _ = s8.logs := Line.of_inv Devm.logs (by line_inv) h8
       _ = s9.logs := Ninst.Hinv.inv (f := Devm.logs) q9
-      _ = s10.logs := permit_add_logs q10
+      _ = s10.logs := Ninst.Hinv.inv q10
       _ = s11.logs := Ninst.Hinv.inv (f := Devm.logs) q11
       _ = s12.logs := Ninst.Hinv.inv (f := Devm.logs) q12
       _ = t.logs := hpop13.logs
@@ -2000,7 +1988,7 @@ theorem of_permitNoncePrepare {sevm : Sevm} {s t : Devm}
       _ = s7.output := Ninst.Hinv.inv (f := Devm.output) q7
       _ = s8.output := Line.of_inv Devm.output (by line_inv) h8
       _ = s9.output := Ninst.Hinv.inv (f := Devm.output) q9
-      _ = s10.output := permit_add_output q10
+      _ = s10.output := Ninst.Hinv.inv q10
       _ = s11.output := Ninst.Hinv.inv (f := Devm.output) q11
       _ = s12.output := Ninst.Hinv.inv (f := Devm.output) q12
       _ = t.output := hpop13.output
@@ -2142,7 +2130,7 @@ theorem of_permitStructPrepare {sevm : Sevm} {s t : Devm}
 
 /-! ## Domain dispatch -/
 
-private lemma prefix_of_pushDeployWord {e : Sevm} {s s' : Devm}
+lemma prefix_of_pushDeployWord {e : Sevm} {s s' : Devm}
     {w : B256} {xs : Stack} (hp : xs <<+ s.stack)
     (h : Ninst.Run e s (pushDeployWord w) s') :
     w :: xs <<+ s'.stack := by

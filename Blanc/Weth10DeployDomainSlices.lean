@@ -14,19 +14,6 @@ open CompiledShape
 The proofs isolate the two generated deployment words while keeping all
 off-path subtrees opaque. -/
 
-private theorem byteAt_next_to_tail
-    (locations : List Nat) (n : Nat) (inst0 inst : Ninst)
-    (p0 p : Func) (i : Nat) (d : UInt8)
-    (_hsize : inst.size = inst0.size) (hlo : inst0.size ≤ i) :
-    Func.byteAtByShape locations n (inst0 ::: p0).compileShape
-        (inst ::: p) i d =
-      Func.byteAtByShape locations (n + inst0.size) p0.compileShape
-        p (i - inst0.size) d := by
-  change
-    Func.byteAtByShape locations n (.next inst0.size p0.compileShape)
-        (inst ::: p) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hlo)]
-
 private theorem pushDeployWord_word_byte
     (locations : List Nat) (n : Nat) (p0 p : Func) (w : B256)
     (j : Nat) (hj : j < 32) (d : UInt8) :
@@ -157,17 +144,14 @@ private theorem domainCachedPathByteAt_eq_zero_34_40
     simp only [Ninst.size]
     omega)]
   simp only [Ninst.size]
-  have hsize : (pushDeployWord dp.cachedDomainSeparator).size =
-      (pushDeployWord 0).size := by
-    simp [pushDeployWord, Ninst.size, B256.length_toBytes]
   rw [byteAt_next_to_tail locations (n + 1)
       (pushDeployWord 0) (pushDeployWord dp.cachedDomainSeparator)
-      domainReturnTail domainReturnTail (i - 1) 0 hsize (by
+      domainReturnTail domainReturnTail (i - 1) 0 (by
         simp [pushDeployWord, Ninst.size, B256.length_toBytes]
         omega),
     byteAt_next_to_tail locations (n + 1)
       (pushDeployWord 0) (pushDeployWord 0)
-      domainReturnTail domainReturnTail (i - 1) 0 rfl (by
+      domainReturnTail domainReturnTail (i - 1) 0 (by
         simp [pushDeployWord, Ninst.size, B256.length_toBytes]
         omega)]
 
@@ -273,13 +257,10 @@ private theorem domainByteAt_to_afterChain
     (p := pushDeployWord dp.deploymentChainId ::: domainAfterChain dp)
     (i := i) (d := 0) (by simpa only [hhead] using (show 2 ≤ i by omega))]
   simp only [hhead]
-  have hsize : (pushDeployWord dp.deploymentChainId).size =
-      (pushDeployWord 0).size := by
-    simp [pushDeployWord, Ninst.size, B256.length_toBytes]
   rw [byteAt_next_to_tail locations (n + 2)
       (pushDeployWord 0) (pushDeployWord dp.deploymentChainId)
       (domainAfterChain (⟨0, 0⟩ : DeployParams)) (domainAfterChain dp)
-      (i - 2) 0 hsize (by
+      (i - 2) 0 (by
         simp [pushDeployWord, Ninst.size, B256.length_toBytes]
         omega)]
   simp [pushDeployWord, Ninst.size, B256.length_toBytes]

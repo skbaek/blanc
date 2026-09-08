@@ -21,29 +21,12 @@ open Jaune.Ninst Ninst
 
 namespace Weth10
 
-/-! ## Local copies of the compiled body lines
-
-`Weth10HolderFlowExecAccounting` keeps its per-selector line
-decompositions private, so this module re-declares the ones it needs,
-byte for byte. -/
-
-private def mintCallerLine : Line :=
-  [caller, sload, callvalue, add, caller, sstore, callvalue] ++
-  mstoreAt 0 ++
-  [caller, pushB256 0, pushB256 Blanc.transferEvent] ++
-  logWith 2 0 1
+/-! ## Compiled body lines -/
 
 private def transferSelectLine : Line := arg 0 ++ [iszero]
 
 private def transferBalanceCheckLine : Line :=
   loadCallerBalanceAmount 1 ++ balanceTooSmall
-
-private def transferNonzeroSuccessLine : Line :=
-  debitLoadedBalance ++
-  addressArg 0 ++ [dup 0, sload] ++ arg 1 ++
-  [add, swap 0, sstore, caller] ++ arg 1 ++ addressArg 0 ++
-  emitTransfer ++
-  [pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
 /-! ## The shared `mintCaller` storage walk
 

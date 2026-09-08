@@ -309,16 +309,12 @@ theorem of_permitSignerGuards_raw_frame (dp : DeployParams)
 
 private lemma raw_prefix_of_chainid {e : Sevm} {s s' : Devm} {xs : Stack}
     (hp : xs <<+ s.stack) (h : Ninst.Run e s chainid s') :
-    e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
+    e.benvStat.chainId.toB256 :: xs <<+ s'.stack :=
+  prefix_of_chainid hp h
 
 private lemma raw_memory_eq_of_chainid {e : Sevm} {s s' : Devm}
-    (h : Ninst.Run e s chainid s') : s.memory = s'.memory := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).memory
+    (h : Ninst.Run e s chainid s') : s.memory = s'.memory :=
+  memory_eq_of_chainid h
 
 /-- The tagged nonce key permit's prefix actually stores at: `addressArg 0`
 normalizes the raw first argument word to its low 160 bits, and

@@ -16,15 +16,6 @@ namespace Weth10
 
 open CompiledShape
 
-private theorem byteAt_next_to_tail
-    (locations : List Nat) (n : Nat) (inst0 inst : Ninst) (p0 p : Func)
-    (i : Nat) (d : UInt8) (hlo : inst0.size ≤ i) :
-    Func.byteAtByShape locations n (inst0 ::: p0).compileShape
-        (inst ::: p) i d =
-      Func.byteAtByShape locations (n + inst0.size) p0.compileShape
-        p (i - inst0.size) d := by
-  rw [Func.compileShape, Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hlo)]
-
 def permitCorePrefix : Line :=
   [Ninst.chainid] ++ addressArg 0 ++ [Ninst.dup 0] ++ tagNonceKey ++
   [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ mstoreAt 4 ++
