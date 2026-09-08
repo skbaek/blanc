@@ -149,6 +149,10 @@ registry has identified the likely vocabulary.
   [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
   full-word `SSTORE` is observably different in that state.
+- **WETH calldata addresses.** `Weth10.normalizedAddressArg_eq_toAdr_toB256` in
+  [`Blanc/Weth10StateFunctional.lean`](../Blanc/Weth10StateFunctional.lean)
+  exposes the shared round trip from `normalizedAddressArg` to the low 160-bit
+  address word.  Reuse it in WETH execution, accounting, and write proofs.
 - Calls, delegate calls, or child-frame resumption: go to E2.
 - A predicate must hold for every entered child root: go to E3.
 - Only the terminal RETURN/REVERT remains: go to E4.
@@ -281,6 +285,18 @@ Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
 For different offsets, sizes, stack tails, or payloads, use the general
 `Func.runCompiledTo_return_word` in `ForwardCall` or
 `Func.runCompiledTo_revert` / `Func.runCompiledTo_revert_of` in `Reverts`.
+For a primitive gas charge, `chargeGas_eq_ok` in
+[`Blanc/Compiled.lean`](../Blanc/Compiled.lean) exposes the exact successful
+decrement, while `chargeGas_eq_outOfGas` in
+[`Blanc/ChargeGas.lean`](../Blanc/ChargeGas.lean) exposes the unchanged-state
+out-of-gas result without pulling compiled-execution infrastructure into a
+small consumer.
+For CALL-family steps that reach that failing charge, use
+`Xinst.step_call_zero_value_outOfGas` and
+`Xinst.step_staticcall_outOfGas` from
+[`Blanc/CallOutOfGas.lean`](../Blanc/CallOutOfGas.lean); their premises expose
+the decoded operands, memory-extension and delegation results, call-gas split,
+and exact insufficient-gas inequality.
 
 For a nonzero branch flag that tail-calls an empty-revert auxiliary, use
 `emptyRevertGuardCost` and `Func.runCompiledTo_emptyRevertGuard` in
@@ -307,6 +323,10 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
   `Prog.SourceSite.coordinates` keeps each counter coupled to its owning
   function-table index for role-preserving finite inventory checks.
+- `Func.sourceSiteCount` in
+  [`Blanc/SourceSiteCount.lean`](../Blanc/SourceSiteCount.lean) counts source instruction
+  nodes selected by a Boolean `Ninst` predicate.  Keep contract-named totals
+  as thin predicate specializations.
 - `Exec.StorageWrite.effectTriple` erases only the derivation node from a
   successful write, and `Exec.retainedStorageEffectTriples` is the canonical
   settlement-retained `(owner, key, value)` chronology.
@@ -1268,6 +1288,12 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `directCreateMessageOutputOf` is the shared projection from a charged direct
   CREATE post-frame to its outer `MsgCallOutput`; contract owners may retain a
   thin historical wrapper name, but must not restate its six fields.
+  The same module owns the shared receipt key, intrinsic/calldata gas
+  projections, type-2 effective gas price and the
+  `jauneListCompare_eq_compareLex` list-comparator bridge;
+  `deploymentTxPreludeBout` delegates to the lower
+  `ExecutionTrace.transactionPreludeBout`.  Redemption and deployment owners
+  should retain compatibility names only as thin aliases to these primitives.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 

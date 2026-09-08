@@ -6,6 +6,7 @@
 -- or retrofits a deployed contract.
 
 import Blanc.Reverts
+import Blanc.ChargeGas
 import Blanc.ForwardCall
 import Blanc.Ladder
 
@@ -1040,18 +1041,6 @@ private lemma of_runCompiledTo_last {fs : List Func} {sevm : Sevm}
     (h : Func.RunCompiledTo fs sevm devm (.last i) ex) :
     Linst.Run sevm devm i ex := by
   cases h with | last h_l => exact h_l
-
-/-- `chargeGas`, evaluated forward on the arm the forward library never takes:
-without the gas the charge is refused, and the state is handed back untouched.
-The mirror of `Blanc.chargeGas_eq_ok`. -/
-private lemma chargeGas_eq_outOfGas {cost : Nat} {devm : Devm}
-    (h : devm.gasLeft < cost) :
-    chargeGas cost devm = .error ⟨.halt (.outOfGas .none), devm⟩ := by
-  rw [chargeGas_def]
-  have hs : safeSub devm.gasLeft cost = none := by
-    unfold safeSub
-    rw [if_neg (by omega)]
-  rw [hs]
 
 /-- `REVERT` over a stack whose top two words are known, inverted.
 

@@ -1,6 +1,7 @@
 import Blanc.CycleWriteFree
 import Blanc.LidoCircuitBreakerCore
 import Blanc.LinearDispatch
+import Blanc.SourceSiteCount
 
 /-!
 Production Lido CircuitBreaker v1.0.0 runtime.
@@ -635,29 +636,20 @@ theorem runtime_compiles (dp : DeployParams) :
   rw [Prog.compiles_eq_of_compileShape (runtime_compileShape_eq_zero dp)]
   exact runtimeCompilesZero
 
-def sourceSstoreSiteCount : Func → Nat
-  | .last _ => 0
-  | .next (.reg .sstore) rest => 1 + sourceSstoreSiteCount rest
-  | .next _ rest => sourceSstoreSiteCount rest
-  | .branch left right =>
-      sourceSstoreSiteCount left + sourceSstoreSiteCount right
-  | .call _ => 0
+def sourceSstoreSiteCount : Func → Nat :=
+  Func.sourceSiteCount fun
+    | .reg .sstore => true
+    | _ => false
 
-def sourceTstoreSiteCount : Func → Nat
-  | .last _ => 0
-  | .next (.reg .tstore) rest => 1 + sourceTstoreSiteCount rest
-  | .next _ rest => sourceTstoreSiteCount rest
-  | .branch left right =>
-      sourceTstoreSiteCount left + sourceTstoreSiteCount right
-  | .call _ => 0
+def sourceTstoreSiteCount : Func → Nat :=
+  Func.sourceSiteCount fun
+    | .reg .tstore => true
+    | _ => false
 
-def sourceExternalCallSiteCount : Func → Nat
-  | .last _ => 0
-  | .next (.exec _) rest => 1 + sourceExternalCallSiteCount rest
-  | .next _ rest => sourceExternalCallSiteCount rest
-  | .branch left right =>
-      sourceExternalCallSiteCount left + sourceExternalCallSiteCount right
-  | .call _ => 0
+def sourceExternalCallSiteCount : Func → Nat :=
+  Func.sourceSiteCount fun
+    | .exec _ => true
+    | _ => false
 
 def programSiteCount (counter : Func → Nat) (program : Prog) : Nat :=
   counter program.main + (program.aux.map counter).sum
