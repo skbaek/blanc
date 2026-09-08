@@ -1,11 +1,10 @@
 import Blanc.ProofRecipeTactic
-import Blanc.ForwardCall
 import Blanc.RootedExecution
 import Blanc.MessageExecution
-import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.LinearDispatchCorrectness
-import Blanc.ExecutionHistoryStateTrace
+import Blanc.ExecutionStateTrace
+import Blanc.ExecutionTrace
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
 
@@ -175,6 +174,17 @@ example (locations : List Nat) (n i : Nat) (d : UInt8)
 
 -- EXPECT: compiled-shape-byte-navigation
 example (locations : List Nat) (n i : Nat) (d : UInt8)
+    (inst0 inst : Ninst) (p0 p : Func) (hlo : inst0.size ≤ i) :
+    Func.byteAtByShape locations n (inst0 ::: p0).compileShape
+        (inst ::: p) i d =
+      Func.byteAtByShape locations (n + inst0.size) p0.compileShape
+        p (i - inst0.size) d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  exact CompiledShape.byteAt_next_to_tail locations n inst0 inst p0 p i d hlo
+
+-- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i : Nat) (d : UInt8)
     (left0 right0 left right : Func) :
     Func.byteAtByShape locations n (Func.branch left0 right0).compileShape
         (.branch left right) i d =
@@ -231,6 +241,37 @@ example (locations : List Nat) (n i : Nat) (d : UInt8) :
       Func.byteAtByShape locations n proofRecipeOpaqueFunction.compileShape
         proofRecipeOpaqueFunction i d := by
   expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: compile-shape-prepend-congruence
+example (l : Line) (p q : Func) (tailShape : p.compileShape = q.compileShape) :
+    (l +++ p).compileShape = (l +++ q).compileShape := by
+  expect_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
+  blanc_suggest
+  exact Func.compileShape_prepend_congr l tailShape
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (leftPrefix rightPrefix : Line) (p q : Func)
+    (given : (leftPrefix +++ p).compileShape =
+      (rightPrefix +++ q).compileShape) :
+    (leftPrefix +++ p).compileShape =
+      (rightPrefix +++ q).compileShape := by
+  expect_no_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
+  blanc_suggest
+  exact given
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (p q : Func) (given : p.compileShape = q.compileShape) :
+    p.compileShape = q.compileShape := by
+  expect_no_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
+  blanc_suggest
+  exact given
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (l : Line) (p : Func) :
+    (l +++ p).compileShape = (l +++ p).compileShape := by
+  expect_no_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
   blanc_suggest
   rfl
 

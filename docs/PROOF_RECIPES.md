@@ -144,12 +144,23 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:compiled-shape-byte-navigation`
-- Preferred path: Import `Blanc.CompiledShape` and open `CompiledShape` inside `namespace Blanc`. Use `byteAt_prepend_*` for fixed instruction prefixes, `byteAt_branch_*` for branch header/left/jumpdest/right regions, `dispatchNodeByteAt_*` for the common selector-dispatch shape, and `pushFullWord_*` for a fixed 32-byte `Ninst.push`. Supply the existing compile-shape, size, and index-bound facts so the proof traverses only the addressed subtree.
-- Boundary: These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again.
+- Preferred path: Import `Blanc.CompiledShape` and open `CompiledShape` inside `namespace Blanc`. Use `byteAt_next_to_tail` once the index is beyond a reference instruction, even when the executed instruction and tail differ; use `byteAt_prepend_*` for fixed instruction prefixes, `byteAt_branch_*` for branch header/left/jumpdest/right regions, `dispatchNodeByteAt_*` for the common selector-dispatch shape, and `pushFullWord_*` for a fixed 32-byte `Ninst.push`. Supply the existing compile-shape, size, and index-bound facts so the proof traverses only the addressed subtree.
+- Boundary: These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `byteAt_next_to_tail` uses the reference instruction's size for the supplied lower bound and offset; it does not assert that the reference and executed instructions have equal bytes or widths. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again.
 - Owner module: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean)
 - Canonical example: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean) — `byteAt_branch_to_right`
-- Registered symbols: `module:Blanc/CompiledShape.lean`, `declaration:Blanc.CompiledShape.byteAt_prepend_to_tail`, `declaration:Blanc.CompiledShape.byteAt_branch_to_right`, `declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath`, `declaration:Blanc.CompiledShape.pushFullWord_opcode_eq`
-- Review: `proof-infrastructure` on `2026-09-08`
+- Registered symbols: `module:Blanc/CompiledShape.lean`, `declaration:Blanc.CompiledShape.byteAt_next_to_tail`, `declaration:Blanc.CompiledShape.byteAt_prepend_to_tail`, `declaration:Blanc.CompiledShape.byteAt_branch_to_right`, `declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath`, `declaration:Blanc.CompiledShape.pushFullWord_opcode_eq`
+- Review: `proof-infrastructure` on `2026-09-09`
+
+## `compile-shape-prepend-congruence`
+
+- Status: `active`
+- Triggers: `goal-shape:compile-shape-prepend-congruence`
+- Preferred path: For an equality `(l +++ p).compileShape = (l +++ q).compileShape`, apply `Func.compileShape_prepend_congr l` to an existing tail-shape equality `p.compileShape = q.compileShape`.
+- Boundary: This transports an already proved compile-shape equality through one syntactically identical instruction-line prefix. It does not prove the tail equality, compare different prefixes, normalize either tail, or search the local context. The matcher requires an `Eq` whose two sides are direct `compileShape` applications to `prepend`, with syntactically identical instantiated prefixes and syntactically distinct tails; no-prepend and reflexive-tail goals stay on the general route.
+- Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
+- Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Func.compileShape_prepend_congr`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Blanc.Func.compileShape_prepend_congr`
+- Review: `proof-infrastructure` on `2026-09-09`
 
 ## `bounded-creation-word-encoder`
 
