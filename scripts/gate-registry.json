@@ -2900,6 +2900,40 @@
           "^OK — proxy-pair-upgrade semantic: "
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check-drip-stack-certificate.sh"
+      ],
+      "id": "drip-stack-certificate-data",
+      "inputs": {
+        "files": [
+          "scripts/check-drip-stack-certificate.sh",
+          "scripts/stack_certificate.py",
+          "scripts/test-stack-certificate.py",
+          "scripts/gen-drip-stack-certificate.py",
+          "scripts/test-drip-stack-certificate.py",
+          "Blanc/DripCode.lean",
+          "Blanc/DripStackSafetyData.lean",
+          "Blanc/DripStackSafetyRegion214.lean",
+          "Blanc/DripStackSafetyRegion576.lean",
+          "Blanc/DripStackSafetyRegion1022.lean",
+          "Blanc/DripStackSafetyRegion1459.lean",
+          "Blanc/DripStackSafetyCertificate.lean"
+        ],
+        "tools": [
+          "python3"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "Non-elaborating deterministic generation and disposable corruption controls. The generated table is data only, and the generated proof text adds no trusted premise; actual decoding and semantic stack certification are checked by the production Lean modules in separately required builds. Ordinary mode byte-compares the fixed outputs, while explicit write modes own only the table or the fixed proof-module set. No external interpreter, private Plans input, or current-mainnet target is consumed.",
+      "order": 63,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — DRIP stack certificate data: "
+        ]
+      }
     }
   ],
   "schema": 1
