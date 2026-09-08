@@ -151,6 +151,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/CompiledShape.lean`, `declaration:Blanc.CompiledShape.byteAt_prepend_to_tail`, `declaration:Blanc.CompiledShape.byteAt_branch_to_right`, `declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath`, `declaration:Blanc.CompiledShape.pushFullWord_opcode_eq`
 - Review: `proof-infrastructure` on `2026-09-08`
 
+## `bounded-creation-word-encoder`
+
+- Status: `active`
+- Triggers: `goal-shape:bounded-creation-word-encoder`
+- Preferred path: For an exact `Ninst.RunCompiled` goal over `CreationArtifact.pushB256AsPush2OrPush32 word`, apply `Ninst.runCompiled_pushB256AsPush2OrPush32`. Supply `devm.gasLeft = G + gVerylow` and `devm.stack.length < 1024`; the result pushes the same word, preserves memory, and leaves gas `G`.
+- Boundary: The encoder's input and operational conclusion are exact `B256` values. A `Nat` consumer must separately prove its value is below `2^256` before conversion. This theorem establishes one instruction's execution; it proves no provisional/final prefix fixed point, constructor execution, or message execution. The matcher inspects only the four-argument `Ninst.RunCompiled` spine and requires the instruction argument itself to have the exact encoder head; it does not traverse the pre-state, result, or closed word, and performs no reduction or normalization.
+- Owner module: [Blanc/CreationArtifact.lean](../Blanc/CreationArtifact.lean)
+- Canonical example: [Blanc/CreationArtifact.lean](../Blanc/CreationArtifact.lean) — `Ninst.runCompiled_pushB256AsPush2OrPush32`
+- Registered symbols: `module:Blanc/CreationArtifact.lean`, `declaration:Blanc.CreationArtifact.pushB256AsPush2OrPush32`, `declaration:Blanc.Ninst.runCompiled_pushB256AsPush2OrPush32`
+- Review: `proof-infrastructure` on `2026-09-08`
+
 ## `successor-projection-normalization`
 
 - Status: `partial`

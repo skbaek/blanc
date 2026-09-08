@@ -43,6 +43,14 @@ def proofRecipeContainsName (needle : Lean.Name) : Lean.Expr → Bool
         proofRecipeContainsName needle body
   | .mdata _ expr | .proj _ _ expr => proofRecipeContainsName needle expr
 
+def proofRecipeIsBoundedCreationWordEncoder : Lean.Expr → Bool
+  | .mdata _ target => proofRecipeIsBoundedCreationWordEncoder target
+  | .app (.app (.app (.app (.const name _) _) _) instruction) _ =>
+      name == `Blanc.Ninst.RunCompiled &&
+        proofRecipeHeadName? instruction ==
+          some `Blanc.CreationArtifact.pushB256AsPush2OrPush32
+  | _ => false
+
 def proofRecipeExprHasFVarOrMVar : Lean.Expr → Bool
   | .fvar _ | .mvar _ => true
   | .bvar _ | .sort _ | .const _ _ | .lit _ => false
@@ -285,6 +293,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeIsByteSizeComposition target
   | "goal-shape:compiled-shape-byte-navigation" =>
       return proofRecipeContainsByteNavigation 8 target
+  | "goal-shape:bounded-creation-word-encoder" =>
+      return proofRecipeIsBoundedCreationWordEncoder target
   | "goal-shape:selector-separation" =>
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:linear-dispatch-selection" =>

@@ -123,6 +123,14 @@ def recipes : List Recipe := [
     boundary := "These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again."
   },
   {
+    id := "bounded-creation-word-encoder"
+    status := "active"
+    triggers := ["goal-shape:bounded-creation-word-encoder"]
+    preferredPath := "For an exact `Ninst.RunCompiled` goal over `CreationArtifact.pushB256AsPush2OrPush32 word`, apply `Ninst.runCompiled_pushB256AsPush2OrPush32`. Supply `devm.gasLeft = G + gVerylow` and `devm.stack.length < 1024`; the result pushes the same word, preserves memory, and leaves gas `G`."
+    symbols := ["module:Blanc/CreationArtifact.lean", "declaration:Blanc.CreationArtifact.pushB256AsPush2OrPush32", "declaration:Blanc.Ninst.runCompiled_pushB256AsPush2OrPush32"]
+    boundary := "The encoder's input and operational conclusion are exact `B256` values. A `Nat` consumer must separately prove its value is below `2^256` before conversion. This theorem establishes one instruction's execution; it proves no provisional/final prefix fixed point, constructor execution, or message execution. The matcher inspects only the four-argument `Ninst.RunCompiled` spine and requires the instruction argument itself to have the exact encoder head; it does not traverse the pre-state, result, or closed word, and performs no reduction or normalization."
+  },
+  {
     id := "successor-projection-normalization"
     status := "partial"
     triggers := ["goal-shape:successor-projection"]

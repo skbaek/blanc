@@ -1327,9 +1327,11 @@ truncation by the encoder but does not undo wrapping that happened earlier.
 The encoder also does not establish a provisional/final constructor-prefix
 fixed point: a provisional value below `2^16` can cross the boundary in the
 final pass, so every two-pass client retains an explicit prefix-length check.
-These declarations are executable byte/layout operations rather than a
-reliable goal-shaped authoring route, so they do not have a goal-triggered
-recipe.
+The operational encoder theorem has a reliable goal shape: on an exact
+`Ninst.RunCompiled` goal containing `pushB256AsPush2OrPush32`, the
+`bounded-creation-word-encoder` recipe points to
+`Ninst.runCompiled_pushB256AsPush2OrPush32`. The remaining byte/layout
+operations have no proposition-shaped recipe.
 
 ### C4. I need to navigate the byte at a known compile shape
 

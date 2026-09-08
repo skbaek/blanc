@@ -151,6 +151,39 @@ example (locations : List Nat) (n i : Nat) (d : UInt8)
   rfl
 
 -- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i size : Nat) (d : UInt8)
+    (restShape : Func.CompileShape) (inst : Ninst) (rest : Func) :
+    Func.byteAtByShape locations n (.next size restShape)
+        (.next inst rest) i d =
+      Func.byteAtByShape locations n (.next size restShape)
+        (.next inst rest) i d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i : Nat) (d : UInt8)
+    (inst0 inst : Ninst) (rest0 rest : Func) :
+    Func.byteAtByShape locations n (Func.next inst0 rest0).compileShape
+        (.next inst rest) i d =
+      Func.byteAtByShape locations n (Func.next inst0 rest0).compileShape
+        (.next inst rest) i d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i : Nat) (d : UInt8)
+    (left0 right0 left right : Func) :
+    Func.byteAtByShape locations n (Func.branch left0 right0).compileShape
+        (.branch left right) i d =
+      Func.byteAtByShape locations n (Func.branch left0 right0).compileShape
+        (.branch left right) i d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: compiled-shape-byte-navigation
 example (locations : List Nat) (n i : Nat) (d : UInt8) (selector : B256)
     (off0 on0 off on : Func) :
     Func.byteAtByShape locations n
@@ -180,6 +213,14 @@ example (locations : List Nat) (n i : Nat) (d : UInt8) (function : Func) :
   blanc_suggest
   rfl
 
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (locations : List Nat) (n i index : Nat) (d : UInt8) :
+    Func.byteAtByShape locations n (.call index) (.call index) i d =
+      Func.byteAtByShape locations n (.call index) (.call index) i d := by
+  expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
 private opaque proofRecipeOpaqueFunction : Func
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
@@ -189,6 +230,47 @@ example (locations : List Nat) (n i : Nat) (d : UInt8) :
       Func.byteAtByShape locations n proofRecipeOpaqueFunction.compileShape
         proofRecipeOpaqueFunction i d := by
   expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: bounded-creation-word-encoder
+example {sevm : Sevm} {devm : Devm} {G : Nat}
+    (gas : devm.gasLeft = G + gVerylow)
+    (room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm
+      (CreationArtifact.pushB256AsPush2OrPush32 (2 ^ 16))
+      (devm.setMach ⟨(2 ^ 16) :: devm.stack, devm.memory, G⟩) := by
+  expect_recipe_trigger "goal-shape:bounded-creation-word-encoder"
+  blanc_suggest
+  exact Ninst.runCompiled_pushB256AsPush2OrPush32 gas room
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example {sevm : Sevm} {devm post : Devm}
+    (run : Ninst.RunCompiled sevm devm Ninst.sload post) :
+    Ninst.RunCompiled sevm devm Ninst.sload post := by
+  expect_no_recipe_trigger "goal-shape:bounded-creation-word-encoder"
+  blanc_suggest
+  exact run
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example {sevm : Sevm} {devm post : Devm} {word : B256}
+    (run : Ninst.RunCompiled sevm
+      (if CreationArtifact.pushB256AsPush2OrPush32 word = Ninst.sload then
+        devm else post)
+      Ninst.sload post) :
+    Ninst.RunCompiled sevm
+      (if CreationArtifact.pushB256AsPush2OrPush32 word = Ninst.sload then
+        devm else post)
+      Ninst.sload post := by
+  expect_no_recipe_trigger "goal-shape:bounded-creation-word-encoder"
+  blanc_suggest
+  exact run
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (word : B256) :
+    CreationArtifact.pushB256AsPush2OrPush32 word =
+      CreationArtifact.pushB256AsPush2OrPush32 word := by
+  expect_no_recipe_trigger "goal-shape:bounded-creation-word-encoder"
   blanc_suggest
   rfl
 
