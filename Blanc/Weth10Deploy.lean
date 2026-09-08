@@ -468,12 +468,6 @@ private theorem approveAndCallSel_eq :
       (0xcae9ca51 : B256) := by
   decide +kernel
 
-private theorem permitSel_eq :
-    selector "permit"
-        [.address, .address, .uint256, .uint256, .uint 8, .bytes 32,
-          .bytes 32] = (0xd505accf : B256) := by
-  decide +kernel
-
 private theorem flashFeeSel_eq :
     selector "flashFee" [.address, .uint256] = (0xd9d98ce4 : B256) := by
   decide +kernel
@@ -481,53 +475,6 @@ private theorem flashFeeSel_eq :
 private theorem allowanceSel_eq :
     selector "allowance" [.address, .address] = (0xdd62ed3e : B256) := by
   decide +kernel
-
-private def treeSlice (dp : DeployParams) (fuel lo len : Nat) : DispatchTree :=
-  DispatchTree.build fuel ((weth10Funcs dp).drop lo |>.take len)
-
-private def dispatch26_0_14 (dp : DeployParams) : Func :=
-  dispatchWith fallbackSlot (treeSlice dp 26 0 14)
-
-private def dispatch25_14_7 (dp : DeployParams) : Func :=
-  dispatchWith fallbackSlot (treeSlice dp 25 14 7)
-
-private def dispatch24_21_3 (dp : DeployParams) : Func :=
-  dispatchWith fallbackSlot (treeSlice dp 24 21 3)
-
-private def dispatch23_26_1 (dp : DeployParams) : Func :=
-  dispatchWith fallbackSlot (treeSlice dp 23 26 1)
-
-private def dispatch22_24_1 (dp : DeployParams) : Func :=
-  dispatchWith fallbackSlot (treeSlice dp 22 24 1)
-
-private def flashFeeLeaf : Func :=
-  Ninst.pushB256 (0xd9d98ce4 : B256) ::: Ninst.eq :::
-    ((nonpayable flashFee) <?> .call fallbackSlot)
-
-private def dispatchD9 (dp : DeployParams) : Func :=
-  dispatchNode 0xd9d98ce4 (dispatch22_24_1 dp) flashFeeLeaf
-
-private def dispatchDd (dp : DeployParams) : Func :=
-  dispatchNode 0xdd62ed3e (dispatchD9 dp) (dispatch23_26_1 dp)
-
-private def dispatchD505 (dp : DeployParams) : Func :=
-  dispatchNode 0xd505accf (dispatch24_21_3 dp) (dispatchDd dp)
-
-private def dispatchCae9 (dp : DeployParams) : Func :=
-  dispatchNode 0xcae9ca51 (dispatch25_14_7 dp) (dispatchD505 dp)
-
-private def flashFeeDispatch (dp : DeployParams) : Func :=
-  dispatchNode 0x7ecebe00 (dispatch26_0_14 dp) (dispatchCae9 dp)
-
-private theorem flashFeeDispatch_eq (dp : DeployParams) :
-    dispatchWith fallbackSlot (weth10Tree dp) = flashFeeDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_0_14, dispatch25_14_7, dispatch24_21_3,
-    dispatch23_26_1, dispatch22_24_1, flashFeeDispatch, dispatchCae9,
-    dispatchD505, dispatchDd, dispatchD9, flashFeeLeaf, dispatchNode,
-    dispatchWith,
-    leftmostFsig, noncesSel_eq, approveAndCallSel_eq, permitSel_eq,
-    flashFeeSel_eq, allowanceSel_eq]
 
 private theorem dispatch23_26_1_eq_zero (dp : DeployParams) :
     dispatch23_26_1 dp =
@@ -540,13 +487,6 @@ private theorem dispatch25_14_7_eq_zero (dp : DeployParams) :
       dispatch25_14_7 (⟨0, 0⟩ : DeployParams) := by
   simp [dispatch25_14_7, treeSlice, weth10Funcs, DispatchTree.build,
     dispatchWith]
-
-private theorem dispatch22_24_1_eq_permit (dp : DeployParams) :
-    dispatch22_24_1 dp =
-      Ninst.pushB256 (0xd505accf : B256) ::: Ninst.eq :::
-        ((nonpayable (permit dp)) <?> .call fallbackSlot) := by
-  simp [dispatch22_24_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, permitSel_eq]
 
 private def approveAndCallLeaf : Func :=
   Ninst.pushB256 (selector "approveAndCall"
@@ -619,18 +559,6 @@ private theorem dispatch25_14_7_size :
       822 := by
   decide +kernel
 
-private theorem dispatchD9_size :
-    (dispatchD9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 410 := by
-  unfold dispatchD9
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    flashFeeLeaf_size, dispatch22_24_1_size]
-
-private theorem dispatchDd_size :
-    (dispatchDd (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 532 := by
-  unfold dispatchDd
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    dispatch23_26_1_size, dispatchD9_size]
-
 private theorem deploymentPairDispatch_size :
     (deploymentPairDispatch
       (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 315 := by
@@ -651,18 +579,6 @@ private theorem dispatch24_21_3_size :
       391 := by
   rw [dispatch24_21_3_eq_deploymentDispatch]
   exact deploymentDispatch_size
-
-private theorem dispatchD505_size :
-    (dispatchD505 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 935 := by
-  unfold dispatchD505
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    dispatchDd_size, dispatch24_21_3_size]
-
-private theorem dispatchCae9_size :
-    (dispatchCae9 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 1769 := by
-  unfold dispatchCae9
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    dispatchD505_size, dispatch25_14_7_size]
 
 private theorem dispatch26_0_14_size :
     (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
@@ -841,14 +757,6 @@ private theorem byteAt_next_to_tail
         p (i - inst0.size) d := by
   rw [Func.compileShape, Func.byteAtByShape,
     if_neg (Nat.not_lt_of_ge hlo)]
-
-private def permitCorePrefix : Line :=
-  [Ninst.chainid] ++ addressArg 0 ++ [Ninst.dup 0] ++ tagNonceKey ++
-  [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ mstoreAt 4 ++
-  [Ninst.pushB256 1, Ninst.add, Ninst.swap 0, Ninst.sstore, Ninst.pop,
-    Ninst.pushB256 PERMIT_TYPEHASH] ++ mstoreAt 0 ++
-  argCopy 1 0 3 ++ arg 3 ++ mstoreAt 5 ++
-  pushList [192, 0] ++ [Ninst.keccak256, Ninst.dup 1]
 
 private def permitDynamicPath : Func :=
   Ninst.swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot
