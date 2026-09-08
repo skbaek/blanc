@@ -1308,15 +1308,28 @@ Use [`Blanc/CreationArtifact.lean`](../Blanc/CreationArtifact.lean):
   `CreationArtifact.immutableWordOffsetsValid` derive and fail-closed validate
   complete fixed-width immutable words.
 - `CreationArtifact.patchWord` applies one validated 32-byte patch.
+- `CreationArtifact.pushB256AsPush2OrPush32` emits an exact word as a
+  fixed-width `PUSH2` when it is below `2^16`, and as a full-width `PUSH32`
+  otherwise.  `Ninst.runCompiled_pushB256AsPush2OrPush32` proves that either
+  branch pushes the same `B256`, costs `gVerylow`, and preserves memory under
+  the ordinary stack-room premise.  This is deliberately different from
+  `Ninst.pushB256`, whose compact encoding strips leading zeroes and may use
+  `PUSH0`.  BeaconDeposit's `constructorPushWord` is the compatibility example.
 - `CreationArtifact.finalizedConstructorProgram` closes a family-owned
   layout-parametric constructor over its compiled provisional prefix and
   parameter-neutral runtime template without restating the shared coordinate
   calculation in each contract namespace.
 
 Contract families still own their marker worlds and the interpretation of
-each generated span.  These declarations are executable byte/layout
-operations rather than proposition-shaped proof endpoints, so they do not
-have a goal-triggered recipe.
+each generated span.  A `Nat` client must separately prove its source value is
+below `2^256` before conversion to `B256`; full-width fallback prevents
+truncation by the encoder but does not undo wrapping that happened earlier.
+The encoder also does not establish a provisional/final constructor-prefix
+fixed point: a provisional value below `2^16` can cross the boundary in the
+final pass, so every two-pass client retains an explicit prefix-length check.
+These declarations are executable byte/layout operations rather than a
+reliable goal-shaped authoring route, so they do not have a goal-triggered
+recipe.
 
 ### C4. I need to navigate the byte at a known compile shape
 

@@ -1,4 +1,5 @@
 import Blanc.BeaconDepositCode
+import Blanc.CreationArtifact
 
 /-!
 # Beacon deposit constructor and creation artifact
@@ -29,11 +30,7 @@ def constructorNodeWord : B256 := 2
 /-- Use fixed-width `PUSH2` for current constructor coordinates without ever
 truncating a future value that outgrows two bytes. -/
 def constructorPushWord (word : B256) : Ninst :=
-  let value := word.toNat
-  if value < 2 ^ 16 then
-    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
-  else
-    Ninst.push word.toBytes (by rw [B256.length_toBytes])
+  CreationArtifact.pushB256AsPush2OrPush32 word
 
 /-- Fixed-width constructor pushes for a source-order word list. -/
 def constructorPushWords : List B256 → Line :=
@@ -47,34 +44,9 @@ theorem Ninst.runCompiled_constructorPushWord
     (room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (constructorPushWord word)
       (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
-  by_cases fit : word.toNat < 2 ^ 16
-  · let bytes : Bytes :=
-      [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
-    have cost : pushCost bytes = gVerylow := by
-      simp [bytes, pushCost]
-    have pushed : Bytes.toB256 bytes = word := by
-      change Bytes.toB256
-        [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
-      rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
-    have run := Ninst.runCompiled_pushBytes
-      (sevm := sevm) (devm := devm) (xs := bytes)
-      (le := by simp [bytes]) (c := gVerylow) (G := G)
-      cost gas room
-    rw [constructorPushWord, if_pos fit]
-    simpa only [bytes, pushed] using run
-  · have run := Ninst.runCompiled_pushBytes
-      (sevm := sevm) (devm := devm) (xs := word.toBytes)
-      (le := by rw [B256.length_toBytes])
-      (c := gVerylow) (G := G)
-      (by
-        have hne : word.toBytes ≠ [] := by
-          intro empty
-          have lengths := congrArg List.length empty
-          simp only [B256.length_toBytes, List.length_nil] at lengths
-          omega
-        simp [pushCost, hne]) gas room
-    rw [constructorPushWord, if_neg fit]
-    simpa only [B256.toB256_toBytes] using run
+  simpa only [constructorPushWord] using
+    (Ninst.runCompiled_pushB256AsPush2OrPush32
+      (sevm := sevm) (devm := devm) (word := word) (G := G) gas room)
 
 /-- Load one constructor scratch word. -/
 def constructorLoadWord (word : B256) : Line :=
