@@ -213,6 +213,77 @@ def normalized(text: str) -> str:
     return " ".join(text.split())
 
 
+def without_lean_comments_and_strings(text: str) -> str:
+    """Blank Lean comments and strings while preserving bytes and newlines."""
+
+    out: list[str] = []
+    index = 0
+    block_depth = 0
+    in_line_comment = False
+    in_string = False
+    escaped = False
+
+    while index < len(text):
+        char = text[index]
+        pair = text[index : index + 2]
+
+        if in_line_comment:
+            if char == "\n":
+                in_line_comment = False
+                out.append(char)
+            else:
+                out.append(" ")
+            index += 1
+            continue
+
+        if block_depth:
+            if pair == "/-":
+                block_depth += 1
+                out.extend("  ")
+                index += 2
+            elif pair == "-/":
+                block_depth -= 1
+                out.extend("  ")
+                index += 2
+            else:
+                out.append("\n" if char == "\n" else " ")
+                index += 1
+            continue
+
+        if in_string:
+            out.append("\n" if char == "\n" else " ")
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if pair == "--":
+            in_line_comment = True
+            out.extend("  ")
+            index += 2
+        elif pair == "/-":
+            block_depth = 1
+            out.extend("  ")
+            index += 2
+        elif char == '"':
+            in_string = True
+            out.append(" ")
+            index += 1
+        else:
+            out.append(char)
+            index += 1
+
+    if block_depth:
+        raise ValueError("unterminated Lean block comment")
+    if in_string:
+        raise ValueError("unterminated Lean string literal")
+    return "".join(out)
+
+
 def static_errors(root: Path) -> list[str]:
     errors: list[str] = []
     texts = {path: read(root, path, errors) for path in PRODUCTION + SUPPORT}
@@ -253,7 +324,11 @@ def static_errors(root: Path) -> list[str]:
         if not re.search(rf"^\s*theorem\s+{re.escape(name)}\b", texts[relative], re.MULTILINE):
             errors.append(f"{code} — required theorem {name} is missing from {relative}")
 
-    root_imports = texts["Blanc.lean"]
+    try:
+        root_imports = without_lean_comments_and_strings(texts["Blanc.lean"])
+    except ValueError as exc:
+        errors.append(f"ROOT — cannot distinguish live imports: {exc}")
+        root_imports = ""
     for module in ("Upgrade", "ProxyPairUpgradePrograms", "ProxyPairUpgradeRelation",
                    "ProxyPairUpgradeExecution", "ProxyPairUpgradeRefinement",
                    "ProxyPairUpgradeStackSafety"):
@@ -261,7 +336,13 @@ def static_errors(root: Path) -> list[str]:
         if root_imports.splitlines().count(line) != 1:
             errors.append(f"ROOT — expected exactly one root import {line}")
 
-    stack_safety = texts["Blanc/ProxyPairUpgradeStackSafety.lean"]
+    try:
+        stack_safety = without_lean_comments_and_strings(
+            texts["Blanc/ProxyPairUpgradeStackSafety.lean"]
+        )
+    except ValueError as exc:
+        errors.append(f"STACK — cannot distinguish live stack surfaces: {exc}")
+        stack_safety = ""
     for label, pattern in STACK_SURFACES:
         count = len(pattern.findall(stack_safety))
         if count != 1:
@@ -463,6 +544,45 @@ def self_test(root: Path) -> list[str]:
             "STACK",
         ),
     )
+    comment_spoofs = (
+        (
+            "comment-spoof-stack-root-import",
+            "Blanc.lean",
+            "import Blanc.ProxyPairUpgradeStackSafety\n",
+            "ROOT",
+        ),
+        (
+            "comment-spoof-generated-table-binding",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "def v1StackTable : AbstractStackSafety.Table := StackSafetyData.table\n",
+            "STACK",
+        ),
+        (
+            "comment-spoof-global-pack-theorem",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "theorem v1FallbackPack_checked :\n"
+            "    StackSafetyData.pack32.all (checkRow v1Code v1StackTable 3) = true := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+        (
+            "comment-spoof-self-pack-rejection",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "example :\n"
+            "    StackSafetyData.pack32.all\n"
+            "      (checkRow v1Code StackSafetyData.pack32 3) = false := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+        (
+            "comment-spoof-row-zero-rejection",
+            "Blanc/ProxyPairUpgradeStackSafety.lean",
+            "example :\n"
+            "    checkTable v1Code StackSafetyData.tableWithoutEntry 3 = false := by\n"
+            "  decide +kernel\n",
+            "STACK",
+        ),
+    )
     with tempfile.TemporaryDirectory(prefix="proxy-pair-upgrade-self-test-") as raw:
         target = Path(raw)
         copy_static_tree(root, target)
@@ -494,6 +614,61 @@ def self_test(root: Path) -> list[str]:
             path.write_text(original, encoding="utf-8")
             if not any(error.startswith(expected + " —") for error in found):
                 failures.append(f"{label}: expected {expected} failure, got {found}")
+
+        for label, relative, block, expected in comment_spoofs:
+            path = target / relative
+            original = path.read_text(encoding="utf-8")
+            if original.count(block) != 1:
+                failures.append(
+                    f"{label}: expected one spoof anchor, found {original.count(block)}"
+                )
+                continue
+            path.write_text(
+                original.replace(block, f"/-\n{block}-/\n", 1), encoding="utf-8"
+            )
+            found = static_errors(target)
+            path.write_text(original, encoding="utf-8")
+            if not any(error.startswith(expected + " —") for error in found):
+                failures.append(f"{label}: expected {expected} failure, got {found}")
+
+        stack_path = target / "Blanc/ProxyPairUpgradeStackSafety.lean"
+        stack_original = stack_path.read_text(encoding="utf-8")
+        stack_anchor = comment_spoofs[1][2]
+        stack_path.write_text(
+            stack_original.replace(
+                stack_anchor, f"/- outer /- nested -/\n{stack_anchor}-/\n", 1
+            ),
+            encoding="utf-8",
+        )
+        nested_found = static_errors(target)
+        stack_path.write_text(stack_original, encoding="utf-8")
+        if not any(error.startswith("STACK —") for error in nested_found):
+            failures.append(
+                f"nested-comment-spoof: expected STACK failure, got {nested_found}"
+            )
+
+        root_path = target / "Blanc.lean"
+        root_original = root_path.read_text(encoding="utf-8")
+        root_anchor = comment_spoofs[0][2]
+        root_path.write_text(
+            root_original.replace(root_anchor, f'"{root_anchor.rstrip()}"\n', 1),
+            encoding="utf-8",
+        )
+        string_found = static_errors(target)
+        root_path.write_text(root_original, encoding="utf-8")
+        if not any(error.startswith("ROOT —") for error in string_found):
+            failures.append(f"string-spoof: expected ROOT failure, got {string_found}")
+
+        for label, path, suffix, expected in (
+            ("unterminated-comment", root_path, "/-", "ROOT"),
+            ("unterminated-string", stack_path, '"', "STACK"),
+        ):
+            original = path.read_text(encoding="utf-8")
+            path.write_text(original + suffix, encoding="utf-8")
+            found = static_errors(target)
+            path.write_text(original, encoding="utf-8")
+            if not any(error.startswith(expected + " — cannot distinguish") for error in found):
+                failures.append(f"{label}: expected fail-closed {expected} error, got {found}")
 
         empty = target / "wrong-root"
         empty.mkdir()
@@ -534,7 +709,7 @@ def main(argv: list[str]) -> int:
             print(f"FAIL — {SUBJECT}: {error}")
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
-    suffix = "; 27 disposable controls bite" if args.self_test else ""
+    suffix = "; 36 disposable controls bite" if args.self_test else ""
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
