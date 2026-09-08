@@ -442,6 +442,29 @@ lemma Rinst.runCore_mstore_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stack_setMach]
 
+/-- `MSTORE8`, evaluated forward with its exact one-byte memory window. -/
+lemma Rinst.runCore_mstore8_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
+    {i v : B256} {s : List B256} (h_stk : devm.stack = i :: v :: s)
+    (h_gas : gVerylow + devm.extCost [⟨i.toNat, 1⟩] ≤ devm.gasLeft) :
+    Rinst.runCore pc devm sevm .mstore8 =
+      .ok ((devm.setMach ⟨s, devm.memory,
+              devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 1⟩])⟩).memWrite
+        i.toNat [v.2.2.toUInt8]) := by
+  show (devm.popToNat >>= fun p => p.2.pop >>= fun q =>
+    chargeGas (gVerylow + q.2.extCost [⟨p.1, 1⟩]) q.2 >>= fun d =>
+      Except.ok (d.memWrite p.1 [q.1.2.2.toUInt8])) = _
+  rw [Devm.popToNat_eq_ok h_stk]
+  simp only [bind, Except.bind]
+  rw [Devm.pop_eq_ok
+    (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      [⟨i.toNat, 1⟩] = devm.extCost [⟨i.toNat, 1⟩] := rfl
+  rw [h_ext, chargeGas_eq_ok
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach,
+    Devm.gasLeft_setMach, Devm.stack_setMach]
+
 /-! ### The state-changing and call-adjacent opcodes
 
 Everything above this point is a read: a value comes off `sevm`, off the stack
@@ -1244,15 +1267,43 @@ lemma Ninst.runCompiled_mstore_of {sevm : Sevm} {devm : Devm} {i v : B256}
   subst h_ext
   exact Ninst.runCompiled_mstore h_stk h_gas h_write
 
+/-- Compiled `MSTORE8`, retaining its exact dynamic expansion term. -/
+lemma Ninst.runCompiled_mstore8 {sevm : Sevm} {devm : Devm} {i v : B256}
+    {s : List B256} {G : Nat} {M : Mem} (h_stk : devm.stack = i :: v :: s)
+    (h_gas : devm.gasLeft = G +
+      (gVerylow + devm.extCost [⟨i.toNat, 1⟩]))
+    (h_write : devm.memory.write i.toNat [v.2.2.toUInt8] = M) :
+    Ninst.RunCompiled sevm devm (.reg .mstore8)
+      (devm.setMach ⟨s, M, G⟩) := by
+  subst h_write
+  have h_eq :
+      devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 1⟩]) = G := by
+    omega
+  refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+  rw [Rinst.runCore_mstore8_eq_ok h_stk (by omega), h_eq]
+  rfl
+
+/-- Compiled `MSTORE8` with its expansion charge named separately. -/
+lemma Ninst.runCompiled_mstore8_of {sevm : Sevm} {devm : Devm} {i v : B256}
+    {s : List B256} {G e : Nat} {M : Mem}
+    (h_stk : devm.stack = i :: v :: s)
+    (h_ext : devm.extCost [⟨i.toNat, 1⟩] = e)
+    (h_gas : devm.gasLeft = G + (gVerylow + e))
+    (h_write : devm.memory.write i.toNat [v.2.2.toUInt8] = M) :
+    Ninst.RunCompiled sevm devm (.reg .mstore8)
+      (devm.setMach ⟨s, M, G⟩) := by
+  subst h_ext
+  exact Ninst.runCompiled_mstore8 h_stk h_gas h_write
+
 /-! ### The mutators and the stack shufflers, in the step interface
 
-Four of the rules below charge for a memory window, and every one of them takes
-its **whole** charge as a single named `Nat` — `h_cost` — rather than naming the
-expansion term the way `Ninst.runCompiled_mstore_of` does.  `MSTORE`'s charge is
-`gVerylow` plus one expansion; a copy's or a hash's is a fee-schedule constant
-plus a per-word term plus an expansion, and splitting a three-term sum across
-three premises would give the walk three obligations where the caller has one
-number.  One hint per instruction, one obligation per instruction.
+The copy, hash, and load rules below take their **whole** memory charge as a
+single named `Nat` — `h_cost` — rather than naming the expansion term the way
+`Ninst.runCompiled_mstore_of` and `Ninst.runCompiled_mstore8_of` do.  The store
+charges are `gVerylow` plus one expansion; a copy's or a hash's is a fee-schedule
+constant plus a per-word term plus an expansion, and splitting a three-term sum
+across three premises would give the walk three obligations where the caller
+has one number.  One hint per instruction, one obligation per instruction.
 
 Each successor is written with the `setMach` **outermost**, including the two
 whose base moves (`LOG`'s `addLog`, `SSTORE`'s accessed-set, refund-counter and
@@ -2226,6 +2277,24 @@ def natOf? (e : Expr) : MetaM (Option Nat) := do
   if let some n := e'.nat? then return some n
   return e'.rawNatLit?
 
+/-- Read a numeric expression directly, or from an exact local equality whose
+right-hand side reduces to a numeral.  The local scan is a fallback for the
+symbolic immediate-cost expressions accepted by `pushB256`; it neither derives
+nor guesses a cost. -/
+def natOfOrLocalEq? (g : MVarId) (e : Expr) : MetaM (Option (Nat × Option Expr)) := do
+  if let some n ← natOf? e then return some (n, none)
+  g.withContext do
+    let e ← instantiateMVars e
+    (← getLCtx).findDeclM? fun decl => do
+      if decl.isImplementationDetail then return none
+      let type ← instantiateMVars decl.type
+      match type.getAppFnArgs with
+      | (``Eq, #[_, lhs, rhs]) =>
+        if lhs != e then return none
+        let some n ← natOf? rhs | return none
+        return some (n, some decl.toExpr)
+      | _ => return none
+
 /-- Apply `name` to `g`, fixing the arguments in `given` and returning the
 argument positions in `holes` as goals. -/
 def applyLemma (g : MVarId) (name : Name) (given : List (Nat × Expr))
@@ -2550,7 +2619,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
     -- word, and a `pushB256` whose immediate is written `0 * 32` is one.
     let costE ← mkAppM ``pushCost
       #[← mkAppM ``Jaune.Bytes.sig #[← mkAppM ``Jaune.B256.toBytes #[w]]]
-    let some cost ← natOf? costE
+    let some (cost, costProof) ← natOfOrLocalEq? g costE
       | throwError "func_run: cannot tell what this PUSH costs:{indentExpr costE}"
     let gas' ← mkGas gb goff cost
     let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas'
@@ -2564,7 +2633,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
     let nek ← `(tactic| (refine pushCost_of_ne_zero ?_; decide +kernel))
     match gs with
     | [hc, hg, hr] =>
-      discharge hc [zero, ne, nek]
+      dischargeLocated hc costProof [zero, ne, nek]
       dischargeProfiled .gas hg (← gasTacs)
       dischargeProfiled .room hr (← roomTacs)
     | _ => throwError "func_run: PUSH left {gs.length} obligations"
@@ -2790,6 +2859,31 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         dischargeProfiled .gas hg (← gasTacs)
         discharge hw (← rflTacs)
       | _ => throwError "func_run: MSTORE left {gs.length} obligations"
+    | (``Jaune.Rinst.mstore8, #[]) => do
+      let ([idx, val], s) ← popStack 2 stk | throwError "func_run: MSTORE8"
+      let some ext ← nextHint g (mkConst ``Nat)
+        | throwError m!"func_run: step {n + 1} is an MSTORE8. Its memory-expansion charge is not computable from the instruction alone; supply it as the next hint."
+      let some extN ← natOf? ext
+        | throwError "func_run: the MSTORE8 hint{indentExpr ext}is not a numeral"
+      let gas' ← mkGas gb goff (3 + extN)
+      let low128 ← mkAppM ``Prod.snd #[val]
+      let low64 ← mkAppM ``Prod.snd #[low128]
+      let byte ← mkAppM ``UInt64.toUInt8 #[low64]
+      let bytes ← mkListLit (mkConst ``UInt8) [byte]
+      let img ← mkAppM ``Jaune.Mem.write
+        #[mem, ← mkAppM ``Jaune.B256.toNat #[idx], bytes]
+      let succ ← mkState base s img gas'
+      fixPost post succ
+      let gs ← applyLemma g ``Ninst.runCompiled_mstore8_of
+        [(0, sevm), (1, d), (2, idx), (3, val), (4, s), (5, gas'), (6, ext), (7, img)]
+        [8, 9, 10, 11]
+      match gs with
+      | [hstk, hext, hg, hw] =>
+        discharge hstk (← rflTacs)
+        discharge hext []
+        dischargeProfiled .gas hg (← gasTacs)
+        discharge hw (← rflTacs)
+      | _ => throwError "func_run: MSTORE8 left {gs.length} obligations"
     | (``Jaune.Rinst.pop, #[]) => do
       let ([_x], s) ← popStack 1 stk | throwError "func_run: POP"
       let gas' ← mkGas gb goff 2

@@ -459,44 +459,18 @@ private theorem storeByteShiftStack_runCompiled
       (dup 0 ::: pushB256 i ::: mstore8 :::
         pushB256 8 ::: shr ::: rest)
       post := by
-  apply Func.RunCompiled.next
-  · exact Ninst.runCompiled_dup (n := 0) (w := word) (G := G + 12) rfl
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-  · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach]
-    apply Func.RunCompiled.next
-    · exact Ninst.runCompiled_pushB256 (G := G + 9) hpush
-        (by simp only [Devm.gasLeft_setMach, gVerylow])
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-    · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-        Devm.memory_setMach]
-      apply Func.RunCompiled.next
-      · exact Ninst.runCompiled_mstore8_of
-          (i := i) (v := word) (s := word :: stack) (G := G + 6) (e := 0)
-          rfl
-          (Devm.extCost_zero_of_le hsize32 hfit)
-          (by simp only [Devm.gasLeft_setMach, gVerylow])
-          rfl
-      · simp only [Devm.setMach_setMach, Devm.memory_setMach]
-        apply Func.RunCompiled.next
-        · exact Ninst.runCompiled_pushB256 (w := 8) (c := gVerylow)
-            (G := G + 3) (by decide +kernel)
-            (by simp only [Devm.gasLeft_setMach, gVerylow])
-            (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-        · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-            Devm.memory_setMach]
-          apply Func.RunCompiled.next
-          · exact Ninst.runCompiled_binary
-              (r := .shr) (f := fun x y => y >>> x.toNat)
-              (cost := gVerylow) (G := G) (x := 8) (y := word)
-              (v := word >>> 8) (s := stack)
-              (by rintro ⟨⟩) rfl rfl
-              (by simp only [show (8 : B256).toNat = 8 by decide +kernel])
-              (by simp only [Devm.gasLeft_setMach, gVerylow])
-              (by omega)
-          · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using
-              hrest
+  func_run (5) [0]
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · exact Devm.extCost_zero_of_le hsize32 hfit
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · omega
+  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      show (8 : B256).toNat = 8 by decide +kernel,
+      show G + 15 - 15 = G by omega] using hrest
 
 private theorem storeByteLastStack_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -514,20 +488,12 @@ private theorem storeByteLastStack_runCompiled
       (base.setMach ⟨word :: stack, memory, G + 6⟩)
       (pushB256 i ::: mstore8 ::: rest)
       post := by
-  apply Func.RunCompiled.next
-  · exact Ninst.runCompiled_pushB256 (G := G + 3) hpush
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-  · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach]
-    apply Func.RunCompiled.next
-    · exact Ninst.runCompiled_mstore8_of
-        (i := i) (v := word) (s := stack) (G := G) (e := 0)
-        rfl
-        (Devm.extCost_zero_of_le hsize32 hfit)
-        (by simp only [Devm.gasLeft_setMach, gVerylow])
-        rfl
-    · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hrest
+  func_run (2) [0]
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · exact Devm.extCost_zero_of_le hsize32 hfit
+  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` at any non-wrapping concrete address.  The
 continuation may retain an arbitrary tail stack; the chain costs exactly 111
@@ -833,44 +799,18 @@ private theorem storeByteShiftStack_runCompiledTo
       (dup 0 ::: pushB256 i ::: mstore8 :::
         pushB256 8 ::: shr ::: rest)
       ex := by
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_dup (n := 0) (w := word) (G := G + 12) rfl
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-  · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach]
-    apply Func.RunCompiledTo.next
-    · exact Ninst.runCompiled_pushB256 (G := G + 9) hpush
-        (by simp only [Devm.gasLeft_setMach, gVerylow])
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-    · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-        Devm.memory_setMach]
-      apply Func.RunCompiledTo.next
-      · exact Ninst.runCompiled_mstore8_of
-          (i := i) (v := word) (s := word :: stack) (G := G + 6) (e := 0)
-          rfl
-          (Devm.extCost_zero_of_le hsize32 hfit)
-          (by simp only [Devm.gasLeft_setMach, gVerylow])
-          rfl
-      · simp only [Devm.setMach_setMach, Devm.memory_setMach]
-        apply Func.RunCompiledTo.next
-        · exact Ninst.runCompiled_pushB256 (w := 8) (c := gVerylow)
-            (G := G + 3) (by decide +kernel)
-            (by simp only [Devm.gasLeft_setMach, gVerylow])
-            (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-        · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-            Devm.memory_setMach]
-          apply Func.RunCompiledTo.next
-          · exact Ninst.runCompiled_binary
-              (r := .shr) (f := fun x y => y >>> x.toNat)
-              (cost := gVerylow) (G := G) (x := 8) (y := word)
-              (v := word >>> 8) (s := stack)
-              (by rintro ⟨⟩) rfl rfl
-              (by simp only [show (8 : B256).toNat = 8 by decide +kernel])
-              (by simp only [Devm.gasLeft_setMach, gVerylow])
-              (by omega)
-          · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using
-              hrest
+  func_run (5) [0]
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · exact Devm.extCost_zero_of_le hsize32 hfit
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · omega
+  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      show (8 : B256).toNat = 8 by decide +kernel,
+      show G + 15 - 15 = G by omega] using hrest
 
 private theorem storeByteLastStack_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -888,20 +828,12 @@ private theorem storeByteLastStack_runCompiledTo
       (base.setMach ⟨word :: stack, memory, G + 6⟩)
       (pushB256 i ::: mstore8 ::: rest)
       ex := by
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256 (G := G + 3) hpush
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-  · simp only [Devm.setMach_setMach, Devm.stack_setMach,
-      Devm.memory_setMach]
-    apply Func.RunCompiledTo.next
-    · exact Ninst.runCompiled_mstore8_of
-        (i := i) (v := word) (s := stack) (G := G) (e := 0)
-        rfl
-        (Devm.extCost_zero_of_le hsize32 hfit)
-        (by simp only [Devm.gasLeft_setMach, gVerylow])
-        rfl
-    · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hrest
+  func_run (2) [0]
+  · simp only [Devm.stack_setMach, List.length_cons]
+    omega
+  · exact Devm.extCost_zero_of_le hsize32 hfit
+  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` before an arbitrary final `Execution`.  This is the
 outcome-general sibling of `storeLe64At_runCompiled`; it is needed by prefixes

@@ -52,6 +52,8 @@ registry has identified the likely vocabulary.
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
+  `MSTORE` and `MSTORE8` each consume the next numeric memory-expansion hint;
+  the hint remains checked by the instruction's exact `Devm.extCost` premise.
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
 - A selected `LOG` step that exposes unchanged storage, balances, code,
@@ -846,8 +848,11 @@ repeat their byte-slice normalization in a contract family.
   class.
 - `Mem.size_write_of_le`, `Mem.size_read_snd_of_le`, and related extension
   lemmas live in [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
-- `Func.runCompiledTo_mstore_step` and other compiled memory steps live in the
-  forward construction modules.
+- For construction, `Ninst.runCompiled_mstore8_of` retains the exact singleton
+  low-byte write and names its dynamic expansion charge. `func_run` uses the
+  same rule for every supported compiled relation; pass that charge as the
+  next numeric hint. `Func.runCompiledTo_mstore_step` covers word stores that
+  need an exhibited outcome-general continuation.
 - For scratch decoders that carry a proof image, use
   `of_run_mstoreAt_image` and `of_run_loadWordAt_image` to advance the stack,
   `Mem.Wf`, `Mem.Reads`, and the state equation together.  When the proof also
