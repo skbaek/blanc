@@ -1093,18 +1093,11 @@ theorem wideFactorFoldTraceImage_wordFrame
     Bytes.WordFrameFrom image
       (wideFactorFoldTraceImage image high low denominator)
       arithmeticScratchEnd := by
-  intro offset after
   unfold wideFactorFoldTraceImage
-  rw [readWord_writeAt_scratch_of_after _ lowWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ factorWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ lowWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ denominatorWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ twosWord _ offset
-      (by decide +kernel) after]
+  repeat' apply Bytes.WordFrameFrom.writeBefore
+  · exact Bytes.WordFrameFrom.refl image arithmeticScratchEnd
+  all_goals simp only [B256.length_toBytes]
+  all_goals decide +kernel
 
 theorem wideFactorFoldTraceImage_denominator
     (image : Bytes) (high low denominator : B256) :
