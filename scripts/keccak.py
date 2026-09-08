@@ -3,8 +3,9 @@
 
 Ethereum uses the original Keccak padding (``0x01``), not NIST SHA3's
 (``0x06``), so ``hashlib.sha3_256`` is not interchangeable.  This stdlib-only
-module is the canonical implementation for generators and primary evidence
-checkers that do not have an independent digest oracle of their own.
+module owns the in-repository primitive for generators and evidence checkers.
+Independent digest values come from pinned external oracles; consumer schemas
+and semantic models remain separate.
 """
 from __future__ import annotations
 
