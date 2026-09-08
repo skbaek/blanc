@@ -78,6 +78,11 @@ EELS root explicitly to `run_t8n`:
 post, result, body = run_t8n(env, alloc, txs, eels_root=EELS_ROOT)
 ```
 
+Run the caller under the selected EELS interpreter and verify its checkout
+against the intended pin before calling this transport. `run_t8n` forwards
+that interpreter and root; it does not itself validate checkout identity.
+Use the clean-checkout helper below for that separate precondition.
+
 Generators keep their scenario accounts, transactions, semantic assertions,
 manifests, output paths, and write policy local.  A generator that is imported
 as support may retain a thin three-argument `run_t8n` adapter to preserve its
