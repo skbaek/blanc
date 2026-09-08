@@ -1,5 +1,6 @@
 import Blanc.Weth10Code
 import Blanc.Forward
+import Blanc.CompiledShape
 
 namespace Blanc
 
@@ -7,62 +8,11 @@ open Jaune
 
 namespace Weth10
 
+open CompiledShape
+
 /-! Shape-indexed byte classification for the parameterized lower dispatcher.
 The proofs isolate the two generated deployment words while keeping all
 off-path subtrees opaque. -/
-
-private def lineByteSize : Line → Nat
-  | [] => 0
-  | inst :: rest => inst.size + lineByteSize rest
-
-private theorem byteAt_prepend_eq_prefix
-    (locations : List Nat) (n : Nat) (l : Line) (p0 p : Func)
-    (i : Nat) (d : UInt8) (hi : i < lineByteSize l) :
-    Func.byteAtByShape locations n (l +++ p0).compileShape
-        (l +++ p) i d =
-      Func.byteAtByShape locations n (l +++ p0).compileShape
-        (l +++ p0) i d := by
-  induction l generalizing n i with
-  | nil => simp [lineByteSize] at hi
-  | cons inst rest ih =>
-      change
-        Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
-            (inst ::: (rest +++ p)) i d =
-          Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
-            (inst ::: (rest +++ p0)) i d
-      by_cases hinst : i < inst.size
-      · conv_lhs => rw [Func.byteAtByShape, if_pos hinst]
-        conv_rhs => rw [Func.byteAtByShape, if_pos hinst]
-      · conv_lhs => rw [Func.byteAtByShape, if_neg hinst]
-        conv_rhs => rw [Func.byteAtByShape, if_neg hinst]
-        apply ih
-        simp only [lineByteSize] at hi
-        omega
-
-private theorem byteAt_prepend_to_tail
-    (locations : List Nat) (n : Nat) (l : Line) (p0 p : Func)
-    (i : Nat) (d : UInt8) (hlo : lineByteSize l ≤ i) :
-    Func.byteAtByShape locations n (l +++ p0).compileShape
-        (l +++ p) i d =
-      Func.byteAtByShape locations (n + lineByteSize l) p0.compileShape
-        p (i - lineByteSize l) d := by
-  induction l generalizing n i with
-  | nil => simp [lineByteSize, prepend]
-  | cons inst rest ih =>
-      have hinst : inst.size ≤ i := by
-        simp only [lineByteSize] at hlo
-        omega
-      change
-        Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
-            (inst ::: (rest +++ p)) i d = _
-      conv_lhs => rw [Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hinst)]
-      rw [ih (n := n + inst.size) (i := i - inst.size) (by
-        simp only [lineByteSize] at hlo
-        omega)]
-      simp only [lineByteSize, Nat.add_assoc, Nat.sub_sub]
 
 private theorem byteAt_next_to_tail
     (locations : List Nat) (n : Nat) (inst0 inst : Ninst)
@@ -76,96 +26,6 @@ private theorem byteAt_next_to_tail
     Func.byteAtByShape locations n (.next inst0.size p0.compileShape)
         (inst ::: p) i d = _
   conv_lhs => rw [Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hlo)]
-
-private theorem byteAt_branch_eq_header
-    (locations : List Nat) (n : Nat)
-    (left0 right0 left right : Func) (i : Nat) (d : UInt8)
-    (hi : i < 4) :
-    Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left right) i d =
-      Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left0 right0) i d := by
-  conv_lhs => rw [Func.byteAtByShape, if_pos (by
-    simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using hi)]
-  conv_rhs => rw [Func.byteAtByShape, if_pos (by
-    simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using hi)]
-
-private theorem byteAt_branch_to_left
-    (locations : List Nat) (n : Nat)
-    (left0 right0 left right : Func) (i : Nat) (d : UInt8)
-    (hlo : 4 ≤ i) (hinside : i - 4 < left0.compileShape.byteSize) :
-    Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left right) i d =
-      Func.byteAtByShape locations (n + 4) left0.compileShape left
-        (i - 4) d := by
-  conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil]
-    omega)]
-  dsimp only
-  conv_lhs => rw [if_pos (by
-    simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using
-      hinside)]
-  simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-
-private theorem byteAt_branch_to_right
-    (locations : List Nat) (n : Nat)
-    (left0 right0 left right : Func) (i : Nat) (d : UInt8)
-    (hlo : 5 + left0.compileShape.byteSize ≤ i) :
-    Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left right) i d =
-      Func.byteAtByShape locations
-        (n + 5 + left0.compileShape.byteSize) right0.compileShape right
-        (i - (5 + left0.compileShape.byteSize)) d := by
-  conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil]
-    omega)]
-  dsimp only
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-    omega)]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-    omega)]
-  simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-  congr 1 <;> omega
-
-private theorem byteAt_branch_eq_before_right
-    (locations : List Nat) (n : Nat)
-    (left0 right0 right : Func) (i : Nat) (d : UInt8)
-    (hi : i < 5 + left0.compileShape.byteSize) :
-    Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left0 right) i d =
-      Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left0 right0) i d := by
-  by_cases hheader : i < 4
-  · exact byteAt_branch_eq_header locations n left0 right0 left0 right
-      i d hheader
-  · by_cases hleft : i - 4 < left0.compileShape.byteSize
-    · rw [byteAt_branch_to_left locations n left0 right0 left0 right i d
-          (by omega) hleft,
-        byteAt_branch_to_left locations n left0 right0 left0 right0 i d
-          (by omega) hleft]
-    · have hjump : i = 4 + left0.compileShape.byteSize := by omega
-      subst i
-      simp [Func.byteAtByShape]
-
-private theorem pushDeployWord_opcode_eq
-    (locations : List Nat) (n : Nat) (p0 p : Func) (w : B256) :
-    Func.byteAtByShape locations n (pushDeployWord 0 ::: p0).compileShape
-        (pushDeployWord w ::: p) 0 0 =
-      Func.byteAtByShape locations n (pushDeployWord 0 ::: p0).compileShape
-        (pushDeployWord 0 ::: p0) 0 0 := by
-  simp [Func.byteAtByShape, Func.compileShape, pushDeployWord,
-    Ninst.toBytes, Ninst.size, pushToB8L, pushToB8,
-    B256.length_toBytes]
 
 private theorem pushDeployWord_word_byte
     (locations : List Nat) (n : Nat) (p0 p : Func) (w : B256)
@@ -244,7 +104,7 @@ private theorem domainCachedPathByteAt_eq_zero_0_2
       simp only [Ninst.size]
       omega)]
     simp only [Ninst.size, Nat.reduceSub]
-    exact pushDeployWord_opcode_eq _ _ _ _ _
+    exact pushFullWord_opcode_eq _ _ _ _ _
 
 private theorem domainCachedPathByteAt_word
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -406,7 +266,7 @@ private theorem domainByteAt_to_afterChain
   rw [domainSeparator_eq_factored dp,
     domainSeparator_eq_factored (⟨0, 0⟩ : DeployParams)]
   unfold domainFactored
-  have hhead : lineByteSize domainHead = 2 := by decide +kernel
+  have hhead : prefixByteSize domainHead = 2 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
     (locations := locations) (n := n) (l := domainHead)
     (p0 := pushDeployWord 0 ::: domainAfterChain (⟨0, 0⟩ : DeployParams))
@@ -437,7 +297,7 @@ private theorem domainSeparatorByteAt_eq_zero_0_3
   rw [domainSeparator_eq_factored dp,
     domainSeparator_eq_factored (⟨0, 0⟩ : DeployParams)]
   unfold domainFactored
-  have hhead : lineByteSize domainHead = 2 := by decide +kernel
+  have hhead : prefixByteSize domainHead = 2 := by decide +kernel
   by_cases hpre : i < 2
   · apply byteAt_prepend_eq_prefix
     simpa only [hhead] using hpre
@@ -454,7 +314,7 @@ private theorem domainSeparatorByteAt_eq_zero_0_3
       (p := pushDeployWord 0 ::: domainAfterChain (⟨0, 0⟩ : DeployParams))
       (i := 2) (d := 0) (by omega)]
     simp only [hhead, Nat.reduceSub]
-    exact pushDeployWord_opcode_eq _ _ _ _ _
+    exact pushFullWord_opcode_eq _ _ _ _ _
 
 private theorem domainSeparatorByteAt_deploymentWord_3_35
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -466,7 +326,7 @@ private theorem domainSeparatorByteAt_deploymentWord_3_35
   rw [domainSeparator_eq_factored dp,
     domainSeparator_eq_factored (⟨0, 0⟩ : DeployParams)]
   unfold domainFactored
-  have hhead : lineByteSize domainHead = 2 := by decide +kernel
+  have hhead : prefixByteSize domainHead = 2 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
     (locations := locations) (n := n) (l := domainHead)
     (p0 := pushDeployWord 0 ::: domainAfterChain (⟨0, 0⟩ : DeployParams))
@@ -573,10 +433,6 @@ private def dispatch22_7_1 (dp : DeployParams) : Func :=
 private def dispatch22_8_1 (dp : DeployParams) : Func :=
   dispatchWith fallbackSlot (treeSlice dp 22 8 1)
 
-private def dispatchNode (selector : B256) (offPath onPath : Func) : Func :=
-  Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
-    (offPath <?> onPath)
-
 private theorem dispatch26_0_14_eq_node (dp : DeployParams) :
     dispatch26_0_14 dp =
       dispatchNode (selector "decimals" [])
@@ -630,19 +486,6 @@ few leaf-level `decide`s: kernel-evaluating `byteSize` over a subtree
 re-walks every leaf below it, so deciding each level independently repeated
 the same traversal per lemma.  The block is ordered children-first; every
 statement is unchanged. -/
-
-private theorem dispatchNode_size (s : B256) (off on : Func)
-    (hpush : (Ninst.pushB256 s).size = 5) :
-    (dispatchNode s off on).compileShape.byteSize =
-      12 + on.compileShape.byteSize + off.compileShape.byteSize := by
-  have hpushBytes : (Ninst.toBytes (Ninst.pushB256 s)).length = 5 := by
-    rw [← Ninst.size_eq_length_toBytes]
-    exact hpush
-  have hdup : (Ninst.toBytes (Ninst.dup 0)).length = 1 := rfl
-  have hgt : (Ninst.toBytes Ninst.gt).length = 1 := rfl
-  simp only [Func.CompileShape.byteSize_compileShape, dispatchNode, compsize,
-    hpushBytes, hdup, hgt]
-  omega
 
 private theorem dispatch22_7_1_size :
     (dispatch22_7_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
@@ -709,83 +552,6 @@ theorem fullDispatch_size :
   rw [dispatchNode_size _ _ _ (by decide +kernel)]
   rw [dispatch26_14_13_size, dispatch26_0_14_size]
 
-private lemma dispatchNodeByteAt_to_onPath
-    (locations : List Nat) (n : Nat) (selector : B256)
-    (off0 on0 off on : Func) (i : Nat) (d : UInt8)
-    (hpush : (Ninst.pushB256 selector).size = 5)
-    (hlo : 11 ≤ i)
-    (hinside : i - 11 < on0.compileShape.byteSize) :
-    Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off on) i d =
-      Func.byteAtByShape locations (n + 11) on0.compileShape on
-        (i - 11) d := by
-  have hdup : (Ninst.dup 0).size = 1 := by decide +kernel
-  have hgt : Ninst.gt.size = 1 := by decide +kernel
-  have hiEq : i - 1 - 5 - 1 - 4 = i - 11 := by omega
-  change
-    Func.byteAtByShape locations n
-      (.next (Ninst.dup 0).size
-        (.next (Ninst.pushB256 selector).size
-          (.next Ninst.gt.size
-            (.branch on0.compileShape off0.compileShape))))
-      (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
-        (off <?> on)) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil]
-    omega)]
-  dsimp only
-  conv_lhs => rw [if_pos (by
-    simpa only [hdup, hpush, hgt, List.length_cons, List.length_nil,
-      Nat.reduceAdd, hiEq] using hinside)]
-  simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
-    Nat.reduceAdd, hiEq]
-
-private lemma dispatchNodeByteAt_to_offPath
-    (locations : List Nat) (n : Nat) (selector : B256)
-    (off0 on0 off on : Func) (i : Nat) (d : UInt8)
-    (hpush : (Ninst.pushB256 selector).size = 5)
-    (hlo : 12 + on0.compileShape.byteSize ≤ i) :
-    Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off on) i d =
-      Func.byteAtByShape locations
-        (n + 12 + on0.compileShape.byteSize) off0.compileShape off
-        (i - (12 + on0.compileShape.byteSize)) d := by
-  have hdup : (Ninst.dup 0).size = 1 := by decide +kernel
-  have hgt : Ninst.gt.size = 1 := by decide +kernel
-  change
-    Func.byteAtByShape locations n
-      (.next (Ninst.dup 0).size
-        (.next (Ninst.pushB256 selector).size
-          (.next Ninst.gt.size
-            (.branch on0.compileShape off0.compileShape))))
-      (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
-        (off <?> on)) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil]
-    omega)]
-  dsimp only
-  conv_lhs => rw [if_neg (by
-    simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
-      Nat.reduceAdd]
-    omega)]
-  conv_lhs => rw [if_neg (by
-    simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
-      Nat.reduceAdd]
-    omega)]
-  simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
-    Nat.reduceAdd]
-  congr 1 <;> omega
-
 private def domainLeafPrefix : Line :=
   [Ninst.pushB256 (selector "DOMAIN_SEPARATOR" []), Ninst.eq]
 
@@ -810,7 +576,7 @@ private theorem domainLeafByteAt_to_nonpayable
         (domainLeafPrefix +++
           Func.branch (.call fallbackSlot)
             (nonpayable (domainSeparator dp))) i 0 = _
-  have hprefix : lineByteSize domainLeafPrefix = 6 := by decide +kernel
+  have hprefix : prefixByteSize domainLeafPrefix = 6 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
     (locations := locations) (n := n) (l := domainLeafPrefix)
     (p0 := Func.branch (.call fallbackSlot)
@@ -855,7 +621,7 @@ private theorem nonpayableDomainByteAt_to_raw
             (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape
         (nonpayablePrefix +++
           Func.branch Func.revert (domainSeparator dp)) i 0 = _
-  have hprefix : lineByteSize nonpayablePrefix = 2 := by decide +kernel
+  have hprefix : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
   conv_lhs => rw [byteAt_prepend_to_tail
     (locations := locations) (n := n) (l := nonpayablePrefix)
     (p0 := Func.branch Func.revert
@@ -919,7 +685,7 @@ private theorem domainLeafByteAt_eq_zero_0_15
           Func.branch (.call fallbackSlot)
             (nonpayable
               (domainSeparator (⟨0, 0⟩ : DeployParams)))) i 0
-  have hprefix : lineByteSize domainLeafPrefix = 6 := by decide +kernel
+  have hprefix : prefixByteSize domainLeafPrefix = 6 := by decide +kernel
   by_cases hpre : i < 6
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
@@ -970,7 +736,7 @@ private theorem nonpayableDomainByteAt_eq_zero_0_10
         (nonpayablePrefix +++
           Func.branch Func.revert
             (domainSeparator (⟨0, 0⟩ : DeployParams))) i 0
-  have hprefix : lineByteSize nonpayablePrefix = 2 := by decide +kernel
+  have hprefix : prefixByteSize nonpayablePrefix = 2 := by decide +kernel
   by_cases hpre : i < 2
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
@@ -1337,126 +1103,6 @@ private theorem fullDispatchByteAt_eq_zero_3059_3065
 
 private def dispatchHeaderPrefix (selector : B256) : Line :=
   [Ninst.dup 0, Ninst.pushB256 selector, Ninst.gt]
-
-private theorem dispatchNodeByteAt_eq_prefix
-    (locations : List Nat) (n : Nat) (selector : B256)
-    (off0 on0 off on : Func)
-    (hpush : (Ninst.pushB256 selector).size = 5)
-    (i : Nat) (hi : i < 11) :
-    Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off on) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off0 on0) i 0 := by
-  unfold dispatchNode
-  change
-    Func.byteAtByShape locations n
-        (dispatchHeaderPrefix selector +++
-          Func.branch on0 off0).compileShape
-        (dispatchHeaderPrefix selector +++ Func.branch on off) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchHeaderPrefix selector +++
-          Func.branch on0 off0).compileShape
-        (dispatchHeaderPrefix selector +++ Func.branch on0 off0) i 0
-  have hprefix : lineByteSize (dispatchHeaderPrefix selector) = 7 := by
-    change (Ninst.dup 0).size +
-      ((Ninst.pushB256 selector).size + (Ninst.gt.size + 0)) = 7
-    rw [hpush]
-    decide +kernel
-  by_cases hline : i < 7
-  · apply byteAt_prepend_eq_prefix
-    simpa only [hprefix] using hline
-  · conv_lhs => rw [byteAt_prepend_to_tail
-      (locations := locations) (n := n)
-      (l := dispatchHeaderPrefix selector)
-      (p0 := Func.branch on0 off0) (p := Func.branch on off)
-      (i := i) (d := 0)
-      (by simpa only [hprefix] using (show 7 ≤ i by omega))]
-    conv_rhs => rw [byteAt_prepend_to_tail
-      (locations := locations) (n := n)
-      (l := dispatchHeaderPrefix selector)
-      (p0 := Func.branch on0 off0) (p := Func.branch on0 off0)
-      (i := i) (d := 0)
-      (by simpa only [hprefix] using (show 7 ≤ i by omega))]
-    simp only [hprefix]
-    apply byteAt_branch_eq_header
-    omega
-
-private lemma byteAt_branch_jumpdest
-    (locations : List Nat) (n : Nat)
-    (left0 right0 left right : Func) (d : UInt8) :
-    Func.byteAtByShape locations n
-        (.branch left0.compileShape right0.compileShape)
-        (.branch left right) (4 + left0.compileShape.byteSize) d =
-      Jinst.jumpdest.toUInt8 := by
-  conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil]
-    omega)]
-  dsimp only
-  conv_lhs => rw [if_neg (by
-    simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-    omega)]
-  conv_lhs => rw [if_pos (by
-    simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-    omega)]
-  have hi0 :
-      4 + left0.compileShape.byteSize - 4 -
-        left0.compileShape.byteSize = 0 := by
-    omega
-  simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
-  rw [hi0]
-  rfl
-
-private theorem dispatchNodeByteAt_eq_jumpdest
-    (locations : List Nat) (n : Nat) (selector : B256)
-    (off0 on0 off on : Func)
-    (hpush : (Ninst.pushB256 selector).size = 5) :
-    Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off on) (11 + on0.compileShape.byteSize) 0 =
-      Func.byteAtByShape locations n
-        (dispatchNode selector off0 on0).compileShape
-        (dispatchNode selector off0 on0)
-        (11 + on0.compileShape.byteSize) 0 := by
-  unfold dispatchNode
-  change
-    Func.byteAtByShape locations n
-        (dispatchHeaderPrefix selector +++ Func.branch on0 off0).compileShape
-        (dispatchHeaderPrefix selector +++ Func.branch on off)
-          (11 + on0.compileShape.byteSize) 0 =
-      Func.byteAtByShape locations n
-        (dispatchHeaderPrefix selector +++ Func.branch on0 off0).compileShape
-        (dispatchHeaderPrefix selector +++ Func.branch on0 off0)
-          (11 + on0.compileShape.byteSize) 0
-  have hprefix : lineByteSize (dispatchHeaderPrefix selector) = 7 := by
-    change (Ninst.dup 0).size +
-      ((Ninst.pushB256 selector).size + (Ninst.gt.size + 0)) = 7
-    rw [hpush]
-    decide +kernel
-  conv_lhs => rw [byteAt_prepend_to_tail
-    (locations := locations) (n := n) (l := dispatchHeaderPrefix selector)
-    (p0 := Func.branch on0 off0) (p := Func.branch on off)
-    (i := 11 + on0.compileShape.byteSize) (d := 0)
-    (by rw [hprefix]; omega)]
-  conv_rhs => rw [byteAt_prepend_to_tail
-    (locations := locations) (n := n) (l := dispatchHeaderPrefix selector)
-    (p0 := Func.branch on0 off0) (p := Func.branch on0 off0)
-    (i := 11 + on0.compileShape.byteSize) (d := 0)
-    (by rw [hprefix]; omega)]
-  simp only [hprefix]
-  have hindex : 11 + on0.compileShape.byteSize - 7 =
-      4 + on0.compileShape.byteSize := by omega
-  rw [hindex]
-  change
-    Func.byteAtByShape locations (n + 7)
-        (.branch on0.compileShape off0.compileShape)
-        (.branch on off) (4 + on0.compileShape.byteSize) 0 =
-      Func.byteAtByShape locations (n + 7)
-        (.branch on0.compileShape off0.compileShape)
-        (.branch on0 off0) (4 + on0.compileShape.byteSize) 0
-  rw [byteAt_branch_jumpdest, byteAt_branch_jumpdest]
 
 private theorem dispatch25_0_7_eq_zero (dp : DeployParams) :
     dispatch25_0_7 dp =
