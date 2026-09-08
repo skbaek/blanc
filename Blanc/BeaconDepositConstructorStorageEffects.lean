@@ -5,6 +5,7 @@ import Blanc.BytesWrite
 import Blanc.ForwardStorageEffects
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
+import Blanc.MemoryImage
 import Blanc.WordArithmetic
 
 /-!
@@ -82,24 +83,6 @@ def constructorInitialMemory_carrier :
 /-- Scratch image after copying the current node into the two SHA input words. -/
 def constructorPairMemory (memory : Mem) (node : B256) : Mem :=
   (memory.write 0 node.toBytes).write 32 node.toBytes
-
-/-- A word written wholly below the node scratch word preserves the loop-head
-memory carrier. -/
-def ConstructorLoopMemory.writeBelowNode
-    {memory : Mem} {height : Nat}
-    (carrier : ConstructorLoopMemory memory height)
-    (offset : Nat) (value : B256) (below : offset + 32 ≤ 64) :
-    ConstructorLoopMemory (memory.write offset value.toBytes) height := by
-  refine ⟨Bytes.writeAt carrier.image offset value.toBytes,
-    carrier.wf.write offset value.toBytes,
-    carrier.reads.write carrier.wf offset value.toBytes, ?_, ?_⟩
-  · rw [Mem.size_write_of_le (by
-      rw [B256.length_toBytes, carrier.size_eq]
-      omega), carrier.size_eq]
-  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]
-      exact below)]
-    exact carrier.nodeWindow
 
 theorem ConstructorLoopMemory.readNode
     {memory : Mem} {height : Nat}
@@ -242,25 +225,38 @@ private theorem constructorPairStage_storageEffectRun
         rest) ex effects := by
   let node := zeroHash Bytes.sha256 height
   let M0 := memory.write 0 node.toBytes
-  have carrier0 : ConstructorLoopMemory M0 height := by
-    dsimp only [M0, node]
-    exact carrier.writeBelowNode 0 _ (by omega)
+  let before := base.setMach ⟨[], memory, 0⟩
+  let after := base.setMach ⟨[], M0, 0⟩
+  have image : MemImage before carrier.image := by
+    exact ⟨by simpa only [before, Devm.memory_setMach] using carrier.wf,
+      by simpa only [before, Devm.memory_setMach] using carrier.reads⟩
+  have window : MemWordAt before 64 node := by
+    apply MemWordAt.of_memImage image
+    simpa only [node] using carrier.nodeWindow
+  have window0 : MemWordAt after 64 node := by
+    apply MemWordAt.writeMiss (a := before) (n := 0) (v := node)
+      (by simp only [after, before, Devm.memory_setMach, M0])
+      (Or.inr (by omega)) window
+  have hsize0 : M0.size = 96 := by
+    dsimp only [M0]
+    rw [Mem.size_write_word_at, carrier.size_eq]
+    decide +kernel
   have hmod : memory.size % 32 = 0 := by
     rw [carrier.size_eq]
   have hmod0 : M0.size % 32 = 0 := by
-    rw [carrier0.size_eq]
+    rw [hsize0]
   have hread0 : Bytes.toB256 (memory.read 64 32).1 = node := by
-    simpa only [node] using carrier.readNode
+    simpa only [before, Devm.memory_setMach] using window.readWord
   have hreadMem0 : (memory.read 64 32).2 = memory := by
     apply Mem.read_snd_eq_self
     apply memExtSize_of_le hmod
     rw [carrier.size_eq]
   have hread1 : Bytes.toB256 (M0.read 64 32).1 = node := by
-    simpa only [node] using carrier0.readNode
+    simpa only [after, Devm.memory_setMach] using window0.readWord
   have hreadMem1 : (M0.read 64 32).2 = M0 := by
     apply Mem.read_snd_eq_self
     apply memExtSize_of_le hmod0
-    rw [carrier0.size_eq]
+    rw [hsize0]
   simp only [constructorLoadWord, constructorStoreWord, constructorNodeWord,
     show ((2 : B256) * 32) = 64 by decide +kernel,
     show ((0 : B256) * 32) = 0 by decide +kernel,
@@ -328,7 +324,7 @@ private theorem constructorPairStage_storageEffectRun
             (c := 3) (G := K + 6) (M := M0) rfl
             (by
               rw [Devm.extCost_zero_of_le hmod0 (by
-                rw [carrier0.size_eq]
+                rw [hsize0]
                 decide +kernel)]
               decide)
             hread1 hreadMem1
@@ -350,7 +346,7 @@ private theorem constructorPairStage_storageEffectRun
               (i := 32) (v := node) (s := heightWord :: stack)
               (G := K) (e := 0) rfl
               (Devm.extCost_zero_of_le hmod0 (by
-                rw [carrier0.size_eq]
+                rw [hsize0]
                 decide +kernel))
               (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
             (by rintro impossible; cases impossible)

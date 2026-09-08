@@ -873,8 +873,9 @@ import is `Blanc.Ladder`.
   becomes existential, which keeps a large scratch region out of downstream
   goals.  Move between the two with `MemWordAt.of_memImage` and
   `MemWordAt.memImage`.
-- Establish a window by storing (`MemWordAt.of_write`, `of_run_mstoreAt_mem`)
-  and read one back onto the stack with `prefix_of_loadWord_window`.
+- Establish a window by storing (`MemWordAt.of_write`, `of_run_mstoreAt_mem`).
+  Eliminate it to a direct memory-read equality with `MemWordAt.readWord`, or
+  read it back onto the stack with `prefix_of_loadWord_window`.
 - Carry a window across a write that misses it with `MemWordAt.writeMiss`
   (whole-word) or `MemWordAt.writeMissBytes` (arbitrary span); across logical
   extension with `MemWordAt.extend` and `MemWordAt.extends`; across the
@@ -887,6 +888,12 @@ import is `Blanc.Ladder`.
 - For a scratch trace whose writes are confined below a fixed boundary,
   `Bytes.WordFrameFrom` is the compositional frame relation, with `refl`,
   `trans`, and `MemWordAt.of_wordFrame` to apply it.
+
+`constructorPairStage_storageEffectRun` in
+`Blanc/BeaconDepositConstructorStorageEffects.lean` is the scratch-layout
+example: it carries the node window `[64,96)` across the disjoint constructor
+write `[0,32)`, then deliberately stops carrying it before SHA output
+overwrites `[64,96)`.
 
 Boundary: every theorem here is frame-shaped — it carries an already-known
 window and proves nothing about what the step computed.  The disjointness side
