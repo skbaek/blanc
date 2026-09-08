@@ -546,6 +546,26 @@ them. `Blanc/ProxyPairImplementation.lean`'s 25-byte `implGuardedCode` is the
 one other runtime already inside the family, at a 19-row table and a ceiling of
 two.
 
+### E10. I have a successful source run of a body that must store
+
+Use [`Blanc/StaticStores.lean`](../Blanc/StaticStores.lean). Prove
+`StoresOrHalts fs f`, then apply `StoresOrHalts.isStatic_eq_false` to the exact
+premise `Func.Run fs e s f r`; the conclusion is `e.isStatic = false`.
+`stores_structure` walks instruction and branch structure to an `SSTORE` or an
+unrunnable `Func.revert` arm. For a long `Line` before the first store, use
+`stores_line line` with the exact prefix supplied explicitly; the driver never
+searches for an arbitrary line split. Contract-specific calls remain explicit
+through `StoresOrHalts.call` or the `with` arm of `stores_structure`.
+
+The relation requires every successful path either to reach `SSTORE` or to be
+impossible under the universal premise carried by `StoresOrHalts.never`. A body
+with an executable `Func.stop` arm does not meet it. The result neither proves
+that the body runs nor describes the storage effect. The production example is
+`LidoTriggerableWithdrawalsGateway.setLimitWrite_storesOrHalts` in
+[`Blanc/LidoTriggerableWithdrawalsGatewayStaticStores.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayStaticStores.lean):
+it names the exact `mloadWord 0 ++ [pushB256 maxExitRequestsLimitSlot]` prefix
+and closes at the following `SSTORE` without changing or duplicating the body.
+
 ## I — invariance and noninterference
 
 ### I1. One instruction/line/function preserves an observation

@@ -1,4 +1,5 @@
 import Blanc.Weth10AllowanceAccounting
+import Blanc.StaticStores
 
 /-!
 Static silence for the allowance region.
@@ -137,63 +138,7 @@ theorem applyAllowanceLedger_writeFree_append
     lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
   cases lastAllowanceWriteAt right.reverse key <;> rfl
 
-/-! ## Compiled bodies that cannot avoid a storage write -/
-
-/-- A compiled body every successful run of which passes an `SSTORE`.  The
-`never` leaf covers the arms that cannot run at all — the constant reverters
-WETH10's guards dispatch to. -/
-inductive StoresOrHalts (fs : List Func) : Func → Prop
-  | store {f : Func} : StoresOrHalts fs (sstore ::: f)
-  | next {i : Ninst} {f : Func} (h : StoresOrHalts fs f) :
-      StoresOrHalts fs (i ::: f)
-  | branch {f g : Func} (hf : StoresOrHalts fs f) (hg : StoresOrHalts fs g) :
-      StoresOrHalts fs (Func.branch f g)
-  | call {k : Nat} {f : Func} (hget : fs[k]? = some f)
-      (h : StoresOrHalts fs f) : StoresOrHalts fs (Func.call k)
-  | never {f : Func} (h : ∀ {e : Sevm} {s r : Devm}, ¬ Func.Run fs e s f r) :
-      StoresOrHalts fs f
-
-/-- A body that cannot avoid a storage write cannot run in a static frame. -/
-theorem StoresOrHalts.isStatic_eq_false {fs : List Func} {f : Func}
-    (h : StoresOrHalts fs f) :
-    ∀ {e : Sevm} {s r : Devm}, Func.Run fs e s f r → e.isStatic = false := by
-  induction h with
-  | store =>
-      intro e s r run
-      cases run with
-      | next hi _ => exact Blanc.of_run_sstore_not_static hi
-  | next _ ih =>
-      intro e s r run
-      cases run with
-      | next _ hf => exact ih hf
-  | branch _ _ ihf ihg =>
-      intro e s r run
-      rcases of_run_branch run with ⟨_, _, hzero⟩ | ⟨_, _, _, _, _, _, hsucc⟩
-      · exact ihf hzero
-      · exact ihg hsucc
-  | call hget _ ih =>
-      intro e s r run
-      cases run with
-      | call hget' _ hbody =>
-          rw [hget] at hget'
-          cases Option.some.inj hget'
-          exact ih hbody
-  | never hnever =>
-      intro e s r run
-      exact absurd run hnever
-
 /-! ## The writing WETH10 selectors all store -/
-
-/-- Walk a body down to the first `SSTORE` on every branch, leaving the
-guard arms that dispatch to an auxiliary slot. -/
-syntax "stores_walk" : tactic
-macro_rules
-  | `(tactic| stores_walk) =>
-    `(tactic|
-        repeat' first
-          | exact StoresOrHalts.store
-          | apply StoresOrHalts.next
-          | apply StoresOrHalts.branch)
 
 /-- A guard arm dispatching to a constant `Error(string)` reverter never
 runs, so it stores vacuously. -/
@@ -205,12 +150,12 @@ theorem storesOrHalts_revertWithSlot {fs : List Func} {k : Nat} {reason : String
 theorem storesOrHalts_approve {fs : List Func} :
     StoresOrHalts fs approve := by
   unfold approve approvePrefix
-  stores_walk
+  stores_structure
 
 theorem storesOrHalts_approveAndCall {fs : List Func} :
     StoresOrHalts fs approveAndCall := by
   unfold approveAndCall approvePrefix
-  stores_walk
+  stores_structure
 
 theorem storesOrHalts_flashTokenErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
@@ -250,7 +195,7 @@ theorem storesOrHalts_transferBalanceErrorSlot (dp : DeployParams) :
     (reason := "WETH: transfer amount exceeds balance")
     (by simp [weth10Aux, transferBalanceErrorSlot, transferBalanceError])
 
-/-- Discharge the guard arms a `stores_walk` leaves behind. -/
+/-- Discharge the guard arms a `stores_structure` walk leaves behind. -/
 syntax "stores_slots" : tactic
 macro_rules
   | `(tactic| stores_slots) =>
@@ -266,21 +211,21 @@ macro_rules
 theorem storesOrHalts_permit (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) (permit dp) := by
   unfold permit
-  stores_walk
+  stores_structure
   stores_slots
 
 theorem storesOrHalts_transferFromCore (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) transferFromCore := by
   unfold transferFromCore transferFromNonzero transferFromZero
     loadArgBalanceAmount balanceTooSmall debitLoadedBalance
-  stores_walk
+  stores_structure
   stores_slots
 
 theorem storesOrHalts_withdrawFromCore (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) withdrawFromCore := by
   unfold withdrawFromCore loadArgBalanceAmount balanceTooSmall
     debitLoadedBalance
-  stores_walk
+  stores_structure
   stores_slots
 
 theorem storesOrHalts_transferFromCoreSlot (dp : DeployParams) :
@@ -298,7 +243,7 @@ theorem storesOrHalts_withdrawFromCoreSlot (dp : DeployParams) :
 theorem storesOrHalts_transferFrom (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) transferFrom := by
   unfold transferFrom spendCallerAllowanceThen
-  stores_walk
+  stores_structure
   all_goals first
     | exact storesOrHalts_transferFromCoreSlot _
     | exact storesOrHalts_allowanceErrorSlot _
@@ -306,7 +251,7 @@ theorem storesOrHalts_transferFrom (dp : DeployParams) :
 theorem storesOrHalts_withdrawFrom (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) withdrawFrom := by
   unfold withdrawFrom spendCallerAllowanceThen
-  stores_walk
+  stores_structure
   all_goals first
     | exact storesOrHalts_withdrawFromCoreSlot _
     | exact storesOrHalts_allowanceErrorSlot _
@@ -314,7 +259,7 @@ theorem storesOrHalts_withdrawFrom (dp : DeployParams) :
 theorem storesOrHalts_flashLoan (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) flashLoan := by
   unfold flashLoan
-  stores_walk
+  stores_structure
   stores_slots
 
 /-! ## Dispatch memberships for the writing selectors -/
