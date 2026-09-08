@@ -214,73 +214,97 @@ def normalized(text: str) -> str:
 
 
 def without_lean_comments_and_strings(text: str) -> str:
-    """Blank Lean comments and strings while preserving bytes and newlines."""
+    """Blank Lean comments/literals, preserving offsets and newlines.
 
-    out: list[str] = []
+    This is a local adaptation of the established
+    `check-proof-recipes.py::mask_comments_and_literals` lexer. Keeping it
+    local avoids creating a new runtime dependency for this focused gate; raw
+    strings, interpolation/macro string prefixes and nested comments follow
+    that already-tested implementation.
+    """
+
+    out = list(text)
     index = 0
-    block_depth = 0
-    in_line_comment = False
-    in_string = False
-    escaped = False
-
-    while index < len(text):
-        char = text[index]
-        pair = text[index : index + 2]
-
-        if in_line_comment:
-            if char == "\n":
-                in_line_comment = False
-                out.append(char)
-            else:
-                out.append(" ")
-            index += 1
-            continue
-
-        if block_depth:
-            if pair == "/-":
-                block_depth += 1
-                out.extend("  ")
+    depth = 0
+    size = len(text)
+    while index < size:
+        if depth:
+            if text.startswith("/-", index):
+                out[index : index + 2] = "  "
+                depth += 1
                 index += 2
-            elif pair == "-/":
-                block_depth -= 1
-                out.extend("  ")
+            elif text.startswith("-/", index):
+                out[index : index + 2] = "  "
+                depth -= 1
                 index += 2
             else:
-                out.append("\n" if char == "\n" else " ")
+                if text[index] != "\n":
+                    out[index] = " "
                 index += 1
             continue
-
-        if in_string:
-            out.append("\n" if char == "\n" else " ")
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            index += 1
+        if text.startswith("--", index):
+            while index < size and text[index] != "\n":
+                out[index] = " "
+                index += 1
+            continue
+        if text.startswith("/-", index):
+            out[index : index + 2] = "  "
+            depth = 1
+            index += 2
             continue
 
-        if pair == "--":
-            in_line_comment = True
-            out.extend("  ")
-            index += 2
-        elif pair == "/-":
-            block_depth = 1
-            out.extend("  ")
-            index += 2
-        elif char == '"':
-            in_string = True
-            out.append(" ")
-            index += 1
-        else:
-            out.append(char)
-            index += 1
+        if text[index] == "r":
+            marker = index + 1
+            while marker < size and text[marker] == "#":
+                marker += 1
+            if marker > index + 1 and marker < size and text[marker] == '"':
+                hashes = marker - index - 1
+                terminator = '"' + "#" * hashes
+                end = text.find(terminator, marker + 1)
+                if end < 0:
+                    raise ValueError("unterminated Lean raw string")
+                stop = end + len(terminator)
+                for offset in range(index, stop):
+                    if text[offset] != "\n":
+                        out[offset] = " "
+                index = stop
+                continue
 
-    if block_depth:
+        prefix = 0
+        if text[index] == '"':
+            prefix = 0
+        elif (
+            index + 2 < size
+            and text[index] in "sm"
+            and text[index + 1] == "!"
+            and text[index + 2] == '"'
+        ):
+            prefix = 2
+        if text[index] == '"' or prefix:
+            start = index
+            index += prefix + 1
+            escaped = False
+            while index < size:
+                if escaped:
+                    escaped = False
+                    index += 1
+                elif text[index] == "\\":
+                    escaped = True
+                    index += 1
+                elif text[index] == '"':
+                    index += 1
+                    break
+                else:
+                    index += 1
+            else:
+                raise ValueError("unterminated Lean string literal")
+            for offset in range(start, index):
+                if text[offset] != "\n":
+                    out[offset] = " "
+            continue
+        index += 1
+    if depth:
         raise ValueError("unterminated Lean block comment")
-    if in_string:
-        raise ValueError("unterminated Lean string literal")
     return "".join(out)
 
 
@@ -631,9 +655,34 @@ def self_test(root: Path) -> list[str]:
             if not any(error.startswith(expected + " —") for error in found):
                 failures.append(f"{label}: expected {expected} failure, got {found}")
 
+        for label, relative, block, expected in comment_spoofs:
+            path = target / relative
+            original = path.read_text(encoding="utf-8")
+            raw_spoof = f'def maskReviewSpoof : String := r#"a "\n{block}" b"#\n'
+            path.write_text(original.replace(block, raw_spoof, 1), encoding="utf-8")
+            found = static_errors(target)
+            path.write_text(original, encoding="utf-8")
+            if not any(error.startswith(expected + " —") for error in found):
+                failures.append(
+                    f"raw-string-{label}: expected {expected} failure, got {found}"
+                )
+
         stack_path = target / "Blanc/ProxyPairUpgradeStackSafety.lean"
         stack_original = stack_path.read_text(encoding="utf-8")
         stack_anchor = comment_spoofs[1][2]
+        multi_hash_spoof = (
+            f'def maskReviewSpoof : String := r###"a "\n{stack_anchor}" b"###\n'
+        )
+        stack_path.write_text(
+            stack_original.replace(stack_anchor, multi_hash_spoof, 1), encoding="utf-8"
+        )
+        multi_hash_found = static_errors(target)
+        stack_path.write_text(stack_original, encoding="utf-8")
+        if not any(error.startswith("STACK —") for error in multi_hash_found):
+            failures.append(
+                f"multi-hash-raw-string-spoof: expected STACK failure, got {multi_hash_found}"
+            )
+
         stack_path.write_text(
             stack_original.replace(
                 stack_anchor, f"/- outer /- nested -/\n{stack_anchor}-/\n", 1
@@ -659,9 +708,22 @@ def self_test(root: Path) -> list[str]:
         if not any(error.startswith("ROOT —") for error in string_found):
             failures.append(f"string-spoof: expected ROOT failure, got {string_found}")
 
+        for label, path, original, block, prefix, expected in (
+            ("interpolated-string-spoof", root_path, root_original, root_anchor, "s!", "ROOT"),
+            ("macro-string-spoof", stack_path, stack_original, stack_anchor, "m!", "STACK"),
+        ):
+            path.write_text(
+                original.replace(block, f'{prefix}"\n{block}"\n', 1), encoding="utf-8"
+            )
+            found = static_errors(target)
+            path.write_text(original, encoding="utf-8")
+            if not any(error.startswith(expected + " —") for error in found):
+                failures.append(f"{label}: expected {expected} failure, got {found}")
+
         for label, path, suffix, expected in (
             ("unterminated-comment", root_path, "/-", "ROOT"),
             ("unterminated-string", stack_path, '"', "STACK"),
+            ("unterminated-raw-string", root_path, 'r##"', "ROOT"),
         ):
             original = path.read_text(encoding="utf-8")
             path.write_text(original + suffix, encoding="utf-8")
@@ -709,7 +771,7 @@ def main(argv: list[str]) -> int:
             print(f"FAIL — {SUBJECT}: {error}")
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
-    suffix = "; 36 disposable controls bite" if args.self_test else ""
+    suffix = "; 45 disposable controls bite" if args.self_test else ""
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
