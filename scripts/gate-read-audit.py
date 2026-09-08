@@ -166,7 +166,10 @@ LAKE_SUBTREES = (".lake/build", ".lake/packages")
 def audit_gate(gate: dict, roots: list[Path]) -> dict:
     identifier = gate["id"]
     log = OUT_DIR / f"{identifier}.log"
-    log.unlink(missing_ok=True)
+    stdout_log = OUT_DIR / f"{identifier}.stdout.log"
+    stderr_log = OUT_DIR / f"{identifier}.stderr.log"
+    for path in (log, stdout_log, stderr_log):
+        path.unlink(missing_ok=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     environment = dict(os.environ)
@@ -182,6 +185,11 @@ def audit_gate(gate: dict, roots: list[Path]) -> dict:
         capture_output=True, text=True, check=False,
     )
     elapsed = time.monotonic() - started
+
+    # Keep the actual command diagnostics, including failed commands, so a read
+    # audit never requires another gate execution merely to explain its exit.
+    stdout_log.write_text(result.stdout, encoding="utf-8")
+    stderr_log.write_text(result.stderr, encoding="utf-8")
 
     reads: set[str] = set()
     writes: set[str] = set()
