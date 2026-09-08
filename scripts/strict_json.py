@@ -1,7 +1,8 @@
 """Strict JSON primitive shared by Blanc's evidence tools.
 
 This module owns syntax parsing plus rejection of duplicate object keys and
-non-finite numbers.  Callers retain their own exception types and diagnostic
+the named non-finite tokens ``NaN`` and ``Infinity`` (including
+``-Infinity``). Callers retain their own exception types and diagnostic
 wording by translating the structured errors below.
 """
 
@@ -26,9 +27,11 @@ class NonFiniteNumberError(ValueError):
 def loads(data: bytes | str) -> Any:
     """Parse one strict JSON value.
 
-    ``json.loads`` already rejects malformed syntax.  These hooks close its
-    two permissive extensions so every evidence entry point gets the same
-    primitive behavior without sharing any higher-level schema policy.
+    ``json.loads`` already rejects malformed syntax. These hooks reject its
+    named non-finite token extension. They do not add a post-parse finiteness
+    check: a finite-spelling overflow such as ``1e999`` retains stdlib behavior
+    and produces infinity. Every evidence entry point gets the same primitive
+    behavior without sharing any higher-level schema policy.
     """
 
     def object_pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:

@@ -43,6 +43,7 @@ import coincurve                                                 # noqa: E402
 
 from prague_fixture import (                                     # noqa: E402
     alloc_state_root, header_json, mk_header, norm_alloc,
+    quantity as q,
     run_t8n as run_prague_t8n,
 )
 
@@ -90,15 +91,6 @@ WAD_1_ETH = 0x0DE0B6B3A7640000  # 1 ether, used throughout as "the" wad
 # Every transaction in the suite is a legacy (type 0x0) transaction at this
 # gas price, so an EOA's fee for one transaction is `gas_used * GAS_PRICE`.
 GAS_PRICE = 10
-
-
-def q(x):
-    """Even-length hex quantity. Jaune's header/account decoders reject an
-    odd hex-digit count, while t8n emits minimal `hex()` form -- so every
-    quantity is re-padded here (Step-1 gotcha 1)."""
-    n = int(x, 16) if isinstance(x, str) else int(x)
-    s = format(n, "x")
-    return "0x" + ("0" + s if len(s) % 2 else s)
 
 
 h = q

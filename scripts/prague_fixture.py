@@ -10,6 +10,12 @@ import tempfile
 
 
 def quantity(value) -> str:
+    """Return an even-width hexadecimal quantity.
+
+    Jaune's header and account decoders reject an odd hex-digit count, while
+    t8n emits minimal ``hex()`` form, so every quantity is padded here.
+    """
+
     number = int(value, 16) if isinstance(value, str) else int(value)
     digits = format(number, "x")
     return "0x" + ("0" + digits if len(digits) % 2 else digits)

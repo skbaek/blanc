@@ -119,6 +119,7 @@ from ethereum.utils.hexadecimal import hex_to_bytes              # noqa: E402
 
 from prague_fixture import (                                     # noqa: E402
     alloc_state_root, header_json, mk_header, norm_alloc,
+    quantity as q,
     run_t8n as run_prague_t8n,
 )
 
@@ -188,12 +189,6 @@ GAS_PRICE = 10
 # trigger prober" below), and the `Trigger` constructor refuses a `gas=` cap on
 # a rejected trigger outright, because such a cap is exactly what would make
 # the gas-floor bit vacuous again.
-
-
-def q(x):
-    n = int(x, 16) if isinstance(x, str) else int(x)
-    s = format(n, "x")
-    return "0x" + ("0" + s if len(s) % 2 else s)
 
 
 h = q
