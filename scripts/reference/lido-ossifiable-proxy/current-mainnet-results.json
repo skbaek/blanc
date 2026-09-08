@@ -2326,14 +2326,14 @@
     "testingBackend": "cancun"
   },
   "provenance": {
-    "artifactGeneratorSha256": "a7772cc49f9aaa437b8590dbc490c59ba17c66518e4c4b57d928f60af29293d3",
+    "artifactGeneratorSha256": "6adadcf66d2d848a17531b1266f289204e48cdaaf7ce7568fc7aa592ebda268a",
     "artifactLeanSha256": "350790dbcca7fa49beb2379a2ac67647cc3e5dc59f5b6ff76832449b0b14cf6d",
     "artifactManifestSha256": "5dc2d5aac806580978388efba9439e174411b0760a616def2b225b395e8966ed",
     "currentMainnetHelperSha256": "c1cfaa965127bb7b86c47dccc0d465bf89c04b07cb81f288926c2a75d33238bf",
     "generatorSha256": "8938490da1cc65e3ada6d6651a090a05d999fe2f703dc30af01fae5648810176",
     "performanceManifestSha256": "a394a57ac6181cc8723afab6dddeb83c271839da568aa3e23f5848a13b7630b7",
     "performanceRunnerSha256": "e3aeacfb886e43c35aca00bcb64d37be5dc3a6f2ef50301766da49e5070c98c3",
-    "performanceSchemaSha256": "e78eb7f82861d3797dced05b27a614cfd675c29a49da5464eeeee4a44a9b488c",
+    "performanceSchemaSha256": "0e3fad6fda4e28c3ad7de3c40fafd655a7589f4de5f554be657391901954ff76",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "referenceLockSha256": "1c9f380f2475e5a54eb870e4f41ceeb09a0f9c227271ad14900fe82b0df1b688",
     "wrapperSha256": "53a4c0c548979c1bd85e70f34ee6ccac04b82d829e2ed22ff9dbf26f78b8bae4"
