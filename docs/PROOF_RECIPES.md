@@ -140,6 +140,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `declaration:Weth10.dispatchCae9_size`
 - Review: `proof-infrastructure` on `2026-08-25`
 
+## `compiled-shape-byte-navigation`
+
+- Status: `active`
+- Triggers: `goal-shape:compiled-shape-byte-navigation`
+- Preferred path: Import `Blanc.CompiledShape` and open `CompiledShape` inside `namespace Blanc`. Use `byteAt_prepend_*` for fixed instruction prefixes, `byteAt_branch_*` for branch header/left/jumpdest/right regions, `dispatchNodeByteAt_*` for the common selector-dispatch shape, and `pushFullWord_*` for a fixed 32-byte `Ninst.push`. Supply the existing compile-shape, size, and index-bound facts so the proof traverses only the addressed subtree.
+- Boundary: These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again.
+- Owner module: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean)
+- Canonical example: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean) — `byteAt_branch_to_right`
+- Registered symbols: `module:Blanc/CompiledShape.lean`, `declaration:Blanc.CompiledShape.byteAt_prepend_to_tail`, `declaration:Blanc.CompiledShape.byteAt_branch_to_right`, `declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath`, `declaration:Blanc.CompiledShape.pushFullWord_opcode_eq`
+- Review: `proof-infrastructure` on `2026-09-08`
+
 ## `successor-projection-normalization`
 
 - Status: `partial`

@@ -1320,10 +1320,16 @@ have a goal-triggered recipe.
 
 ### C4. I need to navigate the byte at a known compile shape
 
-Import [`Blanc.CompiledShape`](../Blanc/CompiledShape.lean) for a
+Import [`Blanc/CompiledShape.lean`](../Blanc/CompiledShape.lean) for a
 `Func.byteAtByShape` goal whose compile shape, sizes and index bounds are
 already known. Inside `namespace Blanc`, use `open CompiledShape`; outside it,
-use `open Blanc.CompiledShape`.
+use `open Blanc.CompiledShape`. The goal-sensitive
+`compiled-shape-byte-navigation` recipe reaches this branch for an explicit
+`.next`/`.branch`, a direct function constructor under `compileShape`, or the
+registered `CompiledShape.dispatchNode` wrapper. It never normalizes an
+arbitrary closed function to find that shape; expose only the relevant wrapper
+or constructor and invoke `blanc_suggest` again. An unknown, opaque, `.last`,
+or `.call` shape stays on the general declaration-search route.
 
 - `byteAt_prepend_*` handles a fixed instruction prefix and its tail.
 - `byteAt_branch_*` selects the branch header, left subtree, jump destination

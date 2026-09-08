@@ -149,6 +149,54 @@ def proofRecipeIsByteSizeComposition (target : Lean.Expr) : Bool :=
     head == some `LE.le || head == some `LT.lt) &&
     proofRecipeContainsClosedCompileShapeByteSize target
 
+def proofRecipeIsDirectByteNavigationFunc (function : Lean.Expr) : Bool :=
+  let head := proofRecipeHeadName? function
+  head == some `Blanc.Func.next ||
+    head == some `Blanc.Func.branch ||
+    head == some `Blanc.CompiledShape.dispatchNode
+
+def proofRecipeShapeIsByteNavigation : Lean.Expr → Bool
+  | .mdata _ shape => proofRecipeShapeIsByteNavigation shape
+  | shape =>
+  let head := proofRecipeHeadName? shape
+      if head == some `Blanc.Func.CompileShape.next ||
+          head == some `Blanc.Func.CompileShape.branch then
+        true
+      else
+        match shape with
+        | .app (.const name _) function =>
+            name == `Blanc.Func.compileShape &&
+              proofRecipeIsDirectByteNavigationFunc function
+        | _ => false
+
+def proofRecipeContainsByteNavigation : Nat → Lean.Expr → Bool
+  | 0, _ => false
+  | fuel + 1, expression@(.app fn arg) =>
+      match expression with
+      | .app (.app (.app (.app (.app (.app (.const name _) _) _) shape) _) _) _ =>
+          if name == `Blanc.Func.byteAtByShape then
+            proofRecipeShapeIsByteNavigation shape
+          else
+            proofRecipeContainsByteNavigation fuel fn ||
+              proofRecipeContainsByteNavigation fuel arg
+      | _ => proofRecipeContainsByteNavigation fuel fn ||
+          proofRecipeContainsByteNavigation fuel arg
+  | fuel + 1, .lam _ type body _ =>
+      proofRecipeContainsByteNavigation fuel type ||
+        proofRecipeContainsByteNavigation fuel body
+  | fuel + 1, .forallE _ type body _ =>
+      proofRecipeContainsByteNavigation fuel type ||
+        proofRecipeContainsByteNavigation fuel body
+  | fuel + 1, .letE _ type value body _ =>
+      proofRecipeContainsByteNavigation fuel type ||
+        proofRecipeContainsByteNavigation fuel value ||
+        proofRecipeContainsByteNavigation fuel body
+  | fuel + 1, .mdata _ expression =>
+      proofRecipeContainsByteNavigation fuel expression
+  | fuel + 1, .proj _ _ expression =>
+      proofRecipeContainsByteNavigation fuel expression
+  | _, _ => false
+
 def proofRecipeHasPremiseHead (needle : Lean.Name) : Lean.Expr → Bool
   | .forallE _ domain body _ =>
       proofRecipeHeadName? domain == some needle ||
@@ -235,6 +283,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         !proofRecipeIsDevmProjectionBridge target
   | "goal-shape:compileshape-bytesize" =>
       return proofRecipeIsByteSizeComposition target
+  | "goal-shape:compiled-shape-byte-navigation" =>
+      return proofRecipeContainsByteNavigation 8 target
   | "goal-shape:selector-separation" =>
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:linear-dispatch-selection" =>

@@ -6,12 +6,23 @@ import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.LinearDispatchCorrectness
 import Blanc.ExecutionHistoryStateTrace
+import Blanc.CompiledShape
 
 namespace Blanc
 
 open Jaune
 
 set_option linter.unusedTactic false
+
+elab "expect_recipe_trigger" trigger:str : tactic => do
+  let target ← Lean.Elab.Tactic.getMainTarget
+  unless ← proofRecipeTriggerMatches target trigger.getString do
+    throwError "expected proof-recipe trigger {trigger.getString} to match"
+
+elab "expect_no_recipe_trigger" trigger:str : tactic => do
+  let target ← Lean.Elab.Tactic.getMainTarget
+  if ← proofRecipeTriggerMatches target trigger.getString then
+    throwError "expected proof-recipe trigger {trigger.getString} not to match"
 
 -- EXPECT: runcompiled-construction
 example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
@@ -125,6 +136,59 @@ example : Func.stop.compileShape.byteSize < 2 := by
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
+  blanc_suggest
+  rfl
+
+-- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i : Nat) (d : UInt8)
+    (leftShape rightShape : Func.CompileShape) (left right : Func) :
+    Func.byteAtByShape locations n (.branch leftShape rightShape)
+        (.branch left right) i d =
+      Func.byteAtByShape locations n (.branch leftShape rightShape)
+        (.branch left right) i d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT: compiled-shape-byte-navigation
+example (locations : List Nat) (n i : Nat) (d : UInt8) (selector : B256)
+    (off0 on0 off on : Func) :
+    Func.byteAtByShape locations n
+        (CompiledShape.dispatchNode selector off0 on0).compileShape
+        (CompiledShape.dispatchNode selector off on) i d =
+      Func.byteAtByShape locations n
+        (CompiledShape.dispatchNode selector off0 on0).compileShape
+        (CompiledShape.dispatchNode selector off on) i d := by
+  expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (locations : List Nat) (n i : Nat) (d : UInt8)
+    (shape : Func.CompileShape) (function : Func) :
+    Func.byteAtByShape locations n shape function i d =
+      Func.byteAtByShape locations n shape function i d := by
+  expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (locations : List Nat) (n i : Nat) (d : UInt8) (function : Func) :
+    Func.byteAtByShape locations n .last function i d =
+      Func.byteAtByShape locations n .last function i d := by
+  expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
+  blanc_suggest
+  rfl
+
+private opaque proofRecipeOpaqueFunction : Func
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (locations : List Nat) (n i : Nat) (d : UInt8) :
+    Func.byteAtByShape locations n proofRecipeOpaqueFunction.compileShape
+        proofRecipeOpaqueFunction i d =
+      Func.byteAtByShape locations n proofRecipeOpaqueFunction.compileShape
+        proofRecipeOpaqueFunction i d := by
+  expect_no_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
   blanc_suggest
   rfl
 

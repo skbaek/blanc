@@ -115,6 +115,14 @@ def recipes : List Recipe := [
     boundary := "The measured law is approximately 2.6 ms per compiled byte of the addressed object; byte-range width predicts nothing because `byteAtByShape` is lazy. Cure 2 applied the existing composition route in `Weth10Deploy`: named size facts replaced repeated closed decisions and moved its owner row from 43.283 to 29.463 s. The narrower `Weth10DeployDomainSlices` packet first had to add its missing child facts and then regressed from 16.628 to 17.734 s, so it was reverted; reopen that family only with a broader child-fact or representation change whose owner row wins. `weth10MainEmit_drop_3950` costs approximately 0.011 s and should remain unchanged."
   },
   {
+    id := "compiled-shape-byte-navigation"
+    status := "active"
+    triggers := ["goal-shape:compiled-shape-byte-navigation"]
+    preferredPath := "Import `Blanc.CompiledShape` and open `CompiledShape` inside `namespace Blanc`. Use `byteAt_prepend_*` for fixed instruction prefixes, `byteAt_branch_*` for branch header/left/jumpdest/right regions, `dispatchNodeByteAt_*` for the common selector-dispatch shape, and `pushFullWord_*` for a fixed 32-byte `Ninst.push`. Supply the existing compile-shape, size, and index-bound facts so the proof traverses only the addressed subtree."
+    symbols := ["module:Blanc/CompiledShape.lean", "declaration:Blanc.CompiledShape.byteAt_prepend_to_tail", "declaration:Blanc.CompiledShape.byteAt_branch_to_right", "declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath", "declaration:Blanc.CompiledShape.pushFullWord_opcode_eq"]
+    boundary := "These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again."
+  },
+  {
     id := "successor-projection-normalization"
     status := "partial"
     triggers := ["goal-shape:successor-projection"]
