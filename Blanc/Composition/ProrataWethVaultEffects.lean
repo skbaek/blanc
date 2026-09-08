@@ -172,6 +172,217 @@ private theorem runCompiled_enters_wethNonpayable
 def wethAllowanceKey (owner spender : B256) : B256 :=
   (owner.toBytes ++ spender.toBytes).keccak
 
+/-- The three successful paths through inherited WETH's allowance suffix.
+The finite arm retains the executed SSTORE, even when its value is unchanged.
+The pre-state here is entry to the suffix, after the balance movement. -/
+def WethAllowanceUpdateEffect (sevm : Sevm) (src wad : B256)
+    (pre post : Devm) : Prop :=
+  if src = sevm.caller.toB256 then Devm.getStor post = Devm.getStor pre
+  else
+    let key := wethAllowanceKey src sevm.caller.toB256
+    let allowed := pre.getStorVal sevm.currentTarget key
+    ¬ ValidAdr key ∧
+      ((allowed = B256.max ∧ Devm.getStor post = Devm.getStor pre) ∨
+       (allowed ≠ B256.max ∧ wad ≤ allowed ∧
+        Devm.getStor post sevm.currentTarget =
+          (Devm.getStor pre sevm.currentTarget).set key (allowed - wad) ∧
+        ∃ writePre writePost,
+          Ninst.Run sevm writePre sstore writePost ∧
+          [key, allowed - wad] <<+ writePre.stack ∧
+          Devm.getStor writePre = Devm.getStor pre ∧
+          Devm.getStor post = Devm.getStor writePost))
+
+private theorem updateAllowance_exact
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {src wad : B256}
+    (wf : Mem.Wf pre.memory) (hp : [wad, src] <<+ pre.stack)
+    (run : Func.Run fs sevm pre updateAllowance post) :
+    WethAllowanceUpdateEffect sevm src wad pre post := by
+  unfold WethAllowanceUpdateEffect
+  rcases of_run_prepend [caller, dup 2, eq] _ run with ⟨a, ha, run⟩
+  have pa : [src =? sevm.caller.toB256, wad, src] <<+ a.stack := by
+    generalize_line_prefix
+  have storage : Devm.getStor pre = Devm.getStor a :=
+    Line.of_inv Devm.getStor (by line_inv) ha
+  rcases of_run_branch run with
+    ⟨b, hb, run⟩ | ⟨flag, b, c, flagNe, hb, hc, run⟩
+  · have pop := hb.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+    rw [pop] at pa
+    have flagZero := pref_head_unique pa (pref_append [0] b.stack)
+    have different : src ≠ sevm.caller.toB256 := by
+      intro same
+      simp only [B256.eqCheck, same, ↓reduceIte] at flagZero
+      exact B256.zero_ne_one flagZero.symm
+    rw [if_neg different]
+    dsimp only
+    rw [flagZero] at pa
+    have pb : [wad, src] <<+ b.stack := cons_pref_cons_inv pa
+    have storage := storage.trans
+      (funext (fun account => (Devm.PopBurn.getStor hb account).symm))
+    have bWf : Mem.Wf b.memory := by
+      rw [← hb.memory, ← Line.of_inv Devm.memory (by line_inv) ha]
+      exact wf
+    rcases of_run_prepend (swap 0 :: mstoreAt 0) _ run with ⟨c, hc, run⟩
+    rcases Line.of_run_cons hc with ⟨b', hswap, hstore⟩
+    have pb' : [src, wad] <<+ b'.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap (0 : Fin 16).val [wad, src] [src, wad] from Stack.swapCore_zero)
+        (of_run_swap hswap) pb
+    obtain ⟨pc, mc⟩ := of_run_mstoreAt_val hstore pb'
+    have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) hc)
+    rcases of_run_next run with ⟨d, hd, run⟩
+    have pd := prefix_of_push (of_run_caller hd) pc
+    have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hd)
+    rcases of_run_prepend (mstoreAt 1) _ run with ⟨e, he, run⟩
+    obtain ⟨pe, me⟩ := of_run_mstoreAt_val he pd
+    have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) he)
+    rcases of_run_prepend (pushList [64, 0]) _ run with ⟨f, hf, run⟩
+    have pf : [0, 64, wad] <<+ f.stack := by
+      rcases Line.of_run_cons hf with ⟨f', h64, hf'⟩
+      rcases Line.of_run_cons hf' with ⟨f'', h0, hnil⟩
+      cases hnil
+      exact prefix_of_push (of_run_pushB256 h0)
+        (prefix_of_push (of_run_pushB256 h64) pe)
+    have window : (f.memory.read 0 64).1 = src.toBytes ++ sevm.caller.toB256.toBytes := by
+      rw [← Line.of_inv Devm.memory (by line_inv) hf, me,
+        ← (of_run_caller hd).memory, mc,
+        ← Ninst.Hinv.inv (f := Devm.memory) hswap]
+      exact Mem.read_two_word_writes bWf (image := b.memory.data.toList)
+        (by intro i; simp) _ _
+    have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) hf)
+    rcases of_run_next run with ⟨g, hg, run⟩
+    have pg := (prefix_of_keccak256_val hg pf).1
+    change (f.memory.read 0 64).1.keccak :: [wad] <<+ g.stack at pg
+    rw [window] at pg
+    change [wethAllowanceKey src sevm.caller.toB256, wad] <<+ g.stack at pg
+    have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hg)
+    rcases of_run_next run with ⟨h, hh, run⟩
+    have ph : [wad, wethAllowanceKey src sevm.caller.toB256] <<+ h.stack :=
+      Stack.prefix_of_swap
+        (show Stack.Swap (0 : Fin 16).val
+          [wethAllowanceKey src sevm.caller.toB256, wad]
+          [wad, wethAllowanceKey src sevm.caller.toB256] from Stack.swapCore_zero)
+        (of_run_swap hh) pg
+    have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hh)
+    rcases of_run_next run with ⟨i, hi, run⟩
+    have pi := prefix_of_dup_val hi (by show_nth) ph
+    have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hi)
+    rcases of_run_prepend checkAddress _ run with ⟨j, hj, run⟩
+    obtain ⟨valid, pj, validIff⟩ := of_check_address pi hj
+    have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) hj)
+    rcases of_run_branch_revert run with ⟨k, hk, run⟩
+    have pop := hk.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+    rw [pop] at pj
+    have validZero := pref_head_unique pj (pref_append [0] k.stack)
+    refine ⟨validIff.mp validZero, ?_⟩
+    rw [validZero] at pj
+    have pk := cons_pref_cons_inv pj
+    have storage := storage.trans
+      (funext (fun account => (Devm.PopBurn.getStor hk account).symm))
+    rcases of_run_next run with ⟨l, hl, run⟩
+    have pl := prefix_of_dup_val hl (by show_nth) pk
+    have storageL := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hl)
+    rcases of_run_next run with ⟨m, hm, run⟩
+    obtain ⟨allowed, pm, read⟩ := prefix_of_sload hm pl
+    have readEntry : allowed = pre.getStorVal sevm.currentTarget
+        (wethAllowanceKey src sevm.caller.toB256) := by
+      rw [read]
+      change (Devm.getStor l sevm.currentTarget).get _ = _
+      rw [← storageL]
+      rfl
+    rw [← readEntry]
+    have storage := storageL.trans (Ninst.Hinv.inv (f := Devm.getStor) hm)
+    rcases of_run_next run with ⟨n, hn, run⟩
+    have pn := prefix_of_dup_val hn (Stack.Nth.head _ _) pm
+    have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hn)
+    rcases of_run_prepend isMax _ run with ⟨o, ho, run⟩
+    have po : [((~~~ allowed) =? 0), allowed, wad,
+        wethAllowanceKey src sevm.caller.toB256] <<+ o.stack := by
+      rcases Line.of_run_cons ho with ⟨o', hnot, ho'⟩
+      rcases Line.of_run_cons ho' with ⟨o'', hzero, hnil⟩
+      cases hnil
+      exact prefix_of_iszero hzero (prefix_of_not hnot pn)
+    have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) ho)
+    rcases of_run_branch run with
+      ⟨p, hp, run⟩ | ⟨flag, p, q, flagNe, hp, hq, run⟩
+    · have pop := hp.stack
+      simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+      rw [pop] at po
+      have zero := pref_head_unique po (pref_append [0] p.stack)
+      have finite : allowed ≠ B256.max := by
+        intro maximum
+        rw [maximum, B256.not_max] at zero
+        simp only [B256.eqCheck, ↓reduceIte] at zero
+        exact B256.zero_ne_one zero.symm
+      rw [zero] at po
+      have pp := cons_pref_cons_inv po
+      have storage := storage.trans
+        (funext (fun account => (Devm.PopBurn.getStor hp account).symm))
+      rcases of_run_next run with ⟨q, hq, run⟩
+      have pq := prefix_of_dup_val hq (by show_nth) pp
+      have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hq)
+      rcases of_run_next run with ⟨r, hr, run⟩
+      have pr := prefix_of_dup_val hr (by show_nth) pq
+      have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hr)
+      rcases of_run_next run with ⟨t, ht, run⟩
+      have pt := prefix_of_lt ht pr
+      have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) ht)
+      rcases of_run_branch_revert run with ⟨u, hu, run⟩
+      have pop := hu.stack
+      simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+      rw [pop] at pt
+      have zero := pref_head_unique pt (pref_append [0] u.stack)
+      have covered : wad ≤ allowed := by
+        rw [← B256.not_lt]
+        intro less
+        rw [B256.ltCheck, if_pos less] at zero
+        exact B256.zero_ne_one zero.symm
+      rw [zero] at pt
+      have pu := cons_pref_cons_inv pt
+      have storage := storage.trans
+        (funext (fun account => (Devm.PopBurn.getStor hu account).symm))
+      rcases of_run_next run with ⟨v, hv, run⟩
+      have pv := prefix_of_sub hv pu
+      have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hv)
+      rcases of_run_next run with ⟨w, hw, run⟩
+      have pw : [wethAllowanceKey src sevm.caller.toB256, allowed - wad] <<+ w.stack :=
+        Stack.prefix_of_swap
+          (show Stack.Swap (0 : Fin 16).val
+            [allowed - wad, wethAllowanceKey src sevm.caller.toB256]
+            [wethAllowanceKey src sevm.caller.toB256, allowed - wad] from Stack.swapCore_zero)
+          (of_run_swap hw) pv
+      have storage := storage.trans (Ninst.Hinv.inv (f := Devm.getStor) hw)
+      rcases of_run_next run with ⟨z, hz, run⟩
+      have after : Devm.getStor z = Devm.getStor post :=
+        Func.of_inv Devm.getStor Devm.getStor (by func_inv) run
+      refine Or.inr ⟨finite, covered, ?_, w, z, hz, pw, storage.symm, after.symm⟩
+      rw [← after, sstore_getStor_set hz pw, ← storage]
+    · have pop := hp.stack
+      simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+      rw [pop] at po
+      have flagEq := pref_head_unique po (pref_append [flag] p.stack)
+      have complementZero : ~~~ allowed = 0 := by
+        by_contra different
+        simp only [B256.eqCheck, if_neg different] at flagEq
+        exact flagNe flagEq.symm
+      refine Or.inl ⟨B256.eq_max_of_not_eq_zero complementZero, ?_⟩
+      exact (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run).symm.trans
+        ((funext (Devm.Burn.getStor hq)).trans
+          ((funext (Devm.PopBurn.getStor hp)).trans storage.symm))
+  · have pop := hb.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at pop
+    rw [pop] at pa
+    have flagEq := pref_head_unique pa (pref_append [flag] b.stack)
+    have same : src = sevm.caller.toB256 := by
+      by_contra different
+      simp only [B256.eqCheck, if_neg different] at flagEq
+      exact flagNe flagEq.symm
+    rw [if_pos same]
+    exact (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run).symm.trans
+      ((funext (Devm.Burn.getStor hc)).trans
+        ((funext (Devm.PopBurn.getStor hb)).trans storage.symm))
+
 /-- Retain the raw key and amount that the successful approval staging computes. -/
 private theorem prepApprove_exact {sevm : Sevm} {pre post : Devm}
     (wf : Mem.Wf pre.memory) (run : Line.Run sevm pre prepApprove post) :
@@ -316,9 +527,9 @@ def touchedWethAllowancePairs (history : List WethAllowanceInvocation) :
     List (B256 × B256) := history.filterMap WethAllowanceInvocation.pair?
 
 /-- The write projection drops maximum-allowance reads as well as self
-bypasses. The transferFrom raw-read/chronology adapter must justify this
-projection when assembling a retained history; the approval consumer below
-uses only the already-proved approval arm. -/
+bypasses. `allowance_effect` and `transferFrom_writer_has_sstore` below
+justify this filter from each compiled invocation. Chronological completeness
+remains an obligation of the retained-history adapter. -/
 def WethAllowanceInvocation.writtenPair? (call : WethAllowanceInvocation) :
     Option (B256 × B256) :=
   if call.approval then call.pair?
@@ -782,7 +993,12 @@ private theorem transferFromBody_exactEffect
     r.logs = s.logs ++
       [transferLogEntry sevm (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)
         (Sevm.argWord sevm 2)] ∧
-    AbiReturnsTrue r := by
+    AbiReturnsTrue r ∧
+    (Mem.Wf s.memory → ∃ allowancePre,
+      Stor.AgreeOffAdr (Devm.getStor s sevm.currentTarget)
+        (Devm.getStor allowancePre sevm.currentTarget) ∧
+      WethAllowanceUpdateEffect sevm (Sevm.argWord sevm 0)
+        (Sevm.argWord sevm 2) allowancePre r) := by
   let src := Sevm.argWord sevm 0
   let dst := Sevm.argWord sevm 1
   let wad := Sevm.argWord sevm 2
@@ -794,6 +1010,8 @@ private theorem transferFromBody_exactEffect
     Line.of_inv Devm.getStor (by line_inv) h1
   have logs : s.logs = a1.logs :=
     Line.of_inv Devm.logs (by line_inv) h1
+  have memory : s.memory = a1.memory :=
+    Line.of_inv Devm.memory (by line_inv) h1
   clear h1
   rcases of_run_next run with ⟨a2, r2, run⟩
   rcases of_run_dup r2 with ⟨y, hy2, pb2⟩
@@ -809,11 +1027,14 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r2 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r2 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r2 Line.Run.nil))
   clear r2 pb2 hs1
   rcases of_run_prepend checkNonAddress _ run with ⟨a3, h3, run⟩
   rcases of_check_non_address hs2 h3 with ⟨invalidSrc, hs3, srcIff⟩
   have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) h3)
   have logs := logs.trans (Line.of_inv Devm.logs (by line_inv) h3)
+  have memory := memory.trans (Line.of_inv Devm.memory (by line_inv) h3)
   clear h3 hs2
   rcases of_run_branch_revert run with ⟨a4, pop4, run⟩
   have popStack4 := pop4.stack
@@ -826,12 +1047,14 @@ private theorem transferFromBody_exactEffect
   have storage := storage.trans
     (funext (fun a => (Devm.PopBurn.getStor pop4 a).symm))
   have logs := logs.trans pop4.logs
+  have memory := memory.trans pop4.memory
   clear hs3 popStack4 pop4 srcIff
   rcases of_run_prepend (arg 2) _ run with ⟨a5, h5, run⟩
   have hs5 : wad :: src :: [] <<+ a5.stack := by
     simpa only [wad] using prefix_of_arg hs4 h5
   have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) h5)
   have logs := logs.trans (Line.of_inv Devm.logs (by line_inv) h5)
+  have memory := memory.trans (Line.of_inv Devm.memory (by line_inv) h5)
   clear h5 hs4
   rcases of_run_next run with ⟨a6, r6, run⟩
   rcases of_run_dup r6 with ⟨y, hy6, pb6⟩
@@ -847,6 +1070,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r6 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r6 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r6 Line.Run.nil))
   clear r6 pb6 hs5
   rcases of_run_next run with ⟨a7, r7, run⟩
   rcases of_run_dup r7 with ⟨y, hy7, pb7⟩
@@ -866,6 +1091,8 @@ private theorem transferFromBody_exactEffect
       (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r7 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r7 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r7 Line.Run.nil))
   clear r7 pb7 hs6
   rcases of_run_next run with ⟨a8, r8, run⟩
   rcases prefix_of_sload r8 hs7 with ⟨sourceBalance, hs8, sourceBalanceEq⟩
@@ -873,6 +1100,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r8 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r8 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r8 Line.Run.nil))
   clear r8 hs7
   rcases of_run_next run with ⟨a9, r9, run⟩
   rcases of_run_dup r9 with ⟨y, hy9, pb9⟩
@@ -891,6 +1120,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r9 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r9 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r9 Line.Run.nil))
   clear r9 pb9 hs8
   rcases of_run_next run with ⟨a10, r10, run⟩
   rcases of_run_dup r10 with ⟨y, hy10, pb10⟩
@@ -909,6 +1140,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r10 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r10 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r10 Line.Run.nil))
   clear r10 pb10 hs9
   rcases of_run_next run with ⟨a11, r11, run⟩
   have hs11 : (sourceBalance <? wad) ::
@@ -918,6 +1151,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r11 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r11 Line.Run.nil))
   clear r11 hs10
   rcases of_run_branch_revert run with ⟨a12, pop12, run⟩
   have popStack12 := pop12.stack
@@ -936,6 +1171,7 @@ private theorem transferFromBody_exactEffect
   have storage12 : Devm.getStor s = Devm.getStor a12 :=
     storage.trans (funext (fun a => (Devm.PopBurn.getStor pop12 a).symm))
   have logs := logs.trans pop12.logs
+  have memory := memory.trans pop12.memory
   clear hs11 popStack12 pop12 lessZero
   rcases of_run_prepend transferFromUpdateSbal _ run with ⟨a13, h13, run⟩
   have sourceBalanceEq' : sourceBalance =
@@ -944,10 +1180,11 @@ private theorem transferFromBody_exactEffect
     show (Devm.getStor a7 sevm.currentTarget).get src = _
     rw [congrFun (storage7.symm.trans storage12) sevm.currentTarget]
   rcases of_transferFromUpdateSbal srcValid sourceBalanceEq' covered hs12 h13
-      with ⟨sourceDecrease, covered', -⟩
+      with ⟨sourceDecrease, covered', off13⟩
   have hs13 : [wad, src] <<+ a13.stack := by
     generalize_line_prefix
   have logs := logs.trans (Line.of_inv Devm.logs (by line_inv) h13)
+  have memory := memory.trans (Line.of_inv Devm.memory (by line_inv) h13)
   have foreign13 : ∀ account, sevm.currentTarget ≠ account →
       Devm.getStor a13 account = Devm.getStor a12 account :=
     fun _ ne => transferFromUpdateSbal_foreignStorage h13 ne
@@ -958,6 +1195,7 @@ private theorem transferFromBody_exactEffect
   have storage' : Devm.getStor a13 = Devm.getStor a14 :=
     Line.of_inv Devm.getStor (by line_inv) h14
   have logs := logs.trans (Line.of_inv Devm.logs (by line_inv) h14)
+  have memory := memory.trans (Line.of_inv Devm.memory (by line_inv) h14)
   clear h14 hs13
   rcases of_run_next run with ⟨a15, r15, run⟩
   rcases of_run_dup r15 with ⟨y, hy15, pb15⟩
@@ -974,12 +1212,15 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r15 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r15 Line.Run.nil))
   clear r15 pb15 hs14
   rcases of_run_prepend checkNonAddress _ run with ⟨a16, h16, run⟩
   rcases of_check_non_address hs15 h16 with ⟨invalidDst, hs16, dstIff⟩
   have storage' := storage'.trans
     (Line.of_inv Devm.getStor (by line_inv) h16)
   have logs := logs.trans (Line.of_inv Devm.logs (by line_inv) h16)
+  have memory := memory.trans (Line.of_inv Devm.memory (by line_inv) h16)
   clear h16 hs15
   rcases of_run_branch_revert run with ⟨a17, pop17, run⟩
   have popStack17 := pop17.stack
@@ -992,6 +1233,7 @@ private theorem transferFromBody_exactEffect
   have storage' := storage'.trans
     (funext (fun a => (Devm.PopBurn.getStor pop17 a).symm))
   have logs := logs.trans pop17.logs
+  have memory := memory.trans pop17.memory
   clear hs16 popStack17 pop17 dstIff
   rcases of_run_next run with ⟨a18, r18, run⟩
   rcases of_run_dup r18 with ⟨y, hy18, pb18⟩
@@ -1008,6 +1250,8 @@ private theorem transferFromBody_exactEffect
     (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r18 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r18 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r18 Line.Run.nil))
   clear r18 pb18 hs17
   rcases of_run_next run with ⟨a19, r19, run⟩
   rcases of_run_dup r19 with ⟨y, hy19, pb19⟩
@@ -1028,6 +1272,8 @@ private theorem transferFromBody_exactEffect
       (Line.of_inv Devm.getStor (by line_inv) (Line.Run.cons r19 Line.Run.nil))
   have logs := logs.trans
     (Line.of_inv Devm.logs (by line_inv) (Line.Run.cons r19 Line.Run.nil))
+  have memory := memory.trans
+    (Line.of_inv Devm.memory (by line_inv) (Line.Run.cons r19 Line.Run.nil))
   clear r19 pb19 hs18
   rcases of_run_prepend incrWbal _ run with ⟨a20, h20, run⟩
   have destinationIncrease :
@@ -1069,15 +1315,18 @@ private theorem transferFromBody_exactEffect
     exact prefix_of_sstore store20 hb4
   have logs20 : s.logs = a20.logs :=
     logs.trans (Line.of_inv Devm.logs (by line_inv) h20)
+  have memory20 : s.memory = a20.memory :=
+    memory.trans (Line.of_inv Devm.memory (by line_inv) h20)
   have foreign20 : ∀ account, sevm.currentTarget ≠ account →
       Devm.getStor a20 account = Devm.getStor a19 account :=
     fun _ ne => incrWbal_foreignStorage h20 ne
+  have off20 := (incrAt_of_incrWbal dstValid h20
+    (pref_trans ⟨[dst, wad, src], rfl⟩ hs19)).right
   clear h20 hs19
   rcases of_run_prepend transferFromLog _ run with ⟨a21, h21, run⟩
   obtain ⟨hs21, emitted⟩ := transferFromLog_effect hs20 h21
   have logStorage : Devm.getStor a20 = Devm.getStor a21 :=
     Line.of_inv Devm.getStor (by line_inv) h21
-  clear h21
   have allowanceRest :
       Stor.rest (Devm.getStor a21 sevm.currentTarget) =
         Stor.rest (Devm.getStor r sevm.currentTarget) :=
@@ -1099,13 +1348,156 @@ private theorem transferFromBody_exactEffect
     refine Func.of_inv Devm.logs Devm.logs ?_ run
     unfold updateAllowance
     func_inv
-  refine ⟨by simpa only [src, dst, wad] using effect, ?_, ?_, outputTrue⟩
+  refine ⟨by simpa only [src, dst, wad] using effect, ?_, ?_, outputTrue, ?_⟩
   · intro account accountNe
     rw [updateAllowance_foreignStorage run accountNe,
       ← congrFun logStorage account, foreign20 account accountNe,
       ← congrFun storage19 account, foreign13 account accountNe,
       ← congrFun storage12 account]
   · rw [← tailLogs, emitted, ← logs20]
+
+  · intro wf
+    have wf20 : Mem.Wf a20.memory := memory20 ▸ wf
+    have wf21 := (transferFromLog_effect_frame hs20 wf20
+      (img := a20.memory.data.toList) (by intro i; simp) h21).2.2.2.2.2.2.1
+    refine ⟨a21, ?_, updateAllowance_exact wf21 hs21 run⟩
+    exact (Stor.AgreeOffAdr.of_eq (congrFun storage12 sevm.currentTarget)).trans
+      (off13.trans ((Stor.AgreeOffAdr.of_eq
+        (congrFun storage19 sevm.currentTarget)).trans
+          (off20.trans (Stor.AgreeOffAdr.of_eq
+            (congrFun logStorage sevm.currentTarget)))))
+
+/-- Exact allowance classification from the compiled transferFrom selector.
+Balance writes precede the allowance read, but cannot change its guarded
+non-address key. Self-bypass preserves every non-address cell; maximum
+allowance is read-only; the finite branch retains the actual decrement write.
+No logical pair-separation premise is needed at this raw-key altitude. -/
+theorem weth_transferFrom_compiled_allowance_effect
+    {sevm : Sevm} {pre post : Devm}
+    (wf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.weth post)
+    (selected : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    let key := wethAllowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256
+    let allowed := pre.getStorVal sevm.currentTarget key
+    if Sevm.argWord sevm 0 = sevm.caller.toB256 then
+      Stor.AgreeOffAdr (Devm.getStor pre sevm.currentTarget)
+        (Devm.getStor post sevm.currentTarget)
+    else ¬ ValidAdr key ∧
+      ((allowed = B256.max ∧
+        Stor.AgreeOffAdr (Devm.getStor pre sevm.currentTarget)
+          (Devm.getStor post sevm.currentTarget)) ∨
+       (allowed ≠ B256.max ∧ Sevm.argWord sevm 2 ≤ allowed ∧
+        Stor.AgreeOffAdr
+          ((Devm.getStor pre sevm.currentTarget).set key (allowed - Sevm.argWord sevm 2))
+          (Devm.getStor post sevm.currentTarget) ∧
+        ∃ writePre writePost,
+          Ninst.Run sevm writePre sstore writePost ∧
+          [key, allowed - Sevm.argWord sevm 2] <<+ writePre.stack ∧
+          Stor.AgreeOffAdr (Devm.getStor pre sevm.currentTarget)
+            (Devm.getStor writePre sevm.currentTarget) ∧
+          Devm.getStor post = Devm.getStor writePost)) := by
+  obtain ⟨bodyPre, -, entryState, entryMemory, -, -, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable (body := transferFrom) run selected
+      (by simp [wethFuncs])
+  obtain ⟨allowancePre, off, effect⟩ :=
+    (transferFromBody_exactEffect bodyRun).2.2.2.2 (entryMemory ▸ wf)
+  have off := (Stor.AgreeOffAdr.of_eq
+    (getStor_eq_of_state_eq entryState sevm.currentTarget)).trans off
+  dsimp only
+  by_cases same : Sevm.argWord sevm 0 = sevm.caller.toB256
+  · rw [if_pos same]
+    simp only [WethAllowanceUpdateEffect, if_pos same] at effect
+    exact off.trans (Stor.AgreeOffAdr.of_eq (congrFun effect.symm sevm.currentTarget))
+  · rw [if_neg same]
+    simp only [WethAllowanceUpdateEffect, if_neg same] at effect
+    obtain ⟨valid, result⟩ := effect
+    have read := off _ valid
+    change pre.getStorVal sevm.currentTarget _ = allowancePre.getStorVal sevm.currentTarget _ at read
+    rw [← read] at result
+    refine ⟨valid, ?_⟩
+    rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, w, z, write, hp, before, after⟩
+    · exact Or.inl ⟨maximum, off.trans
+        (Stor.AgreeOffAdr.of_eq (congrFun silent.symm sevm.currentTarget))⟩
+    · refine Or.inr ⟨finite, covered, ?_, w, z, write, hp, ?_, after⟩
+      · intro k hk
+        rw [stored]
+        by_cases sameKey : wethAllowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256 = k
+        · subst k
+          rw [Stor.get_set_self, Stor.get_set_self]
+        · rw [Stor.get_set_ne _ sameKey, Stor.get_set_ne _ sameKey]
+          exact off k hk
+      · exact off.trans (Stor.AgreeOffAdr.of_eq (congrFun before.symm sevm.currentTarget))
+
+/-- The invocation's finite writer filter agrees with its compiled storage
+classification. A retained pair writes the stated raw cell; omitted self and
+maximum branches preserve all non-address cells. -/
+theorem WethAllowanceInvocation.allowance_effect (call : WethAllowanceInvocation) :
+    match call.writtenPair? with
+    | none => Stor.AgreeOffAdr (Devm.getStor call.pre wethAccount)
+        (Devm.getStor call.post wethAccount)
+    | some p => ¬ ValidAdr (wethAllowanceKey p.1 p.2) ∧
+        Stor.AgreeOffAdr
+          ((Devm.getStor call.pre wethAccount).set (wethAllowanceKey p.1 p.2)
+            (if call.approval then Sevm.argWord call.sevm 1 else
+              call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) -
+                Sevm.argWord call.sevm 2))
+          (Devm.getStor call.post wethAccount) := by
+  cases approval : call.approval with
+  | true =>
+    have selected := call.selected
+    simp only [approval, ↓reduceIte] at selected
+    obtain ⟨valid, effect⟩ :=
+      weth_approve_compiled_raw_effect call.memoryWf call.run selected
+    rw [call.target] at effect
+    simp only [writtenPair?, pair?, approval, ↓reduceIte]
+    exact ⟨valid, Stor.AgreeOffAdr.of_eq effect.symm⟩
+  | false =>
+    have selected := call.selected
+    simp only [approval, Bool.false_eq_true, ↓reduceIte] at selected
+    have effect := weth_transferFrom_compiled_allowance_effect
+      call.memoryWf call.run selected
+    dsimp only at effect
+    rw [call.target] at effect
+    by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
+    · simpa [writtenPair?, pair?, approval, same] using effect
+    · simp only [if_neg same] at effect
+      obtain ⟨valid, result⟩ := effect
+      rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
+      · simpa [writtenPair?, pair?, approval, same, Option.filter, maximum] using silent
+      · simpa [writtenPair?, pair?, approval, same, Option.filter, finite] using And.intro valid stored
+
+/-- A retained transferFrom writer is backed by the executed SSTORE, even
+when a zero amount leaves its value unchanged. -/
+theorem WethAllowanceInvocation.transferFrom_writer_has_sstore
+    (call : WethAllowanceInvocation) (approval : call.approval = false)
+    {p : B256 × B256} (writer : call.writtenPair? = some p) :
+    call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) ≠ B256.max ∧
+      Sevm.argWord call.sevm 2 ≤
+        call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) ∧
+      ∃ writePre writePost,
+        Ninst.Run call.sevm writePre sstore writePost ∧
+        [wethAllowanceKey p.1 p.2,
+          call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) -
+            Sevm.argWord call.sevm 2] <<+ writePre.stack ∧
+        Stor.AgreeOffAdr (Devm.getStor call.pre wethAccount)
+          (Devm.getStor writePre wethAccount) ∧
+        Devm.getStor call.post = Devm.getStor writePost := by
+  have selected := call.selected
+  simp only [approval, Bool.false_eq_true, ↓reduceIte] at selected
+  have effect := weth_transferFrom_compiled_allowance_effect
+    call.memoryWf call.run selected
+  dsimp only at effect
+  rw [call.target] at effect
+  by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
+  · simp [writtenPair?, pair?, approval, same] at writer
+  · simp only [if_neg same] at effect
+    rcases effect.2 with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
+    · simp [writtenPair?, pair?, approval, same, Option.filter, maximum] at writer
+    · have pairEq : (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) = p := by
+        simpa [writtenPair?, pair?, approval, same, Option.filter, finite] using writer
+      subst p
+      exact ⟨finite, covered, witness⟩
 
 /-- Recover the successful compiled WETH run together with the parent-visible
 storage world and log frame.  This is the strong occurrence projection used
@@ -1453,7 +1845,7 @@ theorem SuccessfulWethWorldProgramRun.transferFrom_effect
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
-  obtain ⟨movement, bodyForeign, bodyEmitted, bodyOutput⟩ :=
+  obtain ⟨movement, bodyForeign, bodyEmitted, bodyOutput, -⟩ :=
     transferFromBody_exactEffect bodyRun
   have entryStorage : Devm.getStor childPre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1517,7 +1909,7 @@ theorem SuccessfulWethProgramRun.transferFrom_effect
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
-  obtain ⟨movement, -, -, bodyOutput⟩ := transferFromBody_exactEffect bodyRun
+  obtain ⟨movement, -, -, bodyOutput, -⟩ := transferFromBody_exactEffect bodyRun
   have entryStor : Devm.getStor childPre wethAccount =
       Devm.getStor bodyPre wethAccount :=
     getStor_eq_of_state_eq entryState wethAccount
