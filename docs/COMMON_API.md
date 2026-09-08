@@ -969,7 +969,10 @@ Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
   use `Func.StorageEffectRun` with `of_noRawSstorePath` for an already
   certified empty path and its `last`, `next`, `next_effectNeutral`, `zero`,
   `succ`, and `call` constructors; ordinary non-external steps can otherwise
-  use `StorageEffectPath.next_of_not_exec`.  The `storage_effect_run` tactic
+  use `StorageEffectPath.next_of_not_exec`.  Its `.run` projection recovers the
+  exact indexed `Func.RunCompiledTo` witness without rebuilding the selected
+  walk; it does not turn an arbitrary source `Func.Run` into compiled evidence.
+  The `storage_effect_run` tactic
   walks a childless non-SSTORE prefix with `func_run`'s state, gas, hint, and
   side-condition engine, deliberately returning an external instruction,
   SSTORE, internal call, or terminal to the caller.  To replace a designated
