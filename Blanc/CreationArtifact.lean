@@ -1,4 +1,4 @@
-import Blanc.CommonCore
+import Blanc.Forward
 
 /-!
 Contract-neutral executable vocabulary for compiler-derived creation artifacts.
@@ -14,6 +14,60 @@ generated word span.
 namespace Blanc
 
 open Jaune
+
+namespace CreationArtifact
+
+/-- Encode one exact EVM word with a fixed two-byte immediate when it fits,
+falling back to the complete 32-byte immediate otherwise.  Unlike
+`Ninst.pushB256`, the small branch retains leading zeroes and therefore has a
+stable three-byte instruction width. -/
+def pushB256AsPush2OrPush32 (word : B256) : Ninst :=
+  let value := word.toNat
+  if value < 2 ^ 16 then
+    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+  else
+    Ninst.push word.toBytes (by rw [B256.length_toBytes])
+
+end CreationArtifact
+
+/-- Exact compiled semantics of the bounded constructor-word encoder.  Both
+immediate widths cost `gVerylow`; the instruction preserves memory and pushes
+the complete input word under the ordinary stack-room premise. -/
+theorem Ninst.runCompiled_pushB256AsPush2OrPush32
+    {sevm : Sevm} {devm : Devm} {word : B256} {G : Nat}
+    (gas : devm.gasLeft = G + gVerylow)
+    (room : devm.stack.length < 1024) :
+    Ninst.RunCompiled sevm devm
+      (CreationArtifact.pushB256AsPush2OrPush32 word)
+      (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
+  by_cases fit : word.toNat < 2 ^ 16
+  · let bytes : Bytes :=
+      [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
+    have cost : pushCost bytes = gVerylow := by
+      simp [bytes, pushCost]
+    have pushed : Bytes.toB256 bytes = word := by
+      change Bytes.toB256
+        [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
+      rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
+    have run := Ninst.runCompiled_pushBytes
+      (sevm := sevm) (devm := devm) (xs := bytes)
+      (le := by simp [bytes]) (c := gVerylow) (G := G)
+      cost gas room
+    rw [CreationArtifact.pushB256AsPush2OrPush32, if_pos fit]
+    simpa only [bytes, pushed] using run
+  · have run := Ninst.runCompiled_pushBytes
+      (sevm := sevm) (devm := devm) (xs := word.toBytes)
+      (le := by rw [B256.length_toBytes])
+      (c := gVerylow) (G := G)
+      (by
+        have hne : word.toBytes ≠ [] := by
+          intro empty
+          have lengths := congrArg List.length empty
+          simp only [B256.length_toBytes, List.length_nil] at lengths
+          omega
+        simp [pushCost, hne]) gas room
+    rw [CreationArtifact.pushB256AsPush2OrPush32, if_neg fit]
+    simpa only [B256.toB256_toBytes] using run
 
 namespace CreationArtifact
 
