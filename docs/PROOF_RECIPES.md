@@ -136,7 +136,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Preferred path: Prove one small `decide +kernel` fact per leaf, then derive internal `compileShape.byteSize` facts arithmetically through `dispatchNode_size`-style composition. `dispatchCae9_size` is the canonical example: with its children available, its composition closes in 0.004 s.
 - Boundary: The measured law is approximately 2.6 ms per compiled byte of the addressed object; byte-range width predicts nothing because `byteAtByShape` is lazy. Cure 2 applied the existing composition route in `Weth10Deploy`: named size facts replaced repeated closed decisions and moved its owner row from 43.283 to 29.463 s. The narrower `Weth10DeployDomainSlices` packet first had to add its missing child facts and then regressed from 16.628 to 17.734 s, so it was reverted; reopen that family only with a broader child-fact or representation change whose owner row wins. `weth10MainEmit_drop_3950` costs approximately 0.011 s and should remain unchanged.
 - Owner module: [Blanc/Weth10Deploy.lean](../Blanc/Weth10Deploy.lean)
-- Canonical example: [Blanc/Weth10Deploy.lean](../Blanc/Weth10Deploy.lean) — `dispatchCae9_size`
+- Canonical example: [Blanc/Weth10DeployUpperSlices.lean](../Blanc/Weth10DeployUpperSlices.lean) — `dispatchCae9_size`
 - Registered symbols: `declaration:Weth10.dispatchCae9_size`
 - Review: `proof-infrastructure` on `2026-08-25`
 
