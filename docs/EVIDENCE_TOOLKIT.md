@@ -7,9 +7,11 @@ oracle/model comparisons remain in their owning scripts.
 ## Strict JSON
 
 Use `scripts/strict_json.py` when an evidence input must reject duplicate
-object keys and `NaN`/`Infinity`.  The primitive reports structured
+object keys and the named `NaN`, `Infinity`, and `-Infinity` tokens. The
+primitive reports structured
 `DuplicateKeyError` and `NonFiniteNumberError` exceptions and otherwise lets
-the standard library report syntax and encoding errors.  A caller translates
+the standard library retain its parsing behavior: in particular, a numeric
+overflow such as `1e999` still parses to infinity. A caller translates
 those exceptions into its established local error type and wording:
 
 ```python
