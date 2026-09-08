@@ -44,11 +44,13 @@ theorem Func.StorageEffectRun.next_constructorPushWord
   exact Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_constructorPushWord (word := word) gas room)
     (by
-      simp only [constructorPushWord]
+      simp only [constructorPushWord,
+        CreationArtifact.pushB256AsPush2OrPush32]
       split <;> intro impossible <;> cases impossible)
     (by
       intro operation
-      simp only [constructorPushWord]
+      simp only [constructorPushWord,
+        CreationArtifact.pushB256AsPush2OrPush32]
       split <;> intro impossible <;> cases impossible) tail
 
 /-- Scratch memory at a constructor loop head.  The logical image is exposed
