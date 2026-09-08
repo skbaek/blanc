@@ -21,6 +21,8 @@ import stack_certificate as producer
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "Blanc/DripCode.lean"
 OUTPUT = ROOT / "Blanc/DripStackSafetyData.lean"
+REGION576_OUTPUT = ROOT / "Blanc/DripStackSafetyRegion576.lean"
+REGION1022_OUTPUT = ROOT / "Blanc/DripStackSafetyRegion1022.lean"
 MAXIMUM = 8
 # A representation boundary, not a bound on program/table size or proof resources.
 SUBTREE_ROWS = 15
@@ -82,6 +84,66 @@ class Subtree:
         return f"subtree{self.root[0]}"
 
 
+@dataclass(frozen=True)
+class RowWitness:
+    name: str
+    pc: int
+    external_successor: int
+    comment: str
+
+
+@dataclass(frozen=True)
+class RegionSpec:
+    root: str
+    rows: int
+    start: int
+    stop: int
+    module_doc: tuple[str, ...]
+    witnesses: tuple[RowWitness, ...] = ()
+
+
+REGION576 = RegionSpec(
+    root="subtree576",
+    rows=183,
+    start=372,
+    stop=839,
+    module_doc=(
+        "Checked second 183-row region of the DRIP stack table. Every successor check",
+        "uses the complete 735-row table, including the conditional jump from PC 686",
+        "to PC 947 outside this region.",
+    ),
+    witnesses=(RowWitness(
+        name="row686_cross_region_checked",
+        pc=686,
+        external_successor=947,
+        comment="PC 686 lies in subtree716; its taken successor PC 947 is outside subtree576.",
+    ),),
+)
+
+REGION1022 = RegionSpec(
+    root="subtree1022",
+    rows=183,
+    start=840,
+    stop=1182,
+    module_doc=(
+        "Checked third 183-row region of the DRIP stack table. Every successor check",
+        "uses the complete 735-row table, including the conditional jump from PC 1165",
+        "to PC 1212 outside this region.",
+    ),
+    witnesses=(RowWitness(
+        name="row1165_cross_region_checked",
+        pc=1165,
+        external_successor=1212,
+        comment="PC 1165 lies in subtree1022; its taken successor PC 1212 is outside subtree1022.",
+    ),),
+)
+
+PROOF_OUTPUTS = {
+    REGION576: REGION576_OUTPUT,
+    REGION1022: REGION1022_OUTPUT,
+}
+
+
 def subtrees(states: dict[int, Pattern]) -> list[Subtree]:
     """Name small leaves and every composing node without changing any row."""
     parts: list[Subtree] = []
@@ -97,11 +159,106 @@ def subtrees(states: dict[int, Pattern]) -> list[Subtree]:
     return parts
 
 
+def pattern(words: Pattern) -> str:
+    return "[" + ", ".join("none" if word is None else f"some {word}" for word in words) + "]"
+
+
+def region_parts(parts: list[Subtree], root: str) -> list[Subtree]:
+    by_name = {part.name: part for part in parts}
+    require(root in by_name, f"unknown proof region {root}")
+    ordered: list[Subtree] = []
+
+    def visit(part: Subtree) -> None:
+        if part.left is not None:
+            require(part.right is not None, f"one-sided subtree {part.name}")
+            visit(part.left)
+            visit(part.right)
+        else:
+            require(part.right is None, f"one-sided subtree {part.name}")
+        ordered.append(part)
+
+    visit(by_name[root])
+    require(len({part.name for part in ordered}) == len(ordered),
+            f"duplicate dependency in proof region {root}")
+    return ordered
+
+
+def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec) -> str:
+    decoded = decode(raw)
+    parts = region_parts(subtrees(states), spec.root)
+    root = parts[-1]
+    require(len(root.rows) == spec.rows, f"wrong row count for {spec.root}")
+    require(root.rows[0][0] == spec.start, f"wrong start for {spec.root}")
+    last_pc = root.rows[-1][0]
+    require(last_pc in decoded, f"missing final instruction for {spec.root}")
+    require(last_pc + decoded[last_pc].width == spec.stop, f"wrong stop for {spec.root}")
+    region_pcs = {pc for pc, _ in root.rows}
+
+    output = ["import Blanc.DripStackSafety", "", "/-!", *spec.module_doc, "-/", "",
+              "namespace Blanc.Drip.StackSafety", "", "open Jaune AbstractStackSafety", ""]
+    for part in parts:
+        start = part.rows[0][0]
+        final_pc = part.rows[-1][0]
+        require(final_pc in decoded, f"missing final instruction for {part.name}")
+        stop = final_pc + decoded[final_pc].width
+        output.extend([
+            f"theorem {part.name}_rows_checked :",
+            f"    {part.name}.all (checkRow code.toByteArray table {MAXIMUM}) = true := by",
+        ])
+        if part.left is None:
+            output.append("  decide +kernel")
+        else:
+            require(part.right is not None, f"one-sided subtree {part.name}")
+            output.extend([
+                "  apply Table.all_node",
+                "  · decide +kernel",
+                f"  · exact {part.left.name}_rows_checked",
+                f"  · exact {part.right.name}_rows_checked",
+            ])
+        output.extend(["", f"theorem {part.name}_layout_checked :",
+                       f"    {part.name}.checkLayout code.toByteArray {start} {stop} = true := by"])
+        if part.left is None:
+            output.append("  decide +kernel")
+        else:
+            next_pc = part.right.rows[0][0]
+            output.extend([
+                f"  apply Table.checkLayout_node (next := {next_pc})",
+                "  · decide +kernel",
+                f"  · exact {part.left.name}_layout_checked",
+                f"  · exact {part.right.name}_layout_checked",
+                "  · decide +kernel",
+            ])
+        output.append("")
+
+    for witness in spec.witnesses:
+        require(witness.pc in region_pcs, f"witness PC outside {spec.root}")
+        successors = transfer(decoded, witness.pc, states[witness.pc])
+        require(any(pc == witness.external_successor for pc, _ in successors),
+                f"missing witness successor {witness.external_successor} from {witness.pc}")
+        require(witness.external_successor not in region_pcs,
+                f"witness successor is local to {spec.root}")
+        output.extend([
+            f"/-- {witness.comment} -/",
+            f"theorem {witness.name} :",
+            f"    checkRow code.toByteArray table {MAXIMUM} {witness.pc} {pattern(states[witness.pc])} = true := by",
+            "  decide +kernel",
+            "",
+        ])
+
+    output.extend([
+        "/-- Strict ordering and the exact region population are checked independently. -/",
+        f"theorem {spec.root}_order_and_size_checked :",
+        f"    {spec.root}.checkOrder = true ∧ {spec.root}.size = {spec.rows} := by",
+        "  decide +kernel",
+        "",
+        "end Blanc.Drip.StackSafety",
+        "",
+    ])
+    return "\n".join(output)
+
+
 def render(raw: bytes, states: dict[int, Pattern]) -> str:
     parts = subtrees(states)
-
-    def pattern(words: Pattern) -> str:
-        return "[" + ", ".join("none" if word is None else f"some {word}" for word in words) + "]"
 
     def tree(entries: tuple[tuple[int, Pattern], ...], indent: int) -> list[str]:
         prefix = " " * indent
@@ -145,19 +302,38 @@ def expected_output(source: Path = SOURCE) -> str:
     return render(raw, analyze(raw))
 
 
+def expected_proof_outputs(source: Path = SOURCE) -> dict[Path, str]:
+    raw = runtime_bytes(source.read_text())
+    states = analyze(raw)
+    return {path: render_proof_region(raw, states, spec) for spec, path in PROOF_OUTPUTS.items()}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--write", action="store_true", help="replace the generated Lean data owner")
+    writes = parser.add_mutually_exclusive_group()
+    writes.add_argument("--write", action="store_true", help="replace the generated Lean data owner")
+    writes.add_argument("--write-proofs", action="store_true",
+                        help="replace the fixed generated Lean proof-module set")
     args = parser.parse_args()
     try:
         expected = expected_output()
         if args.write:
             OUTPUT.write_text(expected)
             print("OK — wrote Blanc/DripStackSafetyData.lean")
+        elif args.write_proofs:
+            proofs = expected_proof_outputs()
+            require(REGION576_OUTPUT.is_file() and REGION576_OUTPUT.read_text() == proofs[REGION576_OUTPUT],
+                    "renderer does not reproduce accepted Blanc/DripStackSafetyRegion576.lean")
+            for path, proof in proofs.items():
+                path.write_text(proof)
+            print("OK — wrote fixed DRIP stack proof modules: Region576 and Region1022")
         else:
             require(OUTPUT.is_file() and OUTPUT.read_text() == expected,
                     "stale/missing Blanc/DripStackSafetyData.lean; run the registered writer --write")
-            print("OK — DRIP stack table data exactly matches current runtime analysis")
+            for path, proof in expected_proof_outputs().items():
+                require(path.is_file() and path.read_text() == proof,
+                        f"stale/missing {path.relative_to(ROOT)}; run the registered writer --write-proofs")
+            print("OK — DRIP stack table data and proof text exactly match current runtime analysis")
         return 0
     except (OSError, Rejected) as error:
         print(f"FAIL — DRIP stack table: {error}")

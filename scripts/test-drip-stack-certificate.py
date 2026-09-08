@@ -3,6 +3,7 @@
 
 import importlib.util
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,8 @@ class StackCertificateTests(unittest.TestCase):
         cls.decoded = GEN.decode(cls.raw)
         cls.states = GEN.analyze(cls.raw)
         cls.rendered = GEN.render(cls.raw, cls.states)
+        cls.parts = GEN.subtrees(cls.states)
+        cls.proofs = GEN.expected_proof_outputs()
 
     def restore(self):
         self.assertEqual(GEN.analyze(self.raw), self.states)
@@ -82,6 +85,98 @@ class StackCertificateTests(unittest.TestCase):
         self.assertEqual(sum(len(part.rows) if part.left is None else 1 for part in parts), 735)
         self.assertEqual(len(seen), len(parts))
         self.assertEqual(GEN.render(self.raw, dict(reversed(list(self.states.items())))), self.rendered)
+
+    def assert_proof_structure(self, text, spec):
+        by_name = {part.name: part for part in self.parts}
+        parts = []
+
+        def visit(part):
+            if part.left is not None:
+                self.assertIsNotNone(part.right)
+                visit(part.left)
+                visit(part.right)
+            else:
+                self.assertIsNone(part.right)
+            parts.append(part)
+
+        visit(by_name[spec.root])
+        root_rows = by_name[spec.root].rows
+        root_pcs = [pc for pc, _ in root_rows]
+        self.assertEqual(len(root_rows), spec.rows)
+        self.assertEqual(root_pcs, sorted(set(root_pcs)))
+        self.assertEqual(root_pcs[0], spec.start)
+        self.assertEqual(root_pcs[-1] + self.decoded[root_pcs[-1]].width, spec.stop)
+        expected_names = []
+        for part in parts:
+            expected_names.extend([f"{part.name}_rows_checked", f"{part.name}_layout_checked"])
+        expected_names.extend(witness.name for witness in spec.witnesses)
+        expected_names.append(f"{spec.root}_order_and_size_checked")
+        self.assertEqual(re.findall(r"^theorem (\w+)\s*:", text, re.M), expected_names)
+
+        tables = re.findall(
+            r"^    subtree\d+\.all \(checkRow code\.toByteArray (\w+) 8\) = true := by$",
+            text,
+            re.M,
+        )
+        self.assertEqual(len(tables), len(parts))
+        self.assertEqual(tables, ["table"] * len(parts),
+                         "every emitted row proof must use the complete table")
+
+        layouts = {
+            name: (int(start), int(stop))
+            for name, start, stop in re.findall(
+                r"^theorem (subtree\d+)_layout_checked :\n"
+                r"    subtree\d+\.checkLayout code\.toByteArray (\d+) (\d+) = true := by$",
+                text,
+                re.M,
+            )
+        }
+        expected_layouts = {
+            part.name: (part.rows[0][0], part.rows[-1][0] + self.decoded[part.rows[-1][0]].width)
+            for part in parts
+        }
+        self.assertEqual(layouts, expected_layouts)
+
+        for part in parts:
+            if part.left is None:
+                self.assertIn(
+                    f"theorem {part.name}_rows_checked :\n"
+                    f"    {part.name}.all (checkRow code.toByteArray table 8) = true := by\n"
+                    "  decide +kernel",
+                    text,
+                )
+            else:
+                self.assertIn(f"  · exact {part.left.name}_rows_checked\n"
+                              f"  · exact {part.right.name}_rows_checked", text)
+                self.assertIn(f"  · exact {part.left.name}_layout_checked\n"
+                              f"  · exact {part.right.name}_layout_checked", text)
+
+        self.assertIn(
+            f"theorem {spec.root}_order_and_size_checked :\n"
+            f"    {spec.root}.checkOrder = true ∧ {spec.root}.size = {spec.rows} := by",
+            text,
+        )
+        self.assertEqual(text.count("import Blanc.DripStackSafety"), 1)
+
+    def test_region_proof_renderer_reproduces_and_extends_structure(self):
+        accepted = GEN.REGION576_OUTPUT.read_text()
+        self.assertEqual(self.proofs[GEN.REGION576_OUTPUT], accepted)
+        self.assert_proof_structure(accepted, GEN.REGION576)
+        region1022 = self.proofs[GEN.REGION1022_OUTPUT]
+        self.assert_proof_structure(region1022, GEN.REGION1022)
+        self.assertIn("row1165_cross_region_checked", region1022)
+        self.assertIn("checkRow code.toByteArray table 8 1165 [some 1212, none, none]", region1022)
+
+    def test_proof_renderer_rejects_local_table_substitution(self):
+        rendered = self.proofs[GEN.REGION1022_OUTPUT]
+        mutated = rendered.replace(
+            "checkRow code.toByteArray table 8",
+            "checkRow code.toByteArray subtree1022 8",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "complete table"):
+            self.assert_proof_structure(mutated, GEN.REGION1022)
+        self.assert_proof_structure(rendered, GEN.REGION1022)
 
     def test_runtime_underflow_mutation_and_restore(self):
         raw = bytearray(self.raw)
@@ -188,22 +283,42 @@ class StackCertificateTests(unittest.TestCase):
             source = root / "Blanc/DripCode.lean"
             source.write_text(self.source)
             output = root / "Blanc/DripStackSafetyData.lean"
+            region576 = root / "Blanc/DripStackSafetyRegion576.lean"
+            region576.write_bytes(GEN.REGION576_OUTPUT.read_bytes())
+            region1022 = root / "Blanc/DripStackSafetyRegion1022.lean"
 
             def run(*args):
                 return subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True)
 
             self.assertEqual(run().returncode, 1)
             self.assertFalse(output.exists())
+            self.assertFalse(region1022.exists())
             self.assertEqual(run("--write").returncode, 0)
             self.assertEqual(output.read_text(), self.rendered)
-            before = output.stat().st_mtime_ns
+            self.assertFalse(region1022.exists())
+            before576 = region576.read_bytes()
+            self.assertEqual(run("--write-proofs").returncode, 0)
+            self.assertEqual(region576.read_bytes(), before576)
+            self.assertEqual(region1022.read_text(), self.proofs[GEN.REGION1022_OUTPUT])
+            self.assertEqual(run("--write-proofs", str(root / "escape.lean")).returncode, 2)
+            self.assertFalse((root / "escape.lean").exists())
+            before = {path: path.stat().st_mtime_ns for path in (output, region576, region1022)}
             self.assertEqual(run().returncode, 0)
-            self.assertEqual(output.stat().st_mtime_ns, before)
+            self.assertEqual({path: path.stat().st_mtime_ns for path in before}, before)
             output.write_text(self.rendered.replace(".node 1720", ".node 1721"))
             mutated = output.read_bytes()
             self.assertEqual(run().returncode, 1)
             self.assertEqual(output.read_bytes(), mutated)
             output.write_text(self.rendered)
+            region1022.write_text(region1022.read_text().replace(
+                "checkRow code.toByteArray table 8",
+                "checkRow code.toByteArray subtree1022 8",
+                1,
+            ))
+            mutated_proof = region1022.read_bytes()
+            self.assertEqual(run().returncode, 1)
+            self.assertEqual(region1022.read_bytes(), mutated_proof)
+            region1022.write_text(self.proofs[GEN.REGION1022_OUTPUT])
             self.assertEqual(run().returncode, 0)
             source.write_text(self.source.replace("[0x5b,", "[0x50,", 1))
             self.assertEqual(run().returncode, 1)
