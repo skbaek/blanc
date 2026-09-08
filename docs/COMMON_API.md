@@ -1318,6 +1318,30 @@ each generated span.  These declarations are executable byte/layout
 operations rather than proposition-shaped proof endpoints, so they do not
 have a goal-triggered recipe.
 
+### C4. I need to navigate the byte at a known compile shape
+
+Import [`Blanc.CompiledShape`](../Blanc/CompiledShape.lean) for a
+`Func.byteAtByShape` goal whose compile shape, sizes and index bounds are
+already known. Inside `namespace Blanc`, use `open CompiledShape`; outside it,
+use `open Blanc.CompiledShape`.
+
+- `byteAt_prepend_*` handles a fixed instruction prefix and its tail.
+- `byteAt_branch_*` selects the branch header, left subtree, jump destination
+  or right subtree without expanding the other subtree.
+- `dispatchNodeByteAt_*` navigates the common selector-dispatch shape.
+- `pushFullWord_opcode_eq` and `byteAt_pushFullWord_data` describe a fixed
+  32-byte `Ninst.push w.toBytes` instruction.
+
+Supply the existing shape, size and index-bound facts so only the addressed
+subtree is traversed. These lemmas do not establish the compile-shape equality,
+compile a function, or replace contract-specific selector, route or closed-size
+facts. The fixed-width PUSH lemmas are distinct from value-dependent
+`Ninst.pushB256` and its minimal-width encoding.
+
+The owner imports only `Blanc.Forward` and `Mathlib.Tactic.IntervalCases`.
+The WETH deployment, domain-slice and upper-slice proofs show the direct import
+and application pattern while keeping their contract-specific facts local.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when
