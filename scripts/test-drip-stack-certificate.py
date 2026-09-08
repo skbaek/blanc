@@ -38,6 +38,18 @@ class StackCertificateTests(unittest.TestCase):
         self.assertEqual(GEN.transfer(self.decoded, 1720, self.states[1720]), [(1721, (None, None))])
         self.assertEqual(GEN.transfer(self.decoded, 1140, self.states[1140]), [(951, self.states[951])])
 
+    def test_producer_adapter_preserves_stronger_drip_contract(self):
+        self.assertIs(GEN.Instruction, GEN.producer.Instruction)
+        self.assertEqual(self.states, GEN.producer.analyze(self.raw, GEN.MAXIMUM))
+        self.assertEqual(
+            [part.root for part in GEN.subtrees(self.states)],
+            [part.root for part in GEN.producer.packs(self.states, GEN.SUBTREE_ROWS)],
+        )
+        decoded = GEN.decode(bytes([0x00, 0x00]))
+        reachable = GEN.producer.analyze(bytes([0x00, 0x00]), GEN.MAXIMUM)
+        with self.assertRaisesRegex(GEN.Rejected, "exactly all decoded"):
+            GEN.validate(decoded, reachable)
+
     def test_both_conditional_arms(self):
         decoded = GEN.decode(bytes([0x57, 0x00, 0x5B, 0x00]))
         for condition in (None, 0, 1):
@@ -171,6 +183,8 @@ class StackCertificateTests(unittest.TestCase):
             (root / "Blanc").mkdir()
             script = root / "scripts/gen-drip-stack-certificate.py"
             script.write_bytes((ROOT / "scripts/gen-drip-stack-certificate.py").read_bytes())
+            producer = root / "scripts/stack_certificate.py"
+            producer.write_bytes((ROOT / "scripts/stack_certificate.py").read_bytes())
             source = root / "Blanc/DripCode.lean"
             source.write_text(self.source)
             output = root / "Blanc/DripStackSafetyData.lean"

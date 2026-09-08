@@ -2904,6 +2904,8 @@
       "inputs": {
         "files": [
           "scripts/check-drip-stack-certificate.sh",
+          "scripts/stack_certificate.py",
+          "scripts/test-stack-certificate.py",
           "scripts/gen-drip-stack-certificate.py",
           "scripts/test-drip-stack-certificate.py",
           "Blanc/DripCode.lean",

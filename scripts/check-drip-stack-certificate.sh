@@ -3,6 +3,7 @@
 # certification is supplied by the required built Blanc.DripStackSafety module.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+python3 -B scripts/test-stack-certificate.py
 python3 -B scripts/gen-drip-stack-certificate.py
 python3 -B scripts/test-drip-stack-certificate.py
-echo "OK — DRIP stack certificate data: exact runtime-derived output and deterministic corruption controls passed"
+echo "OK — DRIP stack certificate data: reusable producer controls, exact runtime-derived output and deterministic corruption controls passed"
