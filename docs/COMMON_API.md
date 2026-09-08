@@ -1347,6 +1347,10 @@ or constructor and invoke `blanc_suggest` again. An unknown, opaque, `.last`,
 or `.call` shape stays on the general declaration-search route.
 
 - `byteAt_prepend_*` handles a fixed instruction prefix and its tail.
+- `byteAt_next_to_tail` moves past one reference instruction when
+  `inst0.size ≤ i`, even when the executed instruction `inst` and the two
+  tails are independent. The reference size determines the new base and
+  subtracted index; the lemma does not equate instruction bytes or widths.
 - `byteAt_branch_*` selects the branch header, left subtree, jump destination
   or right subtree without expanding the other subtree.
 - `dispatchNodeByteAt_*` navigates the common selector-dispatch shape.
@@ -1362,6 +1366,21 @@ facts. The fixed-width PUSH lemmas are distinct from value-dependent
 The owner imports only `Blanc.Forward` and `Mathlib.Tactic.IntervalCases`.
 The WETH deployment, domain-slice and upper-slice proofs show the direct import
 and application pattern while keeping their contract-specific facts local.
+
+### C5. I need to preserve a compile-shape equality under a known prefix
+
+Import [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) and apply
+`Func.compileShape_prepend_congr l` to an existing equality
+`p.compileShape = q.compileShape`. It returns
+`(l +++ p).compileShape = (l +++ q).compileShape` without re-proving the
+instruction-line recursion.
+
+The `compile-shape-prepend-congruence` recipe matches only a direct equality
+whose two sides apply `compileShape` to `prepend` with the same syntactic
+prefix and distinct syntactic tails. It does not reduce either tail, search the
+local context for the needed tail equality, compare different prefixes, or fire on
+a no-prepend or reflexive-tail goal. The caller supplies the tail-shape
+equality explicitly.
 
 ## Common-library-first workflow
 

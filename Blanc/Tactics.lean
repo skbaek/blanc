@@ -157,6 +157,31 @@ def proofRecipeIsByteSizeComposition (target : Lean.Expr) : Bool :=
     head == some `LE.le || head == some `LT.lt) &&
     proofRecipeContainsClosedCompileShapeByteSize target
 
+def proofRecipeCompileShapePrepend? : Lean.Expr →
+    Option (Lean.Expr × Lean.Expr)
+  | .mdata _ expression => proofRecipeCompileShapePrepend? expression
+  | .app (.const compileShapeName _)
+      (.app (.app (.const prependName _) linePrefix) tail) =>
+      if `Blanc.Func.compileShape == compileShapeName &&
+          prependName == `Blanc.prepend then
+        some (linePrefix, tail)
+      else
+        none
+  | _ => none
+
+def proofRecipeIsCompileShapePrependCongruence : Lean.Expr → Bool
+  | .mdata _ target => proofRecipeIsCompileShapePrependCongruence target
+  | .app (.app (.app (.const name _) _) lhs) rhs =>
+      if name == `Eq then
+        match proofRecipeCompileShapePrepend? lhs,
+            proofRecipeCompileShapePrepend? rhs with
+        | some (leftPrefix, leftTail), some (rightPrefix, rightTail) =>
+            leftPrefix == rightPrefix && !(leftTail == rightTail)
+        | _, _ => false
+      else
+        false
+  | _ => false
+
 def proofRecipeIsDirectByteNavigationFunc (function : Lean.Expr) : Bool :=
   let head := proofRecipeHeadName? function
   head == some `Blanc.Func.next ||
@@ -293,6 +318,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeIsByteSizeComposition target
   | "goal-shape:compiled-shape-byte-navigation" =>
       return proofRecipeContainsByteNavigation 8 target
+  | "goal-shape:compile-shape-prepend-congruence" =>
+      return proofRecipeIsCompileShapePrependCongruence target
   | "goal-shape:bounded-creation-word-encoder" =>
       return proofRecipeIsBoundedCreationWordEncoder target
   | "goal-shape:selector-separation" =>

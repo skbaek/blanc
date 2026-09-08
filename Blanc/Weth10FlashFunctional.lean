@@ -342,8 +342,8 @@ lemma RawFlashCallbackBoundary.exists_log_segment
   exact ⟨child.logs, hmidLogs⟩
 
 /-- The exact successful suffix of `flashLoan` beginning at its borrower
-`CALL`.  It is named locally so the functional layer remains independent of
-the state-soundness proof's internal factoring. -/
+`CALL`. It is a stable functional-facing alias of the shared
+`flashLoanFromCall` tail used by the state-soundness layer. -/
 def flashLoanSuccessTail : Func :=
   flashLoanFromCall
 
