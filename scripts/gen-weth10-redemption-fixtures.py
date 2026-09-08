@@ -31,6 +31,8 @@ import os
 import sys
 from pathlib import Path
 
+import eels_differential_common as eels_common
+
 
 REPO = Path(__file__).resolve().parents[1]
 EELS = Path(os.environ.get("EELS_ROOT", Path.home() / "execution-specs"))
@@ -719,17 +721,11 @@ def case_authorization(runtime: str):
 
 
 def verify_eels_pin():
-    actual = support.subprocess.check_output(
-        ["git", "-C", str(EELS), "rev-parse", "HEAD"], text=True
-    ).strip()
-    dirty = support.subprocess.check_output(
-        ["git", "-C", str(EELS), "status", "--porcelain"], text=True
-    ).strip()
-    if actual != EELS_PIN or dirty:
-        raise RuntimeError(
-            f"EELS checkout must be clean at {EELS_PIN}; got {actual}, "
-            f"dirty={bool(dirty)}"
-        )
+    eels_common.verify_eels_pin(
+        EELS, EELS_PIN, eels_common.raise_runtime_error,
+        failure_message=lambda head, dirty:
+            f"EELS checkout must be clean at {EELS_PIN}; got {head}, dirty={dirty}",
+    )
 
 
 def main(argv=None) -> int:

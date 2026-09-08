@@ -1078,6 +1078,7 @@
         "files": [
           "scripts/check-lido-circuit-breaker-deployment.sh",
           "scripts/gen-lido-circuit-breaker-deployment-fixture.py",
+          "scripts/eels_differential_common.py",
           "scripts/gen-weth-fixtures.py",
           "scripts/check-lido-circuit-breaker-deployment.py",
           "scripts/test-lido-circuit-breaker-deployment-falsifiers.py",
@@ -1310,6 +1311,7 @@
         "files": [
           "scripts/check-weth10-differential.sh",
           "scripts/gen-weth10-differential.py",
+          "scripts/eels_differential_common.py",
           "scripts/check-runtime-bytes.py",
           "scripts/weth10-reference.json",
           "scripts/fixtures/weth10/manifest.json",
@@ -1648,6 +1650,7 @@
         "files": [
           "scripts/check-weth10-redemption.sh",
           "scripts/gen-weth10-redemption-fixtures.py",
+          "scripts/eels_differential_common.py",
           "scripts/gen-weth-fixtures.py",
           "scripts/check-runtime-bytes.py",
           "scripts/fixtures/weth10-redemption/manifest.json",
@@ -1708,6 +1711,7 @@
         "files": [
           "scripts/check-weth10-deployment.sh",
           "scripts/check-weth10-deployment.py",
+          "scripts/eels_differential_common.py",
           "scripts/gen-weth10-redemption-fixtures.py",
           "scripts/gen-weth-fixtures.py",
           "scripts/check-runtime-bytes.py",
@@ -1913,6 +1917,7 @@
           "scripts/reference/current-mainnet/target-commit.txt",
           "scripts/weth10-reference.json",
           "scripts/gen-weth10-differential.py",
+          "scripts/eels_differential_common.py",
           "scripts/fixtures/weth10-current-mainnet/01-creation-block.json",
           "scripts/fixtures/weth10-current-mainnet/02-type2-redemption-block.json",
           "scripts/fixtures/weth10-current-mainnet/03-type4-authorization-block.json",
@@ -2099,6 +2104,7 @@
         "files": [
           "scripts/check-beacon-deposit-differential.sh",
           "scripts/gen-beacon-deposit-differential.py",
+          "scripts/eels_differential_common.py",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
           "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
           "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
@@ -2156,6 +2162,7 @@
         "files": [
           "scripts/check-beacon-deposit-deployment.sh",
           "scripts/gen-beacon-deposit-deployment-fixture.py",
+          "scripts/eels_differential_common.py",
           "scripts/gen-weth-fixtures.py",
           ".lake/packages/jaune/.lake/build/bin/jaune",
           "@eels/venv/pyvenv.cfg",
