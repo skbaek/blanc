@@ -2910,8 +2910,11 @@
           "scripts/test-drip-stack-certificate.py",
           "Blanc/DripCode.lean",
           "Blanc/DripStackSafetyData.lean",
+          "Blanc/DripStackSafetyRegion214.lean",
           "Blanc/DripStackSafetyRegion576.lean",
-          "Blanc/DripStackSafetyRegion1022.lean"
+          "Blanc/DripStackSafetyRegion1022.lean",
+          "Blanc/DripStackSafetyRegion1459.lean",
+          "Blanc/DripStackSafetyCertificate.lean"
         ],
         "tools": [
           "python3"

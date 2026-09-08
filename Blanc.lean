@@ -298,6 +298,7 @@ import Blanc.DripFunctional
 import Blanc.DripIngress
 import Blanc.DripMachine
 import Blanc.DripRpow
+import Blanc.DripStackSafetyCertificate
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

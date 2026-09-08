@@ -86,6 +86,24 @@ class StackCertificateTests(unittest.TestCase):
         self.assertEqual(len(seen), len(parts))
         self.assertEqual(GEN.render(self.raw, dict(reversed(list(self.states.items())))), self.rendered)
 
+    def test_exact_distinct_row_reconciliation(self):
+        by_name = {part.name: part for part in self.parts}
+        pcs = lambda name: {pc for pc, _ in by_name[name].rows}
+        accepted = ["subtree214", "subtree576", "subtree1022", "subtree1148", "subtree1717"]
+        accepted_sets = [pcs(name) for name in accepted]
+        self.assertEqual([len(rows) for rows in accepted_sets], [183, 183, 183, 11, 10])
+        self.assertEqual(accepted_sets[2] & accepted_sets[3], {
+            1140, 1141, 1142, 1144, 1145, 1148, 1149, 1150, 1151, 1154, 1155,
+        })
+        self.assertEqual(accepted_sets[4] & pcs("subtree1459"), {
+            1712, 1713, 1714, 1715, 1716, 1717, 1718, 1719, 1720, 1721,
+        })
+        accepted_union = set().union(*accepted_sets)
+        self.assertEqual(len(accepted_union), 559)
+        missing = set(self.states) - accepted_union
+        self.assertEqual(len(missing), 176)
+        self.assertEqual(missing, (pcs("subtree1459") - pcs("subtree1717")) | {371, 839, 1182})
+
     def assert_proof_structure(self, text, spec):
         by_name = {part.name: part for part in self.parts}
         parts = []
@@ -118,6 +136,12 @@ class StackCertificateTests(unittest.TestCase):
         expected_names.extend(witness.name for witness in spec.witnesses)
         expected_names.append(f"{spec.root}_order_and_size_checked")
         self.assertEqual(re.findall(r"^theorem (\w+)\s*:", text, re.M), expected_names)
+        for witness in spec.witnesses:
+            self.assertIn(
+                f"checkRow code.toByteArray table 8 {witness.pc} {GEN.pattern(self.states[witness.pc])}",
+                text,
+                "witness must use the complete table",
+            )
 
         tables = re.findall(
             r"^    subtree\d+\.all \(checkRow code\.toByteArray (\w+) 8\) = true := by$",
@@ -176,6 +200,36 @@ class StackCertificateTests(unittest.TestCase):
         self.assert_proof_structure(region1022, GEN.REGION1022)
         self.assertIn("row1165_cross_region_checked", region1022)
         self.assertIn("checkRow code.toByteArray table 8 1165 [some 1212, none, none]", region1022)
+        region1459 = self.proofs[GEN.REGION1459_OUTPUT]
+        self.assert_proof_structure(region1459, GEN.REGION1459)
+        self.assertIn("row1227_cross_pack_checked", region1459)
+        self.assertIn("checkRow code.toByteArray table 8 1227 [some 1735, none, none, none]", region1459)
+        by_name = {part.name: part for part in self.parts}
+        self.assertNotIn(1735, {pc for pc, _ in by_name["subtree1221"].rows})
+        self.assertIn(1735, {pc for pc, _ in by_name["subtree1730"].rows})
+
+    def test_certificate_facade_is_complete_and_same_frame(self):
+        facade = self.proofs[GEN.CERTIFICATE_OUTPUT]
+        self.assertEqual(re.findall(r"^import (\S+)$", facade, re.M), [
+            "Blanc.DripStackSafetyRegion214",
+            "Blanc.DripStackSafetyRegion576",
+            "Blanc.DripStackSafetyRegion1022",
+            "Blanc.DripStackSafetyRegion1459",
+        ])
+        self.assertEqual(re.findall(r"^theorem (\w+)", facade, re.M), [
+            "subtree371_rows_checked", "subtree371_layout_checked",
+            "subtree1182_rows_checked", "subtree1182_layout_checked",
+            "subtree839_rows_checked", "subtree839_layout_checked",
+            "table_rows_checked", "table_layout_checked", "table_order_and_size_checked",
+            "table_checked", "entry_invariant", "actual_entry_safe",
+        ])
+        self.assertIn("table.size = 735", facade)
+        self.assertIn("table.checkLayout code.toByteArray 0 1762 = true", facade)
+        self.assertIn("checkTable code.toByteArray table 8 = true", facade)
+        self.assertIn("(hprefix : Exec.Deriv.ParentPrefix root node)", facade)
+        self.assertIn("(entryPc : root.pc = 0)", facade)
+        self.assertIn("(entryStack : root.devm.stack = [])", facade)
+        self.assertIn("(checkTable_certificate checked).at_parentPrefix hprefix rfl", facade)
 
     def test_proof_renderer_rejects_local_table_substitution(self):
         rendered = self.proofs[GEN.REGION1022_OUTPUT]
@@ -187,6 +241,17 @@ class StackCertificateTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "complete table"):
             self.assert_proof_structure(mutated, GEN.REGION1022)
         self.assert_proof_structure(rendered, GEN.REGION1022)
+
+    def test_cross_pack_witness_rejects_local_table_substitution(self):
+        rendered = self.proofs[GEN.REGION1459_OUTPUT]
+        mutated = rendered.replace(
+            "checkRow code.toByteArray table 8 1227",
+            "checkRow code.toByteArray subtree1221 8 1227",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "complete table"):
+            self.assert_proof_structure(mutated, GEN.REGION1459)
+        self.assert_proof_structure(rendered, GEN.REGION1459)
 
     def test_runtime_underflow_mutation_and_restore(self):
         raw = bytearray(self.raw)
@@ -296,6 +361,8 @@ class StackCertificateTests(unittest.TestCase):
             region576 = root / "Blanc/DripStackSafetyRegion576.lean"
             region576.write_bytes(GEN.REGION576_OUTPUT.read_bytes())
             region1022 = root / "Blanc/DripStackSafetyRegion1022.lean"
+            region1459 = root / "Blanc/DripStackSafetyRegion1459.lean"
+            certificate = root / "Blanc/DripStackSafetyCertificate.lean"
 
             def run(*args):
                 return subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True)
@@ -303,16 +370,23 @@ class StackCertificateTests(unittest.TestCase):
             self.assertEqual(run().returncode, 1)
             self.assertFalse(output.exists())
             self.assertFalse(region1022.exists())
+            self.assertFalse(region1459.exists())
+            self.assertFalse(certificate.exists())
             self.assertEqual(run("--write").returncode, 0)
             self.assertEqual(output.read_text(), self.rendered)
             self.assertFalse(region1022.exists())
+            self.assertFalse(region1459.exists())
+            self.assertFalse(certificate.exists())
             before576 = region576.read_bytes()
             self.assertEqual(run("--write-proofs").returncode, 0)
             self.assertEqual(region576.read_bytes(), before576)
             self.assertEqual(region1022.read_text(), self.proofs[GEN.REGION1022_OUTPUT])
+            self.assertEqual(region1459.read_text(), self.proofs[GEN.REGION1459_OUTPUT])
+            self.assertEqual(certificate.read_text(), self.proofs[GEN.CERTIFICATE_OUTPUT])
             self.assertEqual(run("--write-proofs", str(root / "escape.lean")).returncode, 2)
             self.assertFalse((root / "escape.lean").exists())
-            before = {path: path.stat().st_mtime_ns for path in (output, region576, region1022)}
+            before = {path: path.stat().st_mtime_ns
+                      for path in (output, region576, region1022, region1459, certificate)}
             self.assertEqual(run().returncode, 0)
             self.assertEqual({path: path.stat().st_mtime_ns for path in before}, before)
             output.write_text(self.rendered.replace(".node 1720", ".node 1721"))
@@ -329,6 +403,12 @@ class StackCertificateTests(unittest.TestCase):
             self.assertEqual(run().returncode, 1)
             self.assertEqual(region1022.read_bytes(), mutated_proof)
             region1022.write_text(self.proofs[GEN.REGION1022_OUTPUT])
+            self.assertEqual(run().returncode, 0)
+            certificate.write_text(certificate.read_text().replace("table.size = 735", "table.size = 734"))
+            mutated_facade = certificate.read_bytes()
+            self.assertEqual(run().returncode, 1)
+            self.assertEqual(certificate.read_bytes(), mutated_facade)
+            certificate.write_text(self.proofs[GEN.CERTIFICATE_OUTPUT])
             self.assertEqual(run().returncode, 0)
             source.write_text(self.source.replace("[0x5b,", "[0x50,", 1))
             self.assertEqual(run().returncode, 1)

@@ -23,6 +23,8 @@ SOURCE = ROOT / "Blanc/DripCode.lean"
 OUTPUT = ROOT / "Blanc/DripStackSafetyData.lean"
 REGION576_OUTPUT = ROOT / "Blanc/DripStackSafetyRegion576.lean"
 REGION1022_OUTPUT = ROOT / "Blanc/DripStackSafetyRegion1022.lean"
+REGION1459_OUTPUT = ROOT / "Blanc/DripStackSafetyRegion1459.lean"
+CERTIFICATE_OUTPUT = ROOT / "Blanc/DripStackSafetyCertificate.lean"
 MAXIMUM = 8
 # A representation boundary, not a bound on program/table size or proof resources.
 SUBTREE_ROWS = 15
@@ -90,6 +92,7 @@ class RowWitness:
     pc: int
     external_successor: int
     comment: str
+    local_root: str | None = None
 
 
 @dataclass(frozen=True)
@@ -140,9 +143,30 @@ REGION1022 = RegionSpec(
     ),),
 )
 
+REGION1459 = RegionSpec(
+    root="subtree1459",
+    rows=183,
+    start=1199,
+    stop=1762,
+    module_doc=(
+        "Checked fourth 183-row region of the DRIP stack table. Every successor check",
+        "uses the complete 735-row table, including the conditional jump from PC 1227",
+        "in subtree1221 to PC 1735 in subtree1730.",
+    ),
+    internal_theorem_prefix="region1459_",
+    witnesses=(RowWitness(
+        name="row1227_cross_pack_checked",
+        pc=1227,
+        external_successor=1735,
+        comment="PC 1227 lies in subtree1221; its taken successor PC 1735 lies in subtree1730.",
+        local_root="subtree1221",
+    ),),
+)
+
 PROOF_OUTPUTS = {
     REGION576: REGION576_OUTPUT,
     REGION1022: REGION1022_OUTPUT,
+    REGION1459: REGION1459_OUTPUT,
 }
 
 
@@ -195,6 +219,7 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
     require(last_pc in decoded, f"missing final instruction for {spec.root}")
     require(last_pc + decoded[last_pc].width == spec.stop, f"wrong stop for {spec.root}")
     region_pcs = {pc for pc, _ in root.rows}
+    by_name = {part.name: part for part in subtrees(states)}
 
     def theorem_stem(part: Subtree) -> str:
         if part is root:
@@ -243,8 +268,12 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
         successors = transfer(decoded, witness.pc, states[witness.pc])
         require(any(pc == witness.external_successor for pc, _ in successors),
                 f"missing witness successor {witness.external_successor} from {witness.pc}")
-        require(witness.external_successor not in region_pcs,
-                f"witness successor is local to {spec.root}")
+        local_root = spec.root if witness.local_root is None else witness.local_root
+        require(local_root in by_name, f"unknown witness boundary {local_root}")
+        local_pcs = {pc for pc, _ in by_name[local_root].rows}
+        require(witness.pc in local_pcs, f"witness PC outside {local_root}")
+        require(witness.external_successor not in local_pcs,
+                f"witness successor is local to {local_root}")
         output.extend([
             f"/-- {witness.comment} -/",
             f"theorem {witness.name} :",
@@ -263,6 +292,139 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
         "",
     ])
     return "\n".join(output)
+
+
+def render_certificate_facade(raw: bytes, states: dict[int, Pattern]) -> str:
+    decoded = decode(raw)
+    by_name = {part.name: part for part in subtrees(states)}
+    expected = {
+        "subtree214": (183, 0, 371),
+        "subtree576": (183, 372, 839),
+        "subtree1022": (183, 840, 1182),
+        "subtree1459": (183, 1199, 1762),
+        "subtree371": (367, 0, 839),
+        "subtree1182": (367, 840, 1762),
+        "subtree839": (735, 0, 1762),
+    }
+    for name, (rows, start, stop) in expected.items():
+        require(name in by_name, f"missing facade subtree {name}")
+        part = by_name[name]
+        require(len(part.rows) == rows, f"wrong facade row count for {name}")
+        require(part.rows[0][0] == start, f"wrong facade start for {name}")
+        final_pc = part.rows[-1][0]
+        require(final_pc + decoded[final_pc].width == stop,
+                f"wrong facade stop for {name}")
+    require(states.get(0) == (), "facade entry must be PC zero and empty stack")
+
+    return "\n".join([
+        "import Blanc.DripStackSafetyRegion214",
+        "import Blanc.DripStackSafetyRegion576",
+        "import Blanc.DripStackSafetyRegion1022",
+        "import Blanc.DripStackSafetyRegion1459",
+        "",
+        "/-!",
+        "Complete 735-row DRIP stack certificate and its actual same-frame entry theorem.",
+        "The conclusion follows only along an actual `Exec.Deriv.ParentPrefix`; entered child",
+        "frames require their own certificate before their parent continuation resumes.",
+        "-/",
+        "",
+        "namespace Blanc.Drip.StackSafety",
+        "",
+        "open Jaune AbstractStackSafety CompiledStackSafety",
+        "",
+        "theorem subtree371_rows_checked :",
+        "    subtree371.all (checkRow code.toByteArray table 8) = true := by",
+        "  apply Table.all_node",
+        "  · decide +kernel",
+        "  · exact subtree214_rows_checked",
+        "  · exact subtree576_rows_checked",
+        "",
+        "theorem subtree371_layout_checked :",
+        "    subtree371.checkLayout code.toByteArray 0 839 = true := by",
+        "  apply Table.checkLayout_node (next := 372)",
+        "  · decide +kernel",
+        "  · exact subtree214_layout_checked",
+        "  · exact subtree576_layout_checked",
+        "  · decide +kernel",
+        "",
+        "theorem subtree1182_rows_checked :",
+        "    subtree1182.all (checkRow code.toByteArray table 8) = true := by",
+        "  apply Table.all_node",
+        "  · decide +kernel",
+        "  · exact subtree1022_rows_checked",
+        "  · exact subtree1459_rows_checked",
+        "",
+        "theorem subtree1182_layout_checked :",
+        "    subtree1182.checkLayout code.toByteArray 840 1762 = true := by",
+        "  apply Table.checkLayout_node (next := 1199)",
+        "  · decide +kernel",
+        "  · exact subtree1022_layout_checked",
+        "  · exact subtree1459_layout_checked",
+        "  · decide +kernel",
+        "",
+        "theorem subtree839_rows_checked :",
+        "    subtree839.all (checkRow code.toByteArray table 8) = true := by",
+        "  apply Table.all_node",
+        "  · decide +kernel",
+        "  · exact subtree371_rows_checked",
+        "  · exact subtree1182_rows_checked",
+        "",
+        "theorem subtree839_layout_checked :",
+        "    subtree839.checkLayout code.toByteArray 0 1762 = true := by",
+        "  apply Table.checkLayout_node (next := 840)",
+        "  · decide +kernel",
+        "  · exact subtree371_layout_checked",
+        "  · exact subtree1182_layout_checked",
+        "  · decide +kernel",
+        "",
+        "theorem table_rows_checked :",
+        "    table.all (checkRow code.toByteArray table 8) = true := by",
+        "  exact subtree839_rows_checked",
+        "",
+        "theorem table_layout_checked :",
+        "    table.checkLayout code.toByteArray 0 1762 = true := by",
+        "  exact subtree839_layout_checked",
+        "",
+        "/-- Strict ordering and the exact whole-table population are checked independently. -/",
+        "theorem table_order_and_size_checked :",
+        "    table.checkOrder = true ∧ table.size = 735 := by",
+        "  decide +kernel",
+        "",
+        "/-- The actual runtime, complete ordered table, and all 735 transfer rows agree. -/",
+        "theorem table_checked : checkTable code.toByteArray table 8 = true := by",
+        "  unfold checkTable",
+        "  rw [show decide (8 ≤ 8) = true by decide]",
+        "  rw [table_order_and_size_checked.1, table_rows_checked]",
+        "  rfl",
+        "",
+        "/-- The exact runtime entry row is PC zero with the complete empty operand stack. -/",
+        "theorem entry_invariant (pre : Devm) (entryStack : pre.stack = []) :",
+        "    table.Invariant 0 pre := by",
+        "  refine ⟨[], ?_, ?_⟩",
+        "  · decide +kernel",
+        "  · rw [entryStack]",
+        "    exact matches_nil",
+        "",
+        "/-- Every node on an actual same-frame path from the concrete DRIP entry is locally",
+        "stack-safe and remains within the certified eight-word bound. -/",
+        "theorem actual_entry_safe {root node : Exec.Deriv}",
+        "    (hprefix : Exec.Deriv.ParentPrefix root node)",
+        "    (codeFrame : root.sevm.code = code.toByteArray)",
+        "    (entryPc : root.pc = 0)",
+        "    (entryStack : root.devm.stack = []) :",
+        "    node.devm.stack.length ≤ 8 ∧",
+        "      CompiledStackSafety.StepSafe table.Invariant",
+        "        (Evm.step ⟨node.pc, node.sevm, node.devm⟩) := by",
+        "  have checked : checkTable root.sevm.code table 8 = true := by",
+        "    rw [codeFrame]",
+        "    exact table_checked",
+        "  apply (checkTable_certificate checked).at_parentPrefix hprefix rfl",
+        "  rw [entryPc]",
+        "  exact entry_invariant root.devm entryStack",
+        "",
+        "end Blanc.Drip.StackSafety",
+        "",
+    ])
 
 
 def render(raw: bytes, states: dict[int, Pattern]) -> str:
@@ -313,7 +475,9 @@ def expected_output(source: Path = SOURCE) -> str:
 def expected_proof_outputs(source: Path = SOURCE) -> dict[Path, str]:
     raw = runtime_bytes(source.read_text())
     states = analyze(raw)
-    return {path: render_proof_region(raw, states, spec) for spec, path in PROOF_OUTPUTS.items()}
+    outputs = {path: render_proof_region(raw, states, spec) for spec, path in PROOF_OUTPUTS.items()}
+    outputs[CERTIFICATE_OUTPUT] = render_certificate_facade(raw, states)
+    return outputs
 
 
 def main() -> int:
@@ -334,7 +498,7 @@ def main() -> int:
                     "renderer does not reproduce accepted Blanc/DripStackSafetyRegion576.lean")
             for path, proof in proofs.items():
                 path.write_text(proof)
-            print("OK — wrote fixed DRIP stack proof modules: Region576 and Region1022")
+            print("OK — wrote fixed DRIP stack proof modules: Region576, Region1022, Region1459 and Certificate")
         else:
             require(OUTPUT.is_file() and OUTPUT.read_text() == expected,
                     "stale/missing Blanc/DripStackSafetyData.lean; run the registered writer --write")
