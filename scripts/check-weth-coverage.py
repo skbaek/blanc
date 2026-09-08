@@ -31,6 +31,7 @@ from selector_coverage import (
     run_callsite_falsifiers,
     witnessed_calls,
 )
+from strict_rlp import RLPDecodeError, decode_legacy_block_transactions
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
@@ -53,62 +54,6 @@ _RUNTIME_BYTES = None
 class CoverageError(Exception):
     """A fixture (or the selector/budget data) could not be parsed reliably.
     Always fatal -- see the module docstring's fail-closed rule."""
-
-
-# ---- a small, self-contained RLP decoder (no external dependency, so this
-# gate runs identically in CI, which has no ~/execution-specs) -------------
-
-def rlp_decode(data: bytes):
-    value, rest = _rlp_item(data)
-    if rest:
-        raise CoverageError(
-            f"{len(rest)} trailing byte(s) after the top-level RLP item")
-    return value
-
-
-def _rlp_item(data: bytes):
-    if not data:
-        raise CoverageError("empty RLP input")
-    p = data[0]
-    if p < 0x80:
-        return bytes([p]), data[1:]
-    if p < 0xb8:
-        n = p - 0x80
-        if len(data) < 1 + n:
-            raise CoverageError("short RLP string: declared length overruns input")
-        return data[1:1 + n], data[1 + n:]
-    if p < 0xc0:
-        lol = p - 0xb7
-        if len(data) < 1 + lol:
-            raise CoverageError("long RLP string: length-of-length overruns input")
-        n = int.from_bytes(data[1:1 + lol], "big")
-        s = 1 + lol
-        if len(data) < s + n:
-            raise CoverageError("long RLP string: declared length overruns input")
-        return data[s:s + n], data[s + n:]
-    if p < 0xf8:
-        n = p - 0xc0
-        if len(data) < 1 + n:
-            raise CoverageError("short RLP list: declared length overruns input")
-        payload, rest = data[1:1 + n], data[1 + n:]
-        return _rlp_list_payload(payload), rest
-    lol = p - 0xf7
-    if len(data) < 1 + lol:
-        raise CoverageError("long RLP list: length-of-length overruns input")
-    n = int.from_bytes(data[1:1 + lol], "big")
-    s = 1 + lol
-    if len(data) < s + n:
-        raise CoverageError("long RLP list: declared length overruns input")
-    payload, rest = data[s:s + n], data[s + n:]
-    return _rlp_list_payload(payload), rest
-
-
-def _rlp_list_payload(payload: bytes):
-    items = []
-    while payload:
-        item, payload = _rlp_item(payload)
-        items.append(item)
-    return items
 
 
 # ---- selectors and budget --------------------------------------------------
@@ -234,42 +179,11 @@ def find_weth_address(pre):
     return hits[0].lower()
 
 
-def norm_addr(b: bytes) -> str:
-    return "0x" + b.hex().lower().rjust(40, "0")
-
-
 def decode_txs(rlp_hex: str):
-    if not isinstance(rlp_hex, str) or not rlp_hex.startswith("0x"):
-        raise CoverageError(f"block 'rlp' field is not a 0x-hex string: {rlp_hex!r}")
     try:
-        raw = bytes.fromhex(rlp_hex[2:])
-    except ValueError as exc:
-        raise CoverageError(f"block 'rlp' is not valid hex: {exc}") from exc
-    block = rlp_decode(raw)
-    if not isinstance(block, list) or len(block) < 2:
-        raise CoverageError(
-            f"decoded block RLP is not a >=2-element list: got "
-            f"{type(block).__name__} of length "
-            f"{len(block) if isinstance(block, list) else '?'}")
-    txs = block[1]
-    if not isinstance(txs, list):
-        raise CoverageError("block RLP's second element (transactions) is not a list")
-    out = []
-    for i, tx in enumerate(txs):
-        if not isinstance(tx, list) or len(tx) < 6:
-            raise CoverageError(
-                f"transaction {i}: expected a >=6-element legacy-tx RLP "
-                f"list [nonce, gasPrice, gas, to, value, data, ...], got "
-                f"{tx!r}")
-        to_bytes, data = tx[3], tx[5]
-        if not isinstance(to_bytes, (bytes, bytearray)) or len(to_bytes) not in (0, 20):
-            raise CoverageError(
-                f"transaction {i}: 'to' field is not a 0- or 20-byte "
-                f"string: {to_bytes!r}")
-        if not isinstance(data, (bytes, bytearray)):
-            raise CoverageError(f"transaction {i}: 'data' field is not a byte string")
-        out.append((norm_addr(to_bytes) if to_bytes else None, bytes(data)))
-    return out
+        return decode_legacy_block_transactions(rlp_hex)
+    except RLPDecodeError as exc:
+        raise CoverageError(str(exc)) from exc
 
 
 def scan_prop_selectors(code_hex: str, known):

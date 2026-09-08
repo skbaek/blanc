@@ -16,14 +16,30 @@ from typing import Callable, Dict, List, Mapping, Sequence
 
 
 def verify_eels_pin(root: Path, expected_pin: str,
-                    fail: Callable[[str], object]) -> None:
+                    fail: Callable[[str], object], *,
+                    failure_message: Callable[[str, bool], str] | None = None) -> None:
+    """Require one checkout to be clean at ``expected_pin``.
+
+    Git process failures deliberately propagate so callers can retain their
+    established handling.  ``failure_message`` is only a diagnostic adapter;
+    the clean/head decision has one owner here.
+    """
     head = subprocess.check_output(
         ["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
     dirty = subprocess.check_output(
         ["git", "-C", str(root), "status", "--porcelain"], text=True).strip()
     if head != expected_pin or dirty:
-        fail(f"pinned EELS must be clean at {expected_pin}; "
-             f"found {head}, dirty={bool(dirty)}")
+        message = (
+            failure_message(head, bool(dirty)) if failure_message is not None
+            else f"pinned EELS must be clean at {expected_pin}; "
+                 f"found {head}, dirty={bool(dirty)}"
+        )
+        fail(message)
+
+
+def raise_runtime_error(message: str) -> None:
+    """Adapter for callers whose historical pin failure is RuntimeError."""
+    raise RuntimeError(message)
 
 
 def environments(state, timestamp: int, gas: int, *,

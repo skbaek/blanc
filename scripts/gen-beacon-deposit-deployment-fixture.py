@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
+import eels_differential_common as eels_common
+
 
 REPO = Path(__file__).resolve().parents[1]
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
@@ -194,19 +196,12 @@ def load_eels(eels_root: Path) -> SimpleNamespace:
 
 
 def verify_eels_pin(root: Path) -> None:
-    head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=root, text=True,
-        capture_output=True, check=True,
-    ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=root, text=True,
-        capture_output=True, check=True,
-    ).stdout
-    if head != EELS_PIN or dirty:
-        raise RuntimeError(
+    eels_common.verify_eels_pin(
+        root, EELS_PIN, eels_common.raise_runtime_error,
+        failure_message=lambda head, dirty:
             f"pinned EELS checkout must be clean at {EELS_PIN}; "
-            f"found {head} dirty={bool(dirty)}"
-        )
+            f"found {head} dirty={dirty}",
+    )
 
 
 def address_bytes(address: str) -> bytes:

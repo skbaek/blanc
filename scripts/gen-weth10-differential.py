@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
+import eels_differential_common as eels_common
+
 
 REPO = Path(__file__).resolve().parents[1]
 LOCK_PATH = REPO / "scripts" / "weth10-reference.json"
@@ -1449,14 +1451,15 @@ def require_manifest(expected: Mapping, write: bool) -> None:
 
 def verify_eels_pin(root: Path) -> None:
     try:
-        actual = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
-        dirty = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], text=True).strip()
+        eels_common.verify_eels_pin(
+            root, EELS_PIN, die,
+            failure_message=lambda head, dirty:
+                (f"EELS pin mismatch: expected {EELS_PIN}, got {head}"
+                 if head != EELS_PIN else
+                 f"EELS checkout at {root} is dirty; refusing an unpinned oracle"),
+        )
     except (OSError, subprocess.CalledProcessError) as exc:
         die(f"cannot identify EELS checkout at {root}: {exc}")
-    if actual != EELS_PIN:
-        die(f"EELS pin mismatch: expected {EELS_PIN}, got {actual}")
-    if dirty:
-        die(f"EELS checkout at {root} is dirty; refusing an unpinned oracle")
 
 
 def self_falsifiers(sample: Scenario, oracle: Mapping, blanc: Mapping) -> int:

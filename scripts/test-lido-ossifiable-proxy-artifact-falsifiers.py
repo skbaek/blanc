@@ -32,6 +32,7 @@ MANIFEST = Path("scripts/lido-ossifiable-proxy-artifacts.json")
 LEAN_OWNER = Path("Blanc/ProxyPairOssifiableArtifacts.lean")
 EVALUATOR = Path("scripts/eval-lido-ossifiable-proxy-artifacts.lean")
 REFERENCE_SCHEMA = Path("scripts/lido_ossifiable_proxy_reference_schema.py")
+STRICT_JSON = Path("scripts/strict_json.py")
 
 COPY_SET = (
     GENERATOR,
@@ -39,6 +40,7 @@ COPY_SET = (
     LEAN_OWNER,
     EVALUATOR,
     REFERENCE_SCHEMA,
+    STRICT_JSON,
 )
 
 EXPECTED_EVALUATOR_ROWS = (
