@@ -30,6 +30,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CENSUS = ROOT / "scripts" / "lido-twg-census.json"
@@ -253,18 +255,12 @@ def compact(value: Any) -> bytes:
 
 
 def strict_json(data: bytes | str, what: str) -> Any:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in items:
-            expect(key not in result, f"{what}: duplicate JSON key {key!r}")
-            result[key] = value
-        return result
-
-    def invalid(value: str) -> None:
-        fail(f"{what}: non-finite JSON value {value}")
-
     try:
-        return json.loads(data, object_pairs_hook=pairs, parse_constant=invalid)
+        return strict_json_loads(data)
+    except DuplicateKeyError as exc:
+        fail(f"{what}: duplicate JSON key {exc.key!r}")
+    except NonFiniteNumberError as exc:
+        fail(f"{what}: non-finite JSON value {exc.value}")
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         fail(f"{what}: invalid JSON: {exc}")
 

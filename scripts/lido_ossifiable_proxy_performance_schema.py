@@ -22,6 +22,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 
 DEFAULT_ROOT = Path(os.environ.get(
     "LIDO_OSSIFIABLE_PROXY_PERFORMANCE_ROOT",
@@ -272,18 +274,12 @@ def require(condition: bool, message: str) -> None:
 
 
 def strict_json(data: bytes, label: str) -> Any:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in items:
-            require(key not in result, f"{label}: duplicate JSON key {key!r}")
-            result[key] = value
-        return result
-
-    def invalid(value: str) -> None:
-        raise SchemaError(f"{label}: non-finite JSON value {value}")
-
     try:
-        return json.loads(data, object_pairs_hook=pairs, parse_constant=invalid)
+        return strict_json_loads(data)
+    except DuplicateKeyError as exc:
+        raise SchemaError(f"{label}: duplicate JSON key {exc.key!r}") from exc
+    except NonFiniteNumberError as exc:
+        raise SchemaError(f"{label}: non-finite JSON value {exc.value}") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SchemaError(f"{label}: invalid JSON: {exc}") from exc
 

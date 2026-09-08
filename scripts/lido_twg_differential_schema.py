@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, NoReturn, Sequence
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "scripts" / "fixtures" / "lido-twg" / "manifest.json"
@@ -290,18 +292,12 @@ def expect(condition: bool, message: str) -> None:
 
 
 def strict_json(raw: bytes | str, label: str) -> Any:
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            expect(key not in result, f"{label}: duplicate key {key!r}")
-            result[key] = value
-        return result
-
-    def constant(value: str) -> None:
-        fail(f"{label}: non-finite number {value}")
-
     try:
-        return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant)
+        return strict_json_loads(raw)
+    except DuplicateKeyError as exc:
+        fail(f"{label}: duplicate key {exc.key!r}")
+    except NonFiniteNumberError as exc:
+        fail(f"{label}: non-finite number {exc.value}")
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         fail(f"{label}: invalid JSON: {exc}")
 

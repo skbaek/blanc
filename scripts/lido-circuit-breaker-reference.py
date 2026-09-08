@@ -22,6 +22,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from strict_json import DuplicateKeyError, NonFiniteNumberError, loads as strict_json_loads
+
 from lido_circuit_breaker_reference_schema import (
     IMMUTABLE_ID_NAMES, IMMUTABLE_REFERENCES, INDEPENDENT_PARAMETERS,
     OFFICIAL_PARAMETERS, SchemaError as LockSchemaError, keccak256,
@@ -97,19 +99,12 @@ def compact(value: Any) -> bytes:
 
 
 def strict_json(data: bytes | str, what: str) -> Any:
-    def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in pairs:
-            if key in result:
-                fail(f"duplicate JSON key {key!r} in {what}")
-            result[key] = value
-        return result
-
-    def invalid_constant(value: str) -> None:
-        fail(f"non-finite JSON value {value} in {what}")
-
     try:
-        return json.loads(data, object_pairs_hook=object_pairs, parse_constant=invalid_constant)
+        return strict_json_loads(data)
+    except DuplicateKeyError as exc:
+        fail(f"duplicate JSON key {exc.key!r} in {what}")
+    except NonFiniteNumberError as exc:
+        fail(f"non-finite JSON value {exc.value} in {what}")
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         fail(f"cannot parse JSON {what}: {exc}")
 
