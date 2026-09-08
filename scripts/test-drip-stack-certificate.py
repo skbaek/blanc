@@ -101,6 +101,11 @@ class StackCertificateTests(unittest.TestCase):
 
         visit(by_name[spec.root])
         root_rows = by_name[spec.root].rows
+
+        def theorem_stem(part):
+            if part.name == spec.root:
+                return part.name
+            return f"{spec.internal_theorem_prefix}{part.name}"
         root_pcs = [pc for pc, _ in root_rows]
         self.assertEqual(len(root_rows), spec.rows)
         self.assertEqual(root_pcs, sorted(set(root_pcs)))
@@ -108,7 +113,8 @@ class StackCertificateTests(unittest.TestCase):
         self.assertEqual(root_pcs[-1] + self.decoded[root_pcs[-1]].width, spec.stop)
         expected_names = []
         for part in parts:
-            expected_names.extend([f"{part.name}_rows_checked", f"{part.name}_layout_checked"])
+            stem = theorem_stem(part)
+            expected_names.extend([f"{stem}_rows_checked", f"{stem}_layout_checked"])
         expected_names.extend(witness.name for witness in spec.witnesses)
         expected_names.append(f"{spec.root}_order_and_size_checked")
         self.assertEqual(re.findall(r"^theorem (\w+)\s*:", text, re.M), expected_names)
@@ -125,31 +131,35 @@ class StackCertificateTests(unittest.TestCase):
         layouts = {
             name: (int(start), int(stop))
             for name, start, stop in re.findall(
-                r"^theorem (subtree\d+)_layout_checked :\n"
+                r"^theorem (\w+)_layout_checked :\n"
                 r"    subtree\d+\.checkLayout code\.toByteArray (\d+) (\d+) = true := by$",
                 text,
                 re.M,
             )
         }
         expected_layouts = {
-            part.name: (part.rows[0][0], part.rows[-1][0] + self.decoded[part.rows[-1][0]].width)
+            theorem_stem(part): (
+                part.rows[0][0],
+                part.rows[-1][0] + self.decoded[part.rows[-1][0]].width,
+            )
             for part in parts
         }
         self.assertEqual(layouts, expected_layouts)
 
         for part in parts:
+            stem = theorem_stem(part)
             if part.left is None:
                 self.assertIn(
-                    f"theorem {part.name}_rows_checked :\n"
+                    f"theorem {stem}_rows_checked :\n"
                     f"    {part.name}.all (checkRow code.toByteArray table 8) = true := by\n"
                     "  decide +kernel",
                     text,
                 )
             else:
-                self.assertIn(f"  · exact {part.left.name}_rows_checked\n"
-                              f"  · exact {part.right.name}_rows_checked", text)
-                self.assertIn(f"  · exact {part.left.name}_layout_checked\n"
-                              f"  · exact {part.right.name}_layout_checked", text)
+                self.assertIn(f"  · exact {theorem_stem(part.left)}_rows_checked\n"
+                              f"  · exact {theorem_stem(part.right)}_rows_checked", text)
+                self.assertIn(f"  · exact {theorem_stem(part.left)}_layout_checked\n"
+                              f"  · exact {theorem_stem(part.right)}_layout_checked", text)
 
         self.assertIn(
             f"theorem {spec.root}_order_and_size_checked :\n"

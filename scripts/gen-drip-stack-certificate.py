@@ -99,6 +99,7 @@ class RegionSpec:
     start: int
     stop: int
     module_doc: tuple[str, ...]
+    internal_theorem_prefix: str = ""
     witnesses: tuple[RowWitness, ...] = ()
 
 
@@ -130,6 +131,7 @@ REGION1022 = RegionSpec(
         "uses the complete 735-row table, including the conditional jump from PC 1165",
         "to PC 1212 outside this region.",
     ),
+    internal_theorem_prefix="region1022_",
     witnesses=(RowWitness(
         name="row1165_cross_region_checked",
         pc=1165,
@@ -194,15 +196,21 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
     require(last_pc + decoded[last_pc].width == spec.stop, f"wrong stop for {spec.root}")
     region_pcs = {pc for pc, _ in root.rows}
 
+    def theorem_stem(part: Subtree) -> str:
+        if part is root:
+            return part.name
+        return f"{spec.internal_theorem_prefix}{part.name}"
+
     output = ["import Blanc.DripStackSafety", "", "/-!", *spec.module_doc, "-/", "",
               "namespace Blanc.Drip.StackSafety", "", "open Jaune AbstractStackSafety", ""]
     for part in parts:
+        stem = theorem_stem(part)
         start = part.rows[0][0]
         final_pc = part.rows[-1][0]
         require(final_pc in decoded, f"missing final instruction for {part.name}")
         stop = final_pc + decoded[final_pc].width
         output.extend([
-            f"theorem {part.name}_rows_checked :",
+            f"theorem {stem}_rows_checked :",
             f"    {part.name}.all (checkRow code.toByteArray table {MAXIMUM}) = true := by",
         ])
         if part.left is None:
@@ -212,10 +220,10 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
             output.extend([
                 "  apply Table.all_node",
                 "  · decide +kernel",
-                f"  · exact {part.left.name}_rows_checked",
-                f"  · exact {part.right.name}_rows_checked",
+                f"  · exact {theorem_stem(part.left)}_rows_checked",
+                f"  · exact {theorem_stem(part.right)}_rows_checked",
             ])
-        output.extend(["", f"theorem {part.name}_layout_checked :",
+        output.extend(["", f"theorem {stem}_layout_checked :",
                        f"    {part.name}.checkLayout code.toByteArray {start} {stop} = true := by"])
         if part.left is None:
             output.append("  decide +kernel")
@@ -224,8 +232,8 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
             output.extend([
                 f"  apply Table.checkLayout_node (next := {next_pc})",
                 "  · decide +kernel",
-                f"  · exact {part.left.name}_layout_checked",
-                f"  · exact {part.right.name}_layout_checked",
+                f"  · exact {theorem_stem(part.left)}_layout_checked",
+                f"  · exact {theorem_stem(part.right)}_layout_checked",
                 "  · decide +kernel",
             ])
         output.append("")
