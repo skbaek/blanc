@@ -370,14 +370,14 @@ def normalize_declaration(
 
 
 HEADER_MODIFIER_RE = re.compile(
-    r"(?P<modifier>private|protected|noncomputable|unsafe|partial)(?P<delimiter>[ \t]+)"
+    rf"(?P<modifier>{DECL_MODIFIER})(?P<delimiter>\s+)"
 )
 VISIBILITY_MODIFIERS = {"private", "protected"}
 
 
 def normalize_imported_copy_declaration(
     raw: str, header_offset: int, name_start: int, name_end: int,
-    modifier_start: int, modifier_end: int,
+    modifier_start: int, modifier_end: int, masked_modifiers: str,
 ) -> bytes:
     """Name/doc normalization plus parsed-header visibility erasure.
 
@@ -387,16 +387,25 @@ def normalize_imported_copy_declaration(
     bytes outside an erased visibility token and its delimiter remain exact.
     """
     modifiers = raw[modifier_start:modifier_end]
+    if len(masked_modifiers) != len(modifiers):
+        raise GateError("parsed declaration modifier spans differ")
     kept: List[str] = []
     cursor = 0
-    for match in HEADER_MODIFIER_RE.finditer(modifiers):
-        if match.start() != cursor:
+    parsed_cursor = 0
+    for match in HEADER_MODIFIER_RE.finditer(masked_modifiers):
+        if match.start() != parsed_cursor:
             raise GateError("cannot partition parsed declaration modifiers")
-        if match.group("modifier") not in VISIBILITY_MODIFIERS:
-            kept.append(match.group(0))
-        cursor = match.end()
-    if cursor != len(modifiers):
+        parsed_cursor = match.end()
+        if match.group("modifier") in VISIBILITY_MODIFIERS:
+            kept.append(modifiers[cursor:match.start("modifier")])
+            cursor = match.end("modifier")
+            # Masked whitespace can represent comments.  Remove only the raw
+            # keyword's immediate separator, leaving those comments intact.
+            while cursor < len(modifiers) and modifiers[cursor] in " \t":
+                cursor += 1
+    if parsed_cursor != len(modifiers):
         raise GateError("cannot partition parsed declaration modifiers")
+    kept.append(modifiers[cursor:])
     replacement = "".join(kept)
     adjusted = raw[:modifier_start] + replacement + raw[modifier_end:]
     delta = len(replacement) - len(modifiers)
@@ -567,6 +576,7 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
             imported_copy_normalized=normalize_imported_copy_declaration(
                 raw, header_offset, name_start, name_end,
                 modifier_start, modifier_end,
+                masked[header.modifier_start_offset:header.modifier_end_offset],
             ),
         ))
     return ParsedFile(rel, tuple(imports), tuple(declarations))
@@ -1698,7 +1708,7 @@ end Blanc.Fixture
             raise GateError("self-test: planned selector finding received an exception")
 
 
-VISIBILITY_DETECTOR_CONTROL_COUNT = 11
+VISIBILITY_DETECTOR_CONTROL_COUNT = 14
 
 
 def _visibility_declaration(
@@ -1791,6 +1801,26 @@ def visibility_detector_self_test() -> int:
     )
     if strict or len(findings) != 1:
         raise GateError("self-test wrapped-protected: visibility fallback did not bite")
+
+    for label, comment in (
+        ("inline-modifier-comment", "/- separator -/"),
+        ("nested-modifier-comment", "/- outer /- inner -/ tail -/"),
+        ("semantic-modifier-comment", "/- first -/ noncomputable /- second -/"),
+    ):
+        owner = _visibility_declaration("upstream", visibility="protected")
+        consumer = _visibility_declaration("copied", visibility="private")
+        owner = owner.replace("protected def", "protected " + comment + " def", 1)
+        consumer = consumer.replace("private def", "private " + comment + " def", 1)
+        # Keywords inside a body literal and comment must survive unchanged.
+        body = '  let label := "private protected" -- private /- protected -/\n'
+        owner = owner.replace("  let firstStable", body + "  let firstStable", 1)
+        consumer = consumer.replace("  let firstStable", body + "  let firstStable", 1)
+        strict, findings = run_case(label, owner, consumer, 1)
+        if strict:
+            raise GateError(f"self-test {label}: strict detector unexpectedly matched")
+        parsed = parse_lean_file(consumer, "Blanc/Consumer.lean").declarations[0]
+        if parsed.imported_copy_normalized != parsed.normalized.replace(b"private ", b"", 1):
+            raise GateError(f"self-test {label}: non-visibility bytes changed")
 
     run_case(
         "non-imported",

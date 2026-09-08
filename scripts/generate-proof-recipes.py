@@ -1257,8 +1257,8 @@ def self_test(root: Path) -> None:
             "dead-helper-dispatch",
             replace_once(
                 tactics_original,
-                "`Blanc.Func.compileShape",
-                "`Blanc.Func.departedCompileShape",
+                "compileShapeName == `Blanc.Func.compileShape",
+                "compileShapeName == `Blanc.Func.departedCompileShape",
                 "dead-helper-dispatch",
             ),
             "can never fire",
