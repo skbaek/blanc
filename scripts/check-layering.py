@@ -173,6 +173,10 @@ CONTRACTS = {
                        "BeaconDepositDeploymentRoot",
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
+    "drip": ["DripCore", "Drip", "DripCode", "DripStackSafetyData",
+             "DripStackSafety", "DripStackSafetyRegion214",
+             "DripStackSafetyRegion576", "DripStackSafetyRegion1022",
+             "DripStackSafetyRegion1459", "DripStackSafetyCertificate"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
