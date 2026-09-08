@@ -4,6 +4,34 @@ Blanc's Python evidence tools share a few format and transport primitives.
 Contract semantics, expected observations, schema inventories, and independent
 oracle/model comparisons remain in their owning scripts.
 
+## Ethereum hashes and ABI selectors
+
+Use `scripts/keccak.py` for a stdlib-only Ethereum hash in an evidence script.
+Import `keccak256` for digest bytes, `keccak256_bare_hex` for lowercase text
+without a prefix, `keccak256_hex` for `0x`-prefixed text, and `selector` for
+signature-derived selector bytes. Scripts beside the owner import it directly:
+
+```python
+from keccak import keccak256, keccak256_bare_hex, keccak256_hex, selector
+
+payload_digest = keccak256(payload)
+reference_digest = keccak256_bare_hex(payload)
+rpc_digest = keccak256_hex(payload)
+error_selector = selector("Error(string)")
+```
+
+This primitive uses Ethereum Keccak padding; it does not implement NIST SHA3.
+The selector helper rejects signatures containing spaces. Hashing mechanics
+are shared; frozen expected digests must come from an independent external
+source. Reusing this helper does not replace independent schema validation,
+artifact provenance or semantic models. Existing consumer spellings may remain
+as aliases to preserve their API, but new scripts should import the owner.
+
+Run `scripts/check-keccak-rate-boundary.sh` after changing the primitive or its
+adoption. That gate checks external digest vectors, consumer representations
+and extra implementations detected by its structural census. Its documented
+fully derived-parameter detection limit remains relevant.
+
 ## Strict JSON
 
 Use `scripts/strict_json.py` when an evidence input must reject duplicate

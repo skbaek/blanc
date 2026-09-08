@@ -66,6 +66,9 @@ worktree, reports nonparticipants, and fails closed on participant state it
 cannot interpret. `scripts/GATES.md` is the authoritative trust, recovery, and
 verification contract.
 
+Authors changing Python evidence scripts should use the shared hash, format,
+fixture, and checkout primitives in [the evidence toolkit](docs/EVIDENCE_TOOLKIT.md).
+
 ## Optional enhanced agent workflow
 
 Blanc is standalone: its pinned Jaune dependency is fetched by Lake, and Creme
