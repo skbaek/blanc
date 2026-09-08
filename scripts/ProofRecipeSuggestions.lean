@@ -1,11 +1,10 @@
 import Blanc.ProofRecipeTactic
-import Blanc.ForwardCall
 import Blanc.RootedExecution
 import Blanc.MessageExecution
-import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.LinearDispatchCorrectness
-import Blanc.ExecutionHistoryStateTrace
+import Blanc.ExecutionStateTrace
+import Blanc.ExecutionTrace
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
 
