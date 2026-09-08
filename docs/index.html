@@ -67,17 +67,18 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 1075/1075 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: 1076/1076 audited theorems depend on exactly their pinned axiom sets</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates, verbatim (exact-candidate run 2026-09-03 UTC): the
-          axiom audit that pins every audited theorem to its exact axiom set, and the differential
-          gate executing Blanc’s WETH10 beside the deployed original’s runtime, byte for byte, in a
-          pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
+        <p class="cap"><b>Fig. 1</b> — current-source gate illustrations: the axiom-audit line reflects
+          the current curated inventory; the WETH10 differential line remains verbatim from the
+          exact-candidate run on 2026-09-03 UTC. The gates pin every audited theorem to its exact
+          axiom set and execute Blanc’s WETH10 beside the deployed original’s runtime, byte for byte,
+          in a pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1075-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>1076-theorem audit in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -107,7 +108,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1075<span class="dimmer" style="font-size:1.05rem">/1075</span></span>
+      <div class="fact"><span class="n">1076<span class="dimmer" style="font-size:1.05rem">/1076</span></span>
         <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
       <div class="fact"><span class="n">8</span>
         <span class="l">contracts in — six ports, two études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
@@ -1426,7 +1427,7 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 1075 theorems against their pinned axiom
+          <span class="mono">check.sh</span> audits all 1076 theorems against their pinned axiom
           sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
@@ -1471,9 +1472,11 @@
           page</a> for its conformance evidence.</li>
         <li id="fn3">Every figure about this repository on this page is drawn from a committed
           report, registry, gate summary, or theorem in the repository; the snapshot is current
-          as of 2026-09-03. §&nbsp;11’s landscape table is the one deliberate exception — it
+          as of 2026-09-03 unless a figure says it reflects the current source inventory.
+          §&nbsp;11’s landscape table is the one deliberate exception — it
           describes other people’s projects, on the terms its own disclaimer states. Gate
-          lines shown are verbatim output of the exact-candidate 2026-09-03 UTC run — except
+          lines shown are verbatim output of the exact-candidate 2026-09-03 UTC run, except
+          Fig.&nbsp;1’s axiom-audit line, which tracks the linked current-source audit, and except
           that one long line is wrapped and ellipses mark elision; the
           differential line continues “… 7 state-mutating reentrancy rows, 26
           STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
