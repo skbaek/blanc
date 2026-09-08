@@ -68,7 +68,8 @@ DECL_KINDS = {
     "abbrev", "axiom", "class", "def", "inductive", "instance", "lemma",
     "opaque", "structure", "theorem",
 }
-DECL_MODIFIERS = r"(?:(?:private|protected|noncomputable|unsafe|partial)\s+)*"
+DECL_MODIFIER = r"(?:private|protected|noncomputable|unsafe|partial)"
+DECL_MODIFIERS = rf"(?P<modifiers>(?:{DECL_MODIFIER}\s+)*)"
 NAME_PART = r"(?:[^\W\d]|_)[\w'?!]*"
 QUALIFIED = rf"{NAME_PART}(?:\.{NAME_PART})*"
 DECL_RE = re.compile(
@@ -122,6 +123,7 @@ class Declaration:
     name_line: int
     raw: str
     normalized: bytes
+    imported_copy_normalized: bytes
 
     @property
     def key(self) -> Tuple[str, int]:
@@ -145,6 +147,8 @@ class DeclarationHeader:
     name_start_offset: int
     name_end_offset: int
     name_line: int
+    modifier_start_offset: int
+    modifier_end_offset: int
 
 
 @dataclass(frozen=True)
@@ -365,6 +369,42 @@ def normalize_declaration(
     return normalized.encode("utf-8")
 
 
+HEADER_MODIFIER_RE = re.compile(
+    r"(?P<modifier>private|protected|noncomputable|unsafe|partial)(?P<delimiter>[ \t]+)"
+)
+VISIBILITY_MODIFIERS = {"private", "protected"}
+
+
+def normalize_imported_copy_declaration(
+    raw: str, header_offset: int, name_start: int, name_end: int,
+    modifier_start: int, modifier_end: int,
+) -> bytes:
+    """Name/doc normalization plus parsed-header visibility erasure.
+
+    This key is for the diff-scoped imported-copy detector only.  The modifier
+    offsets come from ``DECL_RE`` or ``WRAPPED_DECL_RE``; no keyword outside
+    that exact parsed header region is considered.  Semantic modifiers and all
+    bytes outside an erased visibility token and its delimiter remain exact.
+    """
+    modifiers = raw[modifier_start:modifier_end]
+    kept: List[str] = []
+    cursor = 0
+    for match in HEADER_MODIFIER_RE.finditer(modifiers):
+        if match.start() != cursor:
+            raise GateError("cannot partition parsed declaration modifiers")
+        if match.group("modifier") not in VISIBILITY_MODIFIERS:
+            kept.append(match.group(0))
+        cursor = match.end()
+    if cursor != len(modifiers):
+        raise GateError("cannot partition parsed declaration modifiers")
+    replacement = "".join(kept)
+    adjusted = raw[:modifier_start] + replacement + raw[modifier_end:]
+    delta = len(replacement) - len(modifiers)
+    return normalize_declaration(
+        adjusted, header_offset, name_start + delta, name_end + delta,
+    )
+
+
 def parse_lean_file(text: str, rel: str) -> ParsedFile:
     masked = mask_comments_and_literals(text, rel)
     original_lines = text.splitlines(True)
@@ -421,6 +461,8 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
                 name_start_offset=offsets[index] + match.start("name"),
                 name_end_offset=offsets[index] + match.end("name"),
                 name_line=index + 1,
+                modifier_start_offset=offsets[index] + match.start("modifiers"),
+                modifier_end_offset=offsets[index] + match.end("modifiers"),
             ))
             boundaries.add(index)
             continue
@@ -436,6 +478,8 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
                     name_start_offset=offsets[index + 1] + name_match.start("name"),
                     name_end_offset=offsets[index + 1] + name_match.end("name"),
                     name_line=index + 2,
+                    modifier_start_offset=offsets[index] + match.start("modifiers"),
+                    modifier_end_offset=offsets[index] + match.end("modifiers"),
                 ))
                 # The keyword line, rather than the indented name line, is the
                 # declaration boundary.  This preserves the source slice and
@@ -505,6 +549,8 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
         header_offset = header_absolute - raw_start
         name_start = header.name_start_offset - raw_start
         name_end = header.name_end_offset - raw_start
+        modifier_start = header.modifier_start_offset - raw_start
+        modifier_end = header.modifier_end_offset - raw_start
         counts[header.name] = counts.get(header.name, 0) + 1
         declarations.append(Declaration(
             file=rel,
@@ -518,6 +564,10 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
             name_line=header.name_line,
             raw=raw,
             normalized=normalize_declaration(raw, header_offset, name_start, name_end),
+            imported_copy_normalized=normalize_imported_copy_declaration(
+                raw, header_offset, name_start, name_end,
+                modifier_start, modifier_end,
+            ),
         ))
     return ParsedFile(rel, tuple(imports), tuple(declarations))
 
@@ -660,31 +710,58 @@ def substantive(normalized: bytes) -> bool:
 
 def imported_copy_findings(
     changed: Sequence[ChangedDeclaration], index: SourceIndex,
+    *, visibility_fallback: bool = True,
 ) -> List[Finding]:
     findings: List[Finding] = []
-    imported_cache: Dict[str, Dict[bytes, List[Declaration]]] = {}
+    imported_cache: Dict[
+        str, Tuple[Dict[bytes, List[Declaration]], Dict[bytes, List[Declaration]]]
+    ] = {}
     for item in changed:
         declaration = item.declaration
         if not substantive(declaration.normalized):
             continue
         if declaration.file not in imported_cache:
-            by_normalized: Dict[bytes, List[Declaration]] = {}
+            strict: Dict[bytes, List[Declaration]] = {}
+            visibility_relaxed: Dict[bytes, List[Declaration]] = {}
             for imported in sorted(index.transitive_imports(declaration.file)):
                 for candidate in index.parse_worktree(imported).declarations:
                     if substantive(candidate.normalized):
-                        by_normalized.setdefault(candidate.normalized, []).append(candidate)
-            imported_cache[declaration.file] = by_normalized
-        matches = imported_cache[declaration.file].get(declaration.normalized, [])
+                        strict.setdefault(candidate.normalized, []).append(candidate)
+                    if substantive(candidate.imported_copy_normalized):
+                        visibility_relaxed.setdefault(
+                            candidate.imported_copy_normalized, []
+                        ).append(candidate)
+            imported_cache[declaration.file] = strict, visibility_relaxed
+        strict, visibility_relaxed = imported_cache[declaration.file]
+        matches = strict.get(declaration.normalized, [])
+        detector_digest: Optional[str] = None
+        if (
+            not matches
+            and visibility_fallback
+            and substantive(declaration.imported_copy_normalized)
+        ):
+            matches = visibility_relaxed.get(
+                declaration.imported_copy_normalized, []
+            )
+            if matches:
+                detector_digest = hashlib.sha256(
+                    declaration.imported_copy_normalized
+                ).hexdigest()[:16]
         if not matches:
             continue
         origins = ", ".join(f"{match.file}:{match.name}" for match in matches)
         digest = hashlib.sha256(declaration.normalized).hexdigest()[:16]
+        digest_detail = f"normalized sha256 {digest}"
+        if detector_digest is not None:
+            digest_detail += (
+                "; imported-copy visibility-normalized sha256 " + detector_digest
+            )
         findings.append(Finding(
             kind="imported-identical-copy",
             file=declaration.file,
             declaration=declaration.name,
             line=declaration.start_line,
-            detail=f"normalized sha256 {digest}; imported origin(s): {origins}",
+            detail=f"{digest_detail}; imported origin(s): {origins}",
             recipe_id=None,
             suppressible=True,
         ))
@@ -1449,6 +1526,8 @@ end Blanc.Fixture
         or wrapped_source[declaration.name_start_offset:declaration.name_end_offset]
         != "Nested.wrappedHeader"
         or declaration.normalized != expected_normalized
+        or declaration.imported_copy_normalized
+        != expected_normalized.replace(b"private ", b"", 1)
     ):
         raise GateError("self-test wrapped-header: kind, span, boundary, or normalized bytes changed")
 
@@ -1466,7 +1545,12 @@ end Blanc.Fixture
         b"    n = n := by\n"
         b"  exact rfl"
     )
-    if len(same_line) != 1 or same_line[0].normalized != expected_same_line:
+    if (
+        len(same_line) != 1
+        or same_line[0].normalized != expected_same_line
+        or same_line[0].imported_copy_normalized
+        != expected_same_line.replace(b"private ", b"", 1)
+    ):
         raise GateError("self-test same-line-normalized-bytes: pre-existing bytes changed")
 
     unsupported_source = """private theorem [unsupported]
@@ -1534,6 +1618,17 @@ end Blanc.Fixture
         copies = imported_copy_findings(changed, index)
         if len(copies) != 1 or copies[0].declaration != "Blanc.Fixture.copiedLongLemma₀":
             raise GateError("self-test: imported byte-identical copy was not detected")
+        strict_digest = hashlib.sha256(
+            next(
+                decl.normalized for decl in parsed.declarations
+                if decl.name == "Blanc.Fixture.copiedLongLemma₀"
+            )
+        ).hexdigest()[:16]
+        if copies[0].detail != (
+            f"normalized sha256 {strict_digest}; imported origin(s): "
+            "Blanc/Owner.lean:Blanc.Fixture.upstreamLongLemma"
+        ):
+            raise GateError("self-test: legacy strict-match finding detail changed")
         registry = RegistryInfo(
             active_ids=frozenset({active_recipe_id}),
             selector_recipe_id="selector-separation",
@@ -1601,6 +1696,155 @@ end Blanc.Fixture
                 raise
         else:
             raise GateError("self-test: planned selector finding received an exception")
+
+
+VISIBILITY_DETECTOR_CONTROL_COUNT = 11
+
+
+def _visibility_declaration(
+    name: str, *, visibility: str = "", semantic: str = "", kind: str = "def",
+    prefix: str = "", tag: str = "Stable", wrapped: bool = False,
+    short: bool = False,
+) -> str:
+    modifiers = " ".join(part for part in (visibility, semantic) if part)
+    header = f"{modifiers} {kind}" if modifiers else kind
+    if wrapped:
+        header += f"\n    {name} (n : Nat) : Nat :=\n"
+    else:
+        header += f" {name} (n : Nat) : Nat :=\n"
+    lines = [
+        f"  let first{tag} := n + 0\n",
+        f"  let second{tag} := first{tag} + 0\n",
+        f"  let third{tag} := second{tag} + 0\n",
+        f"  let fourth{tag} := third{tag} + 0\n",
+        f"  fourth{tag}\n",
+    ]
+    if short:
+        lines = [f"  n + 0 -- {tag}\n"]
+    return prefix + header + "".join(lines)
+
+
+def visibility_detector_self_test() -> int:
+    """Controls for the imported-copy-only parsed-header visibility key."""
+    controls = 0
+
+    def run_case(
+        label: str, owner_declaration: str, consumer_declaration: str,
+        expected: int, *, unimported_declaration: Optional[str] = None,
+    ) -> Tuple[List[Finding], List[Finding]]:
+        nonlocal controls
+        controls += 1
+        with tempfile.TemporaryDirectory(prefix=f"proof-recipe-{label}-") as directory:
+            root = pathlib.Path(directory)
+            (root / "Blanc").mkdir()
+            (root / "Blanc/Owner.lean").write_text(
+                "namespace Blanc.Visibility\n\n" + owner_declaration
+                + "\nend Blanc.Visibility\n",
+                encoding="utf-8",
+            )
+            if unimported_declaration is not None:
+                (root / "Blanc/Unimported.lean").write_text(
+                    "namespace Blanc.Visibility\n\n" + unimported_declaration
+                    + "\nend Blanc.Visibility\n",
+                    encoding="utf-8",
+                )
+            (root / "Blanc/Consumer.lean").write_text(
+                "import Blanc.Owner\n\nnamespace Blanc.Visibility\n\n"
+                + consumer_declaration + "\nend Blanc.Visibility\n",
+                encoding="utf-8",
+            )
+            index = SourceIndex(root)
+            changed = [
+                ChangedDeclaration(declaration, True)
+                for declaration in index.parse_worktree("Blanc/Consumer.lean").declarations
+            ]
+            strict = imported_copy_findings(
+                changed, index, visibility_fallback=False,
+            )
+            findings = imported_copy_findings(changed, index)
+            if len(findings) != expected:
+                raise GateError(
+                    f"self-test {label}: expected {expected} visibility finding(s), "
+                    f"found {len(findings)}"
+                )
+            return strict, findings
+
+    strict, findings = run_case(
+        "inline-private-old-miss",
+        _visibility_declaration("upstream"),
+        _visibility_declaration("copied", visibility="private"),
+        1,
+    )
+    if strict:
+        raise GateError("self-test inline-private-old-miss: strict detector unexpectedly matched")
+    if (
+        "normalized sha256 " not in findings[0].detail
+        or "imported-copy visibility-normalized sha256 " not in findings[0].detail
+    ):
+        raise GateError("self-test inline-private-old-miss: fallback digest signal missing")
+
+    strict, findings = run_case(
+        "wrapped-protected",
+        _visibility_declaration("upstreamWrapped", wrapped=True),
+        _visibility_declaration("copiedWrapped", visibility="protected", wrapped=True),
+        1,
+    )
+    if strict or len(findings) != 1:
+        raise GateError("self-test wrapped-protected: visibility fallback did not bite")
+
+    run_case(
+        "non-imported",
+        _visibility_declaration("importedDifferent", tag="Imported"),
+        _visibility_declaration("copied", visibility="private"),
+        0,
+        unimported_declaration=_visibility_declaration("unimportedExact"),
+    )
+    run_case(
+        "body-difference",
+        _visibility_declaration("upstream"),
+        _visibility_declaration("copied", visibility="private", tag="Changed"),
+        0,
+    )
+    run_case(
+        "attribute-difference",
+        _visibility_declaration("upstream", prefix="@[inline]\n"),
+        _visibility_declaration("copied", visibility="private"),
+        0,
+    )
+    run_case(
+        "option-difference",
+        _visibility_declaration(
+            "upstream", prefix="set_option pp.universes true in\n",
+        ),
+        _visibility_declaration("copied", visibility="private"),
+        0,
+    )
+    for semantic in ("noncomputable", "unsafe", "partial"):
+        run_case(
+            f"{semantic}-difference",
+            _visibility_declaration("upstream", semantic=semantic),
+            _visibility_declaration("copied", visibility="private"),
+            0,
+        )
+    run_case(
+        "kind-difference",
+        _visibility_declaration("upstream", kind="abbrev"),
+        _visibility_declaration("copied", visibility="private"),
+        0,
+    )
+    run_case(
+        "substantive-floor",
+        _visibility_declaration("upstream", short=True),
+        _visibility_declaration("copied", visibility="private", short=True),
+        0,
+    )
+
+    if controls != VISIBILITY_DETECTOR_CONTROL_COUNT:
+        raise GateError(
+            f"self-test accounting: expected {VISIBILITY_DETECTOR_CONTROL_COUNT} "
+            f"visibility controls, ran {controls}"
+        )
+    return controls
 
 
 DUPLICATION_CONTROL_COUNT = 18
@@ -1931,12 +2175,15 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     print("OK — proof recipe source index: 1/1 out-and-back control live")
     parser_controls = parser_header_self_test()
     detector_self_test(sorted(registry.active_ids)[0])
+    visibility_controls = visibility_detector_self_test()
     controls = duplication_self_test()
     print(
         "OK — proof-recipe gate self-test: generated drift; parser headers "
         f"{parser_controls}/{parser_controls} (wrapped-header, same-line normalization, "
         "unsupported-header); anonymous-instance boundary plus 7 detector controls "
         "(imported copy, selector table, 5 exception controls) passed; "
+        f"imported-copy visibility fallback {visibility_controls}/{visibility_controls} "
+        "controls passed; "
         f"duplication ratchet {controls}/{controls} controls passed"
     )
 
