@@ -8,6 +8,7 @@ import Blanc.ExecutionTrace
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
 import Blanc.TaggedStorage
+import Blanc.AddressSlot
 
 namespace Blanc
 
