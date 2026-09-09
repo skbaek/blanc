@@ -1555,6 +1555,27 @@ class ShellAdmission:
         return [line for line in self.coordination.calls_made()
                 if line.startswith("release")]
 
+    def acquire_then_escalate(self) -> tuple[int, str]:
+        """Exercise two requests in one shell, preserving helper state."""
+
+        scripts = self.worktree / "scripts"
+        script = (
+            'set -u\n'
+            f'. "{scripts / "gate-semaphore.sh"}"\n'
+            'gate_semaphore_acquire "first command" 4 tolerant\n'
+            'first=$?\n'
+            'gate_semaphore_acquire "authoritative timing" 8 exclusive\n'
+            'second=$?\n'
+            'gate_semaphore_release\n'
+            'printf "%s %s\\n" "$first" "$second"\n'
+        )
+        with declared_coordination(None):
+            done = subprocess.run(
+                ["bash", "-c", script], capture_output=True, text=True,
+                env=dict(os.environ, CREME_ROOT=str(self.creme)), cwd=str(self.root),
+            )
+        return done.returncode, done.stdout + done.stderr
+
 
 @contextmanager
 def shell_admission():
@@ -1747,14 +1768,14 @@ def control_shell_admission_request_states_the_goal_the_estimate_and_the_wait() 
         )
 
 
-def control_shell_authoritative_admission_requires_a_hard_inheritance() -> None:
-    """An automatic timing inheritance must prove the caller's hard hold.
+def control_shell_authoritative_admission_refuses_automatic_inheritance() -> None:
+    """An automatic timing inheritance cannot prove its complete reservation.
 
-    `adaptive-acquire --contention exclusive` either creates the hard hold or,
-    for a same-label owner, returns the entry point's explicit hard-hold answer.
-    A soft or unclassified `ALREADY_HELD` response cannot establish timing
-    isolation, so it is a refusal.  The explicit `inherited` mode remains the
-    route for an enclosing caller that has already made the required admission.
+    A hard-hold word neither binds the existing hold's memory estimate to this
+    timing request nor proves it was admitted as the same complete unit. Every
+    `ALREADY_HELD` response therefore refuses for sensitive or exclusive work.
+    The explicit `inherited` mode remains the route for an enclosing caller
+    that has already made the required admission.
     """
 
     with shell_admission() as s:
@@ -1767,7 +1788,7 @@ def control_shell_authoritative_admission_requires_a_hard_inheritance() -> None:
         )
         require(len(s.releases()) == 1, "an exclusive hold this gate took must be released")
 
-        for answer in ("already-held", "already-held-soft"):
+        for answer in ("already-held", "already-held-soft", "already-held-hard"):
             s.coordination.forget()
             s.coordination.answer(answer)
             status, output = s.acquire(estimate="8", contention="exclusive")
@@ -1776,18 +1797,29 @@ def control_shell_authoritative_admission_requires_a_hard_inheritance() -> None:
             require(s.releases() == [], "an unproved inherited hold must not be released")
 
         s.coordination.forget()
-        s.coordination.answer("already-held-hard")
-        status, output = s.acquire(estimate="8", contention="exclusive")
-        require(status == 0, "the entry point's hard-hold answer may cover a timing run")
-        require("REFUSED" not in output, "a proved hard inheritance is not a refusal")
-        require(s.releases() == [], "a caller-owned hard hold remains caller-owned")
-
-        s.coordination.forget()
         s.coordination.answer("refuse")
         status, output = s.acquire("inherited", estimate="8", contention="exclusive")
         require(status == 0, "an explicitly declared enclosing admission remains supported")
         require(s.coordination.calls_made() == [], "explicit inheritance must not acquire again")
         require("REFUSED" not in output, "explicit inheritance must not expose a host refusal")
+
+
+def control_shell_reasks_before_escalating_its_own_hold() -> None:
+    """A tolerant process hold must not short-circuit a later timing request."""
+
+    with shell_admission() as s:
+        s.coordination.answer("admit")
+        status, output = s.acquire_then_escalate()
+        require(status == 0 and output.strip() == "0 0", "both admitted commands must succeed")
+        require(
+            s.requests() == [
+                f"adaptive-acquire {ShellAdmission.GOAL} --note Blanc gate: first command --memory-gib 4 --contention tolerant",
+                f"adaptive-acquire {ShellAdmission.GOAL} --note Blanc gate: authoritative timing --memory-gib 8 --contention exclusive",
+            ],
+            "a later exclusive command must re-ask instead of borrowing the tolerant hold",
+        )
+        require(s.releases() == [f"release {ShellAdmission.GOAL}"],
+                "the process-owned admitted unit is released once at shell exit")
 
 
 # --- production wrapper lifetime --------------------------------------------
@@ -3345,8 +3377,7 @@ def control_negative_shell_ignoring_the_declared_coordination_mode() -> None:
     unproved_authoritative_inheritance = committed.replace(
         '      case "$gs_contention:$gs_out" in\n'
         '        tolerant:*) return 0 ;;\n'
-        '        sensitive:*"hard hold"*|exclusive:*"hard hold"*) return 0 ;;\n'
-        '        *) gs_out="$gs_out"$\'\\n\'"ALREADY_HELD response did not prove a hard hold for contention=$gs_contention" ;;\n'
+        '        *) gs_out="$gs_out"$\'\\n\'"ALREADY_HELD response did not prove the requested reservation for contention=$gs_contention" ;;\n'
         '      esac\n',
         '      return 0\n',
     )
@@ -3354,8 +3385,33 @@ def control_negative_shell_ignoring_the_declared_coordination_mode() -> None:
             "the negative control no longer matches the authoritative inheritance guard")
     with patched(sys.modules[__name__], "gate_semaphore_shell_source",
                  lambda: unproved_authoritative_inheritance):
-        must_fail(control_shell_authoritative_admission_requires_a_hard_inheritance,
+        must_fail(control_shell_authoritative_admission_refuses_automatic_inheritance,
                   "an unproved timing inheritance was accepted")
+
+
+def control_negative_shell_short_circuits_its_own_escalation() -> None:
+    """A process-owned tolerant hold must not skip a later exclusive request."""
+
+    committed = gate_semaphore_shell_source()
+    conditional_short_circuit = (
+        '  if [ -n "$GATE_SEMAPHORE_HELD" ]; then\n'
+        '    # A process-owned tolerant hold can cover another tolerant command. Do not\n'
+        '    # let it silently cover a later sensitive or exclusive command: ask the\n'
+        '    # entry point again so it performs a new admitted escalation, or refuse.\n'
+        '    if [ "$gs_contention" = "tolerant" ]; then\n'
+        '      return 0\n'
+        '    fi\n'
+        '  fi\n'
+    )
+    require(committed.count(conditional_short_circuit) == 1,
+            "the negative control no longer matches the process-owned escalation guard")
+    bypass = committed.replace(
+        conditional_short_circuit,
+        '  if [ -n "$GATE_SEMAPHORE_HELD" ]; then\n    return 0\n  fi\n',
+    )
+    with patched(sys.modules[__name__], "gate_semaphore_shell_source", lambda: bypass):
+        must_fail(control_shell_reasks_before_escalating_its_own_hold,
+                  "a tolerant process hold bypassed the exclusive re-admission")
 
 
 def control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold() -> None:
@@ -3393,6 +3449,7 @@ NEGATIVE_CONTROLS = (
     control_negative_holding_the_host_across_the_selective_run,
     control_negative_ignoring_the_declared_coordination_mode,
     control_negative_shell_ignoring_the_declared_coordination_mode,
+    control_negative_shell_short_circuits_its_own_escalation,
     control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold,
 )
 
@@ -3438,7 +3495,8 @@ CONTROLS = (
     control_shell_coordination_inherited_borrows_and_releases_nothing,
     control_shell_absent_coordination_entry_point_announces_once_and_runs,
     control_shell_admission_request_states_the_goal_the_estimate_and_the_wait,
-    control_shell_authoritative_admission_requires_a_hard_inheritance,
+    control_shell_authoritative_admission_refuses_automatic_inheritance,
+    control_shell_reasks_before_escalating_its_own_hold,
     control_beacon_current_mainnet_releases_after_its_final_child,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_corrupt_build_certificate_forces_authoritative_build,

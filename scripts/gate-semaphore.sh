@@ -147,10 +147,11 @@ GATE_SEMAPHORE_NARROW_GIB=4
 #   what        what is about to elaborate, named as the operator sees it
 #   memory-gib  conservative whole-GiB peak; defaults to the narrow estimate
 #   contention  admission class; defaults to `tolerant`.  A timing-authoritative
-#               caller requests `exclusive`.  Its automatic inheritance is
-#               accepted only from the entry point's explicit hard-hold answer;
-#               an enclosing caller that has already made that admission may
-#               state `BLANC_GATE_SEMAPHORE=inherited` explicitly.
+#               caller requests `exclusive`.  Automatic inheritance is only
+#               safe for `tolerant`: an `ALREADY_HELD` line does not prove that
+#               a non-tolerant enclosing unit had the requested reservation.
+#               An enclosing caller that already made the complete admission
+#               states `BLANC_GATE_SEMAPHORE=inherited` explicitly.
 #
 # Returns 0 when the gate may elaborate — because it took a hold, because it
 # inherited one, or because there is no coordination on this host to take.
@@ -163,7 +164,12 @@ gate_semaphore_acquire() {
   gs_label="$(gate_semaphore_label)"
 
   if [ -n "$GATE_SEMAPHORE_HELD" ]; then
-    return 0
+    # A process-owned tolerant hold can cover another tolerant command. Do not
+    # let it silently cover a later sensitive or exclusive command: ask the
+    # entry point again so it performs a new admitted escalation, or refuse.
+    if [ "$gs_contention" = "tolerant" ]; then
+      return 0
+    fi
   fi
   case "${BLANC_GATE_SEMAPHORE:-}" in
     off)
@@ -195,16 +201,14 @@ gate_semaphore_acquire() {
   fi
 
   # The label already owns the host. A tolerant gate may borrow either kind of
-  # hold. A sensitive or timing-authoritative gate requires the entry point to
-  # say it is already a hard hold; unknown or soft inheritance cannot establish
-  # the required exclusion and therefore remains a refusal. A caller that
-  # already made the right admission can use the explicit `inherited` mode.
+  # hold. The response does not bind its reservation to this request's estimate
+  # or class, so sensitive and exclusive work must not inherit it automatically.
+  # A caller that already made the complete admission uses explicit inheritance.
   case "$gs_out" in
     *ALREADY_HELD*)
       case "$gs_contention:$gs_out" in
         tolerant:*) return 0 ;;
-        sensitive:*"hard hold"*|exclusive:*"hard hold"*) return 0 ;;
-        *) gs_out="$gs_out"$'\n'"ALREADY_HELD response did not prove a hard hold for contention=$gs_contention" ;;
+        *) gs_out="$gs_out"$'\n'"ALREADY_HELD response did not prove the requested reservation for contention=$gs_contention" ;;
       esac
       ;;
   esac
