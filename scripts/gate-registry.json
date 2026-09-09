@@ -908,6 +908,7 @@
           "scripts/check-lido-circuit-breaker-enumeration.sh",
           "scripts/check-lido-circuit-breaker-enumeration.py",
           "Blanc/LidoCircuitBreakerEnumeration.lean",
+          "scripts/lean_header.py",
           "scripts/gate_semaphore.py"
         ],
         "lean_entries": [
@@ -971,6 +972,7 @@
           "Blanc/CompiledWalkInversion.lean",
           "Blanc/LidoCircuitBreakerPublicPause.lean",
           "Blanc/LidoCircuitBreakerPublicPauseControl.lean",
+          "scripts/lean_header.py",
           "scripts/gate_semaphore.py"
         ],
         "lean_entries": [

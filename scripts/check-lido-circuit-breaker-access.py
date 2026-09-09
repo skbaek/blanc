@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 
 import gate_semaphore
+from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -858,7 +859,7 @@ ROLES = {
             "d3e6d198d9213f0c92d2a430bffc44edbfbf74ba64cd732b622a7be57aa687be",
         # P1: the kernel's clearing write, read back at the cell it lands in.
         "assignmentPost_assignment":
-            "ec11a7f06a49a484ba2abe253dcb6869179ccb74549bac85466008f54f74099d",
+            "37f3bb10eab7d8ec7fbbe82fa5dc3b0430e29f96f8443545108cd02740f70413",
         # The removal span's storage frame: a cell missing all five written keys survives it. The swap-pop tower subsumes the degenerate walk, so this serves both.
         "removalPost_getStorVal_other":
             "0056a01ad9bfdd138d960238b5d39b74379def77f2a9a1c57cda53751ba95bfd",
@@ -1129,55 +1130,13 @@ def no_trust_shortcut(path: Path) -> None:
     if match:
         fail(f"forbidden trust token {match.group(1)!r} in {path.relative_to(ROOT)}")
 
-_DECL_START = re.compile(
-    r"(?m)^(?:@\[[^\]]*\]\s*)?"
-    r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+)*"
-    r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|example|class)\b")
-
-
-def declaration_slice(source: str, name: str) -> str:
-    """Exact source text of one declaration, never crossing into the next.
-
-    The earlier `.*?:= by` form silently ran past a term-mode declaration and
-    digested a blend of two theorems, so a pin could name one result and hash
-    another.  Slicing first makes that impossible.
-    """
-    start = re.search(rf"(?m)^theorem\s+{re.escape(name)}\b", source)
-    if not start:
-        fail(f"missing pinned public role {name}")
-    rest = source[start.end():]
-    following = _DECL_START.search(rest)
-    end = start.end() + (following.start() if following else len(rest))
-    return source[start.start():end]
-
-
-def normalized_header(name: str, source: str) -> str:
-    declaration = declaration_slice(source, name)
-    tactic = re.search(r"(?s)^.*?:(?==\s*by\b)", declaration)
-    if tactic:
-        header = tactic.group(0)
-    else:
-        depth = 0
-        cut = -1
-        for index, char in enumerate(declaration):
-            if char in "([{":
-                depth += 1
-            elif char in ")]}":
-                depth -= 1
-            elif char == ":" and depth == 0 and declaration[index:index + 2] == ":=":
-                cut = index
-        if cut < 0:
-            fail(f"pinned public role {name} has no definition marker")
-        header = declaration[:cut + 1]
-    return " ".join(header.split())
-
 
 def pin_role_headers(key: str, source: str) -> None:
     # An owner may be carried for its trust scan, compiled-owner guard and axiom
     # probe without pinning any header -- contract-neutral route machinery whose
     # consumers pin what matters, and concrete worlds, which are not claims.
     for name, expected in ROLES.get(key, {}).items():
-        actual = hashlib.sha256(normalized_header(name, source).encode()).hexdigest()
+        actual = hashlib.sha256(header_before_definition(source, name).encode()).hexdigest()
         if actual != expected:
             fail(f"normalized public header changed for {name} in {key}")
 
@@ -1675,6 +1634,10 @@ def axiom_checks() -> None:
                 )
 
 def main() -> None:
+    try:
+        parser_controls()
+    except HeaderError as error:
+        fail(f"header parser control failed: {error}")
     # Static owner-side checks run first so the gate fails before any Lean
     # subprocess is started.
     for key, path in OWNERS.items():

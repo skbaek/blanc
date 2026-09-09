@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 import gate_semaphore
+from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
 OWNER = ROOT / "Blanc/LidoCircuitBreakerEnumeration.lean"
@@ -73,52 +74,10 @@ def no_trust_shortcut(path: Path) -> None:
     if match:
         fail(f"forbidden trust token {match.group(1)!r} in {path.relative_to(ROOT)}")
 
-_DECL_START = re.compile(
-    r"(?m)^(?:@\[[^\]]*\]\s*)?"
-    r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+)*"
-    r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|example|class)\b")
-
-
-def declaration_slice(source: str, name: str) -> str:
-    """Exact source text of one declaration, never crossing into the next.
-
-    The earlier `.*?:= by` form silently ran past a term-mode declaration and
-    digested a blend of two theorems, so a pin could name one result and hash
-    another.  Slicing first makes that impossible.
-    """
-    start = re.search(rf"(?m)^theorem\s+{re.escape(name)}\b", source)
-    if not start:
-        fail(f"missing pinned public role {name}")
-    rest = source[start.end():]
-    following = _DECL_START.search(rest)
-    end = start.end() + (following.start() if following else len(rest))
-    return source[start.start():end]
-
-
-def normalized_header(source: str, name: str) -> str:
-    declaration = declaration_slice(source, name)
-    tactic = re.search(r"(?s)^.*?:(?==\s*by\b)", declaration)
-    if tactic:
-        header = tactic.group(0)
-    else:
-        depth = 0
-        cut = -1
-        for index, char in enumerate(declaration):
-            if char in "([{":
-                depth += 1
-            elif char in ")]}":
-                depth -= 1
-            elif char == ":" and depth == 0 and declaration[index:index + 2] == ":=":
-                cut = index
-        if cut < 0:
-            fail(f"pinned public role {name} has no definition marker")
-        header = declaration[:cut + 1]
-    return " ".join(header.split())
-
 
 def pin_role_headers(source: str) -> None:
     for name, expected in ROLES.items():
-        actual = hashlib.sha256(normalized_header(source, name).encode()).hexdigest()
+        actual = hashlib.sha256(header_before_definition(source, name).encode()).hexdigest()
         if actual != expected:
             fail(f"normalized public header changed for {name}")
 
@@ -243,6 +202,10 @@ def header_mutation_controls(source: str) -> None:
         fail(f"{label} mutation was accepted")
 
 def main() -> None:
+    try:
+        parser_controls()
+    except HeaderError as error:
+        fail(f"header parser control failed: {error}")
     fixture = text(FIXTURE)
     if not OWNER.is_file():
         fail("missing sole production owner")
