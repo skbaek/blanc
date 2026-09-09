@@ -426,19 +426,34 @@ def wideRemainderTraceImage
       (scratchWord * 32).toNat scratch.toBytes)
     (remainderWord * 32).toNat remainder.toBytes
 
+/-- A nearby write to the protected denominator word is rejected by the
+vault's concrete scratch-stage guard. -/
+private theorem wideRemainderTraceImage_denominator_overlap_rejects :
+    (MemoryStage.words [
+      ((factorWord * 32).toNat, (0 : B256)),
+      ((scratchWord * 32).toNat, (0 : B256)),
+      ((remainderWord * 32).toNat, (0 : B256)),
+      ((denominatorWord * 32).toNat, (0 : B256))
+    ]).avoids (denominatorWord * 32).toNat 32 = false := by
+  decide +kernel
+
 theorem wideRemainderTraceImage_wordFrame
     (image : Bytes) (high low denominator : B256) :
     Bytes.WordFrameFrom image
       (wideRemainderTraceImage image high low denominator)
       arithmeticScratchEnd := by
-  intro offset after
-  unfold wideRemainderTraceImage
-  rw [readWord_writeAt_scratch_of_after _ remainderWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ scratchWord _ offset
-      (by decide +kernel) after,
-    readWord_writeAt_scratch_of_after _ factorWord _ offset
-      (by decide +kernel) after]
+  let factor := wordModulusFactorWord denominator
+  let scratch := B256.mulmod high factor denominator
+  let remainder := B256.addmod scratch low denominator
+  change Bytes.WordFrameFrom image
+    ((MemoryStage.words [
+      ((factorWord * 32).toNat, factor),
+      ((scratchWord * 32).toNat, scratch),
+      ((remainderWord * 32).toNat, remainder)
+  ]).applyImage image) arithmeticScratchEnd
+  apply MemoryStage.wordFrameFrom
+  simp [MemoryStage.before, MemoryStage.words, arithmeticScratchEnd,
+    B256.length_toBytes] ; decide +kernel
 
 theorem wideRemainderTraceImage_denominator
     {image : Bytes} {high low denominator : B256}
@@ -447,17 +462,24 @@ theorem wideRemainderTraceImage_denominator
     Bytes.toB256
         ((wideRemainderTraceImage image high low denominator).sliceD
           (denominatorWord * 32).toNat 32 0) = denominator := by
-  unfold wideRemainderTraceImage
-  rw [Bytes.readWord_writeAt_of_disjoint]
-  · rw [Bytes.readWord_writeAt_of_disjoint]
-    · rw [Bytes.readWord_writeAt_of_disjoint]
-      · exact denominatorAt
-      · left
-        decide +kernel
-    · left
-      decide +kernel
-  · left
-    decide +kernel
+  let factor := wordModulusFactorWord denominator
+  let scratch := B256.mulmod high factor denominator
+  let remainder := B256.addmod scratch low denominator
+  let stage := MemoryStage.words [
+    ((factorWord * 32).toNat, factor),
+    ((scratchWord * 32).toNat, scratch),
+    ((remainderWord * 32).toNat, remainder)
+  ]
+  change Bytes.toB256
+    ((stage.applyImage image).sliceD (denominatorWord * 32).toNat 32 0) =
+      denominator
+  rw [MemoryStage.applyImage_sliceD_of_avoids stage image
+    (denominatorWord * 32).toNat 32 (by
+      simp only [stage, MemoryStage.avoids, MemoryStage.words,
+        List.all_cons, Bool.and_eq_true, decide_eq_true_eq,
+        List.map_cons, B256.length_toBytes]
+      decide +kernel)]
+  exact denominatorAt
 
 theorem wideRemainderTraceImage_high
     {image : Bytes} {high low denominator : B256}
@@ -466,17 +488,23 @@ theorem wideRemainderTraceImage_high
     Bytes.toB256
         ((wideRemainderTraceImage image high low denominator).sliceD
           (highWord * 32).toNat 32 0) = high := by
-  unfold wideRemainderTraceImage
-  rw [Bytes.readWord_writeAt_of_disjoint]
-  · rw [Bytes.readWord_writeAt_of_disjoint]
-    · rw [Bytes.readWord_writeAt_of_disjoint]
-      · exact highAt
-      · left
-        decide +kernel
-    · left
-      decide +kernel
-  · left
-    decide +kernel
+  let factor := wordModulusFactorWord denominator
+  let scratch := B256.mulmod high factor denominator
+  let remainder := B256.addmod scratch low denominator
+  let stage := MemoryStage.words [
+    ((factorWord * 32).toNat, factor),
+    ((scratchWord * 32).toNat, scratch),
+    ((remainderWord * 32).toNat, remainder)
+  ]
+  change Bytes.toB256
+    ((stage.applyImage image).sliceD (highWord * 32).toNat 32 0) = high
+  rw [MemoryStage.applyImage_sliceD_of_avoids stage image
+    (highWord * 32).toNat 32 (by
+      simp only [stage, MemoryStage.avoids, MemoryStage.words,
+        List.all_cons, Bool.and_eq_true, decide_eq_true_eq,
+        List.map_cons, B256.length_toBytes]
+      decide +kernel)]
+  exact highAt
 
 theorem wideRemainderTraceImage_low
     {image : Bytes} {high low denominator : B256}
@@ -485,17 +513,23 @@ theorem wideRemainderTraceImage_low
     Bytes.toB256
         ((wideRemainderTraceImage image high low denominator).sliceD
           (lowWord * 32).toNat 32 0) = low := by
-  unfold wideRemainderTraceImage
-  rw [Bytes.readWord_writeAt_of_disjoint]
-  · rw [Bytes.readWord_writeAt_of_disjoint]
-    · rw [Bytes.readWord_writeAt_of_disjoint]
-      · exact lowAt
-      · left
-        decide +kernel
-    · left
-      decide +kernel
-  · left
-    decide +kernel
+  let factor := wordModulusFactorWord denominator
+  let scratch := B256.mulmod high factor denominator
+  let remainder := B256.addmod scratch low denominator
+  let stage := MemoryStage.words [
+    ((factorWord * 32).toNat, factor),
+    ((scratchWord * 32).toNat, scratch),
+    ((remainderWord * 32).toNat, remainder)
+  ]
+  change Bytes.toB256
+    ((stage.applyImage image).sliceD (lowWord * 32).toNat 32 0) = low
+  rw [MemoryStage.applyImage_sliceD_of_avoids stage image
+    (lowWord * 32).toNat 32 (by
+      simp only [stage, MemoryStage.avoids, MemoryStage.words,
+        List.all_cons, Bool.and_eq_true, decide_eq_true_eq,
+        List.map_cons, B256.length_toBytes]
+      decide +kernel)]
+  exact lowAt
 
 theorem wideRemainderTraceImage_remainder
     (image : Bytes) (high low denominator : B256) :
