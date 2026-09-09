@@ -128,6 +128,7 @@ import Blanc.CompiledWalkInversion
 import Blanc.LinearDispatch
 import Blanc.AddressSlot
 import Blanc.AddressSlotProofs
+import Blanc.TaggedStorage
 import Blanc.ForwardCall
 import Blanc.DelegatecallEnvelope
 import Blanc.ForwardStorageAccess

@@ -322,6 +322,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeIsCompileShapePrependCongruence target
   | "goal-shape:bounded-creation-word-encoder" =>
       return proofRecipeIsBoundedCreationWordEncoder target
+  | "goal-shape:tagged-storage-region-separation" =>
+      return proofRecipeContainsName `Blanc.TaggedStorage.encode target
   | "goal-shape:selector-separation" =>
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:linear-dispatch-selection" =>

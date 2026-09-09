@@ -151,6 +151,16 @@ registry has identified the likely vocabulary.
   [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
   full-word `SSTORE` is observably different in that state.
+- **Four-bit tagged logical storage keys.** `Blanc.TaggedStorage.encode` in
+  [`Blanc/TaggedStorage.lean`](../Blanc/TaggedStorage.lean) combines a region
+  with a payload after masking the payload to 252 bits.  Use
+  `encode_eq_of_payload_lt` when bridging an existing unmasked `OR` encoder,
+  `encode_injective_of_payload_lt` for a fixed region, and
+  `encode_ne_of_region_ne` for distinct regions.  The injectivity facts require
+  payloads below `2^252`, and region separation also requires both regions
+  below 16.  This key algebra does not model Solidity `address` slot reads or
+  assignments: use `AddressSlot` for their low-160-bit read and
+  upper-96-bit-preserving write semantics.
 - **WETH calldata addresses.** `Weth10.normalizedAddressArg_eq_toAdr_toB256` in
   [`Blanc/Weth10StateFunctional.lean`](../Blanc/Weth10StateFunctional.lean)
   exposes the shared round trip from `normalizedAddressArg` to the low 160-bit

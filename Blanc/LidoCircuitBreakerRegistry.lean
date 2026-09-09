@@ -1,6 +1,7 @@
 import Blanc.LidoCircuitBreakerCode
 import Blanc.ExecutionOccurrence
 import Blanc.LidoCircuitBreakerRegistryModel
+import Blanc.TaggedStorage
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-! Chronological logical Registry writes for the shared CircuitBreaker kernel. -/
@@ -14,47 +15,20 @@ open scoped BigOperators
 /-- The logical Registry projection of concrete EVM storage. -/
 def logicalStorageOfStor (s : Stor) : LogicalStorage := { read := s.get }
 
-private theorem toB256_or (a b : Nat) :
-    Nat.toB256 (a ||| b) =
-      B256.or (Nat.toB256 a) (Nat.toB256 b) := by
-  simp only [Nat.toB256, B256.or, Nat.shiftRight_or_distrib, toB128_or]
+private theorem slot_eq_encode_of_payload_lt
+    {region : Nat} {payload : B256}
+    (hpayload : payload.toNat < 2 ^ 252) :
+    slot region payload = TaggedStorage.encode region payload := by
+  rw [TaggedStorage.encode_eq_of_payload_lt hpayload]
+  rfl
 
 theorem slot_toNat_of_region_payload_lt
     {region : Nat} {payload : B256}
     (hregion : region < 16) (hpayload : payload.toNat < 2 ^ 252) :
     (slot region payload).toNat =
       region * 2 ^ 252 + payload.toNat := by
-  have hdiv : 2 ^ 252 ∣ region * 2 ^ 252 := Nat.dvd_mul_left _ _
-  have hor :
-      region * 2 ^ 252 ||| payload.toNat =
-        region * 2 ^ 252 + payload.toNat :=
-    (Nat.add_eq_or hdiv hpayload).symm
-  have hsum :
-      region * 2 ^ 252 + payload.toNat < 2 ^ 256 := by
-    calc
-      region * 2 ^ 252 + payload.toNat <
-          region * 2 ^ 252 + 2 ^ 252 :=
-        Nat.add_lt_add_left hpayload _
-      _ = (region + 1) * 2 ^ 252 := by omega
-      _ ≤ 16 * 2 ^ 252 :=
-        Nat.mul_le_mul_right (2 ^ 252) (Nat.succ_le_iff.mpr hregion)
-      _ = 2 ^ 256 := by
-        rw [show 256 = 4 + 252 by omega, pow_add]
-        norm_num
-  have horlt :
-      region * 2 ^ 252 ||| payload.toNat < 2 ^ 256 := by
-    rwa [hor]
-  calc
-    (slot region payload).toNat =
-        (B256.or (Nat.toB256 (region * 2 ^ 252))
-          (Nat.toB256 payload.toNat)).toNat := by
-      rw [slot, regionWord, toB256_toNat]
-    _ = (Nat.toB256
-          (region * 2 ^ 252 ||| payload.toNat)).toNat := by
-      rw [toB256_or]
-    _ = region * 2 ^ 252 ||| payload.toNat :=
-      B256.toNat_toB256_of_lt horlt
-    _ = region * 2 ^ 252 + payload.toNat := hor
+  rw [slot_eq_encode_of_payload_lt hpayload]
+  exact TaggedStorage.encode_toNat_of_bounds hregion hpayload
 
 theorem slot_injective_payload
     {region : Nat} {left right : B256}
@@ -63,11 +37,9 @@ theorem slot_injective_payload
     (hright : right.toNat < 2 ^ 252)
     (hslot : slot region left = slot region right) :
     left = right := by
-  apply B256.toNat_inj
-  have hnat := congrArg B256.toNat hslot
-  rw [slot_toNat_of_region_payload_lt hregion hleft,
-    slot_toNat_of_region_payload_lt hregion hright] at hnat
-  omega
+  apply TaggedStorage.encode_injective_of_payload_lt hregion hleft hright
+  rwa [← slot_eq_encode_of_payload_lt hleft,
+    ← slot_eq_encode_of_payload_lt hright]
 
 theorem slot_ne_of_region_ne
     {leftRegion rightRegion : Nat} {left right : B256}
@@ -76,12 +48,9 @@ theorem slot_ne_of_region_ne
     (hright : right.toNat < 2 ^ 252)
     (hne : leftRegion ≠ rightRegion) :
     slot leftRegion left ≠ slot rightRegion right := by
-  intro hslot
-  apply hne
-  have hnat := congrArg B256.toNat hslot
-  rw [slot_toNat_of_region_payload_lt hlr hleft,
-    slot_toNat_of_region_payload_lt hrr hright] at hnat
-  omega
+  rw [slot_eq_encode_of_payload_lt hleft,
+    slot_eq_encode_of_payload_lt hright]
+  exact TaggedStorage.encode_ne_of_region_ne hlr hrr hleft hright hne
 
 private def addressFin (word : B256) : Fin (2 ^ 160) :=
   ⟨word.toNat % (2 ^ 160), Nat.mod_lt _ (by norm_num)⟩

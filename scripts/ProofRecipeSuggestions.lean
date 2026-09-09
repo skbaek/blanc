@@ -7,6 +7,7 @@ import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
+import Blanc.TaggedStorage
 
 namespace Blanc
 
@@ -23,6 +24,25 @@ elab "expect_no_recipe_trigger" trigger:str : tactic => do
   let target ← Lean.Elab.Tactic.getMainTarget
   if ← proofRecipeTriggerMatches target trigger.getString then
     throwError "expected proof-recipe trigger {trigger.getString} not to match"
+
+-- EXPECT: tagged-storage-region-separation
+example {leftRegion rightRegion : Nat} {left right : B256}
+    (hlr : leftRegion < 16) (hrr : rightRegion < 16)
+    (hleft : left.toNat < 2 ^ 252)
+    (hright : right.toNat < 2 ^ 252)
+    (hne : leftRegion ≠ rightRegion) :
+    TaggedStorage.encode leftRegion left ≠
+      TaggedStorage.encode rightRegion right := by
+  expect_recipe_trigger "goal-shape:tagged-storage-region-separation"
+  blanc_suggest
+  exact TaggedStorage.encode_ne_of_region_ne hlr hrr hleft hright hne
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (raw value : B256) :
+    addressSlotWriteWord raw value = addressSlotWriteWord raw value := by
+  expect_no_recipe_trigger "goal-shape:tagged-storage-region-separation"
+  blanc_suggest
+  rfl
 
 -- EXPECT: runcompiled-construction
 example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}

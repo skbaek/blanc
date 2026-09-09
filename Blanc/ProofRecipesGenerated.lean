@@ -19,6 +19,14 @@ structure Recipe where
 /-- Recipes generated from `scripts/proof-recipes.toml`, in registry order. -/
 def recipes : List Recipe := [
   {
+    id := "tagged-storage-region-separation"
+    status := "active"
+    triggers := ["goal-shape:tagged-storage-region-separation"]
+    preferredPath := "For two `TaggedStorage.encode` keys with regions below 16, payloads below `2^252`, and unequal regions, apply `TaggedStorage.encode_ne_of_region_ne`. For a fixed region, use `TaggedStorage.encode_injective_of_payload_lt`; use `TaggedStorage.encode_eq_of_payload_lt` to bridge an existing unmasked `OR` encoder only after proving its payload bound."
+    symbols := ["module:Blanc/TaggedStorage.lean", "declaration:Blanc.TaggedStorage.encode", "declaration:Blanc.TaggedStorage.encode_eq_of_payload_lt", "declaration:Blanc.TaggedStorage.encode_injective_of_payload_lt", "declaration:Blanc.TaggedStorage.encode_ne_of_region_ne"]
+    boundary := "The encoder masks payload bits at and above bit 252, so unbounded payload injectivity is false; natural regions also wrap modulo the 256-bit word width, so unbounded region separation is false. This is logical key construction, not Solidity address-slot read or assignment semantics, and it proves no family hash/payload injectivity."
+  },
+  {
     id := "runcompiled-construction"
     status := "active"
     triggers := ["goal-head:Func.RunCompiled", "goal-head:Func.RunCompiledTo", "goal-head:Func.ExecTo", "goal-head:Func.ExecWitness"]
