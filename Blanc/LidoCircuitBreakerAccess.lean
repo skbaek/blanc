@@ -1087,7 +1087,7 @@ theorem isPauserLive_runCompiled_at_expiry
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "isPauserLive" [.address] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (33) [0, 0, selector "isPauserLive" [.address],
@@ -1214,7 +1214,7 @@ theorem isPauserLive_runCompiled
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "isPauserLive" [.address] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (33) [0, 0, selector "isPauserLive" [.address],
@@ -1306,7 +1306,7 @@ theorem heartbeatInterval_runCompiled
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "heartbeatInterval" [] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (31) [0, 0, selector "heartbeatInterval" [],
@@ -1415,7 +1415,7 @@ theorem heartbeatExpiry_runCompiled
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "heartbeatExpiry" [.address] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (27) [0, 0, selector "heartbeatExpiry" [.address],
@@ -2835,7 +2835,7 @@ theorem setHeartbeatInterval_runCompiled_of_inclusive
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "setHeartbeatInterval" [.uint256] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (33) [0, 0,
@@ -3008,7 +3008,7 @@ theorem setHeartbeatInterval_dispatch_runCompiledTo
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "setHeartbeatInterval" [.uint256] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (33) [0, 0,
@@ -3776,7 +3776,7 @@ theorem heartbeat_dispatch_runCompiledTo
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "heartbeat" [] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (37) [0, 0, selector "heartbeat" [],
@@ -4011,7 +4011,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
-      · simp [B256.length_toBytes]
+      · simp [panicData, B256.length_toBytes]
       · decide +kernel
       · simp only [Devm.gasLeft_setMach]
         change G + 424 - 396 =

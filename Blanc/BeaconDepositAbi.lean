@@ -879,11 +879,18 @@ private theorem depositDecodedTail2LengthMemory_size (data : Bytes) :
   rw [Mem.size_write_word_at, depositDecodedTail1Memory_size]
   decide +kernel
 
+/-- The explicit decoder write chain is the staged decoder memory.
+
+Discharged through `depositDecodedMemory_eq_writes` rather than `rfl`:
+`depositDecodedMemory` is a `MemoryStage.applyMemory` fold, so a bare `rfl`
+asks `whnf` to evaluate six `Mem.write` applications through the fold. -/
 private theorem depositDecodedTail2Memory_eq (data : Bytes) :
     (depositDecodedTail2LengthMemory data).write 64
         (depositOffsetWord data 2).toBytes =
       depositDecodedMemory data := by
-  rfl
+  unfold depositDecodedTail2LengthMemory depositDecodedTail1Memory
+    depositDecodedTail0Memory
+  exact (depositDecodedMemory_eq_writes data).symm
 
 private theorem depositTail2OffsetStore_success_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

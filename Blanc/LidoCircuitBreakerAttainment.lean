@@ -264,7 +264,8 @@ def runtimeMainEntryPrefix : Line :=
 
 This is the named hazard zone: exposing `runtimeMain dp`'s head through
 `prepend` is the unfolding that neighbouring stage lemmas pay for with
-`unfold runtime runtimeMain hybridDispatchWith` plus a `simpa`.  Through
+`unfold runtime symbolicLinkCert legacyRuntime runtimeMain
+hybridDispatchWith` plus a `simpa`.  Through
 `routeTo_line` it costs nothing measurable — the route never needs the
 compiled form, only the source constructor head. -/
 theorem runtimeMain_routeTo_dispatch (dp : DeployParams)
@@ -2373,7 +2374,7 @@ theorem setPauseDuration_dispatch_runCompiledTo
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "setPauseDuration" [.uint256] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (31) [0, 0,

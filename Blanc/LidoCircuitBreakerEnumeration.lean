@@ -1128,7 +1128,7 @@ theorem getPausables_runCompiled
           (selector "getPausables" []) = 0 := by decide
       have hleaf : B256.eqCheck (selector "getPausables" [])
           (selector "getPausables" []) = 1 := by decide
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (27) [0, 0, selector "getPausables" [], 1, 0, 0, 1]

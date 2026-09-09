@@ -116,8 +116,12 @@ inductive Label : Type
   | arithmeticPanic
   deriving DecidableEq, Repr
 
-/-- Positional auxiliary slot index corresponding to each label. -/
-def slotOf : Label → Nat
+/-- Positional auxiliary slot index corresponding to each label.
+
+The equations are `@[simp]` so that the `*Slot` abbreviations below, which are
+now defined through `slotOf`, still reduce to their numeric literal in the
+downstream `simp [runtime, aux, fooSlot]` table-lookup idiom. -/
+@[simp] def slotOf : Label → Nat
   | .root => 0
   | .fallback => 1
   | .pausableZeroError => 2
@@ -1073,12 +1077,37 @@ def symbolicLinkCert (dp : DeployParams) : LinkCertificate (symbolicRuntime dp) 
   resolve_eq := resolve_symbolicRuntime_eq dp
   compiles := legacyRuntime_compiles dp
 
+/-- The certificate's resolved program is the frozen numeric runtime.
+
+This is the bridge that keeps the downstream normal form intact.  `runtime` is
+now anchored on the certificate, so `simp [runtime, ...]` rewrites a goal to
+`(symbolicLinkCert dp).resolved`; without this `@[simp]` lemma simp cannot
+delta-unfold `symbolicLinkCert` and the 50-odd `simp [runtime, aux, fooSlot]`
+table-lookup sites stall. -/
+@[simp] theorem symbolicLinkCert_resolved (dp : DeployParams) :
+    (symbolicLinkCert dp).resolved = legacyRuntime dp :=
+  rfl
+
+@[simp] theorem legacyRuntime_main (dp : DeployParams) :
+    (legacyRuntime dp).main = runtimeMain dp :=
+  rfl
+
+@[simp] theorem legacyRuntime_aux (dp : DeployParams) :
+    (legacyRuntime dp).aux = aux :=
+  rfl
+
 /-- Production runtime program obtained from the checked symbolic link certificate. -/
 def runtime (dp : DeployParams) : Prog :=
   (symbolicLinkCert dp).resolved
 
 theorem runtime_eq_legacyRuntime (dp : DeployParams) :
     runtime dp = legacyRuntime dp :=
+  rfl
+
+/-- Pair form of the production runtime, for walk idioms that cannot see
+through the certificate projection. -/
+theorem runtime_eq_mk (dp : DeployParams) :
+    runtime dp = ⟨runtimeMain dp, aux⟩ :=
   rfl
 
 /-- Exact resolution theorem relating the symbolic runtime to the production runtime. -/

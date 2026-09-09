@@ -2221,7 +2221,7 @@ theorem registerPauser_dispatch_runCompiledTo
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "registerPauser" [.address, .address] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (35) [0, 0,

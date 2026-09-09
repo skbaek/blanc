@@ -15767,13 +15767,13 @@ private theorem runtime_pause_runCompiledTo
     apply Prog.runCompiledTo_intro (G := G + mainCost) (mid := mid)
       hentryGas
     · simp only [mid, hstack]
-    · simpa only [runtime] using mainRun
+    · simpa only [runtime_eq_mk] using mainRun
   have entryBurn : Devm.BurnBy gJumpdest pre mid := by
     simpa only [mid, hstack] using Devm.burnBy_setMach_gas hentryGas
   exact ⟨raw, mid,
-    by simpa only [runtime] using mainRun,
+    by simpa only [runtime_eq_mk] using mainRun,
     programRun, entryBurn, rfl, rawOutput,
-    by simpa only [runtime] using mainPath⟩
+    by simpa only [runtime_eq_mk] using mainPath⟩
 
 /-- Construction-only transport from an exact compiled main-function walk to
 the corresponding executions at pc 1 and at the program-entry pc 0. -/
@@ -16426,7 +16426,7 @@ theorem runtime_caller_lookups (dp : DeployParams) :
     ∃ panicData,
       fs[arithmeticPanicSlot]? = some (Func.revertData panicData) := by
   simp [runtime, aux, registerAfterSetSlot, pauseAfterSetSlot,
-    arithmeticPanicSlot]
+    arithmeticPanicSlot, arithmeticPanic]
 
 /-! ### Concrete post-write direct-pause control -/
 

@@ -583,7 +583,7 @@ theorem validateDepositAbi_success_of_run
     ⟨next, htail2, hpNext, bodyRun, hmemory2, hstor2, hcode2⟩
   refine ⟨next, ?_, hpNext, bodyRun, ?_, ?_, ?_⟩
   · exact ⟨hHead, htail0, htail1, htail2, rfl, rfl, rfl, rfl⟩
-  · unfold depositDecodedMemory
+  · rw [depositDecodedMemory_eq_writes]
     rw [hmemory2, hmemory1, hmemory0, ← hheadMemory, hmemory]
     rw [show ((3 : B256) * 32).toNat = 96 by decide +kernel,
       show ((0 : B256) * 32).toNat = 0 by decide +kernel,

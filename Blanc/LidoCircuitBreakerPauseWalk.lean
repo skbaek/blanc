@@ -295,7 +295,7 @@ theorem pause_dispatch_runCompiledTo
       have hselector' :
           Sevm.dataWord sevm 0 >>> B256.toNat 224 =
             selector "pause" [.address] := hselector
-      unfold runtime runtimeMain hybridDispatchWith splitDispatch
+      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (23) [0, 0, selector "pause" [.address], 0, 1, 1]

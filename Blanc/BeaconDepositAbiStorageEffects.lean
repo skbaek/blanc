@@ -251,7 +251,9 @@ private theorem depositDecodedTail2Memory_eq_effects (data : Bytes) :
     (depositDecodedTail2LengthMemoryEffects data).write 64
         (depositOffsetWord data 2).toBytes =
       depositDecodedMemory data := by
-  rfl
+  unfold depositDecodedTail2LengthMemoryEffects depositDecodedTail1Memory
+    depositDecodedTail0Memory
+  exact (depositDecodedMemory_eq_writes data).symm
 
 private theorem depositTail2OffsetStore_success_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

@@ -105,6 +105,26 @@ def depositDecodedWrites (data : Bytes) : List (Nat × B256) :=
 def depositDecodedMemory (data : Bytes) : Mem :=
   (MemoryStage.words (depositDecodedWrites data)).applyMemory Mem.empty
 
+/-- The staged decoder memory spelled as the explicit execution-order write
+chain.
+
+Walks over the decoder produce the chain structurally, one `Mem.write` per
+decoded tail, while `depositDecodedMemory` is a `MemoryStage.applyMemory` fold.
+Closing that gap by `rfl` asks `whnf` to evaluate six `Mem.write` applications
+through the fold; this lemma does it by stage decomposition instead, and is the
+single bridge every such walk should use. -/
+theorem depositDecodedMemory_eq_writes (data : Bytes) :
+    depositDecodedMemory data =
+      (((((Mem.empty.write 96 (depositLengthWord data 0).toBytes).write 0
+          (depositOffsetWord data 0).toBytes).write 128
+          (depositLengthWord data 1).toBytes).write 32
+          (depositOffsetWord data 1).toBytes).write 160
+          (depositLengthWord data 2).toBytes).write 64
+          (depositOffsetWord data 2).toBytes := by
+  unfold depositDecodedMemory depositDecodedWrites
+  simp only [MemoryStage.words, List.map_cons, List.map_nil,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
 /-- Symbolic byte image corresponding to `depositDecodedMemory`. -/
 def depositDecodedImage (data : Bytes) : Bytes :=
   (MemoryStage.words (depositDecodedWrites data)).applyImage []
