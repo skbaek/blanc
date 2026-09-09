@@ -119,5 +119,88 @@ def finalizedConstructorProgram
   constructorProgram prefixLength
     (prefixLength + runtimeTemplate.length) runtimeTemplate.length
 
+/-- Certificate witnessing that a layout-parametric constructor program achieves
+a verified fixed point for its creation coordinates. -/
+structure CreationCoordinatesCertificate
+    (constructorProgram : Nat → Nat → Nat → Prog)
+    (runtimeLength : Nat) where
+  prefixLength : Nat
+  provisionalBytes : Bytes
+  finalBytes : Bytes
+  provisional_compile : Prog.compile (constructorProgram 0 0 runtimeLength) = some provisionalBytes
+  prefixLength_eq : prefixLength = provisionalBytes.length
+  final_compile : Prog.compile (constructorProgram prefixLength (prefixLength + runtimeLength) runtimeLength) = some finalBytes
+  fixed_point : finalBytes.length = prefixLength
+
+namespace CreationCoordinatesCertificate
+
+variable {constructorProgram : Nat → Nat → Nat → Prog} {runtimeLength : Nat}
+
+/-- Final constructor program closed over the certified creation coordinates. -/
+def finalProgram (cert : CreationCoordinatesCertificate constructorProgram runtimeLength) : Prog :=
+  constructorProgram cert.prefixLength (cert.prefixLength + runtimeLength) runtimeLength
+
+theorem finalProgram_compile (cert : CreationCoordinatesCertificate constructorProgram runtimeLength) :
+    Prog.compile cert.finalProgram = some cert.finalBytes :=
+  cert.final_compile
+
+end CreationCoordinatesCertificate
+
+/-- Checked adapter for two-pass constructor layout coordinates.
+Compiles provisional `C 0 0 runtimeLength` to `b0`, sets `n = b0.length`,
+compiles final `C n (n + runtimeLength) runtimeLength` to `b1`, and accepts
+only when `b1.length = n`. Rejects compilation failure and coordinate width discrepancies. -/
+def checkCreationCoordinates
+    (constructorProgram : Nat → Nat → Nat → Prog)
+    (runtimeLength : Nat) :
+    Option (CreationCoordinatesCertificate constructorProgram runtimeLength) :=
+  match h0 : Prog.compile (constructorProgram 0 0 runtimeLength) with
+  | none => none
+  | some b0 =>
+    let n := b0.length
+    match h1 : Prog.compile (constructorProgram n (n + runtimeLength) runtimeLength) with
+    | none => none
+    | some b1 =>
+      if hfp : b1.length = n then
+        some {
+          prefixLength := n
+          provisionalBytes := b0
+          finalBytes := b1
+          provisional_compile := h0
+          prefixLength_eq := rfl
+          final_compile := h1
+          fixed_point := hfp
+        }
+      else
+        none
+
+/-! ## Negative controls for creation coordinates checking -/
+
+/-- Negative control constructor: program fails compilation. -/
+def failingCompileConstructorProgram (_r _a _l : Nat) : Prog :=
+  ⟨.call 999, []⟩
+
+/-- Negative control: compilation failure at provisional pass returns `none`. -/
+theorem checkCreationCoordinates_failingCompile (l : Nat) :
+    checkCreationCoordinates failingCompileConstructorProgram l = none :=
+  rfl
+
+/-- Negative control constructor: second pass changes instruction length. -/
+def mismatchedLengthConstructorProgram : Nat → Nat → Nat → Prog
+  | 0, _, _ => ⟨.last .stop, []⟩
+  | _ + 1, _, _ => ⟨.next (Ninst.reg .pop) (.last .stop), []⟩
+
+/-- Negative control: coordinate width discrepancy between passes returns `none`. -/
+theorem checkCreationCoordinates_mismatchedLength (l : Nat) :
+    checkCreationCoordinates mismatchedLengthConstructorProgram l = none :=
+  rfl
+
 end CreationArtifact
+
+/-- Public alias for the creation coordinates certificate. -/
+abbrev CreationCoordinatesCertificate := CreationArtifact.CreationCoordinatesCertificate
+
+/-- Public alias for the creation coordinates checker. -/
+abbrev checkCreationCoordinates := CreationArtifact.checkCreationCoordinates
+
 end Blanc

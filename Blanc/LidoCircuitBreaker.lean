@@ -2,6 +2,7 @@ import Blanc.CycleWriteFree
 import Blanc.LidoCircuitBreakerCore
 import Blanc.LinearDispatch
 import Blanc.SourceSiteCount
+import Blanc.SymbolicProgram
 
 /-!
 Production Lido CircuitBreaker v1.0.0 runtime.
@@ -85,30 +86,84 @@ def circuitBreakerInitializedEvent : B256 :=
 def pauseForSelector : B256 := selector "pauseFor" [.uint256]
 def isPausedSelector : B256 := selector "isPaused" []
 
-/-! ## Stable auxiliary coordinates -/
+/-! ## Stable auxiliary coordinates and symbolic labels -/
 
-def fallbackSlot : Nat := 1
-def pausableZeroErrorSlot : Nat := 2
-def senderNotAdminErrorSlot : Nat := 3
-def senderNotPauserErrorSlot : Nat := 4
-def pauseBelowMinErrorSlot : Nat := 5
-def pauseAboveMaxErrorSlot : Nat := 6
-def heartbeatBelowMinErrorSlot : Nat := 7
-def heartbeatAboveMaxErrorSlot : Nat := 8
-def heartbeatExpiredErrorSlot : Nat := 9
-def pauseFailedErrorSlot : Nat := 10
-def reentrantCallErrorSlot : Nat := 11
-def emptyRevertSlot : Nat := 12
-def bubbleRevertSlot : Nat := 13
-def setPauserSlot : Nat := 14
-def appendTargetSlot : Nat := 15
-def afterOldPauserSlot : Nat := 16
-def removeTargetSlot : Nat := 17
-def finishSetPauserSlot : Nat := 18
-def registerAfterSetSlot : Nat := 19
-def pauseAfterSetSlot : Nat := 20
-def enumLoopSlot : Nat := 21
-def arithmeticPanicSlot : Nat := 22
+/-- Symbolic labels for the CircuitBreaker runtime.
+Root maps to index 0, and auxiliary constructors map to indices 1 through 22. -/
+inductive Label : Type
+  | root
+  | fallback
+  | pausableZeroError
+  | senderNotAdminError
+  | senderNotPauserError
+  | pauseBelowMinError
+  | pauseAboveMaxError
+  | heartbeatBelowMinError
+  | heartbeatAboveMaxError
+  | heartbeatExpiredError
+  | pauseFailedError
+  | reentrantCallError
+  | emptyRevert
+  | bubbleRevert
+  | setPauser
+  | appendTarget
+  | afterOldPauser
+  | removeTarget
+  | finishSetPauser
+  | registerAfterSet
+  | pauseAfterSet
+  | enumLoop
+  | arithmeticPanic
+  deriving DecidableEq, Repr
+
+/-- Positional auxiliary slot index corresponding to each label. -/
+def slotOf : Label → Nat
+  | .root => 0
+  | .fallback => 1
+  | .pausableZeroError => 2
+  | .senderNotAdminError => 3
+  | .senderNotPauserError => 4
+  | .pauseBelowMinError => 5
+  | .pauseAboveMaxError => 6
+  | .heartbeatBelowMinError => 7
+  | .heartbeatAboveMaxError => 8
+  | .heartbeatExpiredError => 9
+  | .pauseFailedError => 10
+  | .reentrantCallError => 11
+  | .emptyRevert => 12
+  | .bubbleRevert => 13
+  | .setPauser => 14
+  | .appendTarget => 15
+  | .afterOldPauser => 16
+  | .removeTarget => 17
+  | .finishSetPauser => 18
+  | .registerAfterSet => 19
+  | .pauseAfterSet => 20
+  | .enumLoop => 21
+  | .arithmeticPanic => 22
+
+def fallbackSlot : Nat := slotOf .fallback
+def pausableZeroErrorSlot : Nat := slotOf .pausableZeroError
+def senderNotAdminErrorSlot : Nat := slotOf .senderNotAdminError
+def senderNotPauserErrorSlot : Nat := slotOf .senderNotPauserError
+def pauseBelowMinErrorSlot : Nat := slotOf .pauseBelowMinError
+def pauseAboveMaxErrorSlot : Nat := slotOf .pauseAboveMaxError
+def heartbeatBelowMinErrorSlot : Nat := slotOf .heartbeatBelowMinError
+def heartbeatAboveMaxErrorSlot : Nat := slotOf .heartbeatAboveMaxError
+def heartbeatExpiredErrorSlot : Nat := slotOf .heartbeatExpiredError
+def pauseFailedErrorSlot : Nat := slotOf .pauseFailedError
+def reentrantCallErrorSlot : Nat := slotOf .reentrantCallError
+def emptyRevertSlot : Nat := slotOf .emptyRevert
+def bubbleRevertSlot : Nat := slotOf .bubbleRevert
+def setPauserSlot : Nat := slotOf .setPauser
+def appendTargetSlot : Nat := slotOf .appendTarget
+def afterOldPauserSlot : Nat := slotOf .afterOldPauser
+def removeTargetSlot : Nat := slotOf .removeTarget
+def finishSetPauserSlot : Nat := slotOf .finishSetPauser
+def registerAfterSetSlot : Nat := slotOf .registerAfterSet
+def pauseAfterSetSlot : Nat := slotOf .pauseAfterSet
+def enumLoopSlot : Nat := slotOf .enumLoop
+def arithmeticPanicSlot : Nat := slotOf .arithmeticPanic
 
 /-! ## Small endpoint helpers -/
 
@@ -435,6 +490,13 @@ def runtimeMain (dp : DeployParams) : Func :=
   callvalue ::: pushB256 4 ::: calldatasize ::: lt ::: Ninst.or :::
     (Func.revert <?> (fsig +++ hybridDispatchWith fallbackSlot (funcs dp)))
 
+def panicData : Bytes :=
+  (signatureHash "Panic" [.uint256]).toBytes.take 4 ++
+    (Nat.toB256 0x11).toBytes
+
+def arithmeticPanic : Func :=
+  Func.revertData panicData
+
 def aux : List Func :=
   [ Func.revert,
     pausableZeroError,
@@ -457,15 +519,359 @@ def aux : List Func :=
     registerAfterSet,
     pauseAfterSet,
     enumLoop,
-    Func.revertData
-      ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
-        (Nat.toB256 0x11).toBytes) ]
+    arithmeticPanic ]
 
-def runtime (dp : DeployParams) : Prog :=
+/-! ## Symbolic owner
+
+The following symbolic representations author the CircuitBreaker runtime
+using `SymbolicFunc Label` and label-based calls.
+-/
+
+local infixr:65 " <??> " => λ (f g : SymbolicFunc Label) => SymbolicFunc.branch g f
+local infixr:65 " :::: " => SymbolicFunc.next
+local infixr:65 " ++++ " => SymbolicFunc.prepend
+
+def symbolicReturnWord : SymbolicFunc Label :=
+  mstoreAt 0 ++++ pushList [32, 0] ++++ .last .return_
+
+def symbolicReturnDeployWord (w : B256) : SymbolicFunc Label :=
+  pushDeployWord w :::: symbolicReturnWord
+
+def symbolicOnlyAdmin (dp : DeployParams) (body : SymbolicFunc Label) : SymbolicFunc Label :=
+  caller :::: pushDeployWord dp.admin :::: eq ::::
+  (body <??> (.call .senderNotAdminError))
+
+def symbolicCanonicalAddressArg (k : B256) (body : SymbolicFunc Label) : SymbolicFunc Label :=
+  arg k ++++ checkNonAddress ++++
+  ((.call .emptyRevert) <??> body)
+
+def symbolicRequireStaticArgs (words : Nat) (body : SymbolicFunc Label) : SymbolicFunc Label :=
+  pushB256 (Nat.toB256 (4 + 32 * words)) :::: calldatasize :::: lt ::::
+  (Func.liftCallFree Label Func.revert <??> body)
+
+def symbolicCheckedHeartbeatExpiry (body : SymbolicFunc Label) : SymbolicFunc Label :=
+  timestamp :::: pushB256 heartbeatIntervalSlot :::: sload :::: add ::::
+  dup 0 :::: timestamp :::: swap 0 :::: lt ::::
+  ((.call .arithmeticPanic) <??> body)
+
+def symbolicAdmin (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicReturnDeployWord dp.admin
+
+def symbolicMinPauseDuration (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicReturnDeployWord dp.minPauseDuration
+
+def symbolicMaxPauseDuration (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicReturnDeployWord dp.maxPauseDuration
+
+def symbolicMinHeartbeatInterval (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicReturnDeployWord dp.minHeartbeatInterval
+
+def symbolicMaxHeartbeatInterval (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicReturnDeployWord dp.maxHeartbeatInterval
+
+def symbolicPauseDuration : SymbolicFunc Label :=
+  pushB256 pauseDurationSlot :::: sload :::: symbolicReturnWord
+
+def symbolicHeartbeatInterval : SymbolicFunc Label :=
+  pushB256 heartbeatIntervalSlot :::: sload :::: symbolicReturnWord
+
+def symbolicHeartbeatExpiry : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicCanonicalAddressArg 0 <|
+    arg 0 ++++ tagTop expiryRegion ++++ sload :::: symbolicReturnWord
+
+def symbolicGetPauser : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicCanonicalAddressArg 0 <|
+    arg 0 ++++ tagTop assignmentRegion ++++ sload :::: symbolicReturnWord
+
+def symbolicGetPausableCount : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicCanonicalAddressArg 0 <|
+    arg 0 ++++ tagTop countRegion ++++ sload :::: symbolicReturnWord
+
+def symbolicIsPauserLive : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicCanonicalAddressArg 0 <|
+    arg 0 ++++ tagTop expiryRegion ++++ sload :::: timestamp :::: lt :::: symbolicReturnWord
+
+def symbolicEnumLoop : SymbolicFunc Label :=
+  pushB256 32 :::: mload :::: dup 1 :::: lt ::::
+  (dup 0 :::: pushB256 1 :::: add :::: tagTop arrayRegion ++++ sload ::::
+    dup 1 :::: pushB256 32 :::: mul :::: pushB256 64 :::: add :::: mstore ::::
+    pushB256 1 :::: add ::::
+    .call .enumLoop) <??>
+  (pop :::: pushB256 32 :::: mload :::: pushB256 32 :::: mul ::::
+    pushB256 64 :::: add :::: pushB256 0 :::: .last .return_)
+
+def symbolicGetPausables : SymbolicFunc Label :=
+  pushB256 32 :::: mstoreAt 0 ++++
+  pushB256 arrayLengthSlot :::: sload :::: mstoreAt 1 ++++
+  pushB256 0 ::::
+  .call .enumLoop
+
+def symbolicSetPauseDuration (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicOnlyAdmin dp <|
+    pushDeployWord dp.minPauseDuration :::: arg 0 ++++ lt ::::
+    ((.call .pauseBelowMinError) <??>
+      (pushDeployWord dp.maxPauseDuration :::: arg 0 ++++ gt ::::
+        ((.call .pauseAboveMaxError) <??>
+          (pushB256 pauseDurationSlot :::: sload :::: mstoreAt 0 ++++
+            arg 0 ++++ mstoreAt 1 ++++
+            pushB256 pauseDurationUpdatedEvent :::: logWith 0 0 2 ++++
+            arg 0 ++++ pushB256 pauseDurationSlot :::: sstore :::: .last .stop))))
+
+def symbolicSetHeartbeatInterval (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicOnlyAdmin dp <|
+    pushDeployWord dp.minHeartbeatInterval :::: arg 0 ++++ lt ::::
+    ((.call .heartbeatBelowMinError) <??>
+      (pushDeployWord dp.maxHeartbeatInterval :::: arg 0 ++++ gt ::::
+        ((.call .heartbeatAboveMaxError) <??>
+          (pushB256 heartbeatIntervalSlot :::: sload :::: mstoreAt 0 ++++
+            arg 0 ++++ mstoreAt 1 ++++
+            pushB256 heartbeatIntervalUpdatedEvent :::: logWith 0 0 2 ++++
+            arg 0 ++++ pushB256 heartbeatIntervalSlot :::: sstore :::: .last .stop))))
+
+def symbolicAppendTarget : SymbolicFunc Label :=
+  pushB256 arrayLengthSlot :::: sload :::: pushB256 1 :::: add ::::
+  dup 0 :::: mstoreAt arrayLengthWord ++++
+  loadWord targetWord ++++ loadWord arrayLengthWord ++++ tagTop arrayRegion ++++
+  sstore ::::
+  loadWord arrayLengthWord ++++ targetIndexKey ++++ sstore ::::
+  loadWord arrayLengthWord ++++ pushB256 arrayLengthSlot :::: sstore ::::
+  .call .afterOldPauser
+
+def symbolicRemoveTarget : SymbolicFunc Label :=
+  targetIndexKey ++++ sload :::: mstoreAt removedIndexWord ++++
+  pushB256 arrayLengthSlot :::: sload :::: mstoreAt arrayLengthWord ++++
+  loadWord arrayLengthWord ++++ tagTop arrayRegion ++++ sload ::::
+  mstoreAt lastTargetWord ++++
+  loadWord lastTargetWord ++++ loadWord removedIndexWord ++++ tagTop arrayRegion ++++
+  sstore ::::
+  loadWord removedIndexWord ++++ lastTargetIndexKey ++++ sstore ::::
+  pushB256 0 :::: loadWord arrayLengthWord ++++ tagTop arrayRegion ++++ sstore ::::
+  loadWord arrayLengthWord ++++ pushB256 1 :::: swap 0 :::: sub ::::
+  pushB256 arrayLengthSlot :::: sstore ::::
+  pushB256 0 :::: targetIndexKey ++++ sstore ::::
+  .call .finishSetPauser
+
+def symbolicSetPauserKernel : SymbolicFunc Label :=
+  loadWord targetWord ++++ iszero ::::
+  ((.call .pausableZeroError) <??>
+    (targetKey ++++ sload :::: dup 0 :::: mstoreAt previousPauserWord ++++
+      loadWord newPauserWord ++++ targetKey ++++ sstore ::::
+      iszero ::::
+      ((.call .appendTarget) <??>
+        (previousCountKey ++++ sload :::: pushB256 1 :::: swap 0 :::: sub ::::
+          previousCountKey ++++ sstore :::: .call .afterOldPauser))))
+
+def symbolicAfterOldPauser : SymbolicFunc Label :=
+  loadWord newPauserWord ++++ iszero ::::
+  ((.call .removeTarget) <??>
+    (newCountKey ++++ sload :::: pushB256 1 :::: add ::::
+      newCountKey ++++ sstore :::: .call .finishSetPauser))
+
+def symbolicFinishSetPauser : SymbolicFunc Label :=
+  loadWord newPauserWord ++++ loadWord previousPauserWord ++++
+  loadWord targetWord ++++ pushB256 pauserSetEvent ::::
+  logWith 3 0 0 ++++
+  loadWord continuationWord ++++ iszero ::::
+  ((.call .registerAfterSet) <??> (.call .pauseAfterSet))
+
+def symbolicRegisterPauser (dp : DeployParams) : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 2 <| symbolicCanonicalAddressArg 0 <| symbolicCanonicalAddressArg 1 <|
+    symbolicOnlyAdmin dp <|
+      arg 0 ++++ mstoreAt targetWord ++++
+      arg 1 ++++ mstoreAt newPauserWord ++++
+      pushB256 0 :::: mstoreAt previousPauserWord ++++
+      pushB256 0 :::: mstoreAt continuationWord ++++
+      .call .setPauser
+
+def symbolicRegisterAfterSet : SymbolicFunc Label :=
+  loadWord previousPauserWord ++++ iszero ::::
+  (loadWord newPauserWord ++++ iszero ::::
+    (.last .stop <??>
+      (symbolicCheckedHeartbeatExpiry <|
+        dup 0 :::: mstoreAt 0 ++++
+        loadWord newPauserWord ++++ tagTop expiryRegion ++++ sstore ::::
+        loadWord newPauserWord ++++ pushB256 heartbeatUpdatedEvent ::::
+        logWith 1 0 1 ++++ .last .stop))) <??>
+  (previousCountKey ++++ sload :::: iszero ::::
+    (pushB256 0 :::: loadWord previousPauserWord ++++ tagTop expiryRegion ++++
+      sstore :::: pushB256 0 :::: mstoreAt 0 ++++
+      loadWord previousPauserWord ++++ pushB256 heartbeatUpdatedEvent ::::
+      logWith 1 0 1 ++++
+      loadWord newPauserWord ++++ iszero ::::
+      (.last .stop <??>
+        (symbolicCheckedHeartbeatExpiry <|
+          dup 0 :::: mstoreAt 0 ++++
+          loadWord newPauserWord ++++ tagTop expiryRegion ++++ sstore ::::
+          loadWord newPauserWord ++++ pushB256 heartbeatUpdatedEvent ::::
+          logWith 1 0 1 ++++ .last .stop))) <??>
+    (loadWord newPauserWord ++++ iszero ::::
+      (.last .stop <??>
+        (symbolicCheckedHeartbeatExpiry <|
+          dup 0 :::: mstoreAt 0 ++++
+          loadWord newPauserWord ++++ tagTop expiryRegion ++++ sstore ::::
+          loadWord newPauserWord ++++ pushB256 heartbeatUpdatedEvent ::::
+          logWith 1 0 1 ++++ .last .stop))))
+
+def symbolicHeartbeat : SymbolicFunc Label :=
+  caller :::: tagTop countRegion ++++ sload :::: iszero ::::
+  ((.call .senderNotPauserError) <??>
+    (caller :::: tagTop expiryRegion ++++ sload :::: timestamp :::: lt ::::
+      ((symbolicCheckedHeartbeatExpiry <|
+        storeHeartbeatExpiryFromStack ++++ .last .stop) <??>
+        (.call .heartbeatExpiredError))))
+
+def symbolicPauseExpiryFinish : SymbolicFunc Label :=
+  storeHeartbeatExpiryFromStack ++++
+  pushB256 0 :::: pushB256 lockKey :::: tstore :::: .last .stop
+
+def symbolicPauseSuccess : SymbolicFunc Label :=
+  loadWord durationWord ++++ mstoreAt 0 ++++
+  caller :::: loadWord targetWord ++++
+  pushB256 pauseTriggeredEvent :::: logWith 2 0 1 ++++
+  caller :::: tagTop countRegion ++++ sload :::: iszero ::::
+  ((pushB256 0 :::: symbolicPauseExpiryFinish) <??>
+    (symbolicCheckedHeartbeatExpiry <|
+      symbolicPauseExpiryFinish))
+
+def symbolicDecodePausedResult : SymbolicFunc Label :=
+  returnDataShorterThan 32 ++++
+  ((.call .emptyRevert) <??>
+    (loadWord 0 ++++
+      dup 0 :::: iszero ::::
+      ((.call .pauseFailedError) <??>
+        (pushB256 1 :::: eq ::::
+          (symbolicPauseSuccess <??> (.call .emptyRevert))))))
+
+def symbolicPauseAfterSet : SymbolicFunc Label :=
+  loadWord targetWord ++++ dup 0 :::: extcodesize :::: iszero ::::
+  ((.call .emptyRevert) <??>
+    (pop ::::
+      pushB256 pauseForSelector :::: mstoreAt 8 ++++
+      loadWord durationWord ++++ mstoreAt 9 ++++
+      pushList [0, 0, 36, 0x11c, 0] ++++ loadWord targetWord ++++ gas :::: Ninst.call ::::
+      iszero ::::
+      ((.call .bubbleRevert) <??>
+        (pushB256 isPausedSelector :::: mstoreAt 8 ++++
+          pushList [32, 0, 4, 0x11c] ++++ loadWord targetWord ++++ gas :::: staticcall ::::
+          iszero ::::
+          ((.call .bubbleRevert) <??>
+            symbolicDecodePausedResult)))))
+
+def symbolicPause : SymbolicFunc Label :=
+  symbolicRequireStaticArgs 1 <| symbolicCanonicalAddressArg 0 <|
+    pushB256 lockKey :::: tload :::: iszero ::::
+    ((pushB256 1 :::: pushB256 lockKey :::: tstore ::::
+      arg 0 ++++ tagTop assignmentRegion ++++ sload :::: caller :::: eq ::::
+      ((caller :::: tagTop expiryRegion ++++ sload :::: timestamp :::: lt ::::
+        ((pushB256 pauseDurationSlot :::: sload :::: mstoreAt durationWord ++++
+          arg 0 ++++ mstoreAt targetWord ++++
+          pushB256 0 :::: mstoreAt newPauserWord ++++
+          pushB256 0 :::: mstoreAt previousPauserWord ++++
+          pushB256 1 :::: mstoreAt continuationWord ++++
+          .call .setPauser) <??> (.call .heartbeatExpiredError))) <??>
+        (.call .senderNotPauserError))) <??>
+      (.call .reentrantCallError))
+
+def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Label) :=
+  [ (selector "pauseDuration" [], symbolicPauseDuration),
+    (selector "MAX_PAUSE_DURATION" [], symbolicMaxPauseDuration dp),
+    (selector "ADMIN" [], symbolicAdmin dp),
+    (selector "registerPauser" [.address, .address],
+      symbolicRegisterPauser dp),
+    (selector "heartbeat" [], symbolicHeartbeat),
+    (selector "getPauser" [.address], symbolicGetPauser),
+    (selector "getPausables" [], symbolicGetPausables),
+    (selector "heartbeatInterval" [], symbolicHeartbeatInterval),
+    (selector "setHeartbeatInterval" [.uint256],
+      symbolicSetHeartbeatInterval dp),
+    (selector "pause" [.address], symbolicPause),
+    (selector "MIN_PAUSE_DURATION" [], symbolicMinPauseDuration dp),
+    (selector "MAX_HEARTBEAT_INTERVAL" [],
+      symbolicMaxHeartbeatInterval dp),
+    (selector "getPausableCount" [.address], symbolicGetPausableCount),
+    (selector "MIN_HEARTBEAT_INTERVAL" [],
+      symbolicMinHeartbeatInterval dp),
+    (selector "heartbeatExpiry" [.address], symbolicHeartbeatExpiry),
+    (selector "setPauseDuration" [.uint256],
+      symbolicSetPauseDuration dp),
+    (selector "isPauserLive" [.address], symbolicIsPauserLive) ]
+
+def symbolicLinearDispatchWith (fb : Label) : List (B256 × SymbolicFunc Label) → SymbolicFunc Label
+  | [] => .call fb
+  | [(word, body)] =>
+      pushB256 word :::: eq :::: (body <??> .call fb)
+  | (word, body) :: rest =>
+      dup 0 :::: pushB256 word :::: eq ::::
+        ((pop :::: body) <??> symbolicLinearDispatchWith fb rest)
+
+def symbolicSplitDispatch (pivot : B256) (left right : SymbolicFunc Label) : SymbolicFunc Label :=
+  dup 0 :::: pushB256 pivot :::: gt :::: (left <??> right)
+
+def symbolicFirstSelector (entries : List (B256 × SymbolicFunc Label)) : B256 :=
+  entries.head?.map Prod.fst |>.getD 0
+
+def symbolicHybridDispatchWith (k : Label)
+    (entries : List (B256 × SymbolicFunc Label)) : SymbolicFunc Label :=
+  let first := entries.take 5
+  let second := (entries.drop 5).take 4
+  let third := (entries.drop 9).take 4
+  let fourth := entries.drop 13
+  let left := symbolicSplitDispatch (symbolicFirstSelector second)
+    (symbolicLinearDispatchWith k first) (symbolicLinearDispatchWith k second)
+  let right := symbolicSplitDispatch (symbolicFirstSelector fourth)
+    (symbolicLinearDispatchWith k third) (symbolicLinearDispatchWith k fourth)
+  symbolicSplitDispatch (symbolicFirstSelector third) left right
+
+def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Label :=
+  callvalue :::: pushB256 4 :::: calldatasize :::: lt :::: Ninst.or ::::
+    (Func.liftCallFree Label Func.revert <??> (fsig ++++ symbolicHybridDispatchWith .fallback (symbolicFuncs dp)))
+def symbolicFallback : SymbolicFunc Label := Func.liftCallFree Label Func.revert
+def symbolicPausableZeroError : SymbolicFunc Label := Func.liftCallFree Label pausableZeroError
+def symbolicSenderNotAdminError : SymbolicFunc Label := Func.liftCallFree Label senderNotAdminError
+def symbolicSenderNotPauserError : SymbolicFunc Label := Func.liftCallFree Label senderNotPauserError
+def symbolicPauseBelowMinError : SymbolicFunc Label := Func.liftCallFree Label pauseBelowMinError
+def symbolicPauseAboveMaxError : SymbolicFunc Label := Func.liftCallFree Label pauseAboveMaxError
+def symbolicHeartbeatBelowMinError : SymbolicFunc Label := Func.liftCallFree Label heartbeatBelowMinError
+def symbolicHeartbeatAboveMaxError : SymbolicFunc Label := Func.liftCallFree Label heartbeatAboveMaxError
+def symbolicHeartbeatExpiredError : SymbolicFunc Label := Func.liftCallFree Label heartbeatExpiredError
+def symbolicPauseFailedError : SymbolicFunc Label := Func.liftCallFree Label pauseFailedError
+def symbolicReentrantCallError : SymbolicFunc Label := Func.liftCallFree Label reentrantCallError
+def symbolicEmptyRevert : SymbolicFunc Label := Func.liftCallFree Label Func.revert
+def symbolicBubbleRevert : SymbolicFunc Label := Func.liftCallFree Label Func.revertReturnData
+def symbolicArithmeticPanic : SymbolicFunc Label :=
+  Func.liftCallFree Label arithmeticPanic (by decide +kernel)
+
+def symbolicAux : List (Label × SymbolicFunc Label) :=
+  [ (.fallback, symbolicFallback),
+    (.pausableZeroError, symbolicPausableZeroError),
+    (.senderNotAdminError, symbolicSenderNotAdminError),
+    (.senderNotPauserError, symbolicSenderNotPauserError),
+    (.pauseBelowMinError, symbolicPauseBelowMinError),
+    (.pauseAboveMaxError, symbolicPauseAboveMaxError),
+    (.heartbeatBelowMinError, symbolicHeartbeatBelowMinError),
+    (.heartbeatAboveMaxError, symbolicHeartbeatAboveMaxError),
+    (.heartbeatExpiredError, symbolicHeartbeatExpiredError),
+    (.pauseFailedError, symbolicPauseFailedError),
+    (.reentrantCallError, symbolicReentrantCallError),
+    (.emptyRevert, symbolicEmptyRevert),
+    (.bubbleRevert, symbolicBubbleRevert),
+    (.setPauser, symbolicSetPauserKernel),
+    (.appendTarget, symbolicAppendTarget),
+    (.afterOldPauser, symbolicAfterOldPauser),
+    (.removeTarget, symbolicRemoveTarget),
+    (.finishSetPauser, symbolicFinishSetPauser),
+    (.registerAfterSet, symbolicRegisterAfterSet),
+    (.pauseAfterSet, symbolicPauseAfterSet),
+    (.enumLoop, symbolicEnumLoop),
+    (.arithmeticPanic, symbolicArithmeticPanic) ]
+
+/-- Symbolic CircuitBreaker program parameterized by deployment words. -/
+def symbolicRuntime (dp : DeployParams) : SymbolicProg Label :=
+  ⟨.root, symbolicRuntimeMain dp, symbolicAux⟩
+
+/-- Frozen pre-migration numeric runtime witness. -/
+def legacyRuntime (dp : DeployParams) : Prog :=
   ⟨runtimeMain dp, aux⟩
-
-def runtimeCode (dp : DeployParams) : Bytes :=
-  (Prog.compile (runtime dp)).getD []
 
 /-! ## Artifact shape and source inventories -/
 
@@ -614,20 +1020,93 @@ private theorem runtimeMain_compileShape_eq (dp : DeployParams) :
       simp [Func.compileShape, hp]
 
 /-- All deployment parameters occupy fixed-width PUSH32 instructions. -/
-theorem runtime_compileShape_eq_zero (dp : DeployParams) :
-    (runtime dp).compileShape =
-      (runtime ⟨0, 0, 0, 0, 0⟩).compileShape := by
-  simp [runtime, Prog.compileShape, runtimeMain_compileShape_eq dp]
+theorem legacyRuntime_compileShape_eq_zero (dp : DeployParams) :
+    (legacyRuntime dp).compileShape =
+      (legacyRuntime ⟨0, 0, 0, 0, 0⟩).compileShape := by
+  simp [legacyRuntime, Prog.compileShape, runtimeMain_compileShape_eq dp]
 
-private theorem runtimeCompilesZero :
-    Prog.compiles (runtime ⟨0, 0, 0, 0, 0⟩) = true := by
+private theorem legacyRuntimeCompilesZero :
+    Prog.compiles (legacyRuntime ⟨0, 0, 0, 0, 0⟩) = true := by
   decide +kernel
 
 /-- Fixed-width deployment parameters cannot change compiler success. -/
+theorem legacyRuntime_compiles (dp : DeployParams) :
+    Prog.compiles (legacyRuntime dp) = true := by
+  rw [Prog.compiles_eq_of_compileShape (legacyRuntime_compileShape_eq_zero dp)]
+  exact legacyRuntimeCompilesZero
+
+theorem findLabel?_symbolicRuntime (dp : DeployParams) (target : Label) :
+    (symbolicRuntime dp).findLabel? target = some (slotOf target) := by
+  cases target <;> rfl
+
+theorem erase_symbolicAux :
+    symbolicAux.map (fun (_, body) => body.erase slotOf) = aux := by
+  dsimp [symbolicAux, aux,
+    symbolicFallback, symbolicPausableZeroError, symbolicSenderNotAdminError,
+    symbolicSenderNotPauserError, symbolicPauseBelowMinError, symbolicPauseAboveMaxError,
+    symbolicHeartbeatBelowMinError, symbolicHeartbeatAboveMaxError, symbolicHeartbeatExpiredError,
+    symbolicPauseFailedError, symbolicReentrantCallError, symbolicEmptyRevert,
+    symbolicBubbleRevert, symbolicArithmeticPanic]
+  simp only [Func.erase_liftCallFree]
+  rfl
+
+theorem erase_symbolicRuntimeMain (dp : DeployParams) :
+    (symbolicRuntimeMain dp).erase slotOf = runtimeMain dp :=
+  rfl
+
+theorem erase_symbolicRuntime (dp : DeployParams) :
+    (symbolicRuntime dp).erase slotOf = legacyRuntime dp :=
+  congrArg₂ Prog.mk (erase_symbolicRuntimeMain dp) erase_symbolicAux
+
+/-- Resolution of the symbolic CircuitBreaker program yields the legacy runtime. -/
+theorem resolve_symbolicRuntime_eq (dp : DeployParams) :
+    resolve (symbolicRuntime dp) = .ok (legacyRuntime dp) := by
+  have h_res := resolve_eq_erase (symbolicRuntime dp) slotOf rfl
+    (fun target _ => findLabel?_symbolicRuntime dp target)
+    (fun lbl body _ target _ => findLabel?_symbolicRuntime dp target)
+  rw [erase_symbolicRuntime dp] at h_res
+  exact h_res
+
+/-- Checked link certificate for the symbolic CircuitBreaker runtime. -/
+def symbolicLinkCert (dp : DeployParams) : LinkCertificate (symbolicRuntime dp) where
+  resolved := legacyRuntime dp
+  resolve_eq := resolve_symbolicRuntime_eq dp
+  compiles := legacyRuntime_compiles dp
+
+/-- Production runtime program obtained from the checked symbolic link certificate. -/
+def runtime (dp : DeployParams) : Prog :=
+  (symbolicLinkCert dp).resolved
+
+theorem runtime_eq_legacyRuntime (dp : DeployParams) :
+    runtime dp = legacyRuntime dp :=
+  rfl
+
+/-- Exact resolution theorem relating the symbolic runtime to the production runtime. -/
+theorem resolve_symbolicRuntime_eq_runtime (dp : DeployParams) :
+    resolve (symbolicRuntime dp) = .ok (runtime dp) :=
+  resolve_symbolicRuntime_eq dp
+
+/-- All deployment parameters occupy fixed-width PUSH32 instructions. -/
+theorem runtime_compileShape_eq_zero (dp : DeployParams) :
+    (runtime dp).compileShape =
+      (runtime ⟨0, 0, 0, 0, 0⟩).compileShape :=
+  legacyRuntime_compileShape_eq_zero dp
+
+/-- Fixed-width deployment parameters cannot change compiler success. -/
 theorem runtime_compiles (dp : DeployParams) :
-    Prog.compiles (runtime dp) = true := by
-  rw [Prog.compiles_eq_of_compileShape (runtime_compileShape_eq_zero dp)]
-  exact runtimeCompilesZero
+    Prog.compiles (runtime dp) = true :=
+  (symbolicLinkCert dp).compiles
+
+def runtimeCode (dp : DeployParams) : Bytes :=
+  (Prog.compile (runtime dp)).getD []
+
+theorem symbolicRuntime_compile_eq (dp : DeployParams) :
+    Prog.compile (runtime dp) = some (runtimeCode dp) :=
+  (symbolicLinkCert dp).compile_eq
+
+theorem symbolicRuntime_bytes_eq (dp : DeployParams) :
+    (symbolicLinkCert dp).bytes = runtimeCode dp :=
+  rfl
 
 def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun
@@ -725,4 +1204,8 @@ theorem enumeration_writing_mutant_rejected :
 
 
 end LidoCircuitBreaker
+
+/-- Public alias for the CircuitBreaker symbolic label type. -/
+abbrev CircuitBreaker.Label := LidoCircuitBreaker.Label
+
 end Blanc

@@ -554,8 +554,180 @@ def aux (dp : DeployParams) : List Func :=
   baseAux ++ Trigger.rebasedLocalAuxWithRoleFailure triggerAuxDelta dp
     triggerRoleFailure
 
+def toBaseSymbolic : Func → SymbolicFunc Trigger.CompositeLabel
+  | .branch left right => .branch (toBaseSymbolic left) (toBaseSymbolic right)
+  | .last inst => .last inst
+  | .next inst rest => .next inst (toBaseSymbolic rest)
+  | .call target => .call (.base target)
+
+theorem toBaseSymbolic_erase (f : Func) :
+    (toBaseSymbolic f).erase (Trigger.compositeSlotOf 27) = f := by
+  induction f with
+  | last o => rfl
+  | next i rest ih =>
+      simp only [toBaseSymbolic, SymbolicFunc.erase, ih]
+  | branch left right ihl ihr =>
+      simp only [toBaseSymbolic, SymbolicFunc.erase, ihl, ihr]
+  | call target =>
+      rfl
+
+def symbolicBaseAux : List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
+  [ (.base 1, toBaseSymbolic Func.revert),
+    (.base 2, toBaseSymbolic (runtimeError "AccessControlUnauthorizedAccount")),
+    (.base 3, toBaseSymbolic (runtimeError "AdminCannotBeZero")),
+    (.base 4, toBaseSymbolic (runtimeError "ZeroArgument" [.dynBytes])),
+    (.base 5, toBaseSymbolic (runtimeError "PausedExpected")),
+    (.base 6, toBaseSymbolic (runtimeError "ResumedExpected")),
+    (.base 7, toBaseSymbolic (runtimeError "ZeroPauseDuration")),
+    (.base 8, toBaseSymbolic (runtimeError "PauseUntilMustBeInFuture")),
+    (.base 9, toBaseSymbolic (Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++ (Nat.toB256 0x11).toBytes))),
+    (.base 10, toBaseSymbolic (runtimeError "LimitExceeded")),
+    (.base 11, toBaseSymbolic (runtimeError "InsufficientFee" [.uint256, .uint256])),
+    (.base 12, toBaseSymbolic (runtimeError "FeeRefundFailed")),
+    (.base 13, toBaseSymbolic Func.revert),
+    (.base 14, toBaseSymbolic roleMemberLoop),
+    (.base 15, toBaseSymbolic roleCountLoop),
+    (.base 16, toBaseSymbolic Func.revert),
+    (.base 17, toBaseSymbolic (runtimeError "TooLargeMaxExitRequestsLimit")),
+    (.base 18, toBaseSymbolic (runtimeError "TooLargeFrameDuration")),
+    (.base 19, toBaseSymbolic (runtimeError "TooLargeExitsPerFrame")),
+    (.base 20, toBaseSymbolic (runtimeError "ZeroFrameDuration")),
+    (.base 21, toBaseSymbolic limitCurrentCompute),
+    (.base 22, toBaseSymbolic limitCurrentContinue),
+    (.base 23, toBaseSymbolic setLimitAfterCurrent),
+    (.base 24, toBaseSymbolic setLimitWrite),
+    (.base 25, toBaseSymbolic consumeExitLimit),
+    (.base 26, toBaseSymbolic consumeAfterCurrent),
+    (.base 27, toBaseSymbolic (([pushB256 Trigger.exitLimitExceededSelector] ++ mstoreAt 0 ++
+       mloadWord 14 ++ mstoreAt 1 ++ mloadWord 8 ++ mstoreAt 2 ++
+       [pushB256 68, pushB256 28]) +++ .last .revert)) ]
+
+theorem erase_symbolicBaseAux :
+    symbolicBaseAux.map (fun (_, body) => body.erase (Trigger.compositeSlotOf 27)) = baseAux := by
+  simp only [symbolicBaseAux, List.map_cons, List.map_nil, toBaseSymbolic_erase, baseAux]
+
+def symbolicTriggerAux (dp : DeployParams) :
+    List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
+  Trigger.symbolicLocalAuxWithRoleFailure dp triggerRoleFailure
+
+def symbolicAux (dp : DeployParams) :
+    List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
+  symbolicBaseAux ++ symbolicTriggerAux dp
+
+def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Trigger.CompositeLabel) :=
+  [ (selPauseFor, toBaseSymbolic (nonpayable pauseFor)),
+    (selIsPaused, toBaseSymbolic (nonpayable isPaused)),
+    (selTriggerFullWithdrawals, Trigger.toCompositeSymbolic (Trigger.triggerFullWithdrawals dp)),
+    (selPauseRole, toBaseSymbolic (nonpayable (constantWord pauseRole))),
+    (selResumeRole, toBaseSymbolic (nonpayable (constantWord resumeRole))),
+    (selAddFullWithdrawalRequestRole, toBaseSymbolic (nonpayable (constantWord addFullWithdrawalRequestRole))),
+    (selTwExitLimitManagerRole, toBaseSymbolic (nonpayable (constantWord twExitLimitManagerRole))),
+    (selTwrLimitPosition, toBaseSymbolic (nonpayable (constantWord twrLimitPosition))),
+    (selVersion, toBaseSymbolic (nonpayable (constantWord version))),
+    (selResume, toBaseSymbolic (nonpayable resume)),
+    (selPauseUntil, toBaseSymbolic (nonpayable pauseUntil)),
+    (selSetExitRequestLimit, toBaseSymbolic (nonpayable setExitRequestLimit)),
+    (selGetExitRequestLimitFullInfo, toBaseSymbolic (nonpayable getExitRequestLimitFullInfo)),
+    (selPauseInfinitely, toBaseSymbolic (nonpayable (constantWord pauseInfinitely))),
+    (selGetResumeSinceTimestamp, toBaseSymbolic (nonpayable getResumeSinceTimestamp)),
+    (selDefaultAdminRole, toBaseSymbolic (nonpayable (constantWord defaultAdminRole))),
+    (selSupportsInterface, toBaseSymbolic (nonpayable supportsInterface)),
+    (selHasRole, toBaseSymbolic (nonpayable hasRole)),
+    (selGetRoleAdmin, toBaseSymbolic (nonpayable getRoleAdmin)),
+    (selGrantRole, toBaseSymbolic (nonpayable grantRole)),
+    (selRevokeRole, toBaseSymbolic (nonpayable revokeRole)),
+    (selRenounceRole, toBaseSymbolic (nonpayable renounceRole)),
+    (selGetRoleMember, toBaseSymbolic (nonpayable getRoleMember)),
+    (selGetRoleMemberCount, toBaseSymbolic (nonpayable getRoleMemberCount)) ]
+
+def symbolicLinearDispatchWith (fb : Trigger.CompositeLabel) :
+    List (B256 × SymbolicFunc Trigger.CompositeLabel) → SymbolicFunc Trigger.CompositeLabel
+  | [] => .call fb
+  | [(word, body)] =>
+      SymbolicFunc.next (pushB256 word) <|
+      SymbolicFunc.next eq <|
+      SymbolicFunc.branch (.call fb) body
+  | (word, body) :: rest =>
+      SymbolicFunc.next (dup 0) <|
+      SymbolicFunc.next (pushB256 word) <|
+      SymbolicFunc.next eq <|
+      SymbolicFunc.branch
+        (symbolicLinearDispatchWith fb rest)
+        (SymbolicFunc.next pop body)
+
+theorem erase_symbolicLinearDispatchWith (fb : Nat) (entries : List (B256 × SymbolicFunc Trigger.CompositeLabel)) :
+    (symbolicLinearDispatchWith (.base fb) entries).erase (Trigger.compositeSlotOf 27) =
+      linearDispatchWith fb (entries.map (fun (s, f) => (s, f.erase (Trigger.compositeSlotOf 27)))) := by
+  induction entries with
+  | nil => rfl
+  | cons head tail ih =>
+    cases tail with
+    | nil =>
+      rcases head with ⟨word, body⟩
+      rfl
+    | cons next rest =>
+      rcases head with ⟨word, body⟩
+      simp only [symbolicLinearDispatchWith, linearDispatchWith, SymbolicFunc.erase,
+        List.map_cons, ih]
+
+local infixr:65 " ++++ " => SymbolicFunc.prepend
+
+def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Trigger.CompositeLabel :=
+  SymbolicFunc.next (pushB256 4) <|
+  SymbolicFunc.next calldatasize <|
+  SymbolicFunc.next lt <|
+  SymbolicFunc.branch
+    (fsig ++++ symbolicLinearDispatchWith (.base fallbackSlot) (symbolicFuncs dp))
+    (toBaseSymbolic Func.revert)
+
+def symbolicRuntime (dp : DeployParams) : SymbolicProg Trigger.CompositeLabel :=
+  ⟨.root, symbolicRuntimeMain dp, symbolicAux dp⟩
+
+theorem symbolicRuntime_findLabel_root (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? .root = some 0 :=
+  rfl
+
+theorem symbolicRuntime_findLabel_trigger (dp : DeployParams) (lbl : Trigger.TriggerLabel) :
+    (symbolicRuntime dp).findLabel? (.trigger lbl) = some (27 + Trigger.localSlotOf lbl) := by
+  cases lbl <;> rfl
+
+theorem symbolicRuntime_resolve_malformedAbi (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) = some 28 :=
+  rfl
+
+theorem symbolicRuntime_resolve_validateArrayLoop (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? (.trigger .validateArrayLoop) = some 39 :=
+  rfl
+
+theorem symbolicRuntime_resolve_afterNestedValidation (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? (.trigger .afterNestedValidation) = some 49 :=
+  rfl
+
+theorem symbolicRuntime_resolve_malformedAbi_off_by_one (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) ≠ some 29 := by
+  intro h
+  injection h with h_eq
+  revert h_eq
+  decide
+
+theorem symbolicRuntime_validateDefinitions (dp : DeployParams) :
+    (symbolicRuntime dp).validateDefinitions = .ok () :=
+  rfl
+
 def runtime (dp : DeployParams) : Prog :=
   ⟨runtimeMain dp, aux dp⟩
+
+theorem erase_symbolicFuncs (dp : DeployParams) :
+    (symbolicFuncs dp).map (fun (s, f) => (s, f.erase (Trigger.compositeSlotOf 27))) = funcs dp := by
+  simp only [symbolicFuncs, List.map_cons, List.map_nil, toBaseSymbolic_erase,
+    Trigger.erase_toCompositeSymbolic_trigger, funcs, triggerFullWithdrawals,
+    triggerAuxDelta]
+
+theorem erase_symbolicRuntimeMain (dp : DeployParams) :
+    (symbolicRuntimeMain dp).erase (Trigger.compositeSlotOf 27) = runtimeMain dp := by
+  simp only [symbolicRuntimeMain, SymbolicFunc.erase, SymbolicFunc.erase_prepend,
+    erase_symbolicLinearDispatchWith, erase_symbolicFuncs, toBaseSymbolic_erase,
+    runtimeMain, fallbackSlot]
 
 def runtimeCode (dp : DeployParams) : Bytes :=
   (Prog.compile (runtime dp)).getD []

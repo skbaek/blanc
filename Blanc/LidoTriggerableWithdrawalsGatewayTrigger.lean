@@ -1,4 +1,5 @@
 import Blanc.LidoTriggerableWithdrawalsGatewayCore
+import Blanc.SymbolicProgram
 
 /-!
 # Triggerable Withdrawals Gateway: `triggerFullWithdrawals`
@@ -54,31 +55,139 @@ namespace Trigger
 
 /-! ## Local auxiliary-table contract -/
 
+/-- Qualified label type for TWG Trigger auxiliary table entries. -/
+inductive TriggerLabel
+  | malformedAbi
+  | zeroMsgValue
+  | zeroValidatorsData
+  | resumedExpected
+  | exitLimitExceeded
+  | insufficientFee
+  | feeRefundFailed
+  | arithmeticPanic
+  | divisionPanic
+  | assertionPanic
+  | roleFailureBoundary
+  | validateArrayLoop
+  | afterValidation
+  | consumeQuota
+  | afterQuota
+  | encodeArraysLoop
+  | afterEncoding
+  | bubbleRevert
+  | afterVaultCall
+  | refundCall
+  | balanceCheck
+  | afterNestedValidation
+  deriving DecidableEq, Repr
+
+/-- Positional slot index for each Trigger auxiliary label (1..22). -/
+def localSlotOf : TriggerLabel → Nat
+  | .malformedAbi => 1
+  | .zeroMsgValue => 2
+  | .zeroValidatorsData => 3
+  | .resumedExpected => 4
+  | .exitLimitExceeded => 5
+  | .insufficientFee => 6
+  | .feeRefundFailed => 7
+  | .arithmeticPanic => 8
+  | .divisionPanic => 9
+  | .assertionPanic => 10
+  | .roleFailureBoundary => 11
+  | .validateArrayLoop => 12
+  | .afterValidation => 13
+  | .consumeQuota => 14
+  | .afterQuota => 15
+  | .encodeArraysLoop => 16
+  | .afterEncoding => 17
+  | .bubbleRevert => 18
+  | .afterVaultCall => 19
+  | .refundCall => 20
+  | .balanceCheck => 21
+  | .afterNestedValidation => 22
+
+/-- Reverse mapping from local slot index to TriggerLabel. -/
+def labelOfLocalSlot? : Nat → Option TriggerLabel
+  | 1 => some .malformedAbi
+  | 2 => some .zeroMsgValue
+  | 3 => some .zeroValidatorsData
+  | 4 => some .resumedExpected
+  | 5 => some .exitLimitExceeded
+  | 6 => some .insufficientFee
+  | 7 => some .feeRefundFailed
+  | 8 => some .arithmeticPanic
+  | 9 => some .divisionPanic
+  | 10 => some .assertionPanic
+  | 11 => some .roleFailureBoundary
+  | 12 => some .validateArrayLoop
+  | 13 => some .afterValidation
+  | 14 => some .consumeQuota
+  | 15 => some .afterQuota
+  | 16 => some .encodeArraysLoop
+  | 17 => some .afterEncoding
+  | 18 => some .bubbleRevert
+  | 19 => some .afterVaultCall
+  | 20 => some .refundCall
+  | 21 => some .balanceCheck
+  | 22 => some .afterNestedValidation
+  | _ => none
+
+/-- Qualified composite label for TWG runtime auxiliary table entries.
+Can be either the root dispatcher (0), a base runtime slot (1..27),
+or a Trigger label (mapped after the base slots). -/
+inductive CompositeLabel
+  | root
+  | base (slot : Nat)
+  | trigger (lbl : TriggerLabel)
+  deriving DecidableEq, Repr
+
+/-- Unified coordinate mapping for the composite table. -/
+def compositeSlotOf (baseCount : Nat) : CompositeLabel → Nat
+  | .root => 0
+  | .base slot => slot
+  | .trigger lbl => baseCount + localSlotOf lbl
+
+theorem compositeSlotOf_malformedAbi :
+    compositeSlotOf 27 (.trigger .malformedAbi) = 28 :=
+  rfl
+
+theorem compositeSlotOf_validateArrayLoop :
+    compositeSlotOf 27 (.trigger .validateArrayLoop) = 39 :=
+  rfl
+
+theorem compositeSlotOf_afterNestedValidation :
+    compositeSlotOf 27 (.trigger .afterNestedValidation) = 49 :=
+  rfl
+
+/-- Negative control: off-by-one mapping (e.g. 29 ≠ 28) fails equality. -/
+theorem compositeSlotOf_malformedAbi_off_by_one :
+    compositeSlotOf 27 (.trigger .malformedAbi) ≠ 29 := by
+  decide
+
 /-! Slot zero is the packet main function.  Every other number is local to the
-standalone packet and must be offset when these functions are appended to a
-larger runtime table. -/
-def malformedAbiSlot : Nat := 1
-def zeroMsgValueSlot : Nat := 2
-def zeroValidatorsDataSlot : Nat := 3
-def resumedExpectedSlot : Nat := 4
-def exitLimitExceededSlot : Nat := 5
-def insufficientFeeSlot : Nat := 6
-def feeRefundFailedSlot : Nat := 7
-def arithmeticPanicSlot : Nat := 8
-def divisionPanicSlot : Nat := 9
-def assertionPanicSlot : Nat := 10
-def roleFailureBoundarySlot : Nat := 11
-def validateArrayLoopSlot : Nat := 12
-def afterValidationSlot : Nat := 13
-def consumeQuotaSlot : Nat := 14
-def afterQuotaSlot : Nat := 15
-def encodeArraysLoopSlot : Nat := 16
-def afterEncodingSlot : Nat := 17
-def bubbleRevertSlot : Nat := 18
-def afterVaultCallSlot : Nat := 19
-def refundCallSlot : Nat := 20
-def balanceCheckSlot : Nat := 21
-def afterNestedValidationSlot : Nat := 22
+standalone packet and corresponds to its semantic `TriggerLabel`. -/
+def malformedAbiSlot : Nat := localSlotOf .malformedAbi
+def zeroMsgValueSlot : Nat := localSlotOf .zeroMsgValue
+def zeroValidatorsDataSlot : Nat := localSlotOf .zeroValidatorsData
+def resumedExpectedSlot : Nat := localSlotOf .resumedExpected
+def exitLimitExceededSlot : Nat := localSlotOf .exitLimitExceeded
+def insufficientFeeSlot : Nat := localSlotOf .insufficientFee
+def feeRefundFailedSlot : Nat := localSlotOf .feeRefundFailed
+def arithmeticPanicSlot : Nat := localSlotOf .arithmeticPanic
+def divisionPanicSlot : Nat := localSlotOf .divisionPanic
+def assertionPanicSlot : Nat := localSlotOf .assertionPanic
+def roleFailureBoundarySlot : Nat := localSlotOf .roleFailureBoundary
+def validateArrayLoopSlot : Nat := localSlotOf .validateArrayLoop
+def afterValidationSlot : Nat := localSlotOf .afterValidation
+def consumeQuotaSlot : Nat := localSlotOf .consumeQuota
+def afterQuotaSlot : Nat := localSlotOf .afterQuota
+def encodeArraysLoopSlot : Nat := localSlotOf .encodeArraysLoop
+def afterEncodingSlot : Nat := localSlotOf .afterEncoding
+def bubbleRevertSlot : Nat := localSlotOf .bubbleRevert
+def afterVaultCallSlot : Nat := localSlotOf .afterVaultCall
+def refundCallSlot : Nat := localSlotOf .refundCall
+def balanceCheckSlot : Nat := localSlotOf .balanceCheck
+def afterNestedValidationSlot : Nat := localSlotOf .afterNestedValidation
 
 def localAuxSlotCount : Nat := 22
 
@@ -756,6 +865,95 @@ theorem packet_compile (dp : DeployParams) :
     Prog.compile (packet dp) = some (packetCode dp) := by
   simpa [packetCode] using
     Prog.compile_eq_some_getD_of_compiles (packet dp) (packet_compiles dp)
+
+def triggerLabels : List TriggerLabel :=
+  [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
+    .exitLimitExceeded, .insufficientFee, .feeRefundFailed, .arithmeticPanic,
+    .divisionPanic, .assertionPanic, .roleFailureBoundary, .validateArrayLoop,
+    .afterValidation, .consumeQuota, .afterQuota, .encodeArraysLoop,
+    .afterEncoding, .bubbleRevert, .afterVaultCall, .refundCall,
+    .balanceCheck, .afterNestedValidation ]
+
+/-- Standard 27-base + 22-trigger auxiliary table layout. -/
+def standardCompositeAux (baseAux : List (CompositeLabel × SymbolicFunc CompositeLabel))
+    (triggerAux : List (TriggerLabel × SymbolicFunc CompositeLabel)) :
+    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
+  baseAux ++ triggerAux.map (fun (lbl, body) => (.trigger lbl, body))
+
+/-- Concrete 27-base prefix skeleton for composite resolution verification. -/
+def base27AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
+  (List.range 27).map fun i => (.base (i + 1), .last .stop)
+
+/-- Concrete Trigger auxiliary skeleton with exact 22 labels in order. -/
+def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
+  triggerLabels.map fun lbl => (lbl, .last .stop)
+
+/-- Composite 49-entry auxiliary program testing exact label resolution. -/
+def composite27TriggerProg (main : SymbolicFunc CompositeLabel) :
+    SymbolicProg CompositeLabel :=
+  ⟨.root, main, standardCompositeAux base27AuxSkeleton triggerAuxSkeleton⟩
+
+/-- Local slot 1 (malformedAbi) resolves to global slot 28 in the 27-base composition. -/
+theorem composite27_resolve_malformedAbi (main : SymbolicFunc CompositeLabel) :
+    (composite27TriggerProg main).findLabel? (.trigger .malformedAbi) = some 28 :=
+  rfl
+
+/-- Local slot 12 (validateArrayLoop) resolves to global slot 39 in the 27-base composition. -/
+theorem composite27_resolve_validateArrayLoop (main : SymbolicFunc CompositeLabel) :
+    (composite27TriggerProg main).findLabel? (.trigger .validateArrayLoop) = some 39 :=
+  rfl
+
+/-- Local slot 22 (afterNestedValidation) resolves to global slot 49 in the 27-base composition. -/
+theorem composite27_resolve_afterNestedValidation (main : SymbolicFunc CompositeLabel) :
+    (composite27TriggerProg main).findLabel? (.trigger .afterNestedValidation) = some 49 :=
+  rfl
+
+/-- All 22 Trigger auxiliary slots resolve without manual offset rebasing. -/
+theorem composite27_resolve_all_trigger (main : SymbolicFunc CompositeLabel) (lbl : TriggerLabel) :
+    (composite27TriggerProg main).findLabel? (.trigger lbl) = some (27 + localSlotOf lbl) := by
+  cases lbl <;> rfl
+
+/-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc CompositeLabel`. -/
+def toCompositeSymbolic : Func → SymbolicFunc CompositeLabel
+  | .branch left right =>
+      .branch (toCompositeSymbolic left) (toCompositeSymbolic right)
+  | .last inst => .last inst
+  | .next inst rest => .next inst (toCompositeSymbolic rest)
+  | .call target =>
+      match labelOfLocalSlot? target with
+      | some lbl => .call (.trigger lbl)
+      | none => .call (.base target)
+
+/-- Symbolic representation of Trigger auxiliary functions with qualified labels. -/
+def symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
+    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
+  [ (.trigger .malformedAbi, toCompositeSymbolic Func.revert),
+    (.trigger .zeroMsgValue, toCompositeSymbolic zeroMsgValueRevert),
+    (.trigger .zeroValidatorsData, toCompositeSymbolic zeroValidatorsDataRevert),
+    (.trigger .resumedExpected, toCompositeSymbolic resumedExpectedRevert),
+    (.trigger .exitLimitExceeded, toCompositeSymbolic exitLimitExceededRevert),
+    (.trigger .insufficientFee, toCompositeSymbolic insufficientFeeRevert),
+    (.trigger .feeRefundFailed, toCompositeSymbolic feeRefundFailedRevert),
+    (.trigger .arithmeticPanic, toCompositeSymbolic arithmeticPanicRevert),
+    (.trigger .divisionPanic, toCompositeSymbolic divisionPanicRevert),
+    (.trigger .assertionPanic, toCompositeSymbolic assertionPanicRevert),
+    (.trigger .roleFailureBoundary, toCompositeSymbolic roleFailure),
+    (.trigger .validateArrayLoop, toCompositeSymbolic validateArrayLoop),
+    (.trigger .afterValidation, toCompositeSymbolic afterValidation),
+    (.trigger .consumeQuota, toCompositeSymbolic (consumeExitRequestLimit (.call afterQuotaSlot))),
+    (.trigger .afterQuota, toCompositeSymbolic (afterQuota dp)),
+    (.trigger .encodeArraysLoop, toCompositeSymbolic encodeArraysLoop),
+    (.trigger .afterEncoding, toCompositeSymbolic afterEncoding),
+    (.trigger .bubbleRevert, toCompositeSymbolic bubbleRevert),
+    (.trigger .afterVaultCall, toCompositeSymbolic (afterVaultCall dp)),
+    (.trigger .refundCall, toCompositeSymbolic refundCall),
+    (.trigger .balanceCheck, toCompositeSymbolic balanceCheck),
+    (.trigger .afterNestedValidation, toCompositeSymbolic afterNestedValidation) ]
+
+theorem erase_toCompositeSymbolic_trigger (dp : DeployParams) :
+    (toCompositeSymbolic (triggerFullWithdrawals dp)).erase (compositeSlotOf 27) =
+      rebasedTrigger 27 dp :=
+  rfl
 
 end Trigger
 end LidoTriggerableWithdrawalsGateway
