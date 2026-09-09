@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
@@ -97,6 +98,7 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@lru_cache(maxsize=1)
 def _gate_cache_module() -> Any:
     scripts = str(ROOT / "scripts")
     if scripts not in sys.path:
@@ -112,14 +114,47 @@ def _gate_cache_module() -> Any:
 
 
 def require_fresh_build_certificate() -> dict[str, Any]:
-    ok, detail, certificate = _gate_cache_module().build_certificate_status(ROOT)
+    gate_cache = _gate_cache_module()
+    ok, detail, certificate = gate_cache.build_certificate_status(ROOT)
     if not ok or certificate is None:
         raise RuntimeError(f"native-identity freshness refusal: {detail}")
     return certificate
 
 
+@lru_cache(maxsize=1)
+def certified_toolchain_identity() -> dict[str, str]:
+    """Read the exact Lean identity already bound by the build certificate."""
+    gate_cache = _gate_cache_module()
+    ok, detail, certificate = gate_cache.build_certificate_status(ROOT)
+    if not ok or certificate is None:
+        raise RuntimeError(f"native-identity freshness refusal: {detail}")
+    identity, components = gate_cache.build_source_identity(ROOT)
+    if identity != certificate["identity"]:
+        raise RuntimeError("native-identity source/build identity drifted")
+    tools = components.get("tools")
+    if not isinstance(tools, dict) or tools.get("digest") != certificate[
+        "components"
+    ].get("tools"):
+        raise RuntimeError("native-identity certified tool component mismatch")
+    tool_detail = tools.get("detail")
+    lean_detail = tool_detail.get("lean") if isinstance(tool_detail, dict) else None
+    if not isinstance(lean_detail, str):
+        raise RuntimeError("native-identity certified Lean identity is missing")
+    match = re.fullmatch(
+        r"Lean \(version ([^,()]+), .*?, commit ([0-9a-f]{40}), .*\)",
+        lean_detail,
+    )
+    if match is None:
+        raise RuntimeError("native-identity certified Lean identity is malformed")
+    return {"version": match.group(1), "githash": match.group(2)}
+
+
+class JSONObjectPairs(list[tuple[str, Any]]):
+    """Marker retaining the JSON object/array distinction, including empties."""
+
+
 def _pairs(value: str) -> Any:
-    return json.loads(value, object_pairs_hook=lambda pairs: pairs)
+    return json.loads(value, object_pairs_hook=JSONObjectPairs)
 
 
 EXPECTED_FIELDS = [
@@ -131,7 +166,7 @@ EXPECTED_FIELDS = [
 
 
 def _object(pairs: Any, expected: list[str], label: str) -> dict[str, Any]:
-    if not isinstance(pairs, list) or not all(
+    if not isinstance(pairs, JSONObjectPairs) or not all(
         isinstance(row, tuple) and len(row) == 2 for row in pairs
     ):
         raise ValueError(f"{label} is not an object")
@@ -141,23 +176,48 @@ def _object(pairs: Any, expected: list[str], label: str) -> dict[str, Any]:
     return dict(pairs)
 
 
-def decode_name(value: Any) -> str:
-    if not isinstance(value, list) or not value:
+def name_key(value: Any) -> tuple[Any, ...]:
+    if type(value) is not list or not value:
         raise ValueError("malformed Name")
     tag = value[0]
     if tag == "anonymous" and value == ["anonymous"]:
-        return ""
+        return ("anonymous",)
     if tag == "str" and len(value) == 3 and isinstance(value[2], str):
-        prefix = decode_name(value[1])
-        return f"{prefix}.{value[2]}" if prefix else value[2]
+        return ("str", name_key(value[1]), value[2])
     if tag == "num" and len(value) == 3 and type(value[2]) is int and value[2] >= 0:
-        prefix = decode_name(value[1])
-        return f"{prefix}.{value[2]}" if prefix else str(value[2])
+        return ("num", name_key(value[1]), value[2])
     raise ValueError("malformed Name constructor")
 
 
-def _validate_level(value: Any, params: set[str]) -> None:
-    if not isinstance(value, list) or not value or not isinstance(value[0], str):
+def decode_name(value: Any) -> str:
+    key = name_key(value)
+    if key == ("anonymous",):
+        return ""
+    prefix = decode_name_key(key[1])
+    component = str(key[2])
+    return f"{prefix}.{component}" if prefix else component
+
+
+def decode_name_key(key: tuple[Any, ...]) -> str:
+    if key == ("anonymous",):
+        return ""
+    prefix = decode_name_key(key[1])
+    component = str(key[2])
+    return f"{prefix}.{component}" if prefix else component
+
+
+def dotted_name_key(value: str) -> tuple[Any, ...]:
+    components = value.split(".")
+    if not value or any(not component for component in components):
+        raise ValueError(f"malformed expected Name {value!r}")
+    key: tuple[Any, ...] = ("anonymous",)
+    for component in components:
+        key = ("str", key, component)
+    return key
+
+
+def _validate_level(value: Any, params: set[tuple[Any, ...]]) -> None:
+    if type(value) is not list or not value or type(value[0]) is not str:
         raise ValueError("malformed Level")
     tag = value[0]
     if tag == "zero" and len(value) == 1:
@@ -168,14 +228,16 @@ def _validate_level(value: Any, params: set[str]) -> None:
         _validate_level(value[1], params)
         return _validate_level(value[2], params)
     if tag == "param" and len(value) == 2:
-        if decode_name(value[1]) not in params:
+        if name_key(value[1]) not in params:
             raise ValueError("undeclared universe parameter")
         return
     raise ValueError(f"unknown or malformed Level tag {tag!r}")
 
 
-def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
-    if not isinstance(value, list) or not value or not isinstance(value[0], str):
+def _validate_expr(
+    value: Any, params: set[tuple[Any, ...]], depth: int = 0
+) -> None:
+    if type(value) is not list or not value or type(value[0]) is not str:
         raise ValueError("malformed Expr")
     tag = value[0]
     if tag == "bvar" and len(value) == 2 and type(value[1]) is int:
@@ -184,7 +246,7 @@ def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
         return
     if tag == "sort" and len(value) == 2:
         return _validate_level(value[1], params)
-    if tag == "const" and len(value) == 3 and isinstance(value[2], list):
+    if tag == "const" and len(value) == 3 and type(value[2]) is list:
         decode_name(value[1])
         for level in value[2]:
             _validate_level(level, params)
@@ -203,7 +265,7 @@ def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
         _validate_expr(value[3], params, depth)
         _validate_expr(value[4], params, depth)
         return _validate_expr(value[5], params, depth + 1)
-    if tag == "lit" and len(value) == 2 and isinstance(value[1], list):
+    if tag == "lit" and len(value) == 2 and type(value[1]) is list:
         literal = value[1]
         if len(literal) != 2 or literal[0] not in {"nat", "string"}:
             raise ValueError("malformed Literal")
@@ -221,12 +283,25 @@ def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
 def parse_frames(stdout: str, expected: tuple[tuple[str, str, str], ...], exporter: str) -> list[dict[str, Any]]:
     if "\x00" in stdout:
         raise ValueError("NUL in probe output")
-    raw_frames = [line[len(FRAME):] for line in stdout.splitlines() if line.startswith(FRAME)]
+    lines = stdout.splitlines()
+    malformed_markers = [
+        line for line in lines
+        if line.startswith("BLANC_NATIVE_IDENTITY") and not line.startswith(FRAME)
+    ]
+    if malformed_markers:
+        raise ValueError("malformed native-identity frame marker")
+    raw_frames = [line[len(FRAME):] for line in lines if line.startswith(FRAME)]
     if len(raw_frames) != len(expected):
         raise ValueError(f"frame population {len(raw_frames)}, expected {len(expected)}")
     records: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    expected_map = {name: (module, kind) for module, name, kind in expected}
+    seen: set[tuple[Any, ...]] = set()
+    expected_map = {
+        dotted_name_key(name): (dotted_name_key(module), module, name, kind)
+        for module, name, kind in expected
+    }
+    if len(expected_map) != len(expected):
+        raise ValueError("duplicate expected declaration Name")
+    expected_toolchain = certified_toolchain_identity()
     for raw in raw_frames:
         pairs = _pairs(raw)
         record = _object(pairs, EXPECTED_FIELDS, "record")
@@ -235,37 +310,40 @@ def parse_frames(stdout: str, expected: tuple[tuple[str, str, str], ...], export
             raise ValueError("schema mismatch")
         if record["exporter"] != exporter:
             raise ValueError("exporter mismatch")
-        if not all(isinstance(toolchain[field], str) and toolchain[field]
+        if not all(type(toolchain[field]) is str and toolchain[field]
                    for field in ("version", "githash")):
             raise ValueError("malformed toolchain identity")
-        pinned_toolchain = (ROOT / "lean-toolchain").read_text(encoding="utf-8").strip()
-        expected_version = pinned_toolchain.rsplit(":v", 1)[-1]
-        if toolchain["version"] != expected_version or not re.fullmatch(
-            r"[0-9a-f]{40}", toolchain["githash"]
-        ):
+        if toolchain != expected_toolchain:
             raise ValueError("toolchain identity mismatch")
-        name = decode_name(record["name"])
-        module = decode_name(record["module"])
-        if name in seen:
+        name_key_value = name_key(record["name"])
+        module_key_value = name_key(record["module"])
+        name = decode_name_key(name_key_value)
+        module = decode_name_key(module_key_value)
+        if name_key_value in seen:
             raise ValueError(f"duplicate frame {name}")
-        seen.add(name)
-        if name not in expected_map:
+        seen.add(name_key_value)
+        if name_key_value not in expected_map:
             raise ValueError(f"unexpected frame {name}")
-        expected_module, expected_kind = expected_map[name]
-        if (module, record["kind"]) != (expected_module, expected_kind):
-            raise ValueError(f"module/kind mismatch for {name}")
-        params = [decode_name(item) for item in record["levelParams"]]
+        expected_module_key, expected_module, expected_name, expected_kind = expected_map[
+            name_key_value
+        ]
+        if (module_key_value, record["kind"]) != (expected_module_key, expected_kind):
+            raise ValueError(f"module/kind mismatch for {expected_name}")
+        if type(record["levelParams"]) is not list:
+            raise ValueError("malformed universe parameter population")
+        params = [name_key(item) for item in record["levelParams"]]
         if len(params) != len(set(params)):
             raise ValueError("duplicate universe parameter")
         _validate_expr(record["type"], set(params))
-        if not isinstance(record["axioms"], list):
+        if type(record["axioms"]) is not list:
             raise ValueError("malformed axiom population")
-        axiom_names = [decode_name(item) for item in record["axioms"]]
-        if axiom_names != sorted(axiom_names) or len(axiom_names) != len(set(axiom_names)):
+        axiom_keys = [name_key(item) for item in record["axioms"]]
+        axiom_names = [decode_name_key(item) for item in axiom_keys]
+        if axiom_names != sorted(axiom_names) or len(axiom_keys) != len(set(axiom_keys)):
             raise ValueError("axiom population is not sorted and unique")
         record["toolchain"] = toolchain
-        record["qualified_name"] = name
-        record["owning_module"] = module
+        record["qualified_name"] = expected_name
+        record["owning_module"] = expected_module
         record["record_bytes"] = raw.encode("utf-8")
         record["record_sha256"] = hashlib.sha256(record["record_bytes"]).hexdigest()
         record["type_bytes"] = json.dumps(record["type"], ensure_ascii=False,
@@ -281,7 +359,8 @@ def parse_frames(stdout: str, expected: tuple[tuple[str, str, str], ...], export
         ).hexdigest()
         records.append(record)
     if seen != set(expected_map):
-        raise ValueError(f"missing frames {sorted(set(expected_map) - seen)!r}")
+        missing = [expected_map[key][2] for key in set(expected_map) - seen]
+        raise ValueError(f"missing frames {sorted(missing)!r}")
     return records
 
 

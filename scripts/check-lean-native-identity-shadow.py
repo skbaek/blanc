@@ -128,6 +128,14 @@ def decoder_controls(record: dict[str, Any]) -> dict[str, Any]:
     exporter = record["exporter"]
     raw = record["record_utf8"]
     frame = native.FRAME + raw
+    decoded = json.loads(raw)
+    dotted_name_collision = ["str", ["anonymous"], record["name"]]
+    dotted_module_collision = ["str", ["anonymous"], record["module"]]
+    universe_collision = json.loads(raw)
+    universe_collision["levelParams"] = [["str", ["anonymous"], "u.v"]]
+    universe_collision["type"] = [
+        "sort", ["param", ["str", ["str", ["anonymous"], "u"], "v"]]
+    ]
     controls = {
         "missing": expect_failure("missing", lambda: native.parse_frames("", expected, exporter),
                                   "frame population"),
@@ -154,11 +162,95 @@ def decoder_controls(record: dict[str, Any]) -> dict[str, Any]:
             native.FRAME + replace_json(raw, "toolchain", {
                 "githash": "0" * 40, "version": "0.0.0"}), expected, exporter),
             "toolchain identity mismatch"),
+        "toolchain_hash_only": expect_failure(
+            "toolchain hash only", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "toolchain", {
+                    "githash": "0" * 40,
+                    "version": decoded["toolchain"]["version"],
+                }), expected, exporter), "toolchain identity mismatch"),
         "exporter": expect_failure("exporter", lambda: native.parse_frames(
             native.FRAME + replace_json(raw, "exporter", "0" * 64), expected, exporter),
             "exporter mismatch"),
+        "declaration_name_structure": expect_failure(
+            "declaration Name structure", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "name", dotted_name_collision),
+                expected, exporter), "unexpected frame"),
+        "module_name_structure": expect_failure(
+            "module Name structure", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "module", dotted_module_collision),
+                expected, exporter), "module/kind mismatch"),
+        "level_params_object": expect_failure(
+            "levelParams object", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "levelParams", {}), expected, exporter),
+            "malformed universe parameter population"),
+        "malformed_native_prefix": expect_failure(
+            "malformed native prefix", lambda: native.parse_frames(
+                frame + "\nBLANC_NATIVE_IDENTITY malformed frame without tab\n",
+                expected, exporter), "malformed native-identity frame marker"),
+        "universe_name_structure": expect_failure(
+            "universe Name structure", lambda: native.parse_frames(
+                native.FRAME + json.dumps(
+                    universe_collision, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":")
+                ), expected, exporter), "undeclared universe parameter"),
     }
     return controls
+
+
+def offline_decoder_replay(input_dir: Path, destination: Path) -> None:
+    """Replay frozen exporter frames through only the current Python decoder."""
+    positives: list[dict[str, Any]] = []
+    first_record: dict[str, Any] | None = None
+    for scope in ("access", "enumeration"):
+        rows = json.loads((input_dir / f"{scope}.json").read_text(encoding="utf-8"))
+        if not isinstance(rows, list) or not rows:
+            raise RuntimeError(f"{scope}: frozen evidence has no record population")
+        exporters = {row["exporter"] for row in rows}
+        if len(exporters) != 1:
+            raise RuntimeError(f"{scope}: frozen evidence has mixed exporters")
+        expected = tuple((row["module"], row["name"], row["kind"]) for row in rows)
+        stdout = "\n".join(native.FRAME + row["record_utf8"] for row in rows)
+        parsed = native.parse_frames(stdout, expected, next(iter(exporters)))
+        for row, current in zip(rows, parsed):
+            if current["record_sha256"] != row["record_sha256"]:
+                raise RuntimeError(f"{row['name']}: frozen record hash mismatch")
+            if current["statement_sha256"] != row["statement_sha256"]:
+                raise RuntimeError(f"{row['name']}: frozen statement hash mismatch")
+            positives.append({
+                "scope": scope,
+                "name": row["name"],
+                "record_sha256": row["record_sha256"],
+                "statement_sha256": row["statement_sha256"],
+                "verdict": "ACCEPTED",
+            })
+        if first_record is None:
+            first_record = rows[0]
+    if first_record is None:
+        raise RuntimeError("frozen evidence has no records")
+    controls = decoder_controls(first_record)
+    if any(row.get("verdict") != "REJECTED" for row in controls.values()):
+        raise RuntimeError("offline decoder control population did not reject")
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, text=True,
+        capture_output=True,
+    ).stdout.strip()
+    result = {
+        "schema": "blanc-lean-native-identity-decoder-repair/v1",
+        "source_commit": source_commit,
+        "mode": "offline replay; no Lean elaboration, probe, build, or recertification",
+        "frozen_input": str(input_dir),
+        "frozen_runtime_source": "4863d02048a81ccadc04d878a85a65c75051eda5",
+        "certified_toolchain": native.certified_toolchain_identity(),
+        "positive_population": len(positives),
+        "positive_frames": positives,
+        "negative_population": len(controls),
+        "negative_controls": controls,
+        "verdict": "OK",
+    }
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    print(f"OK — offline native-identity decoder replay: {len(positives)} frames; "
+          f"{len(controls)} controls rejected")
 
 
 def lean_lookup_control(label: str, module: str, name: str, kind: str,
@@ -360,8 +452,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--control-export-without-freshness", type=Path)
+    parser.add_argument("--offline-replay-input-dir", type=Path)
+    parser.add_argument("--offline-replay-output", type=Path)
     parser.add_argument("--skip-lean-lookup-controls", action="store_true")
     args = parser.parse_args()
+    if args.offline_replay_input_dir or args.offline_replay_output:
+        if not args.offline_replay_input_dir or not args.offline_replay_output:
+            parser.error("offline replay requires both input directory and output")
+        if args.output_dir or args.control_export_without_freshness \
+                or args.skip_lean_lookup_controls:
+            parser.error("offline replay cannot be combined with live harness options")
+        offline_decoder_replay(
+            args.offline_replay_input_dir, args.offline_replay_output
+        )
+        return
     if args.control_export_without_freshness:
         if args.output_dir:
             parser.error("control export cannot be combined with --output-dir")
