@@ -570,6 +570,41 @@ def checkLink [DecidableEq Label] (sp : SymbolicProg Label) :
     else
       .error (.compileFailed resolved)
 
+/-- Checked linking reports `compileFailed` exactly when label resolution
+succeeds and the resolved program still fails the compiler's own decision. -/
+theorem checkLink_eq_error_compileFailed [DecidableEq Label]
+    {sp : SymbolicProg Label} {resolved : Prog}
+    (h_res : resolve sp = .ok resolved)
+    (h_comp : Prog.compiles resolved = false) :
+    checkLink sp = .error (.compileFailed resolved) := by
+  unfold checkLink
+  split
+  · rename_i e h
+    rw [h_res] at h
+    exact absurd h (by simp)
+  · rename_i r h
+    rw [h_res] at h
+    obtain rfl : r = resolved := (Except.ok.inj h).symm
+    simp [h_comp]
+
+/-- Checked linking succeeds exactly when resolution succeeds and the resolved
+program passes the compiler's own decision. -/
+theorem checkLink_isOk [DecidableEq Label]
+    {sp : SymbolicProg Label} {resolved : Prog}
+    (h_res : resolve sp = .ok resolved)
+    (h_comp : Prog.compiles resolved = true) :
+    (checkLink sp).isOk = true := by
+  unfold checkLink
+  split
+  · rename_i e h
+    rw [h_res] at h
+    exact absurd h (by simp)
+  · rename_i r h
+    rw [h_res] at h
+    obtain rfl : r = resolved := (Except.ok.inj h).symm
+    simp only [h_comp, dif_pos]
+    rfl
+
 /-! ## Verification controls -/
 
 namespace Control
@@ -673,6 +708,208 @@ def duplicateAuxProg : SymbolicProg TestLabel where
 theorem duplicateAux_rejects :
     resolve duplicateAuxProg = .error (.duplicateAux .dead 0 1) := by
   rfl
+
+/-! ### Compiler target boundary: 65535 accepted, 65536 rejected
+
+`Func.compile` emits every jump destination in a `PUSH2` immediate, so it admits
+a table call or a forward branch only while `loc < 2 ^ 16`.  These controls pin
+that exact boundary against a synthetic table and program counter, for both the
+table-call target and the branch continuation target.  A destination of 65535 is
+accepted; 65536 is rejected, and the byte producer returns `none`. -/
+
+/-- Two-entry synthetic table whose callable entry sits at an exact location. -/
+def boundaryTable (loc : Nat) : List (Nat × Func) :=
+  [(0, .last .stop), (loc, .last .stop)]
+
+/-- Positive boundary: a call whose target sits at exactly 65535 compiles. -/
+theorem call_target_65535_compiles :
+    Func.compiles (boundaryTable 65535) 0 (.call 1) = true := by
+  decide +kernel
+
+/-- Negative boundary: one byte past the 16-bit window the same call is
+rejected by the decision procedure. -/
+theorem call_target_65536_rejects :
+    Func.compiles (boundaryTable 65536) 0 (.call 1) = false := by
+  decide +kernel
+
+/-- Negative boundary, exact rejection: the byte producer returns `none`. -/
+theorem call_target_65536_compile_eq_none :
+    Func.compile (boundaryTable 65536) 0 (.call 1) = none := by
+  decide +kernel
+
+/-- Positive boundary: a forward branch landing at exactly 65535 compiles. -/
+theorem branch_target_65535_compiles :
+    Func.compiles (boundaryTable 0) 65530
+        (.branch (.last .stop) (.last .stop)) = true := by
+  decide +kernel
+
+/-- Negative boundary: the same branch one program counter later lands at
+65536 and is rejected. -/
+theorem branch_target_65536_rejects :
+    Func.compiles (boundaryTable 0) 65531
+        (.branch (.last .stop) (.last .stop)) = false := by
+  decide +kernel
+
+/-- Negative boundary, exact rejection: the byte producer returns `none`. -/
+theorem branch_target_65536_compile_eq_none :
+    Func.compile (boundaryTable 0) 65531
+        (.branch (.last .stop) (.last .stop)) = none := by
+  decide +kernel
+
+/-! ### `LinkError.compileFailed` at the same boundary
+
+`checkLink` can only report `compileFailed` for a program that resolves cleanly
+and still exceeds the 16-bit jump window, which needs a witness just over 64 KiB
+of code: in a resolved program every call index is in range and every location is
+determined by `compsize`, so no smaller program can fail the compiler.  The
+witness is therefore built from an opaque pad, and every lemma below is general
+in the pad length so that nothing is ever evaluated 65 000 times; only the final
+arithmetic sees the literal. -/
+
+/-- `padFunc n f` prefixes `n` one-byte `POP` instructions to `f`. -/
+def padFunc : Nat → Func → Func
+  | 0, f => f
+  | n + 1, f => .next (.reg .pop) (padFunc n f)
+
+/-- Symbolic counterpart of `padFunc`. -/
+def padSymbolic : Nat → SymbolicFunc TestLabel → SymbolicFunc TestLabel
+  | 0, f => f
+  | n + 1, f => .next (.reg .pop) (padSymbolic n f)
+
+theorem erase_padSymbolic (map : TestLabel → Nat) (n : Nat)
+    (f : SymbolicFunc TestLabel) :
+    (padSymbolic n f).erase map = padFunc n (f.erase map) := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp [padSymbolic, padFunc, SymbolicFunc.erase, ih]
+
+theorem calls_padSymbolic (n : Nat) (f : SymbolicFunc TestLabel) :
+    (padSymbolic n f).calls = f.calls := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp [padSymbolic, SymbolicFunc.calls, ih]
+
+theorem compsize_padFunc (n : Nat) (f : Func) :
+    compsize (padFunc n f) = n + compsize f := by
+  induction n with
+  | zero => simp [padFunc]
+  | succ n ih =>
+      simp only [padFunc, compsize, ih, Ninst.toBytes, List.length_cons,
+        List.length_nil]
+      omega
+
+theorem isSome_compile_next_pop (l : List (Nat × Func)) (m : Nat) (p : Func) :
+    (Func.compile l m (.next (.reg .pop) p)).isSome
+      = (Func.compile l (m + 1) p).isSome := by
+  cases h : Func.compile l (m + 1) p with
+  | none => simp [Func.compile, Ninst.size, h]
+  | some bs => simp [Func.compile, Ninst.size, h]
+
+theorem isSome_compile_padFunc (l : List (Nat × Func)) (f : Func) :
+    ∀ (n m : Nat), (Func.compile l m (padFunc n f)).isSome
+      = (Func.compile l (m + n) f).isSome := by
+  intro n
+  induction n with
+  | zero => intro m; simp [padFunc]
+  | succ n ih =>
+      intro m
+      rw [show padFunc (n + 1) f = .next (.reg .pop) (padFunc n f) from rfl,
+        isSome_compile_next_pop, ih (m + 1),
+        show m + 1 + n = m + (n + 1) from by omega]
+
+/-- Label map for the boundary witness: its single auxiliary entry is index 1. -/
+def boundaryMap : TestLabel → Nat
+  | .loop => 1
+  | _ => 0
+
+/-- Otherwise-valid program: `padding` one-byte instructions, then a call to the
+single auxiliary entry.  `compsize main = padding + 4`, so that entry's table
+location, and hence the call's jump destination, is `padding + 5`. -/
+def boundaryCallProg (padding : Nat) : SymbolicProg TestLabel where
+  root := .root
+  main := padSymbolic padding (.call .loop)
+  aux := [(.loop, .last .stop)]
+
+/-- Resolved form of the boundary witness. -/
+def boundaryResolved (padding : Nat) : Prog :=
+  ⟨padFunc padding (.call 1), [.last .stop]⟩
+
+/-- Table of the resolved witness: the auxiliary entry sits at `padding + 5`. -/
+def boundaryProgTable (padding : Nat) : List (Nat × Func) :=
+  [(0, padFunc padding (.call 1)), (padding + 5, .last .stop)]
+
+/-- Label resolution itself never fails on the witness, which is what leaves the
+compiler's target check as the only thing under test. -/
+theorem boundaryCallProg_resolve (padding : Nat) :
+    resolve (boundaryCallProg padding) = .ok (boundaryResolved padding) := by
+  have h := resolve_eq_erase (boundaryCallProg padding) boundaryMap rfl ?_ ?_
+  · rw [h]
+    simp [SymbolicProg.erase, boundaryResolved, boundaryCallProg,
+      erase_padSymbolic, SymbolicFunc.erase, boundaryMap]
+  · intro target htarget
+    rw [show (boundaryCallProg padding).main
+        = padSymbolic padding (.call .loop) from rfl,
+      calls_padSymbolic] at htarget
+    simp only [SymbolicFunc.calls, List.mem_singleton] at htarget
+    subst htarget
+    rfl
+  · intro lbl body hmem target htarget
+    simp only [boundaryCallProg, List.mem_singleton, Prod.mk.injEq] at hmem
+    obtain ⟨-, rfl⟩ := hmem
+    simp only [SymbolicFunc.calls, List.not_mem_nil] at htarget
+
+theorem boundaryResolved_compile_eq_table (padding : Nat) :
+    Prog.compile (boundaryResolved padding)
+      = Table.compile (boundaryProgTable padding) (boundaryProgTable padding) := by
+  have ht : table 0 ((boundaryResolved padding).main
+      :: (boundaryResolved padding).aux) = boundaryProgTable padding := by
+    show (0, padFunc padding (Func.call 1))
+        :: table (0 + compsize (padFunc padding (Func.call 1)) + 1)
+            [(.last .stop : Func)]
+      = boundaryProgTable padding
+    rw [compsize_padFunc,
+      show 0 + (padding + compsize (Func.call 1)) + 1 = padding + 5 from by
+        simp only [compsize]; omega]
+    rfl
+  simp only [Prog.compile, ht]
+
+/-- The witness compiles exactly while its one jump destination is in range. -/
+theorem isSome_boundaryResolved_compile (padding : Nat) :
+    (Prog.compile (boundaryResolved padding)).isSome
+      = decide (padding + 5 < 2 ^ 16) := by
+  have hkey : (Func.compile (boundaryProgTable padding) 1
+      (padFunc padding (.call 1))).isSome = decide (padding + 5 < 2 ^ 16) := by
+    rw [isSome_compile_padFunc]
+    by_cases hlt : padding + 5 < 65536
+    · simp [boundaryProgTable, Func.compile, guard, hlt]
+    · simp [boundaryProgTable, Func.compile, guard, hlt]
+  have htail : Table.compile (boundaryProgTable padding)
+        (boundaryProgTable padding)
+      = (Func.compile (boundaryProgTable padding) 1
+          (padFunc padding (.call 1))).bind
+          (fun bs => some (Jinst.toUInt8 .jumpdest :: bs ++
+            [Jinst.toUInt8 .jumpdest, Linst.stop.toUInt8])) := rfl
+  rw [boundaryResolved_compile_eq_table, htail, ← hkey]
+  cases Func.compile (boundaryProgTable padding) 1
+      (padFunc padding (.call 1)) with
+  | none => rfl
+  | some bs => rfl
+
+/-- Positive control: the witness whose call lands at exactly 65535 links. -/
+theorem checkLink_ok_at_target_65535 :
+    (checkLink (boundaryCallProg 65530)).isOk = true := by
+  refine checkLink_isOk (boundaryCallProg_resolve 65530) ?_
+  rw [← Prog.isSome_compile, isSome_boundaryResolved_compile]
+  decide
+
+/-- Negative control: the same witness one byte longer lands at 65536 and
+checked linking rejects it with the exact `compileFailed` payload. -/
+theorem checkLink_compileFailed_at_target_65536 :
+    checkLink (boundaryCallProg 65531)
+      = .error (.compileFailed (boundaryResolved 65531)) := by
+  refine checkLink_eq_error_compileFailed (boundaryCallProg_resolve 65531) ?_
+  rw [← Prog.isSome_compile, isSome_boundaryResolved_compile]
+  decide
 
 end Control
 
