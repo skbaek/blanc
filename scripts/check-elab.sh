@@ -363,7 +363,7 @@ gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
 # its number is meaningless, so every discovered module must be current before
 # we start. Explicit targets also give a newly added, not-yet-imported module a
 # Lake trace; the selector uses each trace's transitive dependency hash.
-gate_semaphore_acquire "the elaboration-time measurement" 8 || exit 2
+gate_semaphore_acquire "the elaboration-time measurement" 8 exclusive || exit 2
 
 if [ "$NO_BUILD" -eq 0 ]; then
   if ! MODULE_TARGETS="$(python3 "$SELECTOR" modules --root "$ROOT")"; then

@@ -142,10 +142,15 @@ gate_semaphore_label() {
 # already-current tree. See THE ESTIMATE above before changing it.
 GATE_SEMAPHORE_NARROW_GIB=4
 
-# gate_semaphore_acquire <what> [memory-gib]
+# gate_semaphore_acquire <what> [memory-gib] [contention]
 #
 #   what        what is about to elaborate, named as the operator sees it
 #   memory-gib  conservative whole-GiB peak; defaults to the narrow estimate
+#   contention  admission class; defaults to `tolerant`.  A timing-authoritative
+#               caller requests `exclusive`.  Its automatic inheritance is
+#               accepted only from the entry point's explicit hard-hold answer;
+#               an enclosing caller that has already made that admission may
+#               state `BLANC_GATE_SEMAPHORE=inherited` explicitly.
 #
 # Returns 0 when the gate may elaborate — because it took a hold, because it
 # inherited one, or because there is no coordination on this host to take.
@@ -154,6 +159,7 @@ GATE_SEMAPHORE_NARROW_GIB=4
 gate_semaphore_acquire() {
   gs_what="$1"
   gs_gib="${BLANC_GATE_SEMAPHORE_MEMORY_GIB:-${2:-$GATE_SEMAPHORE_NARROW_GIB}}"
+  gs_contention="${3:-tolerant}"
   gs_label="$(gate_semaphore_label)"
 
   if [ -n "$GATE_SEMAPHORE_HELD" ]; then
@@ -177,6 +183,7 @@ gate_semaphore_acquire() {
     adaptive-acquire "$gs_label"
     --note "Blanc gate: $gs_what"
     --memory-gib "$gs_gib"
+    --contention "$gs_contention"
   )
   if [ -n "${BLANC_GATE_SEMAPHORE_WAIT:-}" ]; then
     gs_request+=(--wait "$BLANC_GATE_SEMAPHORE_WAIT")
@@ -187,11 +194,19 @@ gate_semaphore_acquire() {
     return 0
   fi
 
-  # The label already owns the host. That is the caller's hold — a session, or
-  # a suite that took one for its own reasons — and this gate's elaboration is
-  # part of what it was taken for. Proceed under it, and release nothing.
+  # The label already owns the host. A tolerant gate may borrow either kind of
+  # hold. A sensitive or timing-authoritative gate requires the entry point to
+  # say it is already a hard hold; unknown or soft inheritance cannot establish
+  # the required exclusion and therefore remains a refusal. A caller that
+  # already made the right admission can use the explicit `inherited` mode.
   case "$gs_out" in
-    *ALREADY_HELD*) return 0 ;;
+    *ALREADY_HELD*)
+      case "$gs_contention:$gs_out" in
+        tolerant:*) return 0 ;;
+        sensitive:*"hard hold"*|exclusive:*"hard hold"*) return 0 ;;
+        *) gs_out="$gs_out"$'\n'"ALREADY_HELD response did not prove a hard hold for contention=$gs_contention" ;;
+      esac
+      ;;
   esac
 
   echo "REFUSED — $gs_label: host admission refused $gs_what"

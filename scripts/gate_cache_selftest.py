@@ -325,6 +325,10 @@ class Coordination:
             '    echo "REFUSED DEFER_HEAVY: another session holds the host"; exit 3 ;;\n'
             "  adaptive-acquire:already-held)\n"
             '    echo "ALREADY_HELD: this label already holds the host"; exit 4 ;;\n'
+            "  adaptive-acquire:already-held-soft)\n"
+            '    echo "ALREADY_HELD: label already owns a soft hold; use renew"; exit 4 ;;\n'
+            "  adaptive-acquire:already-held-hard)\n"
+            '    echo "ALREADY_HELD: label already owns the hard hold; use renew"; exit 4 ;;\n'
             "esac\n"
             "echo OK\n",
             encoding="utf-8",
@@ -1513,6 +1517,7 @@ class ShellAdmission:
         extra: dict[str, str] | None = None,
         what: str = "the control's elaboration",
         estimate: str | None = None,
+        contention: str | None = None,
     ) -> tuple[int, str]:
         """Source the shell half in `mode` and take one hold through it.
 
@@ -1522,10 +1527,13 @@ class ShellAdmission:
         """
 
         scripts = (self.clone if clone else self.worktree) / "scripts"
+        arguments = f' "{what}"{(" " + estimate) if estimate is not None else ""}'
+        if contention is not None:
+            arguments += f" {contention}"
         script = (
             'set -u\n'
             f'. "{scripts / "gate-semaphore.sh"}"\n'
-            f'gate_semaphore_acquire "{what}"{"" if estimate is None else " " + estimate}\n'
+            f"gate_semaphore_acquire{arguments}\n"
             'gs_status=$?\n'
             'gate_semaphore_release\n'
             'exit $gs_status\n'
@@ -1708,6 +1716,7 @@ def control_shell_admission_request_states_the_goal_the_estimate_and_the_wait() 
             "a gate in a goal worktree must acquire under that goal's name",
         )
         require("--memory-gib 4" in request, "the default estimate is the documented narrow one")
+        require("--contention tolerant" in request, "the default admission class is stated explicitly")
         require("--wait" not in request, "an unset wait must not queue")
 
         s.coordination.forget()
@@ -1735,6 +1744,154 @@ def control_shell_admission_request_states_the_goal_the_estimate_and_the_wait() 
         require(
             "--memory-gib 2" in s.requests()[0],
             "the environment override must reach the request",
+        )
+
+
+def control_shell_authoritative_admission_requires_a_hard_inheritance() -> None:
+    """An automatic timing inheritance must prove the caller's hard hold.
+
+    `adaptive-acquire --contention exclusive` either creates the hard hold or,
+    for a same-label owner, returns the entry point's explicit hard-hold answer.
+    A soft or unclassified `ALREADY_HELD` response cannot establish timing
+    isolation, so it is a refusal.  The explicit `inherited` mode remains the
+    route for an enclosing caller that has already made the required admission.
+    """
+
+    with shell_admission() as s:
+        s.coordination.answer("admit")
+        status, _output = s.acquire(estimate="8", contention="exclusive")
+        require(status == 0, "an exclusive request must be admitted when the host admits it")
+        require(
+            "--contention exclusive" in s.requests()[0],
+            "a timing-authoritative caller must request exclusive admission",
+        )
+        require(len(s.releases()) == 1, "an exclusive hold this gate took must be released")
+
+        for answer in ("already-held", "already-held-soft"):
+            s.coordination.forget()
+            s.coordination.answer(answer)
+            status, output = s.acquire(estimate="8", contention="exclusive")
+            require(status != 0, f"{answer} must not authorize a timing run")
+            require("REFUSED — " in output, "insufficient inheritance must be a refusal verdict")
+            require(s.releases() == [], "an unproved inherited hold must not be released")
+
+        s.coordination.forget()
+        s.coordination.answer("already-held-hard")
+        status, output = s.acquire(estimate="8", contention="exclusive")
+        require(status == 0, "the entry point's hard-hold answer may cover a timing run")
+        require("REFUSED" not in output, "a proved hard inheritance is not a refusal")
+        require(s.releases() == [], "a caller-owned hard hold remains caller-owned")
+
+        s.coordination.forget()
+        s.coordination.answer("refuse")
+        status, output = s.acquire("inherited", estimate="8", contention="exclusive")
+        require(status == 0, "an explicitly declared enclosing admission remains supported")
+        require(s.coordination.calls_made() == [], "explicit inheritance must not acquire again")
+        require("REFUSED" not in output, "explicit inheritance must not expose a host refusal")
+
+
+# --- production wrapper lifetime --------------------------------------------
+
+BEACON_CURRENT_MAINNET_WRAPPER = (
+    Path(__file__).resolve().parent / "check-beacon-deposit-current-mainnet.sh"
+)
+
+
+def beacon_current_mainnet_wrapper_source() -> str:
+    """The production wrapper, read through a seam for the biting control."""
+
+    return BEACON_CURRENT_MAINNET_WRAPPER.read_text(encoding="utf-8")
+
+
+def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str]]:
+    """Run the production shell path against harmless admission and children.
+
+    The disposable `lake` and isolated-target Python stand-ins never elaborate
+    or inspect a target.  They append their completion to the admission trace,
+    so the control can prove that the shell releases only after the final child
+    returns while preserving that child's status.
+    """
+
+    directory = Path(tempfile.mkdtemp(prefix="beacon-mainnet-lifecycle-"))
+    coordination_directory = Path(tempfile.mkdtemp(prefix="beacon-mainnet-host-"))
+    try:
+        coordination = Coordination(coordination_directory)
+        repository = directory / "blanc" / ".worktrees" / "blanc-mainnet-lifecycle-control"
+        scripts = repository / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "gate-semaphore.sh").write_text(
+            gate_semaphore_shell_source(), encoding="utf-8"
+        )
+        wrapper = scripts / "check-beacon-deposit-current-mainnet.sh"
+        wrapper.write_text(beacon_current_mainnet_wrapper_source(), encoding="utf-8")
+        wrapper.chmod(0o755)
+        # The wrapper's mandatory static preflight is pure Python.  Its real
+        # semantic body is outside this lifetime control, so a harmless child
+        # lets the production shell advance to the admitted path.
+        (scripts / "gen-beacon-deposit-current-mainnet.py").write_text(
+            "raise SystemExit(0)\n", encoding="utf-8"
+        )
+
+        fake_bin = directory / "bin"
+        fake_bin.mkdir()
+        (fake_bin / "lake").write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "lean-child" >> "{coordination.calls}"\n',
+            encoding="utf-8",
+        )
+        (fake_bin / "lake").chmod(0o755)
+
+        target = directory / "target"
+        target_python = target / ".venv" / "bin" / "python"
+        target_python.parent.mkdir(parents=True)
+        child_status = directory / "child-status"
+        child_status.write_text(f"{child_exit}\n", encoding="utf-8")
+        target_python.write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "generator-child" >> "{coordination.calls}"\n'
+            f'exit "$(cat "{child_status}")"\n',
+            encoding="utf-8",
+        )
+        target_python.chmod(0o755)
+
+        creme = directory / "creme"
+        entry = creme / ".semaphore" / "semaphore"
+        entry.parent.mkdir(parents=True)
+        entry.write_text(coordination.entry.read_text(encoding="utf-8"), encoding="utf-8")
+        entry.chmod(0o755)
+        with declared_coordination(None):
+            completed = subprocess.run(
+                ["bash", str(wrapper)],
+                cwd=repository,
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "CREME_ROOT": str(creme),
+                    "JAUNE_T8N_TARGET": str(target),
+                    "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+                },
+            )
+        return completed.returncode, coordination.calls_made()
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(coordination_directory, ignore_errors=True)
+
+
+def control_beacon_current_mainnet_releases_after_its_final_child() -> None:
+    """The production wrapper keeps its EXIT trap past the generator child."""
+
+    for child_exit in (0, 17):
+        status, trace = run_beacon_current_mainnet_lifecycle(child_exit)
+        require(status == child_exit, "the final generator exit status must reach the gate caller")
+        require(
+            trace == [
+                "adaptive-acquire blanc-mainnet-lifecycle-control --note Blanc gate: the BeaconDeposit current-mainnet artifacts --memory-gib 4 --contention tolerant",
+                "lean-child",
+                "generator-child",
+                "release blanc-mainnet-lifecycle-control",
+            ],
+            "the real wrapper must release exactly once, after its harmless final child",
         )
 
 
@@ -3175,10 +3332,8 @@ def control_negative_shell_ignoring_the_declared_coordination_mode() -> None:
                   "a missing Creme checkout turned into a refusal")
 
     always_releases = committed.replace(
-        '  case "$gs_out" in\n    *ALREADY_HELD*) return 0 ;;\n  esac\n',
-        '  case "$gs_out" in\n'
-        '    *ALREADY_HELD*) GATE_SEMAPHORE_HELD="$gs_label"; return 0 ;;\n'
-        '  esac\n',
+        '        tolerant:*) return 0 ;;\n',
+        '        tolerant:*) GATE_SEMAPHORE_HELD="$gs_label"; return 0 ;;\n',
     )
     require(always_releases != committed,
             "the negative control no longer matches the inheritance branch it breaks")
@@ -3186,6 +3341,35 @@ def control_negative_shell_ignoring_the_declared_coordination_mode() -> None:
                  lambda: always_releases):
         must_fail(control_shell_coordination_asks_the_host_and_fails_closed,
                   "an inherited hold released by the process that never took it")
+
+    unproved_authoritative_inheritance = committed.replace(
+        '      case "$gs_contention:$gs_out" in\n'
+        '        tolerant:*) return 0 ;;\n'
+        '        sensitive:*"hard hold"*|exclusive:*"hard hold"*) return 0 ;;\n'
+        '        *) gs_out="$gs_out"$\'\\n\'"ALREADY_HELD response did not prove a hard hold for contention=$gs_contention" ;;\n'
+        '      esac\n',
+        '      return 0\n',
+    )
+    require(unproved_authoritative_inheritance != committed,
+            "the negative control no longer matches the authoritative inheritance guard")
+    with patched(sys.modules[__name__], "gate_semaphore_shell_source",
+                 lambda: unproved_authoritative_inheritance):
+        must_fail(control_shell_authoritative_admission_requires_a_hard_inheritance,
+                  "an unproved timing inheritance was accepted")
+
+
+def control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold() -> None:
+    """Replacing the final child call with `exec` must fail the lifetime control."""
+
+    committed = beacon_current_mainnet_wrapper_source()
+    final_child = '\n/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \\\n'
+    require(committed.count(final_child) == 1,
+            "the negative control no longer matches the final current-mainnet child")
+    with_exec = committed.replace(final_child, "\nexec" + final_child[1:])
+    with patched(sys.modules[__name__], "beacon_current_mainnet_wrapper_source",
+                 lambda: with_exec):
+        must_fail(control_beacon_current_mainnet_releases_after_its_final_child,
+                  "an exec that bypasses the wrapper EXIT trap was accepted")
 
 
 def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
@@ -3209,6 +3393,7 @@ NEGATIVE_CONTROLS = (
     control_negative_holding_the_host_across_the_selective_run,
     control_negative_ignoring_the_declared_coordination_mode,
     control_negative_shell_ignoring_the_declared_coordination_mode,
+    control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold,
 )
 
 CONTROLS = (
@@ -3253,6 +3438,8 @@ CONTROLS = (
     control_shell_coordination_inherited_borrows_and_releases_nothing,
     control_shell_absent_coordination_entry_point_announces_once_and_runs,
     control_shell_admission_request_states_the_goal_the_estimate_and_the_wait,
+    control_shell_authoritative_admission_requires_a_hard_inheritance,
+    control_beacon_current_mainnet_releases_after_its_final_child,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,

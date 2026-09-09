@@ -138,7 +138,7 @@ if [[ -n "${TMPDIR:-}" ]]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-exec /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-beacon-deposit-current-mainnet.py" \
   --root "$TARGET_ROOT" --blanc-artifacts "$ARTIFACTS" \
   "${WRAPPER_ARGS[@]}" "$@"
