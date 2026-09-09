@@ -38,7 +38,8 @@ def footprint (stage : MemoryStage) : List (Nat × Nat) :=
 /-- Every write misses the selected half-open byte window. -/
 def avoids (stage : MemoryStage) (offset width : Nat) : Bool :=
   stage.all fun write =>
-    decide (offset + width ≤ write.1 ∨
+    decide (write.2.length = 0 ∨ width = 0 ∨
+      offset + width ≤ write.1 ∨
       write.1 + write.2.length ≤ offset)
 
 /-- Every selected window is missed by every write. -/
@@ -104,7 +105,14 @@ theorem applyImage_sliceD_of_avoids
         decide_eq_true_eq] at h
       rw [applyImage_cons,
         ih (image := Bytes.writeAt image write.1 write.2) h.2]
-      rcases h.1 with after | before
+      rcases h.1 with emptyPayload | emptyWindow | after | before
+      · rw [List.sliceD_eq_map, List.sliceD_eq_map]
+        apply List.map_congr_left
+        intro i hi
+        rw [Bytes.getD_writeAt, if_neg]
+        omega
+      · subst width
+        simp [List.sliceD]
       · exact Bytes.sliceD_writeAt_before _ _ _ _ _ after
       · exact Bytes.sliceD_writeAt_after _ _ _ _ _ before
 
@@ -263,6 +271,18 @@ theorem control_read_written_allows_earlier_overlap :
 /-- A later overlapping write is rejected by the finite window guard. -/
 theorem control_overlap_guard_rejects :
     avoids ([(0, [1]), (1, [2])] : MemoryStage) 0 2 = false := by
+  decide +kernel
+
+/-- Empty write footprints miss every observation window, even when their
+offset lies inside it. -/
+theorem control_empty_payload_avoids :
+    avoids ([(5, [])] : MemoryStage) 0 10 = true := by
+  decide +kernel
+
+/-- Empty observation windows miss every write footprint, even when their
+offset lies inside it. -/
+theorem control_empty_window_avoids :
+    avoids ([(0, [1, 2])] : MemoryStage) 1 0 = true := by
   decide +kernel
 
 /-- Covered-size preservation cannot be invoked for a write beyond the given
