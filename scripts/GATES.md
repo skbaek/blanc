@@ -845,14 +845,17 @@ same contract, and both files' headers are the authority on it:
   no hold of its own; every row it executes is a separate process that
   coordinates for itself and lets go when it is done, so a long selective run
   leaves a window between rows rather than owning the host for hours.
-* **Inheriting rather than deadlocking.** The hold is named after the goal
-  worktree the gate is running in. A session that already holds this host for
-  that goal gets `ALREADY_HELD` back, immediately and without queueing, and
-  that answer is read as inheritance: the gate proceeds under the caller's hold
-  and releases nothing, so one unit is never charged twice and a suite cannot
-  block behind itself. `BLANC_GATE_SEMAPHORE=inherited` states the same thing
-  outright when the caller holds the host under some other name, and
-  `BLANC_GATE_SEMAPHORE_LABEL` states that name.
+* **Inheriting an existing reservation.** The hold is named after the goal
+  worktree the gate is running in. A same-label request returns
+  `ALREADY_HELD` immediately, without queueing. The shell helper accepts that
+  answer automatically only for `tolerant` work. For `sensitive` or `exclusive`
+  work it refuses, because the response does not establish the requested
+  reservation's class and memory estimate. An enclosing caller that has already
+  obtained the complete required admission may explicitly set
+  `BLANC_GATE_SEMAPHORE=inherited`; the gate then releases nothing, leaving
+  release to the caller. `BLANC_GATE_SEMAPHORE_LABEL` selects the label when
+  the enclosing reservation uses a different name. Explicit inheritance is the
+  caller's assertion of sufficient admission, not a request for admission.
 * **Refusal is not failure.** A refusal that waiting cannot change is reported
   the way `gate-lock.sh` reports its own — `REFUSED — ...`, exit 2. The gate
   did not fail; it did not run, and no verdict of any kind may be read out of
@@ -888,12 +891,13 @@ it. The registry declares the helper as an input of every gate that reads it,
 so editing either helper re-runs those gates rather than crediting them from
 evidence produced under different coordination.
 
-`check-elab.sh` keeps its own report and heavy locks; the semaphore hold is in
-addition to them, not a replacement. The hold it takes is the entry point's
-default class, which is weaker than the exclusivity a timing-authoritative run
-wants: a timing run should still be started by a session that has taken an
-`exclusive` hold itself, and it will then inherit that hold rather than take a
-second one.
+`check-elab.sh` keeps its own report and heavy locks and explicitly requests
+an `exclusive` semaphore reservation. An enclosing session that has already
+obtained an exclusive reservation with the required memory estimate runs it
+with `BLANC_GATE_SEMAPHORE=inherited` and releases that reservation after the
+command finishes. A same-label `ALREADY_HELD` response alone does not authorize
+timing; automatic inheritance refuses it. The report and heavy locks remain
+in force under either direct admission or explicit inheritance.
 
 | gate | report lock | heavy lock |
 |---|---|---|
