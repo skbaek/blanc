@@ -44,12 +44,12 @@ SOURCES = {
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
 AXIOM_GATE = "scripts/check.sh"
-PUBLIC_THEOREM_COUNT = 164
+PUBLIC_THEOREM_COUNT = 165
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "39f728be6a9e22a79230232b9b05780569c8b525a14faad95f4f1b71a72caeb8"
+    "dcf020726dbbbeac0228886f877679ad3a9872b108e02c7110e0cbddc3356565"
 )
 AXIOM_EXPECTATIONS_SHA256 = (
-    "aa632491d3a791e10077c2a9e7add8b8df96d24ead1fc0c57b44e324cc6a6d7f"
+    "a272d7872d1d98d5e8bdfb5bbb009fca6bdad136f4e1dccbb40ddc0029a6aaed"
 )
 
 # Kept as digests rather than copies to make this executable readable.  The
@@ -424,7 +424,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
     """Tie this source family to its exact repository-wide axiom probes."""
     # The constructor owner is included only to enforce the private-to-proof
     # façade below.  Its pre-existing theorem inventory is outside the nine
-    # deployment proof owners and therefore outside this exact 164-name set.
+    # deployment proof owners and therefore outside this exact 165-name set.
     names = public_theorem_names({
         owner: source for owner, source in sources.items()
         if owner != "constructor"

@@ -880,6 +880,7 @@ Blanc.benvAfterTransfer_stat|$STANDARD
 Blanc.processMessage_ok_of_exec|$STANDARD
 Blanc.processCreateMessage_ok_of_processMessage_and_charge|$STANDARD
 Blanc.processCreateMessage_ok_of_processMessage_error|$STANDARD
+Blanc.jauneListCompare_eq_compareLex|propext
 Blanc.processUncheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.processCheckedSystemTransaction_deploymentSystemProgram|$STANDARD
 Blanc.canonicalDeploymentSystemPrefix|$STANDARD

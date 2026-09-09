@@ -631,6 +631,7 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.processMessage_ok_of_exec
 #print axioms Blanc.processCreateMessage_ok_of_processMessage_and_charge
 #print axioms Blanc.processCreateMessage_ok_of_processMessage_error
+#print axioms Blanc.jauneListCompare_eq_compareLex
 #print axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
 #print axioms Blanc.canonicalDeploymentSystemPrefix
