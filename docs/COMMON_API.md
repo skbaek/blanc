@@ -839,6 +839,15 @@ repeat their byte-slice normalization in a contract family.
   `Bytes.sliceD_sliceD_of_le`, `Bytes.sliceD_of_sliceD_eq`,
   `Bytes.sliceD_of_sliceD_zero_eq`, and
   `Bytes.writeAt_append_middle_at`.
+- Compose more than one write with the ordered staging API in
+  [`Blanc/MemoryLayout.lean`](../Blanc/MemoryLayout.lean). `MemoryStage` keeps
+  exact `(offset, payload)` entries in execution order, `applyImage` folds
+  actual `Bytes.writeAt`, and `footprint` records the corresponding byte
+  spans. Use the decidable `avoids` or `avoidsAll` guard with
+  `applyImage_sliceD_of_avoids` or `applyImage_slices_of_avoidsAll` for
+  preserved padded windows. `read_written` requires only the later suffix to
+  miss the selected write, so an earlier overlap and an intentional later
+  replacement retain ordinary last-write-wins behavior.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
@@ -858,6 +867,14 @@ repeat their byte-slice normalization in a contract family.
   class.
 - `Mem.size_write_of_le`, `Mem.size_read_snd_of_le`, and related extension
   lemmas live in [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean).
+- For a finite layout, `MemoryStage.applyMemory` folds actual `Mem.write` in
+  the same order as `applyImage`. `MemoryStage.wf_reads` carries the exact
+  `Mem.Wf`/`Mem.Reads` correspondence; `applyMemory_size` computes allocation
+  through `memExtsSize`, including empty writes and 32-byte rounding;
+  `applyMemory_size_of_covered` preserves an existing allocation only from an
+  explicit fit premise. Use `words`, `applyMemory_words_size`, and
+  `read_written_word` for fixed word stores. These declarations live in
+  [`Blanc/MemoryLayout.lean`](../Blanc/MemoryLayout.lean).
 - For construction, `Ninst.runCompiled_mstore8_of` retains the exact singleton
   low-byte write and names its dynamic expansion charge. `func_run` uses the
   same rule for every supported compiled relation; pass that charge as the
@@ -935,6 +952,11 @@ import is `Blanc.Ladder`.
   below the boundary and `sliceD` to observe any padded width in the preserved
   suffix. Use `refl` and `trans` to compose frames, then
   `MemWordAt.of_wordFrame` when only a 32-byte machine window remains.
+- For a finite ordered trace, import
+  [`Blanc/MemoryLayout.lean`](../Blanc/MemoryLayout.lean) and use
+  `MemImage.applyStage` to advance the whole proof image,
+  `MemWordAt.applyStage` with one checked window guard, or
+  `MemoryStage.wordFrameFrom` when every write ends below a suffix boundary.
 
 `constructorPairStage_storageEffectRun` in
 `Blanc/BeaconDepositConstructorStorageEffects.lean` is the scratch-layout
