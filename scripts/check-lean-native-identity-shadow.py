@@ -78,6 +78,34 @@ def run_shadow(scope: str, output: Path) -> dict[str, Any]:
     }
 
 
+def run_baseline_axiom_probe(scope: str) -> dict[str, Any]:
+    checker = ROOT / f"scripts/check-lido-circuit-breaker-{scope}.py"
+    code = (
+        f"import runpy,sys; sys.path.insert(0, {str(ROOT / 'scripts')!r}); "
+        f"runpy.run_path({str(checker)!r})['axiom_checks']()"
+    )
+    env = dict(os.environ)
+    env.pop(native.SHADOW_ENV, None)
+    env.pop(native.OUTPUT_ENV, None)
+    env["BLANC_GATE_SEMAPHORE_WAIT"] = env.get("BLANC_GATE_SEMAPHORE_WAIT", "900")
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    started = time.perf_counter()
+    run = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    elapsed = time.perf_counter() - started
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    if run.returncode:
+        raise RuntimeError(f"{scope} baseline axiom probe failed ({run.returncode}):\n{run.stdout}")
+    return {
+        "command": f"existing {scope} axiom_checks(shadow=False)",
+        "exit": run.returncode, "wall_seconds": round(elapsed, 6),
+        "child_user_seconds": round(after.ru_utime - before.ru_utime, 6),
+        "child_system_seconds": round(after.ru_stime - before.ru_stime, 6),
+        "child_high_water_maxrss": after.ru_maxrss,
+        "rss_attribution": "RUSAGE_CHILDREN cumulative high-water mark",
+    }
+
+
 def expect_failure(label: str, fn: Callable[[], Any], contains: str) -> dict[str, str]:
     try:
         fn()
@@ -346,6 +374,8 @@ def main() -> None:
     cert_before = native.require_fresh_build_certificate()
     source_before = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                                    check=True, text=True, capture_output=True).stdout.strip()
+    baseline_measurements = [run_baseline_axiom_probe("access"),
+                             run_baseline_axiom_probe("enumeration")]
     measurements = [run_shadow("access", args.output_dir),
                     run_shadow("enumeration", args.output_dir)]
     all_records: dict[str, dict[str, Any]] = {}
@@ -391,6 +421,12 @@ def main() -> None:
         "lean_lookup_controls": lean_controls,
         "referenced_definition_body_control": semantic_body_control(),
         "measurements": measurements,
+        "baseline_measurements": baseline_measurements,
+        "wall_overhead_seconds": {
+            scope: round(measurements[index]["wall_seconds"] -
+                         baseline_measurements[index]["wall_seconds"], 6)
+            for index, scope in enumerate(("access", "enumeration"))
+        },
         "unsupported": [
             "no mathematical equivalence or reduction",
             "no transitive semantic-body identity",
