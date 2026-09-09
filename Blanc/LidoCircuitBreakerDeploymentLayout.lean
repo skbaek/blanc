@@ -830,6 +830,43 @@ theorem officialFullCreateInput_length_exact :
     runtimeTemplateCode_length_exact, abiEncodeConstructorArgs_length,
     constructorArgumentBytes]
 
+/-- Exact compilation of the provisional constructor program under runtime template length. -/
+theorem provisionalConstructorProgram_compile :
+    Prog.compile (constructorProgramForProof 0 0 runtimeTemplateCode.length) =
+      some provisionalConstructorPrefixForProof := by
+  have hcomp := Prog.compile_eq_some_getD_of_compiles
+    (constructorProgramForProof 0 0 runtimeTemplateCode.length)
+  have hlen := runtimeTemplateCode_length_exact
+  have h_compiles : Prog.compiles (constructorProgramForProof 0 0 runtimeTemplateCode.length) = true := by
+    rw [hlen]; exact provisionalConstructorProgram_compiles
+  have h_res := hcomp h_compiles
+  rw [← provisionalConstructorPrefixForProof_eq] at h_res
+  exact h_res
+
+/-- Exact compilation of the final constructor program under runtime template length. -/
+theorem finalConstructorProgram_compile :
+    Prog.compile (constructorProgramForProof 616 (616 + runtimeTemplateCode.length) runtimeTemplateCode.length) =
+      some lidoCircuitBreakerInitPrefix := by
+  have hc := lidoCircuitBreakerConstructorProgram_compile
+  have heq := DeploymentProof.lidoCircuitBreakerConstructorProgram_eq
+  rw [provisionalConstructorPrefix_length_exact] at heq
+  rw [heq] at hc
+  exact hc
+
+/-- Verified fixed-point creation coordinates certificate for LidoCircuitBreaker. -/
+def circuitBreakerCreationCert :
+    CreationCoordinatesCertificate constructorProgramForProof runtimeTemplateCode.length where
+  prefixLength := 616
+  provisionalBytes := provisionalConstructorPrefixForProof
+  finalBytes := lidoCircuitBreakerInitPrefix
+  provisional_compile := provisionalConstructorProgram_compile
+  prefixLength_eq := provisionalConstructorPrefix_length_exact.symm
+  final_compile := finalConstructorProgram_compile
+  fixed_point := lidoCircuitBreakerInitPrefix_length_exact
+
 end LidoCircuitBreaker
+
+/-- Public alias for the CircuitBreaker creation coordinates certificate. -/
+abbrev circuitBreakerCreationCert := LidoCircuitBreaker.circuitBreakerCreationCert
 
 end Blanc
