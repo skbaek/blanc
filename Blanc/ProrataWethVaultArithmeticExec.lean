@@ -4,6 +4,7 @@ import Blanc.ProrataWethVaultArithmetic
 import Blanc.ProrataWethVaultFunctional
 import Blanc.CompiledFixedInvariance
 import Blanc.MemoryImage
+import Blanc.MemoryLayout
 
 namespace Blanc
 

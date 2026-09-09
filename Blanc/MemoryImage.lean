@@ -15,10 +15,72 @@ Blanc's memory-write algebra. `MemWordAt` forgets the rest of that image and
 retains one exact 32-byte window, which is the useful frame invariant when a
 long-lived word must cross unrelated scratch-memory traffic.
 
-These carriers were first developed for the Lido CircuitBreaker proofs. They
-are contract-independent: PRORATA's full-width arithmetic uses the same
-window transport to preserve long-lived operation words above its scratch
-region.
+## Canonical owner and import route
+
+This module is the canonical owner of both carriers. Import it directly with
+`import Blanc.MemoryImage`; it is a shared module whose own only import is
+`Blanc.Ladder`, so nothing here depends on any contract. Do not re-declare a
+local `MemImage`, `MemWordAt`, or a bespoke "this word survives that line"
+predicate in a contract module — extend this one.
+
+The carriers were first developed inside the Lido CircuitBreaker proofs and
+hoisted here unchanged; that family is the current consumer. Nothing about
+them is Lido-specific.
+
+## What each carrier is for
+
+`MemImage devm img` is the right shape while a proof still needs the *whole*
+image: it keeps `Mem.Wf` beside the image so the write algebra never
+re-derives it. `MemWordAt devm offset w` is the right shape once the proof
+only needs one word to survive: the image becomes existential, which is what
+keeps a large scratch region out of every downstream goal. Go from the first
+to the second with `MemWordAt.of_memImage`, and back to an anonymous image
+with `MemWordAt.memImage`.
+
+## Semantic and cost boundary
+
+- Every transport theorem here is *frame-shaped*: it carries an already-known
+  window across a step, and proves nothing about what the step computed. To
+  learn a word, store it (`MemWordAt.of_write`, `of_run_mstoreAt_mem`) or read
+  it back (`prefix_of_loadWord_window`); to carry it, use an `across*` lemma.
+- The disjointness side condition is the caller's. `writeMiss`,
+  `writeMissBytes` and `extendsWrite` all take an explicit
+  `offset + 32 ≤ n ∨ n + len ≤ offset`; this module never infers that a
+  contract's scratch region is below a window. That premise is where a layout
+  argument belongs, and it is deliberately not automated here.
+- `Mem.extends` never moves data, so `MemWordAt.extend` and
+  `MemWordAt.extends` are unconditional; `extendsWrite` is the combined
+  CALL-resume shape (extend, then write the copied return data).
+- `acrossStaticcall` and `acrossSuccessfulCall` are stated over the raw
+  `Ninst.Run` of the instruction with the operand stack supplied, and require
+  only `outputOffset + outputSize ≤ offset`. The callee's output is otherwise
+  unconstrained; that is what makes them reusable across contracts.
+- Cost: these are small structural proofs — `obtain`, one rewrite, and a
+  `sliceD` write-miss law. They are cheap to apply and do not need a raised
+  `maxRecDepth` or `maxHeartbeats` scope. The expensive part of a memory proof
+  is the surrounding walk, not the transport, which is the reason to compose
+  this carrier rather than re-prove transport inside a walk.
+- Not in scope: multi-region layouts, footprint or staging algebra, and any
+  automation that discharges region disjointness. A proof needing those still
+  writes them by hand today.
+
+## Minimal use
+
+Carry a word across an unrelated `CALL` resume, given the memory shape the
+call's inversion lemma already hands you:
+
+```
+example {a b : Devm} {offset : Nat} {w : B256}
+    {pairs : List (Nat × Nat)} {ys : Bytes} {n : Nat}
+    (shape : b.memory = (a.memory.extends pairs).write n ys)
+    (below : n + ys.length ≤ offset)
+    (window : MemWordAt a offset w) : MemWordAt b offset w :=
+  window.extendsWrite shape (Or.inr below)
+```
+
+`Blanc/LidoCircuitBreakerPauseJoin.lean:responder_hcall` is that same step in
+production, with the disjointness premise discharged from the contract's own
+output-size fact.
 -/
 
 /-- A concrete memory image, with the structural invariant the write algebra
@@ -109,6 +171,13 @@ theorem MemWordAt.slice_eq {a : Devm} {img : Bytes} {offset : Nat}
   obtain ⟨_, source, sourceReads, sourceSlice⟩ := window
   rw [← Mem.Reads.read reads, Mem.Reads.read sourceReads]
   exact sourceSlice
+
+/-- Read the selected word directly from the machine memory. -/
+theorem MemWordAt.readWord {a : Devm} {offset : Nat} {w : B256}
+    (window : MemWordAt a offset w) :
+    Bytes.toB256 (a.memory.read offset 32).1 = w := by
+  obtain ⟨_, img, reads, slice⟩ := window
+  rw [Mem.Reads.read reads, slice, B256.toB256_toBytes]
 
 /-- Transport a selected word to a new proof-carrying image whose relevant
 slice is known to agree with an image of the source memory. -/
