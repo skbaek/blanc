@@ -150,7 +150,7 @@ def decode_name(value: Any) -> str:
     if tag == "str" and len(value) == 3 and isinstance(value[2], str):
         prefix = decode_name(value[1])
         return f"{prefix}.{value[2]}" if prefix else value[2]
-    if tag == "num" and len(value) == 3 and isinstance(value[2], int) and value[2] >= 0:
+    if tag == "num" and len(value) == 3 and type(value[2]) is int and value[2] >= 0:
         prefix = decode_name(value[1])
         return f"{prefix}.{value[2]}" if prefix else str(value[2])
     raise ValueError("malformed Name constructor")
@@ -178,7 +178,7 @@ def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
     if not isinstance(value, list) or not value or not isinstance(value[0], str):
         raise ValueError("malformed Expr")
     tag = value[0]
-    if tag == "bvar" and len(value) == 2 and isinstance(value[1], int):
+    if tag == "bvar" and len(value) == 2 and type(value[1]) is int:
         if value[1] < 0 or value[1] >= depth:
             raise ValueError("loose bound variable")
         return
@@ -207,12 +207,12 @@ def _validate_expr(value: Any, params: set[str], depth: int = 0) -> None:
         literal = value[1]
         if len(literal) != 2 or literal[0] not in {"nat", "string"}:
             raise ValueError("malformed Literal")
-        if literal[0] == "nat" and (not isinstance(literal[1], int) or literal[1] < 0):
+        if literal[0] == "nat" and (type(literal[1]) is not int or literal[1] < 0):
             raise ValueError("malformed Nat literal")
         if literal[0] == "string" and not isinstance(literal[1], str):
             raise ValueError("malformed String literal")
         return
-    if tag == "proj" and len(value) == 4 and isinstance(value[2], int) and value[2] >= 0:
+    if tag == "proj" and len(value) == 4 and type(value[2]) is int and value[2] >= 0:
         decode_name(value[1])
         return _validate_expr(value[3], params, depth)
     raise ValueError(f"unknown or malformed Expr tag {tag!r}")

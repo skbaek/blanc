@@ -110,6 +110,15 @@ def decoder_controls(record: dict[str, Any]) -> dict[str, Any]:
         "malformed_tag": expect_failure("malformed tag", lambda: native.parse_frames(
             native.FRAME + replace_json(raw, "type", ["futureExpr"]), expected, exporter),
             "unknown or malformed Expr tag"),
+        "boolean_projection_index": expect_failure(
+            "boolean projection index", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "type", [
+                    "proj", ["anonymous"], True, ["sort", ["zero"]]
+                ]), expected, exporter), "unknown or malformed Expr tag"),
+        "boolean_nat_literal": expect_failure(
+            "boolean Nat literal", lambda: native.parse_frames(
+                native.FRAME + replace_json(raw, "type", ["lit", ["nat", True]]),
+                expected, exporter), "malformed Nat literal"),
         "schema": expect_failure("schema", lambda: native.parse_frames(
             native.FRAME + replace_json(raw, "schema", "future/v9"), expected, exporter),
             "schema mismatch"),
