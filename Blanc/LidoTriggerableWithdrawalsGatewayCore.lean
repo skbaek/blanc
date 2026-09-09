@@ -1,5 +1,6 @@
 import Blanc.CommonCore
 import Blanc.RevertPayload
+import Blanc.TaggedStorage
 
 /-!
   Source-level vocabulary for the Triggerable Withdrawals Gateway.
@@ -46,13 +47,46 @@ deriving DecidableEq
 
 /-! ## Family-owned tagged storage -/
 
-def low252Mask : B256 := Nat.toB256 (2 ^ 252 - 1)
+abbrev low252Mask : B256 := TaggedStorage.low252Mask
 def addressMask : B256 := Nat.toB256 (2 ^ 160 - 1)
 
-def regionWord (region : Nat) : B256 := Nat.toB256 (region * 2 ^ 252)
+abbrev regionWord (region : Nat) : B256 := TaggedStorage.regionWord region
 
-def taggedSlot (region : Nat) (payload : B256) : B256 :=
-  B256.or (regionWord region) (B256.and payload low252Mask)
+abbrev taggedSlot (region : Nat) (payload : B256) : B256 :=
+  TaggedStorage.encode region payload
+
+/-- TWG's retained slot vocabulary is the shared bounded tagged-key encoder. -/
+theorem taggedSlot_eq_encode (region : Nat) (payload : B256) :
+    taggedSlot region payload = TaggedStorage.encode region payload := rfl
+
+/-- A bounded payload is retained verbatim by a TWG tagged key.  This is a
+statement about payload words only; `roleLookupPayload` can still deliberately
+identify distinct role/account inputs after its family-local masking. -/
+theorem taggedSlot_eq_of_payload_lt {region : Nat} {payload : B256}
+    (hpayload : payload.toNat < 2 ^ 252) :
+    taggedSlot region payload = B256.or (regionWord region) payload :=
+  TaggedStorage.encode_eq_of_payload_lt hpayload
+
+/-- At one bounded tag, equality of TWG keys recovers equality of bounded
+payload words.  It does not assert injection for role/account pairs. -/
+theorem taggedSlot_injective_of_payload_lt
+    {region : Nat} {left right : B256}
+    (hregion : region < 16)
+    (hleft : left.toNat < 2 ^ 252)
+    (hright : right.toNat < 2 ^ 252)
+    (hslot : taggedSlot region left = taggedSlot region right) :
+    left = right :=
+  TaggedStorage.encode_injective_of_payload_lt hregion hleft hright hslot
+
+/-- Distinct bounded TWG regions remain separated for bounded payload words. -/
+theorem taggedSlot_ne_of_region_ne
+    {leftRegion rightRegion : Nat} {left right : B256}
+    (hlr : leftRegion < 16) (hrr : rightRegion < 16)
+    (hleft : left.toNat < 2 ^ 252)
+    (hright : right.toNat < 2 ^ 252)
+    (hne : leftRegion ≠ rightRegion) :
+    taggedSlot leftRegion left ≠ taggedSlot rightRegion right :=
+  TaggedStorage.encode_ne_of_region_ne hlr hrr hleft hright hne
 
 def configRegion : Nat := 1
 def roleLookupRoleRegion : Nat := 2

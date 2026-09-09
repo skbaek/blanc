@@ -20,7 +20,8 @@ namespace LidoTriggerableWithdrawalsGateway
 private theorem roleKeyWord_eq (role account : B256) (region : Nat) :
     regionWord region |||
         (low252Mask &&& ((addressMask &&& account) ^^^ role)) =
-      taggedSlot region (roleLookupPayload role account) := by
+      TaggedStorage.encode region (roleLookupPayload role account) := by
+  rw [← taggedSlot_eq_encode]
   unfold taggedSlot roleLookupPayload canonicalAccount
   rw [B256.and_comm addressMask account,
     B256.xor_comm (account &&& addressMask) role,
@@ -55,7 +56,7 @@ private lemma prefix_of_roleKeyForCaller
   have p7 := prefix_of_and qand2 p6
   have p8 := prefix_of_push (of_run_pushB256 qregion) p7
   have p9 := prefix_of_or qor p8
-  simpa [roleKeyWord_eq] using p9
+  simpa [roleKeyWord_eq, taggedSlot_eq_encode] using p9
 
 /-- Sufficient calldata forces the live arm of the gateway's static-argument
 guard.  The result is outcome-polymorphic so authorization and success proofs
