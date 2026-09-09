@@ -151,6 +151,98 @@ def lean_lookup_control(label: str, module: str, name: str, kind: str,
             "raw": run.stdout}
 
 
+def control_export_without_freshness(destination: Path) -> None:
+    """Expose the stale-artifact hazard only inside the disposable control tree."""
+    if not ROOT.name.endswith("-control"):
+        raise RuntimeError("freshness bypass is restricted to a *-control worktree")
+    module = "Blanc.LidoCircuitBreakerPreControl"
+    name = "Blanc.LidoCircuitBreaker.assignmentPost_assignment"
+    kind = "theorem"
+    exporter_hash = native.sha256(native.EXPORTER)
+    source = (
+        f"import {module}\n" + native.EXPORTER.read_text(encoding="utf-8") +
+        f'\n#blanc_native_identity "{module}" "{name}" "{kind}" "{exporter_hash}"\n'
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".lean", prefix="native-stale-bypass-",
+        dir=ROOT / "scripts", encoding="utf-8", delete=False,
+    ) as handle:
+        path = Path(handle.name)
+        handle.write(source)
+    try:
+        with gate_semaphore.admitted("native-identity stale-artifact hazard control"):
+            run = subprocess.run(["lake", "env", "lean", str(path.relative_to(ROOT))],
+                                 cwd=ROOT, text=True, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT)
+    finally:
+        path.unlink(missing_ok=True)
+    if run.returncode:
+        raise RuntimeError(f"control-only export failed ({run.returncode}):\n{run.stdout}")
+    record = native.parse_frames(run.stdout, ((module, name, kind),), exporter_hash)[0]
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps({
+        "warning": "CONTROL ONLY: freshness validation deliberately omitted",
+        "statement_sha256": record["statement_sha256"],
+        "type_sha256": record["type_sha256"],
+        "record_sha256": record["record_sha256"],
+        "raw_stdout": run.stdout,
+    }, indent=2, sort_keys=True) + "\n")
+    print("OK — CONTROL ONLY stale artifact exported with freshness validation omitted")
+
+
+def semantic_body_control() -> dict[str, Any]:
+    """Show that a referenced body can move while the direct theorem type does not."""
+    exporter_hash = native.sha256(native.EXPORTER)
+    variants = {
+        "identity": ("p", "hp"),
+        "conjunction": ("p ∧ True", "And.intro hp True.intro"),
+    }
+    observed: dict[str, Any] = {}
+    for label, (body, proof) in variants.items():
+        namespace = "Blanc.LeanNativeIdentityPilot.SemanticBody"
+        declaration = namespace + ".referenced"
+        path = ROOT / "scripts/LeanNativeIdentitySemanticBodyControl.lean"
+        module = "scripts.LeanNativeIdentitySemanticBodyControl"
+        with path.open("w", encoding="utf-8") as handle:
+            source = (
+                native.EXPORTER.read_text(encoding="utf-8") + "\n" +
+                f"namespace {namespace}\n" +
+                f"def RefAlias (p : Prop) : Prop := {body}\n" +
+                f"theorem referenced (p : Prop) (hp : p) : RefAlias p := {proof}\n" +
+                f"end {namespace}\n" +
+                f'#blanc_native_identity "{module}" "{declaration}" "theorem" "{exporter_hash}"\n'
+            )
+            handle.write(source)
+        try:
+            with gate_semaphore.admitted(f"native-identity referenced-body {label} control"):
+                run = subprocess.run(["lake", "env", "lean", str(path.relative_to(ROOT))],
+                                     cwd=ROOT, text=True, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT)
+        finally:
+            path.unlink(missing_ok=True)
+        if run.returncode:
+            raise RuntimeError(f"semantic body {label} failed ({run.returncode}):\n{run.stdout}")
+        record = native.parse_frames(
+            run.stdout, ((module, declaration, "theorem"),), exporter_hash
+        )[0]
+        observed[label] = {
+            "definition_source_sha256": sha(
+                f"def RefAlias (p : Prop) : Prop := {body}".encode()),
+            "statement_sha256": record["statement_sha256"],
+        }
+    if observed["identity"]["definition_source_sha256"] == \
+            observed["conjunction"]["definition_source_sha256"]:
+        raise RuntimeError("semantic body control source evidence did not move")
+    if observed["identity"]["statement_sha256"] != \
+            observed["conjunction"]["statement_sha256"]:
+        raise RuntimeError("semantic body control unexpectedly changed direct statement identity")
+    return {
+        "verdict": "SOURCE_MOVED_DIRECT_TYPE_EQUAL",
+        "variants": observed,
+        "boundary": "referenced definition bodies require source/semantic evidence",
+    }
+
+
 def classify_fixtures(records: dict[str, dict[str, Any]]) -> dict[str, Any]:
     get = lambda short: records[f"Blanc.LeanNativeIdentityPilot.Fixture.{short}"]
     comparisons = [
@@ -219,6 +311,8 @@ def source_ledger(records: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             "owner_module": record["module"], "kind": record["kind"],
             "levelParams": record["levelParams"], "axioms": record["axioms"],
             "toolchain": record["toolchain"], "exporter": record["exporter"],
+            "driver_sha256": record["driver_sha256"],
+            "fixture_source_sha256": record["fixture_source_sha256"],
             "build_identity": record["build_identity"],
             "build_traces_sha256": record["build_traces_sha256"],
         })
@@ -227,9 +321,17 @@ def source_ledger(records: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--control-export-without-freshness", type=Path)
     parser.add_argument("--skip-lean-lookup-controls", action="store_true")
     args = parser.parse_args()
+    if args.control_export_without_freshness:
+        if args.output_dir:
+            parser.error("control export cannot be combined with --output-dir")
+        control_export_without_freshness(args.control_export_without_freshness)
+        return
+    if args.output_dir is None:
+        parser.error("--output-dir is required")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     parser_controls()  # Reuse the production lexical fake/comment/string controls.
     cert_before = native.require_fresh_build_certificate()
@@ -278,6 +380,7 @@ def main() -> None:
         "fixture_classifications": fixture,
         "decoder_controls": decoder,
         "lean_lookup_controls": lean_controls,
+        "referenced_definition_body_control": semantic_body_control(),
         "measurements": measurements,
         "unsupported": [
             "no mathematical equivalence or reduction",

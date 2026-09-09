@@ -293,6 +293,8 @@ def enabled() -> bool:
 class Probe:
     scope: str
     exporter: str
+    driver: str
+    fixture_source: str | None
     expected: tuple[tuple[str, str, str], ...]
     certificate_before: dict[str, Any]
 
@@ -304,6 +306,7 @@ def write_probe_source(handle: IO[str], scope: str, module_name: str) -> Probe |
         raise RuntimeError(f"unknown native-identity scope {scope}")
     certificate = require_fresh_build_certificate()
     exporter = sha256(EXPORTER)
+    driver = sha256(Path(__file__))
     handle.write(EXPORTER.read_text(encoding="utf-8"))
     expected = list(TARGETS[scope])
     if scope == "access":
@@ -313,7 +316,9 @@ def write_probe_source(handle: IO[str], scope: str, module_name: str) -> Probe |
                 f"Blanc.LeanNativeIdentityPilot.Fixture.{short}", kind))
     for module, name, kind in expected:
         handle.write(f'\n#blanc_native_identity "{module}" "{name}" "{kind}" "{exporter}"\n')
-    return Probe(scope, exporter, tuple(expected), certificate)
+    fixture_source = hashlib.sha256(FIXTURE_SOURCE.encode("utf-8")).hexdigest() \
+        if scope == "access" else None
+    return Probe(scope, exporter, driver, fixture_source, tuple(expected), certificate)
 
 
 def accept_probe_output(probe: Probe | None, stdout: str) -> list[dict[str, Any]]:
@@ -333,6 +338,8 @@ def accept_probe_output(probe: Probe | None, stdout: str) -> list[dict[str, Any]
                 "schema": record["schema"],
                 "toolchain": record["toolchain"],
                 "exporter": record["exporter"],
+                "driver_sha256": probe.driver,
+                "fixture_source_sha256": probe.fixture_source,
                 "module": record["owning_module"],
                 "name": record["qualified_name"],
                 "kind": record["kind"],

@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import re
 import hashlib
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import gate_semaphore
-import lean_native_identity_shadow
 from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -1581,9 +1581,11 @@ def qualified_role_name(key: str, name: str) -> str:
     namespace = "Blanc" if key == "compiledWalk" else "Blanc.LidoCircuitBreaker"
     return namespace + "." + name
 
-def axiom_checks() -> None:
+def axiom_checks(shadow: bool = False) -> None:
     gate_semaphore.guard("the Lido access-control axiom probe")
-    shadow = lean_native_identity_shadow.enabled()
+    native_identity = None
+    if shadow:
+        import lean_native_identity_shadow as native_identity
     temporary = (ROOT / "scripts/LeanNativeIdentityAccessProbe.lean") if shadow else None
     with (temporary.open("w", encoding="utf-8") if temporary else tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="access-axioms-", dir=ROOT,
@@ -1594,9 +1596,15 @@ def axiom_checks() -> None:
             handle.write("import " + module + "\n")
         if shadow:
             handle.write("import Lean.Util.CollectAxioms\n")
-        native_probe = lean_native_identity_shadow.write_probe_source(
-            handle, "access", "scripts.LeanNativeIdentityAccessProbe"
-        )
+        native_probe = None
+        if native_identity is not None:
+            try:
+                native_probe = native_identity.write_probe_source(
+                    handle, "access", "scripts.LeanNativeIdentityAccessProbe"
+                )
+            except RuntimeError as error:
+                temporary.unlink(missing_ok=True)
+                fail(str(error))
         for key, names in ROLES.items():
             for name in names:
                 handle.write("#print axioms " + qualified_role_name(key, name) + "\n")
@@ -1611,7 +1619,8 @@ def axiom_checks() -> None:
     if run.returncode:
         fail("axiom probe failed:\n" + run.stdout)
     try:
-        lean_native_identity_shadow.accept_probe_output(native_probe, run.stdout)
+        if native_identity is not None:
+            native_identity.accept_probe_output(native_probe, run.stdout)
     except (RuntimeError, ValueError) as error:
         fail(str(error))
     for key, names in ROLES.items():
@@ -1735,7 +1744,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--native-identity-shadow-only"]:
-        axiom_checks()
+        if os.environ.get("BLANC_NATIVE_IDENTITY_SHADOW") != "1":
+            fail("--native-identity-shadow-only requires BLANC_NATIVE_IDENTITY_SHADOW=1")
+        axiom_checks(shadow=True)
         print("OK — S5 native-identity shadow probe")
     elif sys.argv[1:]:
         fail(f"unexpected arguments: {sys.argv[1:]!r}")
