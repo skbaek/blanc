@@ -1,6 +1,6 @@
 import Blanc.BeaconDeposit
 import Blanc.BeaconDepositEncoding
-import Blanc.BytesWrite
+import Blanc.MemoryLayout
 
 /-!
 # Beacon deposit ABI-decoder memory
@@ -91,29 +91,23 @@ theorem depositOffsetWord_add_four
     change dynamicOffset data head + 4 < 2 ^ 256
     omega
 
-/-- Exact memory after all three successful dynamic-tail decoders.  The write
-order is the program's order: length, then offset, for each tail. -/
+/-- The decoder's exact word writes in execution order: length then offset for
+each dynamic tail. -/
+def depositDecodedWrites (data : Bytes) : List (Nat × B256) :=
+  [(96, depositLengthWord data 0),
+    (0, depositOffsetWord data 0),
+    (128, depositLengthWord data 1),
+    (32, depositOffsetWord data 1),
+    (160, depositLengthWord data 2),
+    (64, depositOffsetWord data 2)]
+
+/-- Exact memory after all three successful dynamic-tail decoders. -/
 def depositDecodedMemory (data : Bytes) : Mem :=
-  (((((Mem.empty.write 96 (depositLengthWord data 0).toBytes)
-      |>.write 0 (depositOffsetWord data 0).toBytes)
-    |>.write 128 (depositLengthWord data 1).toBytes)
-    |>.write 32 (depositOffsetWord data 1).toBytes)
-    |>.write 160 (depositLengthWord data 2).toBytes)
-    |>.write 64 (depositOffsetWord data 2).toBytes
+  (MemoryStage.words (depositDecodedWrites data)).applyMemory Mem.empty
 
 /-- Symbolic byte image corresponding to `depositDecodedMemory`. -/
 def depositDecodedImage (data : Bytes) : Bytes :=
-  (((((Bytes.writeAt [] 96 (depositLengthWord data 0).toBytes)
-      |> fun image => Bytes.writeAt image 0
-        (depositOffsetWord data 0).toBytes)
-    |> fun image => Bytes.writeAt image 128
-      (depositLengthWord data 1).toBytes)
-    |> fun image => Bytes.writeAt image 32
-      (depositOffsetWord data 1).toBytes)
-    |> fun image => Bytes.writeAt image 160
-      (depositLengthWord data 2).toBytes)
-    |> fun image => Bytes.writeAt image 64
-      (depositOffsetWord data 2).toBytes
+  (MemoryStage.words (depositDecodedWrites data)).applyImage []
 
 /-- The six decoder temporaries, with both a symbolic image and direct read
 coordinates for downstream event staging. -/
@@ -171,156 +165,85 @@ theorem DepositDecodedMemoryCarrier.read_length2
 /-- The concrete decoder image satisfies the reusable six-word carrier. -/
 def depositDecodedMemory_carrier (data : Bytes) :
     DepositDecodedMemoryCarrier (depositDecodedMemory data) data := by
-  let M0 := Mem.empty
-  let I0 : Bytes := []
-  let M1 := M0.write 96 (depositLengthWord data 0).toBytes
-  let I1 := Bytes.writeAt I0 96 (depositLengthWord data 0).toBytes
-  let M2 := M1.write 0 (depositOffsetWord data 0).toBytes
-  let I2 := Bytes.writeAt I1 0 (depositOffsetWord data 0).toBytes
-  let M3 := M2.write 128 (depositLengthWord data 1).toBytes
-  let I3 := Bytes.writeAt I2 128 (depositLengthWord data 1).toBytes
-  let M4 := M3.write 32 (depositOffsetWord data 1).toBytes
-  let I4 := Bytes.writeAt I3 32 (depositOffsetWord data 1).toBytes
-  let M5 := M4.write 160 (depositLengthWord data 2).toBytes
-  let I5 := Bytes.writeAt I4 160 (depositLengthWord data 2).toBytes
-  let M6 := M5.write 64 (depositOffsetWord data 2).toBytes
-  let I6 := Bytes.writeAt I5 64 (depositOffsetWord data 2).toBytes
-  have hwf0 : Mem.Wf M0 := Mem.wf_empty
-  have hreads0 : Mem.Reads M0 I0 := Mem.reads_empty
-  have hwf1 : Mem.Wf M1 := hwf0.write _ _
-  have hreads1 : Mem.Reads M1 I1 := Mem.Reads.write hwf0 hreads0 _ _
-  have hwf2 : Mem.Wf M2 := hwf1.write _ _
-  have hreads2 : Mem.Reads M2 I2 := Mem.Reads.write hwf1 hreads1 _ _
-  have hwf3 : Mem.Wf M3 := hwf2.write _ _
-  have hreads3 : Mem.Reads M3 I3 := Mem.Reads.write hwf2 hreads2 _ _
-  have hwf4 : Mem.Wf M4 := hwf3.write _ _
-  have hreads4 : Mem.Reads M4 I4 := Mem.Reads.write hwf3 hreads3 _ _
-  have hwf5 : Mem.Wf M5 := hwf4.write _ _
-  have hreads5 : Mem.Reads M5 I5 := Mem.Reads.write hwf4 hreads4 _ _
-  have hwf6 : Mem.Wf M6 := hwf5.write _ _
-  have hreads6 : Mem.Reads M6 I6 := Mem.Reads.write hwf5 hreads5 _ _
-  have hsize1 : M1.size = 128 := by
-    dsimp only [M1, M0]
-    rw [Mem.size_write_word_at]
+  have hinv := MemoryStage.wf_reads
+    (MemoryStage.words (depositDecodedWrites data))
+    Mem.wf_empty Mem.reads_empty
+  refine ⟨depositDecodedImage data, rfl, ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa only [depositDecodedMemory] using hinv.1
+  · simpa only [depositDecodedMemory, depositDecodedImage] using hinv.2
+  · rw [depositDecodedMemory,
+      MemoryStage.applyMemory_words_size _ _ (by decide +kernel)]
+    simp only [depositDecodedWrites, List.map_cons, List.map_nil,
+      memExtsSize, memExtSize]
+    change 32 * max 0 6 = 192
     decide +kernel
-  have hsize2 : M2.size = 128 := by
-    dsimp only [M2]
-    rw [Mem.size_write_word_at, hsize1]
-    decide +kernel
-  have hsize3 : M3.size = 160 := by
-    dsimp only [M3]
-    rw [Mem.size_write_word_at, hsize2]
-    decide +kernel
-  have hsize4 : M4.size = 160 := by
-    dsimp only [M4]
-    rw [Mem.size_write_word_at, hsize3]
-    decide +kernel
-  have hsize5 : M5.size = 192 := by
-    dsimp only [M5]
-    rw [Mem.size_write_word_at, hsize4]
-    decide +kernel
-  have hsize6 : M6.size = 192 := by
-    dsimp only [M6]
-    rw [Mem.size_write_word_at, hsize5]
-    decide +kernel
-  have hlen1 : I1.length = 128 := by
-    dsimp only [I1, I0]
-    rw [Bytes.length_writeAt, B256.length_toBytes]
-    decide +kernel
-  have hlen2 : I2.length = 128 := by
-    dsimp only [I2]
-    rw [Bytes.length_writeAt, hlen1, B256.length_toBytes]
-    decide +kernel
-  have hlen3 : I3.length = 160 := by
-    dsimp only [I3]
-    rw [Bytes.length_writeAt, hlen2, B256.length_toBytes]
-    decide +kernel
-  have hlen4 : I4.length = 160 := by
-    dsimp only [I4]
-    rw [Bytes.length_writeAt, hlen3, B256.length_toBytes]
-    decide +kernel
-  have hlen5 : I5.length = 192 := by
-    dsimp only [I5]
-    rw [Bytes.length_writeAt, hlen4, B256.length_toBytes]
-    decide +kernel
-  have hlen6 : I6.length = 192 := by
-    dsimp only [I6]
-    rw [Bytes.length_writeAt, hlen5, B256.length_toBytes]
-    decide +kernel
-  have hoffset0 :
-      I6.sliceD 0 32 0 = (depositOffsetWord data 0).toBytes := by
-    dsimp only [I6]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I5]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I4]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I3]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I2]
-    rw [show 32 = (depositOffsetWord data 0).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  have hoffset1 :
-      I6.sliceD 32 32 0 = (depositOffsetWord data 1).toBytes := by
-    dsimp only [I6]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I5]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I4]
-    rw [show 32 = (depositOffsetWord data 1).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  have hoffset2 :
-      I6.sliceD 64 32 0 = (depositOffsetWord data 2).toBytes := by
-    dsimp only [I6]
-    rw [show 32 = (depositOffsetWord data 2).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  have hlength0 :
-      I6.sliceD 96 32 0 = (depositLengthWord data 0).toBytes := by
-    dsimp only [I6]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes])]
-    dsimp only [I5]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I4]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; omega)]
-    dsimp only [I3]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I2]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; omega)]
-    dsimp only [I1]
-    rw [show 32 = (depositLengthWord data 0).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  have hlength1 :
-      I6.sliceD 128 32 0 = (depositLengthWord data 1).toBytes := by
-    dsimp only [I6]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; omega)]
-    dsimp only [I5]
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega)]
-    dsimp only [I4]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; omega)]
-    dsimp only [I3]
-    rw [show 32 = (depositLengthWord data 1).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  have hlength2 :
-      I6.sliceD 160 32 0 = (depositLengthWord data 2).toBytes := by
-    dsimp only [I6]
-    rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
-      rw [B256.length_toBytes]; omega)]
-    dsimp only [I5]
-    rw [show 32 = (depositLengthWord data 2).toBytes.length by
-      rw [B256.length_toBytes]]
-    exact Bytes.sliceD_writeAt _ _ _
-  change DepositDecodedMemoryCarrier M6 data
-  exact ⟨I6, rfl, hwf6, hreads6, hsize6, hlen6,
-    hoffset0, hoffset1, hoffset2, hlength0, hlength1, hlength2⟩
+  · rw [depositDecodedImage, MemoryStage.applyImage_words_length]
+    simp [depositDecodedWrites]
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        [(96, depositLengthWord data 0)]
+        [(128, depositLengthWord data 1),
+          (32, depositOffsetWord data 1),
+          (160, depositLengthWord data 2),
+          (64, depositOffsetWord data 2)]
+        [] 0 (depositOffsetWord data 0) (by
+          simp [MemoryStage.words, MemoryStage.avoids]))
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        [(96, depositLengthWord data 0),
+          (0, depositOffsetWord data 0),
+          (128, depositLengthWord data 1)]
+        [(160, depositLengthWord data 2),
+          (64, depositOffsetWord data 2)]
+        [] 32 (depositOffsetWord data 1) (by
+          simp [MemoryStage.words, MemoryStage.avoids,
+            B256.length_toBytes]))
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        [(96, depositLengthWord data 0),
+          (0, depositOffsetWord data 0),
+          (128, depositLengthWord data 1),
+          (32, depositOffsetWord data 1),
+          (160, depositLengthWord data 2)]
+        [] [] 64 (depositOffsetWord data 2) (by
+          simp [MemoryStage.words, MemoryStage.avoids]))
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        []
+        [(0, depositOffsetWord data 0),
+          (128, depositLengthWord data 1),
+          (32, depositOffsetWord data 1),
+          (160, depositLengthWord data 2),
+          (64, depositOffsetWord data 2)]
+        [] 96 (depositLengthWord data 0) (by
+          simp [MemoryStage.words, MemoryStage.avoids,
+            B256.length_toBytes]))
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        [(96, depositLengthWord data 0),
+          (0, depositOffsetWord data 0)]
+        [(32, depositOffsetWord data 1),
+          (160, depositLengthWord data 2),
+          (64, depositOffsetWord data 2)]
+        [] 128 (depositLengthWord data 1) (by
+          simp [MemoryStage.words, MemoryStage.avoids,
+            B256.length_toBytes]))
+  · simpa only [depositDecodedImage, depositDecodedWrites,
+      List.cons_append, List.nil_append] using
+      (MemoryStage.read_written_word
+        [(96, depositLengthWord data 0),
+          (0, depositOffsetWord data 0),
+          (128, depositLengthWord data 1),
+          (32, depositOffsetWord data 1)]
+        [(64, depositOffsetWord data 2)]
+        [] 160 (depositLengthWord data 2) (by
+          simp [MemoryStage.words, MemoryStage.avoids,
+            B256.length_toBytes]))
 
 end Blanc.BeaconDeposit

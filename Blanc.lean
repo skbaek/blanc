@@ -8,6 +8,7 @@ import Blanc.BalanceAlgebra
 import Blanc.WordArithmetic
 import Blanc.MemoryImage
 import Blanc.BytesWrite
+import Blanc.MemoryLayout
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
 import Blanc.MessageResult
