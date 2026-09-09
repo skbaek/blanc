@@ -270,6 +270,32 @@ theorem Func.isSome_toSymbolic (Label : Type) (f : Func) :
         rfl
   | call n => rfl
 
+/-- Lift a call-free `Func` into `SymbolicFunc Label`. Fails at compile time if `f` contains calls. -/
+def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSome = true := by rfl) :
+    SymbolicFunc Label :=
+  (f.toSymbolic? Label).get h
+
+@[simp]
+theorem Func.erase_liftCallFree (f : Func) (h : (f.toSymbolic? Label).isSome = true) (map : Label → Nat) :
+    (f.liftCallFree Label h).erase map = f := by
+  have h_eq : f.toSymbolic? Label = some (f.liftCallFree Label h) := Option.get_mem h
+  exact Func.erase_toSymbolic f (f.liftCallFree Label h) h_eq map
+
+/-- Prepend a `Line` of instructions to a `SymbolicFunc`. -/
+def SymbolicFunc.prepend (l : Line) (f : SymbolicFunc Label) : SymbolicFunc Label :=
+  match l with
+  | [] => f
+  | x :: xs => .next x (SymbolicFunc.prepend xs f)
+
+@[simp]
+theorem SymbolicFunc.erase_prepend (l : Line) (f : SymbolicFunc Label) (map : Label → Nat) :
+    (SymbolicFunc.prepend l f).erase map = l +++ (f.erase map) := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    simp [SymbolicFunc.prepend, SymbolicFunc.erase, ih]
+    rfl
+
 /-! ## Structural erasure theorems -/
 
 /-- Successful label lookups imply `resolveFunc` matches total erasure. -/
