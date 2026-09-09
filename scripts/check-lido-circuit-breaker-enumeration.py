@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 import gate_semaphore
+import lean_native_identity_shadow
 from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -102,6 +103,11 @@ def axiom_checks() -> None:
     ) as handle:
         temporary = Path(handle.name)
         handle.write("import Blanc.LidoCircuitBreakerEnumeration\n")
+        if lean_native_identity_shadow.enabled():
+            handle.write("import Lean.Util.CollectAxioms\n")
+        native_probe = lean_native_identity_shadow.write_probe_source(
+            handle, "enumeration", temporary.stem
+        )
         for name in ROLES:
             handle.write(
                 "#print axioms Blanc.LidoCircuitBreaker." + name + "\n"
@@ -116,6 +122,10 @@ def axiom_checks() -> None:
         temporary.unlink(missing_ok=True)
     if run.returncode:
         fail("axiom probe failed:\n" + run.stdout)
+    try:
+        lean_native_identity_shadow.accept_probe_output(native_probe, run.stdout)
+    except (RuntimeError, ValueError) as error:
+        fail(str(error))
     for name in ROLES:
         qualified = "Blanc.LidoCircuitBreaker." + name
         match = re.search(
@@ -220,4 +230,10 @@ def main() -> None:
     print("OK — S3 enumeration assurance: 18 Lean controls; 10 exact public/auxiliary headers and axiom pins; exact-code Registry witnesses at empty/singleton/64; ABI/order/padding/wrap, cursor independence and collision rejection, writer certificate rejection, cap, no-op model/event-omission and event-shape controls; header mutation, deletion and trust controls")
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--native-identity-shadow-only"]:
+        axiom_checks()
+        print("OK — S3 native-identity shadow probe")
+    elif sys.argv[1:]:
+        fail(f"unexpected arguments: {sys.argv[1:]!r}")
+    else:
+        main()

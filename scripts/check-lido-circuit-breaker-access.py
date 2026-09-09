@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 
 import gate_semaphore
+import lean_native_identity_shadow
 from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -1582,13 +1583,20 @@ def qualified_role_name(key: str, name: str) -> str:
 
 def axiom_checks() -> None:
     gate_semaphore.guard("the Lido access-control axiom probe")
-    with tempfile.NamedTemporaryFile(
+    shadow = lean_native_identity_shadow.enabled()
+    temporary = (ROOT / "scripts/LeanNativeIdentityAccessProbe.lean") if shadow else None
+    with (temporary.open("w", encoding="utf-8") if temporary else tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="access-axioms-", dir=ROOT,
         encoding="utf-8", delete=False,
-    ) as handle:
+    )) as handle:
         temporary = Path(handle.name)
         for module in MODULES.values():
             handle.write("import " + module + "\n")
+        if shadow:
+            handle.write("import Lean.Util.CollectAxioms\n")
+        native_probe = lean_native_identity_shadow.write_probe_source(
+            handle, "access", "scripts.LeanNativeIdentityAccessProbe"
+        )
         for key, names in ROLES.items():
             for name in names:
                 handle.write("#print axioms " + qualified_role_name(key, name) + "\n")
@@ -1602,6 +1610,10 @@ def axiom_checks() -> None:
         temporary.unlink(missing_ok=True)
     if run.returncode:
         fail("axiom probe failed:\n" + run.stdout)
+    try:
+        lean_native_identity_shadow.accept_probe_output(native_probe, run.stdout)
+    except (RuntimeError, ValueError) as error:
+        fail(str(error))
     for key, names in ROLES.items():
         for name in names:
             qualified = qualified_role_name(key, name)
@@ -1722,4 +1734,10 @@ def main() -> None:
           f"{controls} labelled header mutations, deletion and trust controls")
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--native-identity-shadow-only"]:
+        axiom_checks()
+        print("OK — S5 native-identity shadow probe")
+    elif sys.argv[1:]:
+        fail(f"unexpected arguments: {sys.argv[1:]!r}")
+    else:
+        main()
