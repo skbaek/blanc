@@ -116,7 +116,8 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionTraceFresh",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
-           "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape"]
+           "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
+           "SymbolicProgram"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
