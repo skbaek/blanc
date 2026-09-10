@@ -130,7 +130,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Check 5 reads the two discovery surfaces, so docs/COMMON_API.md and scripts/proof-recipes.toml are real inputs to this gate even though no Lean module moved.",
+      "note": "Checks 5 and 6 read the two discovery surfaces, so docs/COMMON_API.md and scripts/proof-recipes.toml are real inputs to this gate even though no Lean module moved. Check 6 also binds every SHARED row of the classification table to a docs/COMMON_API.md citation, so adding a shared module is itself a change to this gate's inputs.",
       "order": 4,
       "verdict": {
         "expect_exit": 0,
