@@ -328,6 +328,15 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeContainsName `Blanc.selector target
   | "goal-shape:linear-dispatch-selection" =>
       return proofRecipeContainsName `Blanc.linearDispatchWith target
+  | "goal-head:LinkCertificate" => return head == some `Blanc.LinkCertificate
+  | "goal-shape:symbolic-label-linking" =>
+      return proofRecipeContainsName `Blanc.resolve target ||
+        proofRecipeContainsName `Blanc.checkLink target ||
+        proofRecipeContainsName `Blanc.SymbolicProg.findLabel? target ||
+        proofRecipeContainsName `Blanc.SymbolicProg.validateDefinitions target ||
+        proofRecipeContainsName `Blanc.SymbolicProg.callsOk target ||
+        proofRecipeContainsName `Blanc.SymbolicProg.erase target ||
+        proofRecipeContainsName `Blanc.SymbolicFunc.erase target
   | "goal-shape:fixed-byte-offset" =>
       return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads ||
         proofRecipeContainsName `Blanc.Bytes.writeAt target

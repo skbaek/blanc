@@ -3,6 +3,7 @@ import Blanc.RootedExecution
 import Blanc.MessageExecution
 import Blanc.ExecutionNoninterference
 import Blanc.LinearDispatchCorrectness
+import Blanc.SymbolicProgram
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
 import Blanc.CompiledShape
@@ -85,6 +86,48 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
   blanc_suggest
   intro run
   exact dispatchFallbackWitness_of_runCompiledTo nonempty miss stack run
+
+-- EXPECT: symbolic-label-linking
+example {Label : Type} [DecidableEq Label] (p : SymbolicProg Label) (map : Label → Nat)
+    (hdefs : p.validateDefinitions = .ok ()) (hcalls : p.callsOk map = true) :
+    resolve p = .ok (p.erase map) := by
+  expect_recipe_trigger "goal-shape:symbolic-label-linking"
+  blanc_suggest
+  exact resolve_eq_erase_of_callsOk p map hdefs hcalls
+
+-- EXPECT: symbolic-label-linking
+example {Label : Type} [DecidableEq Label] (p : SymbolicProg Label) :
+    p.findLabel? p.root = some 0 := by
+  expect_recipe_trigger "goal-shape:symbolic-label-linking"
+  blanc_suggest
+  exact findLabel?_root p
+
+-- EXPECT: symbolic-label-linking
+example {Label : Type} [DecidableEq Label] (sp : SymbolicProg Label)
+    (cert : LinkCertificate sp) : LinkCertificate sp := by
+  expect_recipe_trigger "goal-head:LinkCertificate"
+  blanc_suggest
+  exact cert
+
+-- EXPECT-NO-MATCH: the nearby positional-dispatch relation. `blanc_suggest`
+-- must offer `linear-dispatch-selection` here and must NOT offer
+-- `symbolic-label-linking`: naming a call target and selecting a dispatch
+-- route by selector are different problems, and a symbolic-linking recipe
+-- surfacing at a compiled-dispatch goal would be a misdirection.
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {fallback : Nat} {entries : List (B256 × Func)} {selector : B256}
+    {tail : Stack} {body : Func}
+    (unique : selectorUnique entries) (member : (selector, body) ∈ entries)
+    (stack : pre.stack = selector :: tail) :
+    Func.RunCompiledTo fs sevm pre
+      (Blanc.linearDispatchWith fallback entries) out →
+      DispatchBodyWitness fs sevm pre entries selector tail body out := by
+  expect_no_recipe_trigger "goal-shape:symbolic-label-linking"
+  expect_no_recipe_trigger "goal-head:LinkCertificate"
+  expect_recipe_trigger "goal-shape:linear-dispatch-selection"
+  blanc_suggest
+  intro run
+  exact dispatchBodyWitness_of_runCompiledTo unique member stack run
 
 -- EXPECT: line-run-split
 example {sevm : Sevm} {pre post : Devm} {line : Line} :

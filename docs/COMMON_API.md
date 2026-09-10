@@ -1575,11 +1575,19 @@ module itself, together with the self- and mutual-recursion programs beside it.
 The production consumers are `LidoCircuitBreaker.symbolicLinkCert` and
 `LidoTriggerableWithdrawalsGateway.symbolicLinkCert`.
 
-There is no goal-sensitive recipe for this facility yet: its reliable goal
-shapes (`resolve _ = .ok _`, `SymbolicFunc.erase _ _ = _`) need a new arm in
-`Blanc/Tactics.lean`, which 348 modules import, so registering one is a
-separate unit with its own rebuild budget.  Use this branch and
-`lean_local_search` until then.
+Goal-sensitive discovery.  The `symbolic-label-linking` recipe in
+[`docs/PROOF_RECIPES.md`](PROOF_RECIPES.md) covers this facility, so
+`blanc_suggest` reaches it from a goal.  Its two triggers follow the goal shapes
+that actually occur here rather than the ones the module's names suggest:
+`goal-shape:symbolic-label-linking` matches a target mentioning `resolve`,
+`checkLink`, `SymbolicProg.findLabel?`, `SymbolicProg.validateDefinitions`,
+`SymbolicProg.callsOk`, `SymbolicProg.erase` or `SymbolicFunc.erase`, because
+every production obligation here (`resolve _ = .ok _`,
+`SymbolicProg.erase _ _ = _`, `findLabel? _ = some _`, `callsOk _ = true`) is an
+equation and therefore has `Eq` at its head; and `goal-head:LinkCertificate`
+matches certificate construction, which is the one goal in the flow whose head
+really is one of this module's declarations.  A `goal-head:resolve` trigger would
+never have fired.
 
 ## Common-library-first workflow
 
