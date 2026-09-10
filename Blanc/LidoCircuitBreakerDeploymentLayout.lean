@@ -310,35 +310,24 @@ private theorem runtimeTemplateCode_immutable_slices_zero :
     (runtimeTemplateCode.drop 1178).take 32 = (0 : B256).toBytes := by
   decide +kernel
 
-/-! Each two-occurrence marker program is decided on its own.
+/-- The four two-occurrence marker programs compile to the neutral template
+patched at their own offsets.
 
-One conjunction over all five markers forced the kernel to hold five
-independent 4,282-byte compiler runs, plus the neutral template, live at the
-same time, and its administrator conjunct was never consumed: the
-four-occurrence administrator case is established separately by
-`adminMarkerProgram_compile_segments` below.  Splitting the conjunction into
-the exact per-field facts the two-occurrence carrier consumes leaves one
-compiler run per kernel check and removes the unconsumed one outright.  Every
-surviving statement, its decision procedure, and its privacy are unchanged. -/
-
-private theorem minPauseDurationMarkerProgram_compile :
+The administrator marker is deliberately **not** a conjunct here.  Its
+four-occurrence case is established separately by
+`adminMarkerProgram_compile_segments` below, and no consumer of this lemma ever
+read an administrator conjunct, so carrying one only forced the kernel to
+perform a fifth 4,282-byte compiler run and hold it live alongside the other
+four. -/
+private theorem immutableMarkerPrograms_compile :
     Prog.compile (runtime (immutableMarkerParams .minPauseDuration)) =
-      some (patchAtOffsets runtimeTemplateCode B256.max [217, 713]) := by
-  decide +kernel
-
-private theorem maxPauseDurationMarkerProgram_compile :
+        some (patchAtOffsets runtimeTemplateCode B256.max [217, 713]) ∧
     Prog.compile (runtime (immutableMarkerParams .maxPauseDuration)) =
-      some (patchAtOffsets runtimeTemplateCode B256.max [258, 1961]) := by
-  decide +kernel
-
-private theorem minHeartbeatIntervalMarkerProgram_compile :
+        some (patchAtOffsets runtimeTemplateCode B256.max [258, 1961]) ∧
     Prog.compile (runtime (immutableMarkerParams .minHeartbeatInterval)) =
-      some (patchAtOffsets runtimeTemplateCode B256.max [508, 1137]) := by
-  decide +kernel
-
-private theorem maxHeartbeatIntervalMarkerProgram_compile :
+        some (patchAtOffsets runtimeTemplateCode B256.max [508, 1137]) ∧
     Prog.compile (runtime (immutableMarkerParams .maxHeartbeatInterval)) =
-      some (patchAtOffsets runtimeTemplateCode B256.max [672, 1178]) := by
+        some (patchAtOffsets runtimeTemplateCode B256.max [672, 1178]) := by
   decide +kernel
 
 private theorem markerCode_eq_patchAtOffsets
@@ -519,7 +508,7 @@ private theorem immutableWordOffsets_minPauseDuration_exact :
     immutableWordOffsets .minPauseDuration = [217, 713] := by
   rcases runtimeTemplateCode_immutable_slices_zero with
     ⟨_, _, _, _, h217, h713, _, _, _, _, _, _⟩
-  have hcompile := minPauseDurationMarkerProgram_compile
+  rcases immutableMarkerPrograms_compile with ⟨hcompile, _, _, _⟩
   exact immutableWordOffsets_eq_two .minPauseDuration 217 713
     (by omega) (by rw [runtimeTemplateCode_length_exact]; omega)
     h217 h713 hcompile (by
@@ -530,7 +519,7 @@ private theorem immutableWordOffsets_maxPauseDuration_exact :
     immutableWordOffsets .maxPauseDuration = [258, 1961] := by
   rcases runtimeTemplateCode_immutable_slices_zero with
     ⟨_, _, _, _, _, _, h258, h1961, _, _, _, _⟩
-  have hcompile := maxPauseDurationMarkerProgram_compile
+  rcases immutableMarkerPrograms_compile with ⟨_, hcompile, _, _⟩
   exact immutableWordOffsets_eq_two .maxPauseDuration 258 1961
     (by omega) (by rw [runtimeTemplateCode_length_exact]; omega)
     h258 h1961 hcompile (by
@@ -541,7 +530,7 @@ private theorem immutableWordOffsets_minHeartbeatInterval_exact :
     immutableWordOffsets .minHeartbeatInterval = [508, 1137] := by
   rcases runtimeTemplateCode_immutable_slices_zero with
     ⟨_, _, _, _, _, _, _, _, h508, h1137, _, _⟩
-  have hcompile := minHeartbeatIntervalMarkerProgram_compile
+  rcases immutableMarkerPrograms_compile with ⟨_, _, hcompile, _⟩
   exact immutableWordOffsets_eq_two .minHeartbeatInterval 508 1137
     (by omega) (by rw [runtimeTemplateCode_length_exact]; omega)
     h508 h1137 hcompile (by
@@ -552,7 +541,7 @@ private theorem immutableWordOffsets_maxHeartbeatInterval_exact :
     immutableWordOffsets .maxHeartbeatInterval = [672, 1178] := by
   rcases runtimeTemplateCode_immutable_slices_zero with
     ⟨_, _, _, _, _, _, _, _, _, _, h672, h1178⟩
-  have hcompile := maxHeartbeatIntervalMarkerProgram_compile
+  rcases immutableMarkerPrograms_compile with ⟨_, _, _, hcompile⟩
   exact immutableWordOffsets_eq_two .maxHeartbeatInterval 672 1178
     (by omega) (by rw [runtimeTemplateCode_length_exact]; omega)
     h672 h1178 hcompile (by
