@@ -10,6 +10,10 @@ import Blanc.CompiledShape
 import Blanc.CreationArtifact
 import Blanc.TaggedStorage
 import Blanc.AddressSlot
+import Blanc.MemoryLayout
+import Blanc.CommonProofs
+import Blanc.ForwardStorageEffects
+import Blanc.CompiledStackSafety
 
 namespace Blanc
 
@@ -128,6 +132,22 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
   blanc_suggest
   intro run
   exact dispatchBodyWitness_of_runCompiledTo unique member stack run
+
+-- EXPECT: stack-prefix-transport
+example {sevm : Sevm} {pre post : Devm} {line : Line} {p : Stack} :
+    Line.Run sevm pre line post → Pref p post.stack → True := by
+  expect_recipe_trigger "goal-shape:stack-prefix-line-run"
+  blanc_suggest
+  intro _ _
+  trivial
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example {sevm : Sevm} {pre post : Devm} {line : Line} :
+    Line.Run sevm pre line post → True := by
+  expect_no_recipe_trigger "goal-shape:stack-prefix-line-run"
+  blanc_suggest
+  intro _
+  trivial
 
 -- EXPECT: line-run-split
 example {sevm : Sevm} {pre post : Devm} {line : Line} :
@@ -464,5 +484,76 @@ example (word : B256) (devm : Devm) (observed : ReturnsWord word devm) :
     ReturnsWord word devm := by
   blanc_suggest
   exact observed
+
+-- EXPECT: selector-separation
+example (other : B256) (h : selector "name" [] ≠ other) :
+    selector "name" [] ≠ other := by
+  expect_recipe_trigger "goal-shape:selector-separation"
+  blanc_suggest
+  exact h
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (a b : B256) (h : a ≠ b) : a ≠ b := by
+  expect_no_recipe_trigger "goal-shape:selector-separation"
+  blanc_suggest
+  exact h
+
+-- EXPECT: fixed-byte-offsets
+example (m : Mem) (h : Mem.Wf m) : Mem.Wf m := by
+  expect_recipe_trigger "goal-shape:fixed-byte-offset"
+  blanc_suggest
+  exact h
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (bs : Bytes) : bs = bs := by
+  expect_no_recipe_trigger "goal-shape:fixed-byte-offset"
+  blanc_suggest
+  rfl
+
+-- EXPECT: exact-retained-storage-effects
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
+    {out : Execution} {effects : List (Adr × B256 × B256)}
+    (run : Func.StorageEffectRun fs sevm pre body out effects) :
+    Func.StorageEffectRun fs sevm pre body out effects := by
+  expect_recipe_trigger "goal-shape:exact-retained-storage-effects"
+  blanc_suggest
+  exact run
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {f : Func} {post : Devm}
+    (run : Func.RunCompiled fs sevm pre f post) :
+    Func.RunCompiled fs sevm pre f post := by
+  expect_no_recipe_trigger "goal-shape:exact-retained-storage-effects"
+  blanc_suggest
+  exact run
+
+-- EXPECT: memory-window-transport
+example (devm : Devm) (offset : Nat) (w : B256) (h : MemWordAt devm offset w) :
+    MemWordAt devm offset w := by
+  expect_recipe_trigger "goal-head:MemWordAt"
+  blanc_suggest
+  exact h
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (w : B256) : w = w := by
+  expect_no_recipe_trigger "goal-head:MemWordAt"
+  expect_no_recipe_trigger "goal-head:MemImage"
+  expect_no_recipe_trigger "implication-premise:MemWordAt"
+  blanc_suggest
+  rfl
+
+-- EXPECT: operand-stack-certificate
+example {sevm : Sevm} {inv : Nat → Devm → Prop} {maximum : Nat}
+    (cert : CompiledStackSafety.Certificate sevm inv maximum) :
+    CompiledStackSafety.Certificate sevm inv maximum := by
+  expect_recipe_trigger "goal-head:CompiledStackSafety.Certificate"
+  blanc_suggest
+  exact cert
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (maximum : Nat) : maximum = maximum := by
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.Certificate"
+  blanc_suggest
+  rfl
 
 end Blanc
