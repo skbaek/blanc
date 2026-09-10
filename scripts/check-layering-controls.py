@@ -360,6 +360,86 @@ def discovery_controls() -> None:
         must_pass(Path(raw), "no-shared-recipe restoration")
 
 
+def shared_coverage_controls() -> None:
+    """Check 6 bites on the population check 5 cannot see, and is not vacuous.
+
+    The subject is derived from the tree: a shared module that is cited by the
+    need-first registry and owns *no* active recipe is exactly the population
+    check 5 has nothing to bind, which is how `Blanc/SymbolicProgram.lean`
+    shipped undiscoverable while the gate reported green.
+    """
+    import tomllib
+
+    with (ROOT / "scripts" / "proof-recipes.toml").open("rb") as handle:
+        registry = tomllib.load(handle)
+    recipe_owners = {
+        recipe["owner_module"]
+        for recipe in registry["recipe"]
+        if recipe.get("status") == "active"
+    }
+    owner = layering.classify()
+    api_text = (ROOT / "docs" / "COMMON_API.md").read_text(encoding="utf-8")
+    citations = set(layering.CITED_MODULE.findall(api_text))
+    candidates = sorted(
+        path
+        for path in citations
+        if owner.get(layering.module_name_of(path)) == "shared"
+        and path not in recipe_owners
+    )
+    if not candidates:
+        fail("shared-coverage controls: no cited recipe-free shared module to mutate")
+    subject = candidates[0]
+
+    # 1. A shared facility that owns no recipe loses its only registry entry.
+    #    Check 5 cannot see this; check 6 must.
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(api.read_text(encoding="utf-8").replace(subject, "Blanc.lean"),
+                       encoding="utf-8")
+        must_fail(root, "uncited-shared-module mutation",
+                  f"{subject} is classified SHARED in scripts/check-layering.py")
+    with fixture() as raw:
+        must_pass(Path(raw), "uncited-shared-module restoration")
+
+    # 2. An exemption goes stale the moment its module is cited: the table must
+    #    prune itself rather than shadow a real entry.
+    exempt = sorted(layering.DISCOVERY_EXEMPT)[0]
+    exempt_path = "Blanc/" + exempt.replace(".", "/") + ".lean"
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(api.read_text(encoding="utf-8")
+                       + f"\n- Now documented after all: `{exempt_path}`.\n",
+                       encoding="utf-8")
+        must_fail(root, "stale-exemption mutation",
+                  f"{exempt} is exempted from the shared-discovery obligation")
+    with fixture() as raw:
+        must_pass(Path(raw), "stale-exemption restoration")
+
+    # 3. Anti-vacuity for this check's own population: a registry that still
+    #    cites a contract module but no shared one must fail here, not pass
+    #    because check 5's citation set happens to be nonempty.
+    contract_cited = sorted(
+        path
+        for path in citations
+        if owner.get(layering.module_name_of(path)) not in (None, "shared", "root")
+    )
+    if not contract_cited:
+        fail("shared-coverage controls: registry cites no contract module to keep")
+    keeper = contract_cited[0]
+    with fixture() as raw:
+        root = Path(raw)
+        api = root / "docs" / "COMMON_API.md"
+        api.write_text(re.sub(r"`Blanc/[A-Za-z0-9_/]+\.lean`", f"`{keeper}`",
+                              api.read_text(encoding="utf-8")),
+                       encoding="utf-8")
+        must_fail(root, "no-shared-citation mutation",
+                  "cites no shared module at all")
+    with fixture() as raw:
+        must_pass(Path(raw), "no-shared-citation restoration")
+
+
 def main() -> int:
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
@@ -458,6 +538,7 @@ def main() -> int:
 
     composition_edge_controls()
     discovery_controls()
+    shared_coverage_controls()
 
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
@@ -465,7 +546,9 @@ def main() -> int:
         "and 3 architecture controls plus 1 category-agnostic control bite; "
         "5 composition-edge controls bite around a classified positive witness; "
         "4 discovery controls cover the missing and stale entry directions and "
-        "both empty-population escapes"
+        "both empty-population escapes; 3 shared-coverage controls cover a "
+        "recipe-free shared facility losing its only registry entry, an "
+        "exemption going stale by being cited, and the no-shared-citation escape"
     )
     return 0
 

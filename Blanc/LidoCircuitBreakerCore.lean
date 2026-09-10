@@ -1,4 +1,5 @@
 import Blanc.RevertPayload
+import Blanc.TaggedStorage
 
 /-!
 The contract-owned static vocabulary for Lido's CircuitBreaker v1.0.0.
@@ -90,7 +91,18 @@ def ConstructorArgs.Valid (args : ConstructorArgs) : Prop :=
 def canonicalAddress (word : B256) : Prop := word.toNat < 2 ^ 160
 def nonzeroCanonicalAddress (word : B256) : Prop := word ≠ 0 ∧ canonicalAddress word
 
-def regionWord (region : Nat) : B256 := Nat.toB256 (region * 2 ^ 252)
+/-- The family's tag word is the shared bounded tag/payload owner's.  It was a
+character-identical second copy of `Blanc.TaggedStorage.regionWord` until this
+change; the shared owner is the only body now. -/
+abbrev regionWord (region : Nat) : B256 := TaggedStorage.regionWord region
+
+/-- CircuitBreaker's key constructor deliberately does **not** reduce to
+`TaggedStorage.encode`: it leaves the payload unmasked, which is why every
+Registry theorem relating the two (`slot_toNat_of_region_payload_lt` and its
+neighbours in `Blanc/LidoCircuitBreakerRegistry.lean`) has to carry the
+`payload.toNat < 2 ^ 252` hypothesis that `encode` discharges by masking.  That
+is a real semantic boundary, so this definition is retained rather than
+redirected. -/
 def slot (region : Nat) (payload : B256) : B256 := B256.or (regionWord region) payload
 
 def configRegion : Nat := 1

@@ -178,10 +178,15 @@ theorem compositeSlotOf_afterNestedValidation :
     compositeSlotOf 27 (.trigger .afterNestedValidation) = 49 :=
   rfl
 
-/-- Negative control: off-by-one mapping (e.g. 29 ≠ 28) fails equality. -/
-theorem compositeSlotOf_malformedAbi_off_by_one :
-    compositeSlotOf 27 (.trigger .malformedAbi) ≠ 29 := by
-  decide
+-- There was a `compositeSlotOf_malformedAbi_off_by_one : … ≠ 29` here, removed
+-- as a control that could not fail: `compositeSlotOf_malformedAbi` three lines
+-- above proves the same application equals 28, so `≠ 29` is its logical
+-- consequence and red at that boundary is impossible while the positive theorem
+-- is green.  The content it appeared to guard — that the coordinate really
+-- depends on the base count and on the local table — is carried by
+-- `compositeSlotOf_compositeLabelOfLocalSlot` (general in `baseCount`, so a
+-- base-count-ignoring implementation fails it) and by
+-- `localSlotOf_of_labelOfLocalSlot?` (the 22-slot round trip).
 
 /-- Name a Trigger-local call target: a slot the local table defines becomes its
 semantic `TriggerLabel`; anything else stays a numeric base coordinate. -/

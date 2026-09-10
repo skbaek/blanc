@@ -174,6 +174,50 @@ def checkCreationCoordinates
       else
         none
 
+/-- The executable adapter accepts whatever a certificate witnesses.
+
+`checkCreationCoordinates` runs both compiler passes itself, and a
+`CreationCoordinatesCertificate` records exactly that those two passes succeed
+with the stated bytes and that the second has the provisional length.  Feeding
+a certificate back in therefore shows the adapter reaches its accepting branch
+on the same program.  This is the direction a contract family needs in order to
+exercise the checker on a real constructor: the family already owns the two
+compiler theorems, and this lemma turns them into a statement about the
+executable checker without putting `Prog.compile` of a production-sized
+constructor under a decision procedure. -/
+theorem checkCreationCoordinates_isSome_of_cert
+    {constructorProgram : Nat → Nat → Nat → Prog} {runtimeLength : Nat}
+    (cert : CreationCoordinatesCertificate constructorProgram runtimeLength) :
+    (checkCreationCoordinates constructorProgram runtimeLength).isSome = true := by
+  have hlen : cert.provisionalBytes.length = cert.prefixLength :=
+    cert.prefixLength_eq.symm
+  unfold checkCreationCoordinates
+  split
+  · rename_i h0
+    rw [cert.provisional_compile] at h0
+    exact absurd h0 (by simp)
+  · rename_i b0 h0
+    rw [cert.provisional_compile] at h0
+    have hb0 : b0 = cert.provisionalBytes := by
+      injection h0 with h0; exact h0.symm
+    subst hb0
+    -- Zeta-reduce the checker's `let n := b0.length` so `split` can see the
+    -- second match; `split` refuses to descend through the binder.
+    simp only []
+    split
+    · rename_i h1
+      rw [hlen, cert.final_compile] at h1
+      exact absurd h1 (by simp)
+    · rename_i b1 h1
+      rw [hlen, cert.final_compile] at h1
+      have hb1 : b1 = cert.finalBytes := by
+        injection h1 with h1; exact h1.symm
+      subst hb1
+      split
+      · rfl
+      · rename_i hne
+        exact absurd (cert.fixed_point.trans cert.prefixLength_eq) hne
+
 /-! ## Negative controls for creation coordinates checking -/
 
 /-- Negative control constructor: program fails compilation. -/
@@ -202,5 +246,9 @@ abbrev CreationCoordinatesCertificate := CreationArtifact.CreationCoordinatesCer
 
 /-- Public alias for the creation coordinates checker. -/
 abbrev checkCreationCoordinates := CreationArtifact.checkCreationCoordinates
+
+/-- Public alias for the certificate-to-checker direction. -/
+abbrev checkCreationCoordinates_isSome_of_cert :=
+  @CreationArtifact.checkCreationCoordinates_isSome_of_cert
 
 end Blanc

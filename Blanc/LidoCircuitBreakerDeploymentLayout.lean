@@ -864,6 +864,53 @@ def circuitBreakerCreationCert :
   final_compile := finalConstructorProgram_compile
   fixed_point := lidoCircuitBreakerInitPrefix_length_exact
 
+/-! Both consumers below are `private` **deliberately**, and not to dodge a gate.
+
+`scripts/check-lido-circuit-breaker-deployment.py` pins the *public* theorem
+inventory of the nine deployment proof owners by exact count and by SHA
+(`PUBLIC_THEOREM_COUNT`, `PUBLIC_THEOREM_INVENTORY_SHA256`), and requires every
+public name in it to carry exactly one `#print axioms` probe in
+`scripts/AxiomCheck.lean`.  That file's probe count *is* the published figure
+`scripts/check-doc-counts.sh` holds at 1077 across README.md, scripts/GATES.md
+and docs/index.html.  Making these two public would therefore move a published
+public count and a pinned inventory hash — a reserved decision, not an
+implementation choice.  Both are kernel-checked at build time either way, which
+is what exercising the checker requires; what is withheld is a new *published
+assurance claim* about the deployment root, which is the owner's call. -/
+
+/-- The certificate's certified program is the deployed constructor program.
+
+This is what makes `circuitBreakerCreationCert` load-bearing rather than a
+repackaging: its `prefixLength` field is the literal 616, and this identity is
+what forces that literal to agree with
+`DeploymentProof.provisionalConstructorPrefixForProof.length`.  A drift in the
+provisional prefix length therefore fails here. -/
+private theorem circuitBreakerCreationCert_finalProgram :
+    circuitBreakerCreationCert.finalProgram = lidoCircuitBreakerConstructorProgram := by
+  rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq]
+  simp only [CreationArtifact.CreationCoordinatesCertificate.finalProgram,
+    circuitBreakerCreationCert, provisionalConstructorPrefix_length_exact]
+
+/-- The executable creation-coordinate adapter accepts this contract's own
+constructor program.
+
+`CreationArtifact.checkCreationCoordinates` previously had no run on a real
+contract: its only exercises were the two toy negative controls in the shared
+module, so nothing showed the accepting branch is reachable on a production
+constructor.  This consumes the certificate above through the shared
+`CreationArtifact.checkCreationCoordinates_isSome_of_cert`, which is the
+direction a family can supply: the two compiler passes are already proved here
+by `decide +kernel`, and the lemma turns them into a statement about the
+checker without putting a 616-byte compilation inside a decision procedure.
+What is therefore still unmeasured is the checker's *evaluation* cost as a
+decision procedure; the compilation cost itself is the cost of
+`provisionalConstructorProgram_compiles` and `finalConstructorProgram_compiles`
+in this module. -/
+private theorem checkCreationCoordinates_constructorProgramForProof :
+    (checkCreationCoordinates DeploymentProof.constructorProgramForProof
+      runtimeTemplateCode.length).isSome = true :=
+  CreationArtifact.checkCreationCoordinates_isSome_of_cert circuitBreakerCreationCert
+
 end LidoCircuitBreaker
 
 end Blanc

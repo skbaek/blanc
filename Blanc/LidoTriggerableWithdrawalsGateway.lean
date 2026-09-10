@@ -711,12 +711,16 @@ theorem symbolicRuntime_findLabel_afterNestedValidation (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.trigger .afterNestedValidation) = some 49 :=
   rfl
 
-theorem symbolicRuntime_findLabel_malformedAbi_off_by_one (dp : DeployParams) :
-    (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) ≠ some 29 := by
-  intro h
-  injection h with h_eq
-  revert h_eq
-  decide
+-- There was a `symbolicRuntime_findLabel_malformedAbi_off_by_one : … ≠ some 29`
+-- here, removed for the same reason as its Trigger counterpart:
+-- `symbolicRuntime_findLabel_malformedAbi` above proves the lookup is `some 28`,
+-- so `≠ some 29` cannot fail while that is green.  The boundary it appeared to
+-- guard is actually held by `symbolicRuntime_findLabel_base_out_of_range` (the
+-- table stops: `.base 0` and `.base 28` are `none`, which is independent of
+-- every positive lookup), by `symbolicBaseAux_labels` (27 kernel checks that the
+-- named slot definitions are 1 … 27 consecutively) and by
+-- `symbolicRuntime_callsOk` (`decide +kernel` over every call target in the
+-- 49-entry program).
 
 theorem symbolicRuntime_validateDefinitions (dp : DeployParams) :
     (symbolicRuntime dp).validateDefinitions = .ok () :=

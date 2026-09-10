@@ -22,11 +22,20 @@ registry has identified the likely vocabulary.
   [M — bytes and memory](#m--bytes-and-memory).
 - Relate raw execution to message/frame settlement: go to
   [T — settlement](#t--settlement).
-- Relate source programs, compiled code, and deployed artifacts: go to
+- Relate source programs, compiled code, and deployed artifacts, or link an
+  auxiliary call table: go to
   [C — compilation and deployment](#c--compilation-and-deployment).
 - None matches: search public declarations in `Blanc/CommonCore.lean`,
   `Blanc/CommonProofs.lean`, and `Blanc/Ladder.lean`; a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
+- Looking for a *definition* rather than a lemma: the compiled-program language
+  (`Func`, `Prog`, `Line`, `Ninst`, `Linst`, `Stack`) and the EVM seam over
+  Jaune's machine live in [`Blanc/Semantics.lean`](../Blanc/Semantics.lean),
+  whose banners mark which layer a statement belongs to; Blanc's own list
+  prefix/split algebra (`Split`, `Pref`, `Frel`) lives in
+  [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
+  branches below are stated over, so read the declaration and its module
+  documentation there rather than expecting a need-first branch for it.
 
 ## E — execution
 
@@ -660,6 +669,17 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   The certificate checks both branch arms and a finite, lookup-resolved,
   call-closed component; it deliberately says nothing about unselected
   entries, child outcomes, commitment, gas, or liveness.
+- Persistent-storage silence of static execution:
+  [`Blanc/StaticStorage.lean`](../Blanc/StaticStorage.lean).  `Devm.storageView`
+  is the extensional `Stor.get` observation the contract invariants use, and
+  the module already supplies its `PopBurn.Inv`, `Burn.Inv`, `Linst.Hinv`,
+  `Ninst.Hinv` and `Ninst.staticcall` instances, so a read-only contract
+  consumes them rather than restating static propagation.
+  `Exec.rawNodes_isStatic_of_static`, `Exec.retainedStorageWrites_eq_nil_of_static`
+  and `Exec.storageView_committedPost_eq_of_static` are the execution-level
+  facts underneath: the static flag reaches every entered child frame and no
+  `SSTORE` completes in one.  It says nothing about transient storage, logs,
+  balances or gas.
 - Transient-state invariance and settlement:
   [`Blanc/TransientInvariance.lean`](../Blanc/TransientInvariance.lean) and
   [`Blanc/TransientSettlement.lean`](../Blanc/TransientSettlement.lean).
@@ -781,6 +801,13 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
 - A write at a fixed non-address slot is invisible here; each contract states
   that separately (`Stor.rest_set_supplySlot`, `Stor.rest_set_prorataSupplySlot`)
   because the slot is the contract's own.
+- When the credit itself is unchecked and may wrap, use
+  [`Blanc/BalanceAlgebra.lean`](../Blanc/BalanceAlgebra.lean) rather than
+  assuming `B256.Nof`: `B256.toNat_add_le` bounds a wrapped sum by the
+  mathematical one, `sumBelow_increase_le` and `sum_increase_le` bound the
+  growth of an address-prefix sum by the value credited including the wrapping
+  case, and `transfer_does_not_increase_sum` is the paired-movement form.
+  These are upper bounds; they do not establish that no wrap occurred.
 
 ### S6. I need a basic EVM-word identity
 
@@ -789,6 +816,16 @@ Use the word/arithmetic declarations in
 `B256`. In particular, `B256.and_comm` and `B256.xor_comm` provide the shared
 commutativity facts for bitwise conjunction and exclusive-or, while
 `B256.and_idem_right` removes a repeated identical mask.
+
+For the halving and low-bit steps a compiled loop performs, use
+[`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean): `div_two_div_pow`
+and `div_pow_div_two` collapse iterated `Nat` halving into one power,
+`one_and_toB256_eq_mod_two` identifies the low-bit mask with `% 2`,
+`toB256_add_one_of_lt` is the non-wrapping increment, and
+`toUInt64_shiftRight_one`, `toB128_shiftRight_one` and `toB256_shiftRight_one`
+are the fixed-width halving bridges at the three widths.  Each carries its own
+`< 2 ^ 64` or `< 2 ^ 256` bound as a hypothesis; none of them establishes that
+bound for a caller.
 
 For the pause face specifically, `pauseInfiniteSentinel`, `pauseForProjection`,
 and `compact_pause_word_eq_projection` in
@@ -1092,7 +1129,19 @@ Use [`Blanc/ExecutionFrames.lean`](../Blanc/ExecutionFrames.lean),
 [`Blanc/ExecutionAdmission.lean`](../Blanc/ExecutionAdmission.lean), and
 [`Blanc/ContractAdmission.lean`](../Blanc/ContractAdmission.lean) for the raw
 execution layer, then the matching `Execution*Admission` module for retained
-message, transaction, body, block, and history carriers.  Import
+message, transaction, body, block, and history carriers —
+[`Blanc/ExecutionMessageAdmission.lean`](../Blanc/ExecutionMessageAdmission.lean)
+for `RetainedXlot`, `ProcessMessageTrace`, `ProcessCreateMessageTrace` and
+`MessageCallTrace`,
+[`Blanc/ExecutionTransactionAdmission.lean`](../Blanc/ExecutionTransactionAdmission.lean)
+for `TransactionTrace` and `ApplyTransactionsTrace`,
+[`Blanc/ExecutionBodyAdmission.lean`](../Blanc/ExecutionBodyAdmission.lean)
+for `SystemMessageTrace`, `RequestsTrace` and `AppliedBodyTrace`, and
+[`Blanc/ExecutionHistoryAdmission.lean`](../Blanc/ExecutionHistoryAdmission.lean)
+for `ConfiguredBlockTrace` and `ConfiguredHistoryTrace`.  Each module owns only
+the `FrameAdmitted` predicate of its own carriers and the transport theorem
+through them; withdrawals and other direct state steps keep their ordinary
+invariant proofs.  Import
 [`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
 consumer needs canonical interpreter ingress as one conjunct:
 
@@ -1338,6 +1387,18 @@ the consumer instead of adding a premise that assumes the new semantics away.
   should retain compatibility names only as thin aliases to these primitives.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
+- Source-occurrence attribution when the executing code is a compiled prefix
+  followed by a retained runtime or ABI payload:
+  [`Blanc/DeploymentOccurrence.lean`](../Blanc/DeploymentOccurrence.lean).
+  `Prog.CompiledPrefix` states the exact placement (both the compiled prefix
+  and the arbitrary suffix are explicit identities) and
+  `Exec.Deriv.exactProgramPrefix`, `SourceCursor.mainToward_appended`,
+  `callToward_appended`, `toward_appended`, `sourceSite_appended`,
+  `nonPush_sourceSite_appended`, `sstore_sourceSite_appended` and
+  `successfulSstore_sourceSite_appended` carry the cursor and source-site
+  facts the whole-code bridge cannot, because it requires whole-code equality.
+  Bytes in the appended suffix are deliberately granted no source authority
+  even when they decode as an instruction also present in the prefix.
 
 ### C3. I need a parameter-neutral runtime or creation template
 
@@ -1361,14 +1422,32 @@ Use [`Blanc/CreationArtifact.lean`](../Blanc/CreationArtifact.lean):
   layout-parametric constructor over its compiled provisional prefix and
   parameter-neutral runtime template without restating the shared coordinate
   calculation in each contract namespace.
+- `CreationArtifact.CreationCoordinatesCertificate` is the two-pass
+  constructor-coordinate fixed point as a structure: the provisional
+  compilation of `C 0 0 runtimeLength`, the prefix length it determines, the
+  final compilation of `C n (n + runtimeLength) runtimeLength`, and the
+  `finalBytes.length = prefixLength` fixed point.  `.finalProgram` and
+  `.finalProgram_compile` project the certified program and its compiler
+  witness.  `CreationArtifact.checkCreationCoordinates` is the executable
+  adapter that produces one by running both passes and rejecting compilation
+  failure or a width discrepancy, and
+  `CreationArtifact.checkCreationCoordinates_isSome_of_cert` is the converse:
+  a certificate established by contract-owned compiler theorems shows the
+  executable adapter accepts the same program, which is how a family exercises
+  the checker on a real constructor without kernel-evaluating both passes
+  inside the decision procedure.  `LidoCircuitBreaker.circuitBreakerCreationCert`
+  and `LidoCircuitBreaker.checkCreationCoordinates_constructorProgramForProof`
+  are the worked consumer.
 
 Contract families still own their marker worlds and the interpretation of
 each generated span.  A `Nat` client must separately prove its source value is
 below `2^256` before conversion to `B256`; full-width fallback prevents
 truncation by the encoder but does not undo wrapping that happened earlier.
-The encoder also does not establish a provisional/final constructor-prefix
-fixed point: a provisional value below `2^16` can cross the boundary in the
-final pass, so every two-pass client retains an explicit prefix-length check.
+The encoder does not establish a provisional/final constructor-prefix fixed
+point: a provisional value below `2^16` can cross the boundary in the final
+pass, so every two-pass client retains an explicit prefix-length check. That
+check is what `CreationCoordinatesCertificate` packages; the certificate
+records the fixed point, it does not make the boundary crossing impossible.
 The operational encoder theorem has a reliable goal shape: on an exact
 `Ninst.RunCompiled` goal containing `pushB256AsPush2OrPush32`, the
 `bounded-creation-word-encoder` recipe points to
@@ -1423,6 +1502,84 @@ prefix and distinct syntactic tails. It does not reduce either tail, search the
 local context for the needed tail equality, compare different prefixes, or fire on
 a no-prepend or reflexive-tail goal. The caller supplies the tail-shape
 equality explicitly.
+
+### C6. I need to link an auxiliary call table by name instead of by index
+
+Import [`Blanc/SymbolicProgram.lean`](../Blanc/SymbolicProgram.lean) when a
+program's auxiliary table is large enough that hand-maintained numeric call
+targets are the thing going wrong.  `SymbolicFunc Label` mirrors `Func` with
+`call` carrying a caller-chosen `Label`, `SymbolicProg Label` adds a
+distinguished `root` and an ordered `aux` list, and `resolve` turns the
+symbolic program into an ordinary `Prog` by assigning the root index `0` and
+the `i`-th auxiliary entry index `i + 1`.
+
+- `SymbolicProg.validateDefinitions` is the definition-domain half: no root
+  reuse in the table and no duplicate labels, including unused duplicates.
+  `resolve` additionally reports reference completeness, and a
+  `ResolveError.missingLabel` records the enclosing body label and the
+  `BranchArm` path to the offending call.
+- `SymbolicProg.erase map` is the inverse direction — replace each label by
+  `map label` and get a `Prog` back.  `resolve_eq_erase` identifies the two
+  when the table agrees with `map` on the labels that actually occur, and
+  `erase_eq_of_resolve` is its converse.
+- `SymbolicProg.callsOk p map` is the decidable whole-program form of that
+  agreement, and `resolve_eq_erase_of_callsOk` is the front end to use: one
+  `decide +kernel` over `SymbolicProg.allCalls` discharges the agreement for
+  every body at once.  Reach for this instead of proving per-body agreement
+  when `Label` is an infinite type (a label carrying a `Nat` coordinate), where
+  `cases target <;> rfl` is not available because agreement is not total.
+- `Func.mapCalls g` lifts an existing numeric `Func` by naming its targets, and
+  `Func.erase_mapCalls_eq_mapTargets` is the general erasure law: erasure of a
+  lifted body lands on `Func.mapTargets t` of the original, where `t` is the
+  composite of naming and coordinate assignment.  `Func.erase_mapCalls` and
+  `Func.erase_mapCalls_of_inverse` are its `t = id` corollaries.  Use this one
+  shared lifter rather than writing a four-arm structural recursion per
+  contract.  `Func.toSymbolic?` / `Func.liftCallFree` are the deliberately
+  different sibling: they *reject* calls at lift time, which is what lets a
+  call-free wrapper be discharged by the generic `simp` lemma
+  `Func.erase_liftCallFree` with no side condition at all.
+- `symbolicLinearDispatchWith` is the shared symbolic selector chain and
+  `erase_symbolicLinearDispatchWith` its erasure; both are generic in `Label`
+  and in `map`, so a contract keeps only its own pivot topology.
+- `checkLink` combines successful resolution with
+  `Prog.compiles resolved = true` and yields a `LinkCertificate`, whose
+  `bytes`, `compile_eq`, `isSome_compile`, `length_compile`, `table_get_root`
+  and `table_get_aux` are the exact compiled-artifact interface.
+  `LinkError.compileFailed` is the other outcome and
+  `checkLink_eq_error_compileFailed` is its control.
+
+Boundaries.  Resolution is a coordinate assignment, not a compiler: it does
+not choose a table order, and because erasure discards labels, an erasure
+theorem alone does not catch a reordered table — state the label list
+separately, as `LidoTriggerableWithdrawalsGateway.symbolicBaseAux_labels` does.
+Compilability is `checkLink`'s second half and nothing in `resolve` implies it;
+a call target at or above `2 ^ 16` compiles to nothing, which
+`call_target_65535_compiles` and `call_target_65536_rejects` pin exactly.  The
+module says nothing about gas, execution or bytes beyond the compiler witness
+the certificate carries.
+
+Cost.  `resolve`, `erase` and the erasure lemmas are structural and cheap.
+`callsOk` is meant for `decide +kernel` over a closed call list and is the
+cheap route; do **not** put `checkLink` or `resolve` of a production-sized
+program under a decision procedure, because that forces kernel evaluation of
+`Prog.compile` over the whole table.  The two production consumers prove
+`resolve (symbolicRuntime dp) = .ok (runtime dp)` through
+`resolve_eq_erase_of_callsOk` and then build the certificate over the existing
+`runtime`; they do not re-anchor `runtime` on a certificate projection, because
+that replaces a definitional unfolding with a structure projection and breaks
+every downstream `unfold runtime`.
+
+Minimal working example: `nestedBranchProg` with
+`nestedBranch_checkLink : (checkLink nestedBranchProg).isOk = true`, in the
+module itself, together with the self- and mutual-recursion programs beside it.
+The production consumers are `LidoCircuitBreaker.symbolicLinkCert` and
+`LidoTriggerableWithdrawalsGateway.symbolicLinkCert`.
+
+There is no goal-sensitive recipe for this facility yet: its reliable goal
+shapes (`resolve _ = .ok _`, `SymbolicFunc.erase _ _ = _`) need a new arm in
+`Blanc/Tactics.lean`, which 348 modules import, so registering one is a
+separate unit with its own rebuild budget.  Use this branch and
+`lean_local_search` until then.
 
 ## Common-library-first workflow
 

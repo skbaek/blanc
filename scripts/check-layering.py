@@ -6,7 +6,7 @@ siblings" -- every contract's program, compiled-bytes and property modules sit
 at the same level of the import hierarchy, and no contract's module imports
 another contract's, in either direction, at any layer.
 
-Five checks, all falsifiable, all exercised by negative controls:
+Six checks, all falsifiable, all exercised by negative controls:
 
   1. Classification is total. Every Lean module in the repository appears in
      the table below, wherever it sits in the tree -- discovery is recursive
@@ -46,8 +46,34 @@ Five checks, all falsifiable, all exercised by negative controls:
      statement that a module is contract-neutral and reusable, and that is
      exactly the population the obligation attaches to.
 
+  6. Every module classified SHARED is reachable from the need-first registry.
+     Check 5 attaches its obligation to the *recipe* population, so a shared
+     facility that owns no recipe escapes it entirely: `Blanc/SymbolicProgram.lean`
+     shipped as a 1,091-line SHARED module with no `docs/COMMON_API.md` entry
+     and no recipe, and check 5 reported green over it because it had nothing
+     to bind. That is the gap this check closes. The SHARED classification in
+     the table below is the repository's own statement that a module is
+     contract-neutral and reusable; the discovery obligation therefore attaches
+     to that statement directly, not to whether someone also wrote a recipe.
+
+     A shared module satisfies this check when `docs/COMMON_API.md` cites its
+     path. The only other way out is `DISCOVERY_EXEMPT` below, which names each
+     unreachable shared module together with the concrete reason it is not a
+     facility an author could be told to find -- a compatibility re-export that
+     declares nothing, the registry's own machinery, or a negative-control
+     fixture. That table is checked in both directions: an exemption for a
+     module that is no longer shared, no longer present, or now cited FAILS, so
+     it prunes itself and cannot quietly absorb the next shipped facility.
+
+     Note what this check is not. It does not require a recipe (step 5 of
+     `docs/COMMON_API.md`'s own workflow makes a recipe conditional on a
+     reliable goal shape existing), it does not judge the quality of an entry,
+     and it is not a similarity detector: it binds exactly the
+     SHARED-registration-to-registry-entry relation and nothing else. An
+     ordinary edit to a shared file that is already cited is unaffected.
+
 Roots (Blanc.lean, Main.lean) exist to import everything and are exempt from 2,
-3 and 4 as importers, never from 1, and are outside 5.
+3 and 4 as importers, never from 1, and are outside 5 and 6.
 
 Check 4 is what keeps 2 honest once a cross-family theorem exists: without an
 explicit downstream stratum the only ways to state one are an inverted import,
@@ -669,6 +695,92 @@ def module_name_of(relative_path):
     return trimmed.replace("/", ".")
 
 
+# ---------------------------------------------------------------------------
+# Check 6: every SHARED module is reachable from the need-first registry.
+#
+# Keyed by module name as the classification table spells it. The value is the
+# reason the module is not something an author could be told to find, and it is
+# part of the gate: `shared_coverage_failures` rejects an exemption whose module
+# is no longer shared, no longer on disk, or now cited, so the table prunes
+# itself instead of silently absorbing the next shipped facility.
+#
+# "It is not documented yet" is not a reason and must not be added here. The
+# only admissible reasons are the three shapes below: a module that declares
+# nothing, the registry's own machinery, and a control fixture.
+# ---------------------------------------------------------------------------
+
+DISCOVERY_EXEMPT = {
+    "ForwardMstore8": (
+        "compatibility re-export: the module declares nothing at all, and its "
+        "former contents are owned by Blanc/Forward.lean, which the registry cites"
+    ),
+    "ProofRecipeTactic": (
+        "the need-first registry's own machinery: this is the authoring leaf that "
+        "reads the generated recipes, deliberately unreachable from Blanc.lean, so "
+        "citing it would point an author at the mechanism instead of a facility"
+    ),
+    "ProofRecipesGenerated": (
+        "generated artifact: it is produced from scripts/proof-recipes.toml by "
+        "scripts/generate-proof-recipes.py and carries no hand-authored API"
+    ),
+    "ReachableExecFreeControl": (
+        "negative-control fixture for the checker in Blanc/ReachableExecFree.lean, "
+        "which the registry cites at branch I2; it exports a deliberately failing "
+        "and a deliberately passing route, not a facility to reuse"
+    ),
+}
+
+
+def shared_coverage_failures(owner, found, citations):
+    """Shared modules the need-first registry cannot reach, and stale exemptions.
+
+    Returns (failures, n_shared, n_shared_cited). The exemption table is
+    validated in both directions so it cannot drift in either.
+    """
+    failures = []
+    shared = sorted(m for m in found if owner.get(m) == "shared")
+    cited = []
+    for mod in shared:
+        path = "Blanc/" + mod.replace(".", "/") + ".lean"
+        if path in citations:
+            cited.append(mod)
+            if mod in DISCOVERY_EXEMPT:
+                failures.append(
+                    f"{mod} is exempted from the shared-discovery obligation "
+                    f"({DISCOVERY_EXEMPT[mod]}) but {COMMON_API} now cites "
+                    f"{path} — remove the DISCOVERY_EXEMPT row so check 6 covers it"
+                )
+            continue
+        if mod in DISCOVERY_EXEMPT:
+            continue
+        failures.append(
+            f"{path} is classified SHARED in scripts/check-layering.py but "
+            f"{COMMON_API} never cites it — a module the repository calls "
+            f"contract-neutral and reusable that the need-first registry cannot "
+            f"reach; add a branch entry for it, or add a DISCOVERY_EXEMPT row "
+            f"stating why it is not a facility an author could be told to find"
+        )
+
+    for mod, reason in sorted(DISCOVERY_EXEMPT.items()):
+        if mod not in found:
+            failures.append(
+                f"DISCOVERY_EXEMPT lists {mod} ({reason}), but no such module "
+                f"exists — the exemption table is stale"
+            )
+        elif owner.get(mod) != "shared":
+            failures.append(
+                f"DISCOVERY_EXEMPT lists {mod} ({reason}), which is classified "
+                f"{owner.get(mod)!r} rather than shared — the exemption table is stale"
+            )
+
+    if not cited:
+        failures.append(
+            f"{COMMON_API} cites no shared module at all — check 6 would pass "
+            f"over an empty population"
+        )
+    return (failures, len(shared), len(cited))
+
+
 def discovery_failures(root, owner):
     """Missing and stale discovery entries for the shared stratum.
 
@@ -820,6 +932,18 @@ def main(argv):
     discovery, n_shared_recipes, n_citations = discovery_failures(root, owner)
     failures.extend(discovery)
 
+    api_path = os.path.join(root, COMMON_API)
+    try:
+        with open(api_path, encoding="utf-8") as handle:
+            citations = set(CITED_MODULE.findall(handle.read()))
+    except OSError as exc:
+        failures.append(f"cannot read the need-first registry {COMMON_API}: {exc}")
+        citations = set()
+    coverage, n_shared, n_shared_cited = shared_coverage_failures(
+        owner, found, citations
+    )
+    failures.extend(coverage)
+
     for line in failures:
         print(f"LAYERING — {line}")
     n_checked = sum(1 for m in found if owner.get(m) not in (None, "root"))
@@ -836,7 +960,9 @@ def main(argv):
         f"{n_composition} composition module(s) downstream, "
         f"no cross-contract, inverted or composition-inverted import; "
         f"{n_shared_recipes} shared facility recipe(s) reachable from "
-        f"{n_citations} need-first registry citation(s), none stale"
+        f"{n_citations} need-first registry citation(s), none stale; "
+        f"{n_shared_cited}/{n_shared} shared module(s) cited by the need-first "
+        f"registry, {len(DISCOVERY_EXEMPT)} exempt with a stated reason"
     )
     return 0
 
