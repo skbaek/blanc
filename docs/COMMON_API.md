@@ -887,6 +887,14 @@ repeat their byte-slice normalization in a contract family.
   preserved padded windows. `read_written` requires only the later suffix to
   miss the selected write, so an earlier overlap and an intentional later
   replacement retain ordinary last-write-wins behavior.
+  Checked authoring examples demonstrating ordered staging, allocation rounding,
+  symbolic and machine readback, boundary guards, and memory-shape preservation
+  live in [`scripts/ProofRecipeSuggestions.lean`](../scripts/ProofRecipeSuggestions.lean)
+  (`intended_staged_windows`, `intended_staged_allocation`,
+  `intended_final_word_image_readback`, `intended_final_word_machine_readback`,
+  `intended_overlap_guard_rejected`, `intended_empty_write_inside_observation`,
+  `intended_empty_observation_inside_write`,
+  `intended_relation_with_memory_shape`).
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private

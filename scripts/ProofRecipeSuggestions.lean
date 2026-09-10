@@ -556,4 +556,94 @@ example (maximum : Nat) : maximum = maximum := by
   blanc_suggest
   rfl
 
+/-! ### Checked MemoryStage authoring examples (blanc-memory-example-delivery-v1)
+
+These examples promote the eight validated declarations from the need-first
+discovery (Plans `reports/blanc-memory-need-discovery-v1.md` and
+`evidence/blanc-memory-need-discovery-v1/validated-snippets.lean`) into the
+normal checked authoring path.
+-/
+
+/- Three ordered byte writes over an arbitrary existing image. The two guard
+premises are intended to be discharged by `decide +kernel` for a concrete
+layout, or from the contract's explicit length arithmetic for variable
+payloads. -/
+theorem intended_staged_windows
+    {pre post : Devm} {image first second third : Bytes}
+    {trailingWord : B256}
+    (source : MemImage pre image)
+    (trailing : MemWordAt pre 256 trailingWord)
+    (memory : post.memory = MemoryStage.applyMemory
+      [(0, first), (64, second), (160, third)] pre.memory)
+    (interiorMiss : MemoryStage.avoids
+      [(0, first), (64, second), (160, third)] 32 16 = true)
+    (trailingMiss : MemoryStage.avoids
+      [(0, first), (64, second), (160, third)] 256 32 = true) :
+    (MemoryStage.applyImage [(0, first), (64, second), (160, third)]
+        image).sliceD 32 16 0 = image.sliceD 32 16 0 ∧
+      MemWordAt post 256 trailingWord := by
+  constructor
+  · exact MemoryStage.applyImage_sliceD_of_avoids
+      [(0, first), (64, second), (160, third)] image 32 16 interiorMiss
+  · exact MemWordAt.applyStage
+      [(0, first), (64, second), (160, third)] source memory trailingMiss
+        trailing
+
+/- Exact rounded allocation is available when the initial allocation is word
+aligned. -/
+theorem intended_staged_allocation
+    (stage : MemoryStage) (memory : Mem)
+    (aligned : memory.size % 32 = 0) :
+    (stage.applyMemory memory).size =
+      memExtsSize memory.size stage.footprint := by
+  exact MemoryStage.applyMemory_size stage memory aligned
+
+/- A final whole-word write reads back independently of all earlier writes.
+The general API permits a later suffix too, provided that suffix avoids this
+32-byte window. -/
+theorem intended_final_word_image_readback
+    (initial : MemoryStage) (image : Bytes) (offset : Nat) (word : B256) :
+    ((initial ++ [(offset, word.toBytes)]).applyImage image).sliceD
+        offset 32 0 = word.toBytes := by
+  simpa only [B256.length_toBytes] using
+    (MemoryStage.read_written initial [] image word.toBytes offset (by rfl))
+
+/- Bridge the final symbolic readback to an exact machine word. -/
+theorem intended_final_word_machine_readback
+    {pre post : Devm} {image : Bytes}
+    (initial : MemoryStage) (offset : Nat) (word : B256)
+    (source : MemImage pre image)
+    (memory : post.memory =
+      (initial ++ [(offset, word.toBytes)]).applyMemory pre.memory) :
+    MemWordAt post offset word := by
+  have target : MemImage post
+      ((initial ++ [(offset, word.toBytes)]).applyImage image) :=
+    MemImage.applyStage (initial ++ [(offset, word.toBytes)]) source memory
+  apply MemWordAt.of_memImage target
+  exact intended_final_word_image_readback initial image offset word
+
+theorem intended_overlap_guard_rejected :
+    MemoryStage.avoids ([(0, [1]), (1, [2])] : MemoryStage) 0 2 = false := by
+  decide +kernel
+
+theorem intended_empty_write_inside_observation :
+    MemoryStage.avoids ([(5, [])] : MemoryStage) 0 10 = true := by
+  decide +kernel
+
+theorem intended_empty_observation_inside_write :
+    MemoryStage.avoids ([(0, [1, 2])] : MemoryStage) 1 0 = true := by
+  decide +kernel
+
+theorem intended_relation_with_memory_shape
+    {e : Sevm} {pre post : Devm} {line : Line}
+    {image : Bytes} {offset : Nat} {word : B256}
+    (stage : MemoryStage)
+    (_run : Line.Run e pre line post)
+    (source : MemImage pre image)
+    (shape : post.memory = stage.applyMemory pre.memory)
+    (miss : stage.avoids offset 32 = true)
+    (window : MemWordAt pre offset word) :
+    MemWordAt post offset word := by
+  exact MemWordAt.applyStage stage source shape miss window
+
 end Blanc
