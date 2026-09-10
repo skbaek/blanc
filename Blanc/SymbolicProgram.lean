@@ -20,6 +20,49 @@ Linking:
 `checkLink` combines successful resolution with `Prog.compiles resolved = true`,
 yielding a `LinkCertificate` that witnesses the exact compiled bytes,
 compiler success, and structural length.
+
+## Usage rule: what a consumer must state for anything to transport
+
+A `LinkCertificate` on its own transports **nothing**. All it gives you is
+`resolve p = .ok cert.resolved` — an equation against a `Prog` you never wrote
+down and have proved nothing about. A consumer that stops there has linked its
+table and gained no fact about any program of its own.
+
+Gas and execution facts transport only when *you* write the numeric `Prog` out
+by hand and prove `resolve p = .ok <that program>`, normally through
+`resolve_eq_erase_of_callsOk`. At that point the agreement between the named and
+the hand-numbered program is not *proved* by this module: it is made **vacuous
+by syntactic identity**, because both sides are the same term. That is why every
+gas, `Func.Run`, `Func.RunCompiled` and compiled-byte fact about the
+hand-numbered program then rewrites across it, and why to write the numeric
+program out rather than keep only a certificate. The minimal instance is
+`workedProg_resolve` below; the production ones are
+`LidoCircuitBreaker.symbolicLinkCert` and
+`LidoTriggerableWithdrawalsGateway.symbolicLinkCert`.
+
+Because erasure discards labels, no erasure theorem catches a **reordered
+table**. State the auxiliary label order as its own theorem, as
+`workedProg_auxLabels` does.
+
+## Boundaries
+
+Resolution is a coordinate assignment and linking is a compiler witness.
+Neither states anything about the semantics of the erased program: no
+`Func.Run`, `Func.RunCompiled`, gas, execution outcome, storage effect,
+selector route or ABI fact follows from a `LinkCertificate`, and those
+obligations remain ordinary work about the `Prog` that `resolve` returns.
+
+Compilability is `checkLink`'s second half and nothing in `resolve` implies it:
+a call target at or above `2 ^ 16` compiles to nothing, which
+`call_target_65535_compiles` and `call_target_65536_rejects` pin exactly.
+
+Cost: everything here is structural and cheap and `callsOk` is meant for one
+`decide +kernel` over a closed call list, but do not put `checkLink` or
+`resolve` of a production-sized program under a decision procedure — that
+forces kernel evaluation of `Prog.compile` over the whole table.
+
+Entry points: `docs/COMMON_API.md` C6 (need-first) and the
+`symbolic-label-linking` recipe in `docs/PROOF_RECIPES.md` (goal-sensitive).
 -/
 
 namespace Blanc
@@ -579,7 +622,17 @@ theorem aux_erase_eq_of_resolveAux [DecidableEq Label]
         have ht_eq := ih tail' ht
         simp [List.map_cons, hb_eq, ht_eq]
 
-/-- Successfully resolved complete programs equal structural erasure. -/
+/-- Successfully resolved complete programs equal structural erasure.
+
+Discharging `h_agree` is the awkward part: it is *total* over `Label`, unlike
+the restricted premises of `resolve_eq_erase`. `cases target <;> simp_all` does
+**not** close it, because `simp` will not unfold `SymbolicProg.findLabel?`
+through a structure literal and leaves one `0 = n`-shaped goal per label.
+Prove the per-label `findLabel?` equations separately (each is `rfl`),
+including a `= none` equation for every label the table does not define, and
+pass them to `simp_all` explicitly; `workedProg_erase_of_resolve` below is the
+worked instance. For an infinite `Label`, total agreement is false and this
+route is unavailable — use `resolve_eq_erase_of_callsOk` forward instead. -/
 theorem erase_eq_of_resolve [DecidableEq Label]
     (p : SymbolicProg Label) (map : Label → Nat) (prog : Prog)
     (h_res : resolve p = .ok prog)
@@ -882,6 +935,111 @@ def duplicateAuxProg : SymbolicProg TestLabel where
 
 theorem duplicateAux_rejects :
     resolve duplicateAuxProg = .error (.duplicateAux .dead 0 1) := by
+  rfl
+
+/-! ### Minimal worked example: the named program *is* the hand-numbered program
+
+The three `checkLink` controls above prove only that linking succeeds, which is
+not the statement a consumer needs. This is the statement that is:
+`workedProg_resolve` writes the numeric `Prog` out by hand and proves that
+`resolve` returns *that very term*, so every gas, run and compiled-byte fact
+about the hand-numbered program transports to the named one by rewriting. It is
+the smallest complete instance of the usage rule in this module's header; the
+production instances are `LidoCircuitBreaker.symbolicLinkCert` and
+`LidoTriggerableWithdrawalsGateway.symbolicLinkCert`, each against a
+thousand-line runtime. Read `workedProg_resolve` first; everything else here
+supports it or bounds what it does not say. The synthetic `TestLabel` arms are
+reused from the controls above; each program in this section is independent. -/
+
+/-- The four shapes a real auxiliary table has: a root entry that branches, one
+auxiliary calling another, one self-recursive auxiliary, and one call-free
+reverter. `.missing` and `.pong` are deliberately undefined. -/
+def workedProg : SymbolicProg TestLabel where
+  root := .root
+  main :=
+    .next (Ninst.pushB256 0x11) (.next Ninst.eq (.branch (.call .dead) (.call .ping)))
+  aux :=
+    [ (.ping, .next (Ninst.dup 0) (.call .loop))
+    , (.loop, .branch (.last .stop) (.next Ninst.pop (.call .loop)))
+    , (.dead, .last .revert)
+    ]
+
+/-- The intended coordinate assignment: the root is `0` and the table follows in
+its list order. The two undefined labels are unconstrained — `callsOk` only
+checks targets that occur. -/
+def workedMap : TestLabel → Nat
+  | .root => 0
+  | .ping => 1
+  | .loop => 2
+  | .dead => 3
+  | .pong => 98
+  | .missing => 99
+
+/-- The same program written out by hand with numeric call targets. This is the
+term a consumer's gas, execution and byte obligations are actually about. -/
+def workedNumbered : Prog where
+  main :=
+    .next (Ninst.pushB256 0x11) (.next Ninst.eq (.branch (.call 3) (.call 1)))
+  aux :=
+    [ .next (Ninst.dup 0) (.call 2)
+    , .branch (.last .stop) (.next Ninst.pop (.call 2))
+    , .last .revert
+    ]
+
+/-- First premise of `resolve_eq_erase_of_callsOk`: the definition domain. -/
+theorem workedProg_validateDefinitions : workedProg.validateDefinitions = .ok () := rfl
+
+/-- Second premise: decidable agreement between the table and the coordinate
+assignment, over the call targets that occur. -/
+theorem workedProg_callsOk : workedProg.callsOk workedMap = true := by
+  decide +kernel
+
+/-- Erasure under the intended map is syntactically the hand-numbered program. -/
+theorem workedProg_erase : workedProg.erase workedMap = workedNumbered := rfl
+
+/-- **The load-bearing statement, and the whole point of the facility.**
+`resolve` of the named program returns the hand-numbered `Prog` above, not some
+program the author never wrote. A bare `LinkCertificate` gives only
+`resolve p = .ok cert.resolved` and transports nothing; this equation makes the
+agreement vacuous by syntactic identity, which is what lets a gas or execution
+theorem about `workedNumbered` be rewritten into one about `workedProg`. -/
+theorem workedProg_resolve : resolve workedProg = .ok workedNumbered := by
+  rw [← workedProg_erase]
+  exact resolve_eq_erase_of_callsOk workedProg workedMap
+    workedProg_validateDefinitions workedProg_callsOk
+
+theorem workedProg_findLabel_root : workedProg.findLabel? .root = some 0 := rfl
+theorem workedProg_findLabel_ping : workedProg.findLabel? .ping = some 1 := rfl
+theorem workedProg_findLabel_loop : workedProg.findLabel? .loop = some 2 := rfl
+theorem workedProg_findLabel_dead : workedProg.findLabel? .dead = some 3 := rfl
+
+/-- The table bound: an undefined label has no coordinate at all. -/
+theorem workedProg_findLabel_missing : workedProg.findLabel? .missing = none := rfl
+theorem workedProg_findLabel_pong : workedProg.findLabel? .pong = none := rfl
+
+/-- Erasure discards labels, so a reordered table escapes every erasure theorem
+here. The order is therefore its own statement, as the module header requires
+and as `LidoTriggerableWithdrawalsGateway.symbolicBaseAux_labels` does. -/
+theorem workedProg_auxLabels :
+    workedProg.aux.map Prod.fst = [TestLabel.ping, .loop, .dead] := rfl
+
+/-- The converse direction through `erase_eq_of_resolve`, and the worked answer
+to how its *total* agreement premise is discharged. The equation itself is `rfl`
+here; the content of this control is the premise, whose per-label equations
+above — including the two `none` cases — must be supplied explicitly. -/
+theorem workedProg_erase_of_resolve : workedNumbered = workedProg.erase workedMap :=
+  erase_eq_of_resolve workedProg workedMap workedNumbered workedProg_resolve
+    (by
+      intro target n h
+      cases target <;>
+        simp_all [workedMap, workedProg_findLabel_root, workedProg_findLabel_ping,
+          workedProg_findLabel_loop, workedProg_findLabel_dead,
+          workedProg_findLabel_missing, workedProg_findLabel_pong])
+
+/-- Checked linking on the same program. This is the statement the three
+controls above make, and on its own it still says nothing about
+`workedNumbered`. -/
+theorem workedProg_checkLink : (checkLink workedProg).isOk = true := by
   rfl
 
 /-! ### Compiler target boundary: 65535 accepted, 65536 rejected

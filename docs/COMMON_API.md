@@ -22,9 +22,11 @@ registry has identified the likely vocabulary.
   [M — bytes and memory](#m--bytes-and-memory).
 - Relate raw execution to message/frame settlement: go to
   [T — settlement](#t--settlement).
-- Relate source programs, compiled code, and deployed artifacts, or link an
-  auxiliary call table: go to
+- Relate source programs, compiled code, and deployed artifacts: go to
   [C — compilation and deployment](#c--compilation-and-deployment).
+- Link an auxiliary call table by name instead of by index: go straight to
+  [C6](#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index),
+  the last branch of that section rather than its head.
 - None matches: search public declarations in `Blanc/CommonCore.lean`,
   `Blanc/CommonProofs.lean`, and `Blanc/Ladder.lean`; a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
@@ -1521,7 +1523,14 @@ the `i`-th auxiliary entry index `i + 1`.
 - `SymbolicProg.erase map` is the inverse direction — replace each label by
   `map label` and get a `Prog` back.  `resolve_eq_erase` identifies the two
   when the table agrees with `map` on the labels that actually occur, and
-  `erase_eq_of_resolve` is its converse.
+  `erase_eq_of_resolve` is its converse.  That converse is harder to use than
+  it looks: its agreement premise is *total* over `Label`, and
+  `cases target <;> simp_all` does not close it, because `simp` will not unfold
+  `SymbolicProg.findLabel?` through a structure literal and leaves one
+  `0 = n`-shaped goal per label.  Prove the per-label `findLabel?` equations
+  separately — each is `rfl`, and every label the table does not define needs a
+  `findLabel? = none` equation — and pass them all to `simp_all` explicitly.
+  `workedProg_erase_of_resolve` is the worked discharge.
 - `SymbolicProg.callsOk p map` is the decidable whole-program form of that
   agreement, and `resolve_eq_erase_of_callsOk` is the front end to use: one
   `decide +kernel` over `SymbolicProg.allCalls` discharges the agreement for
@@ -1548,15 +1557,31 @@ the `i`-th auxiliary entry index `i + 1`.
   `LinkError.compileFailed` is the other outcome and
   `checkLink_eq_error_compileFailed` is its control.
 
+Usage rule — what you must state for anything to transport.  A bare
+`LinkCertificate` transports **nothing**: all it gives you is
+`resolve p = .ok cert.resolved`, an equation against a `Prog` you never wrote
+down and have proved nothing about.  Gas and execution facts transport only
+when you write the numeric `Prog` out by hand and prove
+`resolve p = .ok <that program>` against it.  At that point the agreement is
+not *proved* by this module — it is made vacuous by syntactic identity, both
+sides being the same term — and that is exactly what lets every gas,
+`Func.Run`, `Func.RunCompiled` and compiled-byte fact about the hand-numbered
+program rewrite across it.  A consumer that keeps only a certificate has linked
+its table and transported nothing.  This is the rule, not a caveat.
+
 Boundaries.  Resolution is a coordinate assignment, not a compiler: it does
 not choose a table order, and because erasure discards labels, an erasure
 theorem alone does not catch a reordered table — state the label list
-separately, as `LidoTriggerableWithdrawalsGateway.symbolicBaseAux_labels` does.
+separately, as `workedProg_auxLabels` and
+`LidoTriggerableWithdrawalsGateway.symbolicBaseAux_labels` do.
 Compilability is `checkLink`'s second half and nothing in `resolve` implies it;
 a call target at or above `2 ^ 16` compiles to nothing, which
 `call_target_65535_compiles` and `call_target_65536_rejects` pin exactly.  The
 module says nothing about gas, execution or bytes beyond the compiler witness
-the certificate carries.
+the certificate carries: no `Func.Run`, `Func.RunCompiled`, gas, execution
+outcome, storage effect, selector route or ABI fact follows from a
+`LinkCertificate`, and those obligations remain ordinary work about the `Prog`
+that `resolve` returns.
 
 Cost.  `resolve`, `erase` and the erasure lemmas are structural and cheap.
 `callsOk` is meant for `decide +kernel` over a closed call list and is the
@@ -1569,11 +1594,20 @@ program under a decision procedure, because that forces kernel evaluation of
 that replaces a definitional unfolding with a structure projection and breaks
 every downstream `unfold runtime`.
 
-Minimal working example: `nestedBranchProg` with
-`nestedBranch_checkLink : (checkLink nestedBranchProg).isOk = true`, in the
-module itself, together with the self- and mutual-recursion programs beside it.
-The production consumers are `LidoCircuitBreaker.symbolicLinkCert` and
-`LidoTriggerableWithdrawalsGateway.symbolicLinkCert`.
+Minimal working example: `workedProg` in the module's own `Control` section,
+with `workedProg_resolve : resolve workedProg = .ok workedNumbered` against the
+hand-numbered `workedNumbered` written out in full.  That is the statement the
+usage rule above demands, and it is the one to copy: it comes with both premises
+of `resolve_eq_erase_of_callsOk`, the per-label `findLabel?` coordinates, two
+`findLabel? = none` table bounds, the separate `workedProg_auxLabels` order
+statement, the `erase_eq_of_resolve` discharge, and `workedProg_checkLink`.
+`nestedBranch_checkLink`, `selfRecursion_checkLink` and
+`mutualRecursion_checkLink` beside it prove only `(checkLink _).isOk = true`, so
+they exercise the three recursion shapes but demonstrate nothing that
+transports; do not take one of them as the example to follow.  The production
+consumers are `LidoCircuitBreaker.symbolicLinkCert` and
+`LidoTriggerableWithdrawalsGateway.symbolicLinkCert`, each against a
+thousand-line runtime.
 
 Goal-sensitive discovery.  The `symbolic-label-linking` recipe in
 [`docs/PROOF_RECIPES.md`](PROOF_RECIPES.md) covers this facility, so
