@@ -112,7 +112,16 @@ Walks over the decoder produce the chain structurally, one `Mem.write` per
 decoded tail, while `depositDecodedMemory` is a `MemoryStage.applyMemory` fold.
 Closing that gap by `rfl` asks `whnf` to evaluate six `Mem.write` applications
 through the fold; this lemma does it by stage decomposition instead, and is the
-single bridge every such walk should use. -/
+single bridge every such walk should use.
+
+The decomposition is spelled as an explicit `rw` chain over
+`MemoryStage.applyMemory_cons` rather than by naming those equations to
+`simp only`.  Both discharge the goal, but the `simp only` spelling left a
+proof term whose kernel check re-entered `Mem.write`'s `Array.replicate` and
+`Array.copyD` branches on all six concrete offsets: it cost 3.7s of type
+checking and took this module from 1.4s to 4.7s of elaboration, against a
+2.0x elaboration gate.  The `rw` chain ends at a syntactic `rfl` and costs
+nothing measurable.  Keep it explicit. -/
 theorem depositDecodedMemory_eq_writes (data : Bytes) :
     depositDecodedMemory data =
       (((((Mem.empty.write 96 (depositLengthWord data 0).toBytes).write 0
@@ -122,8 +131,11 @@ theorem depositDecodedMemory_eq_writes (data : Bytes) :
           (depositLengthWord data 2).toBytes).write 64
           (depositOffsetWord data 2).toBytes := by
   unfold depositDecodedMemory depositDecodedWrites
-  simp only [MemoryStage.words, List.map_cons, List.map_nil,
-    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+  simp only [MemoryStage.words, List.map_cons, List.map_nil]
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
 
 /-- Symbolic byte image corresponding to `depositDecodedMemory`. -/
 def depositDecodedImage (data : Bytes) : Bytes :=
