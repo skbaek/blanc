@@ -762,7 +762,7 @@ theorem branch_target_65536_compile_eq_none :
 and still exceeds the 16-bit jump window, which needs a witness just over 64 KiB
 of code: in a resolved program every call index is in range and every location is
 determined by `compsize`, so no smaller program can fail the compiler.  The
-witness is therefore built from an opaque pad, and every lemma below is general
+witness is therefore built from an uninterpreted pad, and every lemma below is general
 in the pad length so that nothing is ever evaluated 65 000 times; only the final
 arithmetic sees the literal. -/
 

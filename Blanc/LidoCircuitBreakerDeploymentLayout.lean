@@ -831,7 +831,7 @@ theorem officialFullCreateInput_length_exact :
     constructorArgumentBytes]
 
 /-- Exact compilation of the provisional constructor program under runtime template length. -/
-theorem provisionalConstructorProgram_compile :
+private theorem provisionalConstructorProgram_compile :
     Prog.compile (constructorProgramForProof 0 0 runtimeTemplateCode.length) =
       some provisionalConstructorPrefixForProof := by
   have hcomp := Prog.compile_eq_some_getD_of_compiles
@@ -844,7 +844,7 @@ theorem provisionalConstructorProgram_compile :
   exact h_res
 
 /-- Exact compilation of the final constructor program under runtime template length. -/
-theorem finalConstructorProgram_compile :
+private theorem finalConstructorProgram_compile :
     Prog.compile (constructorProgramForProof 616 (616 + runtimeTemplateCode.length) runtimeTemplateCode.length) =
       some lidoCircuitBreakerInitPrefix := by
   have hc := lidoCircuitBreakerConstructorProgram_compile
@@ -865,8 +865,5 @@ def circuitBreakerCreationCert :
   fixed_point := lidoCircuitBreakerInitPrefix_length_exact
 
 end LidoCircuitBreaker
-
-/-- Public alias for the CircuitBreaker creation coordinates certificate. -/
-abbrev circuitBreakerCreationCert := LidoCircuitBreaker.circuitBreakerCreationCert
 
 end Blanc
