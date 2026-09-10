@@ -8,6 +8,8 @@
 import Blanc.DeploymentCompiled
 import Blanc.LidoCircuitBreakerDeploy
 
+set_option Elab.async false
+
 namespace Blanc
 
 open Jaune
