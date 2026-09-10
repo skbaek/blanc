@@ -554,57 +554,72 @@ def aux (dp : DeployParams) : List Func :=
   baseAux ++ Trigger.rebasedLocalAuxWithRoleFailure triggerAuxDelta dp
     triggerRoleFailure
 
-def toBaseSymbolic : Func → SymbolicFunc Trigger.CompositeLabel
-  | .branch left right => .branch (toBaseSymbolic left) (toBaseSymbolic right)
-  | .last inst => .last inst
-  | .next inst rest => .next inst (toBaseSymbolic rest)
-  | .call target => .call (.base target)
+/-- Name a base runtime call target.  The structural recursion is the shared
+owner `Blanc.Func.mapCalls`; the base arm of `CompositeLabel` is the naming. -/
+def toBaseSymbolic (f : Func) : SymbolicFunc Trigger.CompositeLabel :=
+  f.mapCalls Trigger.CompositeLabel.base
 
-theorem toBaseSymbolic_erase (f : Func) :
-    (toBaseSymbolic f).erase (Trigger.compositeSlotOf 27) = f := by
-  induction f with
-  | last o => rfl
-  | next i rest ih =>
-      simp only [toBaseSymbolic, SymbolicFunc.erase, ih]
-  | branch left right ihl ihr =>
-      simp only [toBaseSymbolic, SymbolicFunc.erase, ihl, ihr]
-  | call target =>
-      rfl
+/-- Base naming is totally inverted by the composite coordinate map, for any base
+count, so this needs no membership side condition. -/
+theorem toBaseSymbolic_erase (baseCount : Nat) (f : Func) :
+    (toBaseSymbolic f).erase (Trigger.compositeSlotOf baseCount) = f :=
+  Func.erase_mapCalls_of_inverse Trigger.CompositeLabel.base
+    (Trigger.compositeSlotOf baseCount) (fun _ => rfl) f
 
 def symbolicBaseAux : List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
-  [ (.base 1, toBaseSymbolic Func.revert),
-    (.base 2, toBaseSymbolic (runtimeError "AccessControlUnauthorizedAccount")),
-    (.base 3, toBaseSymbolic (runtimeError "AdminCannotBeZero")),
-    (.base 4, toBaseSymbolic (runtimeError "ZeroArgument" [.dynBytes])),
-    (.base 5, toBaseSymbolic (runtimeError "PausedExpected")),
-    (.base 6, toBaseSymbolic (runtimeError "ResumedExpected")),
-    (.base 7, toBaseSymbolic (runtimeError "ZeroPauseDuration")),
-    (.base 8, toBaseSymbolic (runtimeError "PauseUntilMustBeInFuture")),
-    (.base 9, toBaseSymbolic (Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++ (Nat.toB256 0x11).toBytes))),
-    (.base 10, toBaseSymbolic (runtimeError "LimitExceeded")),
-    (.base 11, toBaseSymbolic (runtimeError "InsufficientFee" [.uint256, .uint256])),
-    (.base 12, toBaseSymbolic (runtimeError "FeeRefundFailed")),
-    (.base 13, toBaseSymbolic Func.revert),
-    (.base 14, toBaseSymbolic roleMemberLoop),
-    (.base 15, toBaseSymbolic roleCountLoop),
-    (.base 16, toBaseSymbolic Func.revert),
-    (.base 17, toBaseSymbolic (runtimeError "TooLargeMaxExitRequestsLimit")),
-    (.base 18, toBaseSymbolic (runtimeError "TooLargeFrameDuration")),
-    (.base 19, toBaseSymbolic (runtimeError "TooLargeExitsPerFrame")),
-    (.base 20, toBaseSymbolic (runtimeError "ZeroFrameDuration")),
-    (.base 21, toBaseSymbolic limitCurrentCompute),
-    (.base 22, toBaseSymbolic limitCurrentContinue),
-    (.base 23, toBaseSymbolic setLimitAfterCurrent),
-    (.base 24, toBaseSymbolic setLimitWrite),
-    (.base 25, toBaseSymbolic consumeExitLimit),
-    (.base 26, toBaseSymbolic consumeAfterCurrent),
-    (.base 27, toBaseSymbolic (([pushB256 Trigger.exitLimitExceededSelector] ++ mstoreAt 0 ++
+  [ (.base fallbackSlot, toBaseSymbolic Func.revert),
+    (.base missingRoleSlot, toBaseSymbolic (runtimeError "AccessControlUnauthorizedAccount")),
+    (.base adminZeroSlot, toBaseSymbolic (runtimeError "AdminCannotBeZero")),
+    (.base zeroArgumentSlot, toBaseSymbolic (runtimeError "ZeroArgument" [.dynBytes])),
+    (.base pausedExpectedSlot, toBaseSymbolic (runtimeError "PausedExpected")),
+    (.base resumedExpectedSlot, toBaseSymbolic (runtimeError "ResumedExpected")),
+    (.base zeroPauseDurationSlot, toBaseSymbolic (runtimeError "ZeroPauseDuration")),
+    (.base pauseUntilPastSlot, toBaseSymbolic (runtimeError "PauseUntilMustBeInFuture")),
+    (.base arithmeticPanicSlot, toBaseSymbolic (Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++ (Nat.toB256 0x11).toBytes))),
+    (.base limitErrorSlot, toBaseSymbolic (runtimeError "LimitExceeded")),
+    (.base feeErrorSlot, toBaseSymbolic (runtimeError "InsufficientFee" [.uint256, .uint256])),
+    (.base refundErrorSlot, toBaseSymbolic (runtimeError "FeeRefundFailed")),
+    (.base triggerNestedAbiSlot, toBaseSymbolic Func.revert),
+    (.base roleMemberLoopSlot, toBaseSymbolic roleMemberLoop),
+    (.base roleCountLoopSlot, toBaseSymbolic roleCountLoop),
+    (.base collisionRefusalSlot, toBaseSymbolic Func.revert),
+    (.base tooLargeMaxExitRequestsLimitSlot, toBaseSymbolic (runtimeError "TooLargeMaxExitRequestsLimit")),
+    (.base tooLargeFrameDurationSlot, toBaseSymbolic (runtimeError "TooLargeFrameDuration")),
+    (.base tooLargeExitsPerFrameSlot, toBaseSymbolic (runtimeError "TooLargeExitsPerFrame")),
+    (.base zeroFrameDurationSlot, toBaseSymbolic (runtimeError "ZeroFrameDuration")),
+    (.base limitCurrentComputeSlot, toBaseSymbolic limitCurrentCompute),
+    (.base limitCurrentContinueSlot, toBaseSymbolic limitCurrentContinue),
+    (.base setLimitAfterCurrentSlot, toBaseSymbolic setLimitAfterCurrent),
+    (.base setLimitWriteSlot, toBaseSymbolic setLimitWrite),
+    (.base consumeExitLimitSlot, toBaseSymbolic consumeExitLimit),
+    (.base consumeAfterCurrentSlot, toBaseSymbolic consumeAfterCurrent),
+    (.base exitRequestsLimitExceededSlot, toBaseSymbolic (([pushB256 Trigger.exitLimitExceededSelector] ++ mstoreAt 0 ++
        mloadWord 14 ++ mstoreAt 1 ++ mloadWord 8 ++ mstoreAt 2 ++
        [pushB256 68, pushB256 28]) +++ .last .revert)) ]
 
 theorem erase_symbolicBaseAux :
     symbolicBaseAux.map (fun (_, body) => body.erase (Trigger.compositeSlotOf 27)) = baseAux := by
   simp only [symbolicBaseAux, List.map_cons, List.map_nil, toBaseSymbolic_erase, baseAux]
+
+/-- Control: the symbolic base table's labels are exactly the 27 named runtime
+slots `fallbackSlot` … `exitRequestsLimitExceededSlot`, in consecutive order
+starting at one.  `erase_symbolicBaseAux` discards labels, so without this the
+base coordinates would be checked by nothing: a renumbered, duplicated or
+reordered slot definition fails here. -/
+theorem symbolicBaseAux_labels :
+    symbolicBaseAux.map Prod.fst =
+      (List.range 27).map (fun i => Trigger.CompositeLabel.base (i + 1)) :=
+  rfl
+
+/-- The 27-entry resolution skeleton in `Blanc.LidoTriggerableWithdrawalsGateway.Trigger`
+carries the real table's labels, so the composite resolution controls stated over
+it are controls about this program. -/
+theorem symbolicBaseAux_labels_eq_skeleton :
+    symbolicBaseAux.map Prod.fst = Trigger.base27AuxSkeleton.map Prod.fst := by
+  rw [symbolicBaseAux_labels]
+  rfl
+
+theorem symbolicBaseAux_length : symbolicBaseAux.length = 27 := rfl
 
 def symbolicTriggerAux (dp : DeployParams) :
     List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
@@ -640,36 +655,6 @@ def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Trigger.Compo
     (selGetRoleMember, toBaseSymbolic (nonpayable getRoleMember)),
     (selGetRoleMemberCount, toBaseSymbolic (nonpayable getRoleMemberCount)) ]
 
-def symbolicLinearDispatchWith (fb : Trigger.CompositeLabel) :
-    List (B256 × SymbolicFunc Trigger.CompositeLabel) → SymbolicFunc Trigger.CompositeLabel
-  | [] => .call fb
-  | [(word, body)] =>
-      SymbolicFunc.next (pushB256 word) <|
-      SymbolicFunc.next eq <|
-      SymbolicFunc.branch (.call fb) body
-  | (word, body) :: rest =>
-      SymbolicFunc.next (dup 0) <|
-      SymbolicFunc.next (pushB256 word) <|
-      SymbolicFunc.next eq <|
-      SymbolicFunc.branch
-        (symbolicLinearDispatchWith fb rest)
-        (SymbolicFunc.next pop body)
-
-theorem erase_symbolicLinearDispatchWith (fb : Nat) (entries : List (B256 × SymbolicFunc Trigger.CompositeLabel)) :
-    (symbolicLinearDispatchWith (.base fb) entries).erase (Trigger.compositeSlotOf 27) =
-      linearDispatchWith fb (entries.map (fun (s, f) => (s, f.erase (Trigger.compositeSlotOf 27)))) := by
-  induction entries with
-  | nil => rfl
-  | cons head tail ih =>
-    cases tail with
-    | nil =>
-      rcases head with ⟨word, body⟩
-      rfl
-    | cons next rest =>
-      rcases head with ⟨word, body⟩
-      simp only [symbolicLinearDispatchWith, linearDispatchWith, SymbolicFunc.erase,
-        List.map_cons, ih]
-
 local infixr:65 " ++++ " => SymbolicFunc.prepend
 
 def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Trigger.CompositeLabel :=
@@ -677,7 +662,7 @@ def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Trigger.CompositeLabe
   SymbolicFunc.next calldatasize <|
   SymbolicFunc.next lt <|
   SymbolicFunc.branch
-    (fsig ++++ symbolicLinearDispatchWith (.base fallbackSlot) (symbolicFuncs dp))
+    (fsig ++++ Blanc.symbolicLinearDispatchWith (.base fallbackSlot) (symbolicFuncs dp))
     (toBaseSymbolic Func.revert)
 
 def symbolicRuntime (dp : DeployParams) : SymbolicProg Trigger.CompositeLabel :=
@@ -691,19 +676,42 @@ theorem symbolicRuntime_findLabel_trigger (dp : DeployParams) (lbl : Trigger.Tri
     (symbolicRuntime dp).findLabel? (.trigger lbl) = some (27 + Trigger.localSlotOf lbl) := by
   cases lbl <;> rfl
 
-theorem symbolicRuntime_resolve_malformedAbi (dp : DeployParams) :
+/-- The 27 base slots resolve to themselves.  `CompositeLabel.base` carries an
+unbounded `Nat`, so this is *not* total: `findLabel? (.base 0)` and
+`findLabel? (.base 28)` are `none` while `compositeSlotOf 27` still answers `0`
+and `28`.  That is why the composite program cannot discharge
+`Blanc.resolve_eq_erase` with a single `cases target <;> rfl` the way a finite
+label type does, and why the agreement has to be restricted to the call targets
+that occur. -/
+theorem symbolicRuntime_findLabel_base (dp : DeployParams) (k : Nat)
+    (h1 : 1 ≤ k) (h2 : k ≤ 27) :
+    (symbolicRuntime dp).findLabel? (.base k) = some k := by
+  have hk : k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4 ∨ k = 5 ∨ k = 6 ∨
+      k = 7 ∨ k = 8 ∨ k = 9 ∨ k = 10 ∨ k = 11 ∨ k = 12 ∨
+      k = 13 ∨ k = 14 ∨ k = 15 ∨ k = 16 ∨ k = 17 ∨ k = 18 ∨
+      k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 ∨ k = 23 ∨ k = 24 ∨
+      k = 25 ∨ k = 26 ∨ k = 27 := by omega
+  rcases hk with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> rfl
+
+/-- Negative control for the bound above: the table really does stop at 27. -/
+theorem symbolicRuntime_findLabel_base_out_of_range (dp : DeployParams) :
+    (symbolicRuntime dp).findLabel? (.base 0) = none ∧
+      (symbolicRuntime dp).findLabel? (.base 28) = none :=
+  ⟨rfl, rfl⟩
+
+theorem symbolicRuntime_findLabel_malformedAbi (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) = some 28 :=
   rfl
 
-theorem symbolicRuntime_resolve_validateArrayLoop (dp : DeployParams) :
+theorem symbolicRuntime_findLabel_validateArrayLoop (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.trigger .validateArrayLoop) = some 39 :=
   rfl
 
-theorem symbolicRuntime_resolve_afterNestedValidation (dp : DeployParams) :
+theorem symbolicRuntime_findLabel_afterNestedValidation (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.trigger .afterNestedValidation) = some 49 :=
   rfl
 
-theorem symbolicRuntime_resolve_malformedAbi_off_by_one (dp : DeployParams) :
+theorem symbolicRuntime_findLabel_malformedAbi_off_by_one (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) ≠ some 29 := by
   intro h
   injection h with h_eq
@@ -727,10 +735,56 @@ theorem erase_symbolicRuntimeMain (dp : DeployParams) :
     (symbolicRuntimeMain dp).erase (Trigger.compositeSlotOf 27) = runtimeMain dp := by
   simp only [symbolicRuntimeMain, SymbolicFunc.erase, SymbolicFunc.erase_prepend,
     erase_symbolicLinearDispatchWith, erase_symbolicFuncs, toBaseSymbolic_erase,
-    runtimeMain, fallbackSlot]
+    Trigger.compositeSlotOf, runtimeMain, fallbackSlot]
 
 def runtimeCode (dp : DeployParams) : Bytes :=
   (Prog.compile (runtime dp)).getD []
+
+/-! ## Closing the symbolic link
+
+`erase_symbolicRuntimeMain` above pins the dispatch tree.  What follows pins the
+49-entry auxiliary table and then resolves the whole symbolic program. -/
+
+/-- The symbolic Trigger half of the auxiliary table erases to the rebased
+numeric half.  The side condition is discharged on a closed term: deployment
+parameters reach the bodies only through PUSH immediates, which
+`Func.callTargets` discards. -/
+theorem erase_symbolicTriggerAux (dp : DeployParams) :
+    (symbolicTriggerAux dp).map (fun (_, body) => body.erase (Trigger.compositeSlotOf 27)) =
+      Trigger.rebasedLocalAuxWithRoleFailure triggerAuxDelta dp triggerRoleFailure :=
+  Trigger.erase_symbolicLocalAuxWithRoleFailure dp triggerRoleFailure
+    (by rw [Trigger.flatMap_callTargets_localAuxWithRoleFailure]; decide +kernel)
+
+/-- The full 49-entry auxiliary table erases to `aux`. -/
+theorem erase_symbolicAux (dp : DeployParams) :
+    (symbolicAux dp).map (fun (_, body) => body.erase (Trigger.compositeSlotOf 27)) = aux dp := by
+  simp only [symbolicAux, aux, List.map_append, erase_symbolicBaseAux,
+    erase_symbolicTriggerAux]
+
+/-- Whole-program structural erasure: the symbolic runtime is the production
+runtime under the composite coordinate map. -/
+theorem erase_symbolicRuntime (dp : DeployParams) :
+    (symbolicRuntime dp).erase (Trigger.compositeSlotOf 27) = runtime dp :=
+  congrArg₂ Prog.mk (erase_symbolicRuntimeMain dp) (erase_symbolicAux dp)
+
+/-- Every call target occurring in the symbolic runtime sits at the coordinate the
+composite map assigns it.  Deployment parameters do not reach
+`SymbolicFunc.calls`, so the check is closed. -/
+theorem symbolicRuntime_callsOk (dp : DeployParams) :
+    (symbolicRuntime dp).callsOk (Trigger.compositeSlotOf 27) = true := by
+  have h : (symbolicRuntime dp).callsOk (Trigger.compositeSlotOf 27) =
+      (symbolicRuntime ⟨0⟩).callsOk (Trigger.compositeSlotOf 27) := rfl
+  rw [h]
+  decide +kernel
+
+/-- **The resolution theorem.**  Checked symbolic linking of the gateway runtime
+yields exactly the production `runtime`.  This is also the anti-drift control: if
+the symbolic program and `runtime` ever diverge, this stops typechecking. -/
+theorem resolve_symbolicRuntime_eq (dp : DeployParams) :
+    resolve (symbolicRuntime dp) = .ok (runtime dp) := by
+  have h := resolve_eq_erase_of_callsOk (symbolicRuntime dp) (Trigger.compositeSlotOf 27)
+    (symbolicRuntime_validateDefinitions dp) (symbolicRuntime_callsOk dp)
+  rwa [erase_symbolicRuntime dp] at h
 
 theorem funcs_selector_census (dp : DeployParams) :
     List.Perm ((funcs dp).map Prod.fst)
@@ -756,6 +810,63 @@ theorem runtime_compile (dp : DeployParams) :
     Prog.compile (runtime dp) = some (runtimeCode dp) := by
   simpa [runtimeCode] using
     Prog.compile_eq_some_getD_of_compiles (runtime dp) (runtime_compiles dp)
+
+/-- Checked link certificate for the symbolic gateway runtime.  `runtime` is left
+exactly as it was — the certificate is a proved view of it, not its definition —
+so no downstream `unfold runtime`/`simp [runtime, aux, …]` normal form moves. -/
+def symbolicLinkCert (dp : DeployParams) : LinkCertificate (symbolicRuntime dp) where
+  resolved := runtime dp
+  resolve_eq := resolve_symbolicRuntime_eq dp
+  compiles := runtime_compiles dp
+
+theorem symbolicLinkCert_resolved (dp : DeployParams) :
+    (symbolicLinkCert dp).resolved = runtime dp :=
+  rfl
+
+/-- The certificate's compiled bytes are the production runtime bytes. -/
+theorem symbolicLinkCert_bytes (dp : DeployParams) :
+    (symbolicLinkCert dp).bytes = runtimeCode dp :=
+  rfl
+
+/-- Structural length of the compiled runtime, evaluated in the kernel through
+`Prog.length_compile` so that the 15,948 emitted bytes are never materialised.
+This is the first proof of this number: the published compatibility figure was
+previously quoted with no Lean theorem behind it. -/
+private theorem runtimeStructuralLengthZero :
+    (((runtime ⟨0⟩).main :: (runtime ⟨0⟩).aux).map fun f => 1 + compsize f).sum = 15948 := by
+  decide +kernel
+
+/-- The zero-parameter member — the constructor's runtime template — compiles to
+exactly 15,948 bytes. -/
+theorem runtimeCode_length_zero : (runtimeCode ⟨0⟩).length = 15948 :=
+  (Prog.length_compile (runtime_compile ⟨0⟩)).trans runtimeStructuralLengthZero
+
+/-- The structural length is the same for every deployment parameter: each one
+occupies a fixed-width PUSH32 immediate, which is exactly what
+`runtime_compileShape_eq_zero` records.  Transported through
+`Func.CompileShape.byteSize_compileShape` rather than by reducing two 15,948-byte
+compilations against each other. -/
+private theorem runtimeStructuralLength_eq_zero (dp : DeployParams) :
+    (((runtime dp).main :: (runtime dp).aux).map fun f => 1 + compsize f).sum =
+      (((runtime ⟨0⟩).main :: (runtime ⟨0⟩).aux).map fun f => 1 + compsize f).sum := by
+  have h := runtime_compileShape_eq_zero dp
+  have hm : (runtime dp).main.compileShape = (runtime ⟨0⟩).main.compileShape := by
+    simpa [Prog.compileShape] using congrArg Prog.CompileShape.main h
+  have ha : (runtime dp).aux.map Func.compileShape =
+      (runtime ⟨0⟩).aux.map Func.compileShape := by
+    simpa [Prog.compileShape] using congrArg Prog.CompileShape.aux h
+  have hmap : ∀ l : List Func, (l.map fun f => 1 + compsize f) =
+      (l.map Func.compileShape).map (fun sh => 1 + sh.byteSize) := by
+    intro l
+    simp [List.map_map, Func.CompileShape.byteSize_compileShape]
+  rw [List.map_cons, List.map_cons, List.sum_cons, List.sum_cons, hmap, hmap,
+    ← Func.CompileShape.byteSize_compileShape, ← Func.CompileShape.byteSize_compileShape,
+    hm, ha]
+
+/-- Every member of the locator-parameterized family compiles to 15,948 bytes. -/
+theorem runtimeCode_length (dp : DeployParams) : (runtimeCode dp).length = 15948 :=
+  ((Prog.length_compile (runtime_compile dp)).trans
+    (runtimeStructuralLength_eq_zero dp)).trans runtimeStructuralLengthZero
 
 def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun

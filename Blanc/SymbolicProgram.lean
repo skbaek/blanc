@@ -1,4 +1,5 @@
 import Blanc.CommonCore
+import Blanc.LinearDispatch
 
 /-!
 # Symbolic programs and checked linking
@@ -281,6 +282,94 @@ theorem Func.erase_liftCallFree (f : Func) (h : (f.toSymbolic? Label).isSome = t
   have h_eq : f.toSymbolic? Label = some (f.liftCallFree Label h) := Option.get_mem h
   exact Func.erase_toSymbolic f (f.liftCallFree Label h) h_eq map
 
+
+/-! ## Generic call naming
+
+`Func.toSymbolic?` above covers only the call-free case.  A runtime that is
+being migrated off hand-maintained numeric coordinates needs the general case:
+lift an existing positional `Func` by *naming* each numeric call target.  One
+definition and one erasure lemma serve every label type, so a consumer does not
+author its own structural recursion. -/
+
+/-- The numeric call targets occurring in a positional `Func`, in source order. -/
+def Func.callTargets : Func → List Nat
+  | .last _ => []
+  | .next _ f => f.callTargets
+  | .branch f g => f.callTargets ++ g.callTargets
+  | .call n => [n]
+
+/-- Lift a positional `Func` into `SymbolicFunc Label` by naming every call
+target through `g`.  Unlike `Func.toSymbolic?` this is total. -/
+def Func.mapCalls (g : Nat → Label) : Func → SymbolicFunc Label
+  | .last o => .last o
+  | .next i f => .next i (f.mapCalls g)
+  | .branch f h => .branch (f.mapCalls g) (h.mapCalls g)
+  | .call n => .call (g n)
+
+/-- Renumber every call target of a positional `Func`.  The general
+target-renumbering owner: a local-to-global table rebase is `mapTargets (delta + ·)`. -/
+def Func.mapTargets (t : Nat → Nat) : Func → Func
+  | .last o => .last o
+  | .next i f => .next i (f.mapTargets t)
+  | .branch f g => .branch (f.mapTargets t) (g.mapTargets t)
+  | .call n => .call (t n)
+
+@[simp] theorem Func.mapTargets_id (f : Func) : f.mapTargets id = f := by
+  induction f with
+  | last o => rfl
+  | next i f ih => simp only [Func.mapTargets, ih]
+  | branch f g ihf ihg => simp only [Func.mapTargets, ihf, ihg]
+  | call n => rfl
+
+/-- Erasing a named lift is the renumbering that `map ∘ g` performs, provided the
+two agree on the targets that actually occur.  The membership restriction is the
+whole content: a naming function that decodes only a bounded window of slots
+still behaves, as long as no body calls outside that window. -/
+theorem Func.erase_mapCalls_eq_mapTargets (g : Nat → Label) (map : Label → Nat)
+    (t : Nat → Nat) (f : Func) (hmap : ∀ n ∈ f.callTargets, map (g n) = t n) :
+    (f.mapCalls g).erase map = f.mapTargets t := by
+  induction f with
+  | last o => rfl
+  | next i f ih =>
+      simp only [Func.callTargets] at hmap
+      simp only [Func.mapCalls, Func.mapTargets, SymbolicFunc.erase, ih hmap]
+  | branch f g' ihf ihg =>
+      simp only [Func.callTargets, List.mem_append] at hmap
+      have hf : ∀ n ∈ f.callTargets, map (g n) = t n := fun n hn => hmap n (Or.inl hn)
+      have hg : ∀ n ∈ g'.callTargets, map (g n) = t n := fun n hn => hmap n (Or.inr hn)
+      simp only [Func.mapCalls, Func.mapTargets, SymbolicFunc.erase, ihf hf, ihg hg]
+  | call n =>
+      simp only [Func.callTargets, List.mem_singleton] at hmap
+      simp only [Func.mapCalls, Func.mapTargets, SymbolicFunc.erase, hmap n rfl]
+
+/-- Erasure inverts `Func.mapCalls` as soon as `map` inverts `g` on the targets
+that actually occur. -/
+theorem Func.erase_mapCalls (g : Nat → Label) (map : Label → Nat) (f : Func)
+    (hmap : ∀ n ∈ f.callTargets, map (g n) = n) :
+    (f.mapCalls g).erase map = f := by
+  have h := Func.erase_mapCalls_eq_mapTargets g map id f hmap
+  simpa using h
+
+/-- Totally inverted naming needs no membership side condition. -/
+theorem Func.erase_mapCalls_of_inverse (g : Nat → Label) (map : Label → Nat)
+    (hmap : ∀ n, map (g n) = n) (f : Func) :
+    (f.mapCalls g).erase map = f :=
+  Func.erase_mapCalls g map f (fun n _ => hmap n)
+
+/-- List form: one agreement hypothesis over a whole auxiliary table.  A table
+authored symbolically and a table authored numerically erase to each other under
+a single renumbering. -/
+theorem Func.erase_map_mapCalls (g : Nat → Label) (map : Label → Nat) (t : Nat → Nat)
+    (bodies : List Func)
+    (h : ∀ f ∈ bodies, ∀ n ∈ f.callTargets, map (g n) = t n) :
+    bodies.map (fun f => (f.mapCalls g).erase map) = bodies.map (Func.mapTargets t) := by
+  induction bodies with
+  | nil => rfl
+  | cons b bs ih =>
+      have hb : ∀ n ∈ b.callTargets, map (g n) = t n := h b (List.mem_cons_self ..)
+      have hbs : ∀ f ∈ bs, ∀ n ∈ f.callTargets, map (g n) = t n :=
+        fun f hf => h f (List.mem_cons_of_mem _ hf)
+      simp only [List.map_cons, Func.erase_mapCalls_eq_mapTargets g map t b hb, ih hbs]
 /-- Prepend a `Line` of instructions to a `SymbolicFunc`. -/
 def SymbolicFunc.prepend (l : Line) (f : SymbolicFunc Label) : SymbolicFunc Label :=
   match l with
@@ -353,6 +442,56 @@ theorem resolve_eq_erase [DecidableEq Label]
   have h_res_aux := resolveAux_eq_erase p map p.aux h_aux
   simp [resolve, h_valid, h_res_main, h_res_aux, SymbolicProg.erase]
 
+/-! ### A decidable front end for `resolve_eq_erase`
+
+`resolve_eq_erase` takes two membership-restricted agreement hypotheses.  A
+program over a *finite* label type discharges them with `cases target <;> rfl`.
+A program over a label type carrying an unbounded payload — a composite table
+whose base arm is `base (slot : Nat)`, say — cannot: agreement holds exactly on
+the slots the table actually defines, and `findLabel?` returns `none` elsewhere.
+
+`callsOk` turns both hypotheses into one Boolean over the call targets that
+actually occur.  `SymbolicFunc.calls` discards every instruction payload, so for
+a runtime whose deployment parameters appear only inside PUSH immediates the
+check is independent of those parameters and closes by `decide +kernel` even
+with the parameter record still a free variable. -/
+
+/-- Every call target occurring anywhere in a symbolic program, in order. -/
+def SymbolicProg.allCalls (p : SymbolicProg Label) : List Label :=
+  p.main.calls ++ p.aux.flatMap (fun entry => entry.2.calls)
+
+/-- Decidable table agreement: every occurring call target is defined in the
+table, at exactly the coordinate `map` assigns it. -/
+def SymbolicProg.callsOk [DecidableEq Label] (p : SymbolicProg Label) (map : Label → Nat) : Bool :=
+  p.allCalls.all (fun target => decide (p.findLabel? target = some (map target)))
+
+theorem SymbolicProg.findLabel?_of_callsOk [DecidableEq Label]
+    {p : SymbolicProg Label} {map : Label → Nat} (h : p.callsOk map = true)
+    {target : Label} (ht : target ∈ p.allCalls) :
+    p.findLabel? target = some (map target) :=
+  of_decide_eq_true (List.all_eq_true.mp h target ht)
+
+theorem SymbolicProg.mem_allCalls_main (p : SymbolicProg Label) {target : Label}
+    (ht : target ∈ p.main.calls) : target ∈ p.allCalls :=
+  List.mem_append_left _ ht
+
+theorem SymbolicProg.mem_allCalls_aux (p : SymbolicProg Label) {lbl : Label}
+    {body : SymbolicFunc Label} (hb : (lbl, body) ∈ p.aux) {target : Label}
+    (ht : target ∈ body.calls) : target ∈ p.allCalls :=
+  List.mem_append_right _ (List.mem_flatMap.mpr ⟨(lbl, body), hb, ht⟩)
+
+/-- Resolution equals whole-program erasure whenever definition validity holds
+and the decidable agreement check passes.  This is the reusable composite-table
+front end: both membership-restricted hypotheses of `resolve_eq_erase` come out
+of one `Bool`. -/
+theorem resolve_eq_erase_of_callsOk [DecidableEq Label]
+    (p : SymbolicProg Label) (map : Label → Nat)
+    (h_valid : p.validateDefinitions = .ok ())
+    (h_calls : p.callsOk map = true) :
+    resolve p = .ok (p.erase map) :=
+  resolve_eq_erase p map h_valid
+    (fun _ ht => SymbolicProg.findLabel?_of_callsOk h_calls (p.mem_allCalls_main ht))
+    (fun _ _ hb _ ht => SymbolicProg.findLabel?_of_callsOk h_calls (p.mem_allCalls_aux hb ht))
 /-- Conversely, any successfully resolved function equals structural erasure with respect to any agreeing map. -/
 theorem erase_eq_of_resolveFunc [DecidableEq Label]
     (p : SymbolicProg Label) (owner : Label) (path : List BranchArm)
@@ -470,6 +609,42 @@ theorem erase_eq_of_resolve [DecidableEq Label]
         have hm_eq := erase_eq_of_resolveFunc p p.root [] map p.main main' hm h_agree
         have ha_eq := aux_erase_eq_of_resolveAux p map p.aux aux' ha h_agree
         simp [SymbolicProg.erase, hm_eq, ha_eq]
+
+/-! ## Generic symbolic dispatch
+
+`Blanc.linearDispatchWith` (`Blanc/LinearDispatch.lean`) is the one positional
+owner of the structured linear selector chain.  Its symbolic twin is authored
+once here, for every label type, with the erasure lemma that carries a symbolic
+dispatcher back to that owner.  A runtime migrating to symbolic labels therefore
+does not re-derive the chain shape, and the two cannot drift.
+-/
+
+/-- Symbolic linear selector dispatch: the exact shape of
+`Blanc.linearDispatchWith`, with a named fallback label. -/
+def symbolicLinearDispatchWith (fallback : Label) :
+    List (B256 × SymbolicFunc Label) → SymbolicFunc Label
+  | [] => .call fallback
+  | [(word, body)] =>
+      .next (Ninst.pushB256 word) (.next Ninst.eq (.branch (.call fallback) body))
+  | (word, body) :: rest =>
+      .next (Ninst.dup 0) (.next (Ninst.pushB256 word) (.next Ninst.eq
+        (.branch (symbolicLinearDispatchWith fallback rest) (.next Ninst.pop body))))
+
+/-- Erasing a symbolic linear dispatcher yields the positional dispatcher over
+the erased bodies, with the fallback label at its assigned coordinate. -/
+@[simp] theorem erase_symbolicLinearDispatchWith (map : Label → Nat) (fallback : Label)
+    (entries : List (B256 × SymbolicFunc Label)) :
+    (symbolicLinearDispatchWith fallback entries).erase map =
+      linearDispatchWith (map fallback)
+        (entries.map (fun (word, body) => (word, body.erase map))) := by
+  induction entries with
+  | nil => rfl
+  | cons head tail ih =>
+    cases tail with
+    | nil => rfl
+    | cons second rest =>
+      simp only [symbolicLinearDispatchWith, linearDispatchWith, SymbolicFunc.erase,
+        List.map_cons, ih]
 
 /-! ## Unique label lookup properties -/
 

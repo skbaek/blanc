@@ -475,7 +475,10 @@ direct calls or jumps to selector destinations. -/
 def splitDispatch (pivot : B256) (left right : Func) : Func :=
   dup 0 ::: pushB256 pivot ::: gt ::: (left <?> right)
 
-def firstSelector (entries : List (B256 × Func)) : B256 :=
+/-- First selector word of a dispatch entry list, `0` when empty.  Polymorphic in
+the body representation: the positional and the symbolic pivot builder below are
+the same function, and a second copy is what let them drift. -/
+def firstSelector {α : Type} (entries : List (B256 × α)) : B256 :=
   entries.head?.map Prod.fst |>.getD 0
 
 def hybridDispatchWith (k : Nat)
@@ -800,19 +803,14 @@ def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Label) :=
       symbolicSetPauseDuration dp),
     (selector "isPauserLive" [.address], symbolicIsPauserLive) ]
 
-def symbolicLinearDispatchWith (fb : Label) : List (B256 × SymbolicFunc Label) → SymbolicFunc Label
-  | [] => .call fb
-  | [(word, body)] =>
-      pushB256 word :::: eq :::: (body <??> .call fb)
-  | (word, body) :: rest =>
-      dup 0 :::: pushB256 word :::: eq ::::
-        ((pop :::: body) <??> symbolicLinearDispatchWith fb rest)
-
+/-- Symbolic pivot.  The positional owner `splitDispatch` above is contract-local
+(the measured 5/4/4/4 Pareto topology is this runtime's, not a shared facility),
+and 12 downstream modules `unfold hybridDispatchWith splitDispatch` by name, so
+hoisting the positional pair would re-anchor their normal form.  The linear chain
+underneath *is* shared: `Blanc.symbolicLinearDispatchWith`
+(`Blanc/SymbolicProgram.lean`) over `Blanc.linearDispatchWith`. -/
 def symbolicSplitDispatch (pivot : B256) (left right : SymbolicFunc Label) : SymbolicFunc Label :=
   dup 0 :::: pushB256 pivot :::: gt :::: (left <??> right)
-
-def symbolicFirstSelector (entries : List (B256 × SymbolicFunc Label)) : B256 :=
-  entries.head?.map Prod.fst |>.getD 0
 
 def symbolicHybridDispatchWith (k : Label)
     (entries : List (B256 × SymbolicFunc Label)) : SymbolicFunc Label :=
@@ -820,11 +818,11 @@ def symbolicHybridDispatchWith (k : Label)
   let second := (entries.drop 5).take 4
   let third := (entries.drop 9).take 4
   let fourth := entries.drop 13
-  let left := symbolicSplitDispatch (symbolicFirstSelector second)
-    (symbolicLinearDispatchWith k first) (symbolicLinearDispatchWith k second)
-  let right := symbolicSplitDispatch (symbolicFirstSelector fourth)
-    (symbolicLinearDispatchWith k third) (symbolicLinearDispatchWith k fourth)
-  symbolicSplitDispatch (symbolicFirstSelector third) left right
+  let left := symbolicSplitDispatch (firstSelector second)
+    (Blanc.symbolicLinearDispatchWith k first) (Blanc.symbolicLinearDispatchWith k second)
+  let right := symbolicSplitDispatch (firstSelector fourth)
+    (Blanc.symbolicLinearDispatchWith k third) (Blanc.symbolicLinearDispatchWith k fourth)
+  symbolicSplitDispatch (firstSelector third) left right
 
 def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Label :=
   callvalue :::: pushB256 4 :::: calldatasize :::: lt :::: Ninst.or ::::
