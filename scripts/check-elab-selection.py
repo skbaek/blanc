@@ -18,6 +18,16 @@ The same module owns the calibration sampler.  Deciding *which* modules can
 have moved is the fingerprint's job and is exact; deciding whether the host is
 behaving normally while they are measured is a separate, statistical question,
 and a seeded stratified sample of provably-unaffected modules answers it.
+
+The same module also owns the shared same-host timing evidence below the
+repository's Git common directory.  A new worktree must not repeat timing
+solely because its worktree-local state is empty, so green runs publish their
+per-module measurements keyed by the exact fingerprints above, and clean-tree
+genesis/rebase runs publish their whole baseline document with its origin
+commit.  A baseline-less worktree adopts a stored document only when that
+origin predates the changes under test, and any module credits a stored
+measurement only on exact environment/fingerprint/host match.  Every shared
+failure costs measurement, never a credit.
 """
 
 from __future__ import annotations
@@ -30,8 +40,10 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -518,6 +530,36 @@ def make_plan(
             else:
                 affected.append(relative)
 
+    # A local miss consults the shared same-host evidence: an exact
+    # (environment, fingerprint) match credits the stored measurement.  An
+    # explicit --full still measures everything -- it asks for fresh evidence.
+    # Any shared failure leaves the module affected; it never breaks planning.
+    shared_credited: list[str] = []
+    shared_reason: str | None = None
+    if not force_full:
+        try:
+            shared_path = shared_store_path(root)
+            shared_host = load_shared_host_identity()
+            shared_store, shared_error, _ = read_shared_store(
+                shared_path, shared_host
+            )
+            if shared_error is not None:
+                shared_reason = shared_error
+            else:
+                shared_table = lookup_shared_measurements(shared_store, environment)
+                for relative in files:
+                    if relative in cached:
+                        continue
+                    moment = shared_table.get(fingerprints[relative])
+                    if moment is not None:
+                        cached[relative] = {"status": "OK", "time": moment}
+                        shared_credited.append(relative)
+                affected = [relative for relative in files if relative not in cached]
+        except SelectionError as error:
+            shared_reason = str(error)
+        except Exception as error:  # shared evidence must never break planning
+            shared_reason = f"shared evidence unavailable: {error}"
+
     calibration: dict[str, Any] | None = None
     if calibration_commit is not None:
         if baseline_path is None:
@@ -578,6 +620,8 @@ def make_plan(
         "cached": cached,
         "reason": reason,
         "calibration": calibration,
+        "shared_credited": sorted(shared_credited),
+        "shared_reason": shared_reason,
     }
 
 
@@ -750,6 +794,423 @@ def commit_state(
         },
     }
     atomic_json(state_path, state)
+
+
+# --- shared same-host timing evidence --------------------------------------
+#
+# A new worktree on the same host and physical clone must not repeat timing
+# solely because its worktree-local state is empty.  The shared store below
+# the repository's Git common directory carries two evidence tables across
+# worktrees of one physical clone on one host:
+#
+# * `measurements`: (environment, module fingerprint) -> measured seconds.
+#   Fingerprints are content self-validating, so any green uncontended
+#   non---force run may publish them, from a clean or dirty tree alike, and a
+#   new worktree may credit them on exact (environment, fingerprint) match.
+#   Only OK rows are ever published; violations and errors stay invalid.
+# * `baselines`: whole rendered baseline documents with their origin commit.
+#   Only genesis/`--rebase` full green runs on clean trees publish them, so
+#   the origin commit exactly describes the measured content.  A
+#   baseline-less worktree adopts one verbatim as its reference, but only
+#   when that origin is at or before merge-base(HEAD, main): an on-main
+#   clean tree may adopt its own commit (nothing is under test), while a
+#   branch or dirty tree only ever receives a pre-change reference, never
+#   its own reassuring baseline.  Adopted bytes are deterministic, so the
+#   outer gate fingerprint can match.
+#
+# The trust boundary mirrors blanc-gate-evidence: same Git common directory,
+# same host identity (whose single authority is gate-cache.host_identity,
+# loaded below), runner-written only, atomically replaced, disposable.  Every
+# read failure costs measurement, never a credit and never a crash.  An
+# existing store file that belongs to a different host, or that this reader
+# does not understand, is never overwritten: publication skips rather than
+# destroying evidence it cannot use.
+#
+# All access happens inside scripts/check-elab.sh, which holds the
+# host-global heavy gate lock from before planning through publication, so
+# concurrent publishers are serialized and an interrupted write resolves to
+# old-or-new via atomic replace.  No other caller may touch this store.
+SHARED_EVIDENCE_DIRNAME = "blanc-elab-evidence"
+SHARED_EVIDENCE_FILENAME = "evidence.json"
+SHARED_EVIDENCE_SCHEMA = 1
+SHARED_TRUST_DOMAIN = "same-git-common-directory"
+SHARED_MAX_ENVS = 4
+SHARED_MAX_PER_ENV = 4096
+SHARED_MAX_BASELINES = 8
+# Verdict-relevant Lean corpus for publish-time origin normalization: a clean
+# branch commit touching none of these measured pre-change content, so its
+# reference may carry the branch point as origin (baseline_origin_for_publish).
+SHARED_LEAN_PATHSPECS = ("Blanc/", "Blanc.lean", "Main.lean")
+SHARED_BASE_REF = "main"
+
+
+def selector_script_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def load_shared_host_identity() -> str:
+    """Host identity from its single authority, gate-cache.host_identity."""
+
+    import importlib.util
+
+    script_dir = str(selector_script_dir())
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    path = selector_script_dir() / "gate-cache.py"
+    spec = importlib.util.spec_from_file_location("blanc_gate_cache_for_elab", path)
+    if spec is None or spec.loader is None:
+        raise SelectionError(f"cannot load host-identity authority: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    identity = module.host_identity()
+    if not isinstance(identity, str) or not identity:
+        raise SelectionError("host-identity authority returned no identity")
+    return identity
+
+
+def shared_git_common_dir(root: Path) -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        raise SelectionError(
+            f"cannot resolve Git common directory: {error}"
+        ) from error
+    if result.returncode != 0 or not result.stdout.strip():
+        raise SelectionError(
+            "shared timing evidence requires a git worktree of one physical repository"
+        )
+    path = Path(result.stdout.strip())
+    if not path.is_absolute():
+        path = root / path
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise SelectionError(
+            f"cannot resolve Git common directory {path}: {error}"
+        ) from error
+    if not resolved.is_dir():
+        raise SelectionError(f"Git common directory is not a directory: {resolved}")
+    return resolved
+
+
+def shared_store_path(root: Path) -> Path:
+    return (
+        shared_git_common_dir(root) / SHARED_EVIDENCE_DIRNAME / SHARED_EVIDENCE_FILENAME
+    )
+
+
+def empty_shared_store(host: str) -> dict[str, Any]:
+    return {
+        "schema": SHARED_EVIDENCE_SCHEMA,
+        "trust_domain": SHARED_TRUST_DOMAIN,
+        "host": host,
+        "measurements": {},
+        "baselines": [],
+    }
+
+
+def valid_shared_record(record: Any) -> bool:
+    return (
+        isinstance(record, dict)
+        and valid_time(record.get("time"))
+        and isinstance(record.get("commit"), str)
+        and isinstance(record.get("utc"), str)
+    )
+
+
+def valid_shared_baseline(entry: Any) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    if not isinstance(entry.get("origin"), str) or not entry["origin"]:
+        return False
+    if not isinstance(entry.get("environment"), str) or not entry["environment"]:
+        return False
+    payload = entry.get("payload")
+    if not isinstance(payload, str) or not payload:
+        return False
+    if entry.get("digest") != sha256_bytes(payload.encode("utf-8")):
+        return False
+    if not isinstance(entry.get("rows"), int) or entry["rows"] <= 0:
+        return False
+    return isinstance(entry.get("utc"), str)
+
+
+def read_shared_store(path: Path, host: str) -> tuple[dict[str, Any], str | None, bool]:
+    """Load the shared store: (store, reason, writable).
+
+    `reason` is None on success.  `writable` is False when an existing file
+    must be preserved rather than replaced: a store belonging to a different
+    host, or one this reader does not understand.  Corrupt files are
+    replaceable -- they carry no usable evidence -- while foreign evidence is
+    never destroyed to make room.
+    """
+
+    if not path.is_file():
+        return empty_shared_store(host), "no prior shared timing evidence", True
+    try:
+        store = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return (
+            empty_shared_store(host),
+            "shared timing evidence is unreadable or corrupt",
+            True,
+        )
+    if not isinstance(store, dict):
+        return empty_shared_store(host), "shared timing evidence is invalid", True
+    if store.get("host") != host:
+        return (
+            empty_shared_store(host),
+            "shared timing evidence belongs to a different host identity",
+            False,
+        )
+    if store.get("schema") != SHARED_EVIDENCE_SCHEMA:
+        return (
+            empty_shared_store(host),
+            "shared timing evidence schema is missing or incompatible",
+            False,
+        )
+    if store.get("trust_domain") != SHARED_TRUST_DOMAIN:
+        return (
+            empty_shared_store(host),
+            "shared timing evidence trust domain is missing or incompatible",
+            False,
+        )
+    measurements = store.get("measurements")
+    baselines = store.get("baselines")
+    if not isinstance(measurements, dict) or not isinstance(baselines, list):
+        return (
+            empty_shared_store(host),
+            "shared timing evidence tables are invalid",
+            True,
+        )
+    for environment, table in measurements.items():
+        if not isinstance(environment, str) or not isinstance(table, dict):
+            return (
+                empty_shared_store(host),
+                "shared measurement table is invalid",
+                True,
+            )
+        for fingerprint, record in table.items():
+            if not isinstance(fingerprint, str) or not valid_shared_record(record):
+                return (
+                    empty_shared_store(host),
+                    "shared measurement record is invalid",
+                    True,
+                )
+    for entry in baselines:
+        if not valid_shared_baseline(entry):
+            return (
+                empty_shared_store(host),
+                "shared baseline record is invalid",
+                True,
+            )
+    return store, None, True
+
+
+def lookup_shared_measurements(
+    store: dict[str, Any], environment: str
+) -> dict[str, str]:
+    table = store["measurements"].get(environment, {})
+    return {
+        fingerprint: record["time"] for fingerprint, record in table.items()
+    }
+
+
+def publish_shared_measurements(
+    store: dict[str, Any],
+    environment: str,
+    entries: dict[str, dict[str, str]],
+    utc: str,
+) -> int:
+    """Merge entries {fingerprint: {"time", "commit"}}; returns changed count.
+
+    Eviction is a performance choice only: a pruned record simply causes a
+    fresh measurement.
+    """
+
+    table = store["measurements"].setdefault(environment, {})
+    changed = 0
+    for fingerprint in sorted(entries):
+        record = {
+            "time": entries[fingerprint]["time"],
+            "commit": entries[fingerprint]["commit"],
+            "utc": utc,
+        }
+        if table.get(fingerprint) != record:
+            changed += 1
+        table[fingerprint] = record
+    if len(table) > SHARED_MAX_PER_ENV:
+        doomed = sorted(table, key=lambda name: table[name]["utc"])
+        for fingerprint in doomed[: len(table) - SHARED_MAX_PER_ENV]:
+            del table[fingerprint]
+    while len(store["measurements"]) > SHARED_MAX_ENVS:
+        oldest = min(
+            store["measurements"],
+            key=lambda name: max(
+                (record["utc"] for record in store["measurements"][name].values()),
+                default="",
+            ),
+        )
+        del store["measurements"][oldest]
+    return changed
+
+
+def count_baseline_rows(text: str) -> int:
+    return sum(
+        1
+        for raw in text.splitlines()
+        if raw.strip() and not raw.lstrip().startswith("#")
+    )
+
+
+def publish_shared_baseline(
+    store: dict[str, Any],
+    payload: bytes,
+    origin: str,
+    environment: str,
+    utc: str,
+) -> tuple[str, bool]:
+    """Append a baseline document unless it is already retained under this environment.
+
+    The key is (digest, environment): identical bytes re-measured under a new
+    toolchain are a new reference, not a duplicate of the old one.
+    """
+
+    text = payload.decode("utf-8")
+    digest = sha256_bytes(payload)
+    if any(
+        entry["digest"] == digest and entry["environment"] == environment
+        for entry in store["baselines"]
+    ):
+        return digest, False
+    store["baselines"].append(
+        {
+            "origin": origin,
+            "environment": environment,
+            "digest": digest,
+            "rows": count_baseline_rows(text),
+            "payload": text,
+            "utc": utc,
+        }
+    )
+    store["baselines"] = store["baselines"][-SHARED_MAX_BASELINES:]
+    return digest, True
+
+
+def git_output(root: Path, args: list[str]) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def git_success(root: Path, args: list[str]) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def baseline_origin_for_publish(root: Path, head: str) -> str:
+    """Normalize the origin of a reference measured on clean HEAD.
+
+    A branch commit that touches no Lean source measured pre-change content,
+    so its reference may carry the branch point as origin and stay adoptable
+    on the branch it was measured for.  Anything else -- a Lean change, an
+    unresolvable base, a failed comparison -- keeps HEAD, which adoption then
+    judges strictly.
+    """
+
+    base = git_output(root, ["merge-base", head, SHARED_BASE_REF])
+    if base is None or base == head:
+        return head
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--quiet", base, head, "--", *SHARED_LEAN_PATHSPECS],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return head
+    return base if result.returncode == 0 else head
+
+
+def select_shared_baseline(
+    store: dict[str, Any], environment: str, root: Path, head: str
+) -> tuple[dict[str, Any] | None, str]:
+    """Newest qualifying reference: same environment, origin at or before the branch point."""
+
+    base = git_output(root, ["merge-base", head, SHARED_BASE_REF])
+    if base is None:
+        return None, f"cannot resolve merge-base({head[:12]}, {SHARED_BASE_REF})"
+    candidates = [
+        entry for entry in store["baselines"] if entry["environment"] == environment
+    ]
+    if not candidates:
+        return None, "no shared baseline under this environment"
+    qualifying: list[tuple[int, dict[str, Any]]] = []
+    for entry in candidates:
+        if not git_success(root, ["merge-base", "--is-ancestor", entry["origin"], base]):
+            continue
+        distance = git_output(root, ["rev-list", "--count", f"{entry['origin']}..{head}"])
+        try:
+            qualifying.append(
+                (int(distance) if distance is not None else 10**9, entry)
+            )
+        except ValueError:
+            qualifying.append((10**9, entry))
+    if not qualifying:
+        return None, "no shared baseline predates the changes under test"
+    qualifying.sort(key=lambda item: item[0])
+    return qualifying[0][1], ""
+
+
+def validate_shared_baseline_payload(text: str) -> dict[str, float]:
+    """Parse adopted rows strictly, minus the seeder's exact-corpus rule.
+
+    Partial coverage is sound: paths without a row take the gate's existing
+    first-measurement path, and rows for vanished paths are warnings.  Anything
+    malformed refuses the adoption, never the gate.
+    """
+
+    rows: dict[str, float] = {}
+    for number, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        fields = raw.split("\t")
+        if len(fields) != 3 or fields[0] != "OK":
+            raise SelectionError(f"malformed shared baseline row {number}")
+        try:
+            elapsed = float(fields[1])
+        except ValueError as error:
+            raise SelectionError(f"non-numeric shared baseline row {number}") from error
+        if not math.isfinite(elapsed) or elapsed <= 0 or fields[2] in rows:
+            raise SelectionError(f"invalid shared baseline row {number}")
+        rows[fields[2]] = elapsed
+    if not rows:
+        raise SelectionError("shared baseline carries no rows")
+    return rows
+
+
+def shared_utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 def fake_rows(plan: dict[str, Any], error: str | None = None) -> dict[str, dict[str, str]]:
@@ -1246,6 +1707,405 @@ def self_test() -> int:
         assert "2.40" in block and f"REFUSED: {loud}" in block
         controls += 1  # the verdict refuses, names the control, and records the whole draw
 
+    # --- shared same-host timing evidence -----------------------------------
+    # Every block below drives a scratch git repository, because origins and
+    # adoption are commit-relative.  Git identity stays local to the scratch
+    # invocation, and the shared store lands in the scratch common directory,
+    # never in the repository under test.
+    shared_tree = {
+        ".gitignore": "scripts/baseline-elab.txt\n.lake/\n",
+        "lean-toolchain": "leanprover/lean4:v-test\n",
+        "lakefile.lean": "import Lake\n",
+        "lake-manifest.json": "{}\n",
+        "scripts/check-elab.sh": "gate-v1\n",
+        "scripts/check-elab-selection.py": "selector-v1\n",
+        "Blanc/A.lean": "import Init\ndef a := 1\n",
+        "Blanc/B.lean": "import Blanc.A\ndef b := a\n",
+        "Blanc.lean": "import Blanc.B\n",
+    }
+
+    def run_git(root: Path, *args: str) -> str:
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.email=elab-test@local",
+                "-c",
+                "user.name=elab-test",
+                *args,
+            ],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"git {' '.join(args)}: {result.stderr}"
+        return result.stdout.strip()
+
+    def git_tree(directory: str) -> Path:
+        root = Path(directory)
+        (root / "Blanc").mkdir()
+        (root / "scripts").mkdir()
+        for relative, text in shared_tree.items():
+            (root / relative).write_text(text, encoding="utf-8")
+        run_git(root, "init", "-b", "main")
+        run_git(root, "add", "-A")
+        run_git(root, "commit", "-m", "genesis")
+        return root
+
+    def quiet_call(function, *args):
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink):
+            code = function(*args)
+        return code, sink.getvalue()
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-measure-") as directory:
+        root = git_tree(directory)
+        state_path = root / ".lake/check-elab-state.json"
+        report_path = root / "report.tsv"
+        plan_path = root / "plan.json"
+
+        plan = make_plan(root, state_path, "Lean test")
+        write_plan(plan_path, plan)
+        write_rows(report_path, fake_rows(plan))
+        commit_state(plan, report_path, state_path)
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0 and "measurement(s) recorded" in out
+        store_file = shared_store_path(root)
+        assert store_file.is_file()
+        host = load_shared_host_identity()
+        store, reason, writable = read_shared_store(store_file, host)
+        assert reason is None and writable
+        assert len(store["measurements"][plan["environment"]]) == len(plan["files"])
+
+        # A new worktree with empty local state credits every shared row.
+        state_path.unlink()
+        fresh = make_plan(root, state_path, "Lean test")
+        assert fresh["affected"] == []
+        assert sorted(fresh["shared_credited"]) == sorted(plan["files"])
+        assert len(fresh["cached"]) == len(plan["files"])
+        controls += 1  # shared measurements credit an empty local cache on exact match
+
+        # A fingerprint behind a credited measurement moves: only its real
+        # downstream closure is measured; the rest stays credited.
+        b_path = root / "Blanc/B.lean"
+        original_b = b_path.read_text(encoding="utf-8")
+        b_path.write_text(original_b.replace("a\n", "a + 1\n"), encoding="utf-8")
+        moved = make_plan(root, state_path, "Lean test")
+        assert moved["affected"] == ["Blanc.lean", "Blanc/B.lean"]
+        assert moved["shared_credited"] == ["Blanc/A.lean"]
+        b_path.write_text(original_b, encoding="utf-8")
+        controls += 1  # changing an input behind a credit rejects the stale credit
+
+        # Corruption fails open to full measurement, never to a credit.
+        store_file.write_text("not json\n", encoding="utf-8")
+        corrupt = make_plan(root, state_path, "Lean test")
+        assert corrupt["affected"] == corrupt["files"]
+        assert corrupt["shared_credited"] == []
+        assert corrupt["shared_reason"] is not None and "corrupt" in corrupt["shared_reason"]
+        controls += 1  # a corrupt shared store costs measurement, never a credit
+
+        # An interrupted atomic write leaves only a temp file, which readers ignore.
+        write_rows(report_path, fake_rows(plan))
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0 and "store reset" in out
+        (store_file.parent / ".evidence.json.interrupted").write_text(
+            "partial{", encoding="utf-8"
+        )
+        reread, reread_reason, _ = read_shared_store(store_file, host)
+        assert reread_reason is None
+        assert len(reread["measurements"][plan["environment"]]) == len(plan["files"])
+        controls += 1  # an interrupted-write temp file is ignored by readers
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-host-") as directory:
+        root = git_tree(directory)
+        host = load_shared_host_identity()
+        store_file = shared_store_path(root)
+        foreign = empty_shared_store("other-host-identity")
+        foreign["measurements"] = {
+            "env": {"fp": {"time": "1.0", "commit": "c", "utc": "u"}}
+        }
+        atomic_json(store_file, foreign)
+        before = store_file.read_bytes()
+        store, reason, writable = read_shared_store(store_file, host)
+        assert reason is not None and "different host" in reason and not writable
+        assert store["measurements"] == {}
+
+        state_path = root / ".lake/check-elab-state.json"
+        plan = make_plan(root, state_path, "Lean test")
+        assert plan["affected"] == plan["files"] and plan["shared_credited"] == []
+        plan_path = root / "plan.json"
+        write_plan(plan_path, plan)
+        report_path = root / "report.tsv"
+        write_rows(report_path, fake_rows(plan))
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0 and "preserving existing store" in out
+        assert store_file.read_bytes() == before
+        controls += 1  # wrong-host evidence is never credited and never overwritten
+
+        future = empty_shared_store(host)
+        future["schema"] = 999
+        atomic_json(store_file, future)
+        _, reason, writable = read_shared_store(store_file, host)
+        assert reason is not None and "incompatible" in reason and not writable
+        controls += 1  # an unknown same-host schema is preserved, not replaced
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-base-") as directory:
+        root = git_tree(directory)
+        host = load_shared_host_identity()
+        store_file = shared_store_path(root)
+        baseline_path = root / "scripts/baseline-elab.txt"
+        env_id = "Lean test"
+
+        def write_baseline(times: dict[str, float]) -> None:
+            baseline_path.write_text(
+                "# test reference\n"
+                + "".join(
+                    f"OK\t{seconds:.3f}\t{path}\n"
+                    for path, seconds in sorted(times.items())
+                ),
+                encoding="utf-8",
+            )
+
+        files = discover_files(root)
+        reference = {path: 1.0 + index * 0.5 for index, path in enumerate(files)}
+        write_baseline(reference)
+        head_a = run_git(root, "rev-parse", "HEAD")
+
+        # A clean-tree genesis publishes its reference with its own origin.
+        code, out = quiet_call(
+            command_publish_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "recorded" in out
+        store, _, _ = read_shared_store(store_file, host)
+        assert len(store["baselines"]) == 1
+        assert store["baselines"][0]["origin"] == head_a
+        controls += 1  # a clean-tree genesis publishes its reference with its own origin
+
+        # A dirty tree publishes measurements but never a reference.
+        (root / "Blanc/A.lean").write_text(
+            "import Init\ndef a := 99\n", encoding="utf-8"
+        )
+        code, out = quiet_call(
+            command_publish_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "not clean" in out
+        store, _, _ = read_shared_store(store_file, host)
+        assert len(store["baselines"]) == 1
+        run_git(root, "checkout", "--", "Blanc/A.lean")
+        controls += 1  # baseline publication refuses a dirty tree
+
+        # A scripts-only branch commit normalizes its origin to the branch point.
+        run_git(root, "checkout", "-b", "scripts-only")
+        (root / "scripts/check-elab.sh").write_text("gate-v2\n", encoding="utf-8")
+        run_git(root, "commit", "-am", "scripts only")
+        write_baseline(reference)
+        code, out = quiet_call(
+            command_publish_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "recorded" in out
+        store, _, _ = read_shared_store(store_file, host)
+        branch_environment = environment_fingerprint(root, env_id)
+        branch_docs = [
+            entry
+            for entry in store["baselines"]
+            if entry["environment"] == branch_environment
+        ]
+        assert len(branch_docs) == 1 and branch_docs[0]["origin"] == head_a
+        controls += 1  # a branch commit touching no Lean source carries the branch point as origin
+
+        # The branch adopts the pre-change reference verbatim.
+        baseline_path.unlink()
+        code, out = quiet_call(
+            command_adopt_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "adopted" in out
+        assert baseline_path.read_bytes() == branch_docs[0]["payload"].encode("utf-8")
+        receipt = json.loads(
+            (root / ".lake/blanc-elab-shared-receipt.json").read_text(encoding="utf-8")
+        )
+        assert receipt["origin"] == head_a
+        assert receipt["digest"] == branch_docs[0]["digest"]
+        controls += 1  # adoption restores the reference bytes verbatim with a provenance receipt
+
+        # A Lean change keeps its own commit as origin ...
+        run_git(root, "checkout", "main")
+        run_git(root, "checkout", "-b", "lean-change")
+        (root / "Blanc/A.lean").write_text(
+            "import Init\ndef a := 7\n", encoding="utf-8"
+        )
+        run_git(root, "commit", "-am", "lean change")
+        head_c = run_git(root, "rev-parse", "HEAD")
+        write_baseline({path: 5.0 for path in discover_files(root)})
+        code, out = quiet_call(
+            command_publish_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "recorded" in out
+        store, _, _ = read_shared_store(store_file, host)
+        assert [entry for entry in store["baselines"] if entry["origin"] == head_c]
+        controls += 1  # a branch commit touching Lean source keeps its own commit as origin
+
+        # ... and a tree carrying that change adopts the pre-change reference,
+        # never its own.
+        baseline_path.unlink()
+        code, out = quiet_call(
+            command_adopt_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "adopted" in out
+        assert head_a[:12] in out and head_c[:12] not in out
+        selected_rows = validate_shared_baseline_payload(
+            baseline_path.read_text(encoding="utf-8")
+        )
+        assert selected_rows == reference
+        controls += 1  # the changed candidate cannot adopt its own reassuring baseline
+
+        # With only its own origin stored, the changed tree is refused outright.
+        store["baselines"] = [
+            entry for entry in store["baselines"] if entry["origin"] == head_c
+        ]
+        atomic_json(store_file, store)
+        baseline_path.unlink()
+        code, out = quiet_call(
+            command_adopt_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "predates the changes under test" in out
+        assert not baseline_path.exists()
+        controls += 1  # no qualifying reference refuses adoption instead of seeding self
+
+        # A republished identical reference is deduplicated, not duplicated.
+        write_baseline({path: 5.0 for path in discover_files(root)})
+        before_count = len(read_shared_store(store_file, host)[0]["baselines"])
+        code, out = quiet_call(
+            command_publish_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "already retained" in out
+        assert len(read_shared_store(store_file, host)[0]["baselines"]) == before_count
+        controls += 1  # identical references deduplicate by digest
+
+        # A toolchain move finds no reference under the new environment.
+        (root / "lean-toolchain").write_text(
+            "leanprover/lean4:v-other\n", encoding="utf-8"
+        )
+        baseline_path.unlink()
+        code, out = quiet_call(
+            command_adopt_baseline,
+            argparse.Namespace(root=root, baseline=baseline_path, environment_id=env_id),
+        )
+        assert code == 0 and "no shared baseline under this environment" in out
+        assert not baseline_path.exists()
+        run_git(root, "checkout", "--", "lean-toolchain")
+        controls += 1  # adoption refuses a reference measured under another environment
+
+        # Retention evicts oldest-first and only costs re-measurement.
+        saved_max = globals()["SHARED_MAX_BASELINES"]
+        globals()["SHARED_MAX_BASELINES"] = 2
+        try:
+            trial = empty_shared_store(host)
+            for index in range(3):
+                payload = f"# {index}\nOK\t1.000\tBlanc/A.lean\n".encode()
+                publish_shared_baseline(
+                    trial, payload, f"origin-{index}", "env", f"utc-{index}"
+                )
+            assert [entry["origin"] for entry in trial["baselines"]] == [
+                "origin-1",
+                "origin-2",
+            ]
+        finally:
+            globals()["SHARED_MAX_BASELINES"] = saved_max
+        controls += 1  # baseline retention evicts oldest-first
+
+        saved_per_env = globals()["SHARED_MAX_PER_ENV"]
+        globals()["SHARED_MAX_PER_ENV"] = 2
+        try:
+            trial = empty_shared_store(host)
+            publish_shared_measurements(
+                trial,
+                "env",
+                {"fp-a": {"time": "1.0", "commit": "c"}},
+                "2026-01-01T00:00:00Z",
+            )
+            publish_shared_measurements(
+                trial,
+                "env",
+                {
+                    "fp-b": {"time": "2.0", "commit": "c"},
+                    "fp-c": {"time": "3.0", "commit": "c"},
+                },
+                "2026-01-02T00:00:00Z",
+            )
+            assert sorted(trial["measurements"]["env"]) == ["fp-b", "fp-c"]
+        finally:
+            globals()["SHARED_MAX_PER_ENV"] = saved_per_env
+        controls += 1  # measurement retention evicts oldest-first
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-exclude-") as directory:
+        root = git_tree(directory)
+        host = load_shared_host_identity()
+        store_file = shared_store_path(root)
+        state_path = root / ".lake/check-elab-state.json"
+        plan = make_plan(root, state_path, "Lean test")
+        plan_path = root / "plan.json"
+        write_plan(plan_path, plan)
+        report_path = root / "report.tsv"
+        write_rows(report_path, fake_rows(plan, error="Blanc/A.lean"))
+        exclude_path = root / "exclude.txt"
+        exclude_path.write_text("Blanc/A.lean\n", encoding="utf-8")
+        code, _ = quiet_call(
+            command_publish,
+            argparse.Namespace(
+                plan=plan_path, report=report_path, exclude_file=exclude_path
+            ),
+        )
+        assert code == 0
+        store, _, _ = read_shared_store(store_file, host)
+        table = store["measurements"][plan["environment"]]
+        assert plan["fingerprints"]["Blanc/A.lean"] not in table
+        assert plan["fingerprints"]["Blanc/B.lean"] in table
+        controls += 1  # excluded violations are never published while green rows persist
+
+        store_file.unlink()
+        code, _ = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0
+        store, _, _ = read_shared_store(store_file, host)
+        table = store["measurements"][plan["environment"]]
+        assert plan["fingerprints"]["Blanc/A.lean"] not in table
+        controls += 1  # an error row is refused publication even when unexcluded
+
+    import importlib.util
+
+    script_dir = str(selector_script_dir())
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    spec = importlib.util.spec_from_file_location(
+        "blanc_gate_cache_probe", selector_script_dir() / "gate-cache.py"
+    )
+    assert spec is not None and spec.loader is not None
+    probe = importlib.util.module_from_spec(spec)
+    sys.modules["blanc_gate_cache_probe"] = probe
+    spec.loader.exec_module(probe)
+    assert load_shared_host_identity() == probe.host_identity()
+    controls += 1  # the shared store uses the gate cache's host identity, not its own
+
     print(f"OK — elab selection: {controls} invalidation/cache controls passed")
     return 0
 
@@ -1457,8 +2317,222 @@ def command_calibrate_verdict(args: argparse.Namespace) -> int:
     return 1 if summary["refused"] else 0
 
 
+def command_adopt_baseline(args: argparse.Namespace) -> int:
+    """Adopt a provenance-checked shared reference, or explain why not.
+
+    Always returns 0: a refused adoption falls back to genesis, never to a
+    gate failure.  The shell decides by testing whether the baseline appeared.
+    """
+
+    root = args.root.resolve()
+    if args.baseline.is_file():
+        print("NOTE — elab: local baseline already present; not adopting shared evidence")
+        return 0
+    try:
+        environment = environment_fingerprint(root, args.environment_id)
+        head = git_output(root, ["rev-parse", "HEAD"])
+        if head is None:
+            print("NOTE — elab: not adopting shared evidence: cannot resolve HEAD")
+            return 0
+        host = load_shared_host_identity()
+        store, reason, _ = read_shared_store(shared_store_path(root), host)
+        if reason is not None:
+            print(f"NOTE — elab: not adopting shared evidence: {reason}")
+            return 0
+        selected, select_reason = select_shared_baseline(store, environment, root, head)
+        if selected is None:
+            print(f"NOTE — elab: not adopting shared evidence: {select_reason}")
+            return 0
+        rows = validate_shared_baseline_payload(selected["payload"])
+    except SelectionError as error:
+        print(f"NOTE — elab: not adopting shared evidence: {error}")
+        return 0
+    receipt = root / ".lake/blanc-elab-shared-receipt.json"
+    try:
+        atomic_json(
+            receipt,
+            {
+                "schema": 1,
+                "origin": selected["origin"],
+                "environment": environment,
+                "digest": selected["digest"],
+                "rows": len(rows),
+                "host": host,
+                "recorded_utc": shared_utc_now(),
+            },
+        )
+    except OSError as error:
+        print(
+            "NOTE — elab: not adopting shared evidence: "
+            f"cannot record provenance ({error})"
+        )
+        return 0
+    try:
+        args.baseline.parent.mkdir(parents=True, exist_ok=True)
+        args.baseline.write_bytes(selected["payload"].encode("utf-8"))
+    except OSError as error:
+        print(
+            "NOTE — elab: not adopting shared evidence: "
+            f"cannot write baseline ({error})"
+        )
+        return 0
+    print(
+        f"elab shared baseline: adopted origin {selected['origin'][:12]} "
+        f"({len(rows)} rows, digest {selected['digest'][:16]})"
+    )
+    return 0
+
+
+def command_publish(args: argparse.Namespace) -> int:
+    """Publish this run's OK measurements to the shared store.
+
+    Best-effort and loud: publication must never turn a green run red, and a
+    skip always says why.  Only non-excluded OK rows are published, so
+    violations and errors can never enter the store.
+    """
+
+    try:
+        plan = read_plan(args.plan)
+        rows = read_result_rows(args.report)
+    except SelectionError as error:
+        print(f"NOTE — elab: shared publication skipped: {error}")
+        return 0
+    excluded = (
+        set(args.exclude_file.read_text(encoding="utf-8").splitlines())
+        if args.exclude_file
+        else set()
+    )
+    root = Path(plan["root"])
+    entries: dict[str, dict[str, str]] = {}
+    for relative in plan["files"]:
+        if relative in excluded:
+            continue
+        row = rows.get(relative)
+        if row is None or row["status"] != "OK":
+            continue
+        fingerprint = plan["fingerprints"].get(relative)
+        if not isinstance(fingerprint, str):
+            continue
+        entries[fingerprint] = {"time": row["time"], "commit": "unknown"}
+    if not entries:
+        print("NOTE — elab: shared publication skipped: no publishable measurements")
+        return 0
+    head = git_output(root, ["rev-parse", "HEAD"]) or "unknown"
+    for record in entries.values():
+        record["commit"] = head
+    try:
+        host = load_shared_host_identity()
+        path = shared_store_path(root)
+        store, reason, writable = read_shared_store(path, host)
+        if not writable:
+            print(
+                "NOTE — elab: shared publication skipped: "
+                f"preserving existing store ({reason})"
+            )
+            return 0
+        if reason is not None and reason != "no prior shared timing evidence":
+            print(f"NOTE — elab: shared store reset: {reason}")
+        changed = publish_shared_measurements(
+            store, plan["environment"], entries, shared_utc_now()
+        )
+        atomic_json(path, store)
+    except SelectionError as error:
+        print(f"NOTE — elab: shared publication skipped: {error}")
+        return 0
+    except OSError as error:
+        print(f"NOTE — elab: shared publication skipped: cannot write store ({error})")
+        return 0
+    print(
+        f"elab shared publish: {changed} measurement(s) recorded "
+        f"({len(entries)} presented)"
+    )
+    return 0
+
+
+def command_publish_baseline(args: argparse.Namespace) -> int:
+    """Publish a genesis/rebase reference with the origin it measured.
+
+    The shell calls this only after writing a full green baseline.  The tree
+    must be clean, so the origin commit exactly describes the measured
+    content; anything else skips loudly rather than publishing a reference
+    whose provenance it cannot state.
+    """
+
+    root = args.root.resolve()
+    try:
+        rows = read_baseline(args.baseline)
+    except SelectionError as error:
+        print(f"NOTE — elab: baseline publication skipped: {error}")
+        return 0
+    try:
+        files = discover_files(root)
+    except SelectionError as error:
+        print(f"NOTE — elab: baseline publication skipped: {error}")
+        return 0
+    if set(rows) != set(files):
+        print(
+            "NOTE — elab: baseline publication skipped: "
+            "rows do not cover the exact Lean corpus"
+        )
+        return 0
+    try:
+        baseline_text = args.baseline.read_text(encoding="utf-8")
+    except OSError as error:
+        print(f"NOTE — elab: baseline publication skipped: cannot read baseline ({error})")
+        return 0
+    for raw in baseline_text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if raw.startswith("ERROR\t"):
+            print(
+                "NOTE — elab: baseline publication skipped: "
+                "reference carries failures"
+            )
+            return 0
+    status = git_output(root, ["status", "--porcelain"])
+    if status is None:
+        print("NOTE — elab: baseline publication skipped: cannot verify a clean tree")
+        return 0
+    if status:
+        print("NOTE — elab: baseline publication skipped: tree is not clean")
+        return 0
+    head = git_output(root, ["rev-parse", "HEAD"])
+    if head is None:
+        print("NOTE — elab: baseline publication skipped: cannot resolve HEAD")
+        return 0
+    try:
+        environment = environment_fingerprint(root, args.environment_id)
+        payload = args.baseline.read_bytes()
+        payload.decode("utf-8")
+        host = load_shared_host_identity()
+        path = shared_store_path(root)
+        store, reason, writable = read_shared_store(path, host)
+        if not writable:
+            print(
+                "NOTE — elab: baseline publication skipped: "
+                f"preserving existing store ({reason})"
+            )
+            return 0
+        origin = baseline_origin_for_publish(root, head)
+        digest, added = publish_shared_baseline(
+            store, payload, origin, environment, shared_utc_now()
+        )
+        atomic_json(path, store)
+    except (SelectionError, OSError, UnicodeError) as error:
+        print(f"NOTE — elab: baseline publication skipped: {error}")
+        return 0
+    print(
+        f"elab shared publish: baseline {digest[:16]} "
+        f"{'recorded' if added else 'already retained'} (origin {origin[:12]})"
+    )
+    return 0
+
+
 def command_files(args: argparse.Namespace) -> int:
     plan = read_plan(args.plan)
+    if args.shared:
+        print("\n".join(plan.get("shared_credited", [])))
+        return 0
     if args.controls or args.candidates:
         calibration = plan.get("calibration")
         if not calibration:
@@ -1484,15 +2558,17 @@ def command_plan(args: argparse.Namespace) -> int:
     write_plan(args.plan, plan)
     affected = len(plan["affected"])
     cached = len(plan["files"]) - affected
+    shared = len(plan.get("shared_credited", []))
+    shared_note = f", {shared} from shared same-host evidence" if shared else ""
     if plan["reason"]:
         print(
             f"elab selection: {affected} measured, {cached} cache-valid "
-            f"({plan['reason']})"
+            f"({plan['reason']}{shared_note})"
         )
     else:
         print(
             f"elab selection: {affected} measured, {cached} provably unaffected "
-            "by content/import-closure fingerprint"
+            f"by content/import-closure fingerprint{shared_note}"
         )
     calibration = plan["calibration"]
     if calibration is not None:
@@ -1537,6 +2613,7 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--affected", action="store_true")
     group.add_argument("--controls", action="store_true")
     group.add_argument("--candidates", action="store_true")
+    group.add_argument("--shared", action="store_true")
     files.set_defaults(function=command_files)
 
     modules = subparsers.add_parser("modules")
@@ -1588,6 +2665,24 @@ def build_parser() -> argparse.ArgumentParser:
     verdict.add_argument("--floor", type=float, required=True)
     verdict.add_argument("--block-out", type=Path)
     verdict.set_defaults(function=command_calibrate_verdict)
+
+    adopt = subparsers.add_parser("adopt-baseline")
+    adopt.add_argument("--root", type=Path, required=True)
+    adopt.add_argument("--baseline", type=Path, required=True)
+    adopt.add_argument("--environment-id", required=True)
+    adopt.set_defaults(function=command_adopt_baseline)
+
+    publish = subparsers.add_parser("publish")
+    publish.add_argument("--plan", type=Path, required=True)
+    publish.add_argument("--report", type=Path, required=True)
+    publish.add_argument("--exclude-file", type=Path)
+    publish.set_defaults(function=command_publish)
+
+    publish_baseline = subparsers.add_parser("publish-baseline")
+    publish_baseline.add_argument("--root", type=Path, required=True)
+    publish_baseline.add_argument("--baseline", type=Path, required=True)
+    publish_baseline.add_argument("--environment-id", required=True)
+    publish_baseline.set_defaults(function=command_publish_baseline)
 
     test = subparsers.add_parser("self-test")
     test.set_defaults(function=lambda _args: self_test())

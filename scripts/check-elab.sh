@@ -13,6 +13,15 @@
 # clone's first uncontended green run measures the full tree, initializes that
 # file, and performs no timing comparison.
 #
+# Green runs also publish their per-module measurements to shared same-host
+# evidence below the repository's Git common directory, keyed by the exact
+# fingerprints above, and clean-tree genesis/rebase runs publish their whole
+# baseline with its origin commit.  A worktree whose local state is empty
+# credits shared measurements on exact match and adopts a stored reference
+# only when its origin predates the changes under test -- a new worktree on
+# an unchanged checkout therefore reuses valid evidence instead of repeating
+# whole-tree timing.  Every shared failure costs measurement, never a credit.
+#
 # This gate exists because nothing else measures this axis. check-hygiene.sh,
 # check-integrity.sh, and the conformance tiers all say nothing about
 # elaboration cost, and CI's only ceilings are coarse job timeouts, so a module
@@ -301,6 +310,19 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 2
 fi
 
+# A new worktree adopts a provenance-checked pre-change reference before it
+# may mint its own: only a worktree that cannot adopt performs genesis.  The
+# adoption itself always succeeds as a command and explains its decision; the
+# file test below is what routes to genesis.
+if [ ! -f "$BASELINE" ] && [ "$LIST_ONLY" -eq 0 ] && [ "$REBASE" -eq 0 ]; then
+  if LEAN_ID_EARLY="$(lake env lean --version 2>&1)"; then
+    python3 "$SELECTOR" adopt-baseline --root "$ROOT" --baseline "$BASELINE" \
+      --environment-id "$LEAN_ID_EARLY"
+  else
+    echo "NOTE — elab: could not identify the toolchain for shared evidence; continuing to genesis"
+  fi
+fi
+
 if [ ! -f "$BASELINE" ] && [ "$LIST_ONLY" -eq 0 ] && [ "$REBASE" -eq 0 ]; then
   if [ "$FORCE" -eq 1 ]; then
     echo "SETUP — elab: no local baseline exists, and --force measurements cannot initialize one"
@@ -416,9 +438,11 @@ fi
 
 FILES="$(python3 "$SELECTOR" files --plan "$PLANFILE")" || exit 2
 AFFECTED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --affected)" || exit 2
+SHARED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --shared)" || exit 2
 NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
 NMEASURE="$(printf '%s\n' "$AFFECTED" | grep -c .)"
 NSKIP=$((NFILES - NMEASURE))
+NSHARED="$(printf '%s\n' "$SHARED" | grep -c .)"
 
 NCONTROL=0
 NCANDIDATE=0
@@ -501,6 +525,9 @@ NERR="$(printf '%s' "$RESULTS" | awk -F'\t' '$1=="ERROR"' | grep -c .)"
 
 echo "---"
 echo "elab: $NMEASURE measured, $NSKIP provably unaffected, $TOTAL s measured; report: ${REPORT#$ROOT/}"
+if [ "$NSHARED" -gt 0 ]; then
+  echo "NOTE — elab: $NSHARED measurement(s) credited from shared same-host evidence"
+fi
 if [ "$CALIBRATE" -eq 1 ]; then
   echo "elab: of those, $NCANDIDATE mandatory (no local row) and $NCONTROL drawn control(s)"
 fi
@@ -538,6 +565,14 @@ cache_results() {
       echo "REGRESSION — elab: green measurements could not be committed to the local cache"
       return 1
     fi
+  fi
+  # Publication is best-effort and loud: it can never turn this run red, and
+  # any skip says why.  A future new worktree credits what is recorded here.
+  if [ -n "$EXCLUSIONS" ]; then
+    python3 "$SELECTOR" publish --plan "$PLANFILE" --report "$REPORT" \
+      --exclude-file "$EXCLUSIONS"
+  else
+    python3 "$SELECTOR" publish --plan "$PLANFILE" --report "$REPORT"
   fi
   return 0
 }
@@ -577,6 +612,8 @@ if [ "$BASELINE_GENESIS" -eq 1 ]; then
   GENESIS_ROWS="$(printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}')"
   cache_results || exit 2
   write_baseline "$GENESIS_ROWS"
+  python3 "$SELECTOR" publish-baseline --root "$ROOT" --baseline "$BASELINE" \
+    --environment-id "$LEAN_ID"
   echo "OK — elab: host-local baseline initialized with $NFILES file(s), $TOTAL s total; no timing comparison on genesis"
   exit 0
 fi
@@ -591,6 +628,8 @@ if [ "$REBASE" -eq 1 ]; then
   REBASE_ROWS="$(printf '%s\n' "$RESULTS" | awk -F'\t' 'BEGIN {OFS="\t"} NF {print $1, $2, $3}')"
   cache_results || exit 2
   write_baseline "$REBASE_ROWS"
+  python3 "$SELECTOR" publish-baseline --root "$ROOT" --baseline "$BASELINE" \
+    --environment-id "$LEAN_ID"
   echo "OK — elab: host-local baseline rebased with $NFILES file(s), $TOTAL s total"
   exit 0
 fi
