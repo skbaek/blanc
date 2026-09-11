@@ -7,6 +7,8 @@
 import Blanc.Weth10Deploy
 import Blanc.Reverts
 import Blanc.ForwardCall
+-- EXPERIMENTAL (blanc-weth10-memorystage-feasibility-v1): probe-only import, never merged.
+import Blanc.MemoryLayout
 
 namespace Blanc
 
@@ -1044,6 +1046,399 @@ theorem weth10Init_exec_nonzero
     weth10InitFunc_noCalls weth10InitFunc_compile
   simpa [weth10InitCode] using h_code
 
+/-! ## EXPERIMENTAL (blanc-weth10-memorystage-feasibility-v1)
+
+Feasibility probe: MemoryStage restatements of the real constructor staging
+definitions above. This section lands no migration and the branch never merges.
+Every item is marked EXPERIMENTAL. Obligations (1)-(6) per the worker brief.
+-/
+
+/-- EXPERIMENTAL (obligation 1): the nine ordered pre-hash writes as one
+general `(Nat × Bytes)` stage. Payloads are the real staging expressions. -/
+def weth10PreHashStageExp (sevm : Sevm) : MemoryStage :=
+  [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+    (372, sevm.benvStat.chainId.toB256.toBytes),
+    (691, sevm.benvStat.chainId.toB256.toBytes),
+    (2875, sevm.benvStat.chainId.toB256.toBytes),
+    (6336, DOMAIN_TYPEHASH.toBytes),
+    (6368, NAME_HASH.toBytes),
+    (6400, VERSION_HASH.toBytes),
+    (6432, sevm.benvStat.chainId.toB256.toBytes),
+    (6464, sevm.currentTarget.toB256.toBytes)]
+
+/-- EXPERIMENTAL (obligation 1): memory bridge, explicit `rw` chain following
+the donor off-`simp` pattern (`depositDecodedMemory_eq_writes`). -/
+theorem weth10PreHashMemoryExp_eq (sevm : Sevm) :
+    (weth10PreHashStageExp sevm).applyMemory Mem.empty =
+      weth10InitPreHashMemory sevm := by
+  unfold weth10PreHashStageExp weth10InitPreHashMemory weth10InitChainMemory
+    weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
+/-- EXPERIMENTAL (obligation 1): image bridge, same pattern. -/
+theorem weth10PreHashImageExp_eq (sevm : Sevm) :
+    (weth10PreHashStageExp sevm).applyImage [] =
+      weth10InitPreHashImage sevm := by
+  unfold weth10PreHashStageExp weth10InitPreHashImage
+  rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_nil]
+
+/-- EXPERIMENTAL (obligation 1): the two hash-dependent separator patches as a
+second stage, composed after the pre-hash stage. -/
+def weth10SepStageExp (sevm : Sevm) : MemoryStage :=
+  [(536, (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes),
+    (3039, (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes)]
+
+/-- EXPERIMENTAL (obligation 1): full-memory bridge via `applyMemory_append`. -/
+theorem weth10FullMemoryExp_eq (sevm : Sevm) :
+    ((weth10PreHashStageExp sevm ++ weth10SepStageExp sevm).applyMemory
+      Mem.empty) = weth10InitMemory sevm := by
+  rw [MemoryStage.applyMemory_append, weth10PreHashMemoryExp_eq]
+  unfold weth10SepStageExp weth10InitMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
+
+/-- EXPERIMENTAL (obligation 2): one `wf_reads` over the pre-hash stage. -/
+theorem weth10PreHashExp_wf_reads (sevm : Sevm) :
+    Mem.Wf ((weth10PreHashStageExp sevm).applyMemory Mem.empty) ∧
+      Mem.Reads ((weth10PreHashStageExp sevm).applyMemory Mem.empty)
+        ((weth10PreHashStageExp sevm).applyImage []) :=
+  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
+
+/-- EXPERIMENTAL (obligation 2): transfer to the real `_reads` conclusion. -/
+theorem weth10PreHashExp_reads_transfer (sevm : Sevm) :
+    Mem.Reads (weth10InitPreHashMemory sevm)
+      (weth10InitPreHashImage sevm) := by
+  rw [← weth10PreHashMemoryExp_eq, ← weth10PreHashImageExp_eq]
+  exact (weth10PreHashExp_wf_reads sevm).2
+
+/-- EXPERIMENTAL (obligation 2): transfer to the real `_wf` conclusion. -/
+theorem weth10PreHashExp_wf_transfer (sevm : Sevm) :
+    Mem.Wf (weth10InitPreHashMemory sevm) := by
+  rw [← weth10PreHashMemoryExp_eq]
+  exact (weth10PreHashExp_wf_reads sevm).1
+
+/-- EXPERIMENTAL (obligation 2): one `wf_reads` over the composed full stage,
+replacing the post-hash re-thread. -/
+theorem weth10FullExp_wf_reads (sevm : Sevm) :
+    Mem.Wf ((weth10PreHashStageExp sevm ++ weth10SepStageExp sevm).applyMemory
+        Mem.empty) ∧
+      Mem.Reads ((weth10PreHashStageExp sevm ++ weth10SepStageExp sevm).applyMemory
+        Mem.empty)
+        ((weth10PreHashStageExp sevm ++ weth10SepStageExp sevm).applyImage []) :=
+  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
+
+/-- EXPERIMENTAL (obligation 3): copy prefix of the pre-hash stage. -/
+def weth10CopyStageExp (sevm : Sevm) : MemoryStage :=
+  [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+    (372, sevm.benvStat.chainId.toB256.toBytes),
+    (691, sevm.benvStat.chainId.toB256.toBytes),
+    (2875, sevm.benvStat.chainId.toB256.toBytes)]
+
+/-- EXPERIMENTAL (obligation 3): scratch suffix of the pre-hash stage. -/
+def weth10ScratchStageExp (sevm : Sevm) : MemoryStage :=
+  [(6336, DOMAIN_TYPEHASH.toBytes),
+    (6368, NAME_HASH.toBytes),
+    (6400, VERSION_HASH.toBytes),
+    (6432, sevm.benvStat.chainId.toB256.toBytes),
+    (6464, sevm.currentTarget.toB256.toBytes)]
+
+/-- EXPERIMENTAL (obligation 3): stage split. -/
+theorem weth10PreHashExp_split (sevm : Sevm) :
+    weth10PreHashStageExp sevm =
+      weth10CopyStageExp sevm ++ weth10ScratchStageExp sevm := by
+  rfl
+
+/-- EXPERIMENTAL (obligation 3): all five scratch writes miss `[0, 6313)`. -/
+theorem weth10ScratchExp_avoids (sevm : Sevm) :
+    (weth10ScratchStageExp sevm).avoids 0 6313 = true := by
+  simp [weth10ScratchStageExp, MemoryStage.avoids]
+
+/-- EXPERIMENTAL (obligation 3): one guard replaces the five-peel `hpre`. -/
+theorem weth10PreHashExp_slice_window (sevm : Sevm) :
+    ((weth10PreHashStageExp sevm).applyImage []).sliceD 0 6313 0 =
+      ((weth10CopyStageExp sevm).applyImage []).sliceD 0 6313 0 := by
+  rw [weth10PreHashExp_split, MemoryStage.applyImage_append]
+  exact MemoryStage.applyImage_sliceD_of_avoids _ _ _ _
+    (weth10ScratchExp_avoids sevm)
+
+/-- EXPERIMENTAL (obligation 3): end-to-end runtime-window restatement over
+the stage window; the separator crossing keeps the existing congr shape. -/
+theorem weth10InitMemoryExp_read_runtime {sevm : Sevm}
+    (h_code : sevm.code.toList = weth10InitCode) :
+    ((weth10InitMemory sevm).read 0 6313).1 =
+      weth10PatchedRuntime sevm.benvStat.chainId.toB256
+        (deploymentDomainSeparator
+          sevm.benvStat.chainId.toB256 sevm.currentTarget) := by
+  let chain := sevm.benvStat.chainId.toB256
+  let separator := deploymentDomainSeparator chain sevm.currentTarget
+  let I3 := Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt weth10RuntimeTemplate 372 chain.toBytes)
+      691 chain.toBytes)
+    2875 chain.toBytes
+  let I4 := Bytes.writeAt I3 536 separator.toBytes
+  let I5 := Bytes.writeAt I4 3039 separator.toBytes
+  have hcopyimg : (weth10CopyStageExp sevm).applyImage [] = I3 := by
+    unfold weth10CopyStageExp
+    rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+      MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+      MemoryStage.applyImage_nil, weth10InitCode_slice_runtime h_code]
+    rw [show Bytes.writeAt [] 0 weth10RuntimeTemplate =
+      weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp)]
+  have hI3len : I3.length = 6313 := by
+    rw [← hcopyimg, MemoryStage.applyImage_length]
+    simp only [weth10CopyStageExp, List.foldl_cons, List.foldl_nil,
+      B256.length_toBytes]
+    rw [ByteArray.length_sliceD]
+    rfl
+  have h4 : I4.length = 6313 := by
+    rw [show I4 = Bytes.writeAt I3 536 separator.toBytes from rfl,
+      Bytes.length_writeAt_of_le (by rw [hI3len, B256.length_toBytes]; omega),
+      hI3len]
+  have h5 : I5.length = 6313 := by
+    rw [show I5 = Bytes.writeAt I4 3039 separator.toBytes from rfl,
+      Bytes.length_writeAt_of_le (by rw [h4, B256.length_toBytes]; omega), h4]
+  have hpre : (weth10InitPreHashImage sevm).sliceD 0 6313 0 = I3 := by
+    rw [← weth10PreHashImageExp_eq, weth10PreHashExp_slice_window, hcopyimg,
+      Bytes.sliceD_zero_length hI3len]
+  have hsep1 :
+      (Bytes.writeAt (weth10InitPreHashImage sevm) 536 separator.toBytes).sliceD
+          0 6313 0 = I4.sliceD 0 6313 0 := by
+    have hpre' :
+        (weth10InitPreHashImage sevm).sliceD 0 6313 0 =
+          I3.sliceD 0 6313 0 :=
+      hpre.trans (Bytes.sliceD_zero_length hI3len).symm
+    exact Bytes.sliceD_writeAt_congr hpre'
+  have hsep2 :
+      (Bytes.writeAt
+        (Bytes.writeAt (weth10InitPreHashImage sevm) 536 separator.toBytes)
+        3039 separator.toBytes).sliceD 0 6313 0 =
+          I5.sliceD 0 6313 0 := by
+    exact Bytes.sliceD_writeAt_congr hsep1
+  rw [Mem.Reads.read (weth10InitMemory_reads sevm) 0 6313]
+  rw [hsep2, Bytes.sliceD_zero_length h5]
+  rfl
+
+/-- EXPERIMENTAL (obligation 4): copy extension through `applyMemory_size`. -/
+theorem weth10CopyOneExp_size (sevm : Sevm) :
+    (MemoryStage.applyMemory
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop))]
+      Mem.empty).size = 6336 := by
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): chain patches are covered at 6336. -/
+theorem weth10ChainPatchExp_size (sevm : Sevm) :
+    (MemoryStage.applyMemory
+      [(372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes)]
+      (MemoryStage.applyMemory
+        [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop))]
+        Mem.empty)).size = 6336 := by
+  have hbase := weth10CopyOneExp_size sevm
+  rw [MemoryStage.applyMemory_size_of_covered]
+  · exact hbase
+  · intro write hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    obtain rfl | rfl | rfl := hmem <;>
+      simp only [B256.length_toBytes] <;> omega
+
+/-- EXPERIMENTAL (obligation 4): first intermediate gas size as a prefix
+stage (`take 5`), with the explicit prefix spelled by `rfl`. -/
+theorem weth10PrefixExp_take5 (sevm : Sevm) :
+    List.take 5 (weth10PreHashStageExp sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes)] := by
+  rfl
+
+/-- EXPERIMENTAL (obligation 4): prefix-stage split via `take`/`drop`. -/
+theorem weth10PrefixExp_split5 (sevm : Sevm) :
+    List.take 5 (weth10PreHashStageExp sevm) ++
+        List.drop 5 (weth10PreHashStageExp sevm) =
+      weth10PreHashStageExp sevm :=
+  List.take_append_drop 5 _
+
+/-- EXPERIMENTAL (obligation 4): 6368 via `applyMemory_size` on the prefix. -/
+theorem weth10PrefixExp_size_6368 (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 5 (weth10PreHashStageExp sevm)) Mem.empty).size =
+      6368 := by
+  rw [weth10PrefixExp_take5,
+    MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): 6400 prefix. -/
+theorem weth10PrefixExp_take6 (sevm : Sevm) :
+    List.take 6 (weth10PreHashStageExp sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes)] := by
+  rfl
+
+/-- EXPERIMENTAL (obligation 4): 6400 via `applyMemory_size` on the prefix. -/
+theorem weth10PrefixExp_size_6400 (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 6 (weth10PreHashStageExp sevm)) Mem.empty).size =
+      6400 := by
+  rw [weth10PrefixExp_take6,
+    MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): 6432 prefix. -/
+theorem weth10PrefixExp_take7 (sevm : Sevm) :
+    List.take 7 (weth10PreHashStageExp sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes)] := by
+  rfl
+
+/-- EXPERIMENTAL (obligation 4): 6432 via `applyMemory_size` on the prefix. -/
+theorem weth10PrefixExp_size_6432 (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 7 (weth10PreHashStageExp sevm)) Mem.empty).size =
+      6432 := by
+  rw [weth10PrefixExp_take7,
+    MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): 6464 prefix. -/
+theorem weth10PrefixExp_take8 (sevm : Sevm) :
+    List.take 8 (weth10PreHashStageExp sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes),
+        (6432, sevm.benvStat.chainId.toB256.toBytes)] := by
+  rfl
+
+/-- EXPERIMENTAL (obligation 4): 6464 via `applyMemory_size` on the prefix. -/
+theorem weth10PrefixExp_size_6464 (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 8 (weth10PreHashStageExp sevm)) Mem.empty).size =
+      6464 := by
+  rw [weth10PrefixExp_take8,
+    MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): full pre-hash allocation 6496. -/
+theorem weth10PreHashExp_size_6496 (sevm : Sevm) :
+    ((weth10PreHashStageExp sevm).applyMemory Mem.empty).size = 6496 := by
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [weth10PreHashStageExp, MemoryStage.footprint, List.map_cons,
+    List.map_nil, B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- EXPERIMENTAL (obligation 4): separator patches are covered at 6496. -/
+theorem weth10SepExp_size_covered (sevm : Sevm) :
+    ((weth10SepStageExp sevm).applyMemory
+      ((weth10PreHashStageExp sevm).applyMemory Mem.empty)).size = 6496 := by
+  have hbase := weth10PreHashExp_size_6496 sevm
+  rw [MemoryStage.applyMemory_size_of_covered]
+  · exact hbase
+  · intro write hmem
+    simp only [weth10SepStageExp, List.mem_cons, List.not_mem_nil,
+      or_false] at hmem
+    obtain rfl | rfl := hmem <;>
+      simp only [B256.length_toBytes] <;> omega
+
+/-- EXPERIMENTAL (obligation 5): in-template patch readback across the
+earlier overlapping copy (`read_written` overlap tolerance). -/
+theorem weth10Patch372Exp_readback (sevm : Sevm) :
+    (((weth10PreHashStageExp sevm).applyImage []).sliceD 372 32 0 =
+      sevm.benvStat.chainId.toB256.toBytes) := by
+  have h := MemoryStage.read_written
+    [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop))]
+    [(691, sevm.benvStat.chainId.toB256.toBytes),
+      (2875, sevm.benvStat.chainId.toB256.toBytes),
+      (6336, DOMAIN_TYPEHASH.toBytes),
+      (6368, NAME_HASH.toBytes),
+      (6400, VERSION_HASH.toBytes),
+      (6432, sevm.benvStat.chainId.toB256.toBytes),
+      (6464, sevm.currentTarget.toB256.toBytes)]
+    [] (sevm.benvStat.chainId.toB256.toBytes) 372 (by
+      simp [MemoryStage.avoids, B256.length_toBytes])
+  simpa only [weth10PreHashStageExp, List.cons_append, List.nil_append,
+    B256.length_toBytes] using h
+
+/-- EXPERIMENTAL (obligation 5): separator-patch readback over the full
+pre-hash stage. -/
+theorem weth10Sep536Exp_readback (sevm : Sevm) :
+    ((((weth10PreHashStageExp sevm) ++
+      [(536, (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes)]
+      ).applyImage []).sliceD 536 32 0 =
+      (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes) := by
+  have h := MemoryStage.read_written (weth10PreHashStageExp sevm) []
+    [] ((((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes)
+    536 (by rfl)
+  simpa only [B256.length_toBytes] using h
+
+/-- EXPERIMENTAL (biting control): the separator stage provably does NOT
+avoid the runtime window — guards genuinely constrain. -/
+theorem weth10SepExp_overlaps_runtime (sevm : Sevm) :
+    (weth10SepStageExp sevm).avoids 0 6313 = false := by
+  simp only [weth10SepStageExp, MemoryStage.avoids, List.all_cons,
+    List.all_nil]
+  generalize hH : ((((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes) = H
+  have hlen : H.length = 32 := by
+    rw [← hH]
+    exact B256.length_toBytes _
+  simp only [hlen]
+  decide
+
+/-- EXPERIMENTAL (biting control): a patch provably does not avoid its own
+window. -/
+theorem weth10PatchExp_self_overlap (sevm : Sevm) :
+    MemoryStage.avoids [(372, sevm.benvStat.chainId.toB256.toBytes)]
+      372 32 = false := by
+  simp only [MemoryStage.avoids, List.all_cons, List.all_nil]
+  generalize hH : (sevm.benvStat.chainId.toB256.toBytes) = H
+  have hlen : H.length = 32 := by
+    rw [← hH]
+    exact B256.length_toBytes _
+  simp only [hlen]
+  decide
+
+/-- EXPERIMENTAL (obligation 6, cost control): the memory bridge spelled with
+`simp only`, kept to measure the kernel-check cost the donor warns about. -/
+theorem weth10PreHashMemoryExp_eq_simp (sevm : Sevm) :
+    (weth10PreHashStageExp sevm).applyMemory Mem.empty =
+      weth10InitPreHashMemory sevm := by
+  unfold weth10PreHashStageExp weth10InitPreHashMemory weth10InitChainMemory
+    weth10InitCopyMemory
+  simp only [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
 
 end Weth10
 
