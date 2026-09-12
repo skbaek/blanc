@@ -1239,6 +1239,75 @@ def write_rows(path: Path, rows: dict[str, dict[str, str]]) -> None:
 
 def self_test() -> int:
     controls = 0
+    # The shell owns the environment-id capture because it also owns Lake's
+    # setup diagnostics. Pin the two production call sites, then execute their
+    # exact command-substitution shape against a stand-in that behaves like a
+    # pristine first Lake invocation: a clean version on stdout and useful
+    # setup chatter on stderr.
+    shell_path = selector_script_dir() / "check-elab.sh"
+    shell_source = shell_path.read_text(encoding="utf-8")
+    assert 'if LEAN_ID_EARLY="$(lake env lean --version)"; then' in shell_source
+    assert 'if ! LEAN_ID="$(lake env lean --version)"; then' in shell_source
+    assert "lake env lean --version 2>&1" not in shell_source
+    controls += 1  # both production captures keep stderr out of the identity
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-environment-capture-") as directory:
+        fake_bin = Path(directory)
+        fake_lake = fake_bin / "lake"
+        fake_lake.write_text(
+            """#!/bin/sh
+if [ "$*" != "env lean --version" ]; then
+  printf 'unexpected lake arguments: %s\n' "$*" >&2
+  exit 97
+fi
+printf '%s\n' "${FAKE_LAKE_STDERR-}" >&2
+printf '%s\n' "${FAKE_LAKE_STDOUT-}"
+exit "${FAKE_LAKE_RC-0}"
+""",
+            encoding="utf-8",
+        )
+        fake_lake.chmod(0o755)
+        capture_env = os.environ.copy()
+        capture_env["PATH"] = f"{fake_bin}{os.pathsep}{os.defpath}"
+        capture_env["FAKE_LAKE_STDOUT"] = "Lean (version 4.32.1, fake)"
+        capture_env["FAKE_LAKE_STDERR"] = "info: cloning dependency"
+
+        captured = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'if LEAN_ID_EARLY="$(lake env lean --version)"; then '
+                "printf 'identity=<%s>\\n' \"$LEAN_ID_EARLY\"; else exit 98; fi",
+            ],
+            env=capture_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert captured.returncode == 0
+        assert captured.stdout == "identity=<Lean (version 4.32.1, fake)>\n"
+        assert captured.stderr == "info: cloning dependency\n"
+        controls += 1  # successful stdout is isolated while setup chatter remains visible
+
+        capture_env["FAKE_LAKE_RC"] = "23"
+        capture_env["FAKE_LAKE_STDERR"] = "toolchain lookup failed"
+        refused = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'if ! LEAN_ID="$(lake env lean --version)"; then '
+                "printf 'REFUSED\\n'; exit 2; fi; exit 99",
+            ],
+            env=capture_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert refused.returncode == 2
+        assert refused.stdout == "REFUSED\n"
+        assert refused.stderr == "toolchain lookup failed\n"
+        controls += 1  # a nonzero version command still refuses with its diagnostic
+
     with tempfile.TemporaryDirectory(prefix="blanc-elab-selection-") as directory:
         root = Path(directory)
         (root / "Blanc").mkdir()
