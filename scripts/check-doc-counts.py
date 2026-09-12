@@ -306,6 +306,75 @@ CLAIMS = [
         },
         "foreign": [],
     },
+    {
+        "name": "Lido CircuitBreaker differential row count",
+        "producer": (
+            "scripts/fixtures/lido-circuit-breaker/manifest.json (rows)",
+            # The committed anti-vacuity manifest names every row the
+            # differential runner checks -- the same static shape as the WETH10
+            # manifest above, so reading it needs no build, no EELS target and
+            # no network.
+            lambda root: count_json_list(
+                root, "scripts/fixtures/lido-circuit-breaker/manifest.json", ("rows",)
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    # Keyed on the catalogue row's own command: the dispatcher
+                    # row's replay count one line up is the same 175 cases --
+                    # check-lido-circuit-breaker-dispatchers.py replays
+                    # gen.build_cases, the case builder the differential runs --
+                    # stated as cases over boundaries rather than rows. Only
+                    # the 175 is captured; the 464 beside it is a different
+                    # claim.
+                    re.compile(
+                        r"check-lido-circuit-breaker-dispatchers\.sh[^\n]*?"
+                        r"(\d{2,5}) cases/\d{2,5} full boundaries"
+                    ),
+                    re.compile(
+                        r"check-lido-circuit-breaker-differential\.sh[^\n]*\|\s*"
+                        r"(\d{2,5}) rows;"
+                    ),
+                ],
+            ),
+            (
+                "docs/index.html",
+                [
+                    re.compile(r"(\d{2,5})/(\d{2,5}) CircuitBreaker rows"),
+                    # The portfolio card chip, keyed on the preceding size chip
+                    # for the same reason the WETH10 chip is: the sibling cards
+                    # carry identical chip markup with their own row counts.
+                    re.compile(
+                        r'<span class="chip"><b>4,282 B</b> vs 4,584 deployed</span>'
+                        r"\s*\n\s*"
+                        r'<span class="chip">(\d{2,5})/(\d{2,5}) differential rows</span>'
+                    ),
+                ],
+            ),
+            (
+                "docs/contracts/lido-circuit-breaker.html",
+                [
+                    re.compile(r"a (\d{2,5})-row differential matrix"),
+                    re.compile(
+                        r"OK — Lido CircuitBreaker differential: "
+                        r"(\d{2,5})/(\d{2,5}) rows agree"
+                    ),
+                    re.compile(r'foldsub">(\d{2,5}) rows vs the locked Solidity'),
+                    re.compile(
+                        r"pinned EELS Prague interpreter — (\d{2,5}) rows, agreeing on"
+                    ),
+                ],
+            ),
+        ],
+        "census": {
+            "scripts/GATES.md": 2,
+            "docs/index.html": 4,
+            "docs/contracts/lido-circuit-breaker.html": 5,
+        },
+        "foreign": [],
+    },
 ]
 
 
@@ -327,9 +396,11 @@ CLAIMS = [
 # reword a published copy and it must still be what the gate says.
 #
 # Only gates whose verdict line is fully determined by a format string and a
-# claim this gate already produces can be pinned this way. The other transcripts
-# in the same figures interpolate values that only a live run produces; they are
-# named in UNCHECKED_PUBLISHED_NUMBERS rather than half-checked here.
+# claim this gate already produces can be pinned this way. The check.sh
+# axiom-audit line qualifies: its OK wording prints only when both halves equal
+# the audited-theorem count. The other transcripts in the same figures
+# interpolate values that only a live run produces; they are named in
+# UNCHECKED_PUBLISHED_NUMBERS rather than half-checked here.
 
 TRANSCRIPTS = [
     {
@@ -349,6 +420,26 @@ TRANSCRIPTS = [
                 "docs/contracts/weth10.html",
                 re.compile(
                     r'scripts/check-claims\.sh\s*\n<span class="ok">(.*?)</span>', re.S
+                ),
+            ),
+        ],
+    },
+    {
+        "name": "scripts/check.sh axiom-audit line",
+        "script": "scripts/check.sh",
+        # check.sh prints its OK line only after NEXACT == NTOTAL, so both
+        # halves are the audited-theorem count this gate already produces.
+        "format": re.compile(r'^echo "(OK — axiom audit: .*)"\s*$', re.M),
+        "substitutions": {
+            "$NEXACT": "audited-theorem count",
+            "$NTOTAL": "audited-theorem count",
+        },
+        "surfaces": [
+            (
+                "docs/index.html",
+                re.compile(
+                    r'scripts/check\.sh --no-build\s*\n<span class="ok">(.*?)</span>',
+                    re.S,
                 ),
             ),
         ],
@@ -407,15 +498,6 @@ UNCHECKED_PUBLISHED_NUMBERS = [
         "Jaune commits the count as an artifact this tree pins.",
     },
     {
-        "number": "175/175 Lido CircuitBreaker differential rows",
-        "surfaces": "scripts/GATES.md, docs/index.html, docs/contracts/lido-circuit-breaker.html",
-        "producer": "scripts/fixtures/lido-circuit-breaker/manifest.json (rows) -- committed, static",
-        "blocker": "Registerable, not yet registered. Its producer is committed and "
-        "its 11 occurrences are all genuine, so it takes patterns and a census of "
-        "the same shape as the WETH10 row count above. Scheduled as the next unit "
-        "of this class, not blocked on anything.",
-    },
-    {
         "number": "85/85 OssifiableProxy differential cases",
         "surfaces": "scripts/GATES.md, docs/index.html, docs/contracts/ossifiable-proxy.html",
         "producer": "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json (cases) "
@@ -445,8 +527,12 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
     {
         "number": "the interpolated figures in every published gate transcript other "
-        "than check-claims.sh (layering module counts, differential channel counts, "
-        "fixture tallies)",
+        "than check-claims.sh and the check.sh axiom-audit line (19 lines: the "
+        "WETH10 differential on two surfaces and the beacon-deposit, "
+        "CircuitBreaker, TWG and OssifiableProxy differential lines; the layering "
+        "line on two surfaces; 8 fixture, coverage and current-mainnet lines; the "
+        "beacon-deposit-assurance, CircuitBreaker-assurance and proxy-pair-upgrade "
+        "lines)",
         "surfaces": "docs/index.html, docs/contracts/*.html",
         "producer": "the gates themselves, at run time",
         "blocker": "Those verdict lines interpolate values computed during the run, "
@@ -457,7 +543,7 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
 ]
 
-UNCHECKED_PUBLISHED_NUMBER_COUNT = 6
+UNCHECKED_PUBLISHED_NUMBER_COUNT = 5
 
 
 # --------------------------------------------------------------------------
