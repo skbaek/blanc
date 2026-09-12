@@ -3,6 +3,10 @@
 
 Every run first executes ``generate-proof-recipes.py --check``. Registry/schema,
 symbol, and generated-surface drift is therefore a blocking integrity failure.
+Ordinary mode additionally enforces the blocking memory-stage discovery
+regression control: the ``memory-window-transport`` preferred path must name
+the spanning-read route, and the retired misleading example name must be gone
+from the recipe, its citations, and the Lean source.
 The two source findings remain report-only:
 
 * a changed declaration whose bytes match a declaration in a transitively
@@ -63,6 +67,28 @@ EXCEPTIONS_REL = pathlib.Path("scripts/proof-recipe-exceptions.json")
 MIN_COPY_BYTES = 160
 MIN_COPY_LINES = 5
 SCHEMA_VERSION = 1
+
+# Memory-stage discovery regression control (probe findings
+# memstage-recipe-omits-spanning-read / memstage-misleading-example-name).
+# The watched paths below are fixed literals, never derived from input, so
+# they need no traversal policy beyond the fail-closed read.
+DISCOVERY_RECIPE_ID = "memory-window-transport"
+DISCOVERY_ROUTE_NAMES = ("List.sliceD_add", "Mem.read_two_word_writes_at")
+DISCOVERY_ROUTE_SOURCES = (
+    ("Blanc/BytesWrite.lean", "List.sliceD_add"),
+    ("Blanc/CommonProofs.lean", "Mem.read_two_word_writes_at"),
+)
+DISCOVERY_RETIRED_NAME = "constructorPairStage_storageEffectRun"
+DISCOVERY_RENAMED_NAME = "constructorPairWindow_storageEffectRun"
+DISCOVERY_RENAMED_SOURCE = "Blanc/BeaconDepositConstructorStorageEffects.lean"
+DISCOVERY_CITATION_FILES = (
+    "docs/COMMON_API.md",
+    "scripts/proof-recipes.toml",
+)
+DISCOVERY_GENERATED_FILES = (
+    "docs/PROOF_RECIPES.md",
+    "Blanc/ProofRecipesGenerated.lean",
+)
 
 DECL_KINDS = {
     "abbrev", "axiom", "class", "def", "inductive", "instance", "lemma",
@@ -178,6 +204,7 @@ class RegistryInfo:
     selector_recipe_id: str
     selector_status: str
     selector_owner: str
+    discovery_preferred_path: str
 
 
 def run_command(
@@ -237,7 +264,84 @@ def load_registry_info(root: pathlib.Path) -> RegistryInfo:
             f"found {len(selectors)}"
         )
     selector = selectors[0]
-    return RegistryInfo(active_ids, selector.id, selector.status, selector.owner_module)
+    discovery = [recipe for recipe in registry.recipes if recipe.id == DISCOVERY_RECIPE_ID]
+    if len(discovery) != 1:
+        raise GateError(
+            "discovery regression: expected exactly one "
+            f"{DISCOVERY_RECIPE_ID!r} recipe, found {len(discovery)}"
+        )
+    if discovery[0].status != "active":
+        raise GateError(
+            f"discovery regression: recipe {DISCOVERY_RECIPE_ID!r} is not active "
+            f"(status {discovery[0].status!r})"
+        )
+    return RegistryInfo(
+        active_ids, selector.id, selector.status, selector.owner_module,
+        discovery[0].preferred_path,
+    )
+
+
+def _discovery_read(root: pathlib.Path, rel: str) -> str:
+    try:
+        return (root / rel).read_text(encoding="utf-8")
+    except OSError as error:
+        raise GateError(f"discovery regression: cannot read {rel}: {error}") from error
+
+
+def _discovery_declared(text: str, name: str) -> bool:
+    for line in text.splitlines():
+        match = DECL_RE.match(line)
+        if match is not None and match.group("name") == name:
+            return True
+    return False
+
+
+def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> None:
+    """Block the two memory-stage discovery defects from regressing.
+
+    The ``memory-window-transport`` preferred path must name the spanning-read
+    route, the named route declarations must exist in their owning modules,
+    the retired misleading example name must be gone from the recipe, its
+    citations, and the generated surfaces, and the renamed declaration must
+    be declared in the Lean source and cited in both prose surfaces.
+    """
+    for name in DISCOVERY_ROUTE_NAMES:
+        if name not in registry.discovery_preferred_path:
+            raise GateError(
+                "discovery regression: recipe "
+                f"{DISCOVERY_RECIPE_ID!r} preferred_path does not name the "
+                f"spanning-read route {name!r}"
+            )
+    for rel, name in DISCOVERY_ROUTE_SOURCES:
+        if not _discovery_declared(_discovery_read(root, rel), name):
+            raise GateError(
+                f"discovery regression: spanning-read route {name!r} is not "
+                f"declared in {rel}"
+            )
+    watched = (
+        DISCOVERY_RENAMED_SOURCE, *DISCOVERY_CITATION_FILES,
+        *DISCOVERY_GENERATED_FILES,
+    )
+    for rel in watched:
+        if DISCOVERY_RETIRED_NAME in _discovery_read(root, rel):
+            raise GateError(
+                "discovery regression: retired misleading example name "
+                f"{DISCOVERY_RETIRED_NAME!r} is still present in {rel}"
+            )
+    if not _discovery_declared(
+        _discovery_read(root, DISCOVERY_RENAMED_SOURCE), DISCOVERY_RENAMED_NAME
+    ):
+        raise GateError(
+            "discovery regression: renamed example "
+            f"{DISCOVERY_RENAMED_NAME!r} is not declared in "
+            f"{DISCOVERY_RENAMED_SOURCE}"
+        )
+    for rel in DISCOVERY_CITATION_FILES:
+        if DISCOVERY_RENAMED_NAME not in _discovery_read(root, rel):
+            raise GateError(
+                "discovery regression: renamed example "
+                f"{DISCOVERY_RENAMED_NAME!r} is not cited in {rel}"
+            )
 
 
 def mask_comments_and_literals(text: str, source: str) -> str:
@@ -2271,6 +2375,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         self_test(root, registry)
         return 0
 
+    discovery_regression_check(root, registry)
     index = SourceIndex(root)
     changed = changed_declarations(root, args.base, index)
     findings = [
