@@ -81,7 +81,6 @@ from typing import Any, Iterable
 import gate_semaphore
 
 from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
-from gate_cache_host_identity import HostIdentityError, stable_host_identity
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
     T8nPythonBaseError,
@@ -1236,6 +1235,8 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 def host_identity() -> str:
     """Stable OS installation binding with no production override."""
 
+    from gate_cache_host_identity import HostIdentityError, stable_host_identity
+
     try:
         return stable_host_identity()
     except HostIdentityError as error:
@@ -1447,9 +1448,11 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
 def _safe_host_label(value: Any) -> str:
     """Render only the public hashed identity grammar, never arbitrary store bytes."""
 
+    from gate_cache_host_identity import is_public_host_identity
+
     if not isinstance(value, str):
         return "<missing>"
-    if re.fullmatch(r"(?:darwin|linux)-[a-z0-9_.-]+-(?:v[0-9]+-)?[0-9a-f]{16}", value):
+    if is_public_host_identity(value):
         return value
     return "<unrecognized>"
 

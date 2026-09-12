@@ -30,6 +30,18 @@ _LINUX_MACHINE_ID_PATHS = (Path("/etc/machine-id"), Path("/var/lib/dbus/machine-
 _MACOS_IOREG = Path("/usr/sbin/ioreg")
 _MACOS_UUID = re.compile(r'"IOPlatformUUID"\s*=\s*"([0-9A-Fa-f-]{36})"')
 _LINUX_MACHINE_ID = re.compile(r"[0-9a-fA-F]{32}")
+_SUPPORTED_MACHINES = {
+    "darwin": frozenset({"arm64", "x86_64"}),
+    "linux": frozenset({
+        "aarch64", "amd64", "arm64", "i386", "i486", "i586", "i686",
+        "ppc64le", "riscv64", "s390x", "x86_64",
+    }),
+}
+_PUBLIC_IDENTITY = re.compile(
+    r"(?:darwin-(?:arm64|x86_64)|"
+    r"linux-(?:aarch64|amd64|arm64|i386|i486|i586|i686|ppc64le|riscv64|s390x|x86_64))"
+    r"-(?:v[0-9]+-)?[0-9a-f]{16}"
+)
 
 
 class HostIdentityError(RuntimeError):
@@ -110,12 +122,15 @@ def _derive_host_identity(reader: _HostReader) -> str:
     machine = reader.machine().strip().lower()
     if not system or not machine:
         raise HostIdentityError("host platform identity is unavailable")
+    supported = _SUPPORTED_MACHINES.get(system)
+    if supported is None:
+        raise HostIdentityError(f"stable host identity is unsupported on {system}")
+    if machine not in supported:
+        raise HostIdentityError("stable host identity is unsupported on this architecture")
     if system == "darwin":
         source, token = _macos_token(reader)
     elif system == "linux":
         source, token = _linux_token(reader)
-    else:
-        raise HostIdentityError(f"stable host identity is unsupported on {system or 'unknown'}")
     payload = _IDENTITY_DOMAIN + b"\0".join(
         part.encode("utf-8") for part in (system, machine, source, token)
     )
@@ -127,3 +142,9 @@ def stable_host_identity() -> str:
     """Return this machine's stable hashed identity; accepts no override."""
 
     return _derive_host_identity(_ProductionHostReader())
+
+
+def is_public_host_identity(value: str) -> bool:
+    """Whether an untrusted store label is safe to echo in diagnostics."""
+
+    return _PUBLIC_IDENTITY.fullmatch(value) is not None

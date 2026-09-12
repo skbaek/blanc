@@ -513,6 +513,7 @@ def control_stable_host_identity_separates_distinct_machine_tokens() -> None:
 def control_stable_host_identity_fails_closed_on_unknown_or_ambiguous_sources() -> None:
     readers = (
         HostReader("Plan9", "mips"),
+        HostReader("Darwin", "private-node", mac_uuid="12345678-1234-5678-9abc-def012345678"),
         HostReader("Darwin", "arm64", mac_uuid="not-a-uuid"),
         HostReader("Linux", "x86_64"),
         HostReader("Linux", "x86_64", linux_ids={
@@ -536,6 +537,27 @@ def control_production_host_identity_has_no_override_and_ignores_platform_node()
     source = inspect.getsource(gc.host_identity)
     require("platform.node" not in source and "stable_host_identity" in source,
             "the gate authority must use the stable helper, never the network hostname")
+    runner_source = Path(gc.__file__).read_text(encoding="utf-8")
+    baseline = gc.semantic_authority_digest(Path(gc.__file__))
+    mutations = (
+        runner_source.replace(
+            "from gate_cache_host_identity import HostIdentityError, stable_host_identity",
+            "from substituted_host_identity import HostIdentityError, stable_host_identity",
+            1,
+        ),
+        runner_source.replace(
+            "from gate_cache_host_identity import is_public_host_identity",
+            "from substituted_host_identity import is_public_host_identity",
+            1,
+        ),
+    )
+    with tempfile.TemporaryDirectory(prefix="gate-host-import-control-") as temp:
+        for index, mutation in enumerate(mutations):
+            require(mutation != runner_source, "the import-binding control did not apply")
+            path = Path(temp) / f"runner-{index}.py"
+            path.write_text(mutation, encoding="utf-8")
+            require(gc.semantic_authority_digest(path) != baseline,
+                    "moving a host trust import must invalidate runner identity")
 
 
 def control_legacy_host_store_requires_reverification_and_stays_untouched() -> None:
@@ -599,6 +621,9 @@ def control_tampered_or_downgraded_stable_store_never_matches() -> None:
         loaded, reason = gc.read_active_cache(s.root)
         require(not loaded["gates"] and reason == "cache schema is missing or incompatible",
                 "a downgraded schema must fail closed")
+        crafted = "darwin-synthetic-private-node.example-v2-1111222233334444"
+        require(gc._safe_host_label(crafted) == "<unrecognized>",
+                "a hostname-shaped untrusted label must never be echoed")
 
 
 def control_first_run_executes_and_second_reuses() -> None:
