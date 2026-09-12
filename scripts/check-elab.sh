@@ -315,7 +315,7 @@ fi
 # adoption itself always succeeds as a command and explains its decision; the
 # file test below is what routes to genesis.
 if [ ! -f "$BASELINE" ] && [ "$LIST_ONLY" -eq 0 ] && [ "$REBASE" -eq 0 ]; then
-  if LEAN_ID_EARLY="$(lake env lean --version 2>&1)"; then
+  if LEAN_ID_EARLY="$(lake env lean --version)"; then
     python3 "$SELECTOR" adopt-baseline --root "$ROOT" --baseline "$BASELINE" \
       --environment-id "$LEAN_ID_EARLY"
   else
@@ -404,7 +404,7 @@ fi
 # The cache is evidence from a prior successful timing run, never a build
 # substitute. The build above establishes current oleans; this step decides
 # which source files can reuse their prior measurements.
-if ! LEAN_ID="$(lake env lean --version 2>&1)"; then
+if ! LEAN_ID="$(lake env lean --version)"; then
   echo "SETUP — elab: could not identify the active Lean toolchain"
   echo "REGRESSION — elab: selection precondition failed"
   exit 2
