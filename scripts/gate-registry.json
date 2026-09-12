@@ -11,16 +11,22 @@
           "scripts/check-doc-counts.sh",
           "scripts/check-doc-counts.py",
           "scripts/AxiomCheck.lean",
+          "scripts/ClaimCheck.lean",
+          "scripts/check-claims.sh",
+          "scripts/fixtures/weth10/manifest.json",
+          "Blanc.lean",
           "README.md",
+          "PORTING.md",
           "scripts/GATES.md",
-          "docs/index.html"
+          "docs/index.html",
+          "docs/contracts/weth10.html"
         ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "The catalogue is one of this gate's own consumers, so editing scripts/GATES.md reddens the gate that documents it.",
+      "note": "Every producer and every published surface is an input. The catalogue is both a consumer of two counts and the subject of this gate's self-description check, so editing scripts/GATES.md reddens the gate that documents it. scripts/check-claims.sh is an input twice over: it restates the claim-pin count as its own expectation, and its verdict format string is what the published transcripts are pinned to. Blanc.lean is an input because PORTING.md's Lean reference must still be in the library root.",
       "order": 1,
       "verdict": {
         "expect_exit": 0,
