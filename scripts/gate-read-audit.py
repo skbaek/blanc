@@ -28,8 +28,14 @@ BLIND SPOTS, STATED RATHER THAN IMPLIED
 - A read that only happens on a branch this run did not take.
 
 A clean result therefore means "no undeclared read on the path this gate
-actually took", which is a much stronger statement than "nobody spotted one",
-and a weaker one than "there is none".
+actually took under a cold bytecode cache", which is a much stronger
+statement than "nobody spotted one", and a weaker one than "there is
+none".  Reads through the runner-identity channel -- a source the runner
+fingerprints for that gate, or a sibling module bound at the runner's
+module scope -- are reported as runner-channel reads, not holes.  The
+instrument establishes the cold cache itself: it removes
+`scripts/__pycache__` and sets `PYTHONDONTWRITEBYTECODE=1` through the
+whole process tree it measures, so a warm caller cache cannot hide a read.
 
 USE
 
@@ -44,8 +50,10 @@ executes every gate body.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -160,10 +168,108 @@ def declared_coverage(gate: dict) -> tuple[set[Path], list[tuple[Path, str]]]:
     return exact, subtrees
 
 
+def runner_content_files(gate: dict) -> set[Path]:
+    """Runner sources whose contents this gate's fingerprint covers.
+
+    `runner_identity_sources` is the runner's own relevance rule: the
+    soundness digest plus the host-identity file for every gate, and the
+    t8n resolver only for gates that consume it.  An entry that does not
+    map to a file covers nothing, so an unexpected future entry fails
+    closed into `undeclared` rather than into silence.
+    """
+
+    files: set[Path] = set()
+    try:
+        sources = gc.runner_identity_sources(gate)
+    except Exception:
+        return files
+    for source in sources:
+        stem = source.split("#", 1)[0]
+        candidate = ROOT / "scripts" / stem
+        if candidate.is_file():
+            files.add(candidate.resolve())
+    return files
+
+
+def runner_binding_files() -> set[Path]:
+    """Sibling modules bound at the runner's module scope.
+
+    The runner's soundness digest covers the whole binding map -- which
+    global name is bound to which module -- but never the bound module's
+    contents.  A gate that loads the runner therefore reads these files
+    through a channel the fingerprint accounts for, even when their
+    contents deliberately identify no verdict (the lock, the semaphore
+    helper, the t8n resolver for a gate that does not consume it).
+    Derived from the runner's own source, so a module imported tomorrow
+    is covered the day it is added; stdlib bindings resolve to no
+    sibling and drop out.  A parse failure covers nothing.
+    """
+
+    try:
+        tree = ast.parse(
+            (ROOT / "scripts" / "gate-cache.py").read_text(encoding="utf-8")
+        )
+        bindings = gc.import_binding_map(tree)
+    except (OSError, UnicodeError, SyntaxError):
+        return set()
+    files: set[Path] = set()
+    for binding in bindings.values():
+        if binding.startswith("import "):
+            module = binding[len("import "):].partition(".")[0]
+        elif binding.startswith("from "):
+            module = binding[len("from "):].split(" import ", 1)[0]
+            module = module.lstrip(".").partition(".")[0]
+        else:
+            continue
+        if not module:
+            continue
+        candidate = ROOT / "scripts" / f"{module}.py"
+        if candidate.is_file():
+            files.add(candidate.resolve())
+    return files
+
+
+def ensure_cold_bytecode_cache() -> str:
+    """Establish the cold bytecode cache this instrument measures under.
+
+    CPython never opens a `.py` whose valid `.pyc` is cached, so a warm
+    cache hides reads and calls the silence clean.  Worse, without
+    `PYTHONDONTWRITEBYTECODE` this audit's own parent pre-warms the cache
+    before the first gate subprocess starts.  Remove the cache and forbid
+    writing through the whole measured tree, so no caller setup can warm
+    the measurement.  Returns a transcript line describing what was done.
+    """
+
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+    sys.dont_write_bytecode = True
+    caches = sorted((ROOT / "scripts").rglob("__pycache__"))
+    for cache in caches:
+        if cache.is_dir() and not cache.is_symlink():
+            shutil.rmtree(cache)
+        elif cache.exists() or cache.is_symlink():
+            cache.unlink()
+    survivors = [cache for cache in caches if cache.exists()]
+    if survivors:
+        print(
+            "REFUSED — gate read audit: cannot clear bytecode cache "
+            f"({', '.join(str(cache) for cache in survivors)}); "
+            "refusing a warm measurement",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    cleared = ", ".join(
+        sorted(cache.relative_to(ROOT).as_posix() for cache in caches)
+    ) or "none present"
+    return (
+        f"cold bytecode cache: cleared [{cleared}]; "
+        "PYTHONDONTWRITEBYTECODE=1 through the measured tree"
+    )
+
+
 LAKE_SUBTREES = (".lake/build", ".lake/packages")
 
 
-def audit_gate(gate: dict, roots: list[Path]) -> dict:
+def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dict:
     identifier = gate["id"]
     log = OUT_DIR / f"{identifier}.log"
     stdout_log = OUT_DIR / f"{identifier}.stdout.log"
@@ -178,6 +284,9 @@ def audit_gate(gate: dict, roots: list[Path]) -> dict:
     environment["PYTHONPATH"] = (
         f"{HOOK_DIR}{os.pathsep}{existing}" if existing else str(HOOK_DIR)
     )
+    # The whole measured tree must stay cold: without this a gate
+    # subprocess would write the cache the instrument just cleared.
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
 
     started = time.monotonic()
     result = subprocess.run(
@@ -215,7 +324,9 @@ def audit_gate(gate: dict, roots: list[Path]) -> dict:
     reads = {raw for raw in reads if Path(raw).is_file()}
 
     exact, subtrees = declared_coverage(gate)
+    runner_content = runner_content_files(gate)
     covered, lake, external, undeclared = 0, set(), set(), set()
+    runner_identity, runner_binding_reads = set(), set()
     for raw in reads:
         seen = classify(Path(raw), roots)
         if seen is None:
@@ -224,6 +335,12 @@ def audit_gate(gate: dict, roots: list[Path]) -> dict:
         resolved = Path(raw).resolve()
         if resolved in exact:
             covered += 1
+            continue
+        if resolved in runner_content:
+            runner_identity.add(name if label == "repo" else f"{label}::{name}")
+            continue
+        if resolved in runner_bindings:
+            runner_binding_reads.add(name if label == "repo" else f"{label}::{name}")
             continue
         if label == "repo" and any(name.startswith(p) for p in LAKE_SUBTREES):
             lake.add(name)
@@ -255,6 +372,8 @@ def audit_gate(gate: dict, roots: list[Path]) -> dict:
         "elapsed_s": round(elapsed, 1),
         "reads_observed": len(reads),
         "covered": covered,
+        "runner_identity": sorted(runner_identity),
+        "runner_bindings": sorted(runner_binding_reads),
         "lake_artifacts": sorted(lake),
         "in_declared_subtree": sorted(external),
         "undeclared": sorted(undeclared),
@@ -275,6 +394,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--only", nargs="*", help="audit just these gate ids")
     arguments = parser.parse_args(argv)
 
+    print(ensure_cold_bytecode_cache())
+
     registry = gc.load_registry(gc.registry_path(ROOT))
     gates = [g for g in registry["gates"] if g["kind"] == "cacheable"]
     if arguments.only:
@@ -282,9 +403,10 @@ def main(argv: list[str]) -> int:
         gates = [g for g in gates if g["id"] in wanted]
 
     roots = interesting_roots()
+    bindings = runner_binding_files()
     results, failures, holes = [], [], []
     for gate in gates:
-        outcome = audit_gate(gate, roots)
+        outcome = audit_gate(gate, roots, bindings)
         results.append(outcome)
         flag = "    "
         if outcome["exit"] != 0:
@@ -298,6 +420,10 @@ def main(argv: list[str]) -> int:
               f"({outcome['elapsed_s']}s)")
         for name in outcome["undeclared"]:
             print(f"       UNDECLARED READ: {name}")
+        for name in outcome["runner_identity"]:
+            print(f"       runner-identity read: {name}")
+        for name in outcome["runner_bindings"]:
+            print(f"       runner-binding read: {name}")
         for name in outcome["enumerated_undeclared"]:
             print(f"       enumerated directory, membership not declared: {name}")
 
@@ -316,8 +442,8 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 1
     print("OK — gate read audit: every observed Python read is covered by its "
-          "gate's declared inputs, the Lake artifact channel, or a declared "
-          "external checkout")
+          "gate's declared inputs, the runner-identity channel, the Lake "
+          "artifact channel, or a declared external checkout")
     return 0
 
 
