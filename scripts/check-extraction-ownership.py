@@ -450,7 +450,7 @@ def negative_controls(root: Path) -> list[str]:
                 f"CONTROL-FAILED — trailing-question-mark-parser: {exc}"
             )
         copied = Path(temp) / "blanc"
-        shutil.copytree(root, copied, ignore=shutil.ignore_patterns(".git", ".lake", "build"))
+        shutil.copytree(root, copied, ignore=shutil.ignore_patterns(".git", ".lake", "build", ".worktrees"))
         for name, expected, mutate in controls:
             case = Path(temp) / name
             shutil.copytree(copied, case)

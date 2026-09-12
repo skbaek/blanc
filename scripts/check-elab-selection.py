@@ -831,7 +831,12 @@ def commit_state(
 # concurrent publishers are serialized and an interrupted write resolves to
 # old-or-new via atomic replace.  No other caller may touch this store.
 SHARED_EVIDENCE_DIRNAME = "blanc-elab-evidence"
-SHARED_EVIDENCE_FILENAME = "evidence.json"
+# The legacy filename is bound to hostname-derived identities. Keep it intact
+# and start a disjoint store for stable host identities: old clients continue
+# to see only their legacy file, while stable clients neither trust nor replace
+# evidence whose machine provenance cannot be reconstructed independently.
+LEGACY_SHARED_EVIDENCE_FILENAME = "evidence.json"
+SHARED_EVIDENCE_FILENAME_PREFIX = "evidence-stable-host-v2"
 SHARED_EVIDENCE_SCHEMA = 1
 SHARED_TRUST_DOMAIN = "same-git-common-directory"
 SHARED_MAX_ENVS = 4
@@ -901,8 +906,8 @@ def shared_git_common_dir(root: Path) -> Path:
 
 
 def shared_store_path(root: Path) -> Path:
-    return (
-        shared_git_common_dir(root) / SHARED_EVIDENCE_DIRNAME / SHARED_EVIDENCE_FILENAME
+    return shared_git_common_dir(root) / SHARED_EVIDENCE_DIRNAME / (
+        f"{SHARED_EVIDENCE_FILENAME_PREFIX}-{load_shared_host_identity()}.json"
     )
 
 
@@ -1239,6 +1244,75 @@ def write_rows(path: Path, rows: dict[str, dict[str, str]]) -> None:
 
 def self_test() -> int:
     controls = 0
+    # The shell owns the environment-id capture because it also owns Lake's
+    # setup diagnostics. Pin the two production call sites, then execute their
+    # exact command-substitution shape against a stand-in that behaves like a
+    # pristine first Lake invocation: a clean version on stdout and useful
+    # setup chatter on stderr.
+    shell_path = selector_script_dir() / "check-elab.sh"
+    shell_source = shell_path.read_text(encoding="utf-8")
+    assert 'if LEAN_ID_EARLY="$(lake env lean --version)"; then' in shell_source
+    assert 'if ! LEAN_ID="$(lake env lean --version)"; then' in shell_source
+    assert "lake env lean --version 2>&1" not in shell_source
+    controls += 1  # both production captures keep stderr out of the identity
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-environment-capture-") as directory:
+        fake_bin = Path(directory)
+        fake_lake = fake_bin / "lake"
+        fake_lake.write_text(
+            """#!/bin/sh
+if [ "$*" != "env lean --version" ]; then
+  printf 'unexpected lake arguments: %s\n' "$*" >&2
+  exit 97
+fi
+printf '%s\n' "${FAKE_LAKE_STDERR-}" >&2
+printf '%s\n' "${FAKE_LAKE_STDOUT-}"
+exit "${FAKE_LAKE_RC-0}"
+""",
+            encoding="utf-8",
+        )
+        fake_lake.chmod(0o755)
+        capture_env = os.environ.copy()
+        capture_env["PATH"] = f"{fake_bin}{os.pathsep}{os.defpath}"
+        capture_env["FAKE_LAKE_STDOUT"] = "Lean (version 4.32.1, fake)"
+        capture_env["FAKE_LAKE_STDERR"] = "info: cloning dependency"
+
+        captured = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'if LEAN_ID_EARLY="$(lake env lean --version)"; then '
+                "printf 'identity=<%s>\\n' \"$LEAN_ID_EARLY\"; else exit 98; fi",
+            ],
+            env=capture_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert captured.returncode == 0
+        assert captured.stdout == "identity=<Lean (version 4.32.1, fake)>\n"
+        assert captured.stderr == "info: cloning dependency\n"
+        controls += 1  # successful stdout is isolated while setup chatter remains visible
+
+        capture_env["FAKE_LAKE_RC"] = "23"
+        capture_env["FAKE_LAKE_STDERR"] = "toolchain lookup failed"
+        refused = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'if ! LEAN_ID="$(lake env lean --version)"; then '
+                "printf 'REFUSED\\n'; exit 2; fi; exit 99",
+            ],
+            env=capture_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert refused.returncode == 2
+        assert refused.stdout == "REFUSED\n"
+        assert refused.stderr == "toolchain lookup failed\n"
+        controls += 1  # a nonzero version command still refuses with its diagnostic
+
     with tempfile.TemporaryDirectory(prefix="blanc-elab-selection-") as directory:
         root = Path(directory)
         (root / "Blanc").mkdir()
@@ -1858,6 +1932,48 @@ def self_test() -> int:
         _, reason, writable = read_shared_store(store_file, host)
         assert reason is not None and "incompatible" in reason and not writable
         controls += 1  # an unknown same-host schema is preserved, not replaced
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-transition-") as directory:
+        root = git_tree(directory)
+        host = load_shared_host_identity()
+        stable_file = shared_store_path(root)
+        legacy_file = stable_file.with_name(LEGACY_SHARED_EVIDENCE_FILENAME)
+        assert stable_file.name == f"evidence-stable-host-v2-{host}.json"
+        assert legacy_file != stable_file
+
+        legacy = empty_shared_store("legacy-hostname-derived-identity")
+        legacy["measurements"] = {
+            "legacy-env": {
+                "legacy-fp": {"time": "9.0", "commit": "old", "utc": "old"}
+            }
+        }
+        atomic_json(legacy_file, legacy)
+        legacy_before = legacy_file.read_bytes()
+
+        state_path = root / ".lake/check-elab-state.json"
+        plan = make_plan(root, state_path, "Lean test")
+        assert plan["affected"] == plan["files"]
+        plan_path = root / "plan.json"
+        report_path = root / "report.tsv"
+        write_plan(plan_path, plan)
+        write_rows(report_path, fake_rows(plan))
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0 and "measurement(s) recorded" in out
+        assert stable_file.is_file()
+        assert legacy_file.read_bytes() == legacy_before
+        stable_before = stable_file.read_bytes()
+        controls += 1  # a foreign legacy store cannot block or be changed by stable publication
+
+        # An old client still writes only the legacy filename. Its replacement
+        # cannot reach the disjoint stable-host evidence bytes.
+        legacy["measurements"]["legacy-env"]["legacy-fp"]["time"] = "10.0"
+        atomic_json(legacy_file, legacy)
+        assert legacy_file.read_bytes() != legacy_before
+        assert stable_file.read_bytes() == stable_before
+        controls += 1  # an old writer cannot overwrite the stable-host store
 
     with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-base-") as directory:
         root = git_tree(directory)

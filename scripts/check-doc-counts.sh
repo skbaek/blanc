@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
-# Documentation-count gate for Blanc: every published number is produced, not
+# Published-claim gate for Blanc: every published claim is produced, not
 # transcribed.
 #
-# The audited-theorem count is computed by the axiom audit and then quoted in
-# prose on README.md, scripts/GATES.md and docs/index.html. Prose does not
-# recompute itself, so the count drifts silently every time the audit grows --
-# and it did: on 2026-08-12 Jaune's site published 315 against this gate's 333.
+# Blanc publishes numbers, gate transcripts and repository references on public
+# surfaces. Prose does not recompute itself, so a published claim drifts
+# silently every time its producer moves -- and it did: on 2026-08-12 Jaune's
+# site published 315 audited theorems against this gate's 333, and until
+# 2026-09-12 the claim-pin count was published four times with nothing reading
+# any of them.
 #
-# This gate computes the count from scripts/AxiomCheck.lean, finds every place a
-# public surface quotes it, and fails on disagreement. It is anti-vacuous: it
-# knows how many quotations to expect per file and FAILS if a rewording hides
-# one, so a green run never means "nothing was checked".
+# For each registered claim this gate computes the value from the one committed
+# artifact that owns it, finds every place a public surface states it, and fails
+# on disagreement. It also pins the published verbatim transcripts of
+# scripts/check-claims.sh against that gate's own verdict format string, and
+# PORTING.md's references into this tree. Prose judgment is out of scope: see
+# the script's module docstring for what counts as a published claim and why
+# scoring prose against the tree is not this gate's job.
 #
-# It owns only this repository's tree. Jaune's site quotes the same number and
-# no gate can see across the boundary, so a passing run prints the
+# It is anti-vacuous twice over: per pattern, so a rewording that hides a
+# quotation FAILS rather than passing with nothing checked; and per surface, by
+# a census of standalone occurrences of each produced value, so an unregistered
+# quotation cannot drift unseen. A green run never means "nothing was checked".
+#
+# It owns only this repository's tree. Jaune's site quotes the audited-theorem
+# count and no gate can see across the boundary, so a passing run prints the
 # cross-repository reminder instead of pretending that surface does not exist.
 #
 # This gate needs no Lean toolchain, no build and no network -- it reads

@@ -69,7 +69,6 @@ import fnmatch
 import hashlib
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -89,7 +88,7 @@ from gate_cache_t8n_root import (
 )
 
 SCHEMA_VERSION = 1
-EVIDENCE_SCHEMA_VERSION = 2
+EVIDENCE_SCHEMA_VERSION = 3
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -99,9 +98,11 @@ ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_RELATIVE = "scripts/gate-registry.json"
 REPORT_RELATIVE = ".lake/gate-report.md"
 MANIFEST_RELATIVE = ".lake/gate-manifest.json"
-BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate.json"
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
-BUILD_CERTIFICATE_SCHEMA = 2
+EVIDENCE_FILENAME_PREFIX = "evidence-v3-"
+LEGACY_EVIDENCE_FILENAME = "evidence.json"
+BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate-v3.json"
+BUILD_CERTIFICATE_SCHEMA = 3
 
 
 def registry_path(root: Path) -> Path:
@@ -140,7 +141,11 @@ def shared_state_path(root: Path) -> Path:
 
 
 def cache_path(root: Path) -> Path:
-    return shared_state_path(root) / "evidence.json"
+    return shared_state_path(root) / f"{EVIDENCE_FILENAME_PREFIX}{host_identity()}.json"
+
+
+def legacy_cache_path(root: Path) -> Path:
+    return shared_state_path(root) / LEGACY_EVIDENCE_FILENAME
 
 
 def report_path(root: Path) -> Path:
@@ -152,7 +157,7 @@ def manifest_path(root: Path) -> Path:
 
 
 def build_certificate_path(root: Path, lake_root: Path | None = None) -> Path:
-    return (lake_root or root / ".lake") / "blanc-build-certificate.json"
+    return (lake_root or root / ".lake") / Path(BUILD_CERTIFICATE_RELATIVE).name
 
 
 def lock_path(root: Path) -> Path:
@@ -610,6 +615,7 @@ def command_text(gate: dict[str, Any]) -> str:
 
 RUNNER_SOUNDNESS_SOURCE = "gate-cache.py"
 RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
+RUNNER_HOST_IDENTITY_SOURCE = "gate_cache_host_identity.py"
 
 # Top-level authorities whose semantics can change whether an earlier verdict
 # is valid for a candidate.  The AST digest deliberately excludes comments,
@@ -620,9 +626,12 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
     "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
     "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
-    "SHARED_STATE_RELATIVE", "BUILD_CERTIFICATE_RELATIVE",
+    "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
+    "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE",
+    "AUTHORITY_IMPORT_BINDINGS_KEY", "module_scope_imports", "import_binding_map",
     "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable",
-    "git_common_dir", "shared_state_path", "cache_path", "build_certificate_path",
+    "git_common_dir", "shared_state_path", "cache_path", "legacy_cache_path",
+    "build_certificate_path",
     "sha256_bytes",
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
     "load_registry", "_input_strings", "_validate_oracle_lanes",
@@ -631,7 +640,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "component_populations", "trace_path_for", "module_dep_hash",
     "component_lean_modules", "imports_of", "component_lean_entries", "git_output",
     "component_git_refs", "component_external", "component_env", "component_tools",
-    "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache", "lookup",
+    "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache",
+    "_safe_host_label", "host_mismatch_warning", "read_active_cache", "lookup",
     "store", "prune_details", "tree_identity", "plan", "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
     "read_build_certificate", "write_build_certificate",
@@ -658,10 +668,65 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     absent: it serializes writes but cannot make evidence reusable.
     """
 
-    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness"]
+    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness", RUNNER_HOST_IDENTITY_SOURCE]
     if gate_uses_t8n_resolver(gate):
         sources.append(RUNNER_T8N_SOURCE)
     return tuple(sources)
+
+
+# The digest below matches top-level nodes by *name*, and an `import` statement
+# has none, so before this existed every module-scope import binding sat outside
+# the authority -- including `from gate_cache_t8n_root import T8N_TARGET_ROOT`,
+# which is what turns a declared `@t8n_target/...` input into the file that
+# actually gets fingerprinted.  Rebinding that one line moved the resolved input
+# root while the digest stood still.  Naming the two bindings that were caught
+# would have left the class open for the next sibling module, so the digest
+# covers the module-scope binding map as a whole: every global name an authority
+# can resolve at call time, and the module and attribute it is bound to.
+#
+# It is the *binding* that is hashed, not the imported module's contents.  An
+# edit inside `gate_cache_lock.py` therefore still moves nothing here, which is
+# the relevance rule GATES.md states; only rebinding the name to a different
+# source moves the digest.  The map is a dict digested through `canonical`,
+# which sorts keys, so reordering the import block is a presentation edit.
+#
+# There is deliberately no exemption list.  Every module-scope import is cheap
+# to hash and an exemption is a hole with a rationale attached; if one ever
+# becomes necessary it belongs here as an explicit, named, justified constant,
+# not as an accident of the walk.
+AUTHORITY_IMPORT_BINDINGS_KEY = "#module-scope-import-bindings"
+
+
+def module_scope_imports(node: ast.AST) -> Iterable[ast.Import | ast.ImportFrom]:
+    """Every import statement that binds a module global.
+
+    Descends through `if`/`try`/`with` blocks, which still bind at module
+    scope, and stops at function and class bodies, whose imports are local and
+    are already carried by the enclosing authority's own AST dump.
+    """
+
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.Import, ast.ImportFrom)):
+            yield child
+        elif not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            yield from module_scope_imports(child)
+
+
+def import_binding_map(tree: ast.Module) -> dict[str, str]:
+    """Global name -> the module and attribute that name is bound to."""
+
+    bindings: dict[str, str] = {}
+    for node in module_scope_imports(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bound = alias.asname or alias.name.partition(".")[0]
+                bindings[bound] = f"import {alias.name}"
+        else:
+            source = "." * node.level + (node.module or "")
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                bindings[bound] = f"from {source} import {alias.name}"
+    return bindings
 
 
 def semantic_authority_digest(path: Path) -> str:
@@ -685,6 +750,12 @@ def semantic_authority_digest(path: Path) -> str:
     missing = sorted(SOUNDNESS_AUTHORITY_NAMES - set(found))
     if missing:
         raise Unresolvable(f"runner soundness authority is missing: {', '.join(missing)}")
+    bindings = import_binding_map(tree)
+    if not bindings:
+        raise Unresolvable(
+            f"runner soundness authority has no module-scope import bindings: {path}"
+        )
+    found[AUTHORITY_IMPORT_BINDINGS_KEY] = digest_of(bindings)
     return digest_of(found)
 
 
@@ -692,7 +763,9 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
     here = Path(__file__).resolve().parent
     detail = {
         f"scripts/{RUNNER_SOUNDNESS_SOURCE}#soundness":
-            semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE)
+            semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE),
+        f"scripts/{RUNNER_HOST_IDENTITY_SOURCE}":
+            file_digest(here / RUNNER_HOST_IDENTITY_SOURCE),
     }
     if gate_uses_t8n_resolver(gate):
         detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
@@ -1222,13 +1295,14 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 def host_identity() -> str:
-    system = platform.system().lower()
-    machine = platform.machine().lower()
-    # The readable platform prefix makes diagnostics useful; the hashed node
-    # component prevents a shared/NFS common directory from laundering local
-    # evidence between two hosts without publishing the hostname itself.
-    node = sha256_bytes(platform.node().encode("utf-8"))[:16]
-    return f"{system}-{machine}-{node}"
+    """Stable OS installation binding with no production override."""
+
+    from gate_cache_host_identity import HostIdentityError, stable_host_identity
+
+    try:
+        return stable_host_identity()
+    except HostIdentityError as error:
+        raise Unresolvable(str(error)) from error
 
 
 def build_source_identity(
@@ -1406,8 +1480,9 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
         return empty_cache(), "cache schema is missing or incompatible"
     if cache.get("trust_domain") != "same-git-common-directory":
         return empty_cache(), "cache trust domain is missing or incompatible"
-    if cache.get("host") != host_identity():
-        return empty_cache(), "cache belongs to a different host identity"
+    current_host = host_identity()
+    if cache.get("host") != current_host:
+        return empty_cache(), host_mismatch_warning(cache.get("host"), current_host)
     gates = cache.get("gates")
     details = cache.get("details")
     if not isinstance(gates, dict) or not isinstance(details, dict):
@@ -1430,6 +1505,55 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
             if not isinstance(record.get("provenance"), dict):
                 return empty_cache(), "cache record has no provenance"
     return cache, None
+
+
+def _safe_host_label(value: Any) -> str:
+    """Render only the public hashed identity grammar, never arbitrary store bytes."""
+
+    from gate_cache_host_identity import is_public_host_identity
+
+    if not isinstance(value, str):
+        return "<missing>"
+    if is_public_host_identity(value):
+        return value
+    return "<unrecognized>"
+
+
+def host_mismatch_warning(stored: Any, current: str) -> str:
+    return (
+        "WARNING — gate evidence host mismatch: "
+        f"stored {_safe_host_label(stored)} != current {_safe_host_label(current)}; "
+        "preserve the store. Remediation: run scripts/check-gates.sh for fresh "
+        "re-verification, or use a verified migration only when retained provenance "
+        "independently binds both identities to this machine; never edit or re-key records"
+    )
+
+
+def read_active_cache(root: Path) -> tuple[dict[str, Any], str | None]:
+    """Read this stable identity's store without overwriting legacy/foreign bytes."""
+
+    active = cache_path(root)
+    if active.is_file():
+        return read_cache(active)
+
+    state = shared_state_path(root)
+    candidates = [legacy_cache_path(root)]
+    if state.is_dir():
+        candidates.extend(
+            path
+            for path in sorted(state.glob(f"{EVIDENCE_FILENAME_PREFIX}*.json"))
+            if path != active
+        )
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            prior = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            prior = None
+        stored = prior.get("host") if isinstance(prior, dict) else None
+        return empty_cache(), host_mismatch_warning(stored, host_identity())
+    return empty_cache(), "no prior cache"
 
 
 def lookup(cache: dict[str, Any], identifier: str, print_: str) -> dict[str, Any] | None:
@@ -1675,7 +1799,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         return 2
 
     registry = load_registry(registry_path(root))
-    cache, cache_reason = read_cache(cache_path(root))
+    cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"check-gates: {cache_reason}; every gate will execute", file=sys.stderr)
 
@@ -2180,7 +2304,7 @@ def audit(root: Path, quiet: bool = False) -> int:
 
 def show_plan(root: Path, arguments: argparse.Namespace) -> int:
     registry = load_registry(registry_path(root))
-    cache, cache_reason = read_cache(cache_path(root))
+    cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"cache: {cache_reason}")
     rows = plan(root, registry, cache, fresh=arguments.fresh)
@@ -2335,7 +2459,8 @@ def main(argv: list[str]) -> int:
                 certificate = write_build_certificate(root)
                 print(
                     "OK — lake build certificate: "
-                    f"{certificate['identity'][:16]} on {certificate['host']}"
+                    f"{certificate['identity'][:16]} on "
+                    f"{_safe_host_label(certificate.get('host'))}"
                 )
                 return 0
             return run(root, arguments)
