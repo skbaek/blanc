@@ -13,20 +13,23 @@
           "scripts/AxiomCheck.lean",
           "scripts/ClaimCheck.lean",
           "scripts/check-claims.sh",
+          "scripts/check.sh",
           "scripts/fixtures/weth10/manifest.json",
+          "scripts/fixtures/lido-circuit-breaker/manifest.json",
           "Blanc.lean",
           "README.md",
           "PORTING.md",
           "scripts/GATES.md",
           "docs/index.html",
-          "docs/contracts/weth10.html"
+          "docs/contracts/weth10.html",
+          "docs/contracts/lido-circuit-breaker.html"
         ],
         "tools": [
           "python3"
         ]
       },
       "kind": "cacheable",
-      "note": "Every producer and every published surface is an input. The catalogue is both a consumer of two counts and the subject of this gate's self-description check, so editing scripts/GATES.md reddens the gate that documents it. scripts/check-claims.sh is an input twice over: it restates the claim-pin count as its own expectation, and its verdict format string is what the published transcripts are pinned to. Blanc.lean is an input because PORTING.md's Lean reference must still be in the library root.",
+      "note": "Every producer and every published surface is an input. The catalogue is both a consumer of two counts and the subject of this gate's self-description check, so editing scripts/GATES.md reddens the gate that documents it. scripts/check-claims.sh is an input twice over: it restates the claim-pin count as its own expectation, and its verdict format string is what the published transcripts are pinned to. Blanc.lean is an input because PORTING.md's Lean reference must still be in the library root. scripts/check.sh is an input because the axiom-audit transcript is pinned to its verdict format string.",
       "order": 1,
       "verdict": {
         "expect_exit": 0,
