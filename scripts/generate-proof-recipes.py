@@ -39,6 +39,18 @@ REGISTRY_PATH = Path("scripts/proof-recipes.toml")
 MARKDOWN_PATH = "docs/PROOF_RECIPES.md"
 LEAN_PATH = "Blanc/ProofRecipesGenerated.lean"
 TACTICS_PATH = Path("Blanc/Tactics.lean")
+SUGGESTIONS_PATH = Path("scripts/ProofRecipeSuggestions.lean")
+MANIFEST_PATH = Path("lake-manifest.json")
+LAKEFILE_PATH = Path("lakefile.lean")
+
+# The pinned Jaune dependency, as Lake materializes it. These are fixed
+# constants of this script, never registry-supplied strings, so they do not go
+# through the raw-string module-path policy (which exists for the registry's
+# attacker-and-typo-controlled Blanc module values); the walk below refuses
+# symbolic links itself and never leaves the package directory.
+JAUNE_PACKAGE_PARTS = (".lake", "packages", "jaune")
+JAUNE_LIBRARY_DIR = "Jaune"
+JAUNE_LIBRARY_AGGREGATE = "Jaune.lean"
 
 TOP_LEVEL_KEYS = {"schema_version", "generated_notice"}
 REQUIRED_RECIPE_KEYS = {
@@ -115,6 +127,12 @@ class Registry:
     schema_version: int
     generated_notice: str
     recipes: Tuple[Recipe, ...]
+    # Populations the trigger-soundness checks covered on this run, reported in
+    # the terminal verdict so a run that could not resolve the pinned dependency
+    # does not read like one that resolved all of it:
+    # (Jaune dispatch surface, of which resolved against the pinned source,
+    #  recipes with a harness case, triggers with a reachability witness).
+    coverage: Tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 def parse_basic_string(token: str, where: str) -> str:
@@ -568,6 +586,146 @@ UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
 # must still dispatch on some name, and a structural arm must dispatch on none.
 STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision"})
 
+# Every Jaune name any trigger arm dispatches on, through its helper predicates.
+#
+# ``validate_trigger_dispatch`` above can only see this repository's own names,
+# so the Jaune half of the dispatch was unchecked in two different ways. Six
+# arms dispatch on Jaune names only and sit in ``UNCHECKED_DISPATCH_ARMS``; two
+# more -- ``goal-shape:operand-stack-fault-free`` and
+# ``goal-shape:terminal-return-revert`` -- are *inside* the checked population
+# because they also name Blanc declarations, and their Jaune disjuncts were
+# silently unchecked while the arm reported green. Blanc consumes Jaune through
+# a Git-pinned Lake dependency, so a pin bump that renames one of these leaves
+# every one of those arms compiling and comparing against a name nothing
+# produces.
+#
+# The surface is bound to the pin it was verified against. Two checks are
+# always available, with no dependency materialized:
+#   * the names the arms actually dispatch on must equal this set exactly, in
+#     both directions, so the population cannot drift by accident; and
+#   * ``JAUNE_DISPATCH_PIN`` must equal the rev ``lake-manifest.json`` and
+#     ``lakefile.lean`` pin, so a pin bump -- the event that causes the failure
+#     -- fails the gate until the surface is re-verified against the new Jaune.
+# When ``.lake/packages/jaune`` is materialized at that exact rev, every name is
+# additionally resolved against the pinned source. See ``validate_jaune_dispatch``
+# for what that verification does and does not establish.
+JAUNE_DISPATCH_PIN = "0cc7f56aa5159aec57424a04f8c3731618e91441"
+JAUNE_DISPATCH_SURFACE = frozenset({
+    "Jaune.Devm",
+    "Jaune.Devm.accessedAddresses",
+    "Jaune.Devm.accessedStorageKeys",
+    "Jaune.Devm.accountsToDelete",
+    "Jaune.Devm.createdAccounts",
+    "Jaune.Devm.error",
+    "Jaune.Devm.gasLeft",
+    "Jaune.Devm.logs",
+    "Jaune.Devm.mach",
+    "Jaune.Devm.memWrite",
+    "Jaune.Devm.memory",
+    "Jaune.Devm.meta",
+    "Jaune.Devm.output",
+    "Jaune.Devm.refundCounter",
+    "Jaune.Devm.returnData",
+    "Jaune.Devm.setMach",
+    "Jaune.Devm.setMeta",
+    "Jaune.Devm.setStorVal",
+    "Jaune.Devm.setWorld",
+    "Jaune.Devm.stack",
+    "Jaune.Devm.state",
+    "Jaune.Devm.transientStorage",
+    "Jaune.Devm.world",
+    "Jaune.ExceptionalHalt.stackOverflow",
+    "Jaune.ExceptionalHalt.stackUnderflow",
+    "Jaune.Linst.return_",
+    "Jaune.Linst.revert",
+    "Jaune.List.sliceD",
+    "Jaune.addAccessedStorageKey",
+    "Jaune.exec",
+    "Jaune.initEvm",
+    "Jaune.processMessage",
+})
+
+# Names outside both namespaces that an arm may dispatch on. These are Lean core
+# and are not pinned by this repository at all, so they are stated here rather
+# than left to fall through whichever of the two checks happens to ignore them.
+CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne"})
+
+# Registered recipes with no case in ``scripts/ProofRecipeSuggestions.lean``,
+# each with what a case would have to exhibit.
+#
+# A trigger arm that is live -- every name it compares against exists -- can
+# still never fire, because nothing says a goal ever presents those names where
+# the arm looks for them. That reachability question is not decidable from the
+# registry and ``Blanc/Tactics.lean`` (see ``validate_harness_coverage``); the
+# only evidence available is a real goal that the elaborator agrees the trigger
+# matches, which is what the suggestions harness is. This table is therefore the
+# list of recipes for which no such evidence exists, grandfathered by name so
+# that the *next* recipe added without a harness case fails instead of joining
+# them silently. It is checked in both directions: a listed recipe that gains a
+# case, or that leaves the registry, fails.
+UNWITNESSED_RECIPES: Dict[str, str] = {
+    "accepted-boolean-settlement":
+        "needs an Iff goal containing Blanc.AcceptedBoolWord",
+    "binary-dispatch-miss":
+        "shares goal-shape:raw-sstore-free-compiled-path with "
+        "raw-sstore-free-compiled-path; needs a DispatchTree miss goal carrying "
+        "NoRawSstorePath",
+    "call-boundary-outcomes":
+        "needs a Func.ExecSat, Prog.ExecSat or Func.ExecWitness goal head",
+    "constant-error-guard":
+        "needs a Func.RunCompiledTo goal mentioning Func.branch, Func.call and "
+        "errorData together",
+    "line-observation-invariance":
+        "needs a Line.Inv, Ninst.Inv or Rinst.Inv goal head",
+    "raw-sstore-free-compiled-path":
+        "needs a goal naming Func.RunCompiledTo.NoRawSstorePath, "
+        "Exec.NoRawSstore or Ninst.ChildlessRunCompiled",
+    "runcompiled-family-compression":
+        "status partial; its trigger fires on any Func.RunCompiled or "
+        "Func.RunCompiledTo head, so a case has to show the compressed family "
+        "rather than the construction recipe's goal",
+    "state-context-cleanup":
+        "its trigger counts local hypotheses, so a case needs a local context "
+        "with more than two Jaune.Devm hypotheses",
+    "static-store-exclusion":
+        "needs a Func.Run implication premise; the harness exercises "
+        "implication-premise:MemWordAt only",
+    "trace-admitted-frame-invariant":
+        "needs a ContractSpec.PreservesAdmitted goal head",
+    "trace-local-frame-admission":
+        "needs an Exec.FrameAdmitted, ContractSpec.SoundAdmitted or "
+        "ExecutionTrace.*.FrameAdmitted goal",
+    "upgrade-migration-refinement":
+        "needs a MigrationSound or BehavioralRefinement goal head",
+}
+
+# Triggers whose reachability is *proved*: the harness states a real goal and
+# ``expect_recipe_trigger`` makes the elaborator decide the arm's own predicate
+# on it, so the arm demonstrably fires. A bare ``blanc_suggest`` case does not
+# prove this -- the tactic only logs, so an example compiles whether or not any
+# trigger matched -- and neither does an ``-- EXPECT:`` comment, which is prose.
+# The set is pinned by name rather than counted so that losing a witness and
+# gaining an unrelated one cannot cancel out.
+REACHABILITY_WITNESSED_TRIGGERS = frozenset({
+    "goal-head:CompiledStackSafety.Certificate",
+    "goal-head:LinkCertificate",
+    "goal-head:MemWordAt",
+    "goal-shape:bounded-creation-word-encoder",
+    "goal-shape:compile-shape-prepend-congruence",
+    "goal-shape:compiled-shape-byte-navigation",
+    "goal-shape:exact-retained-storage-effects",
+    "goal-shape:fixed-byte-offset",
+    "goal-shape:linear-dispatch-selection",
+    "goal-shape:selector-separation",
+    "goal-shape:stack-prefix-line-run",
+    "goal-shape:symbolic-label-linking",
+    "goal-shape:tagged-storage-region-separation",
+})
+
+EXPECT_COMMENT_RE = re.compile(r"^-- EXPECT: ([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\s*$", re.MULTILINE)
+EXPECT_TRIGGER_RE = re.compile(r'\bexpect_recipe_trigger\s+"([^"\n]*)"')
+EXPECT_NO_TRIGGER_RE = re.compile(r'\bexpect_no_recipe_trigger\s+"([^"\n]*)"')
+
 CONSTRUCTOR_RE = re.compile(rf"^\s+\|\s*({LEAN_PART})(?=\s|:|\(|\{{|$)")
 
 
@@ -761,6 +919,410 @@ def validate_trigger_dispatch(
     return checked
 
 
+FOREIGN_STRUCT_RE = re.compile(
+    rf"^\s*(?:@\[[^]]+\]\s*)*"
+    rf"(?:(?:private|protected|noncomputable|unsafe)\s+)*"
+    rf"(structure|inductive)\s+({QUALIFIED})(?=\s|:|\(|\{{|$)"
+)
+FOREIGN_FIELD_RE = re.compile(rf"^\s+(?:«({LEAN_PART})»|({LEAN_PART}))\s*:(?!=)")
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
+
+
+def foreign_qualify(namespace: Sequence[str], name: str) -> str:
+    if name.startswith("_root_."):
+        return name[len("_root_.") :]
+    return ".".join([*namespace, name]) if namespace else name
+
+
+def foreign_declarations_in(path: Path) -> Set[str]:
+    """Declarations, structure fields and constructors of a dependency module.
+
+    A separate, additive census, for the same reason ``constructors_in`` is one:
+    the shared Blanc inventory that symbol validation uses keeps its exact
+    meaning. It differs from that inventory in three ways that a dependency
+    needs and Blanc's own sources do not:
+
+    * qualification is generic -- ``declarations_in`` short-circuits names that
+      already start with ``Blanc.``, which would silently drop a dependency's
+      namespace;
+    * ``mutual``/``end`` is a scope, which Jaune uses and Blanc does not. Without
+      it the reader pops the enclosing ``namespace Jaune`` at the first such
+      ``end`` and every later declaration is censused unqualified, so a live name
+      reads as dead; and
+    * structure fields are projections a trigger arm legitimately dispatches on
+      (``Jaune.Devm.mach`` is a field, not a ``def``), so they are counted --
+      only inside a ``structure`` body, so an indented ``name : type`` elsewhere
+      cannot invent one.
+
+    Fails closed on an unbalanced scope stack rather than returning a census
+    whose names are wrong.
+    """
+    try:
+        clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
+    except OSError as exc:
+        raise RecipeError(f"cannot read dependency source {path}: {exc}") from exc
+    scopes: List[Tuple[str, List[str]]] = []
+    found: Set[str] = set()
+    owner: Optional[str] = None
+    owner_kind: Optional[str] = None
+    for number, line in enumerate(clean.splitlines(), 1):
+        if match := NAMESPACE_RE.match(line):
+            scopes.append(("namespace", match.group(1).split(".")))
+            owner = None
+        elif SECTION_RE.match(line) or MUTUAL_RE.match(line):
+            scopes.append(("section", []))
+            owner = None
+        elif END_RE.match(line):
+            if not scopes:
+                raise RecipeError(f"{path}:{number}: unmatched end")
+            scopes.pop()
+            owner = None
+        elif match := FOREIGN_STRUCT_RE.match(line):
+            namespace = [
+                part
+                for scope_kind, parts in scopes
+                if scope_kind == "namespace"
+                for part in parts
+            ]
+            owner = foreign_qualify(namespace, match.group(2))
+            owner_kind = match.group(1)
+            found.add(owner)
+        elif match := DECL_RE.match(line):
+            namespace = [
+                part
+                for scope_kind, parts in scopes
+                if scope_kind == "namespace"
+                for part in parts
+            ]
+            found.add(foreign_qualify(namespace, match.group(1)))
+            owner = None
+        elif owner is not None and owner_kind == "inductive" and (
+            match := CONSTRUCTOR_RE.match(line)
+        ):
+            found.add(f"{owner}.{match.group(1)}")
+        elif owner is not None and owner_kind == "structure" and (
+            match := FOREIGN_FIELD_RE.match(line)
+        ):
+            found.add(f"{owner}.{match.group(1) or match.group(2)}")
+        elif line.strip() and not line[0].isspace():
+            owner = None
+    if scopes:
+        raise RecipeError(f"{path}: unclosed namespace, section or mutual block")
+    return found
+
+
+def jaune_package_root(root: Path) -> Optional[Path]:
+    """``.lake/packages/jaune`` if Lake has materialized it, else ``None``.
+
+    Every component is required to be a real directory entry: a symbolic link
+    anywhere on the way in would let the census read some other checkout while
+    the rev check below reports the pinned one.
+    """
+    current = root
+    for component in JAUNE_PACKAGE_PARTS:
+        current = current / component
+        if current.is_symlink():
+            raise RecipeError(
+                f"symbolic-link filesystem alias is forbidden on the pinned "
+                f"dependency path: {current}"
+            )
+        if not current.is_dir():
+            return None
+    return current
+
+
+def jaune_library_sources(package: Path) -> List[Path]:
+    """The pinned package's library modules: ``Jaune.lean`` and ``Jaune/**``.
+
+    Deliberately not the whole checkout. The package's own ``scripts/*.lean``
+    pilots declare names that are not part of the library Blanc imports, and
+    counting them would let a name that no Blanc goal can ever contain read as
+    live.
+    """
+    found: List[Path] = []
+    aggregate = package / JAUNE_LIBRARY_AGGREGATE
+    if aggregate.is_symlink():
+        raise RecipeError(f"symbolic-link filesystem alias is forbidden: {aggregate}")
+    if aggregate.is_file():
+        found.append(aggregate)
+
+    def visit(directory: Path) -> None:
+        try:
+            with os.scandir(str(directory)) as iterator:
+                entries = sorted(iterator, key=lambda entry: entry.name)
+        except OSError as error:
+            raise RecipeError(
+                f"cannot enumerate pinned dependency directory {directory}: {error}"
+            ) from error
+        for entry in entries:
+            entry_path = directory / entry.name
+            if entry.is_symlink():
+                raise RecipeError(
+                    f"symbolic-link filesystem alias is forbidden in the pinned "
+                    f"dependency tree: {entry_path}"
+                )
+            if entry.is_dir(follow_symlinks=False):
+                visit(entry_path)
+            elif entry.name.endswith(".lean"):
+                found.append(entry_path)
+
+    library = package / JAUNE_LIBRARY_DIR
+    if library.is_symlink():
+        raise RecipeError(f"symbolic-link filesystem alias is forbidden: {library}")
+    if library.is_dir():
+        visit(library)
+    if not found:
+        raise RecipeError(
+            f"pinned dependency {package} has no {JAUNE_LIBRARY_AGGREGATE} and no "
+            f"{JAUNE_LIBRARY_DIR}/**/*.lean library modules to census"
+        )
+    return sorted(found)
+
+
+def foreign_declaration_inventory(package: Path) -> Set[str]:
+    found: Set[str] = set()
+    for path in jaune_library_sources(package):
+        found.update(foreign_declarations_in(path))
+    return found
+
+
+def manifest_jaune_rev(root: Path) -> str:
+    path = root / MANIFEST_PATH
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise RecipeError(f"cannot read {MANIFEST_PATH}: {error}") from error
+    packages = document.get("packages") if isinstance(document, dict) else None
+    if not isinstance(packages, list):
+        raise RecipeError(f"{MANIFEST_PATH}: no packages array")
+    revisions = [
+        entry.get("rev")
+        for entry in packages
+        if isinstance(entry, dict) and entry.get("name") == "jaune"
+    ]
+    if len(revisions) != 1 or not isinstance(revisions[0], str):
+        raise RecipeError(
+            f"{MANIFEST_PATH}: expected exactly one jaune package with a rev, "
+            f"found {len(revisions)}"
+        )
+    return revisions[0]
+
+
+def lakefile_jaune_rev(root: Path) -> str:
+    path = root / LAKEFILE_PATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RecipeError(f"cannot read {LAKEFILE_PATH}: {error}") from error
+    matches = re.findall(
+        r'require\s+jaune\s+from\s+git\s+"[^"\n]*"\s*@\s*"([^"\n]*)"', text
+    )
+    if len(matches) != 1:
+        raise RecipeError(
+            f"{LAKEFILE_PATH}: expected exactly one pinned `require jaune from git` "
+            f"clause, found {len(matches)}"
+        )
+    return matches[0]
+
+
+def materialized_jaune_rev(package: Path) -> str:
+    head = package / ".git" / "HEAD"
+    if head.is_symlink() or not head.is_file():
+        raise RecipeError(
+            f"pinned dependency {package} is materialized but its checked-out "
+            f"revision cannot be established from {head} — re-run `lake update` "
+            f"rather than censusing an unidentified Jaune"
+        )
+    try:
+        value = head.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        raise RecipeError(f"cannot read {head}: {error}") from error
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise RecipeError(
+            f"{head} is {value!r}, not a detached 40-hex revision — the pinned "
+            f"dependency checkout is not the one lake-manifest.json names"
+        )
+    return value
+
+
+def validate_jaune_dispatch(
+    closures: Dict[str, Set[str]], root: Path
+) -> Tuple[int, int]:
+    """Close the half of the trigger dispatch ``validate_trigger_dispatch`` cannot see.
+
+    That check reads only ``Blanc.`` names, so every Jaune name any arm compares
+    against was unchecked -- including the Jaune disjuncts of two arms that the
+    per-arm guard reports as checked. This one binds the whole Jaune dispatch
+    surface to the pin it was verified against, and resolves it against the
+    pinned source whenever Lake has materialized it.
+
+    Returns ``(surface size, names resolved against the pinned source)``; the
+    second number is zero when the dependency is not materialized, and the
+    caller prints it, so a run that could not resolve anything says so instead
+    of reading like a run that resolved everything.
+    """
+    if not JAUNE_DISPATCH_SURFACE:
+        raise RecipeError(
+            "JAUNE_DISPATCH_SURFACE is empty — the Jaune half of the trigger "
+            "dispatch would be checked over nothing"
+        )
+    actual: Set[str] = set()
+    stray: Set[str] = set()
+    for closure in closures.values():
+        for name in closure:
+            if name.startswith("Jaune."):
+                actual.add(name)
+            elif not name.startswith("Blanc.") and name not in CORE_DISPATCH_NAMES:
+                stray.add(name)
+    if stray:
+        raise RecipeError(
+            f"{TACTICS_PATH}: trigger dispatch names {sorted(stray)}, which are "
+            f"neither Blanc nor Jaune nor listed in CORE_DISPATCH_NAMES — no check "
+            f"resolves them, so add them to a population that does"
+        )
+    missing = sorted(JAUNE_DISPATCH_SURFACE - actual)
+    unlisted = sorted(actual - JAUNE_DISPATCH_SURFACE)
+    if missing or unlisted:
+        raise RecipeError(
+            f"{TACTICS_PATH}: the Jaune dispatch surface drifted: no arm dispatches "
+            f"on {missing}; {unlisted} is dispatched on but unlisted — re-verify "
+            f"JAUNE_DISPATCH_SURFACE against the pinned Jaune and update it, so the "
+            f"listing keeps naming exactly what the arms compare against"
+        )
+    manifest = manifest_jaune_rev(root)
+    lakefile = lakefile_jaune_rev(root)
+    if manifest != lakefile:
+        raise RecipeError(
+            f"{MANIFEST_PATH} pins jaune at {manifest} but {LAKEFILE_PATH} requires "
+            f"{lakefile}"
+        )
+    if manifest != JAUNE_DISPATCH_PIN:
+        raise RecipeError(
+            f"the Jaune pin moved to {manifest}: JAUNE_DISPATCH_SURFACE was verified "
+            f"against {JAUNE_DISPATCH_PIN}, so every arm that dispatches on a Jaune "
+            f"name is now unverified — re-verify the surface against the new pin "
+            f"with the dependency materialized and update JAUNE_DISPATCH_PIN"
+        )
+    package = jaune_package_root(root)
+    if package is None:
+        return len(JAUNE_DISPATCH_SURFACE), 0
+    checkout = materialized_jaune_rev(package)
+    if checkout != JAUNE_DISPATCH_PIN:
+        raise RecipeError(
+            f"{package} is checked out at {checkout}, not the pinned "
+            f"{JAUNE_DISPATCH_PIN} — censusing it would verify the dispatch surface "
+            f"against a Jaune this repository does not depend on"
+        )
+    names = foreign_declaration_inventory(package)
+    dead = sorted(name for name in JAUNE_DISPATCH_SURFACE if name not in names)
+    if dead:
+        raise RecipeError(
+            f"{TACTICS_PATH}: trigger dispatch compares against {dead}, which the "
+            f"pinned Jaune does not declare — the arm compiles but can never fire, "
+            f"so its recipe is decorative"
+        )
+    return len(JAUNE_DISPATCH_SURFACE), len(JAUNE_DISPATCH_SURFACE)
+
+
+def validate_harness_coverage(
+    root: Path, recipe_ids: Set[str], arms: Set[str]
+) -> Tuple[int, int]:
+    """Enumerate the registry against the suggestions harness.
+
+    Liveness is not reachability. ``validate_trigger_dispatch`` and
+    ``validate_jaune_dispatch`` together establish that every name an arm
+    compares against exists; neither says a goal ever presents that name where
+    the arm looks for it, and an arm that no goal can reach is exactly as
+    decorative as one that compares against a departed name.
+
+    Reachability is not decidable from the registry and ``Blanc/Tactics.lean``.
+    The dispatcher's ``head`` is computed from a goal expression at tactic time,
+    and neither file contains a goal; the question is a property of the corpus of
+    statements authors write, including ones not yet written, so no amount of
+    reading these two files answers it. Even the elaborator answers only the
+    bounded form of the question -- does this trigger match *this* goal -- which
+    is precisely what ``scripts/ProofRecipeSuggestions.lean`` asks it, once per
+    case, under ``scripts/check.sh``.
+
+    So the evidence that a trigger can fire is an exhibited goal, and this check
+    is an enumeration rather than an analysis:
+
+    * every registered recipe has a harness case or is named in
+      ``UNWITNESSED_RECIPES``, both directions checked, so the next recipe added
+      without one fails instead of joining the grandfathered list silently;
+    * every ``-- EXPECT:`` id names a registered recipe, so a renamed recipe
+      cannot leave a comment pointing at nothing;
+    * every trigger string in the harness names a real arm. A misspelled
+      ``expect_no_recipe_trigger`` is the sharpest case: the dispatcher's
+      fail-closed wildcard returns ``false`` for an unknown trigger, so the
+      negative control passes by construction and stops testing anything; and
+    * the triggers with a positive ``expect_recipe_trigger`` case -- the only
+      machine-checked reachability evidence in the repository -- are pinned by
+      name, so one cannot be lost while another is gained.
+
+    Returns ``(recipes with a harness case, triggers with a reachability witness)``.
+    """
+    path = root / SUGGESTIONS_PATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RecipeError(f"cannot read {SUGGESTIONS_PATH}: {error}") from error
+    expected_ids = set(EXPECT_COMMENT_RE.findall(text))
+    if not expected_ids:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: no `-- EXPECT: <recipe id>` case at all — the "
+            f"registry/harness enumeration has been reworded out of this check's "
+            f"sight"
+        )
+    orphans = sorted(expected_ids - recipe_ids)
+    if orphans:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: `-- EXPECT:` names {orphans}, which "
+            f"{REGISTRY_PATH} does not register"
+        )
+    uncovered = recipe_ids - expected_ids
+    unexplained = sorted(uncovered - set(UNWITNESSED_RECIPES))
+    if unexplained:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: recipes {unexplained} have no case, so nothing "
+            f"shows their triggers can fire on a real goal — add a case, or add "
+            f"each to UNWITNESSED_RECIPES with what a case would have to exhibit"
+        )
+    stale = sorted(set(UNWITNESSED_RECIPES) - uncovered)
+    if stale:
+        raise RecipeError(
+            f"UNWITNESSED_RECIPES lists {stale}, which now has a harness case or is "
+            f"no longer registered — remove the listing so the enumeration keeps "
+            f"naming exactly the uncovered recipes"
+        )
+    positive = set(EXPECT_TRIGGER_RE.findall(text))
+    negative = set(EXPECT_NO_TRIGGER_RE.findall(text))
+    if not positive:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: no positive expect_recipe_trigger case — nothing "
+            f"in the repository witnesses that any trigger fires on a real goal"
+        )
+    unknown = sorted((positive | negative) - arms)
+    if unknown:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: {unknown} is not an arm of "
+            f"proofRecipeTriggerMatches — the dispatcher's fail-closed wildcard "
+            f"returns false for it, so a negative control on it passes over nothing "
+            f"and a positive one can never pass"
+        )
+    gained = sorted(positive - REACHABILITY_WITNESSED_TRIGGERS)
+    lost = sorted(REACHABILITY_WITNESSED_TRIGGERS - positive)
+    if gained or lost:
+        raise RecipeError(
+            f"{SUGGESTIONS_PATH}: the reachability-witness population drifted: "
+            f"{gained} gained a positive expect_recipe_trigger case and is not "
+            f"listed; {lost} is listed but no longer has one — update "
+            f"REACHABILITY_WITNESSED_TRIGGERS so a lost witness cannot be masked by "
+            f"an unrelated new one"
+        )
+    return len(expected_ids), len(positive)
+
+
 def validate_symbol(
     symbol: str,
     where: str,
@@ -834,10 +1396,18 @@ def load_and_validate(root: Path) -> Registry:
     declarations, per_file = declaration_inventory(root)
     tactics = tactic_inventory(root)
     supported_triggers = proof_recipe_trigger_inventory(root)
+    helpers = proof_recipe_helper_bodies(root)
     validate_trigger_dispatch(
         supported_triggers,
         declarations | constructor_inventory(root),
-        proof_recipe_helper_bodies(root),
+        helpers,
+    )
+    jaune_surface, jaune_resolved = validate_jaune_dispatch(
+        {
+            trigger: arm_dispatch_closure(arm, helpers)
+            for trigger, arm in supported_triggers.items()
+        },
+        root,
     )
     seen_ids: Set[str] = set()
     recipes: List[Recipe] = []
@@ -924,7 +1494,15 @@ def load_and_validate(root: Path) -> Registry:
                 review_date=review_date,
             )
         )
-    return Registry(1, top["generated_notice"], tuple(recipes))
+    witnessed_recipes, witnessed_triggers = validate_harness_coverage(
+        root, seen_ids, set(supported_triggers)
+    )
+    return Registry(
+        1,
+        top["generated_notice"],
+        tuple(recipes),
+        (jaune_surface, jaune_resolved, witnessed_recipes, witnessed_triggers),
+    )
 
 
 def markdown_link(path: str) -> str:
@@ -1076,10 +1654,77 @@ def make_self_test_root(root: Path, target: Path) -> None:
     (target / "scripts").mkdir(parents=True)
     (target / "docs").mkdir()
     shutil.copy2(root / REGISTRY_PATH, target / REGISTRY_PATH)
+    shutil.copy2(root / SUGGESTIONS_PATH, target / SUGGESTIONS_PATH)
+    shutil.copy2(root / MANIFEST_PATH, target / MANIFEST_PATH)
+    shutil.copy2(root / LAKEFILE_PATH, target / LAKEFILE_PATH)
     shutil.copytree(root / "Blanc", target / "Blanc")
     aggregate = next((path for path in sources if path.name == "Blanc.lean"), None)
     if aggregate is not None:
         shutil.copy2(aggregate, target / "Blanc.lean")
+    make_self_test_jaune_package(target)
+
+
+# The self-test's stand-in for the pinned Lake dependency. It is built from
+# ``JAUNE_DISPATCH_SURFACE`` so the fixture cannot fall behind the surface it
+# exists to resolve, and the three shapes that the real Jaune uses and Blanc's
+# own sources do not -- a ``mutual`` block, a French-quoted structure field, and
+# a projection that is a field rather than a ``def`` -- are written out
+# explicitly, so the parser features are controlled rather than assumed.
+SELF_TEST_JAUNE_STRUCTURES: Dict[str, Tuple[str, ...]] = {
+    "Jaune.Devm": ("mach", "meta", "world"),
+}
+SELF_TEST_JAUNE_INDUCTIVES: Dict[str, Tuple[str, ...]] = {
+    "Jaune.ExceptionalHalt": ("stackOverflow", "stackUnderflow"),
+    "Jaune.Linst": ("return_", "revert"),
+}
+
+
+def self_test_jaune_source(surface: Iterable[str]) -> str:
+    remaining = set(surface)
+    lines = ["namespace Jaune", ""]
+    for owner, fields in sorted(SELF_TEST_JAUNE_STRUCTURES.items()):
+        local = owner.split(".", 1)[1]
+        lines.append(f"structure {local} : Type where")
+        for field in fields:
+            quoted = f"«{field}»" if field == "meta" else field
+            lines.append(f"  {quoted} : Nat")
+            remaining.discard(f"{owner}.{field}")
+        remaining.discard(owner)
+        lines.append("")
+    for owner, constructors in sorted(SELF_TEST_JAUNE_INDUCTIVES.items()):
+        local = owner.split(".", 1)[1]
+        lines.append(f"inductive {local} : Type where")
+        for constructor in constructors:
+            lines.append(f"  | {constructor}")
+            remaining.discard(f"{owner}.{constructor}")
+        remaining.discard(owner)
+        lines.append("")
+    projections = sorted(name for name in remaining if name.startswith("Jaune.Devm."))
+    others = sorted(remaining - set(projections))
+    lines.append("mutual")
+    for name in projections:
+        lines.append(f"def {name.split('.', 1)[1]} (devm : Devm) : Nat := 0")
+    lines.append("end")
+    lines.append("")
+    for name in others:
+        lines.append(f"def {name.split('.', 1)[1]} : Nat := 0")
+    lines.extend(["", "end Jaune", ""])
+    return "\n".join(lines)
+
+
+def make_self_test_jaune_package(target: Path) -> None:
+    package = target.joinpath(*JAUNE_PACKAGE_PARTS)
+    (package / JAUNE_LIBRARY_DIR).mkdir(parents=True)
+    (package / ".git").mkdir()
+    (package / ".git" / "HEAD").write_text(
+        f"{JAUNE_DISPATCH_PIN}\n", encoding="utf-8"
+    )
+    (package / JAUNE_LIBRARY_AGGREGATE).write_text(
+        "import Jaune.Surface\n", encoding="utf-8"
+    )
+    (package / JAUNE_LIBRARY_DIR / "Surface.lean").write_text(
+        self_test_jaune_source(JAUNE_DISPATCH_SURFACE), encoding="utf-8"
+    )
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -1278,6 +1923,166 @@ def self_test(root: Path) -> None:
         )
         if load_and_validate(test_root) is None:
             raise RecipeError("self-test: trigger-dispatch restoration failed")
+
+        package_root = test_root.joinpath(*JAUNE_PACKAGE_PARTS)
+        files = {
+            "harness": test_root / SUGGESTIONS_PATH,
+            "manifest": test_root / MANIFEST_PATH,
+            "lakefile": test_root / LAKEFILE_PATH,
+            "tactics": tactics_path,
+            "jaune-source": package_root / JAUNE_LIBRARY_DIR / "Surface.lean",
+            "jaune-head": package_root / ".git" / "HEAD",
+        }
+        originals = {
+            name: path.read_text(encoding="utf-8") for name, path in files.items()
+        }
+
+        def rejected_files(
+            label: str, mutations: Dict[str, str], expected: str
+        ) -> None:
+            """Reject a tree mutated across one or more of ``files``."""
+            nonlocal controls
+            for name, mutated in mutations.items():
+                if mutated == originals[name]:
+                    raise RecipeError(
+                        f"self-test setup {label}: {name} mutation changed nothing"
+                    )
+                files[name].write_text(mutated, encoding="utf-8")
+            try:
+                load_and_validate(test_root)
+            except RecipeError as exc:
+                if expected not in str(exc):
+                    raise RecipeError(
+                        f"self-test {label}: expected {expected!r}, got {str(exc)!r}"
+                    ) from exc
+            else:
+                raise RecipeError(f"self-test {label}: mutated tree passed")
+            finally:
+                for name in mutations:
+                    files[name].write_text(originals[name], encoding="utf-8")
+            controls += 1
+
+        moved_pin = "f" * 40
+
+        # The Jaune half of the dispatch. A listed name no arm compares against
+        # any more, and a name compared against that no listing covers, are two
+        # different drifts and both have to fail: the surface is only evidence
+        # while it names exactly what the arms dispatch on.
+        rejected_files(
+            "jaune-surface-name-departed",
+            {"tactics": replace_once(
+                originals["tactics"],
+                "`Jaune.List.sliceD",
+                "`Jaune.List.renamedSliceD",
+                "jaune-surface-name-departed",
+            )},
+            "no arm dispatches on",
+        )
+        rejected_files(
+            "jaune-surface-name-unlisted",
+            {"tactics": replace_once(
+                originals["tactics"],
+                "return proofRecipeContainsName `Jaune.List.sliceD target",
+                "return proofRecipeContainsName `Jaune.List.sliceD target ||\n"
+                "        proofRecipeContainsName `Jaune.List.unlistedSliceD target",
+                "jaune-surface-name-unlisted",
+            )},
+            "is dispatched on but unlisted",
+        )
+        # The pin bump is the event that kills these arms, and it is the one
+        # moment the check can bite with no dependency materialized at all.
+        rejected_files(
+            "jaune-pin-moved",
+            {
+                "manifest": originals["manifest"].replace(
+                    JAUNE_DISPATCH_PIN, moved_pin
+                ),
+                "lakefile": originals["lakefile"].replace(
+                    JAUNE_DISPATCH_PIN, moved_pin
+                ),
+            },
+            "the Jaune pin moved to",
+        )
+        rejected_files(
+            "jaune-pin-disagreement",
+            {"manifest": originals["manifest"].replace(JAUNE_DISPATCH_PIN, moved_pin)},
+            f"requires {JAUNE_DISPATCH_PIN}",
+        )
+        # ... and when the dependency is materialized, the arm that compares
+        # against a name the pinned Jaune no longer declares is the original
+        # failure, now reachable across the pin.
+        rejected_files(
+            "jaune-dead-dispatch",
+            {"jaune-source": replace_once(
+                originals["jaune-source"],
+                "def Devm.setStorVal (devm : Devm) : Nat := 0\n",
+                "",
+                "jaune-dead-dispatch",
+            )},
+            "can never fire",
+        )
+        rejected_files(
+            "jaune-package-rev-mismatch",
+            {"jaune-head": f"{moved_pin}\n"},
+            "censusing it would verify the dispatch surface",
+        )
+
+        # Liveness is not reachability: the registry/harness enumeration.
+        rejected_files(
+            "unwitnessed-recipe-unlisted",
+            {"harness": replace_once(
+                originals["harness"],
+                "-- EXPECT: full-length-slice\n",
+                "",
+                "unwitnessed-recipe-unlisted",
+            )},
+            "have no case, so nothing shows their triggers can fire",
+        )
+        rejected_files(
+            "stale-unwitnessed-listing",
+            {"harness": replace_once(
+                originals["harness"],
+                "-- EXPECT: full-length-slice\n",
+                "-- EXPECT: full-length-slice\n-- EXPECT: constant-error-guard\n",
+                "stale-unwitnessed-listing",
+            )},
+            "now has a harness case or is no longer registered",
+        )
+        rejected_files(
+            "orphan-expect-comment",
+            {"harness": replace_once(
+                originals["harness"],
+                "-- EXPECT: memory-window-transport\n",
+                "-- EXPECT: departed-recipe\n",
+                "orphan-expect-comment",
+            )},
+            "does not register",
+        )
+        # The sharpest of them: the dispatcher's fail-closed wildcard returns
+        # false for an unknown trigger, so a misspelled negative control passes
+        # by construction and silently stops testing anything.
+        rejected_files(
+            "vacuous-negative-control",
+            {"harness": replace_once(
+                originals["harness"],
+                'expect_no_recipe_trigger "goal-head:MemImage"',
+                'expect_no_recipe_trigger "goal-head:MemImageTypo"',
+                "vacuous-negative-control",
+            )},
+            "is not an arm of",
+        )
+        rejected_files(
+            "reachability-witness-drift",
+            {"harness": replace_once(
+                originals["harness"],
+                'expect_recipe_trigger "goal-head:MemWordAt"',
+                'expect_recipe_trigger "goal-head:MemImage"',
+                "reachability-witness-drift",
+            )},
+            "reachability-witness population drifted",
+        )
+        if load_and_validate(test_root) is None:
+            raise RecipeError("self-test: dispatch/harness restoration failed")
         rejected(
             "missing-tactic",
             replace_once(original, "tactic:func_run", "tactic:no_such_tactic", "missing-tactic"),
@@ -1352,8 +2157,23 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 14:
-        raise RecipeError(f"self-test accounting: expected 14 controls, ran {controls}")
+    if controls != 25:
+        raise RecipeError(f"self-test accounting: expected 25 controls, ran {controls}")
+
+
+def coverage_phrase(registry: Registry) -> str:
+    """Say what the trigger-soundness checks actually covered on this run."""
+    surface, resolved, recipes, triggers = registry.coverage
+    resolution = (
+        f"{resolved}/{surface} resolved against the pinned Jaune"
+        if resolved
+        else f"0/{surface} resolved (pinned Jaune not materialized)"
+    )
+    return (
+        f"Jaune dispatch surface {resolution}; "
+        f"{recipes}/{len(registry.recipes)} recipes exercised by the suggestions "
+        f"harness; {triggers} trigger(s) with a reachability witness"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1378,7 +2198,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         audit_census(Path(__file__).resolve().parents[1])
         if args.self_test:
             self_test(root)
-            print("OK — proof recipes self-test: 14/14 drift, schema, trigger, trigger-dispatch, and symbol controls live")
+            print(
+                "OK — proof recipes self-test: 25/25 drift, schema, trigger, "
+                "trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
+                "controls live"
+            )
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)
@@ -1391,6 +2215,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 write_atomic(path, text)
             print(
                 f"OK — proof recipes: {len(registry.recipes)} recipes validated; "
+                f"{coverage_phrase(registry)}; "
                 "generated Markdown and Lean lookup written"
             )
             return 0
@@ -1402,6 +2227,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         print(
             f"OK — proof recipes: {len(registry.recipes)} recipes validated; "
+            f"{coverage_phrase(registry)}; "
             "generated Markdown and Lean lookup match"
         )
         return 0
