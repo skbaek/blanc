@@ -208,7 +208,7 @@ theorem ConstructorLoopWorld.afterShaWrite
 
 /-- The four constructor memory operations stage the current node twice as the
 exact 64-byte SHA input without changing the loop-height stack word. -/
-private theorem constructorPairStage_storageEffectRun
+private theorem constructorPairWindow_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {height : Nat} {heightWord : B256}
     {stack : List B256} {K : Nat} {rest : Func} {ex : Execution}
@@ -1033,7 +1033,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
           · rfl
         rw [shaState] at shaRun
         exact shaRun
-      have pairRaw := constructorPairStage_storageEffectRun
+      have pairRaw := constructorPairWindow_storageEffectRun
         (base := base) (heightWord := Nat.toB256 height)
         (stack := []) (K := K + 283 + C)
         memoryCarrier (by simp only [List.length_nil]; omega) shaRun'

@@ -1005,7 +1005,7 @@ import is `Blanc.Ladder`.
   `MemWordAt.applyStage` with one checked window guard, or
   `MemoryStage.wordFrameFrom` when every write ends below a suffix boundary.
 
-`constructorPairStage_storageEffectRun` in
+`constructorPairWindow_storageEffectRun` in
 `Blanc/BeaconDepositConstructorStorageEffects.lean` is the scratch-layout
 example: it carries the node window `[64,96)` across the disjoint constructor
 write `[0,32)`, then deliberately stops carrying it before SHA output
