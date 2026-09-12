@@ -831,7 +831,12 @@ def commit_state(
 # concurrent publishers are serialized and an interrupted write resolves to
 # old-or-new via atomic replace.  No other caller may touch this store.
 SHARED_EVIDENCE_DIRNAME = "blanc-elab-evidence"
-SHARED_EVIDENCE_FILENAME = "evidence.json"
+# The legacy filename is bound to hostname-derived identities. Keep it intact
+# and start a disjoint store for stable host identities: old clients continue
+# to see only their legacy file, while stable clients neither trust nor replace
+# evidence whose machine provenance cannot be reconstructed independently.
+LEGACY_SHARED_EVIDENCE_FILENAME = "evidence.json"
+SHARED_EVIDENCE_FILENAME_PREFIX = "evidence-stable-host-v2"
 SHARED_EVIDENCE_SCHEMA = 1
 SHARED_TRUST_DOMAIN = "same-git-common-directory"
 SHARED_MAX_ENVS = 4
@@ -901,8 +906,8 @@ def shared_git_common_dir(root: Path) -> Path:
 
 
 def shared_store_path(root: Path) -> Path:
-    return (
-        shared_git_common_dir(root) / SHARED_EVIDENCE_DIRNAME / SHARED_EVIDENCE_FILENAME
+    return shared_git_common_dir(root) / SHARED_EVIDENCE_DIRNAME / (
+        f"{SHARED_EVIDENCE_FILENAME_PREFIX}-{load_shared_host_identity()}.json"
     )
 
 
@@ -1927,6 +1932,48 @@ exit "${FAKE_LAKE_RC-0}"
         _, reason, writable = read_shared_store(store_file, host)
         assert reason is not None and "incompatible" in reason and not writable
         controls += 1  # an unknown same-host schema is preserved, not replaced
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-transition-") as directory:
+        root = git_tree(directory)
+        host = load_shared_host_identity()
+        stable_file = shared_store_path(root)
+        legacy_file = stable_file.with_name(LEGACY_SHARED_EVIDENCE_FILENAME)
+        assert stable_file.name == f"evidence-stable-host-v2-{host}.json"
+        assert legacy_file != stable_file
+
+        legacy = empty_shared_store("legacy-hostname-derived-identity")
+        legacy["measurements"] = {
+            "legacy-env": {
+                "legacy-fp": {"time": "9.0", "commit": "old", "utc": "old"}
+            }
+        }
+        atomic_json(legacy_file, legacy)
+        legacy_before = legacy_file.read_bytes()
+
+        state_path = root / ".lake/check-elab-state.json"
+        plan = make_plan(root, state_path, "Lean test")
+        assert plan["affected"] == plan["files"]
+        plan_path = root / "plan.json"
+        report_path = root / "report.tsv"
+        write_plan(plan_path, plan)
+        write_rows(report_path, fake_rows(plan))
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(plan=plan_path, report=report_path, exclude_file=None),
+        )
+        assert code == 0 and "measurement(s) recorded" in out
+        assert stable_file.is_file()
+        assert legacy_file.read_bytes() == legacy_before
+        stable_before = stable_file.read_bytes()
+        controls += 1  # a foreign legacy store cannot block or be changed by stable publication
+
+        # An old client still writes only the legacy filename. Its replacement
+        # cannot reach the disjoint stable-host evidence bytes.
+        legacy["measurements"]["legacy-env"]["legacy-fp"]["time"] = "10.0"
+        atomic_json(legacy_file, legacy)
+        assert legacy_file.read_bytes() != legacy_before
+        assert stable_file.read_bytes() == stable_before
+        controls += 1  # an old writer cannot overwrite the stable-host store
 
     with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-base-") as directory:
         root = git_tree(directory)
