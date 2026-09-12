@@ -60,6 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import importlib.util
 import gate_sampling as gs
 import gate_semaphore
+import gate_cache_host_identity as host_id
 import worktree_seed as ws
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -78,6 +79,42 @@ class ControlFailure(AssertionError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ControlFailure(message)
+
+
+class HostReader:
+    """Injectable OS boundary for stable-identity controls, never production."""
+
+    def __init__(
+        self,
+        system: str,
+        machine: str,
+        *,
+        mac_uuid: str | None = None,
+        linux_ids: dict[str, str] | None = None,
+        node: str = "unused.invalid",
+    ) -> None:
+        self._system = system
+        self._machine = machine
+        self.mac_uuid = mac_uuid
+        self.linux_ids = linux_ids or {}
+        self.node = node
+
+    def system(self) -> str:
+        return self._system
+
+    def machine(self) -> str:
+        return self._machine
+
+    def read_text(self, path: Path) -> str:
+        try:
+            return self.linux_ids[str(path)]
+        except KeyError as error:
+            raise FileNotFoundError(path) from error
+
+    def run(self, command: tuple[str, ...]) -> str:
+        if self.mac_uuid is None:
+            raise host_id.HostIdentityError("stable macOS machine identity is unavailable")
+        return f'    "IOPlatformUUID" = "{self.mac_uuid}"\n'
 
 
 # --- the coordination environment -------------------------------------------
@@ -441,6 +478,127 @@ def prepare_build_state(s: Scratch) -> Path:
 
 
 # --- controls: the reuse decision itself ------------------------------------
+
+
+def control_stable_host_identity_survives_node_renames() -> None:
+    token = "12345678-1234-5678-9abc-def012345678"
+    before = HostReader("Darwin", "arm64", mac_uuid=token, node="signe.lan")
+    after = HostReader("Darwin", "arm64", mac_uuid=token, node="signe-2.local")
+    first = host_id._derive_host_identity(before)
+    second = host_id._derive_host_identity(after)
+    require(first == second, "a Bonjour-style node rename must preserve host identity")
+    require(first.startswith("darwin-arm64-v2-"), "the stable identity must be versioned")
+    require(token not in first and before.node not in first and after.node not in first,
+            "neither a raw device token nor either hostname may leave the derivation")
+
+
+def control_stable_host_identity_separates_distinct_machine_tokens() -> None:
+    first = host_id._derive_host_identity(HostReader(
+        "Darwin", "arm64", mac_uuid="12345678-1234-5678-9abc-def012345678"
+    ))
+    second = host_id._derive_host_identity(HostReader(
+        "Darwin", "arm64", mac_uuid="87654321-4321-8765-cba9-876543210fed"
+    ))
+    require(first != second, "different stable machine tokens must not share evidence")
+    linux = host_id._derive_host_identity(HostReader(
+        "Linux", "x86_64", linux_ids={
+            "/etc/machine-id": "0123456789abcdef0123456789abcdef\n",
+            "/var/lib/dbus/machine-id": "0123456789abcdef0123456789abcdef\n",
+        }
+    ))
+    require(linux.startswith("linux-x86_64-v2-"), "Linux machine-id must be supported")
+    require("0123456789abcdef" not in linux, "raw Linux machine-id must not be published")
+
+
+def control_stable_host_identity_fails_closed_on_unknown_or_ambiguous_sources() -> None:
+    readers = (
+        HostReader("Plan9", "mips"),
+        HostReader("Darwin", "arm64", mac_uuid="not-a-uuid"),
+        HostReader("Linux", "x86_64"),
+        HostReader("Linux", "x86_64", linux_ids={
+            "/etc/machine-id": "0123456789abcdef0123456789abcdef",
+            "/var/lib/dbus/machine-id": "fedcba9876543210fedcba9876543210",
+        }),
+    )
+    for reader in readers:
+        try:
+            host_id._derive_host_identity(reader)
+        except host_id.HostIdentityError:
+            continue
+        raise ControlFailure("unknown, malformed, missing, or disagreeing identity was accepted")
+
+
+def control_production_host_identity_has_no_override_and_ignores_platform_node() -> None:
+    import inspect
+
+    signature = inspect.signature(gc.host_identity)
+    require(not signature.parameters, "production host identity must accept no caller override")
+    source = inspect.getsource(gc.host_identity)
+    require("platform.node" not in source and "stable_host_identity" in source,
+            "the gate authority must use the stable helper, never the network hostname")
+
+
+def control_legacy_host_store_requires_reverification_and_stays_untouched() -> None:
+    old_host = "darwin-arm64-52f1c380770b75d0"
+    new_host = "darwin-arm64-v2-1111222233334444"
+    with scratch() as s, patched(gc, "host_identity", lambda: new_host):
+        s.write("Blanc/A.lean", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command], {"populations": [{"root": "Blanc", "pattern": "*.lean"}]},
+            "^OK — g.sh: ")])
+        s.git_init()
+        legacy = gc.empty_cache()
+        legacy["schema"] = 2
+        legacy["host"] = old_host
+        legacy_bytes = (json.dumps(legacy, sort_keys=True) + "\n").encode()
+        legacy_path = gc.legacy_cache_path(s.root)
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_bytes(legacy_bytes)
+
+        cache, warning = gc.read_active_cache(s.root)
+        require(not cache["gates"], "legacy hostname evidence must never be imported as credit")
+        expected = gc.host_mismatch_warning(old_host, new_host)
+        require(warning == expected and old_host in warning and new_host in warning,
+                "the transition warning must name both hashed identities and remediation")
+
+        args = type("A", (), {"fresh": False, "explain": False})()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            require(gc.show_plan(s.root, args) == 0, "legacy transition plan should succeed")
+        require(expected in out.getvalue(), "--plan must print the loud transition warning verbatim")
+
+        require(s.run() == 0, f"fresh re-verification should establish new evidence:\n{s.output}")
+        require(expected in s.output, "the run transcript must print the loud warning verbatim")
+        require(s.ran("ran.txt") == 1, "legacy evidence must cause one fresh body execution")
+        require(legacy_path.read_bytes() == legacy_bytes, "fresh transition must preserve legacy bytes")
+        stable_bytes = gc.cache_path(s.root).read_bytes()
+        require(gc.read_active_cache(s.root)[1] is None,
+                "newly re-verified stable evidence must read without a warning")
+
+        # Simulate an old checkout replacing only its legacy store.  The
+        # identity-specific stable store must remain byte-identical.
+        legacy_path.write_text('{"old_writer":true}\n', encoding="utf-8")
+        require(gc.cache_path(s.root).read_bytes() == stable_bytes,
+                "an old writer must not overwrite the stable-identity store")
+
+
+def control_tampered_or_downgraded_stable_store_never_matches() -> None:
+    current = "darwin-arm64-v2-1111222233334444"
+    with scratch() as s, patched(gc, "host_identity", lambda: current):
+        stable = gc.empty_cache()
+        stable["host"] = "darwin-arm64-v2-9999000011112222"
+        gc.atomic_json(gc.cache_path(s.root), stable)
+        loaded, warning = gc.read_active_cache(s.root)
+        require(not loaded["gates"] and warning == gc.host_mismatch_warning(stable["host"], current),
+                "hand-editing a stable host field must be refused loudly")
+
+        stable["host"] = current
+        stable["schema"] = 2
+        gc.atomic_json(gc.cache_path(s.root), stable)
+        loaded, reason = gc.read_active_cache(s.root)
+        require(not loaded["gates"] and reason == "cache schema is missing or incompatible",
+                "a downgraded schema must fail closed")
 
 
 def control_first_run_executes_and_second_reuses() -> None:
@@ -2107,7 +2265,7 @@ def control_worktree_seed_previews_then_publishes_isolated_exact_state() -> None
             require(not (target / ".lake").exists(), "preview must not create target state")
             result = ws.seed(source, target, Path("/unused"), True, copier=copy)
         require(result["status"] == "OK", "exact staged state should publish")
-        require((target / ".lake/blanc-build-certificate.json").is_file(),
+        require((target / gc.BUILD_CERTIFICATE_RELATIVE).is_file(),
                 "the exact build certificate must be copied")
         require((target / ".lake/blanc-seed-receipt.json").is_file(),
                 "the target must record copy provenance")
@@ -2674,11 +2832,11 @@ def control_other_physical_clone_never_inherits_shared_records() -> None:
 def control_foreign_host_store_never_yields_reuse() -> None:
     with scratch() as s:
         cache = gc.empty_cache()
-        cache["host"] = "foreign-host"
+        cache["host"] = "darwin-arm64-v2-9999000011112222"
         gc.atomic_json(gc.cache_path(s.root), cache)
         loaded, reason = s.cache()
-        require(reason == "cache belongs to a different host identity",
-                "a foreign host store must be refused explicitly")
+        require(reason == gc.host_mismatch_warning(cache["host"], gc.host_identity()),
+                "a foreign host store must be refused with both hashed identities")
         require(not loaded["gates"], "a foreign host store must become empty work")
 
 
@@ -3095,6 +3253,20 @@ def control_negative_laundering_unknown_into_unchanged() -> None:
         must_fail(control_malformed_trace_forces_execution, "malformed trace laundered")
 
 
+def control_negative_reverting_to_hostname_identity_breaks_rename_stability() -> None:
+    """Reverting only the derivation to the old node hash must fail E0/E5."""
+
+    def old_hostname_identity(reader: HostReader) -> str:
+        digest = gc.sha256_bytes(reader.node.encode("utf-8"))[:16]
+        return f"{reader.system().lower()}-{reader.machine().lower()}-{digest}"
+
+    with patched(host_id, "_derive_host_identity", old_hostname_identity):
+        must_fail(
+            control_stable_host_identity_survives_node_renames,
+            "the hostname derivation returned without breaking rename stability",
+        )
+
+
 def control_negative_dropping_the_post_execution_drift_check() -> None:
     """Without the recompute-after-execution step, a gate that edits its own
     declared inputs while running would have its verdict cached against the
@@ -3436,6 +3608,7 @@ def control_campaign_sampling_is_deterministic_and_fail_closed() -> None:
 
 
 NEGATIVE_CONTROLS = (
+    control_negative_reverting_to_hostname_identity_breaks_rename_stability,
     control_negative_laundering_unknown_into_unchanged,
     control_negative_dropping_the_post_execution_drift_check,
     control_negative_caching_a_failed_run,
@@ -3454,6 +3627,12 @@ NEGATIVE_CONTROLS = (
 )
 
 CONTROLS = (
+    control_stable_host_identity_survives_node_renames,
+    control_stable_host_identity_separates_distinct_machine_tokens,
+    control_stable_host_identity_fails_closed_on_unknown_or_ambiguous_sources,
+    control_production_host_identity_has_no_override_and_ignores_platform_node,
+    control_legacy_host_store_requires_reverification_and_stays_untouched,
+    control_tampered_or_downgraded_stable_store_never_matches,
     control_first_run_executes_and_second_reuses,
     control_content_change_invalidates,
     control_population_membership_invalidates,

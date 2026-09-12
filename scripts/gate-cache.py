@@ -69,7 +69,6 @@ import fnmatch
 import hashlib
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -82,6 +81,7 @@ from typing import Any, Iterable
 import gate_semaphore
 
 from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
+from gate_cache_host_identity import HostIdentityError, stable_host_identity
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
     T8nPythonBaseError,
@@ -89,7 +89,7 @@ from gate_cache_t8n_root import (
 )
 
 SCHEMA_VERSION = 1
-EVIDENCE_SCHEMA_VERSION = 2
+EVIDENCE_SCHEMA_VERSION = 3
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -99,9 +99,11 @@ ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_RELATIVE = "scripts/gate-registry.json"
 REPORT_RELATIVE = ".lake/gate-report.md"
 MANIFEST_RELATIVE = ".lake/gate-manifest.json"
-BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate.json"
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
-BUILD_CERTIFICATE_SCHEMA = 2
+EVIDENCE_FILENAME_PREFIX = "evidence-v3-"
+LEGACY_EVIDENCE_FILENAME = "evidence.json"
+BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate-v3.json"
+BUILD_CERTIFICATE_SCHEMA = 3
 
 
 def registry_path(root: Path) -> Path:
@@ -140,7 +142,11 @@ def shared_state_path(root: Path) -> Path:
 
 
 def cache_path(root: Path) -> Path:
-    return shared_state_path(root) / "evidence.json"
+    return shared_state_path(root) / f"{EVIDENCE_FILENAME_PREFIX}{host_identity()}.json"
+
+
+def legacy_cache_path(root: Path) -> Path:
+    return shared_state_path(root) / LEGACY_EVIDENCE_FILENAME
 
 
 def report_path(root: Path) -> Path:
@@ -152,7 +158,7 @@ def manifest_path(root: Path) -> Path:
 
 
 def build_certificate_path(root: Path, lake_root: Path | None = None) -> Path:
-    return (lake_root or root / ".lake") / "blanc-build-certificate.json"
+    return (lake_root or root / ".lake") / Path(BUILD_CERTIFICATE_RELATIVE).name
 
 
 def lock_path(root: Path) -> Path:
@@ -610,6 +616,7 @@ def command_text(gate: dict[str, Any]) -> str:
 
 RUNNER_SOUNDNESS_SOURCE = "gate-cache.py"
 RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
+RUNNER_HOST_IDENTITY_SOURCE = "gate_cache_host_identity.py"
 
 # Top-level authorities whose semantics can change whether an earlier verdict
 # is valid for a candidate.  The AST digest deliberately excludes comments,
@@ -620,9 +627,11 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
     "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
     "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
-    "SHARED_STATE_RELATIVE", "BUILD_CERTIFICATE_RELATIVE",
+    "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
+    "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE",
     "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable",
-    "git_common_dir", "shared_state_path", "cache_path", "build_certificate_path",
+    "git_common_dir", "shared_state_path", "cache_path", "legacy_cache_path",
+    "build_certificate_path",
     "sha256_bytes",
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
     "load_registry", "_input_strings", "_validate_oracle_lanes",
@@ -631,7 +640,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "component_populations", "trace_path_for", "module_dep_hash",
     "component_lean_modules", "imports_of", "component_lean_entries", "git_output",
     "component_git_refs", "component_external", "component_env", "component_tools",
-    "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache", "lookup",
+    "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache",
+    "_safe_host_label", "host_mismatch_warning", "read_active_cache", "lookup",
     "store", "prune_details", "tree_identity", "plan", "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
     "read_build_certificate", "write_build_certificate",
@@ -658,7 +668,7 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     absent: it serializes writes but cannot make evidence reusable.
     """
 
-    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness"]
+    sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness", RUNNER_HOST_IDENTITY_SOURCE]
     if gate_uses_t8n_resolver(gate):
         sources.append(RUNNER_T8N_SOURCE)
     return tuple(sources)
@@ -692,7 +702,9 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
     here = Path(__file__).resolve().parent
     detail = {
         f"scripts/{RUNNER_SOUNDNESS_SOURCE}#soundness":
-            semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE)
+            semantic_authority_digest(here / RUNNER_SOUNDNESS_SOURCE),
+        f"scripts/{RUNNER_HOST_IDENTITY_SOURCE}":
+            file_digest(here / RUNNER_HOST_IDENTITY_SOURCE),
     }
     if gate_uses_t8n_resolver(gate):
         detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
@@ -1222,13 +1234,12 @@ def fingerprint(root: Path, gate: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 def host_identity() -> str:
-    system = platform.system().lower()
-    machine = platform.machine().lower()
-    # The readable platform prefix makes diagnostics useful; the hashed node
-    # component prevents a shared/NFS common directory from laundering local
-    # evidence between two hosts without publishing the hostname itself.
-    node = sha256_bytes(platform.node().encode("utf-8"))[:16]
-    return f"{system}-{machine}-{node}"
+    """Stable OS installation binding with no production override."""
+
+    try:
+        return stable_host_identity()
+    except HostIdentityError as error:
+        raise Unresolvable(str(error)) from error
 
 
 def build_source_identity(
@@ -1406,8 +1417,9 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
         return empty_cache(), "cache schema is missing or incompatible"
     if cache.get("trust_domain") != "same-git-common-directory":
         return empty_cache(), "cache trust domain is missing or incompatible"
-    if cache.get("host") != host_identity():
-        return empty_cache(), "cache belongs to a different host identity"
+    current_host = host_identity()
+    if cache.get("host") != current_host:
+        return empty_cache(), host_mismatch_warning(cache.get("host"), current_host)
     gates = cache.get("gates")
     details = cache.get("details")
     if not isinstance(gates, dict) or not isinstance(details, dict):
@@ -1430,6 +1442,53 @@ def read_cache(path: Path) -> tuple[dict[str, Any], str | None]:
             if not isinstance(record.get("provenance"), dict):
                 return empty_cache(), "cache record has no provenance"
     return cache, None
+
+
+def _safe_host_label(value: Any) -> str:
+    """Render only the public hashed identity grammar, never arbitrary store bytes."""
+
+    if not isinstance(value, str):
+        return "<missing>"
+    if re.fullmatch(r"(?:darwin|linux)-[a-z0-9_.-]+-(?:v[0-9]+-)?[0-9a-f]{16}", value):
+        return value
+    return "<unrecognized>"
+
+
+def host_mismatch_warning(stored: Any, current: str) -> str:
+    return (
+        "WARNING — gate evidence host mismatch: "
+        f"stored {_safe_host_label(stored)} != current {_safe_host_label(current)}; "
+        "preserve the store. Remediation: run scripts/check-gates.sh for fresh "
+        "re-verification, or use a verified migration only when retained provenance "
+        "independently binds both identities to this machine; never edit or re-key records"
+    )
+
+
+def read_active_cache(root: Path) -> tuple[dict[str, Any], str | None]:
+    """Read this stable identity's store without overwriting legacy/foreign bytes."""
+
+    active = cache_path(root)
+    if active.is_file():
+        return read_cache(active)
+
+    state = shared_state_path(root)
+    candidates = [legacy_cache_path(root)]
+    if state.is_dir():
+        candidates.extend(
+            path
+            for path in sorted(state.glob(f"{EVIDENCE_FILENAME_PREFIX}*.json"))
+            if path != active
+        )
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            prior = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            prior = None
+        stored = prior.get("host") if isinstance(prior, dict) else None
+        return empty_cache(), host_mismatch_warning(stored, host_identity())
+    return empty_cache(), "no prior cache"
 
 
 def lookup(cache: dict[str, Any], identifier: str, print_: str) -> dict[str, Any] | None:
@@ -1675,7 +1734,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         return 2
 
     registry = load_registry(registry_path(root))
-    cache, cache_reason = read_cache(cache_path(root))
+    cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"check-gates: {cache_reason}; every gate will execute", file=sys.stderr)
 
@@ -2180,7 +2239,7 @@ def audit(root: Path, quiet: bool = False) -> int:
 
 def show_plan(root: Path, arguments: argparse.Namespace) -> int:
     registry = load_registry(registry_path(root))
-    cache, cache_reason = read_cache(cache_path(root))
+    cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"cache: {cache_reason}")
     rows = plan(root, registry, cache, fresh=arguments.fresh)
