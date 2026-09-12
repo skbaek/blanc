@@ -664,39 +664,10 @@ CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne"})
 # them silently. It is checked in both directions: a listed recipe that gains a
 # case, or that leaves the registry, fails.
 UNWITNESSED_RECIPES: Dict[str, str] = {
-    "accepted-boolean-settlement":
-        "needs an Iff goal containing Blanc.AcceptedBoolWord",
-    "binary-dispatch-miss":
-        "shares goal-shape:raw-sstore-free-compiled-path with "
-        "raw-sstore-free-compiled-path; needs a DispatchTree miss goal carrying "
-        "NoRawSstorePath",
-    "call-boundary-outcomes":
-        "needs a Func.ExecSat, Prog.ExecSat or Func.ExecWitness goal head",
-    "constant-error-guard":
-        "needs a Func.RunCompiledTo goal mentioning Func.branch, Func.call and "
-        "errorData together",
-    "line-observation-invariance":
-        "needs a Line.Inv, Ninst.Inv or Rinst.Inv goal head",
-    "raw-sstore-free-compiled-path":
-        "needs a goal naming Func.RunCompiledTo.NoRawSstorePath, "
-        "Exec.NoRawSstore or Ninst.ChildlessRunCompiled",
-    "runcompiled-family-compression":
-        "status partial; its trigger fires on any Func.RunCompiled or "
-        "Func.RunCompiledTo head, so a case has to show the compressed family "
-        "rather than the construction recipe's goal",
-    "state-context-cleanup":
-        "its trigger counts local hypotheses, so a case needs a local context "
-        "with more than two Jaune.Devm hypotheses",
-    "static-store-exclusion":
-        "needs a Func.Run implication premise; the harness exercises "
-        "implication-premise:MemWordAt only",
-    "trace-admitted-frame-invariant":
-        "needs a ContractSpec.PreservesAdmitted goal head",
-    "trace-local-frame-admission":
-        "needs an Exec.FrameAdmitted, ContractSpec.SoundAdmitted or "
-        "ExecutionTrace.*.FrameAdmitted goal",
-    "upgrade-migration-refinement":
-        "needs a MigrationSound or BehavioralRefinement goal head",
+    # Empty: every registered recipe currently has a harness case. The
+    # table stays so the next recipe added without a case fails here
+    # instead of joining a silent gap; list it with what a case would
+    # have to exhibit.
 }
 
 # Triggers whose reachability is *proved*: the harness states a real goal and
@@ -707,19 +678,48 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 # The set is pinned by name rather than counted so that losing a witness and
 # gaining an unrelated one cannot cancel out.
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
+    "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
+    "goal-head:ContractSpec.PreservesAdmitted",
+    "goal-head:Func.ExecSat",
+    "goal-head:Func.Inv",
+    "goal-head:Func.RunCompiled",
+    "goal-head:Func.RunCompiledTo",
+    "goal-head:Line.Inv",
     "goal-head:LinkCertificate",
+    "goal-head:Linst.Inv",
     "goal-head:MemWordAt",
+    "goal-head:MigrationSound",
+    "goal-head:ReturnsWord",
+    "goal-head:StateReplay",
+    "goal-shape:accepted-bool-word",
     "goal-shape:bounded-creation-word-encoder",
     "goal-shape:compile-shape-prepend-congruence",
     "goal-shape:compiled-shape-byte-navigation",
+    "goal-shape:compileshape-bytesize",
+    "goal-shape:constant-error-guard",
+    "goal-shape:devm-common-update-law",
+    "goal-shape:devm-update-projection",
     "goal-shape:exact-retained-storage-effects",
     "goal-shape:fixed-byte-offset",
+    "goal-shape:frame-root-carrying",
+    "goal-shape:full-length-slice",
     "goal-shape:linear-dispatch-selection",
+    "goal-shape:message-execution-settlement",
+    "goal-shape:raw-sstore-free-compiled-path",
+    "goal-shape:retained-wrapper-trace",
+    "goal-shape:retained-write-noninterference",
+    "goal-shape:runcompiled-family-compression",
     "goal-shape:selector-separation",
+    "goal-shape:shared-subject-kernel-decision",
     "goal-shape:stack-prefix-line-run",
+    "goal-shape:successor-projection",
     "goal-shape:symbolic-label-linking",
     "goal-shape:tagged-storage-region-separation",
+    "goal-shape:terminal-return-revert",
+    "goal-shape:trace-local-frame-admission",
+    "implication-premise:Func.Run",
+    "implication-premise:Line.Run",
 })
 
 EXPECT_COMMENT_RE = re.compile(r"^-- EXPECT: ([a-z][a-z0-9]*(?:-[a-z0-9]+)*)\s*$", re.MULTILINE)
