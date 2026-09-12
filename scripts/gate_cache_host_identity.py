@@ -37,11 +37,34 @@ _SUPPORTED_MACHINES = {
         "ppc64le", "riscv64", "s390x", "x86_64",
     }),
 }
-_PUBLIC_IDENTITY = re.compile(
-    r"(?:darwin-(?:arm64|x86_64)|"
-    r"linux-(?:aarch64|amd64|arm64|i386|i486|i586|i686|ppc64le|riscv64|s390x|x86_64))"
-    r"-(?:v[0-9]+-)?[0-9a-f]{16}"
-)
+
+# The grammar an untrusted store label must match before it may be echoed in a
+# diagnostic.  It is *derived* from the supported set the derivation itself
+# uses, because two hand-maintained lists that agree today drift tomorrow and
+# the failure is a legitimate identity rendered `<unrecognized>`; there is only
+# one list.  The version field is bounded rather than open: everything here is
+# attacker-chosen text from a file this process did not write, and an unbounded
+# `v[0-9]+-` let `darwin-arm64-v8005551212-...` through a check whose entire
+# purpose is to bound what may be echoed.
+_IDENTITY_VERSION_DIGITS = 3
+_IDENTITY_DIGEST_HEX = 16
+
+
+def _public_identity_pattern(supported: dict[str, frozenset[str]]) -> re.Pattern[str]:
+    platforms = "|".join(
+        "{}-(?:{})".format(
+            re.escape(system),
+            "|".join(re.escape(machine) for machine in sorted(machines)),
+        )
+        for system, machines in sorted(supported.items())
+    )
+    return re.compile(
+        f"(?:{platforms})"
+        f"-(?:v[0-9]{{1,{_IDENTITY_VERSION_DIGITS}}}-)?[0-9a-f]{{{_IDENTITY_DIGEST_HEX}}}"
+    )
+
+
+_PUBLIC_IDENTITY = _public_identity_pattern(_SUPPORTED_MACHINES)
 
 
 class HostIdentityError(RuntimeError):
@@ -131,6 +154,13 @@ def _derive_host_identity(reader: _HostReader) -> str:
         source, token = _macos_token(reader)
     elif system == "linux":
         source, token = _linux_token(reader)
+    else:
+        # Unreachable while the supported set and the branches above agree.
+        # Adding an architecture family to `_SUPPORTED_MACHINES` without a
+        # token source must refuse identity, not raise `UnboundLocalError`:
+        # a contract whose promise is "unsupported platforms fail closed"
+        # cannot answer an unsupported platform with a crash.
+        raise HostIdentityError(f"stable host identity has no token source on {system}")
     payload = _IDENTITY_DOMAIN + b"\0".join(
         part.encode("utf-8") for part in (system, machine, source, token)
     )

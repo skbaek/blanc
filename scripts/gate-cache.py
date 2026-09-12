@@ -628,6 +628,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
     "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
     "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE",
+    "AUTHORITY_IMPORT_BINDINGS_KEY", "module_scope_imports", "import_binding_map",
     "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable",
     "git_common_dir", "shared_state_path", "cache_path", "legacy_cache_path",
     "build_certificate_path",
@@ -673,6 +674,61 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     return tuple(sources)
 
 
+# The digest below matches top-level nodes by *name*, and an `import` statement
+# has none, so before this existed every module-scope import binding sat outside
+# the authority -- including `from gate_cache_t8n_root import T8N_TARGET_ROOT`,
+# which is what turns a declared `@t8n_target/...` input into the file that
+# actually gets fingerprinted.  Rebinding that one line moved the resolved input
+# root while the digest stood still.  Naming the two bindings that were caught
+# would have left the class open for the next sibling module, so the digest
+# covers the module-scope binding map as a whole: every global name an authority
+# can resolve at call time, and the module and attribute it is bound to.
+#
+# It is the *binding* that is hashed, not the imported module's contents.  An
+# edit inside `gate_cache_lock.py` therefore still moves nothing here, which is
+# the relevance rule GATES.md states; only rebinding the name to a different
+# source moves the digest.  The map is a dict digested through `canonical`,
+# which sorts keys, so reordering the import block is a presentation edit.
+#
+# There is deliberately no exemption list.  Every module-scope import is cheap
+# to hash and an exemption is a hole with a rationale attached; if one ever
+# becomes necessary it belongs here as an explicit, named, justified constant,
+# not as an accident of the walk.
+AUTHORITY_IMPORT_BINDINGS_KEY = "#module-scope-import-bindings"
+
+
+def module_scope_imports(node: ast.AST) -> Iterable[ast.Import | ast.ImportFrom]:
+    """Every import statement that binds a module global.
+
+    Descends through `if`/`try`/`with` blocks, which still bind at module
+    scope, and stops at function and class bodies, whose imports are local and
+    are already carried by the enclosing authority's own AST dump.
+    """
+
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.Import, ast.ImportFrom)):
+            yield child
+        elif not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            yield from module_scope_imports(child)
+
+
+def import_binding_map(tree: ast.Module) -> dict[str, str]:
+    """Global name -> the module and attribute that name is bound to."""
+
+    bindings: dict[str, str] = {}
+    for node in module_scope_imports(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bound = alias.asname or alias.name.partition(".")[0]
+                bindings[bound] = f"import {alias.name}"
+        else:
+            source = "." * node.level + (node.module or "")
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                bindings[bound] = f"from {source} import {alias.name}"
+    return bindings
+
+
 def semantic_authority_digest(path: Path) -> str:
     """Digest only verdict-validity authorities in the runner source."""
 
@@ -694,6 +750,12 @@ def semantic_authority_digest(path: Path) -> str:
     missing = sorted(SOUNDNESS_AUTHORITY_NAMES - set(found))
     if missing:
         raise Unresolvable(f"runner soundness authority is missing: {', '.join(missing)}")
+    bindings = import_binding_map(tree)
+    if not bindings:
+        raise Unresolvable(
+            f"runner soundness authority has no module-scope import bindings: {path}"
+        )
+    found[AUTHORITY_IMPORT_BINDINGS_KEY] = digest_of(bindings)
     return digest_of(found)
 
 
@@ -2397,7 +2459,8 @@ def main(argv: list[str]) -> int:
                 certificate = write_build_certificate(root)
                 print(
                     "OK — lake build certificate: "
-                    f"{certificate['identity'][:16]} on {certificate['host']}"
+                    f"{certificate['identity'][:16]} on "
+                    f"{_safe_host_label(certificate.get('host'))}"
                 )
                 return 0
             return run(root, arguments)

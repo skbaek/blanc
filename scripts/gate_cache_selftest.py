@@ -40,6 +40,7 @@ control suite can rot into a set of assertions that hold vacuously.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import copy
 import datetime as dt
@@ -482,8 +483,11 @@ def prepare_build_state(s: Scratch) -> Path:
 
 def control_stable_host_identity_survives_node_renames() -> None:
     token = "12345678-1234-5678-9abc-def012345678"
-    before = HostReader("Darwin", "arm64", mac_uuid=token, node="signe.lan")
-    after = HostReader("Darwin", "arm64", mac_uuid=token, node="signe-2.local")
+    # Synthetic names.  The derivation never reads `reader.node`, so any two
+    # distinct strings exercise the identical control -- and this repository is
+    # public, so a fixture is not a place to publish a real network name.
+    before = HostReader("Darwin", "arm64", mac_uuid=token, node="host-a.lan")
+    after = HostReader("Darwin", "arm64", mac_uuid=token, node="host-b.local")
     first = host_id._derive_host_identity(before)
     second = host_id._derive_host_identity(after)
     require(first == second, "a Bonjour-style node rename must preserve host identity")
@@ -561,7 +565,10 @@ def control_production_host_identity_has_no_override_and_ignores_platform_node()
 
 
 def control_legacy_host_store_requires_reverification_and_stays_untouched() -> None:
-    old_host = "darwin-arm64-52f1c380770b75d0"
+    # Synthetic too: a legacy identity is the hash of a network hostname, and
+    # a hostname hash on a public repository is a dictionary away from the
+    # name.  Any unversioned well-formed label exercises the same transition.
+    old_host = "darwin-arm64-0f1e2d3c4b5a6978"
     new_host = "darwin-arm64-v2-1111222233334444"
     with scratch() as s, patched(gc, "host_identity", lambda: new_host):
         s.write("Blanc/A.lean", "one\n")
@@ -794,6 +801,260 @@ def control_presentation_edits_preserve_soundness_identity() -> None:
             path.write_text(text, encoding="utf-8")
             require(gc.semantic_authority_digest(path) == baseline,
                     "comments, CLI help, and report formatting must preserve verdict identity")
+
+
+def control_module_scope_import_bindings_are_runner_authority() -> None:
+    """Rebinding ANY module-scope import must move the soundness identity.
+
+    The digest matches top-level nodes by name and an `import` statement has
+    none, so every module-scope binding used to sit outside it.  Two of them
+    were caught by moving those imports into hashed function bodies, which left
+    the class open: `from gate_cache_t8n_root import T8N_TARGET_ROOT` supplies
+    `NAMED_ROOTS` and `resolve_path`, so rebinding that one line moved the
+    fingerprinted input root from the pinned checkout to an arbitrary path
+    while the runner identity stayed byte-identical.
+
+    This control enumerates the bindings out of the runner's own source rather
+    than from a list, so a sibling module added tomorrow is covered the day it
+    is added, not the day somebody remembers to extend the list.
+    """
+
+    path = Path(gc.__file__)
+    source = path.read_text(encoding="utf-8")
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    baseline = gc.semantic_authority_digest(path)
+    nodes = list(gc.module_scope_imports(tree))
+    require(len(nodes) >= 5, "the runner's module-scope imports were not found")
+
+    bound_sources = {
+        node.module for node in nodes if isinstance(node, ast.ImportFrom) and node.module
+    } | {
+        alias.name for node in nodes if isinstance(node, ast.Import) for alias in node.names
+    }
+    for sibling in ("gate_cache_lock", "gate_cache_t8n_root", "gate_semaphore"):
+        require(sibling in bound_sources,
+                f"{sibling} is no longer a module-scope import of the runner")
+
+    with tempfile.TemporaryDirectory(prefix="gate-import-binding-") as temp:
+        for index, node in enumerate(nodes):
+            require(getattr(node, "level", 0) == 0,
+                    "a relative import needs its own rebinding shape in this control")
+            keyword = "from " if isinstance(node, ast.ImportFrom) else "import "
+            statement = "".join(lines[node.lineno - 1:node.end_lineno])
+            rebound = statement.replace(keyword, f"{keyword}substituted_", 1)
+            require(rebound != statement, f"the rebinding did not apply to {statement!r}")
+            mutated = (
+                "".join(lines[:node.lineno - 1]) + rebound + "".join(lines[node.end_lineno:])
+            )
+            candidate = Path(temp) / f"runner-{index}.py"
+            candidate.write_text(mutated, encoding="utf-8")
+            require(gc.semantic_authority_digest(candidate) != baseline,
+                    f"rebinding `{statement.splitlines()[0].strip()}` left the runner "
+                    "soundness identity unmoved")
+
+        added = source.replace(
+            "import gate_semaphore\n",
+            "import gate_semaphore\nfrom gate_cache_future_sibling import LATER\n",
+            1,
+        )
+        require(added != source, "the added-sibling mutation did not apply")
+        candidate = Path(temp) / "runner-added-sibling.py"
+        candidate.write_text(added, encoding="utf-8")
+        require(gc.semantic_authority_digest(candidate) != baseline,
+                "a newly added module-scope import must move the runner soundness identity")
+
+        dropped = source.replace("import gate_semaphore\n", "", 1)
+        require(dropped != source, "the dropped-import mutation did not apply")
+        candidate = Path(temp) / "runner-dropped-import.py"
+        candidate.write_text(dropped, encoding="utf-8")
+        require(gc.semantic_authority_digest(candidate) != baseline,
+                "a removed module-scope import must move the runner soundness identity")
+
+
+def control_authority_digest_hashes_bindings_not_imported_sources() -> None:
+    """Closing the binding hole must not start hashing the imported files.
+
+    `GATES.md` states that serialization-only lock code identifies no gate
+    verdict, and `runner_identity_sources` keeps `gate_cache_lock.py` out of
+    every fingerprint for that reason.  A fix that "covered imports" by
+    digesting the imported modules would quietly reverse the relevance rule:
+    editing a comment in the lock module would then re-run the whole catalogue.
+    So the same runner text placed beside different sibling sources must digest
+    identically, while rebinding the name inside the runner must not.
+    """
+
+    path = Path(gc.__file__)
+    source = path.read_text(encoding="utf-8")
+    siblings = (
+        "gate_cache_lock.py", "gate_semaphore.py",
+        "gate_cache_t8n_root.py", "gate_cache_host_identity.py",
+    )
+    digests: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="gate-import-contents-") as temp:
+        for tag, filler in (("a", "# one\n"), ("b", "SOMETHING = 'entirely different'\n")):
+            scripts = Path(temp) / tag
+            scripts.mkdir()
+            for name in siblings:
+                (scripts / name).write_text(filler, encoding="utf-8")
+            candidate = scripts / "gate-cache.py"
+            candidate.write_text(source, encoding="utf-8")
+            digests.append(gc.semantic_authority_digest(candidate))
+    require(digests[0] == digests[1],
+            "an imported module's contents must not enter the runner soundness identity")
+    require(digests[0] == gc.semantic_authority_digest(path),
+            "the runner soundness identity must depend on the runner source alone")
+
+    bindings = gc.import_binding_map(ast.parse(source))
+    require(len(bindings) >= 5, "the runner's import bindings were not collected")
+    require(gc.digest_of(bindings) == gc.digest_of(dict(reversed(list(bindings.items())))),
+            "the binding map is canonical, so reordering the import block is presentation")
+
+
+def control_negative_name_only_authority_walk_misses_import_bindings() -> None:
+    """The pre-repair walk -- top-level nodes matched by name -- must fail.
+
+    Without this, the binding control could pass against a digest that never
+    looked at an import at all.
+    """
+
+    def name_only_digest(path: Path) -> str:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        found: dict[str, str] = {}
+        for node in tree.body:
+            names: list[str] = []
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names = [node.name]
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = [target.id for target in targets if isinstance(target, ast.Name)]
+            for name in names:
+                if name in gc.SOUNDNESS_AUTHORITY_NAMES:
+                    found[name] = ast.dump(node, annotate_fields=True, include_attributes=False)
+        return gc.digest_of(found)
+
+    with patched(gc, "semantic_authority_digest", name_only_digest):
+        must_fail(control_module_scope_import_bindings_are_runner_authority,
+                  "a name-only authority walk was accepted as covering import bindings")
+
+
+def control_build_certificate_report_sanitizes_its_host_field() -> None:
+    """The certificate's host field is read back from a file and then printed.
+
+    It is safe today only because the value happens to come straight from
+    `write_build_certificate`.  That is a property of today's call graph, not of
+    the print statement, and it is the one place left where a future change
+    could reintroduce an arbitrary-text echo.
+    """
+
+    hostile = "darwin-arm64-v2-1111222233334444\nOK — elab: 0/0 nothing to measure"
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        s.git_init()
+        certificate = {"identity": "a" * 64, "host": hostile}
+        out = io.StringIO()
+        with patched(gc, "ROOT", s.root), \
+                patched(gc, "write_build_certificate", lambda root: certificate):
+            with contextlib.redirect_stdout(out):
+                code = gc.main(["certify-build"])
+        printed = out.getvalue()
+    require(code == 0, f"the certify-build report should succeed:\n{printed}")
+    require(hostile not in printed and "OK — elab:" not in printed,
+            "a certificate host field must never reach stdout unsanitized")
+    require("<unrecognized>" in printed,
+            "an unrecognizable certificate host must render as <unrecognized>")
+
+
+def control_public_identity_grammar_is_derived_and_bounded() -> None:
+    """One architecture list, and a version field that cannot run away.
+
+    Two hand-maintained lists that agree today drift tomorrow, and the drift is
+    silent: a legitimate identity starts rendering `<unrecognized>`.  The echo
+    grammar is therefore derived from the supported set the derivation itself
+    uses.  Its version field is bounded because everything matched here is
+    attacker-chosen text out of a file this process did not write, and an
+    unbounded `v[0-9]+-` echoed `darwin-arm64-v8005551212-...` verbatim.
+    """
+
+    require(host_id._PUBLIC_IDENTITY.pattern
+            == host_id._public_identity_pattern(host_id._SUPPORTED_MACHINES).pattern,
+            "the echo grammar must be the one derived from the supported set")
+    for system, machines in host_id._SUPPORTED_MACHINES.items():
+        for machine in sorted(machines):
+            label = f"{system}-{machine}-{host_id.IDENTITY_VERSION}-1111222233334444"
+            require(host_id.is_public_host_identity(label),
+                    f"a derivable identity must stay echoable: {label}")
+    require(host_id.is_public_host_identity("darwin-arm64-v999-1111222233334444"),
+            "a plausible version must stay echoable")
+    for unbounded in (
+        "darwin-arm64-v8005551212-1111222233334444",
+        "darwin-arm64-v1234-1111222233334444",
+        "darwin-arm64-v" + "9" * 64 + "-1111222233334444",
+    ):
+        require(not host_id.is_public_host_identity(unbounded),
+                "an unbounded version field must not be echoed verbatim")
+
+    extended = dict(host_id._SUPPORTED_MACHINES)
+    extended["linux"] = frozenset(extended["linux"] | {"loongarch64"})
+    widened = host_id._public_identity_pattern(extended)
+    require(widened.fullmatch("linux-loongarch64-v2-1111222233334444") is not None,
+            "the echo grammar must follow the supported set it is derived from")
+    require(host_id.is_public_host_identity("linux-loongarch64-v2-1111222233334444") is False,
+            "the committed grammar must not accept an unsupported architecture")
+
+
+def control_supported_platform_without_a_token_source_fails_closed() -> None:
+    """A supported platform with no token source must refuse, never crash.
+
+    `_derive_host_identity` checks the system against `_SUPPORTED_MACHINES` and
+    then branches on it.  Adding a family to that set without adding a branch
+    fell off the end of the `if`/`elif` and raised `UnboundLocalError`: a
+    contract whose promise is "unsupported platforms fail closed" cannot answer
+    an unsupported platform with a crash.
+    """
+
+    extended = dict(host_id._SUPPORTED_MACHINES)
+    extended["plan9"] = frozenset({"mips"})
+    with patched(host_id, "_SUPPORTED_MACHINES", extended):
+        try:
+            host_id._derive_host_identity(HostReader("Plan9", "mips"))
+        except host_id.HostIdentityError:
+            return
+        except Exception as error:  # noqa: BLE001 - any other exception is the defect
+            raise ControlFailure(
+                "a platform with no stable token source must raise HostIdentityError, "
+                f"not {type(error).__name__}"
+            ) from error
+    raise ControlFailure("a platform with no stable token source produced an identity")
+
+
+def control_rename_fixture_node_names_are_synthetic() -> None:
+    """No fixture may hard-code this machine's network name.
+
+    The derivation never reads `reader.node`, so a realistic name buys a
+    control nothing -- and this repository is public, which makes a fixture the
+    worst possible place for one.  The comparison is equality against the live
+    names, never a substring, so an unrelated machine cannot redden this suite.
+    The live names are read and compared; they are never printed.
+    """
+
+    import platform as _platform
+
+    node = _platform.node().strip().lower()
+    live = {node, node.partition(".")[0]} - {""}
+    tree = ast.parse(Path(__file__).resolve().read_text(encoding="utf-8"))
+    fixtures = {
+        keyword.value.value.strip().lower()
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for keyword in node.keywords
+        if keyword.arg == "node"
+        and isinstance(keyword.value, ast.Constant)
+        and isinstance(keyword.value.value, str)
+    }
+    require(bool(fixtures), "the rename fixtures no longer declare a node name")
+    require(not (fixtures & live),
+            "a fixture node name is this machine's real network name; use a synthetic one")
 
 
 def control_soundness_edit_invalidates_every_cacheable_row() -> None:
@@ -3649,6 +3910,7 @@ NEGATIVE_CONTROLS = (
     control_negative_shell_ignoring_the_declared_coordination_mode,
     control_negative_shell_short_circuits_its_own_escalation,
     control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold,
+    control_negative_name_only_authority_walk_misses_import_bindings,
 )
 
 CONTROLS = (
@@ -3656,6 +3918,9 @@ CONTROLS = (
     control_stable_host_identity_separates_distinct_machine_tokens,
     control_stable_host_identity_fails_closed_on_unknown_or_ambiguous_sources,
     control_production_host_identity_has_no_override_and_ignores_platform_node,
+    control_public_identity_grammar_is_derived_and_bounded,
+    control_supported_platform_without_a_token_source_fails_closed,
+    control_rename_fixture_node_names_are_synthetic,
     control_legacy_host_store_requires_reverification_and_stays_untouched,
     control_tampered_or_downgraded_stable_store_never_matches,
     control_first_run_executes_and_second_reuses,
@@ -3668,6 +3933,9 @@ CONTROLS = (
     control_registry_declaration_invalidates,
     control_lock_implementation_is_not_gate_evidence_identity,
     control_presentation_edits_preserve_soundness_identity,
+    control_module_scope_import_bindings_are_runner_authority,
+    control_authority_digest_hashes_bindings_not_imported_sources,
+    control_build_certificate_report_sanitizes_its_host_field,
     control_soundness_edit_invalidates_every_cacheable_row,
     control_scheduling_metadata_is_not_substantive_verdict_identity,
     control_t8n_resolver_invalidates_only_its_consumers,

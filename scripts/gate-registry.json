@@ -2460,8 +2460,6 @@
         "files": [
           "scripts/check-elab.sh",
           "scripts/check-elab-selection.py",
-          "scripts/gate-cache.py",
-          "scripts/gate_cache_host_identity.py",
           "scripts/baseline-elab.txt",
           "scripts/gate-lock.sh",
           "lean-toolchain",

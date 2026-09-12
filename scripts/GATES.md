@@ -260,6 +260,19 @@ cannot alter what a gate read or what evidence qualifies for reuse. Controls
 pin both directions, so a t8n resolver change invalidates its consumers while
 preserving unrelated rows, and a lock-only change preserves all fingerprints.
 
+The engine's soundness identity covers the whole module-scope *binding* map of
+`gate-cache.py` — which global name is bound to which module and attribute —
+and not only the named declarations the digest matches. An `import` statement
+has no name, so without that the resolver, lock and coordination bindings all
+sat outside the authority, and rebinding one line could move the fingerprinted
+current-mainnet input root while the runner identity stood still. It is the
+binding that is identified, never the imported module's contents: the relevance
+rule above is unchanged, an edit inside the lock module still preserves every
+fingerprint, and the map is canonical, so reordering the import block is a
+presentation edit. There is no exemption list; a control enumerates the
+bindings out of the runner's own source, so a module imported tomorrow is
+covered the day it is added.
+
 **What makes a verdict reusable.** `scripts/gate-registry.json` records, per
 command instance, every mutable input that gate actually consumes: exact files,
 globbed populations (path *and* content, so a rename counts), direct Lean roots,
