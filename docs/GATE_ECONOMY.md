@@ -14,7 +14,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 2 | `scripts/check-lido-circuit-breaker-assurance.sh` | — | yes | yes | — | files, populations, tools | not expensive | sub-second | light | stale claim metadata |
 | 3 | `scripts/check-beacon-deposit-assurance.sh` | — | yes | yes | — | files, tools | not expensive | sub-second | light | none known |
 | 4 | `scripts/check-layering.sh` | — | yes | yes | — | files, populations, tools | not expensive | sub-second (production gate); ~14 s controls | light | forbidden WETH re-export |
-| 5 | `scripts/check-proof-recipes.sh --base main` | — | yes | yes | — | clock, files, git_refs, populations, tools | not expensive | ~30 s self-test; ordinary runs are sub-second on a small diff | light | none known |
+| 5 | `scripts/check-proof-recipes.sh --base main` | — | yes | yes | — | clock, files, git_refs, populations, tools | not expensive | `--self-test` 2 min 56 s measured on this host (the generator's own 2 min 43 s of it); ordinary runs are sub-second on a small diff beyond the ~7 s registry pass. The superseded ~30 s figure was already stale before this cycle — the 14-control predecessor measures 89 s on the same host — and each added control is one more whole-tree `load_and_validate` | light | none known |
 | 6 | `scripts/check-proof-debt.sh` | — | yes | yes | — | clock, files, populations, tools | not expensive | sub-second | light | none known |
 | 7 | `scripts/check-proof-module-size.sh` | — | yes | yes | — | clock, files, populations, tools | not expensive | sub-second | light | none known |
 | 8 | `scripts/check-proof-duplication.sh` | — | yes | yes | — | clock, files, populations, tools | not expensive | ~1.4 s | light | none known |
