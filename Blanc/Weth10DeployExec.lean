@@ -137,6 +137,275 @@ theorem weth10FullStage_wf_reads (sevm : Sevm) :
         ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyImage []) :=
   MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
 
+/-- Copy prefix of the pre-hash stage: the template copy plus the three
+in-template chain patches. -/
+def weth10CopyStage (sevm : Sevm) : MemoryStage :=
+  [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+    (372, sevm.benvStat.chainId.toB256.toBytes),
+    (691, sevm.benvStat.chainId.toB256.toBytes),
+    (2875, sevm.benvStat.chainId.toB256.toBytes)]
+
+/-- Scratch suffix of the pre-hash stage: the five EIP-712 preimage words. -/
+def weth10ScratchStage (sevm : Sevm) : MemoryStage :=
+  [(6336, DOMAIN_TYPEHASH.toBytes),
+    (6368, NAME_HASH.toBytes),
+    (6400, VERSION_HASH.toBytes),
+    (6432, sevm.benvStat.chainId.toB256.toBytes),
+    (6464, sevm.currentTarget.toB256.toBytes)]
+
+/-- The pre-hash stage is exactly the copy prefix followed by scratch. -/
+theorem weth10PreHashStage_split (sevm : Sevm) :
+    weth10PreHashStage sevm =
+      weth10CopyStage sevm ++ weth10ScratchStage sevm := by
+  rfl
+
+/-- All five scratch writes miss `[0, 6313)`. -/
+theorem weth10ScratchStage_avoids (sevm : Sevm) :
+    (weth10ScratchStage sevm).avoids 0 6313 = true := by
+  simp [weth10ScratchStage, MemoryStage.avoids]
+
+/-- One guard replaces the five-peel `hpre`: the observed runtime window sees
+only the copy prefix. -/
+theorem weth10PreHashStage_slice_window (sevm : Sevm) :
+    ((weth10PreHashStage sevm).applyImage []).sliceD 0 6313 0 =
+      ((weth10CopyStage sevm).applyImage []).sliceD 0 6313 0 := by
+  rw [weth10PreHashStage_split, MemoryStage.applyImage_append]
+  exact MemoryStage.applyImage_sliceD_of_avoids _ _ _ _
+    (weth10ScratchStage_avoids sevm)
+
+/-- The 1-write take-prefix is exactly the copy memory. -/
+theorem weth10Prefix1_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 1 (weth10PreHashStage sevm)) Mem.empty) =
+      weth10InitCopyMemory sevm := by
+  have htake : List.take 1 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop))] := by
+    rfl
+  rw [htake]
+  unfold weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
+/-- Copy extension to 6336 through `applyMemory_size`. -/
+theorem weth10Prefix1_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 1 (weth10PreHashStage sevm)) Mem.empty).size =
+      6336 := by
+  have htake : List.take 1 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop))] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- The 4-write take-prefix is exactly the chain memory. -/
+theorem weth10Prefix4_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 4 (weth10PreHashStage sevm)) Mem.empty) =
+      weth10InitChainMemory sevm := by
+  have htake : List.take 4 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes)] := by
+    rfl
+  rw [htake]
+  unfold weth10InitChainMemory weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
+
+/-- Chain patches are covered at 6336. -/
+theorem weth10Prefix4_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 4 (weth10PreHashStage sevm)) Mem.empty).size =
+      6336 := by
+  have htake : List.take 4 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes)] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- The 5-write take-prefix is the chain plus the type word. -/
+theorem weth10Prefix5_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 5 (weth10PreHashStage sevm)) Mem.empty) =
+      (weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes := by
+  have htake : List.take 5 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes)] := by
+    rfl
+  rw [htake]
+  unfold weth10InitChainMemory weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
+/-- 6368 via `applyMemory_size` on the 5-write prefix. -/
+theorem weth10Prefix5_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 5 (weth10PreHashStage sevm)) Mem.empty).size =
+      6368 := by
+  have htake : List.take 5 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes)] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- The 6-write take-prefix adds the name word. -/
+theorem weth10Prefix6_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 6 (weth10PreHashStage sevm)) Mem.empty) =
+      ((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes := by
+  have htake : List.take 6 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes)] := by
+    rfl
+  rw [htake]
+  unfold weth10InitChainMemory weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
+
+/-- 6400 via `applyMemory_size` on the 6-write prefix. -/
+theorem weth10Prefix6_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 6 (weth10PreHashStage sevm)) Mem.empty).size =
+      6400 := by
+  have htake : List.take 6 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes)] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- The 7-write take-prefix adds the version word. -/
+theorem weth10Prefix7_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 7 (weth10PreHashStage sevm)) Mem.empty) =
+      (((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes).write 6400 VERSION_HASH.toBytes := by
+  have htake : List.take 7 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes)] := by
+    rfl
+  rw [htake]
+  unfold weth10InitChainMemory weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
+/-- 6432 via `applyMemory_size` on the 7-write prefix. -/
+theorem weth10Prefix7_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 7 (weth10PreHashStage sevm)) Mem.empty).size =
+      6432 := by
+  have htake : List.take 7 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes)] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- The 8-write take-prefix adds the chain word. -/
+theorem weth10Prefix8_eq (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 8 (weth10PreHashStage sevm)) Mem.empty) =
+      ((((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes).write 6400 VERSION_HASH.toBytes).write 6432
+        sevm.benvStat.chainId.toB256.toBytes := by
+  have htake : List.take 8 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes),
+        (6432, sevm.benvStat.chainId.toB256.toBytes)] := by
+    rfl
+  rw [htake]
+  unfold weth10InitChainMemory weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
+
+/-- 6464 via `applyMemory_size` on the 8-write prefix. -/
+theorem weth10Prefix8_size (sevm : Sevm) :
+    (MemoryStage.applyMemory (List.take 8 (weth10PreHashStage sevm)) Mem.empty).size =
+      6464 := by
+  have htake : List.take 8 (weth10PreHashStage sevm) =
+      [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+        (372, sevm.benvStat.chainId.toB256.toBytes),
+        (691, sevm.benvStat.chainId.toB256.toBytes),
+        (2875, sevm.benvStat.chainId.toB256.toBytes),
+        (6336, DOMAIN_TYPEHASH.toBytes),
+        (6368, NAME_HASH.toBytes),
+        (6400, VERSION_HASH.toBytes),
+        (6432, sevm.benvStat.chainId.toB256.toBytes)] := by
+    rfl
+  rw [htake, MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+    B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- Full pre-hash allocation 6496. -/
+theorem weth10PreHashStage_size (sevm : Sevm) :
+    ((weth10PreHashStage sevm).applyMemory Mem.empty).size = 6496 := by
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
+  simp only [weth10PreHashStage, MemoryStage.footprint, List.map_cons,
+    List.map_nil, B256.length_toBytes]
+  rw [ByteArray.length_sliceD]
+  decide
+
+/-- Separator patches are covered at 6496. -/
+theorem weth10SepStage_size_covered (sevm : Sevm) :
+    ((weth10SepStage sevm).applyMemory
+      ((weth10PreHashStage sevm).applyMemory Mem.empty)).size = 6496 := by
+  have hbase := weth10PreHashStage_size sevm
+  rw [MemoryStage.applyMemory_size_of_covered]
+  · exact hbase
+  · intro write hmem
+    simp only [weth10SepStage, List.mem_cons, List.not_mem_nil,
+      or_false] at hmem
+    obtain rfl | rfl := hmem <;>
+      simp only [B256.length_toBytes] <;> omega
+
 /-- Every constructor `MSTORE` is reflected by the corresponding byte-image
 write. -/
 theorem weth10InitPreHashMemory_reads (sevm : Sevm) :
@@ -311,47 +580,43 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
           sevm.benvStat.chainId.toB256 sevm.currentTarget) := by
   let chain := sevm.benvStat.chainId.toB256
   let separator := deploymentDomainSeparator chain sevm.currentTarget
-  let I1 := Bytes.writeAt weth10RuntimeTemplate 372 chain.toBytes
-  let I2 := Bytes.writeAt I1 691 chain.toBytes
-  let I3 := Bytes.writeAt I2 2875 chain.toBytes
+  let I3 := Bytes.writeAt
+    (Bytes.writeAt
+      (Bytes.writeAt weth10RuntimeTemplate 372 chain.toBytes)
+      691 chain.toBytes)
+    2875 chain.toBytes
   let I4 := Bytes.writeAt I3 536 separator.toBytes
   let I5 := Bytes.writeAt I4 3039 separator.toBytes
-  have h1 : I1.length = 6313 := by
-    rw [show I1 = Bytes.writeAt weth10RuntimeTemplate 372 chain.toBytes from rfl,
-      Bytes.length_writeAt_of_le (by
-        rw [weth10RuntimeTemplate_length, B256.length_toBytes]; omega),
-      weth10RuntimeTemplate_length]
-  have h2 : I2.length = 6313 := by
-    rw [show I2 = Bytes.writeAt I1 691 chain.toBytes from rfl,
-      Bytes.length_writeAt_of_le (by rw [h1, B256.length_toBytes]; omega), h1]
-  have h3 : I3.length = 6313 := by
-    rw [show I3 = Bytes.writeAt I2 2875 chain.toBytes from rfl,
-      Bytes.length_writeAt_of_le (by rw [h2, B256.length_toBytes]; omega), h2]
+  have hcopyimg : (weth10CopyStage sevm).applyImage [] = I3 := by
+    unfold weth10CopyStage
+    rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+      MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+      MemoryStage.applyImage_nil, weth10InitCode_slice_runtime h_code]
+    rw [show Bytes.writeAt [] 0 weth10RuntimeTemplate =
+      weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp)]
+  have hI3len : I3.length = 6313 := by
+    rw [← hcopyimg, MemoryStage.applyImage_length]
+    simp only [weth10CopyStage, List.foldl_cons, List.foldl_nil,
+      B256.length_toBytes]
+    rw [ByteArray.length_sliceD]
+    rfl
   have h4 : I4.length = 6313 := by
     rw [show I4 = Bytes.writeAt I3 536 separator.toBytes from rfl,
-      Bytes.length_writeAt_of_le (by rw [h3, B256.length_toBytes]; omega), h3]
+      Bytes.length_writeAt_of_le (by rw [hI3len, B256.length_toBytes]; omega),
+      hI3len]
   have h5 : I5.length = 6313 := by
     rw [show I5 = Bytes.writeAt I4 3039 separator.toBytes from rfl,
       Bytes.length_writeAt_of_le (by rw [h4, B256.length_toBytes]; omega), h4]
-  have hpre :
-      (weth10InitPreHashImage sevm).sliceD 0 6313 0 = I3 := by
-    unfold weth10InitPreHashImage
-    rw [Bytes.sliceD_writeAt_before _ _ 0 6313 6464 (by omega),
-      Bytes.sliceD_writeAt_before _ _ 0 6313 6432 (by omega),
-      Bytes.sliceD_writeAt_before _ _ 0 6313 6400 (by omega),
-      Bytes.sliceD_writeAt_before _ _ 0 6313 6368 (by omega),
-      Bytes.sliceD_writeAt_before _ _ 0 6313 6336 (by omega)]
-    rw [weth10InitCode_slice_runtime h_code]
-    rw [show Bytes.writeAt [] 0 weth10RuntimeTemplate =
-      weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp)]
-    exact Bytes.sliceD_zero_length h3
+  have hpre : (weth10InitPreHashImage sevm).sliceD 0 6313 0 = I3 := by
+    rw [← weth10PreHashImage_eq, weth10PreHashStage_slice_window, hcopyimg,
+      Bytes.sliceD_zero_length hI3len]
   have hsep1 :
       (Bytes.writeAt (weth10InitPreHashImage sevm) 536 separator.toBytes).sliceD
           0 6313 0 = I4.sliceD 0 6313 0 := by
     have hpre' :
         (weth10InitPreHashImage sevm).sliceD 0 6313 0 =
           I3.sliceD 0 6313 0 :=
-      hpre.trans (Bytes.sliceD_zero_length h3).symm
+      hpre.trans (Bytes.sliceD_zero_length hI3len).symm
     exact Bytes.sliceD_writeAt_congr hpre'
   have hsep2 :
       (Bytes.writeAt
@@ -456,17 +721,8 @@ private theorem weth10InitCopyLine_runCompiled
 
 private theorem weth10InitCopyMemory_size (sevm : Sevm) :
     (weth10InitCopyMemory sevm).size = 6336 := by
-  unfold weth10InitCopyMemory
-  generalize hb :
-      sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop) = bs
-  have hlen : bs.length = 6313 := by
-    rw [← hb]
-    exact ByteArray.length_sliceD _ _ _ _
-  rcases bs with _ | ⟨b, bs⟩
-  · simp at hlen
-  · rw [Mem.size_write_cons]
-    simp only [List.length_cons] at hlen ⊢
-    simp [Mem.empty, hlen, ceil32]
+  rw [← weth10Prefix1_eq]
+  exact weth10Prefix1_size sevm
 
 private theorem weth10InitChainLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
@@ -480,15 +736,15 @@ private theorem weth10InitChainLine_runCompiled
   have h372 :
       (Bytes.toB256 [(372 >>> 8).toUInt8, (372 : Nat).toUInt8]).toNat =
         372 := by
-    decide +kernel
+    decide
   have h691 :
       (Bytes.toB256 [(691 >>> 8).toUInt8, (691 : Nat).toUInt8]).toNat =
         691 := by
-    decide +kernel
+    decide
   have h2875 :
       (Bytes.toB256 [(2875 >>> 8).toUInt8, (2875 : Nat).toUInt8]).toNat =
         2875 := by
-    decide +kernel
+    decide
   unfold weth10InitChainLine deploymentChainIdWordOffsets
   func_run (9) [0, 0, 0]
   · exact Devm.extCost_zero_of_le
@@ -529,12 +785,8 @@ private theorem weth10InitChainLine_runCompiled
 
 private theorem weth10InitChainMemory_size (sevm : Sevm) :
     (weth10InitChainMemory sevm).size = 6336 := by
-  unfold weth10InitChainMemory
-  repeat' rw [Mem.size_write_of_le]
-  · exact weth10InitCopyMemory_size sevm
-  all_goals
-    rw [weth10InitCopyMemory_size, B256.length_toBytes]
-    decide
+  rw [← weth10Prefix4_eq]
+  exact weth10Prefix4_size sevm
 
 private def weth10InitPreHashTail1 : Line :=
   (weth10InitPreHashLine 6313).drop 3
@@ -648,17 +900,26 @@ private theorem weth10InitPreHashLine_runCompiled
   let M7 := M6.write 6432 chain.toBytes
   have hs3 : M3.size = 6336 := weth10InitChainMemory_size sevm
   have hs4 : M4.size = 6368 := by
-    rw [Mem.size_write_word_at, hs3]
-    decide
+    show ((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).size
+      = 6368
+    rw [← weth10Prefix5_eq]
+    exact weth10Prefix5_size sevm
   have hs5 : M5.size = 6400 := by
-    rw [Mem.size_write_word_at, hs4]
-    decide
+    show (((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes).size = 6400
+    rw [← weth10Prefix6_eq]
+    exact weth10Prefix6_size sevm
   have hs6 : M6.size = 6432 := by
-    rw [Mem.size_write_word_at, hs5]
-    decide
+    show ((((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes).write 6400 VERSION_HASH.toBytes).size = 6432
+    rw [← weth10Prefix7_eq]
+    exact weth10Prefix7_size sevm
   have hs7 : M7.size = 6464 := by
-    rw [Mem.size_write_word_at, hs6]
-    decide
+    show (((((weth10InitChainMemory sevm).write 6336 DOMAIN_TYPEHASH.toBytes).write
+        6368 NAME_HASH.toBytes).write 6400 VERSION_HASH.toBytes).write 6432
+        sevm.benvStat.chainId.toB256.toBytes).size = 6464
+    rw [← weth10Prefix8_eq]
+    exact weth10Prefix8_size sevm
   apply weth10InitPreHashType_runCompiled (g := g) (h_size := hs3)
   · omega
   · apply weth10InitPreHashName_runCompiled
@@ -682,44 +943,18 @@ private theorem weth10InitPreHashLine_runCompiled
 
 private theorem weth10InitPreHashMemory_size (sevm : Sevm) :
     (weth10InitPreHashMemory sevm).size = 6496 := by
-  let M3 := weth10InitChainMemory sevm
-  let chain := sevm.benvStat.chainId.toB256
-  let M4 := M3.write 6336 DOMAIN_TYPEHASH.toBytes
-  let M5 := M4.write 6368 NAME_HASH.toBytes
-  let M6 := M5.write 6400 VERSION_HASH.toBytes
-  let M7 := M6.write 6432 chain.toBytes
-  have hs3 : M3.size = 6336 := weth10InitChainMemory_size sevm
-  have hs4 : M4.size = 6368 := by
-    rw [show M4 = M3.write 6336 DOMAIN_TYPEHASH.toBytes from rfl,
-      Mem.size_write_word_at, hs3]
-    decide
-  have hs5 : M5.size = 6400 := by
-    rw [show M5 = M4.write 6368 NAME_HASH.toBytes from rfl,
-      Mem.size_write_word_at, hs4]
-    decide
-  have hs6 : M6.size = 6432 := by
-    rw [show M6 = M5.write 6400 VERSION_HASH.toBytes from rfl,
-      Mem.size_write_word_at, hs5]
-    decide
-  have hs7 : M7.size = 6464 := by
-    rw [show M7 = M6.write 6432 chain.toBytes from rfl,
-      Mem.size_write_word_at, hs6]
-    decide
-  have hs8 : (M7.write 6464 sevm.currentTarget.toB256.toBytes).size =
-      6496 := by
-    rw [Mem.size_write_word_at, hs7]
-    decide
-  simpa [weth10InitPreHashMemory, M3, M4, M5, M6, M7, chain] using hs8
+  rw [← weth10PreHashMemory_eq]
+  exact weth10PreHashStage_size sevm
 
 private theorem initPush2Value_160 :
     (Bytes.toB256 [(160 >>> 8).toUInt8, (160 : Nat).toUInt8]).toNat =
       160 := by
-  decide +kernel
+  decide
 
 private theorem initPush2Value_6336 :
     (Bytes.toB256 [(6336 >>> 8).toUInt8, (6336 : Nat).toUInt8]).toNat =
       6336 := by
-  decide +kernel
+  decide
 
 private theorem weth10InitHashLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
@@ -775,11 +1010,11 @@ private theorem weth10InitSeparatorLine_runCompiled
   have h536 :
       (Bytes.toB256 [(536 >>> 8).toUInt8, (536 : Nat).toUInt8]).toNat =
         536 := by
-    decide +kernel
+    decide
   have h3039 :
       (Bytes.toB256 [(3039 >>> 8).toUInt8, (3039 : Nat).toUInt8]).toNat =
         3039 := by
-    decide +kernel
+    decide
   have hM1 : (M.write 536 separator.toBytes).size = 6496 := by
     rw [Mem.size_write_of_le (by
       rw [B256.length_toBytes, h_size]
@@ -824,19 +1059,8 @@ private theorem weth10InitGuard_runCompiled
 
 private theorem weth10InitMemory_size (sevm : Sevm) :
     (weth10InitMemory sevm).size = 6496 := by
-  let M8 := weth10InitPreHashMemory sevm
-  let hash := (M8.read 6336 160).1.keccak
-  have hs8 : M8.size = 6496 := weth10InitPreHashMemory_size sevm
-  have hs9 : (M8.write 536 hash.toBytes).size = 6496 := by
-    rw [Mem.size_write_of_le (by
-      rw [B256.length_toBytes, hs8]
-      omega)]
-    exact hs8
-  unfold weth10InitMemory
-  rw [Mem.size_write_of_le (by
-    rw [B256.length_toBytes, hs9]
-    omega)]
-  exact hs9
+  rw [← weth10FullMemory_eq, MemoryStage.applyMemory_append]
+  exact weth10SepStage_size_covered sevm
 
 private theorem weth10InitRet_runCompiled
     {fs : List Func} {sevm : Sevm} {returnPre : Devm}
