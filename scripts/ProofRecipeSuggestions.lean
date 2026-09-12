@@ -14,6 +14,15 @@ import Blanc.MemoryLayout
 import Blanc.CommonProofs
 import Blanc.ForwardStorageEffects
 import Blanc.CompiledStackSafety
+import Blanc.ContractAdmission
+import Blanc.ExecutionFrames
+import Blanc.ForwardCall
+import Blanc.ForwardDispatchMiss
+import Blanc.ForwardNoRawSstore
+import Blanc.PinnedPauseTarget
+import Blanc.RevertPayload
+import Blanc.StaticStores
+import Blanc.Upgrade
 
 namespace Blanc
 
@@ -54,6 +63,7 @@ example (raw value : B256) :
 example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
     (run : Func.RunCompiled fs sevm pre f post) :
     Func.RunCompiled fs sevm pre f post := by
+  expect_recipe_trigger "goal-head:Func.RunCompiled"
   blanc_suggest
   exact run
 
@@ -61,6 +71,7 @@ example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
 example {fs : List Func} {sevm : Sevm} {pre : Devm} {f : Func}
     {out : Execution} (run : Func.RunCompiledTo fs sevm pre f out) :
     Func.RunCompiledTo fs sevm pre f out := by
+  expect_recipe_trigger "goal-head:Func.RunCompiledTo"
   blanc_suggest
   exact run
 
@@ -73,6 +84,7 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
     Func.RunCompiledTo fs sevm pre
       (Blanc.linearDispatchWith fallback entries) out →
       DispatchBodyWitness fs sevm pre entries selector tail body out := by
+  expect_recipe_trigger "goal-shape:linear-dispatch-selection"
   blanc_suggest
   intro run
   exact dispatchBodyWitness_of_runCompiledTo unique member stack run
@@ -87,6 +99,7 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
     Func.RunCompiledTo fs sevm pre
       (Blanc.linearDispatchWith fallback entries) out →
       DispatchFallbackWitness fs sevm pre entries selector tail fallback out := by
+  expect_recipe_trigger "goal-shape:linear-dispatch-selection"
   blanc_suggest
   intro run
   exact dispatchFallbackWitness_of_runCompiledTo nonempty miss stack run
@@ -152,6 +165,7 @@ example {sevm : Sevm} {pre post : Devm} {line : Line} :
 -- EXPECT: line-run-split
 example {sevm : Sevm} {pre post : Devm} {line : Line} :
     Line.Run sevm pre line post → True := by
+  expect_recipe_trigger "implication-premise:Line.Run"
   blanc_suggest
   intro _
   trivial
@@ -159,6 +173,7 @@ example {sevm : Sevm} {pre post : Devm} {line : Line} :
 -- EXPECT: func-run-prefix-split
 example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func} :
     Func.Run fs sevm pre f post → True := by
+  expect_recipe_trigger "implication-premise:Func.Run"
   blanc_suggest
   intro _
   trivial
@@ -166,60 +181,71 @@ example {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func} :
 -- EXPECT: function-observation-invariance
 example {f : Func} (inv : Func.Inv Devm.getBal Devm.getBal f) :
     Func.Inv Devm.getBal Devm.getBal f := by
+  expect_recipe_trigger "goal-head:Func.Inv"
   blanc_suggest
   exact inv
 
 -- EXPECT: function-observation-invariance
 example (inv : Linst.Inv Devm.getCode Devm.getCode Linst.stop) :
     Linst.Inv Devm.getCode Devm.getCode Linst.stop := by
+  expect_recipe_trigger "goal-head:Linst.Inv"
   blanc_suggest
   exact inv
 
 -- EXPECT: successor-projection-normalization
 example (devm : Devm) (mach : Mach) (address : Adr) (key : B256) :
     (devm.setMach mach).getStorVal address key = devm.getStorVal address key := by
+  expect_recipe_trigger "goal-shape:successor-projection"
   blanc_suggest
   rfl
 
 -- EXPECT: devm-projection-bridge
 example (devm : Devm) (mach : Mach) :
     (devm.setMach mach).refundCounter = devm.refundCounter := by
+  expect_recipe_trigger "goal-shape:devm-update-projection"
   blanc_suggest
   rfl
 
 -- EXPECT: devm-projection-bridge
 example (devm : Devm) (mach : Mach) : (devm.setMach mach).mach = mach := by
+  expect_recipe_trigger "goal-shape:devm-update-projection"
   blanc_suggest
   rfl
 
 -- EXPECT: devm-projection-bridge
 example (devm : Devm) (output : Bytes) :
     (devm.withOutput output).refundCounter = devm.refundCounter := by
+  expect_recipe_trigger "goal-shape:devm-update-projection"
   blanc_suggest
   rfl
 
 -- EXPECT: bytesize-composition
 example : Func.stop.compileShape.byteSize = 1 := by
+  expect_recipe_trigger "goal-shape:compileshape-bytesize"
   blanc_suggest
   decide
 
 -- EXPECT: bytesize-composition
 example : Func.stop.compileShape.byteSize ≠ 0 := by
+  expect_recipe_trigger "goal-shape:compileshape-bytesize"
   blanc_suggest
   decide
 
 -- EXPECT: bytesize-composition
 example : Func.stop.compileShape.byteSize ≤ 1 := by
+  expect_recipe_trigger "goal-shape:compileshape-bytesize"
   blanc_suggest
   decide
 
 -- EXPECT: bytesize-composition
 example : Func.stop.compileShape.byteSize < 2 := by
+  expect_recipe_trigger "goal-shape:compileshape-bytesize"
   blanc_suggest
   decide
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
+  expect_no_recipe_trigger "goal-shape:compileshape-bytesize"
   blanc_suggest
   rfl
 
@@ -407,17 +433,20 @@ example (word : B256) :
 example :
     let subject := ([1, 2, 3] : List Nat)
     (subject.length, subject.reverse.length) = (3, 3) := by
+  expect_recipe_trigger "goal-shape:shared-subject-kernel-decision"
   blanc_suggest
   decide
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (devm : Devm) (output : Bytes) :
     (devm.withOutput output).pop = (devm.withOutput output).pop := by
+  expect_no_recipe_trigger "goal-shape:shared-subject-kernel-decision"
   blanc_suggest
   rfl
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (proposition : Prop) (proof : proposition) : proposition := by
+  expect_no_recipe_trigger "goal-shape:shared-subject-kernel-decision"
   blanc_suggest
   exact proof
 
@@ -426,6 +455,7 @@ example {P : Exec.Deriv → Prop} {fs : List Func} {sevm : Sevm}
     {pre : Devm} {f : Func} {out : Execution}
     {run : Func.RunCompiledTo fs sevm pre f out}
     (rooted : rootedRunCompiledTo P run) : rootedRunCompiledTo P run := by
+  expect_recipe_trigger "goal-shape:frame-root-carrying"
   blanc_suggest
   exact rooted
 
@@ -434,6 +464,7 @@ example {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (owner : Adr) (key : B256)
     (notCommitted : Execution.commits out ≠ true) :
     Exec.NoRetainedWriteTo run owner key := by
+  expect_recipe_trigger "goal-shape:retained-write-noninterference"
   blanc_suggest
   exact Exec.noRetainedWriteTo_of_not_commits run notCommitted owner key
 
@@ -443,12 +474,14 @@ example (msg : Msg)
     (hdisable : msg.disablePrecompiles = true) :
     processMessage msg =
       (Frame.ofCall msg).settle (exec (initEvm msg)) := by
+  expect_recipe_trigger "goal-shape:message-execution-settlement"
   blanc_suggest
   exact MessageExecution.processMessage_eq_settle_exec msg hentry hdisable
 
 -- EXPECT: devm-common-update-laws
 example (devm : Devm) (index : Nat) (value : Bytes) :
     (devm.memWrite index value).memory = devm.memory.write index value := by
+  expect_recipe_trigger "goal-shape:devm-common-update-law"
   blanc_suggest
   exact Devm.memWrite_memory devm index value
 
@@ -456,12 +489,14 @@ example (devm : Devm) (index : Nat) (value : Bytes) :
 example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Func.RunCompiledTo fs sevm pre (Func.last .return_) out) :
     Func.RunCompiledTo fs sevm pre (Func.last .return_) out := by
+  expect_recipe_trigger "goal-shape:terminal-return-revert"
   blanc_suggest
   exact run
 
 -- EXPECT: full-length-slice
 example {bytes : Bytes} {size : Nat} (h : bytes.length = size) :
     bytes.sliceD 0 size 0 = bytes := by
+  expect_recipe_trigger "goal-shape:full-length-slice"
   blanc_suggest
   exact Bytes.sliceD_zero_length h
 
@@ -469,6 +504,7 @@ example {bytes : Bytes} {size : Nat} (h : bytes.length = size) :
 example {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : Nonempty (ExecutionTrace.MessageCallTrace msg state out)) :
     Nonempty (ExecutionTrace.MessageCallTrace msg state out) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
   blanc_suggest
   exact trace
 
@@ -476,12 +512,14 @@ example {msg : Msg} {state : State} {out : MsgCallOutput}
 example {Origin : Type} {pre post : State}
     {events : List (StateTransition Origin)}
     (replay : StateReplay pre events post) : StateReplay pre events post := by
+  expect_recipe_trigger "goal-head:StateReplay"
   blanc_suggest
   exact replay
 
 -- EXPECT: one-word-source-return
 example (word : B256) (devm : Devm) (observed : ReturnsWord word devm) :
     ReturnsWord word devm := by
+  expect_recipe_trigger "goal-head:ReturnsWord"
   blanc_suggest
   exact observed
 
@@ -555,6 +593,124 @@ example (maximum : Nat) : maximum = maximum := by
   expect_no_recipe_trigger "goal-head:CompiledStackSafety.Certificate"
   blanc_suggest
   rfl
+
+-- EXPECT: accepted-boolean-settlement
+example {post : Devm} {word result : B256}
+    (errorClean : post.error = none)
+    (outputEq : post.output = word.toBytes) :
+    AcceptedBoolWord post result ↔ word = result := by
+  expect_recipe_trigger "goal-shape:accepted-bool-word"
+  blanc_suggest
+  exact acceptedBoolWord_iff_of_output errorClean outputEq
+
+-- EXPECT: binary-dispatch-miss
+example (tree : DispatchTree) (selector : B256)
+    {program : Prog} {sevm : Sevm} {base : Devm} (G : Nat)
+    (hmiss : ¬ tree.HasSelector selector) :
+    ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
+        (base.setMach
+          ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector⟩)
+        (dispatch tree)
+        (.error (.revert,
+          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+      Func.RunCompiledTo.NoRawSstorePath run := by
+  expect_recipe_trigger "goal-shape:raw-sstore-free-compiled-path"
+  blanc_suggest
+  exact DispatchTree.dispatchMiss_runCompiledTo_with_path tree selector G hmiss
+
+-- EXPECT: call-boundary-outcomes
+example {fs : List Func} {sevm : Sevm} {devm : Devm} {f : Func}
+    {P : Execution → Prop} (h : Func.ExecSat fs sevm devm f P) :
+    Func.ExecSat fs sevm devm f P := by
+  expect_recipe_trigger "goal-head:Func.ExecSat"
+  blanc_suggest
+  exact h
+
+-- EXPECT: constant-error-guard
+example {fs : List Func} {sevm : Sevm} {devm : Devm} {reason : String}
+    {slot G : Nat} {stack : List B256} {otherwise : Func}
+    (run : Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
+      (.error (.revert,
+        (devm.setMach ⟨stack,
+          Mem.writeStoresRev devm.memory
+            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+              (errorData reason)))) :
+    Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
+      (.error (.revert,
+        (devm.setMach ⟨stack,
+          Mem.writeStoresRev devm.memory
+            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+              (errorData reason))) := by
+  expect_recipe_trigger "goal-shape:constant-error-guard"
+  blanc_suggest
+  exact run
+
+-- EXPECT: line-observation-invariance
+example : Line.Inv Devm.getBal [] := by
+  expect_recipe_trigger "goal-head:Line.Inv"
+  blanc_suggest
+  exact Line.nil_inv
+
+-- EXPECT: raw-sstore-free-compiled-path
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {body : Func}
+    {out : Execution} {run : Func.RunCompiledTo fs sevm pre body out}
+    (safe : Func.RunCompiledTo.NoRawSstorePath run) :
+    Func.RunCompiledTo.NoRawSstorePath run := by
+  expect_recipe_trigger "goal-shape:raw-sstore-free-compiled-path"
+  blanc_suggest
+  exact safe
+
+-- The trigger is head-only (`Func.RunCompiled`/`Func.RunCompiledTo`), so no
+-- goal distinguishes this recipe from `runcompiled-construction` to the
+-- matcher; the case exhibits a body-from-kernel boundary instantiation.
+-- EXPECT: runcompiled-family-compression
+example {fs : List Func} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {kernelTail : Func}
+    (run : Func.RunCompiledTo fs sevm pre kernelTail out) :
+    Func.RunCompiledTo fs sevm pre kernelTail out := by
+  expect_recipe_trigger "goal-shape:runcompiled-family-compression"
+  blanc_suggest
+  exact run
+
+-- EXPECT: state-context-cleanup
+example (stage entry exit : Devm) :
+    stage = stage ∧ entry = entry ∧ exit = exit := by
+  expect_recipe_trigger "context-shape:intermediate-devm"
+  blanc_suggest
+  exact ⟨rfl, rfl, rfl⟩
+
+-- EXPECT: static-store-exclusion
+example {fs : List Func} {f : Func} {e : Sevm} {s r : Devm}
+    (stores : StoresOrHalts fs f) :
+    Func.Run fs e s f r → e.isStatic = false := by
+  expect_recipe_trigger "implication-premise:Func.Run"
+  blanc_suggest
+  exact stores.isStatic_eq_false
+
+-- EXPECT: trace-admitted-frame-invariant
+example {c : ContractSpec} {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : c.PreservesAdmitted ca entry) :
+    c.PreservesAdmitted ca entry := by
+  expect_recipe_trigger "goal-head:ContractSpec.PreservesAdmitted"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {ca : Adr} {entry : Sevm → Devm → Prop} {pc : Nat} {sevm : Sevm}
+    {pre : Devm} {out : Execution} {run : Exec pc sevm pre out}
+    (h : Exec.FrameAdmitted ca entry run) :
+    Exec.FrameAdmitted ca entry run := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: upgrade-migration-refinement
+example {σ : Type} {arch : UpgradeArchitecture σ} {v1 v2 : σ → Prop}
+    (h : MigrationSound arch v1 v2) :
+    MigrationSound arch v1 v2 := by
+  expect_recipe_trigger "goal-head:MigrationSound"
+  blanc_suggest
+  exact h
 
 /-! ### Checked MemoryStage authoring examples (blanc-memory-example-delivery-v1)
 
