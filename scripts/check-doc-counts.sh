@@ -12,8 +12,9 @@
 # For each registered claim this gate computes the value from the one committed
 # artifact that owns it, finds every place a public surface states it, and fails
 # on disagreement. It also pins the published verbatim transcripts of
-# scripts/check-claims.sh against that gate's own verdict format string, and
-# PORTING.md's references into this tree. Prose judgment is out of scope: see
+# scripts/check-claims.sh and the check.sh axiom-audit line against those gates'
+# own verdict format strings, and PORTING.md's references into this tree. Prose
+# judgment is out of scope: see
 # the script's module docstring for what counts as a published claim and why
 # scoring prose against the tree is not this gate's job.
 #
