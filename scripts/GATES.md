@@ -216,15 +216,34 @@ the build row separately says *exact build certificate*. Both files are
 candidate-local disposable state under `.lake/`.
 
 Successful cacheable verdicts are stored atomically in
-`$(git rev-parse --git-common-dir)/blanc-gate-evidence/evidence.json`. This is
-the trust boundary: worktrees of one physical clone on one host can consume an
-exact fingerprint, but another clone cannot. A dirty worktree may consume
-matching evidence and may execute gates, but its fresh verdicts are
-candidate-local and are not admitted to the shared store. The store retains
-several historical fingerprints per row, so returning to an earlier exact
-tree can recover its evidence. It is runner-written only, ignored by Git, and
-may be deleted; absence, corruption, schema mismatch, or an interrupted write
-costs fresh execution and never produces a credit.
+`$(git rev-parse --git-common-dir)/blanc-gate-evidence/evidence-v3-<host>.json`.
+The host identity is stable across network-hostname changes: macOS uses the
+hashed IOPlatformUUID and Linux uses the hashed machine-id, with no hostname,
+boot/session or unknown-platform fallback. The raw OS token is never written.
+Missing, malformed or disagreeing sources refuse identity rather than widening
+reuse. Machine-id and virtual-machine IOPlatformUUID can be deliberately cloned,
+so this is an OS-installation binding inside the existing same-host, same-user
+local trust boundary, not a hardware-uniqueness claim.
+
+The identity-specific path is the downgrade boundary. Legacy hostname-bound
+`evidence.json` and stores for other stable identities are preserved; an old
+checkout can continue writing only its legacy path and cannot overwrite the v3
+store. A mismatch prints both sanitized hashed identities and the remediation
+in `--plan` and run transcripts. Legacy rows are not re-keyed: their retained
+provenance has no stable OS token, and this runner's identity authority is a
+fingerprint component for every cacheable row. Fresh re-verification writes v3
+records, which later unchanged candidates may reuse. A verified import would
+require independent retained provenance binding both identities to this OS
+installation; editing host or fingerprint fields is never migration.
+
+This is the trust boundary: worktrees of one physical clone under that local
+host/user binding can consume an exact fingerprint, but another clone cannot.
+A dirty worktree may consume matching evidence and may execute gates, but its
+fresh verdicts are candidate-local and are not admitted to the shared store.
+The store retains several historical fingerprints per row, so returning to an
+earlier exact tree can recover its evidence. It is runner-written only, ignored
+by Git, and may be deleted; absence, corruption, schema mismatch, or an
+interrupted write costs fresh execution and never produces a credit.
 
 Selective runs in every worktree of that clone are serialized by the
 nonblocking kernel lock at the sibling `blanc-gate-evidence/run.lock`. Python
@@ -233,12 +252,26 @@ separate command sandboxes have distinct PID namespaces. The kernel releases
 the lock when its holder exits; the lock file is not deleted to infer liveness.
 
 Runner identity follows the same relevance rule as gate inputs. The shared
-fingerprint/verdict/drift engine and shell entry point identify every row. The
+fingerprint/verdict/drift engine, stable-host helper and shell entry point
+identify every row. The
 native current-mainnet root resolver identifies only rows that consume the t8n
 target. Serialization-only lock code identifies no gate verdict: changing it
 cannot alter what a gate read or what evidence qualifies for reuse. Controls
 pin both directions, so a t8n resolver change invalidates its consumers while
 preserving unrelated rows, and a lock-only change preserves all fingerprints.
+
+The engine's soundness identity covers the whole module-scope *binding* map of
+`gate-cache.py` — which global name is bound to which module and attribute —
+and not only the named declarations the digest matches. An `import` statement
+has no name, so without that the resolver, lock and coordination bindings all
+sat outside the authority, and rebinding one line could move the fingerprinted
+current-mainnet input root while the runner identity stood still. It is the
+binding that is identified, never the imported module's contents: the relevance
+rule above is unchanged, an edit inside the lock module still preserves every
+fingerprint, and the map is canonical, so reordering the import block is a
+presentation edit. There is no exemption list; a control enumerates the
+bindings out of the runner's own source, so a module imported tomorrow is
+covered the day it is added.
 
 **What makes a verdict reusable.** `scripts/gate-registry.json` records, per
 command instance, every mutable input that gate actually consumes: exact files,
@@ -257,7 +290,7 @@ Jaune. There is no second, hand-maintained import graph here. An evaluator under
 `scripts/` that Lake has no target for is identified by its own source plus the
 `depHash` of each module it imports.
 
-The local `.lake/blanc-build-certificate.json` may satisfy the build
+The local `.lake/blanc-build-certificate-v3.json` may satisfy the build
 prerequisite without rebuilding only when its host, all Lean sources, Lake
 configuration, toolchain and package pins, trace population, trace `depHash`
 values, and the exact Jaune fixture-runner bytes match. A certifiable local
@@ -508,7 +541,7 @@ against the gate.
 | `scripts/check-prorata.sh --no-build` | replays the 14 committed BPO2 PRORATA blocks through Jaune, checks their bidirectional manifest, timing-free canonical oracle-vector bytes, and byte-equality of every fixture's PRORATA pre-state code against frozen `Blanc.prorataCode`. This CI-safe replay deliberately needs no external target; `check-prorata-current-mainnet.sh` separately regenerates the documents. `--self-test` requires a deleted manifest expectation and a mutated canonical vector both to fail in isolated copies | 14 BPO2 fixtures, 131 generation-time assertions, 4 canonical oracle vectors; 2 self-test falsifiers | sub-second |
 | `scripts/check-fmint-coverage.sh` | selector reachability split into direct top-level entry, post-state-witnessed internal CALL, and uncredited embedding; five built-in callsite corruptions prove the evidence channel is live | 12 selectors: 2 direct + 7 witnessed internal, budget 3 | sub-second |
 | `scripts/check-weth-coverage.sh` | the same honest reachability split for WETH, plus direct empty-calldata `deposit()` fallback and the same five callsite falsifiers | 10 selectors: 4 direct + 6 witnessed internal + fallback, budget 0 | sub-second |
-| `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, and missing/cyclic local-import rejection; and the calibration sampler: commit-seeded reproducible order-independent draw, per-band quotas drawn from inside their own boundaries, under-populated bands, band membership recomputed from the current baseline, at-most-one displacement when the library grows, mandatory candidates never sampled, possibly-affected and vanished files never drawn, withheld controls still drawn while changed ones stop being drawn, the refuse/annotate/floor tiers, fail-closed rejection of a control or admission candidate that was not re-measured, refusal of a cache write from a calibration run, and an end-to-end verdict whose evidence block records the seed, digests, boundaries and every ratio | 59 invalidation/cache/sampling controls | sub-second |
+| `scripts/check-elab.sh --self-test` | fail-closed elaboration-selection behavior: cache-cold full selection, unchanged-tree reuse, exact leaf/upstream/import-edge propagation, global configuration invalidation, new/deleted modules, corrupt-cache fallback, failed-result non-persistence, independent-green-result retention, concurrent-source-drift rejection, stable/changed/missing Lake trace evidence, missing/cyclic local-import rejection, stable-host shared measurement/baseline reuse, legacy-store coexistence, and old-writer isolation; and the calibration sampler: commit-seeded reproducible order-independent draw, per-band quotas drawn from inside their own boundaries, under-populated bands, band membership recomputed from the current baseline, at-most-one displacement when the library grows, mandatory candidates never sampled, possibly-affected and vanished files never drawn, withheld controls still drawn while changed ones stop being drawn, the refuse/annotate/floor tiers, fail-closed rejection of a control or admission candidate that was not re-measured, refusal of a cache write from a calibration run, and an end-to-end verdict whose evidence block records the seed, digests, boundaries and every ratio | 64 invalidation/cache/sampling controls | sub-second |
 | `lake build` | integration elaboration, including the audited compile witnesses, production Lido runtime/constructor artifact family, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, committed holder-flow conservation, and the BeaconDeposit model/runtime/constructor/effect family | 1385 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | elaborates the committed proof-recipe suggestion controls after the authoritative build, then audits the audited top theorems, each against its own pinned expected axiom set; the common rows include the direct spawned-code-address and source-chronology theorems, the proxy-pair rows cover its compiled programs, concrete success/revert executions, correspondence and write authority with biting controls, canonical empty CREATE, nonempty setup chronology, the exact both-slot setup child and complete settled CREATE, and failed whole-CREATE rollback, and the Lido rows include the universal runtime compile equation, source inventories, cycle canary/mutant, Registry mutation bridges, arbitrary-finite enumeration, coherent views, local raw/error/committed observability boundaries, and the complete direct-deployment proof family; the PRORATA rows cover its compile witness and deployed-byte body effects, the exact rounding-direction and residue arithmetic, zero-tolerance preview/actual consistency at both body and deployed-byte altitude, the `ContractSpec` instantiation and genesis-anchored accounting invariant, the eleven realized-accounting rungs with both carrier projections, and the three attack-trace headlines; the WETH10 rows pin the schedule-parametric generic surfaces, every current-mainnet specialization, every retained Prague corollary, the four-rule gas ceiling and the schedule-wide EIP-7825 discharge that consumes it in the direction `AdmissibleRedemptionTx.gas_cap` is stated, schedule selection, and the BPO2 timestamp; the Lido TWG rows cover selector-route construction, the completed pinned-target bundle, the S1 sentinel execution control, the A2 waypoint, and the shared branch-inversion and accepted-boolean adapters used by A3; BeaconDeposit covers its opening model, compiled P1–P6, direct deployment root/occurrence, exact dispatcher frame preservation, Prague-only prefix extension, and deployment-rooted count/root headline; and the contract-neutral operand-stack certificate rows pin the same-frame transport trio, the checker's `checkTable_certificate` soundness theorem and the module's live minimal use, so the finite validation stays KERNEL-checked, including the first real consumer's transported entry result | 1077 theorems | ~7 s |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the common direct spawned-code-address and source-chronology theorems, WETH10 generic/current-mainnet/Prague flagships, the Lido artifact, projection, Registry mutation, arbitrary-finite enumeration, coherent-view, local raw/settled observability, constructor/message/transaction/block, and direct-deployment-root boundaries, the proxy-pair canonical constructor/direct-CREATE/closed-fixture boundaries plus its nonempty setup chronology, exact both-slot setup child, and failed whole-CREATE rollback, and PRORATA's SF-frozen P3 headlines (genesis-anchored reachable invariant, the pure and realized cumulative-dust identities, and both directions of the realized carrier's non-vacuity against chain reachability) and its three P4 headlines, plus BeaconDeposit's compiled P1–P6 and exact P7/P8 deployment/frame/history/count-root headlines | exactly 382 definitions/statements and constructors | ~2 s |
@@ -650,7 +683,7 @@ invoked by the scripts above and should not be run directly in a report:
 | `scripts/selector_coverage.py` | both coverage gates | conservatively recognizes straight-line internal CALL sites tied to changed post-state recorder slots, inventories uncredited selector embeddings, and runs five corruption falsifiers |
 | `scripts/check-fmint-coverage.py` | `check-fmint-coverage.sh` | accounts for direct, witnessed-internal, embedded-only, and unreached selectors; identifies fmint by byte-equality against the committed literal |
 | `scripts/check-weth-coverage.py` | `check-weth-coverage.sh` | the same accounting for WETH, plus the direct empty-calldata fallback |
-| `scripts/check-elab-selection.py` | `check-elab.sh` | discovers all local Lean modules, parses the local import graph fail-closed, combines each module's recursive local-source fingerprint with Lake's transitive artifact `depHash`, selects only cache-invalid modules, atomically records non-drifting measurements after revalidating the tree while leaving any violating files invalid, draws and adjudicates the commit-seeded stratified calibration sample, and owns the 39 fast invalidation/cache/sampling controls. It refuses to advance the cache from a calibration run, because that cache is what decides which modules the draw may treat as unaffected |
+| `scripts/check-elab-selection.py` | `check-elab.sh` | discovers all local Lean modules, parses the local import graph fail-closed, combines each module's recursive local-source fingerprint with Lake's transitive artifact `depHash`, selects only cache-invalid modules, atomically records non-drifting measurements after revalidating the tree while leaving any violating files invalid, shares only stable-host records through an identity-specific path that legacy writers cannot overwrite, draws and adjudicates the commit-seeded stratified calibration sample, and owns the 64 invalidation/cache/sampling controls. It refuses to advance the cache from a calibration run, because that cache is what decides which modules the draw may treat as unaffected |
 | `scripts/gate-lock.sh` | `check-elab.sh` | exclusive gate locking; sourced, never run |
 
 Current-mainnet consumers use the shared API and register their own wrapper,
