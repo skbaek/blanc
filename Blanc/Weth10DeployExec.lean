@@ -7,6 +7,7 @@
 import Blanc.Weth10Deploy
 import Blanc.Reverts
 import Blanc.ForwardCall
+import Blanc.MemoryLayout
 
 namespace Blanc
 
@@ -64,47 +65,90 @@ def weth10InitMemory (sevm : Sevm) : Mem :=
   let M9 := M8.write 536 hash.toBytes
   M9.write 3039 hash.toBytes
 
+/-! ## MemoryStage constructor staging -/
+
+/-- The nine ordered pre-hash writes as one general `(Nat × Bytes)` stage.
+Payloads are the real staging expressions. -/
+def weth10PreHashStage (sevm : Sevm) : MemoryStage :=
+  [(0, sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)),
+    (372, sevm.benvStat.chainId.toB256.toBytes),
+    (691, sevm.benvStat.chainId.toB256.toBytes),
+    (2875, sevm.benvStat.chainId.toB256.toBytes),
+    (6336, DOMAIN_TYPEHASH.toBytes),
+    (6368, NAME_HASH.toBytes),
+    (6400, VERSION_HASH.toBytes),
+    (6432, sevm.benvStat.chainId.toB256.toBytes),
+    (6464, sevm.currentTarget.toB256.toBytes)]
+
+/-- Memory bridge: the pre-hash stage folds the exact `weth10InitPreHashMemory`
+writes. Explicit `rw` chain following the donor off-`simp` pattern. -/
+theorem weth10PreHashMemory_eq (sevm : Sevm) :
+    (weth10PreHashStage sevm).applyMemory Mem.empty =
+      weth10InitPreHashMemory sevm := by
+  unfold weth10PreHashStage weth10InitPreHashMemory weth10InitChainMemory
+    weth10InitCopyMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
+
+/-- Image bridge: the pre-hash stage folds the exact `weth10InitPreHashImage`
+writes. -/
+theorem weth10PreHashImage_eq (sevm : Sevm) :
+    (weth10PreHashStage sevm).applyImage [] =
+      weth10InitPreHashImage sevm := by
+  unfold weth10PreHashStage weth10InitPreHashImage
+  rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+    MemoryStage.applyImage_cons, MemoryStage.applyImage_nil]
+
+/-- The two hash-dependent separator patches as a second stage, composed after
+the pre-hash stage. -/
+def weth10SepStage (sevm : Sevm) : MemoryStage :=
+  [(536, (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes),
+    (3039, (((weth10InitPreHashMemory sevm).read 6336 160).1.keccak).toBytes)]
+
+/-- Full-memory bridge via `applyMemory_append`. -/
+theorem weth10FullMemory_eq (sevm : Sevm) :
+    ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyMemory
+      Mem.empty) = weth10InitMemory sevm := by
+  rw [MemoryStage.applyMemory_append, weth10PreHashMemory_eq]
+  unfold weth10SepStage weth10InitMemory
+  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
+    MemoryStage.applyMemory_nil]
+
+/-- One `wf_reads` over the pre-hash stage. -/
+theorem weth10PreHashStage_wf_reads (sevm : Sevm) :
+    Mem.Wf ((weth10PreHashStage sevm).applyMemory Mem.empty) ∧
+      Mem.Reads ((weth10PreHashStage sevm).applyMemory Mem.empty)
+        ((weth10PreHashStage sevm).applyImage []) :=
+  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
+
+/-- One `wf_reads` over the composed full stage, replacing the post-hash
+re-thread. -/
+theorem weth10FullStage_wf_reads (sevm : Sevm) :
+    Mem.Wf ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyMemory
+        Mem.empty) ∧
+      Mem.Reads ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyMemory
+        Mem.empty)
+        ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyImage []) :=
+  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
+
 /-- Every constructor `MSTORE` is reflected by the corresponding byte-image
 write. -/
 theorem weth10InitPreHashMemory_reads (sevm : Sevm) :
     Mem.Reads (weth10InitPreHashMemory sevm)
       (weth10InitPreHashImage sevm) := by
-  let copied := sevm.code.sliceD 177 6313 (Linst.toUInt8 .stop)
-  let chain := sevm.benvStat.chainId.toB256
-  have wf0 := Mem.Wf.write Mem.wf_empty 0 copied
-  have r0 := Mem.Reads.write Mem.wf_empty Mem.reads_empty 0 copied
-  have wf1 := Mem.Wf.write wf0 372 chain.toBytes
-  have r1 := Mem.Reads.write wf0 r0 372 chain.toBytes
-  have wf2 := Mem.Wf.write wf1 691 chain.toBytes
-  have r2 := Mem.Reads.write wf1 r1 691 chain.toBytes
-  have wf3 := Mem.Wf.write wf2 2875 chain.toBytes
-  have r3 := Mem.Reads.write wf2 r2 2875 chain.toBytes
-  have wf4 := Mem.Wf.write wf3 6336 DOMAIN_TYPEHASH.toBytes
-  have r4 := Mem.Reads.write wf3 r3 6336 DOMAIN_TYPEHASH.toBytes
-  have wf5 := Mem.Wf.write wf4 6368 NAME_HASH.toBytes
-  have r5 := Mem.Reads.write wf4 r4 6368 NAME_HASH.toBytes
-  have wf6 := Mem.Wf.write wf5 6400 VERSION_HASH.toBytes
-  have r6 := Mem.Reads.write wf5 r5 6400 VERSION_HASH.toBytes
-  have wf7 := Mem.Wf.write wf6 6432 chain.toBytes
-  have r7 := Mem.Reads.write wf6 r6 6432 chain.toBytes
-  have r8 := Mem.Reads.write wf7 r7 6464 sevm.currentTarget.toB256.toBytes
-  simpa [weth10InitPreHashMemory, weth10InitChainMemory,
-    weth10InitCopyMemory, weth10InitPreHashImage, copied, chain]
-    using r8
+  rw [← weth10PreHashMemory_eq, ← weth10PreHashImage_eq]
+  exact (weth10PreHashStage_wf_reads sevm).2
 
 theorem weth10InitPreHashMemory_wf (sevm : Sevm) :
     Mem.Wf (weth10InitPreHashMemory sevm) := by
-  unfold weth10InitPreHashMemory weth10InitChainMemory weth10InitCopyMemory
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  apply Mem.Wf.write
-  exact Mem.wf_empty
+  rw [← weth10PreHashMemory_eq]
+  exact (weth10PreHashStage_wf_reads sevm).1
 
 private lemma Bytes.length_writeAt_of_le
     {bs xs : Bytes} {n : Nat} (h : n + xs.length ≤ bs.length) :
@@ -227,12 +271,19 @@ theorem weth10InitMemory_reads (sevm : Sevm) :
       ((weth10InitPreHashMemory sevm).read 6336 160).1.keccak = separator := by
     rw [weth10InitPreHashMemory_read]
     rfl
-  have wf8 := weth10InitPreHashMemory_wf sevm
-  have r8 := weth10InitPreHashMemory_reads sevm
-  have wf9 := Mem.Wf.write wf8 536 separator.toBytes
-  have r9 := Mem.Reads.write wf8 r8 536 separator.toBytes
-  have r10 := Mem.Reads.write wf9 r9 3039 separator.toBytes
-  simpa [weth10InitMemory, separator, hhash] using r10
+  have hfull := (weth10FullStage_wf_reads sevm).2
+  rw [weth10FullMemory_eq] at hfull
+  have himage :
+      ((weth10PreHashStage sevm ++ weth10SepStage sevm).applyImage []) =
+        Bytes.writeAt
+          (Bytes.writeAt (weth10InitPreHashImage sevm) 536 separator.toBytes)
+          3039 separator.toBytes := by
+    rw [MemoryStage.applyImage_append, weth10PreHashImage_eq]
+    unfold weth10SepStage
+    rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
+      MemoryStage.applyImage_nil, hhash]
+  rw [himage] at hfull
+  exact hfull
 
 private lemma Bytes.sliceD_writeAt_congr
     {bs cs xs : Bytes} {len n : Nat}
