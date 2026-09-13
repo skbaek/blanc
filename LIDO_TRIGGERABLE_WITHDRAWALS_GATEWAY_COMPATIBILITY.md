@@ -40,7 +40,7 @@ prose, own artifact identities and finite observations.
 | Blanc complete CREATE input | `9966` bytes; SHA-256 `6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690` |
 | Blanc runtime | `8094` bytes; SHA-256 `6fdb5afdafc949df0677cea1e2f61f6363e21fd6348ff9843186fa8c68ca3c56` |
 | EELS oracle | `ethereum/execution-specs` commit `4198b9c5996713b268aed602739d5aa40e277694`, Prague |
-| Differential manifest | schema `1`; SHA-256 `2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26` |
+| Differential manifest | schema `1`; SHA-256 `c8e8ee1d09dfb0e8f2173c6d4723a6517f593bb061132bbcf658b310548577c4` |
 | Differential result | `PASS`; `71` cases, `186` measured resource boundaries |
 
 The mainnet snapshot is provenance and selection-time context. It is not a
