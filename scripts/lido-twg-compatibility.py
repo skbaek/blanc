@@ -141,8 +141,8 @@ GAS_ROWS = [
     ("TRIGGER_REFUND_REVERT", "trigger-refund-revert"),
 ]
 
-BLANC_ARTIFACT_COMMIT = "a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e"
-BLANC_PROOF_COMMIT = "6e62f0f884534fa89b18635ed3687099d1b25488"
+BLANC_ARTIFACT_COMMIT = "f8b56653b94ff810c876a56b1539ac45c009de72"
+BLANC_PROOF_COMMIT = "84ff5f155a83c25097aa3fef2aeb65bce7670651"
 CALLDATA_EXCLUSION_TEXT = (
     "nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and "
     "recognized-selector nonpayability are untested and excluded"

@@ -33,8 +33,8 @@ prose, own artifact identities and finite observations.
 | Reference creation bytes | `10256` bytes; SHA-256 `0e7dd55e589cf6bd38b2ebae7581ff169a354f9399087ecb6b8940f56bacc7e7` |
 | Reference runtime | `8128` bytes; SHA-256 `12c9d210f25202cf535622f93ba5237181512cc23970f2da08434f77e68d3a7b` |
 | Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `25866991`; code hash `0xbf27dab01ae7fb4507657a02d975bd38aeea9eaba4498225da3a0ee5f815f123`; role/pause snapshot `b22333b245132e24f43328f46030b09f2ccf805ad3937382d1636a849626cc23` |
-| Blanc artifact/runtime program commit | `a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e` |
-| Optimized-runtime theorem ladder and pinned-target certificate | `6e62f0f884534fa89b18635ed3687099d1b25488` |
+| Blanc artifact/runtime program commit | `f8b56653b94ff810c876a56b1539ac45c009de72` |
+| Optimized-runtime theorem ladder and pinned-target certificate | `84ff5f155a83c25097aa3fef2aeb65bce7670651` |
 | Jaune pin | `949cf97ee1956828a3ac0eb12a62c438656ba76e` |
 | Blanc creation template | `9806` bytes; SHA-256 `0e1ee072fc51e1f93917004d7a0e67164bc7bc668087dd2f707f21f52e06f872` |
 | Blanc complete CREATE input | `9966` bytes; SHA-256 `6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690` |
@@ -459,9 +459,9 @@ not claimed; any later nonnegative named cell reopens this boundary.
 ### Formal Blanc boundary
 
 The runtime/artifact program is frozen at
-`a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e`. The optimized-runtime theorem
+`f8b56653b94ff810c876a56b1539ac45c009de72`. The optimized-runtime theorem
 ladder and pinned-target certificate is commit
-`6e62f0f884534fa89b18635ed3687099d1b25488`, which certifies that exact
+`84ff5f155a83c25097aa3fef2aeb65bce7670651`, which certifies that exact
 program's pause-face, authorization, protected-surface, and
 `PinnedPauseTarget` properties within
 `[propext, Classical.choice, Quot.sound]`. The bundle's CircuitBreaker-cell
@@ -483,9 +483,9 @@ Solidity account invariant.
 The published finite claim is:
 
 > For the exact Blanc runtime/artifact program at
-> `a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e`, certified by the
+> `f8b56653b94ff810c876a56b1539ac45c009de72`, certified by the
 > optimized-runtime theorem ladder and pinned-target commit
-> `6e62f0f884534fa89b18635ed3687099d1b25488`, Jaune pin
+> `84ff5f155a83c25097aa3fef2aeb65bce7670651`, Jaune pin
 > `949cf97ee1956828a3ac0eb12a62c438656ba76e`, reference lock
 > `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f`, and EELS commit
 > `4198b9c5996713b268aed602739d5aa40e277694`, the exact compiled Blanc

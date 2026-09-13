@@ -45,9 +45,9 @@
     },
     "positiveIdentityChecks": 10,
     "proof": {
-      "artifactProgramCommit": "a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e",
+      "artifactProgramCommit": "f8b56653b94ff810c876a56b1539ac45c009de72",
       "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
-      "proofCertificateCommit": "6e62f0f884534fa89b18635ed3687099d1b25488"
+      "proofCertificateCommit": "84ff5f155a83c25097aa3fef2aeb65bce7670651"
     },
     "reference": {
       "creationTemplate": {
@@ -397,7 +397,7 @@
     "censusSha256": "60ef98c19d78b2e1068e23501a30e7159471f95b25b6b4c1d4dadaebc22083eb",
     "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
     "evidence": {
-      "artifactProgramCommit": "a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e",
+      "artifactProgramCommit": "f8b56653b94ff810c876a56b1539ac45c009de72",
       "artifacts": {
         "creationTemplate": {
           "byteLength": 9806,
@@ -830,7 +830,7 @@
           }
         ]
       },
-      "proofCertificateCommit": "6e62f0f884534fa89b18635ed3687099d1b25488",
+      "proofCertificateCommit": "84ff5f155a83c25097aa3fef2aeb65bce7670651",
       "summaries": {
         "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded",
         "B2_CODE_SIZE_HEADROOM_SUMMARY": "runtime 8094 bytes (16482 EIP-170 headroom); full CREATE 9966 bytes (39186 EIP-3860 headroom)",

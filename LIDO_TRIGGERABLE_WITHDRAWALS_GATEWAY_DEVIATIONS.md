@@ -118,7 +118,7 @@ Other accepted low-level freedoms, subject to the same behavioral boundary:
 
 ## Code-size comparison
 
-<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","artifactProgramCommit":"a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e","proofCertificateCommit":"6e62f0f884534fa89b18635ed3687099d1b25488","manifest":"2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26"} -->
+<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","artifactProgramCommit":"f8b56653b94ff810c876a56b1539ac45c009de72","proofCertificateCommit":"84ff5f155a83c25097aa3fef2aeb65bce7670651","manifest":"2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26"} -->
 
 All lengths are byte counts over the exact hex decoded by the named gates.
 Negative delta means Blanc is smaller. The creation template has no direct
