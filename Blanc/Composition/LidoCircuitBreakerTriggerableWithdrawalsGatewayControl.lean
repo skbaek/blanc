@@ -61,7 +61,7 @@ def gatewayPauseWorldState : State :=
         stor := controlGatewayStor
         code := gatewayCode controlDeployParams }
 
-def gatewayPauseWorldGas : Nat := 107635
+def gatewayPauseWorldGas : Nat := 103461
 
 def gatewayPauseWorldMsg : Msg :=
   { (pauseWorldMsg pauseLastWorldStor gatewayPauseWorldGas) with

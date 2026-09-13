@@ -1452,7 +1452,7 @@ private theorem gatewayPauseWorld_targetPausedZero :
   change (gatewayPauseWorldState.get pauseWorldCallee).stor.get
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
   rw [gatewayPauseWorldState_get_target]
-  rfl
+  decide +kernel
 
 private theorem gatewayPauseWorld_targetPausedOrigZero :
     getOrigStorVal gatewayPauseWorldSevm pauseWorldCallee
@@ -1460,7 +1460,7 @@ private theorem gatewayPauseWorld_targetPausedOrigZero :
   change (gatewayPauseWorldState.get pauseWorldCallee).stor.get
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
   rw [gatewayPauseWorldState_get_target]
-  rfl
+  decide +kernel
 
 private theorem gatewayPauseWorld_targetPausedCold :
     (pauseWorldCallee, LidoTriggerableWithdrawalsGateway.resumeSinceSlot) ∉
@@ -1528,27 +1528,12 @@ private theorem gatewayRunAfterSetBase_targetPausedZero :
     gatewayRunAfterSetBase.getStorVal pauseWorldCallee.toB256.toAdr
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0 := by
   rw [gatewayRunAfterSetBase_targetStor]
-  rfl
+  decide +kernel
 
-private theorem gatewayRunAfterSetBase_roleIndex :
+private theorem gatewayRunAfterSetBase_membership :
     gatewayRunAfterSetBase.getStorVal pauseWorldCallee.toB256.toAdr
-      (roleLookupIndexSlot pauseRole
-        gatewayPauseWorldSevm.currentTarget.toB256) = 1 := by
-  rw [gatewayRunAfterSetBase_targetStor, gatewayPauseWorld_currentTarget]
-  rfl
-
-private theorem gatewayRunAfterSetBase_role :
-    gatewayRunAfterSetBase.getStorVal pauseWorldCallee.toB256.toAdr
-      (roleLookupRoleSlot pauseRole
-        gatewayPauseWorldSevm.currentTarget.toB256) = pauseRole := by
-  rw [gatewayRunAfterSetBase_targetStor, gatewayPauseWorld_currentTarget]
-  rfl
-
-private theorem gatewayRunAfterSetBase_account :
-    gatewayRunAfterSetBase.getStorVal pauseWorldCallee.toB256.toAdr
-      (roleLookupAccountSlot pauseRole
-        gatewayPauseWorldSevm.currentTarget.toB256) =
-      canonicalAccount gatewayPauseWorldSevm.currentTarget.toB256 := by
+      (roleMembershipSlot pauseRole
+        gatewayPauseWorldSevm.currentTarget.toB256) ≠ 0 := by
   rw [gatewayRunAfterSetBase_targetStor, gatewayPauseWorld_currentTarget]
   decide +kernel
 
@@ -1603,42 +1588,12 @@ private theorem gatewayRunAfterSetBase_warmExpiry :
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     gatewayRunWarm_expiry_rb3
 
-private theorem gatewayRunAfterSetBase_roleIndexCold :
+private theorem gatewayRunAfterSetBase_membershipCold :
     (pauseWorldCallee.toB256.toAdr,
-      roleLookupIndexSlot pauseRole
+      roleMembershipSlot pauseRole
         gatewayPauseWorldSevm.currentTarget.toB256) ∉
       gatewayRunAfterSetBase.accessedStorageKeys :=
   gatewayRunAfterSetBase_targetKeyCold _
-
-private theorem gatewayRunAfterSetBase_roleCold :
-    (pauseWorldCallee.toB256.toAdr,
-      roleLookupRoleSlot pauseRole
-        gatewayPauseWorldSevm.currentTarget.toB256) ∉
-      (addAccessedStorageKey gatewayRunAfterSetBase
-        pauseWorldCallee.toB256.toAdr
-        (roleLookupIndexSlot pauseRole
-          gatewayPauseWorldSevm.currentTarget.toB256)).accessedStorageKeys := by
-  rw [addAccessedStorageKey_accessedStorageKeys']
-  simp only [Std.HashSet.mem_insert, beq_iff_eq, not_or]
-  exact ⟨by decide +kernel, gatewayRunAfterSetBase_targetKeyCold _⟩
-
-private theorem gatewayRunAfterSetBase_accountCold :
-    (pauseWorldCallee.toB256.toAdr,
-      roleLookupAccountSlot pauseRole
-        gatewayPauseWorldSevm.currentTarget.toB256) ∉
-      (addAccessedStorageKey
-        (addAccessedStorageKey gatewayRunAfterSetBase
-          pauseWorldCallee.toB256.toAdr
-          (roleLookupIndexSlot pauseRole
-            gatewayPauseWorldSevm.currentTarget.toB256))
-        pauseWorldCallee.toB256.toAdr
-        (roleLookupRoleSlot pauseRole
-          gatewayPauseWorldSevm.currentTarget.toB256)).accessedStorageKeys := by
-  rw [addAccessedStorageKey_accessedStorageKeys',
-    addAccessedStorageKey_accessedStorageKeys']
-  simp only [Std.HashSet.mem_insert, beq_iff_eq, not_or]
-  exact ⟨by decide +kernel, by decide +kernel,
-    gatewayRunAfterSetBase_targetKeyCold _⟩
 
 private theorem gatewayRunAfterSetBase_resumeCold :
     (pauseWorldCallee.toB256.toAdr, resumeSinceSlot) ∉
@@ -1649,14 +1604,13 @@ private theorem gatewayRunAfterSetBase_resumeCold :
         gatewayRunAfterSetBase).accessedStorageKeys := by
   simp only [pauseRoleWarm, addAccessedStorageKey_accessedStorageKeys',
     Std.HashSet.mem_insert, beq_iff_eq, not_or]
-  exact ⟨by decide +kernel, by decide +kernel, by decide +kernel,
-    gatewayRunAfterSetBase_targetKeyCold _⟩
+  exact ⟨by decide +kernel, gatewayRunAfterSetBase_targetKeyCold _⟩
 
 private theorem gatewayPauseWorld_afterSetGatewaySeam :
     ∃ mid : Devm,
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory gatewayRunMemoryLast pauseWorldDuration ∧
-      mid.gasLeft = 42343 ∧
+      mid.gasLeft = 42321 ∧
       (∀ key : B256,
         mid.getStorVal configWorldOwner key =
           gatewayRunAfterSetBase.getStorVal configWorldOwner key) ∧
@@ -1672,7 +1626,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
             ((runtime officialParams).main :: (runtime officialParams).aux)
             gatewayPauseWorldSevm
             (gatewayRunAfterSetBase.setMach
-              ⟨[], gatewayRunMemoryLast, 75328⟩)
+              ⟨[], gatewayRunMemoryLast, 71154⟩)
             pauseAfterSet final := by
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
@@ -1700,12 +1654,8 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
           exact Std.HashSet.not_mem_emptyWithCapacity)]
         rfl)
       gatewayRunAfterSetBase_code
-      gatewayRunAfterSetBase_roleIndex
-      gatewayRunAfterSetBase_role
-      gatewayRunAfterSetBase_account
-      gatewayRunAfterSetBase_roleIndexCold
-      gatewayRunAfterSetBase_roleCold
-      gatewayRunAfterSetBase_accountCold
+      gatewayRunAfterSetBase_membership
+      gatewayRunAfterSetBase_membershipCold
       gatewayRunAfterSetBase_targetPausedZero
       (by simpa only [toAdr_toB256] using
         gatewayPauseWorld_targetPausedOrigZero)
@@ -1768,7 +1718,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
   have hfiniteCost : pauseWorldDuration ≠ pauseInfiniteSentinel := by
     decide +kernel
   simp only [gatewayPauseChildCost, if_neg hfiniteCost] at h
-  rw [show (42362 + 29772 + 594 + 2600 : Nat) = 75328 from by norm_num] at h
+  rw [show (42362 + 25598 + 594 + 2600 : Nat) = 71154 from by norm_num] at h
   exact h
 
 private theorem gatewayPauseWorld_originalExpiry :
@@ -1820,7 +1770,7 @@ private theorem gatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 75328⟩)
+            ⟨[], gatewayRunMemoryLast, 71154⟩)
           pauseAfterSet final ∧
       Func.RunCompiledTo
           ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -1829,11 +1779,11 @@ private theorem gatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 75328⟩)
+            ⟨[], gatewayRunMemoryLast, 71154⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference gatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 75328⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71154⟩) successPre := by
   obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
     gatewayPauseWorld_afterSetGatewaySeam
   have hmidCount : mid.getStorVal gatewayPauseWorldSevm.currentTarget
@@ -1848,7 +1798,7 @@ private theorem gatewayPauseWorld_successSuffix :
     ((runtime officialParams).main :: (runtime officialParams).aux)
     gatewayPauseWorldSevm mid gatewayRunDecodedMemory gatewayRunImage8
     pauseWorldCallee.toB256 pauseWorldDuration pauseWorldPauser
-    pauseWorldExpiry pauseWorldExpiry 100 2900 36021
+    pauseWorldExpiry pauseWorldExpiry 100 2900 35999
     (by simpa only [gatewayRunDecodedMemory, gatewayRunMemoryLast,
       Blanc.LidoCircuitBreaker.stubRunMemoryLast] using
       stubRunMem_wf8)
@@ -1880,8 +1830,8 @@ private theorem gatewayPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], gatewayRunDecodedMemory, 36021 + 3322 + 100 + 2900⟩ = mid := by
-    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
+      ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900⟩ = mid := by
+    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -1906,16 +1856,16 @@ private theorem gatewayPauseWorld_productionRun :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 75328⟩)
+            ⟨[], gatewayRunMemoryLast, 71154⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference gatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 75328⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71154⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     gatewayPauseWorld_successSuffix
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
     gatewayPauseWorldSevm gatewayRunAfterSetNoLog gatewayRunMemoryLast gatewayRunImageLast
-    pauseWorldCallee.toB256 pauseWorldPauser 0 [] 75328 _ (by decide)
+    pauseWorldCallee.toB256 pauseWorldPauser 0 [] 71154 _ (by decide)
     (by simpa only [gatewayRunMemoryLast, gatewayRunImageLast,
       Blanc.LidoCircuitBreaker.stubRunMemoryLast,
       Blanc.LidoCircuitBreaker.stubRunImageLast] using
@@ -1936,12 +1886,12 @@ private theorem gatewayPauseWorld_productionRun :
     (by
       simpa only [gatewayRunAfterSetNoLog, gatewayRunAfterSetBase,
         gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using hafter)
-  rw [show (75328 + 1934 : Nat) = 77262 from by norm_num] at hfin
+  rw [show (71154 + 1934 : Nat) = 73088 from by norm_num] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled officialParams
     gatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
     pauseWorldCallee.toB256 1 1
-    2100 2100 2100 100 100 2900 2900 2900 77262 0
+    2100 2100 2100 100 100 2900 2900 2900 73088 0
     (by simpa only [gatewayRunMemory1] using stubRunMem_wf1)
     (by simpa only [gatewayRunMemory1, gatewayRunImage1] using stubRunMem_reads1)
     (by simpa only [gatewayRunImage1] using stubRunMem_target1)
@@ -1967,23 +1917,23 @@ private theorem gatewayPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (by decide) (by norm_num [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
-  rw [show (0 + 77262 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 92601 from by norm_num] at hrem
+  rw [show (0 + 73088 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
+    100 + 2900 + 2900 + 2900 : Nat) = 88427 from by norm_num] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     gatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1 []
-    92601 _ (by decide)
+    88427 _ (by decide)
     (by simpa only [gatewayRunMemory1, gatewayRunImage1] using stubRunMem_reads1)
     (by simpa only [gatewayRunImage1] using stubRunMem_new1)
     (by rw [gatewayRunMemory1, stubRunMem_size1]; decide)
     (by rw [gatewayRunMemory1, stubRunMem_size1])
     hrem
-  rw [show (92601 + 35 : Nat) = 92636 from by norm_num] at hglue
+  rw [show (88427 + 35 : Nat) = 88462 from by norm_num] at hglue
   have hker := setPauserKernel_found_runCompiled officialParams
     gatewayPauseWorldSevm gatewayRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
     (pauseImage pauseWorldCallee.toB256 pauseWorldDuration) _
     pauseWorldCallee.toB256 0 pauseWorldPauser 1 pauseWorldPauser 1
-    2900 2900 92636 0
+    2900 2900 88462 0
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).1
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).2.1
     (pauseMemory_spec pauseWorldCallee.toB256
@@ -2012,12 +1962,12 @@ private theorem gatewayPauseWorld_productionRun :
       gatewayRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [gatewayRunKernelBase] using gatewayRunKernelPrefixGas,
-    show (0 + 92636 + 8122 : Nat) = 100758 from by norm_num] at hker
+    show (0 + 88462 + 8122 : Nat) = 96584 from by norm_num] at hker
   have hcalldata := pauseCalldata_facts
     gatewayPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled officialParams gatewayPauseWorldSevm
     gatewayPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser
-    pauseWorldExpiry pauseWorldDuration 2100 2100 2100 100758 _
+    pauseWorldExpiry pauseWorldDuration 2100 2100 2100 96584 _
     hcalldata.1
     (by decide) rfl
     hcalldata.2
@@ -2035,11 +1985,11 @@ private theorem gatewayPauseWorld_productionRun :
       rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal]
       exact (gatewayRunStor_lockPost _).trans pauseLastStor_duration)
     gatewayRunCost_duration rfl hker
-  rw [show (100758 + (469 + 2100 + 2100 + 2100) : Nat) = 107527 from by
+  rw [show (96584 + (469 + 2100 + 2100 + 2100) : Nat) = 103353 from by
     norm_num] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
-    gatewayPauseWorldSevm gatewayPauseWorldPre 107527 0 _
+    gatewayPauseWorldSevm gatewayPauseWorldPre 103353 0 _
     hcalldata.1
     gatewayPauseWorld_publicPausePremises.valueZero
     gatewayPauseWorld_publicPausePremises.selectorEq
@@ -2048,16 +1998,16 @@ private theorem gatewayPauseWorld_productionRun :
       exact gatewayPauseWorld_publicPausePremises.codeAddress)
     gatewayPauseWorld_publicPausePremises.productionBytes hbodyTo
   have hentry : gatewayPauseWorldPre.setMach
-      ⟨[], Mem.empty, 0 + pauseDispatchGas + 107527⟩ =
+      ⟨[], Mem.empty, 0 + pauseDispatchGas + 103353⟩ =
       gatewayPauseWorldPre := by
-    rw [show (0 + pauseDispatchGas + 107527 : Nat) = gatewayPauseWorldGas from by
+    rw [show (0 + pauseDispatchGas + 103353 : Nat) = gatewayPauseWorldGas from by
       norm_num [pauseDispatchGas, gatewayPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
 
 private def gatewayPauseWorldAfterSetEntry : Devm :=
-  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 75328⟩
+  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 71154⟩
 
 private theorem gatewayPauseWorldAfterSetEntry_memory :
     gatewayPauseWorldAfterSetEntry.memory = gatewayRunMemoryLast := by
