@@ -391,16 +391,28 @@ def is_within(path: Path, base: Path) -> bool:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--only", nargs="*", help="audit just these gate ids")
+    parser.add_argument(
+        "--only", nargs="*", default=None, help="audit just these gate ids"
+    )
     arguments = parser.parse_args(argv)
-
-    print(ensure_cold_bytecode_cache())
 
     registry = gc.load_registry(gc.registry_path(ROOT))
     gates = [g for g in registry["gates"] if g["kind"] == "cacheable"]
-    if arguments.only:
+    if arguments.only is not None:
         wanted = set(arguments.only)
+        if not wanted:
+            parser.error("--only requires at least one cacheable gate id")
+        known = {gate["id"] for gate in gates}
+        unknown = sorted(wanted - known)
+        if unknown:
+            parser.error(
+                "unknown cacheable gate id(s): " + ", ".join(unknown)
+            )
         gates = [g for g in gates if g["id"] in wanted]
+        if not gates:
+            parser.error("--only selected no cacheable gates")
+
+    print(ensure_cold_bytecode_cache())
 
     roots = interesting_roots()
     bindings = runner_binding_files()
