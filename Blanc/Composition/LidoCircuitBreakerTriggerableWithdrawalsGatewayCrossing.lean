@@ -26,7 +26,7 @@ def gatewayPauseEvent (target : Adr) (duration : B256) : Log :=
 
 /-- Exact child charge of the selected `pauseFor(uint256)` arm. -/
 def gatewayPauseChildCost (duration : B256) : Nat :=
-  if duration = pauseInfiniteSentinel then 29741 else 29772
+  if duration = pauseInfiniteSentinel then 25567 else 25598
 
 private def gatewayPauseChildPost
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) : Devm :=
@@ -37,15 +37,13 @@ private def gatewayPauseChildPost
 
 /-- Exact installed width of the concrete control gateway runtime. -/
 theorem controlGatewayCode_size :
-    (gatewayCode controlDeployParams).size = 15948 := by
+    (gatewayCode controlDeployParams).size = 8094 := by
   decide +kernel
 
 def gatewayPauseKeys (keys : Std.HashSet (Adr × B256))
     (target : Adr) (caller : B256) : Std.HashSet (Adr × B256) :=
-  ((((keys.insert
-    (target, roleLookupIndexSlot pauseRole caller)).insert
-    (target, roleLookupRoleSlot pauseRole caller)).insert
-    (target, roleLookupAccountSlot pauseRole caller)).insert
+  ((keys.insert
+    (target, roleMembershipSlot pauseRole caller)).insert
     (target, resumeSinceSlot))
 
 theorem gatewayPauseKeys_resume_mem
@@ -89,29 +87,11 @@ private lemma runCompiled_call_zero_value_gatewayPause
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).read
         iiw.toNat isw.toNat).1 =
           LidoTriggerableWithdrawalsGateway.pauseForCalldata duration)
-    (h_index : d1.getStorVal cw.toAdr
-      (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) = 1)
-    (h_role : d1.getStorVal cw.toAdr
-      (roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) = pauseRole)
-    (h_account : d1.getStorVal cw.toAdr
-      (roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) =
-        canonicalAccount sevm.currentTarget.toB256)
-    (h_coldIndex : (cw.toAdr,
-      roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
+    (h_membership : d1.getStorVal cw.toAdr
+      (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠ 0)
+    (h_cold : (cw.toAdr,
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
         d1.accessedStorageKeys)
-    (h_coldRole : (cw.toAdr,
-      roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey d1 cw.toAdr
-          (roleLookupIndexSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
-    (h_coldAccount : (cw.toAdr,
-      roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey d1 cw.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-          cw.toAdr
-          (roleLookupRoleSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
     (h_resume : d1.getStorVal cw.toAdr resumeSinceSlot = 0)
     (h_original : getOrigStorVal sevm cw.toAdr resumeSinceSlot = 0)
     (h_coldResume : (cw.toAdr, resumeSinceSlot) ∉
@@ -191,51 +171,17 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have hchildTarget : childSevm.currentTarget = cw.toAdr := rfl
   have hchildCaller : childSevm.caller = sevm.currentTarget := rfl
   have hchildTime : childSevm.benvStat.time = sevm.benvStat.time := rfl
-  have hchildIndex : childBase.getStorVal childSevm.currentTarget
-      (roleLookupIndexSlot pauseRole childSevm.caller.toB256) = 1 := by
-    rw [hchildTarget, hchildCaller, hchildStor, h_index]
-  have hchildRole : childBase.getStorVal childSevm.currentTarget
-      (roleLookupRoleSlot pauseRole childSevm.caller.toB256) = pauseRole := by
-    rw [hchildTarget, hchildCaller, hchildStor, h_role]
-  have hchildAccount : childBase.getStorVal childSevm.currentTarget
-      (roleLookupAccountSlot pauseRole childSevm.caller.toB256) =
-        canonicalAccount childSevm.caller.toB256 := by
-    rw [hchildTarget, hchildCaller, hchildStor, h_account]
-  have hchildColdIndex : (childSevm.currentTarget,
-      roleLookupIndexSlot pauseRole childSevm.caller.toB256) ∉
+  have hchildMembership : childBase.getStorVal childSevm.currentTarget
+      (roleMembershipSlot pauseRole childSevm.caller.toB256) ≠ 0 := by
+    rw [hchildTarget, hchildCaller, hchildStor]
+    exact h_membership
+  have hchildCold : (childSevm.currentTarget,
+      roleMembershipSlot pauseRole childSevm.caller.toB256) ∉
         childBase.accessedStorageKeys := by
     change (cw.toAdr,
-      roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
         d1.accessedStorageKeys
-    exact h_coldIndex
-  have hchildColdRole : (childSevm.currentTarget,
-      roleLookupRoleSlot pauseRole childSevm.caller.toB256) ∉
-        (addAccessedStorageKey childBase childSevm.currentTarget
-          (roleLookupIndexSlot pauseRole
-            childSevm.caller.toB256)).accessedStorageKeys := by
-    change (cw.toAdr,
-      roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey d1 cw.toAdr
-          (roleLookupIndexSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys
-    exact h_coldRole
-  have hchildColdAccount : (childSevm.currentTarget,
-      roleLookupAccountSlot pauseRole childSevm.caller.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey childBase childSevm.currentTarget
-            (roleLookupIndexSlot pauseRole childSevm.caller.toB256))
-          childSevm.currentTarget
-          (roleLookupRoleSlot pauseRole
-            childSevm.caller.toB256)).accessedStorageKeys := by
-    change (cw.toAdr,
-      roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey d1 cw.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-          cw.toAdr
-          (roleLookupRoleSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys
-    exact h_coldAccount
+    exact h_cold
   have hchildResume :
       childBase.getStorVal childSevm.currentTarget resumeSinceSlot = 0 := by
     rw [hchildTarget, hchildStor, h_resume]
@@ -261,19 +207,18 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have hexec : exec child = .ok exactOut := by
     by_cases hinfinite : duration = pauseInfiniteSentinel
     · subst duration
-      have hmcsSentinel : 29741 ≤ mcs := by
+      have hmcsSentinel : 25567 ≤ mcs := by
         simpa [gatewayPauseChildCost] using h_mcs
       simpa [exactOut, gatewayPauseChildPost, gatewayPauseChildCost,
         child, childSevm, childBase] using
-        pauseForSentinel_exec childMsg controlDeployParams (mcs - 29741)
+        pauseForSentinel_exec childMsg controlDeployParams (mcs - 25567)
           hcompile hchildData
-          (by change mcs = mcs - 29741 + 29741; omega)
-          rfl hchildIndex hchildRole hchildAccount hchildColdIndex
-          hchildColdRole hchildColdAccount hchildResume hchildOriginal
-          hchildColdResume
+          (by change mcs = mcs - 25567 + 25567; omega)
+          rfl hchildMembership hchildCold
+          hchildResume hchildOriginal hchildColdResume
           (by change sevm.isStatic = false; exact h_dynamic)
     · have hfinite : duration ≠ pauseInfinitely := hinfinite
-      have hmcsFinite : 29772 ≤ mcs := by
+      have hmcsFinite : 25598 ≤ mcs := by
         simpa [gatewayPauseChildCost, hinfinite] using h_mcs
       have htimeFinite : sevm.benvStat.time <
           duration + sevm.benvStat.time := by
@@ -282,12 +227,11 @@ private lemma runCompiled_call_zero_value_gatewayPause
           (B256.add_comm (xs := sevm.benvStat.time) (ys := duration))
       simpa [exactOut, gatewayPauseChildPost, gatewayPauseChildCost,
         hinfinite, child, childSevm, childBase] using
-        pauseForFinite_exec childMsg controlDeployParams duration (mcs - 29772)
+        pauseForFinite_exec childMsg controlDeployParams duration (mcs - 25598)
           hcompile hchildData
-          (by change mcs = mcs - 29772 + 29772; omega)
-          rfl hchildIndex hchildRole hchildAccount hchildColdIndex
-          hchildColdRole hchildColdAccount hchildResume hchildOriginal
-          hchildColdResume
+          (by change mcs = mcs - 25598 + 25598; omega)
+          rfl hchildMembership hchildCold
+          hchildResume hchildOriginal hchildColdResume
           (by change sevm.isStatic = false; exact h_dynamic)
           h_duration hfinite htimeFinite
   generalize houtDef : exactOut = out at hexec
@@ -468,7 +412,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
     exact hstateOut
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
-charge is the warm access `100` plus the compiled gateway's `29772`. -/
+charge is the warm access `100` plus the compiled gateway's `25598`. -/
 private lemma gatewayPause_call_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw duration : B256}
     {s : List B256} {G : Nat}
@@ -483,29 +427,11 @@ private lemma gatewayPause_call_crossing
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).read
         iiw.toNat isw.toNat).1 =
           LidoTriggerableWithdrawalsGateway.pauseForCalldata duration)
-    (hindex : devm.getStorVal target.toAdr
-      (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) = 1)
-    (hrole : devm.getStorVal target.toAdr
-      (roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) = pauseRole)
-    (haccount : devm.getStorVal target.toAdr
-      (roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) =
-        canonicalAccount sevm.currentTarget.toB256)
-    (hcoldIndex : (target.toAdr,
-      roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
+    (hmembership : devm.getStorVal target.toAdr
+      (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠ 0)
+    (hcold : (target.toAdr,
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
         devm.accessedStorageKeys)
-    (hcoldRole : (target.toAdr,
-      roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey devm target.toAdr
-          (roleLookupIndexSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
-    (hcoldAccount : (target.toAdr,
-      roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey devm target.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-          target.toAdr
-          (roleLookupRoleSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
     (hresume : devm.getStorVal target.toAdr resumeSinceSlot = 0)
     (horiginal : getOrigStorVal sevm target.toAdr resumeSinceSlot = 0)
     (hcoldResume : (target.toAdr, resumeSinceSlot) ∉
@@ -553,7 +479,7 @@ private lemma gatewayPause_call_crossing
         target.toAdr) = none := by
     rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
-    have hsize : (gatewayCode controlDeployParams).size = 15948 := by
+    have hsize : (gatewayCode controlDeployParams).size = 8094 := by
       exact controlGatewayCode_size
     unfold getDelegatedCodeAddress
     rw [if_neg]
@@ -618,29 +544,12 @@ private lemma gatewayPause_call_crossing
     · simp [gatewayPauseChildCost, hinfinite] at hfloor ⊢
       exact ⟨by omega, by omega, by omega⟩
   have hd0mem : d0.memory = devm.memory := rfl
-  have hd0index : d0.getStorVal target.toAdr
-      (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) = 1 := hindex
-  have hd0role : d0.getStorVal target.toAdr
-      (roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) = pauseRole := hrole
-  have hd0account : d0.getStorVal target.toAdr
-      (roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) =
-        canonicalAccount sevm.currentTarget.toB256 := haccount
-  have hd0coldIndex : (target.toAdr,
-      roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
-        d0.accessedStorageKeys := hcoldIndex
-  have hd0coldRole : (target.toAdr,
-      roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey d0 target.toAdr
-          (roleLookupIndexSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys := hcoldRole
-  have hd0coldAccount : (target.toAdr,
-      roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey d0 target.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-          target.toAdr
-          (roleLookupRoleSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys := hcoldAccount
+  have hd0membership : d0.getStorVal target.toAdr
+      (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠
+        0 := hmembership
+  have hd0cold : (target.toAdr,
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
+        d0.accessedStorageKeys := hcold
   have hd0resume : d0.getStorVal target.toAdr resumeSinceSlot = 0 := hresume
   have hd0coldResume : (target.toAdr, resumeSinceSlot) ∉
       (pauseRoleWarm
@@ -656,8 +565,8 @@ private lemma gatewayPause_call_crossing
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr = gatewayCode controlDeployParams from hcode)
-      hmcs (by simpa only [hd0mem] using hdata) hd0index hd0role hd0account
-      hd0coldIndex hd0coldRole hd0coldAccount hd0resume horiginal
+      hmcs (by simpa only [hd0mem] using hdata) hd0membership hd0cold
+      hd0resume horiginal
       hd0coldResume hdynamic hduration hnew htime hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, ?_, heffect, stmid, hsub, hstate⟩
@@ -697,7 +606,7 @@ private lemma runCompiled_statcall_gatewayQuery
     (h_depth : sevm.depth ≠ 0)
     (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
     (h_code : code = gatewayCode controlDeployParams)
-    (h_mcs : 220 ≤ mcs)
+    (h_mcs : 242 ≤ mcs)
     (h_data : ((d1.memory.extends
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).read
         iiw.toNat isw.toNat).1 =
@@ -712,7 +621,7 @@ private lemma runCompiled_statcall_gatewayQuery
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
           oiw.toNat ((1 : B256).toBytes.take osw.toNat) ∧
-      post.gasLeft = d1.gasLeft - (mcc + ext) + (mcs - 220) ∧
+      post.gasLeft = d1.gasLeft - (mcc + ext) + (mcs - 242) ∧
       post.error = devm.error ∧ post.output = devm.output ∧
       post.returnData = (1 : B256).toBytes ∧
       post.logs = devm.logs ∧
@@ -777,9 +686,9 @@ private lemma runCompiled_statcall_gatewayQuery
     exact (gatewayCode_compile controlDeployParams).symm
   obtain ⟨out, hexec, hout, heffectOut, hgasOut, herr, hmetaOut,
     hworldOut⟩ :=
-    isPaused_true_warm_exec childMsg controlDeployParams storedUntil (mcs - 220)
+    isPaused_true_warm_exec childMsg controlDeployParams storedUntil (mcs - 242)
       hcompile hchildData
-      (by change mcs = mcs - 220 + 220; omega)
+      (by change mcs = mcs - 242 + 242; omega)
       rfl hchildStored hchildWarm
       (by change sevm.benvStat.time < storedUntil; exact h_paused)
   have hlogsOut : out.logs = [] := by
@@ -921,7 +830,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact hstateOut
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
-parent charge is the warm access `100` plus the compiled gateway's `220`. -/
+parent charge is the warm access `100` plus the compiled gateway's `242`. -/
 private lemma gatewayQuery_statcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw storedUntil : B256}
     {s : List B256} {G : Nat}
@@ -942,7 +851,7 @@ private lemma gatewayQuery_statcall_crossing
     (hpaused : sevm.benvStat.time < storedUntil)
     (hdepth : sevm.depth ≠ 0)
     (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
-    (hfloor : 323 ≤ G) (hbound : G < 2 ^ 256)
+    (hfloor : 345 ≤ G) (hbound : G < 2 ^ 256)
     (hroom : s.length < 1024) :
     ∃ post,
       Ninst.RunCompiled sevm devm (.exec .staticcall) post ∧
@@ -950,7 +859,7 @@ private lemma gatewayQuery_statcall_crossing
       post.memory = (devm.memory.extends
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]).write
           oiw.toNat ((1 : B256).toBytes.take osw.toNat) ∧
-      post.gasLeft = G - 320 ∧
+      post.gasLeft = G - 342 ∧
       post.error = devm.error ∧ post.output = devm.output ∧
       post.returnData = (1 : B256).toBytes ∧
       post.logs = devm.logs ∧
@@ -968,7 +877,7 @@ private lemma gatewayQuery_statcall_crossing
         target.toAdr) = none := by
     rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
-    have hsize : (gatewayCode controlDeployParams).size = 15948 := by
+    have hsize : (gatewayCode controlDeployParams).size = 8094 := by
       exact controlGatewayCode_size
     unfold getDelegatedCodeAddress
     rw [if_neg]
@@ -1005,8 +914,8 @@ private lemma gatewayQuery_statcall_crossing
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
         gasWarmAccess = ⟨mcc, mcs⟩ := ⟨_, _, rfl⟩
   obtain ⟨hmcs, hcross, hgasout⟩ :
-      220 ≤ mcs ∧ mcc + 0 ≤ G ∧
-        G - (mcc + 0) + (mcs - 220) = G - 320 := by
+      242 ≤ mcs ∧ mcc + 0 ≤ G ∧
+        G - (mcc + 0) + (mcs - 242) = G - 342 := by
     have hGnat : (Nat.toB256 G).toNat = G :=
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
@@ -1094,29 +1003,11 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     (hsize : M.size = 768)
     (hcodeCost : temporalAccountAccessCost base target.toAdr = codeCost)
     (hgatewayCode : base.getCode target.toAdr = gatewayCode controlDeployParams)
-    (hindex : base.getStorVal target.toAdr
-      (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) = 1)
-    (hrole : base.getStorVal target.toAdr
-      (roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) = pauseRole)
-    (haccount : base.getStorVal target.toAdr
-      (roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) =
-        canonicalAccount sevm.currentTarget.toB256)
-    (hcoldIndex : (target.toAdr,
-      roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
+    (hmembership : base.getStorVal target.toAdr
+      (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠ 0)
+    (hcold : (target.toAdr,
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
         base.accessedStorageKeys)
-    (hcoldRole : (target.toAdr,
-      roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey base target.toAdr
-          (roleLookupIndexSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
-    (hcoldAccount : (target.toAdr,
-      roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-        (addAccessedStorageKey
-          (addAccessedStorageKey base target.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-          target.toAdr
-          (roleLookupRoleSlot pauseRole
-            sevm.currentTarget.toB256)).accessedStorageKeys)
     (hresume : base.getStorVal target.toAdr resumeSinceSlot = 0)
     (horiginal : getOrigStorVal sevm target.toAdr resumeSinceSlot = 0)
     (hcoldResume : (target.toAdr, resumeSinceSlot) ∉
@@ -1135,7 +1026,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     ∃ mid : Devm,
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory M duration ∧
-      mid.gasLeft = Gb - 19 ∧
+      mid.gasLeft = Gb - 41 ∧
       mid.error = base.error ∧
       mid.output = base.output ∧
       mid.returnData = (1 : B256).toBytes ∧
@@ -1295,7 +1186,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         pauseDecodedMemory M duration := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le (by omega) (by omega))]
   have hgatewaySize :
-      (gatewayCode controlDeployParams).size.toB256 = (15948 : B256) := by
+      (gatewayCode controlDeployParams).size.toB256 = (8094 : B256) := by
     rw [controlGatewayCode_size]
     decide +kernel
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
@@ -1332,62 +1223,15 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
       (by
         show (temporalAccountAccessBase base target.toAdr).getStorVal
           target.toAdr
-            (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) = 1
+            (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠ 0
         simpa only [Devm.getStorVal, Devm.getAcct,
-          temporalAccountAccessBase_state] using hindex)
-      (by
-        show (temporalAccountAccessBase base target.toAdr).getStorVal
-          target.toAdr
-            (roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) =
-              pauseRole
-        simpa only [Devm.getStorVal, Devm.getAcct,
-          temporalAccountAccessBase_state] using hrole)
-      (by
-        show (temporalAccountAccessBase base target.toAdr).getStorVal
-          target.toAdr
-            (roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) =
-              canonicalAccount sevm.currentTarget.toB256
-        simpa only [Devm.getStorVal, Devm.getAcct,
-          temporalAccountAccessBase_state] using haccount)
+          temporalAccountAccessBase_state] using hmembership)
       (by
         change (target.toAdr,
-          roleLookupIndexSlot pauseRole sevm.currentTarget.toB256) ∉
+          roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
             (temporalAccountAccessBase base target.toAdr).accessedStorageKeys
         rw [temporalAccountAccessBase_accessedStorageKeys]
-        exact hcoldIndex)
-      (by
-        change (target.toAdr,
-          roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-            (addAccessedStorageKey
-              (temporalAccountAccessBase base target.toAdr) target.toAdr
-              (roleLookupIndexSlot pauseRole
-                sevm.currentTarget.toB256)).accessedStorageKeys
-        change (target.toAdr,
-          roleLookupRoleSlot pauseRole sevm.currentTarget.toB256) ∉
-            (temporalAccountAccessBase base target.toAdr).accessedStorageKeys.insert
-              (target.toAdr,
-                roleLookupIndexSlot pauseRole sevm.currentTarget.toB256)
-        rw [temporalAccountAccessBase_accessedStorageKeys]
-        exact hcoldRole)
-      (by
-        change (target.toAdr,
-          roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-            (addAccessedStorageKey
-              (addAccessedStorageKey
-                (temporalAccountAccessBase base target.toAdr) target.toAdr
-                (roleLookupIndexSlot pauseRole sevm.currentTarget.toB256))
-              target.toAdr
-              (roleLookupRoleSlot pauseRole
-                sevm.currentTarget.toB256)).accessedStorageKeys
-        change (target.toAdr,
-          roleLookupAccountSlot pauseRole sevm.currentTarget.toB256) ∉
-            ((temporalAccountAccessBase base target.toAdr).accessedStorageKeys.insert
-              (target.toAdr,
-                roleLookupIndexSlot pauseRole sevm.currentTarget.toB256)).insert
-              (target.toAdr,
-                roleLookupRoleSlot pauseRole sevm.currentTarget.toB256)
-        rw [temporalAccountAccessBase_accessedStorageKeys]
-        exact hcoldAccount)
+        exact hcold)
       (by
         show (temporalAccountAccessBase base target.toAdr).getStorVal
           target.toAdr resumeSinceSlot = 0
@@ -1396,13 +1240,9 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
       horiginal
       (by
         change (target.toAdr, resumeSinceSlot) ∉
-          (((temporalAccountAccessBase base target.toAdr).accessedStorageKeys.insert
+          ((temporalAccountAccessBase base target.toAdr).accessedStorageKeys.insert
             (target.toAdr,
-              roleLookupIndexSlot pauseRole sevm.currentTarget.toB256)).insert
-            (target.toAdr,
-              roleLookupRoleSlot pauseRole sevm.currentTarget.toB256)).insert
-            (target.toAdr,
-              roleLookupAccountSlot pauseRole sevm.currentTarget.toB256)
+              roleMembershipSlot pauseRole sevm.currentTarget.toB256))
         rw [temporalAccountAccessBase_accessedStorageKeys]
         exact hcoldResume)
       hdynamic hdurationNonzero hnew hpaused hdepth hnp
@@ -1489,7 +1329,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         exact gatewayPauseKeys_union_resume_mem base.accessedStorageKeys
           target.toAdr sevm.currentTarget.toB256)
       hpaused hdepth hnp (by omega) (by omega) (by simp)
-  have hgas2' : post2.gasLeft = Gb + 62 := by
+  have hgas2' : post2.gasLeft = Gb + 40 := by
     rw [hgas2]
     omega
   have hmem2' : post2.memory = pauseDecodedMemory M duration := by
@@ -1501,7 +1341,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
       Mem.extends_covered (by rw [hsize3]; decide)]
     rfl
   have heta2 : post2 = post2.setMach ⟨[1], pauseDecodedMemory M duration,
-      Gb + 62⟩ := by
+      Gb + 40⟩ := by
     rw [← hstk2, ← hmem2', ← hgas2']
     rfl
   have hltFlag : (Nat.toB256 post2.returnData.length <? (32 : B256)) =
@@ -1568,13 +1408,13 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
           some st₂ := by
     rw [← hstate1]
     exact hsub2
-  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 19⟩,
+  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 41⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
     haskB, haaB, ?_, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
   · simpa only [Devm.getStorVal_setMach] using heffect2
   intro post hwalk
   have hC : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 40⟩)
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult)) post := by
     have hisz : ((pauseDecodedMemory M duration).read 0 32).1.toB256 =? 0 =
@@ -1585,21 +1425,21 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         ((pauseDecodedMemory M duration).read 0 32).1.toB256 = 1 := by
       rw [hdecodedValue]
       decide
-    have hG61 : 61 ≤ Gb + 62 := by omega
-    have hG64 : 64 ≤ Gb + 62 := by omega
-    have hG67 : 67 ≤ Gb + 62 := by omega
+    have hG61 : 61 ≤ Gb + 40 := by omega
+    have hG64 : 64 ≤ Gb + 40 := by omega
+    have hG67 : 67 ≤ Gb + 40 := by omega
     func_run (14) [0, 0, 3, 0, 1]
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
       norm_num [gVerylow]
     case h_arm =>
-      have hg : Gb + 62 - 81 = Gb - 19 := by omega
+      have hg : Gb + 40 - 81 = Gb - 41 := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide,
         hdecodedMemory]
       exact hwalk
   have hQueryPost : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 40⟩)
       installedQueryPost post := by
     simpa only [installedQueryPost] using hC
   have hQueryCross : Func.RunCompiled fs sevm
