@@ -288,18 +288,13 @@ def _discovery_read(root: pathlib.Path, rel: str) -> str:
         raise GateError(f"discovery regression: cannot read {rel}: {error}") from error
 
 
-def _discovery_declared_text(text: str, rel: str, name: str) -> bool:
-    """Resolve a discovery declaration through the comment-safe Lean parser."""
-    parsed = parse_lean_file(text, rel)
-    expected = name if name.startswith("Blanc.") else f"Blanc.{name}"
-    return any(
-        declaration.name == expected or declaration.name.endswith(f".{name}")
-        for declaration in parsed.declarations
-    )
-
-
-def _discovery_declared(root: pathlib.Path, rel: str, name: str) -> bool:
-    return _discovery_declared_text(_discovery_read(root, rel), rel, name)
+def _discovery_declared(text: str, name: str) -> bool:
+    """Match live declaration headers using the existing comment/literal mask."""
+    for line in mask_comments_and_literals(text, "discovery declaration").splitlines():
+        match = DECL_RE.match(line)
+        if match is not None and match.group("name") == name:
+            return True
+    return False
 
 
 def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> None:
@@ -319,7 +314,7 @@ def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> No
                 f"spanning-read route {name!r}"
             )
     for rel, name in DISCOVERY_ROUTE_SOURCES:
-        if not _discovery_declared(root, rel, name):
+        if not _discovery_declared(_discovery_read(root, rel), name):
             raise GateError(
                 f"discovery regression: spanning-read route {name!r} is not "
                 f"declared in {rel}"
@@ -334,7 +329,9 @@ def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> No
                 "discovery regression: retired misleading example name "
                 f"{DISCOVERY_RETIRED_NAME!r} is still present in {rel}"
             )
-    if not _discovery_declared(root, DISCOVERY_RENAMED_SOURCE, DISCOVERY_RENAMED_NAME):
+    if not _discovery_declared(
+        _discovery_read(root, DISCOVERY_RENAMED_SOURCE), DISCOVERY_RENAMED_NAME
+    ):
         raise GateError(
             "discovery regression: renamed example "
             f"{DISCOVERY_RENAMED_NAME!r} is not declared in "
@@ -2317,15 +2314,9 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
         "theorem List.sliceD_add (xs : List Nat) : True := by trivial\n"
         "end Blanc\n"
     )
-    if not _discovery_declared_text(
-        discovery_fixture, "Blanc/DiscoveryFixture.lean", "List.sliceD_add"
-    ):
+    if not _discovery_declared(discovery_fixture, "List.sliceD_add"):
         raise GateError("self-test: live discovery declaration was not recognized")
-    if _discovery_declared_text(
-        "/-\n" + discovery_fixture + "-/\n",
-        "Blanc/DiscoveryFixture.lean",
-        "List.sliceD_add",
-    ):
+    if _discovery_declared("/-\n" + discovery_fixture + "-/\n", "List.sliceD_add"):
         raise GateError("self-test: block-comment discovery declaration was accepted")
     print("OK — proof recipe discovery parser: 2/2 live/comment controls passed")
     parser_controls = parser_header_self_test()
