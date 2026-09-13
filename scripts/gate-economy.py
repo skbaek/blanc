@@ -86,7 +86,6 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "keccak-rate-boundary",
             "drip-stack-certificate-data",
             "drip-evidence",
-            "drip-stack-certificate-data",
             "drip-current-mainnet",
         ],
     }
