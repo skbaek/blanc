@@ -234,6 +234,60 @@ comparison separate through
 `DirectTargetTransport`; this interface explicitly exposes gas, depth, access,
 transfer, code-address, and storage-owner changes.
 
+To invert an existing source `Ninst.Run` over a direct call whose operands are
+already known, use the shared inversion pair in
+[`Blanc/Ladder.lean`](../Blanc/Ladder.lean) — do not re-derive the
+spawn/resume equations at the consumer:
+
+- `of_run_call_val_with_depth_frame`: from a known 7-operand stack prefix
+  (`g :: c :: v :: ii :: is :: oi :: os :: xs`) and
+  `Ninst.Run sevm s Ninst.call sf`, either the failed arm (flag `0` plus
+  `Devm.WorldEq s sf`) or the entered arm (`Ninst.StepRun`, `0 < depth`, exact
+  parent stack/state/memory/logs/output, both delegation-resolution arms,
+  `Xlot.Filled`, the exact `ProcessMessage (callMsg …)` child with a clean
+  result, the exact `Resume.call` equation, and the `sf` state/returndata/
+  memory/stack projections). The compat projections `of_run_call_val_with_depth`
+  and `of_run_call_val` drop the step/logs/output and then the depth fact for
+  consumers that do not need them.
+- `of_run_staticcall_val_with_depth_cause`: the 6-operand
+  (`g :: t :: ii :: is :: oi :: os :: xs`) STATICCALL analogue over
+  `Ninst.staticcall`, whose failed arm additionally carries a
+  `StatcallFailureCause` witness; compat projection
+  `of_run_staticcall_val_with_depth`. Opcode honesty is load-bearing: CALL (7
+  operands, value, stipend) and STATICCALL (6 operands, forced static) already
+  have separate statements — select by the operand count actually on the stack,
+  never by analogy, and keep DELEGATECALL on its envelope above.
+- Consumption pattern: Blanc's compiled callers branch on the pushed flag, so a
+  caller holding the success guard dismisses the failed arm with the trailing
+  `iszero`+guard; the entered arm's `StepRun` aligns to the occurrence slot by
+  `Ninst.StepRun.unique_exec_of_filled`, and `RawCommits` comes from
+  `ProcessMessage.settlementCommits_of_some_ok_clean`.
+
+For the entered child's code and code address at the `Xinst`-step level — from a
+spawn equation without operand knowledge — use the spawn-source family in
+[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+
+- `Xinst.step_spawn_source`: the trichotomy over any
+  `Xinst.step sevm devm x = .spawn f rsm` — empty target code, same target as
+  the parent, or code identity under `¬ isValidDelegation`. Its second disjunct
+  (`f.inner.currentTarget = sevm.currentTarget`) is explicitly open: no shared
+  step-level lemma resolves a same-target child, so report the open disjunct
+  rather than forcing the inversion. Message-level same-target resolution with
+  the callee word known goes through `not_delegation_of_compile` instead.
+- `Xinst.step_spawn_codeAddress_eq_currentTarget`: away-from-parent child
+  code-address identity, from the spawn equation plus `≠`, nonempty target code,
+  and no-delegation evidence.
+- `Evm.step_spawn_child`: the `Evm.step` packaging — child `pc = 0`, preserved
+  `getCode`, and the same away-case code identity.
+
+Direction honesty: this family inverts an existing run or spawn; it never
+manufactures liveness from a stack prefix. To construct a call crossing, use the
+`Ninst.runCompiled_*call*` family above. Note the asymmetry: entered-frame CALL
+has `runCompiled_call_zero_value` / `runCompiled_call_nonzero`, while
+entered-frame STATICCALL has no `runCompiled` constructor — assemble those
+crossings per consumer from `Xinst.step_staticcall_spawn` composed with
+`Ninst.runCompiled_exec_run`.
+
 If the property concerns which child roots were entered rather than only the
 terminal result, continue to E3.
 

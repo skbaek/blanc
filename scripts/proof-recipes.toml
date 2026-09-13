@@ -196,8 +196,8 @@ review_date = "2026-08-20"
 id = "call-boundary-outcomes"
 status = "active"
 triggers = ["goal-head:Func.ExecSat", "goal-head:Prog.ExecSat", "goal-head:Func.ExecWitness"]
-preferred_path = "Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes. At a proof-carrying `DELEGATECALL` boundary, use `DelegatecallSpawnDescriptor.step` for the exact spawn and `.crossing` for the entered child's successful continuation instead of reconstructing the descriptor fields at the consumer. To construct the compiled call from a retained child and exact resume equation, use `DelegatecallSpawnDescriptor.runCompiled_of_certificate`. When an existing compiled call step has already resumed, use `DelegatecallSpawnDescriptor.settled_of_runCompiled` to obtain a `DelegatecallSettledBoundary` with the exact retained child and parent observations. Use `DelegatecallSettledBoundary.memory_image_of_outputSize_zero` to carry a proof-carrying memory image across a zero-output child resume."
-boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone."
+preferred_path = "Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes. At a proof-carrying `DELEGATECALL` boundary, use `DelegatecallSpawnDescriptor.step` for the exact spawn and `.crossing` for the entered child's successful continuation instead of reconstructing the descriptor fields at the consumer. To construct the compiled call from a retained child and exact resume equation, use `DelegatecallSpawnDescriptor.runCompiled_of_certificate`. When an existing compiled call step has already resumed, use `DelegatecallSpawnDescriptor.settled_of_runCompiled` to obtain a `DelegatecallSettledBoundary` with the exact retained child and parent observations. Use `DelegatecallSettledBoundary.memory_image_of_outputSize_zero` to carry a proof-carrying memory image across a zero-output child resume. To invert an existing source `Ninst.Run` over a direct call with known operands, use the `Blanc/Ladder.lean` inversion pair: `of_run_call_val_with_depth_frame` for the 7-operand CALL prefix (failed arm: flag `0` + `Devm.WorldEq`; entered arm: `Ninst.StepRun`, depth, exact parent/message/resume equations; compat projections `of_run_call_val_with_depth`, `of_run_call_val`) and `of_run_staticcall_val_with_depth_cause` for the 6-operand STATICCALL prefix (failed arm carries `StatcallFailureCause`; compat projection `of_run_staticcall_val_with_depth`). Dismiss the failed arm with the trailing `iszero`+guard, align the entered step with `Ninst.StepRun.unique_exec_of_filled`, and take `RawCommits` from `ProcessMessage.settlementCommits_of_some_ok_clean`. For child code/address from a spawn equation without operand knowledge, use the `Blanc/CommonProofs.lean` spawn-source family: the `Xinst.step_spawn_source` trichotomy (whose same-target disjunct is explicitly open), `Xinst.step_spawn_codeAddress_eq_currentTarget`, and `Evm.step_spawn_child` for the away-from-parent cases."
+boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone. CALL (7 operands, value, stipend) and STATICCALL (6 operands, forced static) have separate inversion statements: select by operand count, never by analogy. The inversion pair inverts an existing run and never manufactures liveness from a prefix; the spawn-source trichotomy's same-target disjunct is open and must be reported, not forced."
 owner_module = "Blanc/ForwardCall.lean"
 canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
 symbols = [
@@ -217,6 +217,17 @@ symbols = [
   "declaration:DelegatecallSettledBoundary.memory",
   "declaration:DelegatecallSettledBoundary.memory_eq_parent_of_outputSize_zero",
   "declaration:DelegatecallSettledBoundary.memory_image_of_outputSize_zero",
+  "module:Blanc/Ladder.lean",
+  "module:Blanc/CommonProofs.lean",
+  "declaration:Blanc.of_run_call_val_with_depth_frame",
+  "declaration:Blanc.of_run_call_val_with_depth",
+  "declaration:Blanc.of_run_call_val",
+  "declaration:Blanc.StatcallFailureCause",
+  "declaration:Blanc.of_run_staticcall_val_with_depth_cause",
+  "declaration:Blanc.of_run_staticcall_val_with_depth",
+  "declaration:Blanc.Xinst.step_spawn_source",
+  "declaration:Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget",
+  "declaration:Blanc.Evm.step_spawn_child",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
