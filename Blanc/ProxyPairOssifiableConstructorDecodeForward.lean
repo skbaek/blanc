@@ -185,6 +185,20 @@ private theorem decodeForwardLengthSuffix_avoids_pointer (sevm : Sevm) :
       96 32 = true := by
   simp [MemoryStage.avoids]
 
+/-- Control: the tail guard rejects the pointer window, which overlaps the
+pointer write. The guards above are not vacuously true. -/
+private theorem decodeForwardTailStage_avoids_overlap_control (sevm : Sevm) :
+    (decodeForwardTailStage sevm).avoids 96 32 = false := by
+  have hlen := ByteArray.length_sliceD sevm.code 3533 32
+    (Linst.toUInt8 .stop)
+  have hne : (Nat.toB256 3533).toBytes ≠ [] := by
+    intro hnil
+    have hlength := B256.length_toBytes (Nat.toB256 3533)
+    rw [hnil] at hlength
+    simp at hlength
+  simp [decodeForwardTailStage, MemoryStage.avoids, hlen, hne,
+    B256.length_toBytes]
+
 /-- One guard replaces the two-peel implementation read: the observed window
 sees only the head prefix. -/
 private theorem decodeForwardStage_slice_implementation (sevm : Sevm) :
