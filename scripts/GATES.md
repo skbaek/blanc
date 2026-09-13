@@ -427,15 +427,6 @@ can only add work or fail the audit. The workflow runs
 its trust/dependency controls. CI therefore gains an explicit selection record
 without treating local same-clone evidence as portable or trusted.
 
-**Campaign sampling.** Production sampling is disabled. The reviewed policy
-classifies every candidate-positive and harness case as complete or mandatory,
-and no family is enabled without its own representative shadow evidence. The
-generic deterministic selector is nevertheless controlled now: its seed binds
-candidate, gate, and schema; every failure stratum is represented; a complete
-audit occurs every seventh scheduler day; and any sampled failure expands to
-the full campaign. `docs/GATE_SAMPLING.md` is generated from the policy and the
-economic inventory.
-
 **Fail closed.** A missing or malformed trace, an unresolvable ref, a dirty or
 absent external checkout, an unreadable file, an unknown input kind, an
 undeclared catalogued command, or a corrupt cache all cause execution. So does a
@@ -445,12 +436,14 @@ Nothing on this path can turn a failure, a refusal, a missing terminal summary
 or a doubled one into a pass.
 
 **The declarations are measured, not just reviewed.**
-`scripts/gate-read-audit.py` runs every cacheable gate once under a Python
+`scripts/gate-read-audit.py` runs cacheable gates under a Python
 audit hook that records each file its whole process tree opens, then reports
 any read the gate's registry entry does not fingerprint. It is an instrument,
-not a gate: it is not in the ordered set above, it seeds no cache record, and
-it costs a fresh full set because it executes every gate body. Run it after
-changing a gate's implementation or its registry entry.
+not a gate: it is not in the ordered set above and it seeds no cache record.
+For an isolated gate implementation or registry-entry change, audit the exact
+affected IDs with `scripts/gate-read-audit.py --only ID...`. Run the full audit
+after a shared runner, registry parser, audit-instrumentation, or other common
+helper change, because those surfaces can affect every cacheable row.
 
 It cannot see reads by non-Python processes — `grep` and `sed` in the wrappers,
 and everything `lake env lean` touches, the latter being covered by `depHash`
