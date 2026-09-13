@@ -118,7 +118,7 @@ Other accepted low-level freedoms, subject to the same behavioral boundary:
 
 ## Code-size comparison
 
-<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","artifactProgramCommit":"df9ce992b98b1eb784ab631be312cba4550ff61b","proofCertificateCommit":"35ba1e1b137529482180adccd44ae0da70417ac4","manifest":"30a62c2866e8a504aaece1b220622e16a774024b5aa6ab9f0d28bb38ba3de60c"} -->
+<!-- LIDO-TWG-CODE-SIZE {"referenceLock":"8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f","artifactProgramCommit":"a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e","proofCertificateCommit":"6e62f0f884534fa89b18635ed3687099d1b25488","manifest":"2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26"} -->
 
 All lengths are byte counts over the exact hex decoded by the named gates.
 Negative delta means Blanc is smaller. The creation template has no direct
@@ -135,7 +135,7 @@ EIP-170/EIP-3860 headroom, where applicable:
 
 ## Named-path gas comparison
 
-<!-- LIDO-TWG-GAS-MEASUREMENT {"eelsCommit":"4198b9c5996713b268aed602739d5aa40e277694","manifest":"30a62c2866e8a504aaece1b220622e16a774024b5aa6ab9f0d28bb38ba3de60c","boundaryDefinition":"direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds","rowCount":51,"positiveDeltaRows":0} -->
+<!-- LIDO-TWG-GAS-MEASUREMENT {"eelsCommit":"4198b9c5996713b268aed602739d5aa40e277694","manifest":"2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26","boundaryDefinition":"direct EELS Prague message gas used, computed as message gas minus output gas_left; constructor rows include code-deposit gas and exclude transaction intrinsic gas and refunds","rowCount":51,"positiveDeltaRows":0} -->
 
 Every cell below comes from the same ordered machine-owned resource vector.
 `Reference` and `Blanc` use one boundary definition, recorded verbatim as

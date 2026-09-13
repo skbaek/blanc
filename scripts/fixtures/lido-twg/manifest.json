@@ -45,9 +45,9 @@
     },
     "positiveIdentityChecks": 10,
     "proof": {
-      "artifactProgramCommit": "df9ce992b98b1eb784ab631be312cba4550ff61b",
+      "artifactProgramCommit": "a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e",
       "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
-      "proofCertificateCommit": "35ba1e1b137529482180adccd44ae0da70417ac4"
+      "proofCertificateCommit": "6e62f0f884534fa89b18635ed3687099d1b25488"
     },
     "reference": {
       "creationTemplate": {
@@ -397,7 +397,7 @@
     "censusSha256": "60ef98c19d78b2e1068e23501a30e7159471f95b25b6b4c1d4dadaebc22083eb",
     "eelsCommit": "4198b9c5996713b268aed602739d5aa40e277694",
     "evidence": {
-      "artifactProgramCommit": "df9ce992b98b1eb784ab631be312cba4550ff61b",
+      "artifactProgramCommit": "a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e",
       "artifacts": {
         "creationTemplate": {
           "byteLength": 9806,
@@ -830,7 +830,7 @@
           }
         ]
       },
-      "proofCertificateCommit": "35ba1e1b137529482180adccd44ae0da70417ac4",
+      "proofCertificateCommit": "6e62f0f884534fa89b18635ed3687099d1b25488",
       "summaries": {
         "B2_CALLDATA_SCOPE_SUMMARY": "canonical ABI endpoint rows plus named dirty-address constructor rejection; nested malformed dynamic ABI, empty/unknown/short dispatch, trailing calldata, and recognized-selector nonpayability are untested and excluded",
         "B2_CODE_SIZE_HEADROOM_SUMMARY": "runtime 8094 bytes (16482 EIP-170 headroom); full CREATE 9966 bytes (39186 EIP-3860 headroom)",
@@ -7745,10 +7745,10 @@
   ],
   "schema": 1,
   "sectionDigests": {
-    "artifacts": "469a26f6be68511245ea30277bb6dd4f97230bc98d1a1de75c462056a35f3c5b",
+    "artifacts": "f8b42bb868dde8bd4ac98b3f7456dd06f04c2a76c3e863ac9f8173fffbe89e52",
     "counts": "db1508511764751f1fb433fcbfeb5e615909fb10d09f37b17032eeaa7f327cbc",
     "coverage": "9019d450947ae27fec1ae711180caafbbb3869bedba87492f5301cf25125b790",
-    "documentFill": "f16efa4768016df09a4c72fc89a4beb8b882c3ead67ee412843db61a70e4aa98",
+    "documentFill": "75cb510a7c26a880cf74d4eff1f103e4a3efdbeee6c33f4e348d68c2aa962950",
     "oracle": "93bef5c99cce1b76cd347e3c0dbb1cd69f361189d2c9be2ccf03d5b277b15892",
     "projection": "2cf7a3070c01f541165e2252ad1c5df14cd0f49fab27a73198a2f91e6b7fe0b5",
     "resourceEvidence": "8ec0cdf5a96e5600dfb180a42720b24a9424d4b5de55cc6e3bbb139e7b49d16f",

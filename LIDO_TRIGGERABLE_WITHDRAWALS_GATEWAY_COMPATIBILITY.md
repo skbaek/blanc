@@ -33,14 +33,14 @@ prose, own artifact identities and finite observations.
 | Reference creation bytes | `10256` bytes; SHA-256 `0e7dd55e589cf6bd38b2ebae7581ff169a354f9399087ecb6b8940f56bacc7e7` |
 | Reference runtime | `8128` bytes; SHA-256 `12c9d210f25202cf535622f93ba5237181512cc23970f2da08434f77e68d3a7b` |
 | Selection-time mainnet snapshot | account `0xDC00116a0D3E064427dA2600449cfD2566B3037B`; block `25866991`; code hash `0xbf27dab01ae7fb4507657a02d975bd38aeea9eaba4498225da3a0ee5f815f123`; role/pause snapshot `b22333b245132e24f43328f46030b09f2ccf805ad3937382d1636a849626cc23` |
-| Blanc artifact/runtime program commit | `df9ce992b98b1eb784ab631be312cba4550ff61b` |
-| Optimized-runtime theorem ladder and pinned-target certificate | `35ba1e1b137529482180adccd44ae0da70417ac4` |
+| Blanc artifact/runtime program commit | `a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e` |
+| Optimized-runtime theorem ladder and pinned-target certificate | `6e62f0f884534fa89b18635ed3687099d1b25488` |
 | Jaune pin | `949cf97ee1956828a3ac0eb12a62c438656ba76e` |
 | Blanc creation template | `9806` bytes; SHA-256 `0e1ee072fc51e1f93917004d7a0e67164bc7bc668087dd2f707f21f52e06f872` |
 | Blanc complete CREATE input | `9966` bytes; SHA-256 `6342403216b7c9f9787d13a2f8ce1a98e4465b1d1955f0f1b1b72911c076b690` |
 | Blanc runtime | `8094` bytes; SHA-256 `6fdb5afdafc949df0677cea1e2f61f6363e21fd6348ff9843186fa8c68ca3c56` |
 | EELS oracle | `ethereum/execution-specs` commit `4198b9c5996713b268aed602739d5aa40e277694`, Prague |
-| Differential manifest | schema `1`; SHA-256 `30a62c2866e8a504aaece1b220622e16a774024b5aa6ab9f0d28bb38ba3de60c` |
+| Differential manifest | schema `1`; SHA-256 `2df2b83506e14b91f7ee2a816c1a6407cf69c72fcd8a4d5fc6602404b1679c26` |
 | Differential result | `PASS`; `71` cases, `186` measured resource boundaries |
 
 The mainnet snapshot is provenance and selection-time context. It is not a
@@ -459,9 +459,9 @@ not claimed; any later nonnegative named cell reopens this boundary.
 ### Formal Blanc boundary
 
 The runtime/artifact program is frozen at
-`df9ce992b98b1eb784ab631be312cba4550ff61b`. The optimized-runtime theorem
+`a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e`. The optimized-runtime theorem
 ladder and pinned-target certificate is commit
-`35ba1e1b137529482180adccd44ae0da70417ac4`, which certifies that exact
+`6e62f0f884534fa89b18635ed3687099d1b25488`, which certifies that exact
 program's pause-face, authorization, protected-surface, and
 `PinnedPauseTarget` properties within
 `[propext, Classical.choice, Quot.sound]`. The bundle's CircuitBreaker-cell
@@ -483,9 +483,9 @@ Solidity account invariant.
 The published finite claim is:
 
 > For the exact Blanc runtime/artifact program at
-> `df9ce992b98b1eb784ab631be312cba4550ff61b`, certified by the
+> `a0a324403a8a0a65ca1db625e53a1e9ef4f4b08e`, certified by the
 > optimized-runtime theorem ladder and pinned-target commit
-> `35ba1e1b137529482180adccd44ae0da70417ac4`, Jaune pin
+> `6e62f0f884534fa89b18635ed3687099d1b25488`, Jaune pin
 > `949cf97ee1956828a3ac0eb12a62c438656ba76e`, reference lock
 > `8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f`, and EELS commit
 > `4198b9c5996713b268aed602739d5aa40e277694`, the exact compiled Blanc
