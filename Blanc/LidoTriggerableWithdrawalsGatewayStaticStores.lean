@@ -18,8 +18,10 @@ namespace LidoTriggerableWithdrawalsGateway
 
 theorem setLimitWrite_storesOrHalts {fs : List Func} :
     StoresOrHalts fs setLimitWrite := by
-  unfold setLimitWrite
-  stores_line (mloadWord 0 ++ [pushB256 maxExitRequestsLimitSlot])
+  unfold setLimitWrite storePackedLimitWorkingWords
+  stores_line (mloadWord 0 ++ mstoreAt 13 ++ mloadWord 2 ++ mstoreAt 6 ++
+    mloadWord 1 ++ mstoreAt 7 ++ packFiveUint32Words 13 4 12 6 7 ++
+    [pushB256 twrLimitPosition])
   exact StoresOrHalts.store
 
 theorem setLimitWrite_isStatic_eq_false {fs : List Func} {e : Sevm}

@@ -153,7 +153,7 @@ theorem localSlotOf_of_labelOfLocalSlot? {n : Nat} {lbl : TriggerLabel}
       | exact absurd h (by simp)
 
 /-- Qualified composite label for TWG runtime auxiliary table entries.
-Can be either the root dispatcher (0), a base runtime slot (1..27),
+Can be either the root dispatcher (0), a base runtime slot (1..17),
 or a Trigger label (mapped after the base slots). -/
 inductive CompositeLabel
   | root
@@ -168,20 +168,20 @@ def compositeSlotOf (baseCount : Nat) : CompositeLabel → Nat
   | .trigger lbl => baseCount + localSlotOf lbl
 
 theorem compositeSlotOf_malformedAbi :
-    compositeSlotOf 27 (.trigger .malformedAbi) = 28 :=
+    compositeSlotOf 17 (.trigger .malformedAbi) = 18 :=
   rfl
 
 theorem compositeSlotOf_validateArrayLoop :
-    compositeSlotOf 27 (.trigger .validateArrayLoop) = 39 :=
+    compositeSlotOf 17 (.trigger .validateArrayLoop) = 29 :=
   rfl
 
 theorem compositeSlotOf_afterNestedValidation :
-    compositeSlotOf 27 (.trigger .afterNestedValidation) = 49 :=
+    compositeSlotOf 17 (.trigger .afterNestedValidation) = 39 :=
   rfl
 
--- There was a `compositeSlotOf_malformedAbi_off_by_one : … ≠ 29` here, removed
+-- There was a `compositeSlotOf_malformedAbi_off_by_one : … ≠ 19` here, removed
 -- as a control that could not fail: `compositeSlotOf_malformedAbi` three lines
--- above proves the same application equals 28, so `≠ 29` is its logical
+-- above proves the same application equals 18, so `≠ 19` is its logical
 -- consequence and red at that boundary is impossible while the positive theorem
 -- is green.  The content it appeared to guard — that the coordinate really
 -- depends on the base count and on the local table — is carried by
@@ -937,43 +937,43 @@ def triggerLabels : List TriggerLabel :=
     .afterEncoding, .bubbleRevert, .afterVaultCall, .refundCall,
     .balanceCheck, .afterNestedValidation ]
 
-/-- Standard 27-base + 22-trigger auxiliary table layout. -/
+/-- Standard 17-base + 22-trigger auxiliary table layout. -/
 def standardCompositeAux (baseAux : List (CompositeLabel × SymbolicFunc CompositeLabel))
     (triggerAux : List (TriggerLabel × SymbolicFunc CompositeLabel)) :
     List (CompositeLabel × SymbolicFunc CompositeLabel) :=
   baseAux ++ triggerAux.map (fun (lbl, body) => (.trigger lbl, body))
 
-/-- Concrete 27-base prefix skeleton for composite resolution verification. -/
-def base27AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  (List.range 27).map fun i => (.base (i + 1), .last .stop)
+/-- Concrete 17-base prefix skeleton for composite resolution verification. -/
+def base17AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
+  (List.range 17).map fun i => (.base (i + 1), .last .stop)
 
 /-- Concrete Trigger auxiliary skeleton with exact 22 labels in order. -/
 def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
   triggerLabels.map fun lbl => (lbl, .last .stop)
 
-/-- Composite 49-entry auxiliary program testing exact label resolution. -/
-def composite27TriggerProg (main : SymbolicFunc CompositeLabel) :
+/-- Composite 39-entry auxiliary program testing exact label resolution. -/
+def composite17TriggerProg (main : SymbolicFunc CompositeLabel) :
     SymbolicProg CompositeLabel :=
-  ⟨.root, main, standardCompositeAux base27AuxSkeleton triggerAuxSkeleton⟩
+  ⟨.root, main, standardCompositeAux base17AuxSkeleton triggerAuxSkeleton⟩
 
-/-- Local slot 1 (malformedAbi) resolves to global slot 28 in the 27-base composition. -/
-theorem findLabel?_composite27_malformedAbi (main : SymbolicFunc CompositeLabel) :
-    (composite27TriggerProg main).findLabel? (.trigger .malformedAbi) = some 28 :=
+/-- Local slot 1 (malformedAbi) resolves to global slot 18 in the 17-base composition. -/
+theorem findLabel?_composite17_malformedAbi (main : SymbolicFunc CompositeLabel) :
+    (composite17TriggerProg main).findLabel? (.trigger .malformedAbi) = some 18 :=
   rfl
 
-/-- Local slot 12 (validateArrayLoop) resolves to global slot 39 in the 27-base composition. -/
-theorem findLabel?_composite27_validateArrayLoop (main : SymbolicFunc CompositeLabel) :
-    (composite27TriggerProg main).findLabel? (.trigger .validateArrayLoop) = some 39 :=
+/-- Local slot 12 (validateArrayLoop) resolves to global slot 29 in the 17-base composition. -/
+theorem findLabel?_composite17_validateArrayLoop (main : SymbolicFunc CompositeLabel) :
+    (composite17TriggerProg main).findLabel? (.trigger .validateArrayLoop) = some 29 :=
   rfl
 
-/-- Local slot 22 (afterNestedValidation) resolves to global slot 49 in the 27-base composition. -/
-theorem findLabel?_composite27_afterNestedValidation (main : SymbolicFunc CompositeLabel) :
-    (composite27TriggerProg main).findLabel? (.trigger .afterNestedValidation) = some 49 :=
+/-- Local slot 22 (afterNestedValidation) resolves to global slot 39 in the 17-base composition. -/
+theorem findLabel?_composite17_afterNestedValidation (main : SymbolicFunc CompositeLabel) :
+    (composite17TriggerProg main).findLabel? (.trigger .afterNestedValidation) = some 39 :=
   rfl
 
 /-- All 22 Trigger auxiliary slots resolve without manual offset rebasing. -/
-theorem findLabel?_composite27_all_trigger (main : SymbolicFunc CompositeLabel) (lbl : TriggerLabel) :
-    (composite27TriggerProg main).findLabel? (.trigger lbl) = some (27 + localSlotOf lbl) := by
+theorem findLabel?_composite17_all_trigger (main : SymbolicFunc CompositeLabel) (lbl : TriggerLabel) :
+    (composite17TriggerProg main).findLabel? (.trigger lbl) = some (17 + localSlotOf lbl) := by
   cases lbl <;> rfl
 
 /-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc
@@ -1060,18 +1060,19 @@ theorem symbolicLocalAuxWithRoleFailure_eq_map (dp : DeployParams) (roleFailure 
 
 /-- Erasure of the symbolic Trigger auxiliary table is the rebased numeric
 table. -/
-theorem erase_symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func)
+theorem erase_symbolicLocalAuxWithRoleFailure (baseCount : Nat) (dp : DeployParams)
+    (roleFailure : Func)
     (h : ∀ n ∈ (localAuxWithRoleFailure dp roleFailure).flatMap Func.callTargets,
       (labelOfLocalSlot? n).isSome) :
     (symbolicLocalAuxWithRoleFailure dp roleFailure).map
-        (fun (_, body) => body.erase (compositeSlotOf 27)) =
-      rebasedLocalAuxWithRoleFailure 27 dp roleFailure :=
-  erase_map_toCompositeSymbolic 27 (localAuxWithRoleFailure dp roleFailure) h
+        (fun (_, body) => body.erase (compositeSlotOf baseCount)) =
+      rebasedLocalAuxWithRoleFailure baseCount dp roleFailure :=
+  erase_map_toCompositeSymbolic baseCount (localAuxWithRoleFailure dp roleFailure) h
 
-theorem erase_toCompositeSymbolic_trigger (dp : DeployParams) :
-    (toCompositeSymbolic (triggerFullWithdrawals dp)).erase (compositeSlotOf 27) =
-      rebasedTrigger 27 dp :=
-  erase_toCompositeSymbolic 27 (triggerFullWithdrawals dp)
+theorem erase_toCompositeSymbolic_trigger (baseCount : Nat) (dp : DeployParams) :
+    (toCompositeSymbolic (triggerFullWithdrawals dp)).erase (compositeSlotOf baseCount) =
+      rebasedTrigger baseCount dp :=
+  erase_toCompositeSymbolic baseCount (triggerFullWithdrawals dp)
     (by rw [callTargets_triggerFullWithdrawals]; decide +kernel)
 
 end Trigger
