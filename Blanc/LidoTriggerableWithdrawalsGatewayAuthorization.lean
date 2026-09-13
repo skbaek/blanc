@@ -7,11 +7,10 @@ import Blanc.LidoTriggerableWithdrawalsGatewayPinnedTargetInterface
 # Triggerable Withdrawals Gateway: authorization packet
 
 This file is the source-side A2 authorization census.  It records the exact
-role-gated bodies and the two distinct failure boundaries used by the runtime:
-the zero-index path calls `missingRoleSlot`, while a nonzero record whose role
-or canonical account does not match calls `collisionRefusalSlot`.  The latter
-is intentionally an empty revert, not an `AccessControlUnauthorizedAccount`
-payload.
+role-gated bodies and the compact `missingRoleSlot` boundary selected by a zero
+nested-keccak membership word.  The old lossy flat-record collision boundary
+remains specified below as a compatibility theorem for its retained auxiliary
+slot, but is no longer reachable from the one-read role gate.
 
 The public selector-to-body/role-storage inversions are left as explicit route
 obligations below.  The six endpoints using the family's shared `onlyRole`
@@ -89,7 +88,7 @@ These images are deliberately canonical rather than merely selector-bearing.
 The trigger fixture uses an empty dynamic tuple array: its first head is the
 ABI-relative offset `0x60`, and the zero array-length word begins at byte 100.
 That is the smallest complete input which passes the live trigger validator and
-reaches its flat role guard.  Address words are built from `Adr`, so the
+reaches its one-read role guard.  Address words are built from `Adr`, so the
 `canonicalArg` and strict trigger address checks cannot fail first.
 -/
 
@@ -237,22 +236,19 @@ theorem grantRole_role_gate_exact :
       (requireStaticArgs 2 <| canonicalArg 1 <|
         onlyRole defaultAdminRole <|
           ((arg 0 ++ mstoreAt 0 ++ arg 1 ++ mstoreAt 1 ++
-            roleKeyFromMemory roleLookupIndexRegion ++ [sload, iszero]) +++
-            ((([pushB256 roleRecordLengthSlot, sload] ++ mstoreAt 2 ++
+            roleMembershipSlotFrom (mloadWord 0) (mloadWord 1) ++
+              [dup 0] ++ mstoreAt 3 ++ [sload, iszero]) +++
+            ((([pushB256 1] ++ mloadWord 3 ++ [sstore] ++
+                roleEnumerationBaseSlotFrom (mloadWord 0) ++
+                  [dup 0] ++ mstoreAt 4 ++ [sload] ++ mstoreAt 2 ++
+                mloadWord 1 ++ keccakWordLine (mloadWord 4) ++
+                  mloadWord 2 ++ [add, sstore] ++
                 mloadWord 2 ++ [pushB256 1, add] ++
-                  roleKeyFromMemory roleLookupIndexRegion ++ [sstore] ++
-                mloadWord 0 ++ roleKeyFromMemory roleLookupRoleRegion ++
-                  [sstore] ++
-                mloadWord 1 ++ roleKeyFromMemory roleLookupAccountRegion ++
-                  [sstore] ++
-                mloadWord 0 ++ enumKeyFromMemory enumRoleRegion ++ [sstore] ++
-                mloadWord 1 ++ enumKeyFromMemory enumAccountRegion ++ [sstore] ++
-                mloadWord 2 ++
-                  [pushB256 1, add, pushB256 roleRecordLengthSlot, sstore] ++
+                  keccakPairLinesRightFirst (mloadWord 1)
+                    (mloadWord 4 ++ [pushB256 1, add]) ++ [sstore] ++
+                mloadWord 2 ++ [pushB256 1, add] ++ mloadWord 4 ++ [sstore] ++
                 emitRoleGranted) +++ Func.stop)
-              <?>
-              (roleIdentityMatchesMemory +++
-                (Func.stop <?> .call collisionRefusalSlot))))) :=
+              <?> Func.stop))) :=
   rfl
 
 theorem revokeRole_role_gate_exact :
@@ -280,6 +276,11 @@ theorem trigger_role_precedes_pause_exact (dp : DeployParams) :
   rfl
 
 /-! ## Exact auxiliary failure outcomes -/
+
+/-- Compatibility name for the retired flat-record collision continuation.
+The optimized role gate cannot reach it; the retained empty-revert fallback is
+used solely to preserve the established route theorem below. -/
+def collisionRefusalSlot : Nat := fallbackSlot
 
 /-- The live shared `onlyRole` zero-index boundary.  The final dynamic-memory
 read of the selector reverter may itself exhaust gas, which is why the exact
@@ -311,7 +312,7 @@ theorem collisionRefusal_call_reverts_exact
     ∃ post, out = .error (.revert, post) ∧ post.output = [] := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[collisionRefusalSlot]? =
       some Func.revert := by
-    simp [runtime, aux, baseAux, collisionRefusalSlot]
+    rfl
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
   exact runCompiledTo_revert_inv hbody
 
@@ -352,6 +353,17 @@ theorem collision_role_failure_outcome_of_route
 
 /-! ## From an `onlyRole` route to the exact absent-role outcome -/
 
+private theorem trigger_not_mem_shared (body : Func) :
+    (selTriggerFullWithdrawals, body) ∉ sharedNonpayableFuncs := by
+  intro member
+  have selectorMember :
+      selTriggerFullWithdrawals ∈ sharedNonpayableFuncs.map Prod.fst :=
+    List.mem_map_of_mem member
+  have selectorNot :
+      selTriggerFullWithdrawals ∉ sharedNonpayableFuncs.map Prod.fst := by
+    decide +kernel
+  exact selectorNot selectorMember
+
 /-- A caller without the exact flat record cannot take the authorized arm, so
 every remaining `onlyRole` continuation is one of the two exact auxiliary
 failures.  This is the only place the four-way route is collapsed. -/
@@ -366,10 +378,6 @@ theorem absentRole_of_onlyRole_route
   | authorized _ hasRole _ _ _ => exact (lacksRole hasRole).elim
   | missingRole _ _ callRun _ _ =>
       exact Or.inl (zeroIndex_role_failure_outcome_of_route callRun)
-  | roleCollision _ _ _ callRun _ _ =>
-      exact Or.inr (collision_role_failure_outcome_of_route callRun)
-  | accountCollision _ _ _ _ callRun _ _ =>
-      exact Or.inr (collision_role_failure_outcome_of_route callRun)
 
 /-- The shared opening for a statically-shaped nonpayable role gate: the
 dispatcher hands over the exact wrapped body, `nonpayable` and
@@ -386,25 +394,24 @@ private theorem absentRole_of_static_entry
     (hsize : B256.ltCheck sevm.data.length.toB256
       (Nat.toB256 (4 + 32 * words)) = 0)
     (hselector : Sevm.selector sevm = selector)
-    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hmember : (selector, wrapped) ∈ sharedNonpayableFuncs)
     (hshape : wrapped = requireStaticArgs words (onlyRole role body))
     (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
       role sevm.caller.toB256) :
     AbsentRoleFailure out := by
   subst hshape
+  have hnotTrigger : selector ≠ selTriggerFullWithdrawals := by
+    intro h
+    exact trigger_not_mem_shared _ (h ▸ hmember)
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
-      hselector hmember
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue hguard
+      hselector hnotTrigger hmember
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
-  obtain ⟨staticPre, staticRun, pStatic, staticStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
-      dispatchRun
   obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
-    requireStaticArgs_body_of_sufficient_calldata pStatic hsize staticRun
+    requireStaticArgs_body_of_sufficient_calldata pDispatch hsize dispatchRun
   have chain : Devm.getStor entry = Devm.getStor rolePre :=
-    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans
-      (staticStor.trans roleStor)
+    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans roleStor
   refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
   rw [← congrFun chain sevm.currentTarget]
   exact lacksRole
@@ -419,23 +426,23 @@ private theorem absentRole_of_plain_entry
     (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
     (hselector : Sevm.selector sevm = selector)
-    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hmember : (selector, wrapped) ∈ sharedNonpayableFuncs)
     (hshape : wrapped = onlyRole role body)
     (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
       role sevm.caller.toB256) :
     AbsentRoleFailure out := by
   subst hshape
+  have hnotTrigger : selector ≠ selTriggerFullWithdrawals := by
+    intro h
+    exact trigger_not_mem_shared _ (h ▸ hmember)
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
-      hselector hmember
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue hguard
+      hselector hnotTrigger hmember
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
-  obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
-      dispatchRun
-  have chain : Devm.getStor entry = Devm.getStor rolePre :=
-    (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans roleStor
-  refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
+  have chain : Devm.getStor entry = Devm.getStor dispatchPre :=
+    funext (getStor_eq_of_state_eq dispatchFrame.state)
+  refine absentRole_of_onlyRole_route ?_ (onlyRole_route pDispatch dispatchRun)
   rw [← congrFun chain sevm.currentTarget]
   exact lacksRole
 
@@ -452,28 +459,28 @@ private theorem absentRole_of_canonical_entry
       (Nat.toB256 (4 + 32 * words)) = 0)
     (hvalid : ValidAdr (Sevm.argWord sevm index))
     (hselector : Sevm.selector sevm = selector)
-    (hmember : (selector, nonpayable wrapped) ∈ funcs dp)
+    (hmember : (selector, wrapped) ∈ sharedNonpayableFuncs)
     (hshape : wrapped =
       requireStaticArgs words (canonicalArg index (onlyRole role body)))
     (lacksRole : ¬ CallerHasRole (Devm.getStor entry sevm.currentTarget)
       role sevm.caller.toB256) :
     AbsentRoleFailure out := by
   subst hshape
+  have hnotTrigger : selector ≠ selTriggerFullWithdrawals := by
+    intro h
+    exact trigger_not_mem_shared _ (h ▸ hmember)
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hguard
-      hselector hmember
+    dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue hguard
+      hselector hnotTrigger hmember
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
-  obtain ⟨staticPre, staticRun, pStatic, staticStor⟩ :=
-    Func.RunCompiledTo.nonpayable_body_of_value_zero hvalue pDispatch
-      dispatchRun
   obtain ⟨canonPre, canonRun, pCanon, canonStor⟩ :=
-    requireStaticArgs_body_of_sufficient_calldata pStatic hsize staticRun
+    requireStaticArgs_body_of_sufficient_calldata pDispatch hsize dispatchRun
   obtain ⟨rolePre, roleRun, pRole, roleStor⟩ :=
     canonicalArg_body_of_valid hvalid pCanon canonRun
   have chain : Devm.getStor entry = Devm.getStor rolePre :=
     (funext (getStor_eq_of_state_eq dispatchFrame.state)).trans
-      (staticStor.trans (canonStor.trans roleStor))
+      (canonStor.trans roleStor)
   refine absentRole_of_onlyRole_route ?_ (onlyRole_route pRole roleRun)
   rw [← congrFun chain sevm.currentTarget]
   exact lacksRole
@@ -495,7 +502,8 @@ theorem pauseFor_absent_role_reverts
   have hlen : sevm.data.length = 36 := by
     rw [hdata]; exact pauseForCalldata_length duration
   refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
-    ?_ ?_ (selector_of_pauseForAuthorizationCalldata hdata) (by simp [funcs])
+    ?_ ?_ (selector_of_pauseForAuthorizationCalldata hdata)
+    (by simp [sharedNonpayableFuncs])
     pauseFor_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
@@ -515,7 +523,7 @@ theorem pauseUntil_absent_role_reverts
     rw [hdata]; exact pauseUntilAuthorizationCalldata_length expiry
   refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
     ?_ ?_ (selector_of_pauseUntilAuthorizationCalldata hdata)
-    (by simp [funcs]) pauseUntil_role_gate_exact lacksRole
+    (by simp [sharedNonpayableFuncs]) pauseUntil_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
 
@@ -538,7 +546,8 @@ theorem setExitRequestLimit_absent_role_reverts
       exitsPerFrame frameDuration
   refine absentRole_of_static_entry (words := 3) hprog hentryStack hvalue
     ?_ ?_ (selector_of_setExitRequestLimitAuthorizationCalldata hdata)
-    (by simp [funcs]) setExitRequestLimit_role_gate_exact lacksRole
+    (by simp [sharedNonpayableFuncs]) setExitRequestLimit_role_gate_exact
+    lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
 
@@ -555,7 +564,8 @@ theorem resume_absent_role_reverts
   have hlen : sevm.data.length = 4 := by
     rw [hdata]; exact resumeAuthorizationCalldata_length
   refine absentRole_of_plain_entry hprog hentryStack hvalue ?_
-    (selector_of_resumeAuthorizationCalldata hdata) (by simp [funcs])
+    (selector_of_resumeAuthorizationCalldata hdata)
+    (by simp [sharedNonpayableFuncs])
     resume_role_gate_exact lacksRole
   · rw [hlen]; decide
 
@@ -601,7 +611,7 @@ theorem grantRole_absent_role_reverts
     rw [hdata]; exact grantRoleAuthorizationCalldata_length role account
   refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
     ?_ ?_ ?_ (selector_of_grantRoleAuthorizationCalldata hdata)
-    (by simp [funcs]) grantRole_role_gate_exact lacksRole
+    (by simp [sharedNonpayableFuncs]) grantRole_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
   · rw [grantRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
@@ -621,7 +631,7 @@ theorem revokeRole_absent_role_reverts
     rw [hdata]; exact revokeRoleAuthorizationCalldata_length role account
   refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
     ?_ ?_ ?_ (selector_of_revokeRoleAuthorizationCalldata hdata)
-    (by simp [funcs]) revokeRole_role_gate_exact lacksRole
+    (by simp [sharedNonpayableFuncs]) revokeRole_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
   · rw [revokeRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
@@ -651,9 +661,9 @@ theorem triggerFullWithdrawals_absent_role_reverts
     rw [hdata]
     exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame (body := triggerFullWithdrawals dp)
-      hprog hentryStack (by rw [hlen]; decide)
-      (selector_of_triggerEmptyAuthorizationCalldata hdata) (by simp [funcs])
+    trigger_body_of_prog_run_empty_frame hprog hentryStack
+      (by rw [hlen]; decide)
+      (selector_of_triggerEmptyAuthorizationCalldata hdata)
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
   have memDispatch : dispatchPre.memory = Mem.empty := by
@@ -687,9 +697,9 @@ theorem triggerFullWithdrawals_authorized_paused_reverts
     rw [hdata]
     exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, dispatchFrame⟩ :=
-    dispatcher_body_of_prog_run_empty_frame (body := triggerFullWithdrawals dp)
-      hprog hentryStack (by rw [hlen]; decide)
-      (selector_of_triggerEmptyAuthorizationCalldata hdata) (by simp [funcs])
+    trigger_body_of_prog_run_empty_frame hprog hentryStack
+      (by rw [hlen]; decide)
+      (selector_of_triggerEmptyAuthorizationCalldata hdata)
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
   have memDispatch : dispatchPre.memory = Mem.empty := by

@@ -46,74 +46,62 @@ theorem isPausedProjection_effect (timestamp resumeSince : B256) :
 theorem pauseFor_selected_body_of_prog_run
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selPauseFor)
-    (huniq : selectorUnique (funcs dp)) :
-    ∃ dispatchEntry tail bodyPre,
+    (hselector : Sevm.selector sevm = selPauseFor) :
+    ∃ bodyPre,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre (nonpayable pauseFor) out ∧
-      bodyPre.stack = tail ∧
-      Devm.DispatchFramePreserved dispatchEntry bodyPre := by
-  have hmember : (selPauseFor, nonpayable pauseFor) ∈ funcs dp := by
-    simp [funcs]
-  obtain ⟨dispatchEntry, tail, witness⟩ :=
-    dispatcher_body_of_prog_run hprog hguard hselector huniq hmember
-  rcases witness with ⟨bodyPre, -, hbody, hstack, hframe⟩
-  exact ⟨dispatchEntry, tail, bodyPre, hbody, hstack, hframe⟩
+        sevm bodyPre pauseFor out ∧
+      bodyPre.stack = [] ∧
+      Devm.DispatchFramePreserved entry bodyPre := by
+  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
+    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
 
 theorem pauseUntil_selected_body_of_prog_run
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selPauseUntil)
-    (huniq : selectorUnique (funcs dp)) :
-    ∃ dispatchEntry tail bodyPre,
+    (hselector : Sevm.selector sevm = selPauseUntil) :
+    ∃ bodyPre,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre (nonpayable pauseUntil) out ∧
-      bodyPre.stack = tail ∧
-      Devm.DispatchFramePreserved dispatchEntry bodyPre := by
-  have hmember : (selPauseUntil, nonpayable pauseUntil) ∈ funcs dp := by
-    simp [funcs]
-  obtain ⟨dispatchEntry, tail, witness⟩ :=
-    dispatcher_body_of_prog_run hprog hguard hselector huniq hmember
-  rcases witness with ⟨bodyPre, -, hbody, hstack, hframe⟩
-  exact ⟨dispatchEntry, tail, bodyPre, hbody, hstack, hframe⟩
+        sevm bodyPre pauseUntil out ∧
+      bodyPre.stack = [] ∧
+      Devm.DispatchFramePreserved entry bodyPre := by
+  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
+    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
 
 theorem resume_selected_body_of_prog_run
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selResume)
-    (huniq : selectorUnique (funcs dp)) :
-    ∃ dispatchEntry tail bodyPre,
+    (hselector : Sevm.selector sevm = selResume) :
+    ∃ bodyPre,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre (nonpayable resume) out ∧
-      bodyPre.stack = tail ∧
-      Devm.DispatchFramePreserved dispatchEntry bodyPre := by
-  have hmember : (selResume, nonpayable resume) ∈ funcs dp := by
-    simp [funcs]
-  obtain ⟨dispatchEntry, tail, witness⟩ :=
-    dispatcher_body_of_prog_run hprog hguard hselector huniq hmember
-  rcases witness with ⟨bodyPre, -, hbody, hstack, hframe⟩
-  exact ⟨dispatchEntry, tail, bodyPre, hbody, hstack, hframe⟩
+        sevm bodyPre resume out ∧
+      bodyPre.stack = [] ∧
+      Devm.DispatchFramePreserved entry bodyPre := by
+  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
+    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
 
 theorem isPaused_selected_body_of_prog_run
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
+    (hentryStack : entry.stack = [])
+    (hvalue : sevm.value = 0)
     (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selIsPaused)
-    (huniq : selectorUnique (funcs dp)) :
-    ∃ dispatchEntry tail bodyPre,
+    (hselector : Sevm.selector sevm = selIsPaused) :
+    ∃ bodyPre,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre (nonpayable isPaused) out ∧
-      bodyPre.stack = tail ∧
-      Devm.DispatchFramePreserved dispatchEntry bodyPre := by
-  have hmember : (selIsPaused, nonpayable isPaused) ∈ funcs dp := by
-    simp [funcs]
-  obtain ⟨dispatchEntry, tail, witness⟩ :=
-    dispatcher_body_of_prog_run hprog hguard hselector huniq hmember
-  rcases witness with ⟨bodyPre, -, hbody, hstack, hframe⟩
-  exact ⟨dispatchEntry, tail, bodyPre, hbody, hstack, hframe⟩
+        sevm bodyPre isPaused out ∧
+      bodyPre.stack = [] ∧
+      Devm.DispatchFramePreserved entry bodyPre := by
+  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
+    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
 
 /-! ## Exact instruction-level storage boundary -/
 

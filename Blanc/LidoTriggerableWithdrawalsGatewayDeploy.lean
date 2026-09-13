@@ -83,28 +83,29 @@ private def initializeAdminRole : Line :=
   loadCachedArgumentIndex 0 ++ mstoreAt (Nat.toB256 accountWord) ++
   [pushB256 0] ++ mstoreAt (Nat.toB256 indexWord) ++
   [pushB256 1] ++
-    roleKeyFromMemoryAt roleWord accountWord roleLookupIndexRegion ++ [sstore] ++
-  mloadWord (Nat.toB256 roleWord) ++
-    roleKeyFromMemoryAt roleWord accountWord roleLookupRoleRegion ++ [sstore] ++
+    roleMembershipSlotFrom (mloadWord (Nat.toB256 roleWord))
+      (mloadWord (Nat.toB256 accountWord)) ++ [sstore] ++
   mloadWord (Nat.toB256 accountWord) ++
-    roleKeyFromMemoryAt roleWord accountWord roleLookupAccountRegion ++ [sstore] ++
-  mloadWord (Nat.toB256 roleWord) ++
-    enumKeyFromMemoryAt indexWord enumRoleRegion ++ [sstore] ++
-  mloadWord (Nat.toB256 accountWord) ++
-    enumKeyFromMemoryAt indexWord enumAccountRegion ++ [sstore] ++
-  [pushB256 1, pushB256 roleRecordLengthSlot, sstore] ++
+    roleEnumerationMemberSlotFrom (mloadWord (Nat.toB256 roleWord))
+      (mloadWord (Nat.toB256 indexWord)) ++ [sstore] ++
+  [pushB256 1] ++
+    roleEnumerationIndexSlotFrom (mloadWord (Nat.toB256 roleWord))
+      (mloadWord (Nat.toB256 accountWord)) ++ [sstore] ++
+  [pushB256 1] ++
+    roleEnumerationBaseSlotFrom (mloadWord (Nat.toB256 roleWord)) ++ [sstore] ++
   [caller] ++ mloadWord (Nat.toB256 accountWord) ++
     mloadWord (Nat.toB256 roleWord) ++
     [pushB256 (signatureHash "RoleGranted" [.bytes 32, .address, .address])] ++
     logWith 3 0 0
 
 private def initializeExitRequestLimit : Line :=
-  loadCachedArgumentIndex 2 ++ [pushB256 maxExitRequestsLimitSlot, sstore] ++
-  loadCachedArgumentIndex 2 ++ [pushB256 prevExitRequestsLimitSlot, sstore] ++
-  [timestamp, pushB256 (Nat.toB256 (2 ^ 32 - 1)), and,
-    pushB256 prevTimestampSlot, sstore] ++
-  loadCachedArgumentIndex 4 ++ [pushB256 frameDurationInSecSlot, sstore] ++
-  loadCachedArgumentIndex 3 ++ [pushB256 exitsPerFrameSlot, sstore] ++
+  [timestamp] ++ mstoreAt (Nat.toB256 constructorAdminScratchBase) ++
+  packFiveUint32Words (Nat.toB256 (cachedArgumentWord 2))
+    (Nat.toB256 (cachedArgumentWord 2))
+    (Nat.toB256 constructorAdminScratchBase)
+    (Nat.toB256 (cachedArgumentWord 4))
+    (Nat.toB256 (cachedArgumentWord 3)) ++
+    [pushB256 twrLimitPosition, sstore] ++
   loadCachedArgumentIndex 2 ++
     mstoreAt (Nat.toB256 constructorLimitEventScratchBase) ++
   loadCachedArgumentIndex 3 ++
@@ -209,17 +210,11 @@ theorem full_create_input_length (args : ConstructorArgs) :
 table edges are not external EVM calls. -/
 def constructorPersistentWriteInventory :
     List (SourceSite × PersistentWriteClass) :=
-  [ (⟨"constructor.admin.lookupIndex", 0⟩, .roleIndex),
-    (⟨"constructor.admin.lookupRole", 1⟩, .roleRecord),
-    (⟨"constructor.admin.lookupAccount", 2⟩, .roleRecord),
-    (⟨"constructor.admin.enumRole", 3⟩, .enumeration),
-    (⟨"constructor.admin.enumAccount", 4⟩, .enumeration),
-    (⟨"constructor.admin.recordLength", 5⟩, .roleMembership),
-    (⟨"constructor.limit.maximum", 6⟩, .limit),
-    (⟨"constructor.limit.previous", 7⟩, .limit),
-    (⟨"constructor.limit.timestamp", 8⟩, .limit),
-    (⟨"constructor.limit.frameDuration", 9⟩, .limit),
-    (⟨"constructor.limit.exitsPerFrame", 10⟩, .limit) ]
+  [ (⟨"constructor.admin.membership", 0⟩, .roleMembership),
+    (⟨"constructor.admin.member", 1⟩, .enumeration),
+    (⟨"constructor.admin.memberIndex", 2⟩, .roleIndex),
+    (⟨"constructor.admin.memberCount", 3⟩, .enumeration),
+    (⟨"constructor.limit.packed", 4⟩, .limit) ]
 
 def constructorExternalCallInventory :
     List (SourceSite × ExternalCallClass) := []

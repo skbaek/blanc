@@ -3,8 +3,8 @@
 
 Both implementations execute their complete CREATE input in a fresh pinned
 Prague state.  Runtime histories are compared through an explicit logical
-projection; raw storage is never compared.  The five published behavioral
-differences are fail-closed, named, and limited to exact fields.
+projection; raw storage is never compared.  Published behavioral differences
+are fail-closed, named, and limited to exact fields.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ MANIFEST_PATH = REPO / "scripts" / "fixtures" / "lido-twg" / "manifest.json"
 COMPATIBILITY_TOOL = REPO / "scripts" / "lido-twg-compatibility.py"
 EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 JAUNE_PIN = "949cf97ee1956828a3ac0eb12a62c438656ba76e"
-BLANC_ARTIFACT_COMMIT = "35a196fd50192aa269d6cb07699ea0910ad3c468"
-BLANC_PROOF_COMMIT = "a0e04e7a69558b8744ced81ea4a3defdfc478d36"
+BLANC_ARTIFACT_COMMIT = "f8b56653b94ff810c876a56b1539ac45c009de72"
+BLANC_PROOF_COMMIT = "84ff5f155a83c25097aa3fef2aeb65bce7670651"
 REFERENCE_WORLD = "differential-corpus"
 DEFAULT_GAS_LIMIT = 20_000_000
 UINT256_MAX = (1 << 256) - 1
@@ -77,8 +77,6 @@ DEVIATION_FIELDS = {
     "TWG-D01": ("returndata",),
     "TWG-D02": ("returndata",),
     "TWG-D03": ("returndata",),
-    "TWG-D04": ("returndata", "logicalState"),
-    "TWG-D05": ("status", "returndata", "logicalState", "logs"),
 }
 
 CHANNEL_FIELDS = {
@@ -144,9 +142,9 @@ GAS_CASES = [
     ("TRIGGER_REFUND_REVERT", "trigger-refund-revert", "trigger-refund-revert"),
 ]
 
-RETAINED_NONPOSITIVE_GAS_CASES = {
-    "view-is-paused-resumed", "view-is-paused-paused", "role-negative-pause-for",
-}
+PERFORMANCE_CONTROL_IDS = (
+    "packing", "keccak-key", "enumeration", "compiled-route",
+)
 
 BOUNDARY_DEFINITION = (
     "direct EELS Prague message gas used, computed as message gas minus "
@@ -154,8 +152,8 @@ BOUNDARY_DEFINITION = (
     "transaction intrinsic gas and refunds"
 )
 PLACEHOLDER_TEMPLATE_DIGESTS = {
-    "compatibility": "527ffa4fa5287d020064c254ea877792f5001a20bb091e136c7aeb26bc03150a",
-    "deviations": "1e17fa747d0702be780cc42462e4382b9d6fe21232ad180b941a1a898c5833b3",
+    "compatibility": "b27f0021eee4a15c71aa2e03b001afd2b1c9c9dfe6dce93c2b9235a667f5483f",
+    "deviations": "c41e5b8df35cabd4553c6b912f16fa88f3674a17269c3d654ce8ec3dadda29b1",
 }
 EVENT_TOPICS = {
     "ExitRequestsLimitSet": "0x3119d910326e0f179e121df55f23f45b8a5022ff10c73c02aabf2b48ae36070a",
@@ -539,7 +537,7 @@ def build_cases() -> List[Case]:
              history=d04_history,
              action=tx("getRoleMember(bytes32,uint256)", ADMIN, role_a, 0),
              observe_roles=[role_a, role_b], observe_accounts=[REFUND],
-             tags=("deviation.TWG-D04",), deviation="TWG-D04"))
+             tags=("roles.enumeration-order",)))
 
     collision_role_a = int.from_bytes(keccak(b"TWG_D05_ROLE_A"), "big")
     collision_role_b = collision_role_a ^ int.from_bytes(address_bytes(ACTOR), "big") ^ \
@@ -551,7 +549,7 @@ def build_cases() -> List[Case]:
              history=[grant(collision_role_a, ACTOR), grant(collision_role_b, ACTOR_B)],
              action=tx("hasRole(bytes32,address)", ADMIN, collision_role_b, ACTOR_B),
              observe_roles=[collision_role_a, collision_role_b],
-             tags=("deviation.TWG-D05",), deviation="TWG-D05"))
+             tags=("roles.keccak-collision-separation",)))
 
     role_negatives = [
         ("role-negative-grant", "grantRole(bytes32,address)", tx("grantRole(bytes32,address)", ACTOR, PAUSE_ROLE, ACTOR_B)),
@@ -705,7 +703,9 @@ def build_cases() -> List[Case]:
 
 
 def parse_artifacts(text: str) -> Dict[str, object]:
-    result: Dict[str, object] = {"offsets": {}, "projection": {}}
+    result: Dict[str, object] = {
+        "offsets": {}, "projection": {}, "performance-controls": [],
+    }
     byte_labels = {"creation-template", "primary-create", "primary-runtime",
                    "independent-create", "independent-runtime"}
     for line in text.splitlines():
@@ -727,6 +727,13 @@ def parse_artifacts(text: str) -> Dict[str, object]:
             result["offsets"] = {"locator": [int(value) for value in values]}
         elif label in {"offset-metadata-valid", "patch-controls-valid"}:
             result[label] = parts[1] == "true"
+        elif label == "performance-control":
+            expect(len(parts) == 4, "malformed performance-control evaluator row")
+            result["performance-controls"].append({
+                "id": parts[1],
+                "production": parts[2] == "true",
+                "mutantRejected": parts[3] == "true",
+            })
         elif label == "constructor-persistent-sites":
             rows = [] if parts[2] == "-" else parts[2].split(",")
             expect(len(rows) == int(parts[1]), "constructor inventory length mismatch")
@@ -753,8 +760,12 @@ def parse_artifacts(text: str) -> Dict[str, object]:
     expect(not (required - result.keys()), f"Lean evaluator omitted {sorted(required - result.keys())}")
     expect(result["offset-metadata-valid"] is True and result["patch-controls-valid"] is True,
            "Lean evaluator patch controls are not live")
+    expect(result["performance-controls"] == [
+        {"id": control_id, "production": True, "mutantRejected": True}
+        for control_id in PERFORMANCE_CONTROL_IDS
+    ], "Lean evaluator performance controls or paired mutants are not live")
     expect(len(result["offsets"]["locator"]) >= 1, "locator patch inventory is empty")
-    expect(len(result["constructor-persistent-sites"]) == 11 and not result["constructor-external-sites"],
+    expect(len(result["constructor-persistent-sites"]) == 5 and not result["constructor-external-sites"],
            "constructor source-site inventory drifted")
     expect(result["constructor-arguments"] == ["admin", "locator", "max-exit-requests", "exits-per-frame", "frame-duration"],
            "constructor argument inventory drifted")
@@ -897,7 +908,8 @@ def project_state(case: Case, state, side: str) -> Mapping[str, object]:
             role_slot = sol_map(h256(role), roles_position)
             enum_slot = sol_map(h256(role), role_members_position)
             length = read_storage(state, GATEWAY, enum_slot)
-            expect(length <= 64, f"refusing Solidity role array length {length}")
+            expect(length <= 64,
+                   f"{case.name}: refusing Solidity role array length {length}")
             array_base = int.from_bytes(keccak(h256(enum_slot)), "big")
             members = [canonical_address("0x" + h256(
                 read_storage(state, GATEWAY, (array_base + index) & UINT256_MAX)
@@ -910,32 +922,30 @@ def project_state(case: Case, state, side: str) -> Mapping[str, object]:
                     "members": members, "membership": membership}
     else:
         resume_since = read_storage(state, GATEWAY, tagged(1, 0))
+        packed = read_storage(state, GATEWAY, limit_position)
         limit = {
-            "maximum": hex(read_storage(state, GATEWAY, tagged(1, 1))),
-            "previous": hex(read_storage(state, GATEWAY, tagged(1, 2))),
-            "timestamp": hex(read_storage(state, GATEWAY, tagged(1, 3))),
-            "frameDuration": hex(read_storage(state, GATEWAY, tagged(1, 4))),
-            "exitsPerFrame": hex(read_storage(state, GATEWAY, tagged(1, 5))),
+            "maximum": hex(packed & 0xffffffff),
+            "previous": hex((packed >> 32) & 0xffffffff),
+            "timestamp": hex((packed >> 64) & 0xffffffff),
+            "frameDuration": hex((packed >> 96) & 0xffffffff),
+            "exitsPerFrame": hex((packed >> 128) & 0xffffffff),
         }
-        record_length = read_storage(state, GATEWAY, tagged(1, 6))
-        expect(record_length <= 64,
-               f"{case.name}/{side}: refusing Blanc role record length {record_length}")
 
         def role_projection(role: int) -> Mapping[str, object]:
-            members: List[str] = []
-            for index in range(record_length):
-                stored_role = read_storage(state, GATEWAY, tagged(5, index))
-                account_value = read_storage(state, GATEWAY, tagged(6, index))
-                if stored_role == role:
-                    members.append(canonical_address("0x" + h256(account_value)[-20:].hex()))
+            role_slot = sol_map(h256(role), roles_position)
+            enum_slot = sol_map(h256(role), role_members_position)
+            length = read_storage(state, GATEWAY, enum_slot)
+            expect(length <= 64,
+                   f"{case.name}: refusing Blanc role array length {length}")
+            array_base = int.from_bytes(keccak(h256(enum_slot)), "big")
+            members = [canonical_address("0x" + h256(
+                read_storage(state, GATEWAY, (array_base + index) & UINT256_MAX)
+            )[-20:].hex()) for index in range(length)]
             membership = {}
             for account in accounts:
-                payload = role_payload(role, account)
-                membership[canonical_address(account)] = (
-                    read_storage(state, GATEWAY, tagged(4, payload)) != 0 and
-                    read_storage(state, GATEWAY, tagged(2, payload)) == role and
-                    read_storage(state, GATEWAY, tagged(3, payload)) ==
-                    int.from_bytes(address_bytes(account), "big"))
+                member_slot = sol_map(address_word(account), role_slot)
+                membership[canonical_address(account)] = bool(
+                    read_storage(state, GATEWAY, member_slot))
             return {"adminRole": role_hex(DEFAULT_ADMIN_ROLE),
                     "members": members, "membership": membership}
 
@@ -1167,9 +1177,9 @@ def projection_schema(artifacts: Mapping) -> Mapping[str, object]:
             "formula": artifacts["projection"].get("formula"),
             "regions": artifacts["projection"].get("projection-regions"),
             "slots": artifacts["projection"].get("projection-slots"),
-            "roles": "full-identity lookup records plus filtered global enumeration",
+            "roles": "nested-keccak membership plus direct per-role length/index/member storage",
         },
-        "nonclaim": "raw slots, storage roots, bytecode, and enumeration order at TWG-D04 are not equated",
+        "nonclaim": "raw slots, storage roots, and bytecode are not equated",
     }
 
 
@@ -1194,7 +1204,7 @@ def resource_rows(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, Ma
     return rows
 
 
-def named_gas_rows(resources: Sequence[Mapping]) -> List[Mapping[str, object]]:
+def named_gas_rows(resources: Sequence[Mapping], enforce_frozen_shape: bool = True) -> List[Mapping[str, object]]:
     by_case: Dict[str, List[Mapping]] = {}
     for row in resources:
         by_case.setdefault(str(row["case"]), []).append(row)
@@ -1214,64 +1224,13 @@ def named_gas_rows(resources: Sequence[Mapping]) -> List[Mapping[str, object]]:
     }
     expect(len(final_actions) == 63,
            "public final-action inventory must contain exactly the 63 non-constructor rows")
-    expected_positive = {
-        str(row["coordinate"]) for row in final_actions.values() if row["delta"] > 0
-    }
-    constructor = by_case["constructor-success"][0]
-    expect(constructor["label"] == "constructor" and constructor["delta"] > 0,
-           "successful constructor positive-cost boundary differs")
-    expected_positive.add(str(constructor["coordinate"]))
-    actual_positive = {str(row["coordinate"]) for row in result if row["delta"] > 0}
-    expect(actual_positive == expected_positive and len(actual_positive) == 48,
-           "named gas rows do not cover every positive public final action plus constructor")
-    actual_nonpositive = {
-        str(row["coordinate"]).split("#", 1)[0]
-        for row in result if row["delta"] <= 0
-    }
-    expect(actual_nonpositive == RETAINED_NONPOSITIVE_GAS_CASES,
-           "named gas rows do not retain the exact three negative review controls")
+    if enforce_frozen_shape:
+        constructor = by_case["constructor-success"][0]
+        expect(constructor["label"] == "constructor",
+               "successful constructor resource boundary differs")
+        expect(len(result) == 51 and all(row["delta"] < 0 for row in result),
+               "the exact 51-cell named gas ledger is not strictly dominant")
     return result
-
-
-def gas_cost_disposition(row: Mapping[str, object]) -> Tuple[str, str]:
-    case = str(row["coordinate"]).split("#", 1)[0]
-    if case == "constructor-success":
-        return (
-            "Accepted deployment cost for explicit constructor validation, tagged role/limit "
-            "initialization, and runtime code deposit; no deployment-gas improvement is claimed.",
-            "deployment initialization and code-deposit boundary",
-        )
-    if case.startswith("trigger-"):
-        return (
-            "Accepted trigger-path cost for explicit fee, vault, router, refund, and rollback "
-            "choreography; the corpus pins effects and no aggregate gas advantage is claimed.",
-            "trigger dependency/value/rollback boundary",
-        )
-    if case.startswith("set-limit-") or case.startswith("get-limit-"):
-        return (
-            "Accepted exit-limit cost for explicit five-field projection, validation, checked "
-            "consumption, or whole-frame refill; the measured behavior is independently pinned.",
-            "exit-limit projection and validation boundary",
-        )
-    if case.startswith("pause-") or case.startswith("resume-"):
-        return (
-            "Accepted pause-control cost for explicit authorization, sentinel/error-polarity "
-            "checks, and tagged-state update or rollback; no gas improvement is claimed.",
-            "pause/resume authorization and tagged-state boundary",
-        )
-    if (case.startswith("grant-role") or case.startswith("revoke-role") or
-            case.startswith("renounce-role") or case.startswith("get-role-member") or
-            case.startswith("role-")):
-        return (
-            "Accepted role-state cost for full-identity collision checks and global enumeration "
-            "maintenance or scanning; TWG-D02–D05 separately delimit observable differences.",
-            "full-identity role lookup/enumeration boundary",
-        )
-    return (
-        "Accepted read-path cost of Blanc's explicit dispatcher and proof-local tagged "
-        "representation; exact output semantics are pinned and no gas improvement is claimed.",
-        "constant, interface, role, or pause-state read boundary",
-    )
 
 
 def compatibility_contract() -> Mapping[str, object]:
@@ -1295,15 +1254,7 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
                         projection: Mapping) -> Mapping[str, object]:
     fill = copy.deepcopy(contract)
     named = named_gas_rows(resources)
-    positives = []
-    for row in named:
-        if row["delta"] > 0:
-            defense, review_group = gas_cost_disposition(row)
-            positives.append({
-                "id": f"TWG-G{len(positives) + 1:02d}", "gasKey": row["gasKey"],
-                "defense": defense,
-                "evidence": f"manifest resource coordinate {row['coordinate']}; {review_group}",
-            })
+    positives: List[Mapping[str, object]] = []
     template = artifacts["creation-template"]
     full = template + constructor_suffix(PARAMS)
     runtime = patch_blanc_runtime(artifacts, LOCATOR)
@@ -1329,11 +1280,11 @@ def build_document_fill(contract: Mapping, cases: Sequence[Case], resources: Seq
             "B2_D02_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D02"),
             "B2_D03_RESOURCE_ATTRIBUTION": "out-of-bounds getRoleMember action gas and exact two payload digests are pinned",
             "B2_D03_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D03"),
-            "B2_D04_EXPECTED_ORDERS": "reference role-A order [ACTOR_C, ACTOR_B]; Blanc filtered global order [ACTOR_B, ACTOR_C]",
-            "B2_D04_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D04"),
+            "B2_D04_EXPECTED_ORDERS": "reference and Blanc role-A order [ACTOR_C, ACTOR_B] after the same cross-role removal history",
+            "B2_D04_ROW_SET": "role-enumeration-cross-role-order",
             "B2_D05_PROJECTION_SHA256": digest(projection),
-            "B2_D05_RESOURCE_ATTRIBUTION": "colliding second grant and subsequent hasRole boundaries are pinned",
-            "B2_D05_ROW_SET": ", ".join(case.name for case in cases if case.deviation == "TWG-D05"),
+            "B2_D05_RESOURCE_ATTRIBUTION": "both formerly colliding grants succeed independently and subsequent hasRole observations remain separated",
+            "B2_D05_ROW_SET": "role-flat-key-collision-refusal",
             "B2_DIFFERENTIAL_VERDICT": "PASS",
             "B2_PER_SELECTOR_RESOURCE_COVERAGE_SUMMARY": "24/24 census selectors each own at least one direct action boundary",
             "B2_PROJECTION_SCHEMA_SHA256": digest(projection),
@@ -1403,11 +1354,12 @@ def build_manifest(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, M
                             "sha256": results["constructor-success"][1]["artifact"]["runtimeSha256"]},
                 "locatorOffsets": artifacts["offsets"]["locator"],
                 "patchControlsValid": True,
+                "performanceControls": artifacts["performance-controls"],
             },
             "proof": {
                 "artifactProgramCommit": BLANC_ARTIFACT_COMMIT,
                 "proofCertificateCommit": BLANC_PROOF_COMMIT,
-                "certificate": "first compile-valid pinned-target certificate",
+                "certificate": "optimized-runtime theorem ladder and pinned-target certificate",
             },
             "positiveIdentityChecks": identity_checks,
         },
@@ -1491,6 +1443,78 @@ def live_falsifiers(cases: Sequence[Case], results: Mapping[str, Tuple[Mapping, 
     return channel_count, identity_count + 1
 
 
+def write_prototype_report(path: Path, cases: Sequence[Case], resources: Sequence[Mapping],
+                           artifacts: Mapping, lock: Mapping) -> Mapping[str, object]:
+    gas_rows = named_gas_rows(resources, enforce_frozen_shape=False)
+    baseline_manifest = json.loads(MANIFEST_PATH.read_text())
+    baseline_rows = {
+        str(row["gasKey"]): row
+        for row in baseline_manifest["resourceEvidence"]["namedGasRows"]
+    }
+    gas_movement = []
+    for row in gas_rows:
+        before = baseline_rows[str(row["gasKey"])]
+        gas_movement.append({
+            **row,
+            "baselineBlanc": before["blanc"],
+            "blancImprovement": before["blanc"] - row["blanc"],
+            "baselineDelta": before["delta"],
+        })
+    reference_world = next(
+        world for world in lock["artifacts"]["worlds"]
+        if world["name"] == REFERENCE_WORLD)
+    reference_runtime = reference_world["returnedRuntime"]["byteLength"]
+    reference_create = reference_world["fullCreateInput"]["byteLength"]
+    candidate_runtime = len(artifacts["primary-runtime"])
+    candidate_create = len(artifacts["primary-create"])
+    byte_rows = [
+        {"key": "RUNTIME", "reference": reference_runtime,
+         "blanc": candidate_runtime, "delta": candidate_runtime - reference_runtime},
+        {"key": "FULL_CREATE", "reference": reference_create,
+         "blanc": candidate_create, "delta": candidate_create - reference_create},
+    ]
+    result = {
+        "schema": 1,
+        "semantic": {
+            "cases": len(cases),
+            "agreementCases": sum(case.deviation is None for case in cases),
+            "registeredDeviationCases": sum(case.deviation is not None for case in cases),
+            "removedLayoutDeviations": ["TWG-D04", "TWG-D05"],
+            "resourceBoundaries": len(resources),
+        },
+        "artifacts": {
+            "creationTemplateBytes": len(artifacts["creation-template"]),
+            "fullCreateBytes": candidate_create,
+            "fullCreateSha256": sha256(artifacts["primary-create"]),
+            "runtimeBytes": candidate_runtime,
+            "runtimeSha256": sha256(artifacts["primary-runtime"]),
+            "runtimeSavedFromBaseline": 15948 - candidate_runtime,
+            "runtimeStrictGap": candidate_runtime - 8127,
+            "fullCreateStrictGap": candidate_create - 10255,
+        },
+        "byteRows": byte_rows,
+        "gasRows": gas_movement,
+        "resourceRows": list(resources),
+        "score": {
+            "byteWins": sum(row["delta"] < 0 for row in byte_rows),
+            "gasWins": sum(row["delta"] < 0 for row in gas_rows),
+            "ties": sum(row["delta"] == 0 for row in byte_rows + gas_rows),
+            "totalWins": sum(row["delta"] < 0 for row in byte_rows + gas_rows),
+            "comparisons": len(byte_rows) + len(gas_rows),
+        },
+        "movement": {
+            "gasRegressionsFromBaseline": [row["gasKey"] for row in gas_movement
+                                           if row["blancImprovement"] < 0],
+            "preservedBaselineWins": [row["gasKey"] for row in gas_movement
+                                      if row["baselineDelta"] < 0 and row["delta"] < 0],
+            "newGasWins": [row["gasKey"] for row in gas_movement
+                           if row["baselineDelta"] >= 0 and row["delta"] < 0],
+        },
+    }
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--eels-root", required=True)
@@ -1498,6 +1522,7 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--write-manifest", action="store_true")
     parser.add_argument("--manifest-only", action="store_true")
     parser.add_argument("--constructor-probe", action="store_true")
+    parser.add_argument("--prototype-report", type=Path)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -1511,6 +1536,14 @@ def main(argv: Sequence[str]) -> int:
         case = cases[0]
         solidity = run_side(case, "solidity", lock, artifacts)
         blanc = run_side(case, "blanc", lock, artifacts)
+        if args.verbose:
+            print(json.dumps({
+                "differences": compare(case, solidity, blanc),
+                "referenceLogicalState": solidity["logicalState"],
+                "blancLogicalState": blanc["logicalState"],
+                "referenceLogs": solidity["logs"],
+                "blancLogs": blanc["logs"],
+            }, indent=2, sort_keys=True))
         assert_case(case, solidity, blanc)
         admin_role = role_hex(DEFAULT_ADMIN_ROLE)
         print(json.dumps({
@@ -1549,6 +1582,15 @@ def main(argv: Sequence[str]) -> int:
             raise
         results[case.name] = (solidity, blanc)
     resources = resource_rows(cases, results)
+    if args.prototype_report is not None:
+        prototype = write_prototype_report(args.prototype_report, cases, resources,
+                                           artifacts, lock)
+        print(f"OK — Lido TWG P1 prototype: {prototype['semantic']['cases']} rows; "
+              f"{prototype['semantic']['resourceBoundaries']} resource boundaries; "
+              f"score {prototype['score']['totalWins']}/{prototype['score']['comparisons']}; "
+              f"runtime {prototype['artifacts']['runtimeBytes']} bytes; "
+              f"full CREATE {prototype['artifacts']['fullCreateBytes']} bytes")
+        return 0
     manifest = build_manifest(cases, results, resources, lock, census, artifacts,
                               identity_checks)
     require_manifest(manifest, args.write_manifest)
@@ -1556,7 +1598,8 @@ def main(argv: Sequence[str]) -> int:
     if args.manifest_only:
         print(f"OK — Lido TWG differential manifest: {len(cases)} rows; "
               f"{len(resources)} resource boundaries; 24/24 selectors + constructor; "
-              f"5 stable deviations; {channel_falsifiers + other_live} live in-generator falsifiers")
+              f"3 active + 2 repaired stable deviations; "
+              f"{channel_falsifiers + other_live} live in-generator falsifiers")
         return 0
     histories = sum(len(case.history) for case in cases)
     traces = sum(sum(len(trace) for trace in results[case.name][0]["callTrace"])
@@ -1566,7 +1609,8 @@ def main(argv: Sequence[str]) -> int:
           f"{deviations} exact registered-deviation rows; 24/24 selectors + constructor; "
           f"{histories} causal history messages; {len(resources)} resource boundaries; "
           f"{traces} reference CALL/STATICCALL traces; {identity_checks} positive artifact "
-          f"checks; {channel_falsifiers + other_live} live channel/identity/semantic falsifiers")
+          f"checks; {2 * len(PERFORMANCE_CONTROL_IDS)} performance control/mutant checks; "
+          f"{channel_falsifiers + other_live} live channel/identity/semantic falsifiers")
     return 0
 
 

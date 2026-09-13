@@ -16,6 +16,7 @@ import Blanc.TaggedStorage
 namespace Blanc
 
 open Jaune
+open Jaune.Ninst Ninst
 
 namespace LidoTriggerableWithdrawalsGateway
 
@@ -115,6 +116,125 @@ def roleLookupIndexSlot (role account : B256) : B256 :=
   taggedSlot roleLookupIndexRegion (roleLookupPayload role account)
 def enumRoleSlot (index : B256) : B256 := taggedSlot enumRoleRegion index
 def enumAccountSlot (index : B256) : B256 := taggedSlot enumAccountRegion index
+
+/-! ## Disposable P1 physical storage prototype
+
+The public logical projection remains independent of raw storage.  The P1
+artifact uses the source family's nested keccak domains so role membership is
+one collision-resistant lookup and enumeration is direct per role.  The
+literal base words are tied to their source preimages below, rather than
+recomputing keccak during every program elaboration. -/
+
+def accessControlRolesPosition : B256 :=
+  0x9a627a5d4aa7c17f87ff26e3fe9a42c2b6c559e8b41a42282d0ecebb17c0e4d3
+def accessControlRoleMembersPosition : B256 :=
+  0x8f8c450dae5029cd48cd91dd9db65da48fb742893edfc7941250f6721d93cbbe
+
+/-- The mathematical storage keys mirrored by the executable keccak helpers.
+These definitions are proof/projection names; the program continues to derive
+the keys by executing `KECCAK256` over the two-word images below. -/
+def roleDataSlot (role : B256) : B256 :=
+  (role.toBytes ++ accessControlRolesPosition.toBytes).keccak
+
+def roleMembershipSlot (role account : B256) : B256 :=
+  (account.toBytes ++ (roleDataSlot role).toBytes).keccak
+
+def roleEnumerationBaseSlot (role : B256) : B256 :=
+  (role.toBytes ++ accessControlRoleMembersPosition.toBytes).keccak
+
+def roleEnumerationIndexSlot (role account : B256) : B256 :=
+  (account.toBytes ++ ((roleEnumerationBaseSlot role) + 1).toBytes).keccak
+
+def roleEnumerationMemberSlot (role index : B256) : B256 :=
+  (roleEnumerationBaseSlot role).toBytes.keccak + index
+
+def limitUint32Mask : B256 := 0xffffffff
+
+/-! Storage-key derivation may run after trigger calldata has populated words
+0--40.  Words 64 and 65 are below the trigger's dynamic-memory base and are
+reserved for these two-word keccak images. -/
+def storageKeyScratchWord : B256 := 64
+def storageKeyScratchNextWord : B256 := 65
+
+def storageMloadWord (word : B256) : Line :=
+  [pushB256 (word * 32), mload]
+
+def keccakPairLines (first second : Line) : Line :=
+  first ++ mstoreAt storageKeyScratchWord ++
+  second ++ mstoreAt storageKeyScratchNextWord ++
+  [pushB256 64, pushB256 (storageKeyScratchWord * 32), keccak256]
+
+/-! Evaluate the right image before the left one.  Nested mapping bases use
+the same scratch pair, so this order keeps the final image `first ++ second`
+after the inner keccak has returned. -/
+def keccakPairLinesRightFirst (first second : Line) : Line :=
+  second ++ mstoreAt storageKeyScratchNextWord ++
+  first ++ mstoreAt storageKeyScratchWord ++
+  [pushB256 64, pushB256 (storageKeyScratchWord * 32), keccak256]
+
+def keccakWordLine (word : Line) : Line :=
+  word ++ mstoreAt storageKeyScratchWord ++
+  [pushB256 32, pushB256 (storageKeyScratchWord * 32), keccak256]
+
+def roleDataSlotFrom (role : Line) : Line :=
+  keccakPairLines role [pushB256 accessControlRolesPosition]
+
+def roleMembershipSlotFrom (role account : Line) : Line :=
+  keccakPairLinesRightFirst account (roleDataSlotFrom role)
+
+def roleEnumerationBaseSlotFrom (role : Line) : Line :=
+  keccakPairLines role [pushB256 accessControlRoleMembersPosition]
+
+def roleEnumerationIndexSlotFrom (role account : Line) : Line :=
+  keccakPairLinesRightFirst account
+    (roleEnumerationBaseSlotFrom role ++ [pushB256 1, add])
+
+def roleEnumerationMemberSlotFrom (role index : Line) : Line :=
+  keccakWordLine (roleEnumerationBaseSlotFrom role) ++ index ++ [add]
+
+/-! Read-only/runtime-entry role checks can use the first two memory words:
+their inputs are still in calldata or are immediate instructions, and callers
+do not depend on earlier memory.  Keeping this separate from the general
+helpers preserves constructor arguments, role-update scratch, and the
+post-decoder trigger packet while avoiding word-64 memory expansion on views. -/
+def viewKeccakPairLines (first second : Line) : Line :=
+  first ++ mstoreAt 0 ++ second ++ mstoreAt 1 ++
+  [pushB256 64, pushB256 0, keccak256]
+
+def viewKeccakPairLinesRightFirst (first second : Line) : Line :=
+  second ++ mstoreAt 1 ++ first ++ mstoreAt 0 ++
+  [pushB256 64, pushB256 0, keccak256]
+
+def viewKeccakWordLine (word : Line) : Line :=
+  word ++ mstoreAt 0 ++ [pushB256 32, pushB256 0, keccak256]
+
+def viewRoleDataSlotFrom (role : Line) : Line :=
+  viewKeccakPairLines role [pushB256 accessControlRolesPosition]
+
+def viewRoleMembershipSlotFrom (role account : Line) : Line :=
+  viewKeccakPairLinesRightFirst account (viewRoleDataSlotFrom role)
+
+def viewRoleEnumerationBaseSlotFrom (role : Line) : Line :=
+  viewKeccakPairLines role [pushB256 accessControlRoleMembersPosition]
+
+def viewRoleEnumerationMemberSlotFrom (role index : Line) : Line :=
+  viewKeccakWordLine (viewRoleEnumerationBaseSlotFrom role) ++ index ++ [add]
+
+def unpackUint32Lane (packedWord destinationWord shift : B256) : Line :=
+  storageMloadWord packedWord ++ [pushB256 shift, shr,
+    pushB256 limitUint32Mask, and] ++ mstoreAt destinationWord
+
+def packFiveUint32Words
+    (maximum previous previousTimestamp frameDuration exitsPerFrame : B256) : Line :=
+  storageMloadWord maximum ++ [pushB256 limitUint32Mask, and] ++
+  storageMloadWord previous ++ [pushB256 limitUint32Mask, and,
+    pushB256 32, shl, or] ++
+  storageMloadWord previousTimestamp ++ [pushB256 limitUint32Mask, and,
+    pushB256 64, shl, or] ++
+  storageMloadWord frameDuration ++ [pushB256 limitUint32Mask, and,
+    pushB256 96, shl, or] ++
+  storageMloadWord exitsPerFrame ++ [pushB256 limitUint32Mask, and,
+    pushB256 128, shl, or]
 
 def lookupRecordMatches
     (role account storedRole storedAccount storedIndex : B256) : Prop :=
