@@ -200,7 +200,7 @@
   },
   "touchedConsumerHashes": {
     "Blanc/Weth10AllowanceArmsPermit.lean": "06062305249386944359a87dc9870b8c2db0d267b42ce6dc204cd838d06e6521",
-    "Blanc/Weth10StaticSilence.lean": "5f10c4224dbcc53d5acc15d08f840c16dc99f9878b540765d0de1804324c891e"
+    "Blanc/Weth10StaticSilence.lean": "33baaeb9b942d9c813deff2cab4c1f7e6b2fc66bd09c761582eefbaf3494de22"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
