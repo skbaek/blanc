@@ -11,6 +11,7 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
 JAUNE_BIN="$ROOT/.lake/packages/jaune/.lake/build/bin/jaune"
+LEAF_OLEAN="$ROOT/.lake/build/lib/lean/Blanc/ProofRecipeTactic.olean"
 EELS_PIN="4198b9c5996713b268aed602739d5aa40e277694"
 TMP_DIR="$(mktemp -d)"
 ARTIFACTS="$TMP_DIR/artifacts.txt"
@@ -32,6 +33,9 @@ if [ ! -x "$EELS_PY" ]; then
 fi
 if [ ! -x "$JAUNE_BIN" ]; then
   fail "Jaune runner not found at $JAUNE_BIN; run the catalogue build first"
+fi
+if [ ! -f "$LEAF_OLEAN" ]; then
+  fail "proof-recipe authoring leaf not built at $LEAF_OLEAN; run 'lake build Blanc.ProofRecipeTactic' first"
 fi
 if [ "$(git -C "$EELS_ROOT" rev-parse HEAD 2>"$LOG")" != "$EELS_PIN" ]; then
   fail "EELS checkout is not at $EELS_PIN"

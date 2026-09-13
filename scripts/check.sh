@@ -323,6 +323,12 @@ if [ "$BUILD" -eq 1 ]; then
     echo "REGRESSION — axiom audit: lake build failed"
     exit 1
   fi
+  # The authoring leaf is deliberately unreachable from Blanc.lean, so the
+  # default target never builds it; the suggestion controls below need it.
+  if ! (cd "$ROOT" && lake build Blanc.ProofRecipeTactic); then
+    echo "REGRESSION — axiom audit: proof-recipe leaf build failed"
+    exit 1
+  fi
 fi
 
 if ! SUGGEST_OUT="$(cd "$ROOT" && lake env lean scripts/ProofRecipeSuggestions.lean 2>&1)"; then
