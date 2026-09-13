@@ -147,6 +147,22 @@ became a second consumer.  Nothing in them named this contract. -/
 
 /-! ## The writing WETH10 selectors all store -/
 
+/-- Walk a body down to the first `SSTORE` on every branch, leaving the
+guard arms that dispatch to an auxiliary slot.
+
+A local prepend-free walker: the shared `stores_structure` searches an
+arbitrary `prepend` split for the vault's long staging lines, and that
+search misroutes these walks.  The search order below is main's proven one. -/
+syntax "stores_walk" : tactic
+macro_rules
+  | `(tactic| stores_walk) =>
+    `(tactic|
+        repeat' first
+          | exact StoresOrHalts.store
+          | apply StoresOrHalts.next
+          | apply StoresOrHalts.branch
+          | exact StoresOrHalts.never not_run_revert)
+
 /-- A guard arm dispatching to a constant `Error(string)` reverter never
 runs, so it stores vacuously. -/
 theorem storesOrHalts_revertWithSlot {fs : List Func} {k : Nat} {reason : String}
@@ -157,12 +173,12 @@ theorem storesOrHalts_revertWithSlot {fs : List Func} {k : Nat} {reason : String
 theorem storesOrHalts_approve {fs : List Func} :
     StoresOrHalts fs approve := by
   unfold approve approvePrefix
-  stores_structure
+  stores_walk
 
 theorem storesOrHalts_approveAndCall {fs : List Func} :
     StoresOrHalts fs approveAndCall := by
   unfold approveAndCall approvePrefix
-  stores_structure
+  stores_walk
 
 theorem storesOrHalts_flashTokenErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
@@ -202,7 +218,7 @@ theorem storesOrHalts_transferBalanceErrorSlot (dp : DeployParams) :
     (reason := "WETH: transfer amount exceeds balance")
     (by simp [weth10Aux, transferBalanceErrorSlot, transferBalanceError])
 
-/-- Discharge the guard arms a `stores_structure` walk leaves behind. -/
+/-- Discharge the guard arms a `stores_walk` leaves behind. -/
 syntax "stores_slots" : tactic
 macro_rules
   | `(tactic| stores_slots) =>
@@ -218,21 +234,21 @@ macro_rules
 theorem storesOrHalts_permit (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) (permit dp) := by
   unfold permit
-  stores_structure
+  stores_walk
   stores_slots
 
 theorem storesOrHalts_transferFromCore (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) transferFromCore := by
   unfold transferFromCore transferFromNonzero transferFromZero
     loadArgBalanceAmount balanceTooSmall debitLoadedBalance
-  stores_structure
+  stores_walk
   stores_slots
 
 theorem storesOrHalts_withdrawFromCore (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) withdrawFromCore := by
   unfold withdrawFromCore loadArgBalanceAmount balanceTooSmall
     debitLoadedBalance
-  stores_structure
+  stores_walk
   stores_slots
 
 theorem storesOrHalts_transferFromCoreSlot (dp : DeployParams) :
@@ -250,7 +266,7 @@ theorem storesOrHalts_withdrawFromCoreSlot (dp : DeployParams) :
 theorem storesOrHalts_transferFrom (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) transferFrom := by
   unfold transferFrom spendCallerAllowanceThen
-  stores_structure
+  stores_walk
   all_goals first
     | exact storesOrHalts_transferFromCoreSlot _
     | exact storesOrHalts_allowanceErrorSlot _
@@ -258,7 +274,7 @@ theorem storesOrHalts_transferFrom (dp : DeployParams) :
 theorem storesOrHalts_withdrawFrom (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) withdrawFrom := by
   unfold withdrawFrom spendCallerAllowanceThen
-  stores_structure
+  stores_walk
   all_goals first
     | exact storesOrHalts_withdrawFromCoreSlot _
     | exact storesOrHalts_allowanceErrorSlot _
@@ -266,7 +282,7 @@ theorem storesOrHalts_withdrawFrom (dp : DeployParams) :
 theorem storesOrHalts_flashLoan (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux) flashLoan := by
   unfold flashLoan
-  stores_structure
+  stores_walk
   stores_slots
 
 /-! ## Dispatch memberships for the writing selectors -/
