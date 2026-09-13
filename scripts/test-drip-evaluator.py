@@ -22,9 +22,12 @@ class EvaluatorControls(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="drip-evaluator-controls-")
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name) / "repo"
+        # Canonicalize once: macOS TMPDIRs spell through /var and /tmp symlinks
+        # while the helper under test normalizes every path it reports.
+        tmp = Path(temporary.name).resolve()
+        self.root = tmp / "repo"
         self.root.mkdir()
-        self.home = Path(temporary.name) / "home"
+        self.home = tmp / "home"
         self.home.mkdir()
         for name in HELPER.SHARED_SOURCES:
             target = self.root / name
@@ -43,7 +46,7 @@ class EvaluatorControls(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("mock compiler artifact; never execute")
             path.chmod(0o755)
-        self.cache = Path(temporary.name) / "cache"
+        self.cache = tmp / "cache"
         (self.cache / "artifacts").mkdir(parents=True)
         (self.cache / "artifacts/mock").write_text("presence only; not a Lake hash")
         self.trace = self.root / ".lake/packages/jaune/.lake/build/lib/lean/Jaune/Transaction.trace"

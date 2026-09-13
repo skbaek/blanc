@@ -63,7 +63,9 @@ class ReceiptProtocolControls(unittest.TestCase):
         self.addCleanup(patch.stopall)
         temporary = tempfile.TemporaryDirectory(prefix="drip-receipt-protocol-")
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Canonicalize once: macOS TMPDIRs spell through /var and /tmp symlinks
+        # while the helper under test normalizes every path it reports.
+        self.root = Path(temporary.name).resolve()
         self.directory = self.root / "scripts/fixtures/drip"
         self.directory.mkdir(parents=True)
         # Isolate protocol tests from another worker's in-progress generated
