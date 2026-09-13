@@ -441,9 +441,11 @@ audit hook that records each file its whole process tree opens, then reports
 any read the gate's registry entry does not fingerprint. It is an instrument,
 not a gate: it is not in the ordered set above and it seeds no cache record.
 For an isolated gate implementation or registry-entry change, audit the exact
-affected IDs with `scripts/gate-read-audit.py --only ID...`. Run the full audit
-after a shared runner, registry parser, audit-instrumentation, or other common
-helper change, because those surfaces can affect every cacheable row.
+affected IDs with `scripts/gate-read-audit.py --only ID...`, including every
+consumer of a changed helper. Run the full audit when shared runner, parser,
+instrumentation, or helper changes affect observation or input coverage across
+the catalogue, or when the affected set cannot be established. Changes confined
+to audit CLI selection need its CLI controls; they do not change observed reads.
 
 It cannot see reads by non-Python processes — `grep` and `sed` in the wrappers,
 and everything `lake env lean` touches, the latter being covered by `depHash`

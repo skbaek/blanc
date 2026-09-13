@@ -67,8 +67,9 @@ def main() -> int:
     assert "1 gates executed" in output
 
     for arguments, diagnostic in (
-        (["--only"], "requires at least one cacheable gate id"),
+        (["--only"], "expected at least one argument"),
         (["--only", "missing"], "unknown cacheable gate id(s): missing"),
+        (["--only", "alpha", "missing"], "unknown cacheable gate id(s): missing"),
     ):
         code, cold, audited, output, error = exercise(arguments)
         assert code == 2 and not cold and not audited and not output
