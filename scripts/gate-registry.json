@@ -170,6 +170,7 @@
           "scripts/module-path-dereference-census.json",
           "scripts/proof-recipes.toml",
           "scripts/proof-recipe-exceptions.json",
+          "docs/COMMON_API.md",
           "docs/PROOF_RECIPES.md",
           "Blanc/ProofRecipesGenerated.lean",
           "Blanc/ProofRecipeTactic.lean",

@@ -2038,16 +2038,41 @@ def self_test(root: Path) -> None:
             )},
             "have no case, so nothing shows their triggers can fire",
         )
-        rejected_files(
-            "stale-unwitnessed-listing",
-            {"harness": replace_once(
-                originals["harness"],
-                "-- EXPECT: full-length-slice\n",
-                "-- EXPECT: full-length-slice\n-- EXPECT: constant-error-guard\n",
-                "stale-unwitnessed-listing",
-            )},
-            "now has a harness case or is no longer registered",
+        # Exercise the opposite direction with a fixture-owned allowance.  The
+        # production allowance table is intentionally empty because every live
+        # recipe currently has a case.  Removing this case in the fixture and
+        # adding only a temporary allowance makes the next mutation genuinely
+        # stale, so the control cannot pass vacuously by naming a recipe that
+        # already has another EXPECT case.
+        stale_recipe = "full-length-slice"
+        stale_previous = UNWITNESSED_RECIPES.get(stale_recipe)
+        UNWITNESSED_RECIPES[stale_recipe] = "self-test fixture allowance"
+        fixture_harness = replace_once(
+            originals["harness"],
+            "-- EXPECT: full-length-slice\n",
+            "",
+            "stale-unwitnessed-listing setup",
         )
+        files["harness"].write_text(fixture_harness, encoding="utf-8")
+        try:
+            if load_and_validate(test_root) is None:
+                raise RecipeError("self-test: fixture unwitnessed allowance did not validate")
+            rejected_files(
+                "stale-unwitnessed-listing",
+                {"harness": replace_once(
+                    originals["harness"],
+                    "-- EXPECT: full-length-slice\n",
+                    "-- EXPECT: full-length-slice\n-- EXPECT: full-length-slice\n",
+                    "stale-unwitnessed-listing",
+                )},
+                "now has a harness case or is no longer registered",
+            )
+        finally:
+            files["harness"].write_text(originals["harness"], encoding="utf-8")
+            if stale_previous is None:
+                UNWITNESSED_RECIPES.pop(stale_recipe, None)
+            else:
+                UNWITNESSED_RECIPES[stale_recipe] = stale_previous
         rejected_files(
             "orphan-expect-comment",
             {"harness": replace_once(
