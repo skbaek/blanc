@@ -75,7 +75,7 @@ Choose the gate by what you changed, cheapest falsifier first:
 | a protected Lido artifact statement or canary | `scripts/check-claims.sh` | `scripts/check.sh --no-build` |
 | anything that could move elaboration cost | `scripts/check-elab.sh` | — |
 | a new module that must state its elaboration cost | `scripts/check-elab.sh --calibrate` | — |
-| the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` | `scripts/check-elab.sh --full` |
+| the elaboration selector, cache contract, or timing-gate implementation | `scripts/check-elab.sh --self-test` and `python3 scripts/test-check-elab-warmup.py` (mocked shell routing) | `scripts/check-elab.sh --full` |
 | FMINT or WETH compiled bytes | `scripts/check-fmint.sh --no-build` + `scripts/check-weth.sh --no-build` | both `scripts/check-*-coverage.sh` |
 | PRORATA compiled bytes or conformance artifacts | `scripts/check-prorata.sh --no-build` | — |
 | the DRIP finite stack table, generator, or generator controls | `scripts/check-drip-stack-certificate.sh` | the **full set**, in the order below |
@@ -445,7 +445,8 @@ affected IDs with `scripts/gate-read-audit.py --only ID...`, including every
 consumer of a changed helper. Run the full audit when shared runner, parser,
 instrumentation, or helper changes affect observation or input coverage across
 the catalogue, or when the affected set cannot be established. Changes confined
-to audit CLI selection need its CLI controls; they do not change observed reads.
+to audit CLI selection need `python3 scripts/test-gate-read-audit.py`; they do
+not change observed reads.
 
 It cannot see reads by non-Python processes — `grep` and `sed` in the wrappers,
 and everything `lake env lean` touches, the latter being covered by `depHash`
