@@ -1029,6 +1029,59 @@ predicate.  These adapters live beside the protocol in
 [`Blanc/PinnedPauseTarget.lean`](../Blanc/PinnedPauseTarget.lean); do not
 repeat their byte-slice normalization in a contract family.
 
+### S7. I need a token-ledger conservation invariant
+
+A token contract that keeps balances at address-shaped keys and a total
+supply at one reserved non-address key satisfies one invariant: the word at
+the supply slot is exactly the sum of the balances.  That invariant is
+`LedgerConserved` in
+[`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean), and
+everything it needs rests on the single bit fact `¬ ValidAdr slot`:
+`toB256_ne_of_not_validAdr` is the fact in the form the storage lemmas want,
+`rest_set_slot` says a supply write cannot move the sum, `get_slot_set` says
+a balance write cannot move the supply, and `rest_set_of_not_validAdr` says a
+write at any other non-address key is invisible to the balances.
+`transfer_of_debit_credit` is the two-`set` transfer step, and
+`LedgerConserved.transfer`/`mint`/`burn` (with the `mint_set`/`burn_set`
+`Stor.set` forms) carry the invariant across a booked movement.
+`LedgerConserved.sumNof` says the sum never overflows (it *is* a word),
+`le_supply` bounds every balance by the supply, and `of_empty`, `of_eq`,
+`of_get_eq`, and `of_rest_eq` seed and transport the invariant.  Nothing here
+names a contract; `Blanc/Conserved.lean` proves the same algebra for fmint's
+own supply slot and predates this module.
+
+### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
+
+Four modules carry the offset-priced proportional economics both PRORATA
+families share.  [`Blanc/OffsetPricing.lean`](../Blanc/OffsetPricing.lean)
+owns the virtual-offset arithmetic: `mintN`/`payN` price deposits and
+withdrawals, `mintN_never_overmints`/`payN_never_overpays` floor both in the
+ledger's favor, `depositResidueN`/`withdrawResidueN` name the exact floor
+residues, and `deposit_price_nondecreasing`/`withdraw_price_nondecreasing`
+say settlement never lowers the cross-multiplied share price.
+[`Blanc/ProrataAccounting.lean`](../Blanc/ProrataAccounting.lean) classifies
+one semantic step: `AccountingSnapshot` is the observed state,
+`ProrataAccountingKind` the four SF-frozen classes, `ProrataAccountingEffect`
+the exact state equation per class with `deposit_inv`/`withdraw_inv`/
+`externalCredit_inv`/`silent_inv` inversion at a known class, and
+`ProrataAccountingPath` chains steps with `snapshotAt`/`XAt`/`DAt`/`rhoAt`/
+`kappaAt` projections and the `prorata_dust_trace_exact` dust telescope.
+[`Blanc/ProrataAttackModel.lean`](../Blanc/ProrataAttackModel.lean) bounds one
+coalition move: `PriceLe` with `refl`/`trans` orders snapshots by virtual
+price, `ProrataAccountingEffect.priceLe` lifts every classified effect into
+it, `claimN` values a share balance with `claimN_le_balance`,
+`payN_mono_price`, and the per-move bounds `claimN_externalCredit_le`,
+`claimN_deposit_le`, and `claimN_withdraw_le`, closing in
+`victim_loss_le_ceil`/`victim_loss_le_div_add_one`.
+[`Blanc/ProrataAttackPath.lean`](../Blanc/ProrataAttackPath.lean) runs the
+whole attack: `ProrataAttackState.Invariant` conjoins `SharesPartition`,
+`FlowExact`, `ClaimBound`, and `VictimConsistent`, `genesis_invariant` seeds
+it, each `ProrataAttackEffect` preserves it (`preservesInvariant`), and a
+closed `ProrataAttackPath` yields `attacker_no_profit_of_attackPath` and
+`victim_loss_bound_of_attackPath`.  Nothing here names an asset, a contract,
+or a program; the WETH-backed vault is the second consumer of arithmetic
+first stated for PRORATA's ETH-denominated shares.
+
 ## M — bytes and memory
 
 ### M1. The goal is a `sliceD` normalization
@@ -1858,6 +1911,22 @@ equation and therefore has `Eq` at its head; and `goal-head:LinkCertificate`
 matches certificate construction, which is the one goal in the flow whose head
 really is one of this module's declarations.  A `goal-head:resolve` trigger would
 never have fired.
+
+### C7. I need a storage-determined contract specification
+
+`ContractSpec` carries an invariant over storage, in-flight callvalue, and
+ETH balance, and a contract whose invariant reads only storage still owes the
+record's eight balance obligations.  `ContractSpec.ofStorageOnly` in
+[`Blanc/StorageOnlySpec.lean`](../Blanc/StorageOnlySpec.lean) packages that
+argument once: `getStor_addBal`/`getStor_subBal_addBal` say balance movement
+never moves storage, `ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
+reduce the frame invariants to the storage predicate, and
+`ofStorageOnly_funcSound` reduces each per-target obligation to the bare
+storage walk, declining the `nof`-class side condition a storage-determined
+invariant never needs.  The module's no-write and `STATICCALL` sections
+discharge targets that never write storage, and `ofStorageOnly_of_call`
+carries the invariant across a child `call` under the deeper-frame
+hypothesis.
 
 ## Common-library-first workflow
 
