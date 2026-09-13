@@ -42,17 +42,10 @@ def controlDeployParams : LidoTriggerableWithdrawalsGateway.DeployParams :=
 the pause role.  These are exactly the role/storage premises the gateway
 family's authorization route consumes. -/
 def controlGatewayStor : Stor :=
-  ((((Stor.empty : Stor).set LidoTriggerableWithdrawalsGateway.resumeSinceSlot
-            0).set
-        (LidoTriggerableWithdrawalsGateway.roleLookupIndexSlot
-          LidoTriggerableWithdrawalsGateway.pauseRole
-          configWorldOwner.toB256) 1).set
-      (LidoTriggerableWithdrawalsGateway.roleLookupRoleSlot
-        LidoTriggerableWithdrawalsGateway.pauseRole configWorldOwner.toB256)
-      LidoTriggerableWithdrawalsGateway.pauseRole).set
-    (LidoTriggerableWithdrawalsGateway.roleLookupAccountSlot
-      LidoTriggerableWithdrawalsGateway.pauseRole configWorldOwner.toB256)
-    configWorldOwner.toB256
+  ((Stor.empty : Stor).set LidoTriggerableWithdrawalsGateway.resumeSinceSlot
+        0).set
+    (LidoTriggerableWithdrawalsGateway.roleMembershipSlot
+      LidoTriggerableWithdrawalsGateway.pauseRole configWorldOwner.toB256) 1
 
 /-! ## The closed world
 
