@@ -1,0 +1,3095 @@
+{
+  "schema": 2,
+  "kind": "drip-bpo2-runtime-fixtures",
+  "executionEvidence": true,
+  "runtimeSha256": "f7680a271f9634409f54800453c40d3e432d94cfc02774381090b67f77f27993",
+  "creationSha256": "beba712ca49c8c5b757925c5498e8e0200a3e0c7c1f5b6ef683ca167c83c04a5",
+  "artifactSizes": {
+    "runtime": 1762,
+    "creation": 2001
+  },
+  "targetProfile": "827a1cad9c9c8528512f90a06888c8bd9171d9ae",
+  "obligations": [
+    {
+      "name": "deployment-genesis",
+      "fixtures": [
+        "deployment-genesis.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-same-timestamp",
+      "fixtures": [
+        "drip-same-timestamp.json",
+        "observer-drip-same-timestamp.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-local-under-k2",
+      "fixtures": [
+        "drip-local-under-k2.json",
+        "observer-drip-local-under-k2.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-local-over-k3",
+      "fixtures": [
+        "drip-local-over-k3.json",
+        "observer-drip-local-over-k3.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-one-year",
+      "fixtures": [
+        "drip-one-year.json",
+        "observer-drip-one-year.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-max-elapsed",
+      "fixtures": [
+        "drip-max-elapsed.json",
+        "observer-drip-max-elapsed.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-elapsed-overflow-revert",
+      "fixtures": [
+        "drip-elapsed-overflow-revert.json",
+        "observer-drip-elapsed-overflow-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-timestamp-regression-revert",
+      "fixtures": [
+        "drip-timestamp-regression-revert.json",
+        "observer-drip-timestamp-regression-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-chi-below-scale-revert",
+      "fixtures": [
+        "drip-chi-below-scale-revert.json",
+        "observer-drip-chi-below-scale-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-chi-above-cap-revert",
+      "fixtures": [
+        "drip-chi-above-cap-revert.json",
+        "observer-drip-chi-above-cap-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-post-chi-cap-boundary",
+      "fixtures": [
+        "drip-post-chi-cap-boundary.json",
+        "observer-drip-post-chi-cap-boundary.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "drip-post-chi-cap-revert",
+      "fixtures": [
+        "drip-post-chi-cap-revert.json",
+        "observer-drip-post-chi-cap-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-zero-value",
+      "fixtures": [
+        "join-zero-value.json",
+        "observer-join-zero-value.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-genesis-first",
+      "fixtures": [
+        "join-genesis-first.json",
+        "observer-join-genesis-first.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-future-auto-drip",
+      "fixtures": [
+        "join-future-auto-drip.json",
+        "observer-join-future-auto-drip.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-max-asset",
+      "fixtures": [
+        "join-max-asset.json",
+        "observer-join-max-asset.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-over-max-asset-revert",
+      "fixtures": [
+        "join-over-max-asset-revert.json",
+        "observer-join-over-max-asset-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-total-or-row-cap-revert",
+      "fixtures": [
+        "join-cap-row-pre.json",
+        "join-cap-row-result.json",
+        "join-cap-total-pre.json",
+        "join-cap-total-result.json",
+        "observer-join-cap-row-pre.json",
+        "observer-join-cap-row-result.json",
+        "observer-join-cap-total-pre.json",
+        "observer-join-cap-total-result.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "join-zero-unit-credit",
+      "fixtures": [
+        "join-zero-unit-credit.json",
+        "observer-join-zero-unit-credit.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-zero-unit-call",
+      "fixtures": [
+        "exit-zero-unit-call-observer.json",
+        "exit-zero-unit-call.json",
+        "observer-exit-zero-unit-call.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-partial",
+      "fixtures": [
+        "exit-partial.json",
+        "observer-exit-partial.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-full",
+      "fixtures": [
+        "exit-full.json",
+        "observer-exit-full.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-future-auto-drip",
+      "fixtures": [
+        "exit-future-auto-drip.json",
+        "observer-exit-future-auto-drip.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-insufficient-units-revert",
+      "fixtures": [
+        "exit-insufficient-units-revert.json",
+        "observer-exit-insufficient-units-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-underfunded-call-rollback",
+      "fixtures": [
+        "exit-underfunded-call-rollback.json",
+        "observer-exit-underfunded-call-rollback.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-rejecting-recipient-rollback",
+      "fixtures": [
+        "exit-rejecting-recipient-rollback-observer.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "exit-successful-reentry",
+      "fixtures": [
+        "exit-nested-overdraw-observer.json",
+        "exit-successful-reentry-observer.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "view-units-fresh-consistency",
+      "fixtures": [
+        "observer-view-units-fresh-consistency.json",
+        "view-units-fresh-consistency.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "view-assets-fresh-consistency",
+      "fixtures": [
+        "observer-view-assets-fresh-consistency.json",
+        "view-assets-fresh-consistency.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "view-arithmetic-cap-boundaries",
+      "fixtures": [
+        "observer-view-cap-convertToAssets-0.json",
+        "observer-view-cap-convertToAssets-340282366920938463463374607431768211455.json",
+        "observer-view-cap-convertToAssets-340282366920938463463374607431768211456.json",
+        "observer-view-cap-convertToUnits-0.json",
+        "observer-view-cap-convertToUnits-340282366920938463463374607431768211455.json",
+        "observer-view-cap-convertToUnits-340282366920938463463374607431768211456.json",
+        "view-cap-convertToAssets-0.json",
+        "view-cap-convertToAssets-340282366920938463463374607431768211455.json",
+        "view-cap-convertToAssets-340282366920938463463374607431768211456.json",
+        "view-cap-convertToUnits-0.json",
+        "view-cap-convertToUnits-340282366920938463463374607431768211455.json",
+        "view-cap-convertToUnits-340282366920938463463374607431768211456.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "receive-value-donation",
+      "fixtures": [
+        "observer-receive-value-donation.json",
+        "receive-value-donation.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "receive-zero-value",
+      "fixtures": [
+        "observer-receive-zero-value.json",
+        "receive-zero-value.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "unknown-selector-revert",
+      "fixtures": [
+        "observer-unknown-selector-revert.json",
+        "unknown-selector-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "short-and-trailing-calldata-revert",
+      "fixtures": [
+        "observer-short-and-trailing-calldata-revert.json",
+        "short-and-trailing-calldata-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "value-bearing-nonpayable-revert",
+      "fixtures": [
+        "observer-value-bearing-nonpayable-revert.json",
+        "value-bearing-nonpayable-revert.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "multi-participant-conservation",
+      "fixtures": [
+        "multi-participant-conservation.json",
+        "observer-multi-participant-conservation.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "segmentation-k3-versus-k1-k2",
+      "fixtures": [
+        "observer-segmentation-one.json",
+        "observer-segmentation-split.json",
+        "segmentation-one.json",
+        "segmentation-split.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences"
+      ]
+    },
+    {
+      "name": "receipt-returndata-log-matrix",
+      "fixtures": [
+        "exit-nested-overdraw-observer.json",
+        "exit-rejecting-recipient-rollback-observer.json",
+        "exit-successful-reentry-observer.json",
+        "exit-zero-unit-call-observer.json",
+        "observer-drip-chi-above-cap-revert.json",
+        "observer-drip-chi-below-scale-revert.json",
+        "observer-drip-elapsed-overflow-revert.json",
+        "observer-drip-local-over-k3.json",
+        "observer-drip-local-under-k2.json",
+        "observer-drip-max-elapsed.json",
+        "observer-drip-one-year.json",
+        "observer-drip-post-chi-cap-boundary.json",
+        "observer-drip-post-chi-cap-revert.json",
+        "observer-drip-same-timestamp.json",
+        "observer-drip-timestamp-regression-revert.json",
+        "observer-exit-full.json",
+        "observer-exit-future-auto-drip.json",
+        "observer-exit-insufficient-units-revert.json",
+        "observer-exit-partial.json",
+        "observer-exit-underfunded-call-rollback.json",
+        "observer-exit-zero-unit-call.json",
+        "observer-join-cap-row-pre.json",
+        "observer-join-cap-row-result.json",
+        "observer-join-cap-total-pre.json",
+        "observer-join-cap-total-result.json",
+        "observer-join-future-auto-drip.json",
+        "observer-join-genesis-first.json",
+        "observer-join-max-asset.json",
+        "observer-join-over-max-asset-revert.json",
+        "observer-join-zero-unit-credit.json",
+        "observer-join-zero-value.json",
+        "observer-multi-participant-conservation.json",
+        "observer-receive-value-donation.json",
+        "observer-receive-zero-value.json",
+        "observer-segmentation-one.json",
+        "observer-segmentation-split.json",
+        "observer-short-and-trailing-calldata-revert.json",
+        "observer-unknown-selector-revert.json",
+        "observer-value-bearing-nonpayable-revert.json",
+        "observer-view-assets-fresh-consistency.json",
+        "observer-view-cap-convertToAssets-0.json",
+        "observer-view-cap-convertToAssets-340282366920938463463374607431768211455.json",
+        "observer-view-cap-convertToAssets-340282366920938463463374607431768211456.json",
+        "observer-view-cap-convertToUnits-0.json",
+        "observer-view-cap-convertToUnits-340282366920938463463374607431768211455.json",
+        "observer-view-cap-convertToUnits-340282366920938463463374607431768211456.json",
+        "observer-view-units-fresh-consistency.json"
+      ],
+      "requiredAssertions": [
+        "complete target pre/post account and storage",
+        "receipt status and cumulative-gas differences",
+        "returndata bytes/size and ordered observer logs"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "drip-same-timestamp",
+      "obligation": "drip-same-timestamp",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-same-timestamp.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x65dc",
+          "gasUsed": "0x65dc",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-local-under-k2",
+      "obligation": "drip-local-under-k2",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-local-under-k2.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7d4a",
+          "gasUsed": "0x7d4a",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-local-over-k3",
+      "obligation": "drip-local-over-k3",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-local-over-k3.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7d4b",
+          "gasUsed": "0x7d4b",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-one-year",
+      "obligation": "drip-one-year",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-one-year.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x93f8",
+          "gasUsed": "0x93f8",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-max-elapsed",
+      "obligation": "drip-max-elapsed",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-max-elapsed.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xa2cb",
+          "gasUsed": "0xa2cb",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-elapsed-overflow-revert",
+      "obligation": "drip-elapsed-overflow-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-elapsed-overflow-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x63ea",
+          "gasUsed": "0x63ea",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-timestamp-regression-revert",
+      "obligation": "drip-timestamp-regression-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-timestamp-regression-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x63c4",
+          "gasUsed": "0x63c4",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-chi-below-scale-revert",
+      "obligation": "drip-chi-below-scale-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-chi-below-scale-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5b50",
+          "gasUsed": "0x5b50",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-chi-above-cap-revert",
+      "obligation": "drip-chi-above-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-chi-above-cap-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5b69",
+          "gasUsed": "0x5b69",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-post-chi-cap-boundary",
+      "obligation": "drip-post-chi-cap-boundary",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-post-chi-cap-boundary.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xa2cb",
+          "gasUsed": "0xa2cb",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "drip-post-chi-cap-revert",
+      "obligation": "drip-post-chi-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "drip-post-chi-cap-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x8ba2",
+          "gasUsed": "0x8ba2",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-zero-value",
+      "obligation": "join-zero-value",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-zero-value.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x77c9",
+          "gasUsed": "0x77c9",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-genesis-first",
+      "obligation": "join-genesis-first",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-genesis-first.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x11341",
+          "gasUsed": "0x011341",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-future-auto-drip",
+      "obligation": "join-future-auto-drip",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-future-auto-drip.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x12ab0",
+          "gasUsed": "0x012ab0",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-max-asset",
+      "obligation": "join-max-asset",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-max-asset.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x11341",
+          "gasUsed": "0x011341",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-over-max-asset-revert",
+      "obligation": "join-over-max-asset-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-over-max-asset-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x52e6",
+          "gasUsed": "0x52e6",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-zero-unit-credit",
+      "obligation": "join-zero-unit-credit",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-zero-unit-credit.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x8df8",
+          "gasUsed": "0x8df8",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-cap-total-result",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-cap-total-result.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x761d",
+          "gasUsed": "0x761d",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-cap-row-result",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-cap-row-result.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x75fb",
+          "gasUsed": "0x75fb",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-cap-total-pre",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-cap-total-pre.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x6391",
+          "gasUsed": "0x6391",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "join-cap-row-pre",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "join-cap-row-pre.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5b3b",
+          "gasUsed": "0x5b3b",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-zero-unit-call",
+      "obligation": "exit-zero-unit-call",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-zero-unit-call.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x78ce",
+          "gasUsed": "0x78ce",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-partial",
+      "obligation": "exit-partial",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-partial.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xa8e6",
+          "gasUsed": "0xa8e6",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-full",
+      "obligation": "exit-full",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-full.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x871f",
+          "gasUsed": "0x871f",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-future-auto-drip",
+      "obligation": "exit-future-auto-drip",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-future-auto-drip.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x9b35",
+          "gasUsed": "0x9b35",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-insufficient-units-revert",
+      "obligation": "exit-insufficient-units-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-insufficient-units-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x6468",
+          "gasUsed": "0x6468",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-underfunded-call-rollback",
+      "obligation": "exit-underfunded-call-rollback",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-underfunded-call-rollback.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0xd6fb",
+          "gasUsed": "0xd6fb",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-units-fresh-consistency",
+      "obligation": "view-units-fresh-consistency",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "view-units-fresh-consistency.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x679f",
+          "gasUsed": "0x679f",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1924f",
+          "gasUsed": "0x012ab0",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-assets-fresh-consistency",
+      "obligation": "view-assets-fresh-consistency",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "view-assets-fresh-consistency.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x678e",
+          "gasUsed": "0x678e",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x102c3",
+          "gasUsed": "0x9b35",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToUnits-0",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToUnits-0.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x65a4",
+          "gasUsed": "0x65a4",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToUnits-340282366920938463463374607431768211455",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToUnits-340282366920938463463374607431768211455.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x6664",
+          "gasUsed": "0x6664",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToUnits-340282366920938463463374607431768211456",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToUnits-340282366920938463463374607431768211456.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5406",
+          "gasUsed": "0x5406",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToAssets-0",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToAssets-0.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x6593",
+          "gasUsed": "0x6593",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToAssets-340282366920938463463374607431768211455",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToAssets-340282366920938463463374607431768211455.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x6653",
+          "gasUsed": "0x6653",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "view-cap-convertToAssets-340282366920938463463374607431768211456",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "view-cap-convertToAssets-340282366920938463463374607431768211456.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5406",
+          "gasUsed": "0x5406",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "receive-zero-value",
+      "obligation": "receive-zero-value",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "receive-zero-value.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x5218",
+          "gasUsed": "0x5218",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "receive-value-donation",
+      "obligation": "receive-value-donation",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "receive-value-donation.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x5218",
+          "gasUsed": "0x5218",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "unknown-selector-revert",
+      "obligation": "unknown-selector-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "unknown-selector-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x52a8",
+          "gasUsed": "0x52a8",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "short-and-trailing-calldata-revert",
+      "obligation": "short-and-trailing-calldata-revert",
+      "steps": 13,
+      "executionEvidence": true,
+      "fixture": "short-and-trailing-calldata-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x5284",
+          "gasUsed": "0x5284",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0xa50c",
+          "gasUsed": "0x5288",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0xf798",
+          "gasUsed": "0x528c",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x14b76",
+          "gasUsed": "0x53de",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x19f86",
+          "gasUsed": "0x5410",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x1f364",
+          "gasUsed": "0x53de",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x24774",
+          "gasUsed": "0x5410",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x29b52",
+          "gasUsed": "0x53de",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x2ef62",
+          "gasUsed": "0x5410",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x341fa",
+          "gasUsed": "0x5298",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x394cf",
+          "gasUsed": "0x52d5",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x3e767",
+          "gasUsed": "0x5298",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x43a28",
+          "gasUsed": "0x52c1",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "value-bearing-nonpayable-revert",
+      "obligation": "value-bearing-nonpayable-revert",
+      "steps": 4,
+      "executionEvidence": true,
+      "fixture": "value-bearing-nonpayable-revert.json",
+      "receiptGas": [
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x53e8",
+          "gasUsed": "0x53e8",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0xa7d0",
+          "gasUsed": "0x53e8",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0xfbb8",
+          "gasUsed": "0x53e8",
+          "logs": []
+        },
+        {
+          "status": "0x0",
+          "cumulativeGasUsed": "0x14e73",
+          "gasUsed": "0x52bb",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "multi-participant-conservation",
+      "obligation": "multi-participant-conservation",
+      "steps": 6,
+      "executionEvidence": true,
+      "fixture": "multi-participant-conservation.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x11341",
+          "gasUsed": "0x011341",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1e3b6",
+          "gasUsed": "0xd075",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x235ce",
+          "gasUsed": "0x5218",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7d4b",
+          "gasUsed": "0x7d4b",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x12631",
+          "gasUsed": "0xa8e6",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1bc57",
+          "gasUsed": "0x9626",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "segmentation-one",
+      "obligation": "segmentation-k3-versus-k1-k2",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "segmentation-one.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7d4b",
+          "gasUsed": "0x7d4b",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "segmentation-split",
+      "obligation": "segmentation-k3-versus-k1-k2",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "segmentation-split.json",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7c0b",
+          "gasUsed": "0x7c0b",
+          "logs": []
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7d4a",
+          "gasUsed": "0x7d4a",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-same-timestamp",
+      "obligation": "drip-same-timestamp",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-same-timestamp.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17ab7",
+          "gasUsed": "0x017ab7",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c9fd0803ce8000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-local-under-k2",
+      "obligation": "drip-local-under-k2",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-local-under-k2.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x19225",
+          "gasUsed": "0x019225",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ccac17df6a11d7649"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-local-over-k3",
+      "obligation": "drip-local-over-k3",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-local-over-k3.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x19226",
+          "gasUsed": "0x019226",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-one-year",
+      "obligation": "drip-one-year",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-one-year.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1a8d3",
+          "gasUsed": "0x01a8d3",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000003648a260e3486a657adfa41"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-max-elapsed",
+      "obligation": "drip-max-elapsed",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-max-elapsed.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1b7a6",
+          "gasUsed": "0x01b7a6",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000009b4300d93bbdff5291a69e50c"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-elapsed-overflow-revert",
+      "obligation": "drip-elapsed-overflow-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-elapsed-overflow-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x8f91",
+          "gasUsed": "0x8f91",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-timestamp-regression-revert",
+      "obligation": "drip-timestamp-regression-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-timestamp-regression-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x8f6b",
+          "gasUsed": "0x8f6b",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-chi-below-scale-revert",
+      "obligation": "drip-chi-below-scale-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-chi-below-scale-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x86f7",
+          "gasUsed": "0x86f7",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-chi-above-cap-revert",
+      "obligation": "drip-chi-above-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-chi-above-cap-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x8710",
+          "gasUsed": "0x8710",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-post-chi-cap-boundary",
+      "obligation": "drip-post-chi-cap-boundary",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-post-chi-cap-boundary.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1b7a6",
+          "gasUsed": "0x01b7a6",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000fffffffffffffffffffffffffffffedf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-drip-post-chi-cap-revert",
+      "obligation": "drip-post-chi-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-drip-post-chi-cap-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xb749",
+          "gasUsed": "0xb749",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-zero-value",
+      "obligation": "join-zero-value",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-zero-value.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x13ee8",
+          "gasUsed": "0x013ee8",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-genesis-first",
+      "obligation": "join-genesis-first",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-genesis-first.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x24248",
+          "gasUsed": "0x024248",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c9fd0803ce8000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-future-auto-drip",
+      "obligation": "join-future-auto-drip",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-future-auto-drip.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x259b7",
+          "gasUsed": "0x0259b7",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c5f6703aa80597134"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-max-asset",
+      "obligation": "join-max-asset",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-max-asset.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x24248",
+          "gasUsed": "0x024248",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000ffffffffffffffffffffffffffffffff"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-over-max-asset-revert",
+      "obligation": "join-over-max-asset-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-over-max-asset-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x98b9",
+          "gasUsed": "0x98b9",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-zero-unit-credit",
+      "obligation": "join-zero-unit-credit",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-zero-unit-credit.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x16f43",
+          "gasUsed": "0x016f43",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-cap-total-result",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-cap-total-result.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xbbf0",
+          "gasUsed": "0xbbf0",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-cap-row-result",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-cap-row-result.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xbbce",
+          "gasUsed": "0xbbce",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-cap-total-pre",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-cap-total-pre.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xa964",
+          "gasUsed": "0xa964",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-join-cap-row-pre",
+      "obligation": "join-total-or-row-cap-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-join-cap-row-pre.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xa10e",
+          "gasUsed": "0xa10e",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-zero-unit-call",
+      "obligation": "exit-zero-unit-call",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-zero-unit-call.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x206b0",
+          "gasUsed": "0x0206b0",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-partial",
+      "obligation": "exit-partial",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-partial.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2d240",
+          "gasUsed": "0x02d240",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000004"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-full",
+      "obligation": "exit-full",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-full.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2acc0",
+          "gasUsed": "0x02acc0",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-future-auto-drip",
+      "obligation": "exit-future-auto-drip",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-future-auto-drip.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2c48f",
+          "gasUsed": "0x02c48f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000033b2e3ce039fcd453ad52000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-insufficient-units-revert",
+      "obligation": "exit-insufficient-units-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-insufficient-units-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x9012",
+          "gasUsed": "0x9012",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-exit-underfunded-call-rollback",
+      "obligation": "exit-underfunded-call-rollback",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-exit-underfunded-call-rollback.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x102a5",
+          "gasUsed": "0x0102a5",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-units-fresh-consistency",
+      "obligation": "view-units-fresh-consistency",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "observer-view-units-fresh-consistency.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17c7d",
+          "gasUsed": "0x017c7d",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c5f6703aa80597134"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2ed00",
+          "gasUsed": "0x017083",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c5f6703aa80597134"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-assets-fresh-consistency",
+      "obligation": "view-assets-fresh-consistency",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "observer-view-assets-fresh-consistency.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17c6c",
+          "gasUsed": "0x017c6c",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x357c7",
+          "gasUsed": "0x01db5b",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000033b2e3ce039fcd453ad52000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToUnits-0",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToUnits-0.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x12cc6",
+          "gasUsed": "0x012cc6",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToUnits-340282366920938463463374607431768211455",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToUnits-340282366920938463463374607431768211455.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17b42",
+          "gasUsed": "0x017b42",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3c9fd0803ce8000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToUnits-340282366920938463463374607431768211456",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToUnits-340282366920938463463374607431768211456.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7f34",
+          "gasUsed": "0x7f34",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToAssets-0",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToAssets-0.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x12cb5",
+          "gasUsed": "0x012cb5",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToAssets-340282366920938463463374607431768211455",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToAssets-340282366920938463463374607431768211455.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17b31",
+          "gasUsed": "0x017b31",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000004f3a68dbc8f03f243baf513267aa9a3e46b0272896"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-view-cap-convertToAssets-340282366920938463463374607431768211456",
+      "obligation": "view-arithmetic-cap-boundaries",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-view-cap-convertToAssets-340282366920938463463374607431768211456.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7f4c",
+          "gasUsed": "0x7f4c",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-receive-zero-value",
+      "obligation": "receive-zero-value",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-receive-zero-value.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xcb78",
+          "gasUsed": "0xcb78",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-receive-value-donation",
+      "obligation": "receive-value-donation",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-receive-value-donation.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xe5a4",
+          "gasUsed": "0xe5a4",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-unknown-selector-revert",
+      "obligation": "unknown-selector-revert",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-unknown-selector-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7e4e",
+          "gasUsed": "0x7e4e",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-short-and-trailing-calldata-revert",
+      "obligation": "short-and-trailing-calldata-revert",
+      "steps": 13,
+      "executionEvidence": true,
+      "fixture": "observer-short-and-trailing-calldata-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x7e2b",
+          "gasUsed": "0x7e2b",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xfc5a",
+          "gasUsed": "0x7e2f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x17a8d",
+          "gasUsed": "0x7e33",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1f99c",
+          "gasUsed": "0x7f0f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x278bf",
+          "gasUsed": "0x7f23",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2f7cd",
+          "gasUsed": "0x7f0e",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x376ef",
+          "gasUsed": "0x7f22",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x3f5e6",
+          "gasUsed": "0x7ef7",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x474f1",
+          "gasUsed": "0x7f0b",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x4f330",
+          "gasUsed": "0x7e3f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x571ac",
+          "gasUsed": "0x7e7c",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x5efeb",
+          "gasUsed": "0x7e3f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x66e53",
+          "gasUsed": "0x7e68",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-value-bearing-nonpayable-revert",
+      "obligation": "value-bearing-nonpayable-revert",
+      "steps": 4,
+      "executionEvidence": true,
+      "fixture": "observer-value-bearing-nonpayable-revert.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x9929",
+          "gasUsed": "0x9929",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x13251",
+          "gasUsed": "0x9928",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1cb62",
+          "gasUsed": "0x9911",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x263f0",
+          "gasUsed": "0x988e",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-multi-participant-conservation",
+      "obligation": "multi-participant-conservation",
+      "steps": 6,
+      "executionEvidence": true,
+      "fixture": "observer-multi-participant-conservation.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x24248",
+          "gasUsed": "0x024248",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000064"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x441c4",
+          "gasUsed": "0x01ff7c",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d221",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004b"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x4cccb",
+          "gasUsed": "0x8b07",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x1446a",
+          "gasUsed": "0x01446a",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x33866",
+          "gasUsed": "0x01f3fc",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000028"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x50eb2",
+          "gasUsed": "0x01d64c",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d221",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000004b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d219"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d221",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004b"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-segmentation-one",
+      "obligation": "segmentation-k3-versus-k1-k2",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "observer-segmentation-one.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x19226",
+          "gasUsed": "0x019226",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad5200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observer-segmentation-split",
+      "obligation": "segmentation-k3-versus-k1-k2",
+      "steps": 2,
+      "executionEvidence": true,
+      "fixture": "observer-segmentation-split.json",
+      "observerHelpers": [
+        "0x000000000000000000000000000000000000d220",
+        "0x000000000000000000000000000000000000d221"
+      ],
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x190e6",
+          "gasUsed": "0x0190e6",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3cb548ff197d3905a0"
+            }
+          ]
+        },
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0xb3e1",
+          "gasUsed": "0xb3e1",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000033b2e3ce039fcd453ad51ff"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "deployment-genesis",
+      "obligation": "deployment-genesis",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "deployment-genesis.json",
+      "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "creationCodeSha256": "beba712ca49c8c5b757925c5498e8e0200a3e0c7c1f5b6ef683ca167c83c04a5",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x752a5",
+          "gasUsed": "0x0752a5",
+          "logs": []
+        }
+      ]
+    },
+    {
+      "name": "exit-zero-unit-call-observer",
+      "obligation": "exit-zero-unit-call",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-zero-unit-call-observer.json",
+      "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x206b0",
+          "gasUsed": "0x0206b0",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f2e246bb76df876cef8b38ae84130f4f55de395b"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ],
+      "observer": {
+        "mode": "ordinary",
+        "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+        "nestedUnits": 1,
+        "callback": {
+          "caller": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+          "value": 0,
+          "calldata": "0x"
+        },
+        "outerResultSlots": {
+          "status": 0,
+          "returnSize": 1,
+          "returnWord": 2
+        },
+        "callbackSlots": {
+          "count": 3,
+          "value": 4,
+          "calldataSize": 5,
+          "caller": 6
+        },
+        "nestedResultSlots": {
+          "status": 7,
+          "returnSize": 8,
+          "returnWord": 9
+        },
+        "topics": {
+          "callback": "0x0000000000000000000000000000000000000000000000000000000000d21901",
+          "outerResult": "0x0000000000000000000000000000000000000000000000000000000000d21902",
+          "nestedResult": "0x0000000000000000000000000000000000000000000000000000000000d21903",
+          "reject": "0x0000000000000000000000000000000000000000000000000000000000d21904"
+        }
+      }
+    },
+    {
+      "name": "exit-successful-reentry-observer",
+      "obligation": "exit-successful-reentry",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-successful-reentry-observer.json",
+      "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x3e48b",
+          "gasUsed": "0x03e48b",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f2e246bb76df876cef8b38ae84130f4f55de395b"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f2e246bb76df876cef8b38ae84130f4f55de395b"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21903"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002"
+            }
+          ]
+        }
+      ],
+      "observer": {
+        "mode": "reenter",
+        "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+        "nestedUnits": 1,
+        "callback": {
+          "caller": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+          "value": 2,
+          "calldata": "0x"
+        },
+        "outerResultSlots": {
+          "status": 0,
+          "returnSize": 1,
+          "returnWord": 2
+        },
+        "callbackSlots": {
+          "count": 3,
+          "value": 4,
+          "calldataSize": 5,
+          "caller": 6
+        },
+        "nestedResultSlots": {
+          "status": 7,
+          "returnSize": 8,
+          "returnWord": 9
+        },
+        "topics": {
+          "callback": "0x0000000000000000000000000000000000000000000000000000000000d21901",
+          "outerResult": "0x0000000000000000000000000000000000000000000000000000000000d21902",
+          "nestedResult": "0x0000000000000000000000000000000000000000000000000000000000d21903",
+          "reject": "0x0000000000000000000000000000000000000000000000000000000000d21904"
+        }
+      }
+    },
+    {
+      "name": "exit-nested-overdraw-observer",
+      "obligation": "exit-successful-reentry",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-nested-overdraw-observer.json",
+      "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x2f67f",
+          "gasUsed": "0x02f67f",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21901"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f2e246bb76df876cef8b38ae84130f4f55de395b"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21903"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            },
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002"
+            }
+          ]
+        }
+      ],
+      "observer": {
+        "mode": "reenter",
+        "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+        "nestedUnits": 2,
+        "callback": {
+          "caller": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+          "value": 2,
+          "calldata": "0x"
+        },
+        "outerResultSlots": {
+          "status": 0,
+          "returnSize": 1,
+          "returnWord": 2
+        },
+        "callbackSlots": {
+          "count": 3,
+          "value": 4,
+          "calldataSize": 5,
+          "caller": 6
+        },
+        "nestedResultSlots": {
+          "status": 7,
+          "returnSize": 8,
+          "returnWord": 9
+        },
+        "topics": {
+          "callback": "0x0000000000000000000000000000000000000000000000000000000000d21901",
+          "outerResult": "0x0000000000000000000000000000000000000000000000000000000000d21902",
+          "nestedResult": "0x0000000000000000000000000000000000000000000000000000000000d21903",
+          "reject": "0x0000000000000000000000000000000000000000000000000000000000d21904"
+        }
+      }
+    },
+    {
+      "name": "exit-rejecting-recipient-rollback-observer",
+      "obligation": "exit-rejecting-recipient-rollback",
+      "steps": 1,
+      "executionEvidence": true,
+      "fixture": "exit-rejecting-recipient-rollback-observer.json",
+      "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+      "receiptGas": [
+        {
+          "status": "0x1",
+          "cumulativeGasUsed": "0x372f6",
+          "gasUsed": "0x0372f6",
+          "logs": [
+            {
+              "address": "0x000000000000000000000000000000000000d220",
+              "topics": [
+                "0x0000000000000000000000000000000000000000000000000000000000d21902"
+              ],
+              "data": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        }
+      ],
+      "observer": {
+        "mode": "reject-after-reentry",
+        "target": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+        "nestedUnits": 1,
+        "callback": {
+          "caller": "0xf2e246bb76df876cef8b38ae84130f4f55de395b",
+          "value": 2,
+          "calldata": "0x"
+        },
+        "outerResultSlots": {
+          "status": 0,
+          "returnSize": 1,
+          "returnWord": 2
+        },
+        "callbackSlots": {
+          "count": 3,
+          "value": 4,
+          "calldataSize": 5,
+          "caller": 6
+        },
+        "nestedResultSlots": {
+          "status": 7,
+          "returnSize": 8,
+          "returnWord": 9
+        },
+        "topics": {
+          "callback": "0x0000000000000000000000000000000000000000000000000000000000d21901",
+          "outerResult": "0x0000000000000000000000000000000000000000000000000000000000d21902",
+          "nestedResult": "0x0000000000000000000000000000000000000000000000000000000000d21903",
+          "reject": "0x0000000000000000000000000000000000000000000000000000000000d21904"
+        }
+      }
+    }
+  ]
+}
