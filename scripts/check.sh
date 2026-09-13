@@ -1292,7 +1292,7 @@ Blanc.Prorata.attacker_no_profit|$STANDARD
 Blanc.Prorata.victim_loss_bound|$STANDARD
 Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect|$STANDARD
 Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance|$STANDARD
-Blanc.Composition.ProrataWethVault.totalAssetsResources_of_run|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.totalAssetsResources_of_run|$STANDARD
 Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect|$STANDARD
 Blanc.Composition.ProrataWethVault.maxMint_body_effect|$STANDARD
 Blanc.Composition.ProrataWethVault.maxDeposit_body_effect|$STANDARD
