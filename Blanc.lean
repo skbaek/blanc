@@ -329,6 +329,8 @@ import Blanc.DripStackSafetyCertificate
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 
 namespace Blanc
 

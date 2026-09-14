@@ -209,6 +209,12 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
+- `accessDelegation_worldMeta` carries transient storage and the storage-access
+  warm set through the exact delegation-resolution equation.
+- `state_subBal_stor` preserves every account's storage across a successful
+  balance subtraction in call settlement.
+- `hashSetPair_mem_union_right` transports a known `(Adr × B256)` membership
+  into the right side of a warm-key union without unfolding concrete hashes.
 - `Ninst.ChildlessRunCompiled` strengthens one compiled instruction with a
   definitionally empty recursive slot; `.toRunCompiled` forgets that fact,
   while `childlessRunCompiled_exec_doneFrame` and

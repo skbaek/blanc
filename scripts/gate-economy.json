@@ -24,7 +24,8 @@
     "prorata-weth-vault-differential",
     "prorata-weth-vault-oracle-self-test",
     "prorata-weth-vault-differential-self-test",
-    "prorata-weth-vault-reference-self-test"
+    "prorata-weth-vault-reference-self-test",
+    "lido-twg-pinned-target-current-mainnet"
   ],
   "rows": [
     {
@@ -845,6 +846,20 @@
       "resource_class": "light",
       "prerequisites": [],
       "historical_catches": []
+    },
+    {
+      "id": "lido-twg-pinned-target-current-mainnet",
+      "work": [
+        "candidate-positive",
+        "static-corpus",
+        "harness-self-test"
+      ],
+      "resource_class": "exclusive",
+      "prerequisites": [
+        "current-mainnet"
+      ],
+      "historical_catches": [],
+      "material_identity": "already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs"
     }
   ]
 }

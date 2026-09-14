@@ -1500,7 +1500,18 @@ Blanc.CompiledStackSafety.Certificate.parentPrefix|$STANDARD
 Blanc.CompiledStackSafety.Certificate.at_parentPrefix|$STANDARD
 Blanc.AbstractStackSafety.checkTable_certificate|$STANDARD
 Blanc.AbstractStackSafety.exampleTable_certificate|$STANDARD
-Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry|$STANDARD"
+Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_runtime_runCompiledTo|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_exec|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_runtime_exact_runCompiledTo|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_exec|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_runtime_runCompiledTo|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_exec|$STANDARD
+Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_cold_runtime_runCompiledTo|$STANDARD
+Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled|$STANDARD
+Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause|$STANDARD
+Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause|$STANDARD
+Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

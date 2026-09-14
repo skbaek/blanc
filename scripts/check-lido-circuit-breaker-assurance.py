@@ -198,22 +198,22 @@ EXPECTED_ROWS_PER_PILLAR = {
     "Hostile-world results (Stage 6)": 5,
     "Deployment and history": 13,
     "Artifact conformance and cost": 4,
-    "Pinned-target composition (entry 3)": 3,
+    "Pinned-target composition (entry 3)": 4,
 }
 
 # The total is pinned SEPARATELY from the per-pillar map rather than derived
 # from it. Deriving it would let a single edit move a row between pillars and a
 # matching edit here keep the gate green with no total to disagree with; two
 # independent pins have to be falsified together.
-EXPECTED_TOTAL_ROWS = 74
+EXPECTED_TOTAL_ROWS = 75
 
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.
-EXPECTED_GATE_OWNED_ROWS = 8
+EXPECTED_GATE_OWNED_ROWS = 9
 
 # Rows whose Gate field names more than one gate.
 #
-# Naming two gates is legitimate and four rows do it: one gate owns the row's
+# Naming two gates is legitimate and seven rows do it: one gate owns the row's
 # evidence and the other pins its axioms, and both really would fail if the row
 # moved. But a second gate name is also the one edit that can make a
 # MIS-ATTRIBUTED declaration resolve. A name pinned by the access authority,
@@ -223,11 +223,11 @@ EXPECTED_GATE_OWNED_ROWS = 8
 # is rescued rather than reported. Discipline is not a mechanism, so the count
 # is pinned in both directions.
 #
-# A future editor who genuinely needs a fifth multi-gate row bumps this number
+# A future editor who genuinely needs an eighth multi-gate row bumps this number
 # in the same commit as the row, having decided that the row's second gate is
 # an authority it really depends on rather than padding. That is a decision.
 # Bumping it to clear a red gate is Rule 1 in `scripts/GATES.md`.
-EXPECTED_MULTI_GATE_ROWS = 6
+EXPECTED_MULTI_GATE_ROWS = 7
 
 # Load-bearing non-claims. Each must still appear somewhere in the register.
 # Matched case-insensitively against the register with all whitespace runs
@@ -273,8 +273,9 @@ NONCLAIM_PHRASES = [
     "the history witness is existential, not the same list",
     # Reachability carries a wei bound inherited from the chain model.
     "below `2 ^ 256`",
-    # No liveness.
-    "nothing here says the contract can be paused",
+    # The two configured TWG worlds are reachable, but no universal liveness or
+    # all-world gas claim follows.
+    "no universal liveness or all-world gas claim",
     # Mid-callback count/expiry incoherence is real source behaviour.
     "no callback-time count/expiry coherence",
     # Finite evidence corroborates; it is never a Lean premise.
@@ -282,6 +283,9 @@ NONCLAIM_PHRASES = [
     # The synthetic satisfying world is an anti-vacuity exhibit, not a
     # deployment.
     "the synthetic stable world receives no deployment credit",
+    # The BPO2 lane replays rules against closed fixtures; it does not inspect
+    # current chain roles or state.
+    "not a live-chain role/state attestation",
 ]
 # END PINNED EXPECTATIONS
 # ---------------------------------------------------------------------------
