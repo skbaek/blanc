@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Strict DRIP receipt/Lean batch protocol. No crypto, writer or implicit build.
 
-The missing eval-drip-receipts.lean is intentional until the admitted Lean
-packet supplies it. Mock tests are protocol evidence, never trie evidence.
+eval-drip-receipts.lean binds receipts through the pinned Jaune implementation.
+Mock tests are protocol evidence, never trie evidence.
 """
 from __future__ import annotations
 
