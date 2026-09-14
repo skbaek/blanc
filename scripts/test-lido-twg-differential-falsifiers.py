@@ -151,18 +151,31 @@ def main() -> int:
         refresh_sections(manifest, "resourceEvidence", "documentFill")
 
     def gas_completeness(manifest: dict[str, Any]) -> None:
-        rows = manifest["resourceEvidence"]["namedGasRows"]
-        target = next(row for row in rows if row["gasKey"] == "DEFAULT_ADMIN_ROLE_VIEW")
-        duplicate = next(row for row in rows if row["gasKey"] == "CONSTRUCTOR_SUCCESS")
-        for key in ("coordinate", "reference", "blanc", "delta"):
-            target[key] = duplicate[key]
-        manifest["documentFill"]["evidence"]["gas"]["rows"] = copy.deepcopy(rows)
+        manifest["resourceEvidence"]["namedGasRows"].pop()
+        manifest["documentFill"]["evidence"]["gas"]["rows"].pop()
         refresh_sections(manifest, "resourceEvidence", "documentFill")
 
-    def gas_boilerplate(manifest: dict[str, Any]) -> None:
-        item = manifest["documentFill"]["evidence"]["gas"]["positiveDeviations"][0]
-        item["defense"] = "Published finite-corpus increase retained for explicit review."
-        refresh_sections(manifest, "documentFill")
+    def gas_dominance(manifest: dict[str, Any]) -> None:
+        row = manifest["resourceEvidence"]["namedGasRows"][0]
+        row["blanc"] = row["reference"]
+        row["delta"] = 0
+        boundary = next(item for item in manifest["resourceEvidence"]["boundaries"]
+                        if item["coordinate"] == row["coordinate"])
+        boundary["blancGas"] = boundary["referenceGas"]
+        boundary["delta"] = 0
+        manifest["resourceEvidence"]["vectorSha256"] = digest(
+            manifest["resourceEvidence"]["boundaries"])
+        manifest["documentFill"]["evidence"]["gas"]["rows"] = copy.deepcopy(
+            manifest["resourceEvidence"]["namedGasRows"])
+        refresh_sections(manifest, "resourceEvidence", "documentFill")
+
+    def performance_control(control_id: str, field: str) -> Callable[[dict[str, Any]], None]:
+        def mutation(manifest: dict[str, Any]) -> None:
+            control = next(item for item in manifest["artifacts"]["blanc"]["performanceControls"]
+                           if item["id"] == control_id)
+            control[field] = False
+            refresh_sections(manifest, "artifacts")
+        return mutation
 
     def exclusion_boundary(manifest: dict[str, Any]) -> None:
         manifest["coverage"]["criterion"] = manifest["coverage"]["criterion"].replace(
@@ -190,11 +203,16 @@ def main() -> int:
         ("extra-semantic-claim", extra_semantic_claim),
         ("resource-coordinate", resource_coordinate),
         ("gas-completeness", gas_completeness),
-        ("gas-boilerplate", gas_boilerplate),
+        ("gas-dominance", gas_dominance),
         ("exclusion-boundary", exclusion_boundary),
         ("document-template-identity", template_identity),
         ("section-digest", section_digest),
     ])
+    for control_id in ("packing", "keccak-key", "enumeration", "compiled-route"):
+        mutations.extend([
+            (f"{control_id}-production", performance_control(control_id, "production")),
+            (f"{control_id}-mutant", performance_control(control_id, "mutantRejected")),
+        ])
 
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="lido-twg-differential-falsifiers-") as tmp:
@@ -218,8 +236,8 @@ def main() -> int:
 
     print(f"PASS — Lido TWG differential falsifiers: {rejected} "
           "channel/identity/manifest/semantic corruptions rejected; "
-          "artifact-program, proof-certificate, gas-completeness, gas-disposition, "
-          "and exclusion-boundary controls bite")
+          "artifact-program, proof-certificate, gas-completeness, strict-dominance, "
+          "performance-shape, and exclusion-boundary controls bite")
     return 0
 
 

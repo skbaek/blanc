@@ -228,6 +228,7 @@ CONTRACTS = {
         "LidoTriggerableWithdrawalsGatewayTriggerAuthorizationRoute",
         "LidoTriggerableWithdrawalsGatewayAuthorization",
         "LidoTriggerableWithdrawalsGatewayPinnedTarget",
+        "LidoTriggerableWithdrawalsGatewayReachability",
     ],
     "proxy-pair": ["ProxyPairSlots", "ProxyPairProgram",
                    "ProxyPairOssifiableSurface",
@@ -362,6 +363,10 @@ CONTRACTS = {
 COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
 ]
 
 ROOTS = ["Blanc", "Main"]
