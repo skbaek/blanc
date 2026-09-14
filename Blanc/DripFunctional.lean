@@ -460,6 +460,231 @@ theorem drip_exec_error_committedFrames_nil {sevm : Sevm} {pre : Devm} {err}
   apply Exec.committedFrames_eq_nil_of_not_commits
   simp [Execution.commits]
 
+/-! ## Failure paths, deep guards: surface and machine-guard absence
+
+A successful deployed call on a recognized selector with the right length and
+payability still has to cross that endpoint's surface caps and the shared
+machine's guards. Each theorem below says one violated guard rules out
+success. The endpoint inversions need a machine `Frame` at the endpoint body,
+built from the canonical-entry hypothesis (`pre.memory = Mem.empty`, true of
+every real frame via `initDevm`) transported along the dispatcher's memory
+equation; the stack tail is empty (`nil_pref`). -/
+
+private theorem entryFrame_of_canonical {pre entry : Devm}
+    (hmm : pre.memory = entry.memory) (hcanon : pre.memory = Mem.empty) :
+    Frame [] entry entry := by
+  have hmem : entry.memory = Mem.empty := by rw [← hmm, hcanon]
+  exact ⟨by rw [hmem]; exact Mem.wf_empty,
+    by rw [hmem]; exact Mem.reads_empty, rfl, rfl⟩
+
+private theorem getStorVal_entry_of_pre {sevm : Sevm} {pre entry : Devm}
+    (hst : pre.state = entry.state) (k : B256) :
+    Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+  Devm.getStorVal_of_state hst.symm sevm.currentTarget k
+
+theorem no_exec_success_of_drip_machine_guards {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = dripSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hbad : Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∨
+      maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∨
+      sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      ¬ B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∨
+      ¬ B256.Nofm (Devm.getStorVal pre sevm.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (sevm.benvStat.time -
+            Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat) ∨
+      maxChi <
+        (B256.rpow scale half rate
+              (sevm.benvStat.time -
+                Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+            Devm.getStorVal pre sevm.currentTarget chiSlot) / scale)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_drip exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  rcases of_run_drip auxLookup_runtime hframe nil_pref hbody with
+    ⟨hlower, hupper, hclock, helapsed, hguards, hnofm, hcap, -, -⟩
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  simp only [hgv] at hlower hupper hclock helapsed hguards hnofm hcap
+  rcases hbad with h|h|h|h|h|h|h
+  · exact hlower h
+  · exact hupper h
+  · exact hclock h
+  · exact helapsed h
+  · exact h hguards
+  · exact h hnofm
+  · exact hcap h
+
+theorem no_exec_success_of_exit_guards {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hbad : maxUnits < Sevm.dataWord sevm (32 * 0 + 4) ∨
+      maxUnits < Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∨
+      maxPie < Devm.getStorVal pre sevm.currentTarget totalUnitsSlot ∨
+      Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 <
+        Sevm.dataWord sevm (32 * 0 + 4) ∨
+      Devm.getStorVal pre sevm.currentTarget totalUnitsSlot <
+        Sevm.dataWord sevm (32 * 0 + 4) ∨
+      Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∨
+      maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∨
+      sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      ¬ B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_exit exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  rcases of_run_exit_settles auxLookup_runtime hframe nil_pref hbody with
+    ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
+      hguards, -⟩
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  simp only [hgv] at harg hrow htotal hown hfund hlower hupper hclock helapsed hguards
+  rcases hbad with h|h|h|h|h|h|h|h|h|h
+  · exact harg h
+  · exact hrow h
+  · exact htotal h
+  · exact hown h
+  · exact hfund h
+  · exact hlower h
+  · exact hupper h
+  · exact hclock h
+  · exact helapsed h
+  · exact h hguards
+
+theorem no_exec_success_of_join_guards {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = joinSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hbad : maxAsset < sevm.value ∨
+      maxUnits < Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∨
+      maxPie < Devm.getStorVal pre sevm.currentTarget totalUnitsSlot ∨
+      Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∨
+      maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∨
+      sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      ¬ B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∨
+      maxUnits <
+        Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 +
+          scale * sevm.value /
+            ((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal pre sevm.currentTarget chiSlot) / scale) ∨
+      maxPie <
+        scale * sevm.value /
+            ((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal pre sevm.currentTarget chiSlot) / scale) +
+          Devm.getStorVal pre sevm.currentTarget totalUnitsSlot)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_join exc hcode hsel hnonempty with
+    ⟨-, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  rcases of_run_join auxLookup_runtime hframe nil_pref hbody with
+    ⟨hasset, hrowPre, htotalPre, hlower, hupper, hclock, helapsed, hguards,
+      freshChi, units, hfreshEq, hunitsEq, hrowPost, htotalPost, -, -⟩
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  simp only [hgv] at hasset hrowPre htotalPre hlower hupper hclock helapsed hguards hfreshEq hunitsEq hrowPost htotalPost
+  rw [hunitsEq, hfreshEq] at hrowPost htotalPost
+  rcases hbad with h|h|h|h|h|h|h|h|h|h
+  · exact hasset h
+  · exact hrowPre h
+  · exact htotalPre h
+  · exact hlower h
+  · exact hupper h
+  · exact hclock h
+  · exact helapsed h
+  · exact h hguards
+  · exact hrowPost h
+  · exact htotalPost h
+
+theorem no_exec_success_of_convertToAssets_guards {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToAssetsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hbad : maxUnits < Sevm.dataWord sevm (32 * 0 + 4) ∨
+      Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∨
+      maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∨
+      sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      ¬ B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_convertToAssets exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  rcases of_run_convertToAssets auxLookup_runtime hframe nil_pref hbody with
+    ⟨hcap, hlower, hupper, hclock, helapsed, hguards, -, -⟩
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  simp only [hgv] at hcap hlower hupper hclock helapsed hguards
+  rcases hbad with h|h|h|h|h|h
+  · exact hcap h
+  · exact hlower h
+  · exact hupper h
+  · exact hclock h
+  · exact helapsed h
+  · exact h hguards
+
+theorem no_exec_success_of_convertToUnits_guards {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToUnitsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hbad : maxAsset < Sevm.dataWord sevm (32 * 0 + 4) ∨
+      Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∨
+      maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∨
+      sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∨
+      ¬ B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_convertToUnits exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  rcases of_run_convertToUnits auxLookup_runtime hframe nil_pref hbody with
+    ⟨hcap, hlower, hupper, hclock, helapsed, hguards, -, -⟩
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  simp only [hgv] at hcap hlower hupper hclock helapsed hguards
+  rcases hbad with h|h|h|h|h|h
+  · exact hcap h
+  · exact hlower h
+  · exact hupper h
+  · exact hclock h
+  · exact helapsed h
+  · exact h hguards
+
 end Drip
 
 end Blanc

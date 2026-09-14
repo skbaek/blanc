@@ -1416,6 +1416,53 @@ theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
       hpostMemory, hpostStack⟩
   · exact (returnsWord_of_storeReturn hreturnPrefix hreturn).1
 
+/-! ## `exit`'s failed-child outcome
+
+A zero success flag on the payout `CALL` — the depth guard, the balance
+guard, or a child frame that settled with some error — selects the outer
+empty-revert arm with the caller's world untouched. The failed arm is
+internal to the exit run, so this is an outcome disjunction over the run:
+either the child entered cleanly and the exact payout settled
+(`ExitPaysExactly`), or the call failed with flag `0`, the revert arm was
+selected, and the caller's world is unchanged (`Devm.WorldEq` plus its
+storage and transient projections). Whole-frame revert then restores the
+pre-state through the `Exec`-altitude absorbers; the revert data is empty by
+the `Func.revert` construction (`PUSH0 PUSH0 REVERT`). -/
+
+theorem of_run_exit_child_outcome {fs : List Func} (hlookup : AuxLookup fs)
+    {sevm : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs sevm s Drip.exit r) :
+    ExitPaysExactly sevm entry r ∨
+      ∃ callPre callPost : Devm, ∃ rest : Stack,
+        (0 : B256) :: rest <<+ callPost.stack ∧
+        Devm.WorldEq callPre callPost ∧
+        Devm.getStor callPost = Devm.getStor callPre ∧
+        callPost.transientStorage = callPre.transientStorage ∧
+        ∃ mid, Devm.PopBurn [0] callPost mid ∧
+          Func.Run fs sevm mid Func.revert r := by
+  rcases of_run_exit_settles hlookup frame hp run with
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, hpStart, _, _, _, suffix⟩
+  rcases of_run_prepend [dup 0] _ suffix with ⟨sendPre, hdup, suffix⟩
+  have hpSend : _ :: _ :: tail <<+ sendPre.stack :=
+    prefix_of_dup_val (of_run_singleton hdup) (by show_nth) hpStart
+  rcases of_run_prepend sendToCaller _ suffix with ⟨callPost, hsend, hbranch⟩
+  rcases exit_sendToCaller_frame hpSend hsend with
+    ⟨callPre, _, hstack, hcall, _, _, _, _, _, _⟩
+  rcases of_run_call_val_with_depth_frame hstack hcall with hfailed | _
+  · obtain ⟨hflag0, hworld⟩ := hfailed
+    have hstorW : Devm.getStor callPost = Devm.getStor callPre := by
+      funext a
+      exact (Devm.WorldEq.getStor hworld a).symm
+    have htraW : callPost.transientStorage = callPre.transientStorage :=
+      hworld.2.symm
+    rcases of_run_branch hbranch with
+      ⟨mid, hpop, hrev⟩ | ⟨w, _, _, hnz, hpop, _, _⟩
+    · exact Or.inr ⟨callPre, callPost, _, hflag0, hworld, hstorW, htraW,
+        mid, hpop, hrev⟩
+    · exact (hnz (popBurn_pref hpop hflag0).1).elim
+  · exact Or.inl (exit_pays_exactly hlookup frame hp run)
+
 end Drip
 
 end Blanc
