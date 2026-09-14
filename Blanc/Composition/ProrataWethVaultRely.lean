@@ -453,4 +453,292 @@ theorem foreign_debit_excluded
           rw [Stor.get_set_ne _ (Ne.symm keys)] at frame
           exact frame.symm
 
+/-! ## Rooted allowance chronology
+
+The retained-history adapter the invocation projection was built for: the
+list of `WethAllowanceInvocation` is chronological only once it is chained
+from a root with settled-state continuity. `RootedAllowanceHistory` is that
+chain, threaded at WETH-storage granularity — the exact altitude the quiet
+argument reads. Each `invoked` step links one listed invocation's pre/post
+WETH storage to the chain; each `silent` step preserves every vault-owned
+touched cell. Linkage, provenance, and preservation are carrier fields that
+the configured-history inhabitation discharges; they are never assumed world
+facts. In particular this adapter takes no `DirectWethConfiguration`: every
+invocation already carries its target and its genuine successful WETH run.
+-/
+
+/-- The configured root plus WETH-side emptiness: both runtimes installed and
+both storages empty. `ConfiguredRoot` states the vault half; this adds the
+WETH half the allowance replay roots at. -/
+structure AllowanceRoot (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
+  /-- The configured two-runtime root: asset pinned, vault installed, vault
+  storage empty. -/
+  configured : ConfiguredRoot vault sevm pre
+  /-- The WETH account's storage is empty at the root. -/
+  wethEmpty : Devm.getStor pre wethAccount = Stor.empty
+
+/-- Root quiescence: every vault-owned touched cell reads zero at the root.
+Holds for every cell, so the touched/owner witnesses are unused. -/
+theorem AllowanceRoot.quiet {vault : Adr} {sevm : Sevm} {pre : Devm}
+    {history : List WethAllowanceInvocation}
+    (root : AllowanceRoot vault sevm pre)
+    (p : B256 × B256) (_touched : p ∈ touchedWethAllowancePairs history)
+    (_owner : p.1 = vault.toB256) :
+    pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) = 0 := by
+  show (Devm.getStor pre wethAccount).get (wethAllowanceKey p.1 p.2) = 0
+  rw [root.wethEmpty]
+  rfl
+
+/-- Vault-staged calldata: the invocation's calldata is exactly one of the
+three WETH call shapes the vault stages. Occurrence and parent threading are
+inhabitation obligations; the bridge below needs only the data shape. -/
+def VaultStagedCalldata (call : WethAllowanceInvocation) : Prop :=
+  (∃ v, call.sevm.data = balanceOfCalldata v) ∨
+    (∃ owner dst assets, call.sevm.data = transferFromCalldata owner dst assets) ∨
+    (∃ receiver assets, call.sevm.data = transferCalldata receiver assets)
+
+/-- A vault-staged child is never an approval: its staged selector is one of
+the three allowlisted forms, and `approve` is not among them. -/
+theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
+    (staged : VaultStagedCalldata call) : call.approval = false := by
+  have selNe : Sevm.selector call.sevm ≠
+      selector "approve" [.address, .uint256] := by
+    rcases staged with ⟨v, hdata⟩ | ⟨owner, dst, assets, hdata⟩ | ⟨receiver, assets, hdata⟩
+    · have sel := (balanceOfCalldata_facts hdata).1
+      have mem : selector "balanceOf" [.address] ∈ allowedWethSelectors := by
+        simp [allowedWethSelectors]
+      rw [sel]
+      intro hEq
+      rw [hEq] at mem
+      exact approveSelector_not_allowed mem
+    · have sel := (transferFromCalldata_facts hdata).1
+      have mem : selector "transferFrom" [.address, .address, .uint256] ∈
+          allowedWethSelectors := by
+        simp [allowedWethSelectors]
+      rw [sel]
+      intro hEq
+      rw [hEq] at mem
+      exact approveSelector_not_allowed mem
+    · have sel := (transferCalldata_facts hdata).1
+      have mem : selector "transfer" [.address, .uint256] ∈ allowedWethSelectors := by
+        simp [allowedWethSelectors]
+      rw [sel]
+      intro hEq
+      rw [hEq] at mem
+      exact approveSelector_not_allowed mem
+  cases approval : call.approval with
+  | true =>
+    have selected := call.selected
+    simp only [approval, ↓reduceIte] at selected
+    exact absurd selected selNe
+  | false => rfl
+
+/-- A rooted allowance history over the full invocation list, processing `done`
+from WETH storage `s` to WETH storage `t`. The root starts from empty WETH
+storage; `invoked` links one listed call; `silent` covers every other settled
+step by its cell preservation. -/
+inductive RootedAllowanceHistory (vault : Adr)
+    (full : List WethAllowanceInvocation) :
+    List WethAllowanceInvocation → Stor → Stor → Prop
+  | root {sevm : Sevm} {pre : Devm} (r : AllowanceRoot vault sevm pre) :
+      RootedAllowanceHistory vault full [] Stor.empty Stor.empty
+  | invoked (done : List WethAllowanceInvocation) (s t u : Stor)
+      (call : WethAllowanceInvocation) :
+      RootedAllowanceHistory vault full done s t →
+      call ∈ full →
+      call.pre.state.getStor wethAccount = t →
+      u = call.post.state.getStor wethAccount →
+      (call.sevm.caller = vault → VaultStagedCalldata call) →
+      RootedAllowanceHistory vault full (done ++ [call]) s u
+  | silent (done : List WethAllowanceInvocation) (s t u : Stor) :
+      RootedAllowanceHistory vault full done s t →
+      (∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
+        u.get (wethAllowanceKey p.1 p.2) = t.get (wethAllowanceKey p.1 p.2)) →
+      RootedAllowanceHistory vault full done s u
+
+/-- Rooted quiet: over a rooted history, every vault-owned touched cell reads
+zero at the current chain state, and every processed call was quiet at its
+pre. The induction invariant is over the full list's pairs, so silent steps
+and invocation order are both harmless. -/
+theorem RootedAllowanceHistory.all_quiet
+    {vault : Adr} {full done : List WethAllowanceInvocation} {s t : Stor}
+    (collision : NoVaultAllowanceKeyCollision full vault)
+    (chain : RootedAllowanceHistory vault full done s t) :
+    (∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
+      t.get (wethAllowanceKey p.1 p.2) = 0) ∧
+    (∀ call ∈ done, ∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
+      call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) = 0) := by
+  induction chain with
+  | root r =>
+    refine ⟨?_, ?_⟩
+    · intro p touched owner
+      have h := r.quiet (history := full) p touched owner
+      rw [← r.wethEmpty]
+      exact h
+    · intro call hmem
+      simp at hmem
+  | invoked _done _s mid fin call _prev member entry exit staged ih =>
+    obtain ⟨zeroT, quietDone⟩ := ih
+    have quietPre : ∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
+        call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) = 0 := by
+      intro p touched owner
+      have h0 := zeroT p touched owner
+      have link : call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) =
+          mid.get (wethAllowanceKey p.1 p.2) := by
+        show (call.pre.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+          mid.get (wethAllowanceKey p.1 p.2)
+        rw [entry]
+      rw [link, h0]
+    refine ⟨?_, ?_⟩
+    · intro p touched owner
+      have keyShape : ¬ ValidAdr (wethAllowanceKey p.1 p.2) :=
+        touchedWethAllowancePairs_keys_nonaddress touched
+      have finish : call.post.getStorVal wethAccount (wethAllowanceKey p.1 p.2) = 0 →
+          fin.get (wethAllowanceKey p.1 p.2) = 0 := by
+        intro post0
+        subst exit
+        exact post0
+      by_cases vaultCaller : call.sevm.caller = vault
+      · have approvalFalse := (staged vaultCaller).not_approve
+        have classif := allowance_debit_classification call
+        rcases classif with ⟨hAppr, _, _⟩ | ⟨_, _, _, frameSelf⟩
+          | ⟨_, _, _, _, frameMax⟩
+          | ⟨_, _, _, covered, writtenEq, _, stored, _⟩
+        · rw [approvalFalse] at hAppr
+          simp at hAppr
+        · apply finish
+          have quiet := quietPre p touched owner
+          have preEq : (Devm.getStor call.pre wethAccount).get
+              (wethAllowanceKey p.1 p.2) = 0 := quiet
+          have postEq : (Devm.getStor call.post wethAccount).get
+              (wethAllowanceKey p.1 p.2) = 0 :=
+            (frameSelf _ keyShape).symm.trans preEq
+          exact postEq
+        · apply finish
+          have quiet := quietPre p touched owner
+          have preEq : (Devm.getStor call.pre wethAccount).get
+              (wethAllowanceKey p.1 p.2) = 0 := quiet
+          have postEq : (Devm.getStor call.post wethAccount).get
+              (wethAllowanceKey p.1 p.2) = 0 :=
+            (frameMax _ keyShape).symm.trans preEq
+          exact postEq
+        · apply finish
+          by_cases pairEq :
+            (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) = p
+          · have keyEq : wethAllowanceKey p.1 p.2 =
+                wethAllowanceKey (Sevm.argWord call.sevm 0)
+                  call.sevm.caller.toB256 := by
+              rw [← pairEq]
+            have quiet := quietPre p touched owner
+            have quietArg : call.pre.getStorVal wethAccount
+                (wethAllowanceKey (Sevm.argWord call.sevm 0)
+                  call.sevm.caller.toB256) = 0 := by
+              rwa [keyEq] at quiet
+            have coveredArg := covered
+            rw [quietArg] at coveredArg
+            have wad0 : Sevm.argWord call.sevm 2 = 0 := by
+              have h := B256.toNat_le_toNat coveredArg
+              rw [B256.toNat_zero] at h
+              have h0 := Nat.le_zero.mp h
+              exact B256.toNat_inj _ _ (by rwa [B256.toNat_zero])
+            have frame := stored _ keyShape
+            rw [keyEq, Stor.get_set_self, quietArg, wad0] at frame
+            have zeroSub : (0 : B256) - 0 = 0 := by decide +kernel
+            rw [zeroSub] at frame
+            have postEq : call.post.getStorVal wethAccount
+                (wethAllowanceKey p.1 p.2) = 0 := by
+              have postEqStor : (Devm.getStor call.post wethAccount).get
+                  (wethAllowanceKey (Sevm.argWord call.sevm 0)
+                    call.sevm.caller.toB256) = 0 := frame.symm
+              rw [keyEq]
+              exact postEqStor
+            exact postEq
+          · have writer : (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) ∈
+                writtenWethAllowancePairs full :=
+              List.mem_filterMap.mpr ⟨call, member, writtenEq⟩
+            have keys := collision p touched owner _ writer (Ne.symm pairEq)
+            have frame := stored _ keyShape
+            rw [Stor.get_set_ne _ (Ne.symm keys)] at frame
+            have quiet := quietPre p touched owner
+            have preEq : (Devm.getStor call.pre wethAccount).get
+                (wethAllowanceKey p.1 p.2) = 0 := quiet
+            have postEq : (Devm.getStor call.post wethAccount).get
+                (wethAllowanceKey p.1 p.2) = 0 :=
+              frame.symm.trans preEq
+            exact postEq
+      · apply finish
+        have quiet := quietPre p touched owner
+        have pres := foreign_debit_excluded collision call member vaultCaller p
+          touched owner quiet
+        rw [pres, quiet]
+    · intro call' hmem p touched owner
+      rw [List.mem_append, List.mem_singleton] at hmem
+      rcases hmem with hDone | rfl
+      · exact quietDone call' hDone p touched owner
+      · exact quietPre p touched owner
+  | silent _done _s _t _u _prev preserve ih =>
+    obtain ⟨zeroT, quietDone⟩ := ih
+    refine ⟨?_, quietDone⟩
+    intro p touched owner
+    exact (preserve p touched owner).trans (zeroT p touched owner)
+
+/-- Rooted foreign-debit exclusion: V1's exclusion with `quiet` discharged
+from the rooted history. The only premises are the chain and the finite
+trace-local collision hypothesis. -/
+theorem foreign_debit_excluded_rooted
+    {history : List WethAllowanceInvocation} {vault : Adr} {s0 sn : Stor}
+    (chain : RootedAllowanceHistory vault history history s0 sn)
+    (collision : NoVaultAllowanceKeyCollision history vault)
+    (call : WethAllowanceInvocation) (member : call ∈ history)
+    (foreign : call.sevm.caller ≠ vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs history)
+    (owner : p.1 = vault.toB256) :
+    call.post.getStorVal wethAccount (wethAllowanceKey p.1 p.2) =
+      call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) := by
+  have quiet := (chain.all_quiet collision).2 call member p touched owner
+  exact foreign_debit_excluded collision call member foreign p touched owner quiet
+
+/-! ## Settled rollback in chain currency
+
+Each rollback substrate fact restated as WETH-storage preservation, the form
+in which `silent` chain steps consume it. -/
+
+/-- A failed WETH child settles its parent's WETH storage to the call-time
+value: the occurrence-level rollback in chain currency. -/
+theorem weth_child_failure_preserves_weth_storage
+    {sevm : Sevm} {pre post : Devm} {instruction : Ninst} {calldata : Bytes}
+    {static : Bool}
+    (occurrence : ExactWethChildOccurrence sevm pre post instruction calldata
+      static)
+    (failureFlag : ∃ tail, post.stack = (0 : B256) :: tail) :
+    (Devm.getStor post wethAccount) = (Devm.getStor pre wethAccount) := by
+  have h := occurrence.rollback_of_post failureFlag
+  show (post.state.getStor wethAccount) = (pre.state.getStor wethAccount)
+  rw [h]
+
+/-- A failed top-level message restores its entry world's WETH storage. -/
+theorem failed_message_preserves_weth_storage
+    {msg : Msg} {xl : Xlot} {out : Devm}
+    (run : ProcessMessage msg xl (.ok out)) (failed : out.error.isSome) :
+    (Devm.getStor out wethAccount) = (msg.benv.state.getStor wethAccount) := by
+  have h := (ProcessMessage.rollback_of_error run failed).1
+  show (out.state.getStor wethAccount) = (msg.benv.state.getStor wethAccount)
+  rw [h]
+
+/-- A message with no successful interpreted execution settles to its entry
+world's WETH storage: the Ladder generic in chain currency. -/
+theorem no_success_message_preserves_weth_storage
+    {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
+    (h_pm : ProcessMessage msg xl (.ok out))
+    (h_fill : Xlot.Filled xl)
+    (h_bt : msg.benvAfterTransfer = .ok benv)
+    (h_prec : ∀ adr, msg.codeAddress = some adr →
+      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
+        (initDevm (msg.withBenv benv)) (.ok post) → False) :
+    (Devm.getStor out wethAccount) = (msg.benv.state.getStor wethAccount) := by
+  have h := (Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec h_none).2.1
+  show (out.state.getStor wethAccount) = (msg.benv.state.getStor wethAccount)
+  rw [h]
+
 end Blanc.Composition.ProrataWethVault
