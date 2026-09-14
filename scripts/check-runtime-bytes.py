@@ -101,6 +101,8 @@ def _mask_lean_comments_and_strings(text):
                     i += 1
             if depth:
                 raise ParseError("unterminated Lean block comment")
+        elif text[i] == "r" and re.match(r'r#*"', text[i:]):
+            raise ParseError("raw Lean strings are outside the byte parser grammar")
         elif text[i] == '"':
             i += 1
             while i < len(text) and text[i] != '"':

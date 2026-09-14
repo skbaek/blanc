@@ -54,6 +54,13 @@ class LiteralParserTests(unittest.TestCase):
         with self.assertRaises(parser.ParseError):
             self.parse(real + real)
 
+    def test_raw_string_spoof_is_unsupported(self):
+        source = ('def s := r#"embedded quote "\n'
+                  'def runtime : Bytes := [0x01]\n"#\n'
+                  'def runtime : Bytes := [0x02]\n')
+        with self.assertRaisesRegex(parser.ParseError, "raw Lean strings"):
+            self.parse(source)
+
     def test_unknown_chunk_and_non_bytes_fail(self):
         for expression in ["missing", "[]", "[0x100]", "[0x01] ++ []", '"x"',
                            "[0x01, bogus]", "List.replicate 2 0"]:
