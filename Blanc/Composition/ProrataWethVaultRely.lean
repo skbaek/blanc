@@ -366,4 +366,91 @@ theorem allowance_debit_classification (call : WethAllowanceInvocation) :
         simp [WethAllowanceInvocation.writtenPair?,
           WethAllowanceInvocation.pair?, approval, same, Option.filter, finite]
 
+/-- An approval invocation debits no balance row: its exact raw write lands at
+a non-address-shaped key, which the balance view cannot see. Unconditional. -/
+theorem approve_invocation_preserves_balance_rows
+    (call : WethAllowanceInvocation) (approval : call.approval = true) :
+    Stor.rest (Devm.getStor call.post wethAccount) =
+      Stor.rest (Devm.getStor call.pre wethAccount) := by
+  have selected := call.selected
+  simp only [approval, ↓reduceIte] at selected
+  obtain ⟨valid, effect⟩ :=
+    weth_approve_compiled_raw_effect call.memoryWf call.run selected
+  rw [call.target] at effect
+  rw [effect]
+  exact rest_set_of_not_validAdr valid
+
+/-- **Foreign-debit exclusion.** Under D9's finite collision premise, a foreign
+invocation preserves every vault-owned touched allowance cell — given the
+explicit quiescence hypothesis that the cell reads zero at the invocation's
+pre-state. Foreign approvals and foreign spends of other pairs cannot alias
+the vault key; a finite spend of the vault's own pair is then ruled out by
+coverage against the zero cell; self and maximum branches are read-only. The
+quiescence hypothesis is the precise premise the rooted chronology unit roots
+from the empty root, vault-never-approves, and settled rollback. -/
+theorem foreign_debit_excluded
+    {history : List WethAllowanceInvocation} {vault : Adr}
+    (collision : NoVaultAllowanceKeyCollision history vault)
+    (call : WethAllowanceInvocation) (member : call ∈ history)
+    (foreign : call.sevm.caller ≠ vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs history)
+    (owner : p.1 = vault.toB256)
+    (quiet : call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) = 0) :
+    Devm.getStorVal call.post wethAccount (wethAllowanceKey p.1 p.2) =
+      Devm.getStorVal call.pre wethAccount (wethAllowanceKey p.1 p.2) := by
+  have keyShape : ¬ ValidAdr (wethAllowanceKey p.1 p.2) :=
+    touchedWethAllowancePairs_keys_nonaddress touched
+  cases approval : call.approval with
+  | true =>
+    exact foreign_approve_preserves_vault_allowance collision call member
+      approval foreign p touched owner
+  | false =>
+    have selected := call.selected
+    simp only [approval, Bool.false_eq_true, ↓reduceIte] at selected
+    have effect := weth_transferFrom_compiled_allowance_effect
+      call.memoryWf call.run selected
+    dsimp only at effect
+    rw [call.target] at effect
+    by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
+    · simp only [if_pos same] at effect
+      exact (effect _ keyShape).symm
+    · simp only [if_neg same] at effect
+      obtain ⟨valid, result⟩ := effect
+      rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
+      · exact (silent _ keyShape).symm
+      · by_cases pairEq : (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) = p
+        · subst pairEq
+          have keyEq : wethAllowanceKey
+                (Sevm.argWord call.sevm 0, call.sevm.caller.toB256).1
+                (Sevm.argWord call.sevm 0, call.sevm.caller.toB256).2 =
+              wethAllowanceKey (Sevm.argWord call.sevm 0)
+                call.sevm.caller.toB256 := rfl
+          rw [keyEq] at quiet keyShape ⊢
+          have frame := stored _ keyShape
+          rw [Stor.get_set_self] at frame
+          rw [quiet] at covered
+          have wad0 : Sevm.argWord call.sevm 2 = 0 := by
+            have h := B256.toNat_le_toNat covered
+            rw [B256.toNat_zero] at h
+            have h0 := Nat.le_zero.mp h
+            exact B256.toNat_inj _ _ (by rwa [B256.toNat_zero])
+          rw [quiet, wad0] at frame
+          have zeroSub : (0 : B256) - 0 = 0 := by decide +kernel
+          rw [zeroSub] at frame
+          have post0 : call.post.getStorVal wethAccount
+              (wethAllowanceKey (Sevm.argWord call.sevm 0)
+                call.sevm.caller.toB256) = 0 := frame.symm
+          rw [post0, quiet]
+        · have writer : (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) ∈
+              writtenWethAllowancePairs history := by
+            apply List.mem_filterMap.mpr
+            refine ⟨call, member, ?_⟩
+            simp [WethAllowanceInvocation.writtenPair?,
+              WethAllowanceInvocation.pair?, approval, same, Option.filter,
+              finite]
+          have keys := collision p touched owner _ writer (Ne.symm pairEq)
+          have frame := stored _ keyShape
+          rw [Stor.get_set_ne _ (Ne.symm keys)] at frame
+          exact frame.symm
+
 end Blanc.Composition.ProrataWethVault
