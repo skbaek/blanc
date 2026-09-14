@@ -9,8 +9,10 @@
 -- shared nonpayable guard.  Those three are stated here as the absence of a
 -- successful run, which is what `Func.Run` says.
 
+import Blanc.DripEndpoints
 import Blanc.DripIngress
 import Blanc.Ladder
+import Blanc.MessageExecution
 
 namespace Blanc
 

@@ -1,7 +1,12 @@
 -- DripDeploy.lean : no-argument DRIP constructor and creation artifact.
 
 import Blanc.CreationArtifact
+import Blanc.DeploymentCompiled
+import Blanc.DeploymentMessage
 import Blanc.DripCode
+import Blanc.ExecutionHistory
+import Blanc.Ladder
+import Blanc.MessageExecution
 
 /-!
 # DRIP deployment source
