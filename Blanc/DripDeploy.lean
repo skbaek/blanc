@@ -414,6 +414,7 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     (horigRho : getOrigStorVal sevm sevm.currentTarget rhoSlot = 0)
     (hcurChi : pre.getStorVal sevm.currentTarget chiSlot = 0)
     (hcurRho : pre.getStorVal sevm.currentTarget rhoSlot = 0)
+    (hcurAll : ∀ k, pre.getStorVal sevm.currentTarget k = 0)
     (hcoldChi : ⟨sevm.currentTarget, chiSlot⟩ ∉ pre.accessedStorageKeys)
     (hcoldRho : ⟨sevm.currentTarget, rhoSlot⟩ ∉ pre.accessedStorageKeys) :
     ∃ post, Prog.RunCompiled sevm pre constructorProgram post ∧
@@ -421,7 +422,10 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       post.error = .none ∧
       post.logs = [] ∧
       Devm.getStorVal post sevm.currentTarget chiSlot = scale ∧
-      Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time := by
+      Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time ∧
+      post.gasLeft = G ∧ post.refundCounter = 0 ∧
+      post.accountsToDelete = pre.accountsToDelete ∧
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) := by
   have hlen : code.length = 1762 := codeSize_exact
   have hsize : sevm.code.size = 2001 := by
     rw [ByteArray.size_eq_length_toList, hcode]
@@ -639,13 +643,405 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
   have hrowRho : Devm.getStorVal postW sevm.currentTarget rhoSlot = sevm.benvStat.time := by
     show (Devm.getStor postW sevm.currentTarget).get rhoSlot = sevm.benvStat.time
     rw [hstorW, Stor.get_set_self]
+  have hpieW : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal postW sevm.currentTarget k = 0 := by
+    intro k hkc hkr
+    show (Devm.getStor postW sevm.currentTarget).get k = 0
+    rw [hstorW, Stor.get_set_ne _ (Ne.symm hkr), Stor.get_set_ne _ (Ne.symm hkc)]
+    show (Devm.getStor pre sevm.currentTarget).get k = 0
+    exact hcurAll k
+  have hgasW : postW.gasLeft = G := rfl
+  have hrefundW : postW.refundCounter = 0 := rfl
+  have hdeleteW : postW.accountsToDelete = pre.accountsToDelete := rfl
   have herrW : postW.error = .none := by
     simp only [postW, dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10, s9, s8, s7, s6, s5, s4, s3, s2, s1, mid]
     exact herror
   have hlogsW : postW.logs = [] := by
     simp only [postW, dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10, s9, s8, s7, s6, s5, s4, s3, s2, s1, mid]
     exact hlogs
-  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho⟩
+  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩
+
+theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hcode : sevm.code.toList = creationCode)
+    (hvalue : sevm.value = 0)
+    (hstatic : sevm.isStatic = false)
+    (htime : sevm.benvStat.time ≠ 0)
+    (hstack : pre.stack = [])
+    (hmem : pre.memory = Mem.empty)
+    (hgas : pre.gasLeft = G + 44611)
+    (hlogs : pre.logs = [])
+    (hrefund : pre.refundCounter = 0)
+    (herror : pre.error = .none)
+    (horigChi : getOrigStorVal sevm sevm.currentTarget chiSlot = 0)
+    (horigRho : getOrigStorVal sevm sevm.currentTarget rhoSlot = 0)
+    (hcurChi : pre.getStorVal sevm.currentTarget chiSlot = 0)
+    (hcurRho : pre.getStorVal sevm.currentTarget rhoSlot = 0)
+    (hcurAll : ∀ k, pre.getStorVal sevm.currentTarget k = 0)
+    (hcoldChi : ⟨sevm.currentTarget, chiSlot⟩ ∉ pre.accessedStorageKeys)
+    (hcoldRho : ⟨sevm.currentTarget, rhoSlot⟩ ∉ pre.accessedStorageKeys) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
+      post.output = code ∧
+      post.error = .none ∧
+      post.logs = [] ∧
+      Devm.getStorVal post sevm.currentTarget chiSlot = scale ∧
+      Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time ∧
+      post.gasLeft = G ∧ post.refundCounter = 0 ∧
+      post.accountsToDelete = pre.accountsToDelete ∧
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) := by
+  obtain ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩ :=
+    constructorProgram_runCompiled hcode hvalue hstatic htime hstack hmem hgas
+      hlogs hrefund herror horigChi horigRho hcurChi hcurRho hcurAll hcoldChi hcoldRho
+  have h_compile : some constructorInitPrefix = constructorProgram.compile :=
+    constructorInitPrefix_compile.symm
+  have h_code : sevm.code.toList = constructorInitPrefix ++ code := by
+    rw [hcode, creationCode_eq_prefix_append_runtime]
+  have hexec := Prog.exec_of_runCompiled_appended hProg h_compile h_code
+  exact ⟨postW, hexec, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩
+
+structure DripInitCheckpoint (msg : Msg) (initPost : Devm) : Prop where
+  process : processMessage (processCreateMessage.msg msg) = .ok initPost
+  output : initPost.output = code
+  chi : Devm.getStorVal initPost msg.currentTarget chiSlot = scale
+  rho : Devm.getStorVal initPost msg.currentTarget rhoSlot = msg.benv.stat.time
+  logs : initPost.logs = []
+  error : initPost.error = .none
+  refundCounter : initPost.refundCounter = 0
+  accountsToDelete : initPost.accountsToDelete = .emptyWithCapacity
+  gas : initPost.gasLeft = msg.gas - 44611
+  pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal initPost msg.currentTarget k = 0
+
+theorem processMessage_drip_checkpoint
+    (msg : Msg)
+    (h_value : msg.value = 0)
+    (h_codeAddress : msg.codeAddress = .none)
+    (h_code : msg.code.toList = creationCode)
+    (h_gas : 44611 ≤ msg.gas)
+    (h_static : msg.isStatic = false)
+    (h_time : msg.benv.stat.time ≠ 0)
+    (h_origChi : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget chiSlot = 0)
+    (h_origRho : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget rhoSlot = 0)
+    (h_coldChi : ⟨msg.currentTarget, chiSlot⟩ ∉ msg.accessedStorageKeys)
+    (h_coldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys) :
+    ∃ initPost, DripInitCheckpoint msg initPost := by
+  let prepared := processCreateMessage.msg msg
+  obtain ⟨benv, h_transfer⟩ :=
+    benvAfterTransfer_exists_zero (msg := prepared) h_value
+  let seeded := prepared.withBenv benv
+  have h_stat : benv.stat = msg.benv.stat := by
+    calc
+      benv.stat = prepared.benv.stat := benvAfterTransfer_stat h_transfer
+      _ = msg.benv.stat := by rfl
+  have h_seed_code : (initSevm seeded).code.toList = creationCode := h_code
+  have h_seed_value : (initSevm seeded).value = 0 := h_value
+  have h_seed_static : (initSevm seeded).isStatic = false := h_static
+  have h_seed_time : (initSevm seeded).benvStat.time ≠ 0 := by
+    have heq : (initSevm seeded).benvStat = msg.benv.stat := h_stat
+    rw [heq]
+    exact h_time
+  have h_seed_stack : (initDevm seeded).stack = [] := rfl
+  have h_seed_mem : (initDevm seeded).memory = Mem.empty := rfl
+  have h_seed_gas_msg : seeded.gas = msg.gas := rfl
+  have h_seed_gas : (initDevm seeded).gasLeft = (msg.gas - 44611) + 44611 := by
+    show seeded.gas = (msg.gas - 44611) + 44611
+    rw [h_seed_gas_msg]
+    omega
+  have h_seed_logs : (initDevm seeded).logs = [] := rfl
+  have h_seed_refund : (initDevm seeded).refundCounter = 0 := rfl
+  have h_seed_error : (initDevm seeded).error = .none := rfl
+  have h_beq : (initSevm seeded).benvStat = (initSevm prepared).benvStat :=
+    benvAfterTransfer_stat h_transfer
+  have h_orch : getOrigStorVal (initSevm seeded) msg.currentTarget chiSlot = 0 := by
+    simpa only [getOrigStorVal, getOrigAcct, h_beq] using h_origChi
+  have h_orr : getOrigStorVal (initSevm seeded) msg.currentTarget rhoSlot = 0 := by
+    simpa only [getOrigStorVal, getOrigAcct, h_beq] using h_origRho
+  have h_benv_stor : benv.state.getStor msg.currentTarget = Stor.empty := by
+    have h := congrFun (benvAfterTransfer_getStor_eq (msg := prepared) h_transfer) msg.currentTarget
+    rw [h]
+    exact processCreateMessage_msg_getStor_currentTarget msg
+  have h_curchi : (initDevm seeded).getStorVal msg.currentTarget chiSlot = 0 := by
+    show (benv.state.getStor msg.currentTarget).get chiSlot = 0
+    rw [h_benv_stor]
+    rfl
+  have h_currho : (initDevm seeded).getStorVal msg.currentTarget rhoSlot = 0 := by
+    show (benv.state.getStor msg.currentTarget).get rhoSlot = 0
+    rw [h_benv_stor]
+    rfl
+  have h_curall : ∀ k, (initDevm seeded).getStorVal msg.currentTarget k = 0 := by
+    intro k
+    show (benv.state.getStor msg.currentTarget).get k = 0
+    rw [h_benv_stor]
+    rfl
+  have h_cchi : ⟨(initSevm seeded).currentTarget, chiSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldChi
+  have h_crho : ⟨(initSevm seeded).currentTarget, rhoSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldRho
+  obtain ⟨initPost, hexecW, houtW, herrW, hlogsW, hchiW, hrhoW, hgasW, hrefundW, hdeleteW, hpieW⟩ :=
+    constructorExec_of_walk (sevm := initSevm seeded) (pre := initDevm seeded)
+      (G := msg.gas - 44611) h_seed_code h_seed_value h_seed_static h_seed_time
+      h_seed_stack h_seed_mem h_seed_gas h_seed_logs h_seed_refund h_seed_error
+      h_orch h_orr h_curchi h_currho h_curall h_cchi h_crho
+  have hexec : exec (initEvm seeded) = .ok initPost := hexecW
+  have h_seed_ca : seeded.codeAddress = .none := h_codeAddress
+  have h_pm : processMessage prepared = .ok initPost :=
+    processMessage_ok_of_exec h_transfer h_seed_ca hexec herrW
+  have h_rho : Devm.getStorVal initPost msg.currentTarget rhoSlot = msg.benv.stat.time := by
+    have heq : (initSevm seeded).benvStat.time = msg.benv.stat.time :=
+      congrArg BenvStat.time h_stat
+    rw [← heq]
+    exact hrhoW
+  have h_delete : initPost.accountsToDelete = .emptyWithCapacity := by
+    rw [hdeleteW]
+    rfl
+  exact ⟨initPost,
+    { process := h_pm
+      output := houtW
+      chi := hchiW
+      rho := h_rho
+      logs := hlogsW
+      error := herrW
+      refundCounter := hrefundW
+      accountsToDelete := h_delete
+      gas := hgasW
+      pie := hpieW }⟩
+
+private theorem code_cons : ∃ tail, code = 0x5b :: tail := ⟨_, rfl⟩
+
+private theorem setMach_output_eq (d : Devm) (m : Mach) :
+    (d.setMach m).output = d.output := rfl
+
+private theorem setMach_state_eq (d : Devm) (m : Mach) :
+    (d.setMach m).state = d.state := rfl
+
+private theorem setMach_logs_eq (d : Devm) (m : Mach) :
+    (d.setMach m).logs = d.logs := rfl
+
+private theorem setMach_error_eq (d : Devm) (m : Mach) :
+    (d.setMach m).error = d.error := rfl
+
+private theorem setMach_refundCounter_eq (d : Devm) (m : Mach) :
+    (d.setMach m).refundCounter = d.refundCounter := rfl
+
+private theorem setMach_accountsToDelete_eq (d : Devm) (m : Mach) :
+    (d.setMach m).accountsToDelete = d.accountsToDelete := rfl
+
+private theorem setMach_gasLeft_eq (d : Devm) (m : Mach) :
+    (d.setMach m).gasLeft = m.gasLeft := rfl
+
+
+
+private theorem chargeCodeGas_drip_output
+    {rules : ForkRules} {d : Devm}
+    (h_output : d.output = code)
+    (h_gas : 352400 ≤ d.gasLeft)
+    (h_max : 1762 ≤ rules.code.maxCodeSize) :
+    processCreateMessage.chargeCodeGas rules d =
+      .ok (d.setMach ⟨d.stack, d.memory, d.gasLeft - 352400⟩) := by
+  obtain ⟨tail, hcons⟩ := code_cons
+  have hlen : code.length = 1762 := codeSize_exact
+  unfold processCreateMessage.chargeCodeGas
+  rw [h_output, hcons]
+  rw [hcons] at hlen
+  simp only [List.length_cons] at hlen
+  simp only [List.length_cons, hlen, gasCodeDeposit]
+  rw [chargeGas_eq_ok h_gas]
+  change ((if rules.code.maxCodeSize < 1762 then
+      Except.error ⟨.halt (.outOfGas .none), _⟩
+    else Except.ok _) : Execution) = Except.ok _
+  rw [if_neg (by omega)]
+
+structure DripCodeGasCheckpoint (rules : ForkRules) (d : Devm) (charged : Devm) : Prop where
+  charge : processCreateMessage.chargeCodeGas rules d = .ok charged
+  output : charged.output = code
+  state : charged.state = d.state
+  logs : charged.logs = d.logs
+  error : charged.error = d.error
+  refundCounter : charged.refundCounter = d.refundCounter
+  accountsToDelete : charged.accountsToDelete = d.accountsToDelete
+  gas : charged.gasLeft = d.gasLeft - 352400
+
+theorem chargeCodeGas_drip_checkpoint
+    {rules : ForkRules} {d : Devm}
+    (h_output : d.output = code)
+    (h_gas : 352400 ≤ d.gasLeft)
+    (h_max : 1762 ≤ rules.code.maxCodeSize) :
+    ∃ charged, DripCodeGasCheckpoint rules d charged := by
+  let m : Mach := ⟨d.stack, d.memory, d.gasLeft - 352400⟩
+  have hm : processCreateMessage.chargeCodeGas rules d = .ok (d.setMach m) := by
+    simpa only [m] using chargeCodeGas_drip_output h_output h_gas h_max
+  obtain ⟨charged, hc⟩ : ∃ charged, processCreateMessage.chargeCodeGas rules d = .ok charged := ⟨d.setMach m, hm⟩
+  have heq : charged = d.setMach m := Except.ok.inj (hc.symm.trans hm)
+  have hout : charged.output = d.output := by
+    rw [heq]
+    exact setMach_output_eq d m
+  have hst : charged.state = d.state := by
+    rw [heq]
+    exact setMach_state_eq d m
+  have hlogs : charged.logs = d.logs := by
+    rw [heq]
+    exact setMach_logs_eq d m
+  have herr : charged.error = d.error := by
+    rw [heq]
+    exact setMach_error_eq d m
+  have href : charged.refundCounter = d.refundCounter := by
+    rw [heq]
+    exact setMach_refundCounter_eq d m
+  have hdel : charged.accountsToDelete = d.accountsToDelete := by
+    rw [heq]
+    exact setMach_accountsToDelete_eq d m
+  have hgas : charged.gasLeft = d.gasLeft - 352400 := by
+    have hmg : charged.gasLeft = m.gasLeft := by
+      rw [heq]
+      exact setMach_gasLeft_eq d m
+    exact hmg.trans (by rfl)
+  exact ⟨charged, hc, hout.trans h_output, hst, hlogs, herr, href, hdel, hgas⟩
+
+structure DripChargeCheckpoint (msg : Msg) (charged : Devm) : Prop where
+  process :
+    processCreateMessage msg =
+      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩)
+  output : charged.output = code
+  chi : Devm.getStorVal charged msg.currentTarget chiSlot = scale
+  rho : Devm.getStorVal charged msg.currentTarget rhoSlot = msg.benv.stat.time
+  logs : charged.logs = []
+  error : charged.error = .none
+  refundCounter : charged.refundCounter = 0
+  accountsToDelete : charged.accountsToDelete = .emptyWithCapacity
+  gas : charged.gasLeft = msg.gas - 44611 - 352400
+  pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal charged msg.currentTarget k = 0
+
+theorem processCreateMessage_drip_charge_checkpoint
+    (msg : Msg) {initPost : Devm}
+    (init : DripInitCheckpoint msg initPost)
+    (h_gas : 44611 + 352400 ≤ msg.gas)
+    (h_max : 1762 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ charged, DripChargeCheckpoint msg charged := by
+  have h_deposit : 352400 ≤ initPost.gasLeft := by
+    rw [init.gas]
+    omega
+  obtain ⟨charged, checkpoint⟩ :=
+    chargeCodeGas_drip_checkpoint (rules := msg.benv.stat.rules) (d := initPost)
+      init.output h_deposit h_max
+  have h_chi : Devm.getStorVal charged msg.currentTarget chiSlot = scale := by
+    show (charged.state.getStor msg.currentTarget).get chiSlot = scale
+    rw [checkpoint.state]
+    exact init.chi
+  have h_rho : Devm.getStorVal charged msg.currentTarget rhoSlot = msg.benv.stat.time := by
+    show (charged.state.getStor msg.currentTarget).get rhoSlot = msg.benv.stat.time
+    rw [checkpoint.state]
+    exact init.rho
+  have h_pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal charged msg.currentTarget k = 0 := by
+    intro k hkc hkr
+    show (charged.state.getStor msg.currentTarget).get k = 0
+    rw [checkpoint.state]
+    exact init.pie k hkc hkr
+  have h_gas_charged : charged.gasLeft = msg.gas - 44611 - 352400 := by
+    rw [checkpoint.gas, init.gas]
+  exact ⟨charged,
+    { process :=
+        processCreateMessage_ok_of_processMessage_and_charge msg
+          init.process init.error checkpoint.charge
+      output := checkpoint.output
+      chi := h_chi
+      rho := h_rho
+      logs := checkpoint.logs.trans init.logs
+      error := checkpoint.error.trans init.error
+      refundCounter := checkpoint.refundCounter.trans init.refundCounter
+      accountsToDelete := checkpoint.accountsToDelete.trans init.accountsToDelete
+      gas := h_gas_charged
+      pie := h_pie }⟩
+
+private theorem dripInstalledPost_certificate
+    (msg : Msg) {charged : Devm}
+    (h_process :
+      processCreateMessage msg =
+        .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩))
+    (h_output : charged.output = code)
+    (h_chi : Devm.getStorVal charged msg.currentTarget chiSlot = scale)
+    (h_rho : Devm.getStorVal charged msg.currentTarget rhoSlot = msg.benv.stat.time)
+    (h_pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal charged msg.currentTarget k = 0)
+    (h_logs : charged.logs = [])
+    (h_error : charged.error = .none)
+    (h_refund : charged.refundCounter = 0)
+    (h_delete : charged.accountsToDelete = .emptyWithCapacity)
+    (h_gas : charged.gasLeft = msg.gas - 44611 - 352400) :
+    ∃ post,
+      processCreateMessage msg = .ok post ∧
+      post.getCode msg.currentTarget = ⟨⟨code⟩⟩ ∧
+      Devm.getStorVal post msg.currentTarget chiSlot = scale ∧
+      Devm.getStorVal post msg.currentTarget rhoSlot = msg.benv.stat.time ∧
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post msg.currentTarget k = 0) ∧
+      post.logs = [] ∧
+      post.output = code ∧
+      post.gasLeft = msg.gas - 44611 - 352400 ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity := by
+  refine ⟨charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩,
+    h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · unfold Devm.getCode Devm.getAcct
+    rw [Devm.setCode_state]
+    unfold State.setCode
+    rw [State.get_set_self]
+    simp only [h_output]
+  · change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
+        msg.currentTarget).get chiSlot = scale
+    rw [Devm.setCode_state]
+    change (((charged.state.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get chiSlot = scale
+    rw [State.setCode_get_stor]
+    exact h_chi
+  · change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
+        msg.currentTarget).get rhoSlot = msg.benv.stat.time
+    rw [Devm.setCode_state]
+    change (((charged.state.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get rhoSlot = msg.benv.stat.time
+    rw [State.setCode_get_stor]
+    exact h_rho
+  · intro k hkc hkr
+    change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
+        msg.currentTarget).get k = 0
+    rw [Devm.setCode_state]
+    change (((charged.state.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get k = 0
+    rw [State.setCode_get_stor]
+    exact h_pie k hkc hkr
+  · exact h_logs
+  · exact h_output
+  · exact h_gas
+  · exact h_error
+  · exact h_refund
+  · exact h_delete
+
+theorem processCreateMessage_drip_success
+    (msg : Msg)
+    (h_value : msg.value = 0)
+    (h_codeAddress : msg.codeAddress = .none)
+    (h_code : msg.code.toList = creationCode)
+    (h_gas : 44611 + 352400 ≤ msg.gas)
+    (h_static : msg.isStatic = false)
+    (h_time : msg.benv.stat.time ≠ 0)
+    (h_origChi : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget chiSlot = 0)
+    (h_origRho : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget rhoSlot = 0)
+    (h_coldChi : ⟨msg.currentTarget, chiSlot⟩ ∉ msg.accessedStorageKeys)
+    (h_coldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys)
+    (h_max : 1762 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ post,
+      processCreateMessage msg = .ok post ∧
+      post.getCode msg.currentTarget = ⟨⟨code⟩⟩ ∧
+      Devm.getStorVal post msg.currentTarget chiSlot = scale ∧
+      Devm.getStorVal post msg.currentTarget rhoSlot = msg.benv.stat.time ∧
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post msg.currentTarget k = 0) ∧
+      post.logs = [] ∧
+      post.output = code ∧
+      post.gasLeft = msg.gas - 44611 - 352400 ∧
+      post.error = .none ∧
+      post.refundCounter = 0 ∧
+      post.accountsToDelete = .emptyWithCapacity := by
+  obtain ⟨initPost, init⟩ :=
+    processMessage_drip_checkpoint msg h_value h_codeAddress h_code
+      (by omega) h_static h_time h_origChi h_origRho h_coldChi h_coldRho
+  obtain ⟨chargedPost, charged⟩ :=
+    processCreateMessage_drip_charge_checkpoint msg init h_gas h_max
+  exact dripInstalledPost_certificate msg charged.process charged.output
+    charged.chi charged.rho charged.pie charged.logs charged.error charged.refundCounter
+    charged.accountsToDelete charged.gas
 
 end Drip
 end Blanc
