@@ -56,80 +56,6 @@ split once, so the one-message rung below becomes a soundness corollary
 with an unchanged statement.
 -/
 
--- Aux-table lookups, restated: the Inbound/Outbound copies are `private`.
-private theorem depositAfterQuote_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.depositAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.depositAfterQuoteSlot]
-
-private theorem mintAfterQuote_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.mintAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.mintAfterQuoteSlot]
-
-private theorem withdrawAfterQuote_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.withdrawAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.withdrawAfterQuoteSlot]
-
-private theorem redeemAfterQuote_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.redeemAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.redeemAfterQuoteSlot]
-
-private theorem withdrawBurn_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.withdrawBurnSlot]? =
-      some Blanc.ProrataWethVault.withdrawBurn := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.withdrawBurnSlot]
-
-private theorem redeemBurn_lookup :
-    (Blanc.ProrataWethVault.vault.main ::
-      Blanc.ProrataWethVault.vault.aux)[
-        Blanc.ProrataWethVault.redeemBurnSlot]? =
-      some Blanc.ProrataWethVault.redeemBurn := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.redeemBurnSlot]
-
--- Dispatch-table membership, restated: the Inbound/Outbound copies are `private`.
-private theorem deposit_mem_vaultFuncs :
-    (selector "deposit" [.uint256, .address],
-      Blanc.ProrataWethVault.routed 2 Blanc.ProrataWethVault.deposit) ∈
-      Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
-
-private theorem mint_mem_vaultFuncs :
-    (selector "mint" [.uint256, .address],
-      Blanc.ProrataWethVault.routed 2 Blanc.ProrataWethVault.mint) ∈
-      Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
-
-private theorem withdraw_mem_vaultFuncs :
-    (selector "withdraw" [.uint256, .address, .address],
-      Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.withdraw) ∈
-      Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
-
-private theorem redeem_mem_vaultFuncs :
-    (selector "redeem" [.uint256, .address, .address],
-      Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.redeem) ∈
-      Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
-
 /-- Body-level configured obligation for `deposit`: the compiled body effect
 is an `InboundEffect`, and every inbound effect preserves conservation. -/
 theorem deposit_body_obligation
@@ -332,9 +258,19 @@ theorem vault_target_obligations :
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · intro _sevm _pre _post config memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
-      enter_flow_body config memoryWf run selectorEq deposit_mem_vaultFuncs
-        conserved
-    exact deposit_body_obligation bodyConfig bodyWf depositAfterQuote_lookup
+      enter_flow_body (words := 2) (body := Blanc.ProrataWethVault.deposit)
+        config memoryWf run selectorEq
+        (by simp [Blanc.ProrataWethVault.vaultFuncs]) conserved
+    -- Aux-table and dispatch facts are discharged inline: the
+    -- Inbound/Outbound copies are `private`, and named restatements would
+    -- clone them under the K1 ratchet.
+    have afterLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
+        some Blanc.ProrataWethVault.depositAfterQuote := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.depositAfterQuoteSlot]
+    exact deposit_body_obligation bodyConfig bodyWf afterLookup
       nil_pref bodyRun conservedBody
   · intro _sevm _pre _post _config memoryWf run selectorEq conserved
     exact readOnly_message (words := 1)
@@ -343,9 +279,16 @@ theorem vault_target_obligations :
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · intro _sevm _pre _post config memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
-      enter_flow_body config memoryWf run selectorEq mint_mem_vaultFuncs
-        conserved
-    exact mint_body_obligation bodyConfig bodyWf mintAfterQuote_lookup
+      enter_flow_body (words := 2) (body := Blanc.ProrataWethVault.mint)
+        config memoryWf run selectorEq
+        (by simp [Blanc.ProrataWethVault.vaultFuncs]) conserved
+    have afterLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
+        some Blanc.ProrataWethVault.mintAfterQuote := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.mintAfterQuoteSlot]
+    exact mint_body_obligation bodyConfig bodyWf afterLookup
       nil_pref bodyRun conservedBody
   · intro _sevm _pre _post _config memoryWf run selectorEq conserved
     exact readOnly_message (words := 0)
@@ -362,16 +305,42 @@ theorem vault_target_obligations :
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · intro _sevm _pre _post config memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
-      enter_flow_body config memoryWf run selectorEq withdraw_mem_vaultFuncs
-        conserved
-    exact withdraw_body_obligation bodyConfig bodyWf withdrawAfterQuote_lookup
-      withdrawBurn_lookup nil_pref bodyRun conservedBody
+      enter_flow_body (words := 3) (body := Blanc.ProrataWethVault.withdraw)
+        config memoryWf run selectorEq
+        (by simp [Blanc.ProrataWethVault.vaultFuncs]) conserved
+    have afterLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
+        some Blanc.ProrataWethVault.withdrawAfterQuote := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.withdrawAfterQuoteSlot]
+    have burnLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.withdrawBurnSlot]? =
+        some Blanc.ProrataWethVault.withdrawBurn := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.withdrawBurnSlot]
+    exact withdraw_body_obligation bodyConfig bodyWf afterLookup burnLookup
+      nil_pref bodyRun conservedBody
   · intro _sevm _pre _post config memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
-      enter_flow_body config memoryWf run selectorEq redeem_mem_vaultFuncs
-        conserved
-    exact redeem_body_obligation bodyConfig bodyWf redeemAfterQuote_lookup
-      redeemBurn_lookup nil_pref bodyRun conservedBody
+      enter_flow_body (words := 3) (body := Blanc.ProrataWethVault.redeem)
+        config memoryWf run selectorEq
+        (by simp [Blanc.ProrataWethVault.vaultFuncs]) conserved
+    have afterLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
+        some Blanc.ProrataWethVault.redeemAfterQuote := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.redeemAfterQuoteSlot]
+    have burnLookup : (Blanc.ProrataWethVault.vault.main ::
+        Blanc.ProrataWethVault.vault.aux)[
+          Blanc.ProrataWethVault.redeemBurnSlot]? =
+        some Blanc.ProrataWethVault.redeemBurn := by
+      simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
+        Blanc.ProrataWethVault.redeemBurnSlot]
+    exact redeem_body_obligation bodyConfig bodyWf afterLookup burnLookup
+      nil_pref bodyRun conservedBody
   · intro _sevm _pre _post _config memoryWf run selectorEq conserved
     exact readOnly_message (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) run selectorEq
