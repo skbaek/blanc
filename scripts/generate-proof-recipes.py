@@ -671,13 +671,6 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
     # would have to exhibit. Checked in both directions by
     # validate_harness_coverage, so a listed recipe that gains a case, or that
     # leaves the registry, fails here instead of joining a silent gap.
-    "same-frame-stack-certificate":
-        "its ResumeSafe trigger lives in the leaf-only proofRecipeLeafTriggerMatches, "
-        "which the suggestions harness cannot reach: its expect helpers call the "
-        "core proofRecipeTriggerMatches, which owns StepSafe but not ResumeSafe. "
-        "A case would have to state a ResumeSafe-headed goal and expect the leaf "
-        "matcher to fire on it. Leaf-only exact-head positive/negative controls "
-        "exist as scripts/ProofRecipeStackSafety.lean instead",
 }
 
 # Triggers whose reachability is *proved*: the harness states a real goal and
@@ -690,6 +683,8 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
+    "goal-head:CompiledStackSafety.StepSafe",
+    "goal-head:CompiledStackSafety.ResumeSafe",
     "goal-head:ContractSpec.PreservesAdmitted",
     "goal-head:Func.ExecSat",
     "goal-head:Func.Inv",
