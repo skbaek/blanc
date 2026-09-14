@@ -685,6 +685,80 @@ theorem no_exec_success_of_convertToUnits_guards {sevm : Sevm} {pre : Devm}
   · exact helapsed h
   · exact h hguards
 
+/-! ## Failure paths, message altitude: settled-revert projections
+
+A DRIP message that settles with an error rolls the world back to the
+pre-state: state and transient storage come straight from
+`ProcessMessage.rollback_of_error`, and the account projections follow.
+Output and logs are raw-preserving (`settledRevert_output/_logs`), stated
+here honestly as relations rather than emptiness: universal
+raw-output-emptiness / logs-silence needs per-path occurrence work beyond
+absence + rollback (the miss walk in `DripIngress` and the `Func.revert`
+construction carry the per-path facts). -/
+
+theorem drip_message_error_state {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
+    (_hcode : msg.code.toList = code) :
+    out.state = msg.benv.state :=
+  (ProcessMessage.rollback_of_error h herr).1
+
+theorem drip_message_error_transient {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
+    (_hcode : msg.code.toList = code) :
+    out.transientStorage = msg.tenv.transientStorage :=
+  (ProcessMessage.rollback_of_error h herr).2
+
+theorem drip_message_error_getStor {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
+    (_hcode : msg.code.toList = code) (a : Adr) :
+    Devm.getStor out a = (msg.benv.state.get a).stor := by
+  have hst := (ProcessMessage.rollback_of_error h herr).1
+  unfold Devm.getStor Devm.getAcct
+  rw [hst]
+
+theorem drip_message_error_getBal {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
+    (_hcode : msg.code.toList = code) (a : Adr) :
+    Devm.getBal out a = (msg.benv.state.get a).bal := by
+  have hst := (ProcessMessage.rollback_of_error h herr).1
+  unfold Devm.getBal Devm.getAcct
+  rw [hst]
+
+theorem drip_message_error_getCode {msg : Msg} {xl : Xlot} {out : Devm}
+    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
+    (_hcode : msg.code.toList = code) (a : Adr) :
+    Devm.getCode out a = (msg.benv.state.get a).code := by
+  have hst := (ProcessMessage.rollback_of_error h herr).1
+  unfold Devm.getCode Devm.getAcct
+  rw [hst]
+
+theorem drip_settledRevert_projections (msg : Msg) (raw : Devm)
+    (_hcode : msg.code.toList = code) :
+    (MessageExecution.settledRevert msg raw).state = msg.benv.state ∧
+      (MessageExecution.settledRevert msg raw).transientStorage =
+        msg.tenv.transientStorage ∧
+      (∀ a, Devm.getStor (MessageExecution.settledRevert msg raw) a =
+        (msg.benv.state.get a).stor) ∧
+      (∀ a, Devm.getBal (MessageExecution.settledRevert msg raw) a =
+        (msg.benv.state.get a).bal) ∧
+      (∀ a, Devm.getCode (MessageExecution.settledRevert msg raw) a =
+        (msg.benv.state.get a).code) ∧
+      (MessageExecution.settledRevert msg raw).output = raw.output ∧
+      (MessageExecution.settledRevert msg raw).logs = raw.logs := by
+  refine ⟨MessageExecution.settledRevert_state msg raw,
+    MessageExecution.settledRevert_transientStorage msg raw, ?_, ?_, ?_,
+    MessageExecution.settledRevert_output msg raw,
+    MessageExecution.settledRevert_logs msg raw⟩
+  · intro a
+    unfold Devm.getStor Devm.getAcct
+    rw [MessageExecution.settledRevert_state]
+  · intro a
+    unfold Devm.getBal Devm.getAcct
+    rw [MessageExecution.settledRevert_state]
+  · intro a
+    unfold Devm.getCode Devm.getAcct
+    rw [MessageExecution.settledRevert_state]
+
 end Drip
 
 end Blanc
