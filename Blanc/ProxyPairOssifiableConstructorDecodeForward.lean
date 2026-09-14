@@ -18,6 +18,15 @@ namespace Blanc.ProxyPair
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
+/-! ## MemoryStage decode-forward staging -/
+
+/-- The three ordered decode-forward writes as one general `(Nat × Bytes)`
+stage. Payloads are the real staging expressions (memory side). -/
+private def decodeForwardStage (sevm : Sevm) : MemoryStage :=
+  [(0, sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop)),
+    (96, (Nat.toB256 3533).toBytes),
+    (128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))]
+
 private def decodeForwardHeadMemory (sevm : Sevm) : Mem :=
   Mem.empty.write 0 (sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop))
 
@@ -32,163 +41,30 @@ private def decodeForwardHeadImage (sevm : Sevm) : Bytes :=
   Bytes.writeAt [] 0 (sevm.code.toList.sliceD 3437 96 0)
 
 private def decodeForwardPointerImage (sevm : Sevm) : Bytes :=
-  Bytes.writeAt (decodeForwardHeadImage sevm) 96
-    (Nat.toB256 3533).toBytes
+  MemoryStage.applyImage (List.take 2 (decodeForwardStage sevm)) []
 
 private def decodeForwardLengthImage (sevm : Sevm) : Bytes :=
-  Bytes.writeAt (decodeForwardPointerImage sevm) 128
-    (sevm.code.toList.sliceD 3533 32 0)
-
-/-! ## MemoryStage decode-forward staging -/
-
-/-- The three ordered decode-forward writes as one general `(Nat × Bytes)`
-stage. Payloads are the real staging expressions (memory side). -/
-private def decodeForwardStage (sevm : Sevm) : MemoryStage :=
-  [(0, sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop)),
-    (96, (Nat.toB256 3533).toBytes),
-    (128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))]
-
-/-- The 1-write take-prefix is the head copy. -/
-private theorem decodeForwardStage_take1 (sevm : Sevm) :
-    List.take 1 (decodeForwardStage sevm) =
-      [(0, sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop))] := by
-  rfl
-
-/-- The 2-write take-prefix is the head copy plus the pointer word. -/
-private theorem decodeForwardStage_take2 (sevm : Sevm) :
-    List.take 2 (decodeForwardStage sevm) =
-      [(0, sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop)),
-        (96, (Nat.toB256 3533).toBytes)] := by
-  rfl
-
-/-- Memory bridge: the head take-prefix folds exactly
-`decodeForwardHeadMemory`. Explicit `rw` chain following the donor off-`simp`
-pattern. -/
-private theorem decodeForwardHeadMemory_eq (sevm : Sevm) :
-    (MemoryStage.applyMemory (List.take 1 (decodeForwardStage sevm))
-      Mem.empty) = decodeForwardHeadMemory sevm := by
-  rw [decodeForwardStage_take1]
-  unfold decodeForwardHeadMemory
-  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
-
-/-- Memory bridge: the pointer take-prefix folds exactly
-`decodeForwardPointerMemory`. -/
-private theorem decodeForwardPointerMemory_eq (sevm : Sevm) :
-    (MemoryStage.applyMemory (List.take 2 (decodeForwardStage sevm))
-      Mem.empty) = decodeForwardPointerMemory sevm := by
-  rw [decodeForwardStage_take2]
-  unfold decodeForwardPointerMemory decodeForwardHeadMemory
-  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
-    MemoryStage.applyMemory_nil]
-
-/-- Memory bridge: the full stage folds exactly `decodeForwardLengthMemory`. -/
-private theorem decodeForwardLengthMemory_eq (sevm : Sevm) :
-    (decodeForwardStage sevm).applyMemory Mem.empty =
-      decodeForwardLengthMemory sevm := by
-  unfold decodeForwardStage decodeForwardLengthMemory
-    decodeForwardPointerMemory decodeForwardHeadMemory
-  rw [MemoryStage.applyMemory_cons, MemoryStage.applyMemory_cons,
-    MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]
-
-/-- Image bridge: the head take-prefix folds exactly
-`decodeForwardHeadImage`. The memory-side `ByteArray.sliceD` payloads are
-rewritten to the image-side `toList.sliceD` form. -/
-private theorem decodeForwardHeadImage_eq (sevm : Sevm) :
-    (MemoryStage.applyImage (List.take 1 (decodeForwardStage sevm)) []) =
-      decodeForwardHeadImage sevm := by
-  rw [decodeForwardStage_take1]
-  unfold decodeForwardHeadImage
-  rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_nil]
-  simp only [ByteArray.sliceD_eq,
-    show Linst.toUInt8 .stop = 0 by decide]
-
-/-- Image bridge: the pointer take-prefix folds exactly
-`decodeForwardPointerImage`. -/
-private theorem decodeForwardPointerImage_eq (sevm : Sevm) :
-    (MemoryStage.applyImage (List.take 2 (decodeForwardStage sevm)) []) =
-      decodeForwardPointerImage sevm := by
-  rw [decodeForwardStage_take2]
-  unfold decodeForwardPointerImage decodeForwardHeadImage
-  rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
-    MemoryStage.applyImage_nil]
-  simp only [ByteArray.sliceD_eq,
-    show Linst.toUInt8 .stop = 0 by decide]
-
-/-- Image bridge: the full stage folds exactly `decodeForwardLengthImage`. -/
-private theorem decodeForwardLengthImage_eq (sevm : Sevm) :
-    (decodeForwardStage sevm).applyImage [] =
-      decodeForwardLengthImage sevm := by
-  unfold decodeForwardStage decodeForwardLengthImage
-    decodeForwardPointerImage decodeForwardHeadImage
-  rw [MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
-    MemoryStage.applyImage_cons, MemoryStage.applyImage_nil]
-  simp only [ByteArray.sliceD_eq,
-    show Linst.toUInt8 .stop = 0 by decide]
-
-/-- One `wf_reads` over the head take-prefix. -/
-private theorem decodeForwardHeadStage_wf_reads (sevm : Sevm) :
-    Mem.Wf (MemoryStage.applyMemory (List.take 1 (decodeForwardStage sevm))
-        Mem.empty) ∧
-      Mem.Reads (MemoryStage.applyMemory (List.take 1 (decodeForwardStage sevm))
-        Mem.empty)
-        (MemoryStage.applyImage (List.take 1 (decodeForwardStage sevm)) []) :=
-  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
-
-/-- One `wf_reads` over the pointer take-prefix. -/
-private theorem decodeForwardPointerStage_wf_reads (sevm : Sevm) :
-    Mem.Wf (MemoryStage.applyMemory (List.take 2 (decodeForwardStage sevm))
-        Mem.empty) ∧
-      Mem.Reads (MemoryStage.applyMemory (List.take 2 (decodeForwardStage sevm))
-        Mem.empty)
-        (MemoryStage.applyImage (List.take 2 (decodeForwardStage sevm)) []) :=
-  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
-
-/-- One `wf_reads` over the full stage, replacing the from-scratch
-re-thread. -/
-private theorem decodeForwardLengthStage_wf_reads (sevm : Sevm) :
-    Mem.Wf ((decodeForwardStage sevm).applyMemory Mem.empty) ∧
-      Mem.Reads ((decodeForwardStage sevm).applyMemory Mem.empty)
-        ((decodeForwardStage sevm).applyImage []) :=
-  MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty
-
-/-- Suffix of the decode-forward stage after the head copy. -/
-private def decodeForwardTailStage (sevm : Sevm) : MemoryStage :=
-  [(96, (Nat.toB256 3533).toBytes),
-    (128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))]
-
-/-- The full stage is the head prefix followed by the tail. -/
-private theorem decodeForwardStage_split_head (sevm : Sevm) :
-    decodeForwardStage sevm = List.take 1 (decodeForwardStage sevm) ++
-      decodeForwardTailStage sevm := by
-  rfl
-
-/-- The full stage is the pointer prefix followed by the length write. -/
-private theorem decodeForwardStage_split_length (sevm : Sevm) :
-    decodeForwardStage sevm = List.take 2 (decodeForwardStage sevm) ++
-      [(128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))] := by
-  rfl
+  MemoryStage.applyImage (decodeForwardStage sevm) []
 
 /-- Both tail writes miss the implementation window `[0, 32)`. -/
 private theorem decodeForwardTailStage_avoids_implementation (sevm : Sevm) :
-    (decodeForwardTailStage sevm).avoids 0 32 = true := by
-  simp [decodeForwardTailStage, MemoryStage.avoids]
+    MemoryStage.avoids (List.drop 1 (decodeForwardStage sevm)) 0 32 = true := by
+  simp [decodeForwardStage, MemoryStage.avoids]
 
 /-- Both tail writes miss the admin window `[32, 64)`. -/
 private theorem decodeForwardTailStage_avoids_admin (sevm : Sevm) :
-    (decodeForwardTailStage sevm).avoids 32 32 = true := by
-  simp [decodeForwardTailStage, MemoryStage.avoids]
+    MemoryStage.avoids (List.drop 1 (decodeForwardStage sevm)) 32 32 = true := by
+  simp [decodeForwardStage, MemoryStage.avoids]
 
 /-- The length write misses the pointer window `[96, 128)`. -/
 private theorem decodeForwardLengthSuffix_avoids_pointer (sevm : Sevm) :
-    MemoryStage.avoids
-      [(128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))]
-      96 32 = true := by
-  simp [MemoryStage.avoids]
+    MemoryStage.avoids (List.drop 2 (decodeForwardStage sevm)) 96 32 = true := by
+  simp [decodeForwardStage, MemoryStage.avoids]
 
 /-- Control: the tail guard rejects the pointer window, which overlaps the
 pointer write. The guards above are not vacuously true. -/
 private theorem decodeForwardTailStage_avoids_overlap_control (sevm : Sevm) :
-    (decodeForwardTailStage sevm).avoids 96 32 = false := by
+    MemoryStage.avoids (List.drop 1 (decodeForwardStage sevm)) 96 32 = false := by
   have hlen := ByteArray.length_sliceD sevm.code 3533 32
     (Linst.toUInt8 .stop)
   have hne : (Nat.toB256 3533).toBytes ≠ [] := by
@@ -196,7 +72,7 @@ private theorem decodeForwardTailStage_avoids_overlap_control (sevm : Sevm) :
     have hlength := B256.length_toBytes (Nat.toB256 3533)
     rw [hnil] at hlength
     simp at hlength
-  simp [decodeForwardTailStage, MemoryStage.avoids, hlen, hne,
+  simp [decodeForwardStage, MemoryStage.avoids, hlen, hne,
     B256.length_toBytes]
 
 /-- One guard replaces the two-peel implementation read: the observed window
@@ -205,7 +81,8 @@ private theorem decodeForwardStage_slice_implementation (sevm : Sevm) :
     ((decodeForwardStage sevm).applyImage []).sliceD 0 32 0 =
       (MemoryStage.applyImage
         (List.take 1 (decodeForwardStage sevm)) []).sliceD 0 32 0 := by
-  rw [decodeForwardStage_split_head, MemoryStage.applyImage_append]
+  rw [← List.take_append_drop 1 (decodeForwardStage sevm),
+    MemoryStage.applyImage_append]
   exact MemoryStage.applyImage_sliceD_of_avoids _ _ _ _
     (decodeForwardTailStage_avoids_implementation sevm)
 
@@ -215,7 +92,8 @@ private theorem decodeForwardStage_slice_admin (sevm : Sevm) :
     ((decodeForwardStage sevm).applyImage []).sliceD 32 32 0 =
       (MemoryStage.applyImage
         (List.take 1 (decodeForwardStage sevm)) []).sliceD 32 32 0 := by
-  rw [decodeForwardStage_split_head, MemoryStage.applyImage_append]
+  rw [← List.take_append_drop 1 (decodeForwardStage sevm),
+    MemoryStage.applyImage_append]
   exact MemoryStage.applyImage_sliceD_of_avoids _ _ _ _
     (decodeForwardTailStage_avoids_admin sevm)
 
@@ -225,7 +103,8 @@ private theorem decodeForwardStage_slice_pointer (sevm : Sevm) :
     ((decodeForwardStage sevm).applyImage []).sliceD 96 32 0 =
       (MemoryStage.applyImage
         (List.take 2 (decodeForwardStage sevm)) []).sliceD 96 32 0 := by
-  rw [decodeForwardStage_split_length, MemoryStage.applyImage_append]
+  rw [← List.take_append_drop 2 (decodeForwardStage sevm),
+    MemoryStage.applyImage_append]
   exact MemoryStage.applyImage_sliceD_of_avoids _ _ _ _
     (decodeForwardLengthSuffix_avoids_pointer sevm)
 
@@ -240,21 +119,25 @@ private theorem Mem.size_write_of_lt {memory : Mem} {offset : Nat}
 
 private theorem decodeForwardHeadMemory_size (sevm : Sevm) :
     (decodeForwardHeadMemory sevm).size = 96 := by
-  rw [← decodeForwardHeadMemory_eq, decodeForwardStage_take1,
-    MemoryStage.applyMemory_size _ _ (by decide)]
-  simp only [MemoryStage.footprint, List.map_cons, List.map_nil]
-  rw [ByteArray.length_sliceD]
+  change (MemoryStage.applyMemory (List.take 1 (decodeForwardStage sevm))
+    Mem.empty).size = 96
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
+  simp [decodeForwardStage, MemoryStage.footprint, ByteArray.length_sliceD]
   decide
 
 private theorem decodeForwardHeadMemory_wf (sevm : Sevm) :
     Mem.Wf (decodeForwardHeadMemory sevm) := by
-  rw [← decodeForwardHeadMemory_eq]
-  exact (decodeForwardHeadStage_wf_reads sevm).1
+  change Mem.Wf (MemoryStage.applyMemory
+    (List.take 1 (decodeForwardStage sevm)) Mem.empty)
+  exact (MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty).1
 
 private theorem decodeForwardHeadMemory_reads (sevm : Sevm) :
     Mem.Reads (decodeForwardHeadMemory sevm) (decodeForwardHeadImage sevm) := by
-  rw [← decodeForwardHeadMemory_eq, ← decodeForwardHeadImage_eq]
-  exact (decodeForwardHeadStage_wf_reads sevm).2
+  simpa [decodeForwardHeadMemory, decodeForwardHeadImage, decodeForwardStage,
+    MemoryStage.applyMemory, MemoryStage.applyImage, ByteArray.sliceD_eq,
+    show Linst.toUInt8 .stop = 0 by decide] using
+    (MemoryStage.wf_reads (List.take 1 (decodeForwardStage sevm))
+      Mem.wf_empty Mem.reads_empty).2
 
 private theorem decodeForwardHeadImage_implementation
     {sevm : Sevm} {implementation : Adr}
@@ -294,23 +177,26 @@ private theorem decodeForwardHeadImage_offset
 
 private theorem decodeForwardPointerMemory_size (sevm : Sevm) :
     (decodeForwardPointerMemory sevm).size = 128 := by
-  rw [← decodeForwardPointerMemory_eq, decodeForwardStage_take2,
-    MemoryStage.applyMemory_size _ _ (by decide)]
-  simp only [MemoryStage.footprint, List.map_cons, List.map_nil,
+  change (MemoryStage.applyMemory (List.take 2 (decodeForwardStage sevm))
+    Mem.empty).size = 128
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
+  simp [decodeForwardStage, MemoryStage.footprint, ByteArray.length_sliceD,
     B256.length_toBytes]
-  rw [ByteArray.length_sliceD]
   decide
 
 private theorem decodeForwardPointerMemory_wf (sevm : Sevm) :
     Mem.Wf (decodeForwardPointerMemory sevm) := by
-  rw [← decodeForwardPointerMemory_eq]
-  exact (decodeForwardPointerStage_wf_reads sevm).1
+  change Mem.Wf (MemoryStage.applyMemory
+    (List.take 2 (decodeForwardStage sevm)) Mem.empty)
+  exact (MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty).1
 
 private theorem decodeForwardPointerMemory_reads (sevm : Sevm) :
     Mem.Reads (decodeForwardPointerMemory sevm)
       (decodeForwardPointerImage sevm) := by
-  rw [← decodeForwardPointerMemory_eq, ← decodeForwardPointerImage_eq]
-  exact (decodeForwardPointerStage_wf_reads sevm).2
+  simpa [decodeForwardPointerMemory, decodeForwardHeadMemory,
+    decodeForwardPointerImage, decodeForwardStage, MemoryStage.applyMemory] using
+    (MemoryStage.wf_reads (List.take 2 (decodeForwardStage sevm))
+      Mem.wf_empty Mem.reads_empty).2
 
 private theorem decodeForwardPointerImage_pointer (sevm : Sevm) :
     Bytes.toB256 ((decodeForwardPointerImage sevm).sliceD 96 32 0) =
@@ -323,27 +209,30 @@ private theorem decodeForwardPointerImage_pointer (sevm : Sevm) :
     [(0, sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop))]
     ([] : MemoryStage) [] (Nat.toB256 3533).toBytes 96 (by decide)
   rw [B256.length_toBytes] at hread
-  rw [← decodeForwardPointerImage_eq, htake, hread]
+  rw [decodeForwardPointerImage, htake, hread]
   exact B256.toB256_toBytes _
 
 private theorem decodeForwardLengthMemory_size (sevm : Sevm) :
     (decodeForwardLengthMemory sevm).size = 160 := by
-  rw [← decodeForwardLengthMemory_eq,
-    MemoryStage.applyMemory_size _ _ (by decide)]
+  change (MemoryStage.applyMemory (decodeForwardStage sevm) Mem.empty).size = 160
+  rw [MemoryStage.applyMemory_size _ _ (by decide)]
   simp only [decodeForwardStage, MemoryStage.footprint, List.map_cons,
     List.map_nil, B256.length_toBytes, ByteArray.length_sliceD]
   decide
 
 private theorem decodeForwardLengthMemory_wf (sevm : Sevm) :
     Mem.Wf (decodeForwardLengthMemory sevm) := by
-  rw [← decodeForwardLengthMemory_eq]
-  exact (decodeForwardLengthStage_wf_reads sevm).1
+  change Mem.Wf (MemoryStage.applyMemory (decodeForwardStage sevm) Mem.empty)
+  exact (MemoryStage.wf_reads _ Mem.wf_empty Mem.reads_empty).1
 
 private theorem decodeForwardLengthMemory_reads (sevm : Sevm) :
     Mem.Reads (decodeForwardLengthMemory sevm)
       (decodeForwardLengthImage sevm) := by
-  rw [← decodeForwardLengthMemory_eq, ← decodeForwardLengthImage_eq]
-  exact (decodeForwardLengthStage_wf_reads sevm).2
+  simpa [decodeForwardLengthMemory, decodeForwardPointerMemory,
+    decodeForwardHeadMemory, decodeForwardLengthImage, decodeForwardStage,
+    MemoryStage.applyMemory] using
+    (MemoryStage.wf_reads (decodeForwardStage sevm)
+      Mem.wf_empty Mem.reads_empty).2
 
 private theorem decodeForwardLengthImage_implementation
     {sevm : Sevm} {implementation : Adr}
@@ -352,8 +241,11 @@ private theorem decodeForwardLengthImage_implementation
         implementation.toB256) :
     Bytes.toB256 ((decodeForwardLengthImage sevm).sliceD 0 32 0) =
       implementation.toB256 := by
-  rw [← decodeForwardLengthImage_eq, decodeForwardStage_slice_implementation,
-    decodeForwardHeadImage_eq]
+  rw [decodeForwardLengthImage, decodeForwardStage_slice_implementation]
+  rw [show MemoryStage.applyImage (List.take 1 (decodeForwardStage sevm)) [] =
+      decodeForwardHeadImage sevm by
+    simp [decodeForwardHeadImage, decodeForwardStage, MemoryStage.applyImage,
+      ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide]]
   exact decodeForwardHeadImage_implementation himplementation
 
 private theorem decodeForwardLengthImage_admin
@@ -362,8 +254,11 @@ private theorem decodeForwardLengthImage_admin
       requestedAdmin.toB256) :
     Bytes.toB256 ((decodeForwardLengthImage sevm).sliceD 32 32 0) =
       requestedAdmin.toB256 := by
-  rw [← decodeForwardLengthImage_eq, decodeForwardStage_slice_admin,
-    decodeForwardHeadImage_eq]
+  rw [decodeForwardLengthImage, decodeForwardStage_slice_admin]
+  rw [show MemoryStage.applyImage (List.take 1 (decodeForwardStage sevm)) [] =
+      decodeForwardHeadImage sevm by
+    simp [decodeForwardHeadImage, decodeForwardStage, MemoryStage.applyImage,
+      ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide]]
   exact decodeForwardHeadImage_admin hadmin
 
 private theorem decodeForwardLengthImage_length
@@ -374,7 +269,10 @@ private theorem decodeForwardLengthImage_length
     (List.take 2 (decodeForwardStage sevm)) ([] : MemoryStage) []
     (sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop)) 128 (by rfl)
   rw [ByteArray.length_sliceD] at hread
-  rw [← decodeForwardLengthImage_eq, decodeForwardStage_split_length, hread,
+  rw [decodeForwardLengthImage,
+    show decodeForwardStage sevm = List.take 2 (decodeForwardStage sevm) ++
+      [(128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))] by rfl,
+    hread,
     ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide]
   exact hlength
 
@@ -388,15 +286,18 @@ private theorem decodeForwardLengthImage_length_word
     (List.take 2 (decodeForwardStage sevm)) ([] : MemoryStage) []
     (sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop)) 128 (by rfl)
   rw [ByteArray.length_sliceD] at hread
-  rw [← decodeForwardLengthImage_eq, decodeForwardStage_split_length, hread,
+  rw [decodeForwardLengthImage,
+    show decodeForwardStage sevm = List.take 2 (decodeForwardStage sevm) ++
+      [(128, sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))] by rfl,
+    hread,
     ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide]
   exact hlength
 
 private theorem decodeForwardLengthImage_pointer (sevm : Sevm) :
     Bytes.toB256 ((decodeForwardLengthImage sevm).sliceD 96 32 0) =
       Nat.toB256 3533 := by
-  rw [← decodeForwardLengthImage_eq, decodeForwardStage_slice_pointer,
-    decodeForwardPointerImage_eq]
+  rw [decodeForwardLengthImage, decodeForwardStage_slice_pointer,
+    ← decodeForwardPointerImage]
   exact decodeForwardPointerImage_pointer sevm
 
 private def decodeForwardLoadWord (word : B256) : Line :=
