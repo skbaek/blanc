@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+. "$SCRIPT_DIR/gate-semaphore.sh"
 : "${HOME:?HOME is required}"
 
 WRAPPER_SCHEMA=2
@@ -15,9 +16,9 @@ WRAPPER_PROFILE="executionFork=BPO2,logicalCompilerFork=Osaka,testingBackend=can
 WRAPPER_TX_GAS_LIMIT=1000000
 WRAPPER_RLP_BLOCK_SIZE_CAP=8388608
 WRAPPER_RLP_BLOCK_UPPER_BOUND=8435
-WRAPPER_ARTIFACTS="circuitBreakerBytes=4282,circuitBreakerSha256=ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505,gatewayBytes=15948,gatewaySha256=3b9a9442dd0a33d8fc39471bab2f42aed7189859a2c106709631b2c16e6a22e0,gatewayLocator=0x800"
+WRAPPER_ARTIFACTS="circuitBreakerBytes=4282,circuitBreakerSha256=ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505,gatewayBytes=8094,gatewaySha256=80a5db185d173b6eda4565398186936953775775cf6c62677cc7af567dac6164,gatewayLocator=0x800"
 WRAPPER_LEDGER_SHA256="da8ce495bb8a351c95466ba11773f6ed54b6fede3ff3cb685b41c1b26efec0eb"
-WRAPPER_RUNTIME_LOCK_SHA256="9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c"
+WRAPPER_RUNTIME_LOCK_SHA256="5fa857e4a898e2d1e8fb12e2dccbbc952cad95919ca27fc2c40992793ea7bcbf"
 WRAPPER_ARGS=(
   --wrapper-schema "$WRAPPER_SCHEMA"
   --wrapper-scenarios "$WRAPPER_SCENARIOS"
@@ -98,7 +99,8 @@ fi
 
 ARTIFACTS="$(mktemp)"
 ERRORS="$(mktemp)"
-trap 'rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS" "$ERRORS"' EXIT
+gate_semaphore_acquire "the Lido TWG pinned-target current-mainnet artifacts" || exit 2
 if ! (cd "$ROOT" && lake env lean \
   scripts/eval-lido-twg-pinned-target-current-mainnet.lean \
   >"$ARTIFACTS" 2>"$ERRORS"); then
@@ -126,6 +128,6 @@ if [[ "$WRITE" -eq 1 ]]; then
   GENERATOR_ARGS+=(--write)
 fi
 
-exec /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-lido-twg-pinned-target-current-mainnet.py" \
   "${GENERATOR_ARGS[@]}"

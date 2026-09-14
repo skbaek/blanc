@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from keccak import keccak256
+
 from current_mainnet import (
     load_profile,
     resolve_root,
@@ -65,7 +67,6 @@ EXECUTION_MUTANTS = (
 
 UINT256_MAX = 2**256 - 1
 LOW252_MASK = 2**252 - 1
-ADDRESS_MASK = 2**160 - 1
 FINITE_DURATION = 1_814_400
 HEARTBEAT_INTERVAL = 2_592_000
 BPO2_ACTIVATION_TIMESTAMP = 1_767_747_671
@@ -106,8 +107,8 @@ MUTANT_HEARTBEAT_INTERVAL = 31_536_000
 
 EXPECTED_BREAKER_RUNTIME_BYTES = 4_282
 EXPECTED_BREAKER_RUNTIME_SHA256 = "ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505"
-EXPECTED_GATEWAY_RUNTIME_BYTES = 15_948
-EXPECTED_GATEWAY_RUNTIME_SHA256 = "3b9a9442dd0a33d8fc39471bab2f42aed7189859a2c106709631b2c16e6a22e0"
+EXPECTED_GATEWAY_RUNTIME_BYTES = 8_094
+EXPECTED_GATEWAY_RUNTIME_SHA256 = "80a5db185d173b6eda4565398186936953775775cf6c62677cc7af567dac6164"
 EXPECTED_GATEWAY_LOCATOR = 0x800
 
 
@@ -220,17 +221,13 @@ def tagged_slot(region: int, payload: int) -> int:
     return region * 2**252 | (payload & LOW252_MASK)
 
 
-def role_payload(role: int, account_address: str) -> int:
-    return (role ^ (int(account_address, 16) & ADDRESS_MASK)) & LOW252_MASK
-
-
 def gateway_role_storage(account_address: str) -> dict[int, int]:
-    payload = role_payload(PAUSE_ROLE, account_address)
-    return {
-        tagged_slot(2, payload): PAUSE_ROLE,
-        tagged_slot(3, payload): int(account_address, 16),
-        tagged_slot(4, payload): 1,
-    }
+    # Mirror roleMembershipSlot and the closed controlGatewayStor world:
+    # keccak(account ++ keccak(role ++ accessControlRolesPosition)) := 1.
+    roles_position = keccak256(b"openzeppelin.AccessControl._roles")
+    role_slot = keccak256(PAUSE_ROLE.to_bytes(32, "big") + roles_position)
+    membership_slot = keccak256(int(account_address, 16).to_bytes(32, "big") + role_slot)
+    return {int.from_bytes(membership_slot, "big"): 1}
 
 
 def breaker_storage(

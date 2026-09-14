@@ -5,9 +5,9 @@
       "sha256": "ff8eb66d66f8e4668af9bf5b687dda082c3729f8cd5ffd24a4b14697389d1505"
     },
     "gatewayControlRuntime": {
-      "byteLength": 15948,
+      "byteLength": 8094,
       "locator": "0x0000000000000000000000000000000000000000000000000000000000000800",
-      "sha256": "3b9a9442dd0a33d8fc39471bab2f42aed7189859a2c106709631b2c16e6a22e0"
+      "sha256": "80a5db185d173b6eda4565398186936953775775cf6c62677cc7af567dac6164"
     }
   },
   "boundary": {
@@ -65,15 +65,15 @@
   "provenance": {
     "breakerManifestSha256": "c5525f6d53f96c502cecbb5bbb676ad858bf9edcfd5b29b54b6c0e5203fbd951",
     "breakerReferenceSha256": "09e1732d8226b301bb8013ffecdd89a13fc174b736bb60e382bcfa8504fff909",
-    "currentMainnetHelperSha256": "4b66f81325a1bf17d0c193b1973fe6db051fa6504176fbc83af94dc94ccab450",
+    "currentMainnetHelperSha256": "c1cfaa965127bb7b86c47dccc0d465bf89c04b07cb81f288926c2a75d33238bf",
     "evaluatorSha256": "7727a46df26adc6621645cbaeba19edc73ca965ce0c81b5eeebd24d9c51c66cd",
-    "gatewayManifestSha256": "4dea3481b12f12a751af1bdae602a8e5d6d7055f6359795fdd89950b3e0ae4d4",
+    "gatewayManifestSha256": "c8e8ee1d09dfb0e8f2173c6d4723a6517f593bb061132bbcf658b310548577c4",
     "gatewayReferenceSha256": "8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f",
-    "generatorSha256": "de90c522e434bf85ea3b3fa1cef708f9c0cbeb73c9e914838ca5c76724d52ba5",
+    "generatorSha256": "20513e1d17325f5c502314e5bf3cb94e3ef4c17363e0163fc72fe17240771d2b",
     "ledgerSha256": "da8ce495bb8a351c95466ba11773f6ed54b6fede3ff3cb685b41c1b26efec0eb",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
-    "runtimeLockSha256": "9dc5ec960cc35b3eb81ae5c4b2a10401f24d068a0347a501721bfb235ecc5e3c",
-    "wrapperSha256": "accb857ee892ca92ca67182cafe876a795eba35f830a514b7453e3d6f153b676"
+    "runtimeLockSha256": "5fa857e4a898e2d1e8fb12e2dccbbc952cad95919ca27fc2c40992793ea7bcbf",
+    "wrapperSha256": "65320546888322260101fd96ba9b1ef540eb4228d180189171c52eb04ea8b706"
   },
   "rows": {
     "composed-public-pause-finite": {
@@ -81,7 +81,7 @@
       "expectedPausedUntil": "0x0000000000000000000000000000000000000000000000000000000069795fd7",
       "expectedPublicPauseOutputBytes": 0,
       "gasUsed": {
-        "publicPauseViaDriver": 80378
+        "publicPauseViaDriver": 77056
       },
       "logs": [
         {
@@ -127,7 +127,7 @@
       "expectedPausedUntil": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "expectedPublicPauseOutputBytes": 0,
       "gasUsed": {
-        "publicPauseViaDriver": 80353
+        "publicPauseViaDriver": 77032
       },
       "logs": [
         {
@@ -175,8 +175,8 @@
       "expectedPauseForOutputBytes": 0,
       "expectedPausedUntil": "0x0000000000000000000000000000000000000000000000000000000069795fd7",
       "gasUsed": {
-        "isPaused": 53062,
-        "pauseFor": 53875
+        "isPaused": 53084,
+        "pauseFor": 49701
       },
       "logs": [
         {
@@ -200,8 +200,8 @@
       "expectedPauseForOutputBytes": 0,
       "expectedPausedUntil": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "gasUsed": {
-        "isPaused": 53062,
-        "pauseFor": 54192
+        "isPaused": 53084,
+        "pauseFor": 50018
       },
       "logs": [
         {
