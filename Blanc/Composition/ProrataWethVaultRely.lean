@@ -241,4 +241,129 @@ theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
       ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩
       ⟨⟨pre_, memoryWf⟩, config, code⟩).inv
 
+/-! ## Allowance-debit authorization
+
+The 09-08 transferFrom seam classifies each retained invocation's allowance
+effect from its successful compiled run. This section closes the two G6
+allowance-debit items over the retained history: the unconditional
+authorization classification (every allowance write or omission is exactly one
+runtime branch, and every touched pair's raw key is non-address-shaped), and
+the `NoVaultAllowanceKeyCollision`-premised exclusion of foreign debits of the
+vault's allowance cells (modulo the explicit quiescence hypothesis the rooted
+chronology unit will discharge).
+-/
+
+/-- Every retained allowance pair visits a non-address-shaped raw key. The
+executed hash guard of the originating successful invocation derives the shape
+of its own pair's key; a self-bypass visits no pair. Unconditional: no
+collision premise and no chronology. This is what lets the omission frames
+apply at vault-owned keys in the exclusion below. -/
+theorem touchedWethAllowancePairs_keys_nonaddress
+    {history : List WethAllowanceInvocation} {p : B256 × B256}
+    (touched : p ∈ touchedWethAllowancePairs history) :
+    ¬ ValidAdr (wethAllowanceKey p.1 p.2) := by
+  obtain ⟨call, _, pairEq⟩ := List.mem_filterMap.mp touched
+  cases approval : call.approval with
+  | true =>
+    have selected := call.selected
+    simp only [approval, ↓reduceIte] at selected
+    simp only [WethAllowanceInvocation.pair?, approval, ↓reduceIte] at pairEq
+    cases pairEq
+    exact (weth_approve_compiled_raw_effect call.memoryWf call.run selected).1
+  | false =>
+    have selected := call.selected
+    simp only [approval, Bool.false_eq_true, ↓reduceIte] at selected
+    have effect := weth_transferFrom_compiled_allowance_effect
+      call.memoryWf call.run selected
+    dsimp only at effect
+    by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
+    · simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+    · simp only [if_neg same] at effect
+      obtain ⟨valid, _⟩ := effect
+      simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+      cases pairEq
+      exact valid
+
+/-- **Unconditional debit-authorization classification.** Every retained
+invocation's allowance effect is exactly one runtime-authorized branch: a
+caller-owned exact approve write, a self-bypass omission, a maximum read-only
+omission, or a covered finite decrement with its executed SSTORE witness. No
+collision premise: this is raw-key/runtime-authorization altitude, proved from
+the invocation's successful compiled run. -/
+theorem allowance_debit_classification (call : WethAllowanceInvocation) :
+    (call.approval = true ∧
+      ¬ ValidAdr (wethAllowanceKey call.sevm.caller.toB256 (Sevm.argWord call.sevm 0)) ∧
+      Devm.getStor call.post wethAccount =
+        (Devm.getStor call.pre wethAccount).set
+          (wethAllowanceKey call.sevm.caller.toB256 (Sevm.argWord call.sevm 0))
+          (Sevm.argWord call.sevm 1)) ∨
+    (call.approval = false ∧ Sevm.argWord call.sevm 0 = call.sevm.caller.toB256 ∧
+      call.writtenPair? = none ∧
+      Stor.AgreeOffAdr (Devm.getStor call.pre wethAccount)
+        (Devm.getStor call.post wethAccount)) ∨
+    (call.approval = false ∧ Sevm.argWord call.sevm 0 ≠ call.sevm.caller.toB256 ∧
+      call.pre.getStorVal wethAccount
+        (wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256) =
+        B256.max ∧
+      call.writtenPair? = none ∧
+      Stor.AgreeOffAdr (Devm.getStor call.pre wethAccount)
+        (Devm.getStor call.post wethAccount)) ∨
+    (call.approval = false ∧ Sevm.argWord call.sevm 0 ≠ call.sevm.caller.toB256 ∧
+      call.pre.getStorVal wethAccount
+        (wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256) ≠
+        B256.max ∧
+      Sevm.argWord call.sevm 2 ≤ call.pre.getStorVal wethAccount
+        (wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256) ∧
+      call.writtenPair? =
+        some (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) ∧
+      ¬ ValidAdr
+        (wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256) ∧
+      Stor.AgreeOffAdr
+        ((Devm.getStor call.pre wethAccount).set
+          (wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256)
+          (call.pre.getStorVal wethAccount
+            (wethAllowanceKey (Sevm.argWord call.sevm 0)
+              call.sevm.caller.toB256) - Sevm.argWord call.sevm 2))
+        (Devm.getStor call.post wethAccount) ∧
+      ∃ writePre writePost,
+        Ninst.Run call.sevm writePre Ninst.sstore writePost ∧
+        [wethAllowanceKey (Sevm.argWord call.sevm 0) call.sevm.caller.toB256,
+          call.pre.getStorVal wethAccount
+            (wethAllowanceKey (Sevm.argWord call.sevm 0)
+              call.sevm.caller.toB256) - Sevm.argWord call.sevm 2] <<+
+          writePre.stack ∧
+        Stor.AgreeOffAdr (Devm.getStor call.pre wethAccount)
+          (Devm.getStor writePre wethAccount) ∧
+        Devm.getStor call.post = Devm.getStor writePost) := by
+  cases approval : call.approval with
+  | true =>
+    have selected := call.selected
+    simp only [approval, ↓reduceIte] at selected
+    obtain ⟨valid, effect⟩ :=
+      weth_approve_compiled_raw_effect call.memoryWf call.run selected
+    rw [call.target] at effect
+    exact Or.inl ⟨rfl, valid, effect⟩
+  | false =>
+    have selected := call.selected
+    simp only [approval, Bool.false_eq_true, ↓reduceIte] at selected
+    have effect := weth_transferFrom_compiled_allowance_effect
+      call.memoryWf call.run selected
+    dsimp only at effect
+    rw [call.target] at effect
+    by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
+    · simp only [if_pos same] at effect
+      refine Or.inr (Or.inl ⟨rfl, same, ?_, effect⟩)
+      simp [WethAllowanceInvocation.writtenPair?,
+        WethAllowanceInvocation.pair?, approval, same]
+    · simp only [if_neg same] at effect
+      obtain ⟨valid, result⟩ := effect
+      rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
+      · refine Or.inr (Or.inr (Or.inl ⟨rfl, same, maximum, ?_, silent⟩))
+        simp [WethAllowanceInvocation.writtenPair?,
+          WethAllowanceInvocation.pair?, approval, same, Option.filter, maximum]
+      · refine Or.inr (Or.inr
+          (Or.inr ⟨rfl, same, finite, covered, ?_, valid, stored, witness⟩))
+        simp [WethAllowanceInvocation.writtenPair?,
+          WethAllowanceInvocation.pair?, approval, same, Option.filter, finite]
+
 end Blanc.Composition.ProrataWethVault
