@@ -77,57 +77,90 @@ class FixtureError(Exception):
     mismatching account) of the expected runtime length. Always fatal."""
 
 
+def _mask_lean_comments_and_strings(text):
+    """Keep offsets/newlines while preventing fake declarations in inert text."""
+    chars = list(text)
+    i = 0
+    while i < len(text):
+        start = i
+        if text.startswith("--", i):
+            i = text.find("\n", i)
+            if i < 0:
+                i = len(text)
+        elif text.startswith("/-", i):
+            depth = 1
+            i += 2
+            while i < len(text) and depth:
+                if text.startswith("/-", i):
+                    depth += 1
+                    i += 2
+                elif text.startswith("-/", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            if depth:
+                raise ParseError("unterminated Lean block comment")
+        elif text[i] == '"':
+            i += 1
+            while i < len(text) and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+            if i >= len(text):
+                raise ParseError("unterminated Lean string")
+            i += 1
+            # A string in a byte expression must fail, not disappear.
+            chars[start] = "?"
+            start += 1
+        else:
+            i += 1
+            continue
+        for j in range(start, i):
+            if chars[j] != "\n":
+                chars[j] = " "
+    return "".join(chars)
+
+
 def parse_lean_literal(lean_path, name, _resolving=None):
     if _resolving is None:
         _resolving = set()
+    if name in _resolving:
+        raise ParseError(f"{lean_path}: `{name}` resolves through a cycle")
     if not os.path.isfile(lean_path):
         raise ParseError(f"{lean_path} not found")
-    text = open(lean_path, encoding="utf-8").read()
-
-    def_re = re.compile(
-        r"(?:private\s+)?def\s+" + re.escape(name) + r"\s*:\s*Bytes\s*:=\s*\n?\s*\["
-        r"(?P<body>.*?)\]", re.DOTALL)
-    m = def_re.search(text)
-    if m:
-        body = m.group("body")
+    with open(lean_path, encoding="utf-8") as source:
+        text = source.read()
+    masked = _mask_lean_comments_and_strings(text)
+    # These compiler-owned files use unindented declarations. Capture the
+    # complete expression up to the next declaration/end, never a prefix that
+    # happens to look like a literal or a chunk join.
+    headers = list(re.finditer(
+        r"^(?:private[ \t]+)?def[ \t]+" + re.escape(name)
+        + r"\s*:\s*Bytes\s*:=", masked, re.M))
+    if len(headers) != 1:
+        raise ParseError(f"{lean_path}: expected exactly one Bytes definition of `{name}`")
+    m = headers[0]
+    following = masked[m.end():]
+    boundary = re.search(
+        r"^(?:(?:private[ \t]+)?(?:def|theorem|lemma)[ \t]+|end(?:[ \t]|$))",
+        following, re.M)
+    expression = following[:boundary.start() if boundary else len(following)].strip()
+    literal = re.fullmatch(r"\[(.*)\]", expression, re.S)
+    if literal:
+        body = literal.group(1)
     else:
-        # A literal too long for one list is committed as `++`-joined chunk
-        # definitions; the PRORATA WETH vault's 17481 bytes are the first such
-        # in the tree. Resolve each chunk as its own literal and concatenate,
-        # so the same gate covers both shapes.
-        chunk_re = re.compile(
-            r"(?:private\s+)?def\s+" + re.escape(name) + r"\s*:\s*Bytes\s*:=[ \t]*\n"
-            # Zero or more `name ++` lines, then a final bare `name` line. The
-            # final line has no `++`, which is what stops the match running on
-            # into the next definition.
-            r"(?P<body>(?:[ \t]*\w+[ \t]*\+\+[ \t]*\n)*[ \t]*\w+[ \t]*\n)")
-        cm = chunk_re.search(text)
-        if not cm:
+        if not re.fullmatch(r"\w+(?:\s*\+\+\s*\w+)*", expression):
             raise ParseError(
-                f"{lean_path}: no `def {name} : Bytes := [...]` literal and no "
-                f"`++`-joined chunk definition found -- the file's shape has "
-                f"drifted from what this parser knows how to read")
-        chunks = [part.strip() for part in re.split(r"\+\+", cm.group("body"))
-                  if part.strip()]
-        pieces = []
-        for chunk_name in chunks:
-            if not chunk_name.isidentifier():
-                raise ParseError(
-                    f"{lean_path}: `{name}` names {chunk_name!r}, which is not "
-                    f"a plain chunk name")
-            if chunk_name in _resolving:
-                raise ParseError(
-                    f"{lean_path}: `{name}` resolves through a cycle at "
-                    f"{chunk_name!r}")
-            _resolving.add(chunk_name)
-            try:
-                # A single name is an alias — the generator emits one when a
-                # chunk repeats — and is resolved the same way as a join.
-                pieces.append(parse_lean_literal(lean_path, chunk_name,
-                                                 _resolving))
-            finally:
-                _resolving.discard(chunk_name)
-        return b"".join(pieces)
+                f"{lean_path}: `{name}` is not a complete byte literal or chunk join")
+        chunks = re.split(r"\s*\+\+\s*", expression)
+        if not all(chunk.isidentifier() for chunk in chunks):
+            raise ParseError(f"{lean_path}: `{name}` has a non-identifier chunk")
+        _resolving.add(name)
+        try:
+            data = b"".join(parse_lean_literal(lean_path, chunk, _resolving)
+                            for chunk in chunks)
+        finally:
+            _resolving.remove(name)
+        return data
     # Fail loudly on anything other than a plain comma-separated list of
     # `0xNN` tokens. A scan that merely pulled out every `0xNN`-shaped
     # substring and ignored the rest would silently accept a body holding
