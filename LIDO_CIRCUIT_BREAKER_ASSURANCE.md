@@ -1,7 +1,7 @@
 # Lido CircuitBreaker — end-to-end assurance register
 
 **Status:** authoritative claim map for Blanc's Lido CircuitBreaker port.
-**Reconciled:** 2026-08-27.
+**Reconciled:** 2026-09-03.
 **Machine-checked by:** `scripts/check-lido-circuit-breaker-assurance.sh`.
 
 This register maps every assurance claim Blanc makes about its Lido
@@ -93,12 +93,15 @@ Three assumptions hold up everything below, and none of them is hidden.
    not about Lido's deployed Solidity.
 2. **A pause target is not assumed honest.** The hostile-world family
    quantifies over arbitrary callee bytecode. What it proves is what the
-   CircuitBreaker *observed and did* — never that the target is really paused.
+   CircuitBreaker *observed and did*; by itself it never proves that an
+   arbitrary target is really paused. The pinned-target pillar separately
+   proves that stronger fact for its two configured TWG worlds.
 3. **The admin is privileged, and one family says so.** Registry coherence
    across histories permits admin interference by returning an existentially
-   updated witness. The exact final state of one successful pause does not, and
-   names `PauseSuccessNoninterference` as an explicit assumption rather than
-   deriving it.
+   updated witness. The standalone exact-final-state family names
+   `PauseSuccessNoninterference` as an explicit assumption; the TWG composition
+   discharges that condition semantically for its two configured worlds rather
+   than generalising it to arbitrary targets.
 
 ## What is deliberately not claimed, in one place
 
@@ -130,8 +133,11 @@ lost.
   below `2 ^ 256`. Histories crossing that ceiling are simply not among those
   quantified over. The Registry invariant never consults the figure; the
   restriction is inherited from the shared chain model.
-- **No liveness.** Nothing here says the contract can be paused, only what
-  happens when it is.
+- **No universal liveness or all-world gas claim.** TWG-3 constructs successful
+  public pauses for two finite configured worlds (the ordinary duration and
+  the infinite-sentinel duration). Nothing here says every admissible world can
+  be paused, that an external actor will submit such a transaction, or that one
+  gas bound suffices universally.
 - **No callback-time count/expiry coherence.** Mid-call, after the target is
   unregistered and before the callback returns, the count is already zero and
   the expiry is stale. That is real source behaviour, and no theorem claims
@@ -708,7 +714,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the 82 Solidity call and static-call traces in the differential gate; `pause-return-true`
-- **Non-claims:** nothing about what the target does with either message, what it returns, or whether it honours the duration. **The static flag is a fact about the message the CircuitBreaker builds, not a no-write theorem** — a static-context no-write result over arbitrary code exists nowhere in Jaune or Blanc and is not built here. No claim that either edge is reached in any particular run. These relations remain **implications at exact reached states**; composition from the public `pause` entry is deferred and recorded in the successor register.
+- **Non-claims:** nothing about what the target does with either message, what it returns, or whether it honours the duration. **The static flag is a fact about the message the CircuitBreaker builds, not a no-write theorem** — a static-context no-write result over arbitrary code exists nowhere in Jaune or Blanc and is not built here. CALL-1 alone makes no claim that either edge is reached in any particular run: its relations remain **implications at exact reached states**. TWG-3 separately constructs those edges and paused-state conclusions for two configured direct-installation worlds; CALL-1 does not generalise their reachability or target-truth conclusions to arbitrary targets or worlds.
 - **Source:** `reports/lido-circuit-breaker-call-boundary.md`; `Blanc/LidoCircuitBreakerCallBoundary.lean`
 
 #### CALL-2 — The staged target and duration words survive arbitrary callee execution
@@ -738,7 +744,11 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the pause-failure family, plus an independent shape schema validating the exact successful 32-byte output window, the absence of successful-tail copying, complete short and large return coverage, and full failed-child bubbling
-- **Non-claims:** **accepting a canonical `1` is evidence only that the target reported success — never that the target is really paused.** End-to-end pause correctness would need a separately verified target and a composition theorem, recorded in the successor register.
+- **Non-claims:** **CALL-4 alone treats a canonical `1` only as evidence that
+  the target reported success, never as a proof that an arbitrary target is
+  really paused.** TWG-3 separately supplies the verified target executions and
+  composition theorem for its two configured direct-installation worlds; this
+  decoder row does not generalise that result to other targets or worlds.
 - **Source:** `reports/lido-circuit-breaker-observation.md`; `Blanc/LidoCircuitBreakerObservation.lean`
 
 ---
@@ -1031,12 +1041,22 @@ semantic descendant-write noninterference, not by an assumed callback equality:
 - **Non-claims:** direct installation is the account shape proved here. A target behind a proxy is a **different instantiation** and is not licensed by this row; the later three-party convergence remains a separate unscheduled successor. This row says nothing about Lido's deployed Solidity, current mainnet code or role membership, liveness, gas sufficiency, or a second transaction. In particular it is **not** a sequential theorem that `triggerFullWithdrawals` reverts after this pause: the gateway family's protected-surface law is the exact boundary and is a statement about a paused entry projection, not about a history following this run.
 - **Source:** `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`; `Blanc/LidoCircuitBreakerPinnedTargetComposition.lean`
 
-#### TWG-3 — The entry-3 premise bundle is satisfied by a concrete world holding the compiler's own gateway output, and its code identity is discharged without a premise-refuting code mutant
+#### TWG-3 — Concrete finite and infinite worlds execute the production public pause through the installed compiled gateway
 
-- **Declarations:** `Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises`, `Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises`
-- **Premises:** one concrete world installing the production CircuitBreaker runtime at its account and the exact compiled gateway runtime at the pause target, with only the explicit role, Registry, time and storage configuration. No code fact is restated in the world, because entry 3 asks for none. No literal byte string and no evaluator output is reflected into a theorem.
+- **Declarations:** `Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_runtime_runCompiledTo`, `Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_runtime_exact_runCompiledTo`, `Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_runtime_runCompiledTo`, `Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled`, `Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause`, `Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause`, `Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel`
+- **Premises:** no external run premise. The two closed worlds install the production CircuitBreaker runtime and the compiler's exact gateway runtime, configure only their explicit role, Registry, time and storage data, and construct the complete public-pause executions. The finite world uses the derived `103461`-gas schedule; the separately executed infinite world follows the sentinel arm and stores `2^256 - 1` itself. The real child `CALL` and warm query `STATICCALL`, callback noninterference, committed outcomes and TWG-2 conclusion all come from the walks. No literal runtime byte string, evaluator result or `Nonempty` assumption is reflected into a theorem.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
-- **Gate:** `scripts/check.sh`
-- **Differential channel:** not applicable — this row is a satisfiability exhibit for TWG-2's premises
-- **Non-claims:** **this row does not establish that the world's public pause run terminates successfully.** `gatewayPauseWorld_closedPremises` discharges every entry-3 premise *except* reachability, so it yields TWG-2's conclusion only when handed a successful production run of that world. A gateway-side compiled walk and its gas schedule are required to close that last premise, and are not part of this row; the finite-versus-sentinel duration arms are covered only by whichever run is eventually supplied. There is deliberately no code mutant: a mutant needs a hypothesis to falsify, and entry 3 has no code-shape hypothesis left. The ABI agreement remains falsifiable and is controlled.
-- **Source:** `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGatewayControl.lean`
+- **Gate:** `scripts/check.sh`, `scripts/check-lido-twg-pinned-target-current-mainnet.sh`
+- **Differential channel:** the two live execution mutants in TWG-4: a query-incompatible installed target forces outer-transaction rollback, while a reentrant admin-address target returns canonical true but retains a write to the protected CircuitBreaker heartbeat cell. They exercise execution divergence rather than refuting a theorem premise.
+- **Non-claims:** these are two finite configured worlds, not a universal gas or liveness theorem. This row does not identify the compiler-owned runtime with code currently installed on mainnet, attest current roles or state, cover a proxy installation, or prove a sequential second transaction such as `triggerFullWithdrawals` after the pause. There remains deliberately no *premise-refuting* code mutant because entry 3 has no code-shape premise; the separate execution mutant changes installed target code and is rejected by the run's query behavior.
+- **Source:** `Blanc/LidoTriggerableWithdrawalsGatewayReachability.lean`; `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing.lean`; `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun.lean`; `Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun.lean`
+
+#### TWG-4 — Literal BPO2 replay reproduces the model-predicted finite and sentinel pause/query observations for the exact compiler-owned CircuitBreaker and gateway artifacts
+
+- **Declarations:** no audited declaration — gate-owned row
+- **Premises:** the dated Prague-to-Osaka applicability ledger; the registered BPO2 target profile and two-platform runtime lock; the exact compiler-emitted official CircuitBreaker runtime and locator-`0x800` gateway runtime; and the four-row/two-mutant lane schema. Each family pause and query is a separate singleton state-test transition, each composed positive row is one public-pause transition with the same storage, event and output projections, and each mutant is one independently executed transition. The composed signed envelope substitutes an ordinary pauser account for the proof world's precompile-numbered pauser while preserving the last-assignment shape; it does not claim transaction-envelope identity with the theorem world.
+- **Axioms:** not applicable
+- **Gate:** `scripts/check-lido-twg-pinned-target-current-mainnet.sh`
+- **Differential channel:** four scenario rows and eight BPO2 state-test transitions: six positive family/composed transitions cover the finite duration and `2^256 - 1` sentinel with exact projected storage, ordered logs, empty pause output and canonical-true query output; the STOP-code/query mutant executes to status `0x0` with rollback, and the reentrant noninterference mutant executes to status `0x1` while changing `heartbeatIntervalSlot` from `2592000` to `31536000`. No semantic or control mismatch is accepted.
+- **Non-claims:** this is finite, dated 2026-09-02 model-boundary evidence and never a premise of any theorem. It is **not a live-chain role/state attestation**, does not identify either compiler-owned runtime with code currently installed on mainnet, and states no universal gas, liveness or post-BPO2 claim. A future applicability-ledger flip requires Jaune pin-movement adjudication rather than a local lane patch.
+- **Source:** `LIDO_TWG_PRAGUE_TO_OSAKA_APPLICABILITY.md`; `scripts/fixtures/lido-twg-current-mainnet/results.json`; `scripts/GATES.md`
