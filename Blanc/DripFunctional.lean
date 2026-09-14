@@ -345,6 +345,119 @@ theorem exec_enters_join {sevm : Sevm} {pre post : Devm}
   exact ⟨hsize, entry, hst.trans hst', hmm.trans hmm', hlg.trans hlg',
     hou.trans hou', hbody⟩
 
+/-! ## Failure paths, ingress layer: absence of success
+
+A value-bearing call to a nonpayable entry, a recognized selector with the
+wrong calldata length, and an unrecognized selector can never end `.ok`:
+each contradicts a guard the corresponding `exec_enters_*` theorem (or the
+selector census) forces on every successful deployed call.  (`Exec` is data,
+not a `Prop`, so absence is stated as a universal over derivations.) -/
+
+theorem no_exec_success_of_drip_value_or_length {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = dripSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hbad : sevm.value ≠ 0 ∨ sevm.data.length.toB256 ≠ 4)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_drip exc hcode hsel hnonempty with ⟨hvalue, hsize, -⟩
+  rcases hbad with h | h
+  · exact h hvalue
+  · exact h hsize
+
+theorem no_exec_success_of_exit_value_or_length {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hbad : sevm.value ≠ 0 ∨ sevm.data.length.toB256 ≠ 36)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_exit exc hcode hsel hnonempty with ⟨hvalue, hsize, -⟩
+  rcases hbad with h | h
+  · exact h hvalue
+  · exact h hsize
+
+theorem no_exec_success_of_convertToAssets_value_or_length {sevm : Sevm}
+    {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToAssetsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hbad : sevm.value ≠ 0 ∨ sevm.data.length.toB256 ≠ 36)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_convertToAssets exc hcode hsel hnonempty with
+    ⟨hvalue, hsize, -⟩
+  rcases hbad with h | h
+  · exact h hvalue
+  · exact h hsize
+
+theorem no_exec_success_of_convertToUnits_value_or_length {sevm : Sevm}
+    {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToUnitsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hbad : sevm.value ≠ 0 ∨ sevm.data.length.toB256 ≠ 36)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_convertToUnits exc hcode hsel hnonempty with
+    ⟨hvalue, hsize, -⟩
+  rcases hbad with h | h
+  · exact h hvalue
+  · exact h hsize
+
+/-- `join()` is payable, so only a wrong calldata length rules out success. -/
+theorem no_exec_success_of_join_length {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = joinSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hbad : sevm.data.length.toB256 ≠ 4)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False := by
+  rcases exec_enters_join exc hcode hsel hnonempty with ⟨hsize, -⟩
+  exact hbad hsize
+
+/-- An unrecognized selector never ends `.ok`, at any nonempty length. -/
+theorem no_exec_success_of_unknown_selector {sevm : Sevm} {pre : Devm}
+    (hcode : sevm.code.toList = code)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hmiss : Sevm.selector sevm ∉ selectors)
+    (post : Devm) (exc : Exec 0 sevm pre (.ok post)) : False :=
+  hmiss (exec_selector_mem exc hcode hnonempty)
+
+/-! ## Whole-call rollback at `Exec` altitude
+
+Any execution of the installed runtime that ends `.error` — a guard revert,
+a failed child, or a halt — retains no storage write and commits no frame.
+The installed-code premise scopes these absorbers to DRIP's boundary; the
+proofs themselves are the shared settlement substrate's rollback-first route
+(`Execution.commits (.error _) = false`), so every failure path below
+inherits rollback without re-walking it. -/
+
+theorem drip_exec_error_noRetainedWriteTo {sevm : Sevm} {pre : Devm} {err}
+    (exc : Exec 0 sevm pre (.error err))
+    (_hcode : sevm.code.toList = code)
+    (owner : Adr) (key : B256) :
+    Exec.NoRetainedWriteTo exc owner key :=
+  exc.noRetainedWriteTo_of_not_commits (by simp [Execution.commits]) owner key
+
+theorem drip_exec_error_retainedWrites_nil {sevm : Sevm} {pre : Devm} {err}
+    (exc : Exec 0 sevm pre (.error err))
+    (_hcode : sevm.code.toList = code) :
+    Exec.retainedStorageWrites exc = [] := by
+  have hnc : Execution.commits (.error err) ≠ true := by
+    simp [Execution.commits]
+  have hnodes := Exec.retainedNodes_eq_nil_of_not_commits exc hnc
+  simp [Exec.retainedStorageWrites, hnodes]
+
+theorem drip_exec_error_retainedTriples_nil {sevm : Sevm} {pre : Devm} {err}
+    (exc : Exec 0 sevm pre (.error err))
+    (hcode : sevm.code.toList = code) :
+    Exec.retainedStorageEffectTriples exc = [] := by
+  have hwrites := drip_exec_error_retainedWrites_nil exc hcode
+  simp [Exec.retainedStorageEffectTriples, hwrites]
+
+theorem drip_exec_error_committedFrames_nil {sevm : Sevm} {pre : Devm} {err}
+    (exc : Exec 0 sevm pre (.error err))
+    (_hcode : sevm.code.toList = code) :
+    Exec.committedFrames exc = [] := by
+  apply Exec.committedFrames_eq_nil_of_not_commits
+  simp [Execution.commits]
+
 end Drip
 
 end Blanc
