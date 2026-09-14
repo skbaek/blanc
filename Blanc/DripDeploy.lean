@@ -5,6 +5,7 @@ import Blanc.DeploymentCompiled
 import Blanc.DeploymentMessage
 import Blanc.DripCode
 import Blanc.ExecutionHistory
+import Blanc.ForwardCall
 import Blanc.Ladder
 import Blanc.MessageExecution
 
@@ -209,13 +210,13 @@ private theorem run_body_of_run_nonpayable_stack {fs : List Func} {sevm : Sevm}
     · exact (Line.of_inv Devm.memory (by line_inv) hline).trans
         (hpop.memory.trans hburn.memory)
 
-theorem of_run_constructorProgram_main {sevm : Sevm} {s r : Devm}
+theorem of_run_constructorProgram_main {fs : List Func} {sevm : Sevm} {s r : Devm}
     {tail : Stack} {image : Bytes}
     (hp : tail <<+ s.stack)
     (hwf : Mem.Wf s.memory)
     (hreads : Mem.Reads s.memory image)
     (hcode : sevm.code.toList = creationCode)
-    (run : Func.Run [] sevm s constructorProgram.main r) :
+    (run : Func.Run fs sevm s constructorProgram.main r) :
     sevm.value = 0 ∧
       Devm.getStor r sevm.currentTarget =
         ((Devm.getStor s sevm.currentTarget).set chiSlot scale).set rhoSlot
@@ -370,6 +371,281 @@ theorem of_run_constructorProgram_main {sevm : Sevm} {s r : Devm}
         ← congrFun (getStor_of_state hst_f1) sevm.currentTarget,
         ← congrFun he4 sevm.currentTarget, hstor2]
     exact ⟨hv, hg, hout⟩
+
+/-! ## F4b: constructor execution
+
+The compiled constructor prefix executes gas-exactly against the creation
+image. G1 already owns the compiler-output bridge
+(`constructorInitPrefix_compile` + `creationCode_eq_prefix_append_runtime`);
+below are the slice and return-window facts the walk's memory steps need,
+then the walk itself with its `Exec`/message bridge and installed-post
+certificate. -/
+
+theorem constructorCode_slice_exact {sevm : Sevm}
+    (hcode : sevm.code.toList = creationCode) :
+    sevm.code.sliceD 239 1762 (Linst.toUInt8 .stop) = code := by
+  have hstop : Linst.toUInt8 .stop = 0 := rfl
+  rw [hstop, ByteArray.sliceD_eq, hcode, ← constructorRuntimeOffset_exact,
+    ← codeSize_exact]
+  exact creationCode_slice_runtime
+
+theorem constructorReturnImage_read :
+    ((Mem.empty.write 0 code).read 0 1762).1 = code := by
+  have hreadsM : Mem.Reads (Mem.empty.write 0 code) (Bytes.writeAt [] 0 code) :=
+    Mem.Reads.write Mem.wf_empty Mem.reads_empty 0 code
+  have hread := Mem.Reads.read hreadsM 0 1762
+  have hlen : code.length = 1762 := codeSize_exact
+  rw [← hlen] at hread ⊢
+  rw [Bytes.sliceD_writeAt] at hread
+  exact hread
+
+theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hcode : sevm.code.toList = creationCode)
+    (hvalue : sevm.value = 0)
+    (hstatic : sevm.isStatic = false)
+    (htime : sevm.benvStat.time ≠ 0)
+    (hstack : pre.stack = [])
+    (hmem : pre.memory = Mem.empty)
+    (hgas : pre.gasLeft = G + 44611)
+    (hlogs : pre.logs = [])
+    (hrefund : pre.refundCounter = 0)
+    (herror : pre.error = .none)
+    (horigChi : getOrigStorVal sevm sevm.currentTarget chiSlot = 0)
+    (horigRho : getOrigStorVal sevm sevm.currentTarget rhoSlot = 0)
+    (hcurChi : pre.getStorVal sevm.currentTarget chiSlot = 0)
+    (hcurRho : pre.getStorVal sevm.currentTarget rhoSlot = 0)
+    (hcoldChi : ⟨sevm.currentTarget, chiSlot⟩ ∉ pre.accessedStorageKeys)
+    (hcoldRho : ⟨sevm.currentTarget, rhoSlot⟩ ∉ pre.accessedStorageKeys) :
+    ∃ post, Prog.RunCompiled sevm pre constructorProgram post ∧
+      post.output = code ∧
+      post.error = .none ∧
+      post.logs = [] ∧
+      Devm.getStorVal post sevm.currentTarget chiSlot = scale ∧
+      Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time := by
+  have hlen : code.length = 1762 := codeSize_exact
+  have hsize : sevm.code.size = 2001 := by
+    rw [ByteArray.size_eq_length_toList, hcode]
+    exact creationCodeSize_exact
+  have hAO : (239 : Nat) + 1762 = 2001 := by decide
+  have hRO239 : (Nat.toB256 239).toNat = 239 :=
+    B256.toNat_toB256_of_lt (by decide)
+  have hRL1762 : (Nat.toB256 1762).toNat = 1762 :=
+    B256.toNat_toB256_of_lt (by decide)
+  have hChiNeRho : chiSlot ≠ rhoSlot := by decide
+  have hScaleNe0 : (0 : B256) ≠ scale := by decide
+  have htime0 : (0 : B256) ≠ sevm.benvStat.time := Ne.symm htime
+  have hne : (1 : B256) ≠ 0 := by decide
+  have hvcS : sstoreValueCost 0 0 scale = gasStorageSet := by
+    simp [sstoreValueCost, hScaleNe0]
+  have hvcT : sstoreValueCost 0 0 sevm.benvStat.time = gasStorageSet := by
+    simp [sstoreValueCost, htime0]
+  have hrcS : sstoreNewRefundCounter scale 0 0 0 = 0 := by decide
+  have hrcT : sstoreNewRefundCounter sevm.benvStat.time 0 0 0 = 0 := by
+    simp [sstoreNewRefundCounter, htime0]
+  let fs := constructorProgram.main :: constructorProgram.aux
+  let F0 : Func := Func.return_
+  let F1 : Func := pushB256 0 ::: F0
+  let F2 : Func := pushCreationCoordinate 1762 ::: F1
+  let F3 : Func := codecopy ::: F2
+  let F4 : Func := pushB256 0 ::: F3
+  let F5 : Func := pushCreationCoordinate 239 ::: F4
+  let F6 : Func := pushCreationCoordinate 1762 ::: F5
+  let F7 : Func := sstore ::: F6
+  let F8 : Func := pushB256 rhoSlot ::: F7
+  let F9 : Func := timestamp ::: F8
+  let F10 : Func := sstore ::: F9
+  let F11 : Func := pushB256 chiSlot ::: F10
+  let F12 : Func := pushB256 scale ::: F11
+  let G1 : Func := (F12 <?> Func.revert)
+  let E0 : Func := eq ::: G1
+  let E1 : Func := codesize ::: E0
+  let BODY : Func := pushCreationCoordinate 2001 ::: E1
+  let G0 : Func := (BODY <?> Func.revert)
+  let N0 : Func := iszero ::: G0
+  let MAIN : Func := callvalue ::: N0
+  let mid := pre.setMach ⟨[], Mem.empty, G + 44610⟩
+  let s1 := mid.setMach ⟨[sevm.value], Mem.empty, G + 44608⟩
+  let s2 := s1.setMach ⟨[(1 : B256)], Mem.empty, G + 44605⟩
+  let s3 := s2.setMach ⟨[], Mem.empty, G + 44591⟩
+  let s4 := s3.setMach ⟨[Nat.toB256 2001], Mem.empty, G + 44588⟩
+  let s5 := s4.setMach ⟨[sevm.code.size.toB256, Nat.toB256 2001], Mem.empty, G + 44586⟩
+  let s6 := s5.setMach ⟨[(1 : B256)], Mem.empty, G + 44583⟩
+  let s7 := s6.setMach ⟨[], Mem.empty, G + 44569⟩
+  let s8 := s7.setMach ⟨[scale], Mem.empty, G + 44566⟩
+  let s9 := s8.setMach ⟨[chiSlot, scale], Mem.empty, G + 44563⟩
+  let s10 := ((((addAccessedStorageKey s9 sevm.currentTarget chiSlot).withRefundCounter 0).setStorVal sevm.currentTarget chiSlot scale).setMach ⟨[], Mem.empty, G + 22463⟩)
+  let s11 := s10.setMach ⟨[sevm.benvStat.time], Mem.empty, G + 22461⟩
+  let s12 := s11.setMach ⟨[rhoSlot, sevm.benvStat.time], Mem.empty, G + 22458⟩
+  let s13 := ((((addAccessedStorageKey s12 sevm.currentTarget rhoSlot).withRefundCounter 0).setStorVal sevm.currentTarget rhoSlot sevm.benvStat.time).setMach ⟨[], Mem.empty, G + 358⟩)
+  let s14 := s13.setMach ⟨[Nat.toB256 1762], Mem.empty, G + 355⟩
+  let s15 := s14.setMach ⟨[Nat.toB256 239, Nat.toB256 1762], Mem.empty, G + 352⟩
+  let s16 := s15.setMach ⟨[(0 : B256), Nat.toB256 239, Nat.toB256 1762], Mem.empty, G + 350⟩
+  let s17 := s16.setMach ⟨[], Mem.empty.write 0 code, G + 5⟩
+  let s18 := s17.setMach ⟨[Nat.toB256 1762], Mem.empty.write 0 code, G + 2⟩
+  let s19 := s18.setMach ⟨[(0 : B256), Nat.toB256 1762], Mem.empty.write 0 code, G⟩
+  let dRet := s19.setMach ⟨[], Mem.empty.write 0 code, G⟩
+  let postW := (dRet.withMemory (Mem.empty.write 0 code)).withOutput code
+  have hentry : Devm.BurnBy gJumpdest pre mid := by
+    simpa only [mid, hstack, hmem] using
+      Devm.burnBy_setMach_gas (devm := pre) (cost := gJumpdest) (G := G + 44610) (by simp only [hgas, gJumpdest])
+  have h1 : Ninst.RunCompiled sevm mid callvalue s1 := by
+    simpa only [s1, mid, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid) (r := .callvalue) (x := sevm.value) (cost := gBase) (G := G + 44608) (by rintro ⟨⟩) rfl (by simp only [mid, Devm.gasLeft_setMach, gBase]) (by simp only [mid, Devm.stack_setMach, List.length_nil]; omega))
+  have h2 : Ninst.RunCompiled sevm s1 iszero s2 := by
+    simpa only [s2, s1, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp [B256.eqCheck]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+  have hpop1 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s2 s3 := by
+    simpa only [s3, s2, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      Devm.popBurnBy_setMach (devm := s2) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44591) (by simp only [s2, Devm.stack_setMach]) (by simp only [s2, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
+  have hroom2 : s2.stack.length < 1024 := by
+    simp only [s2, Devm.stack_setMach, List.length_cons, List.length_nil]; omega
+  have h4 : Ninst.RunCompiled sevm s3 (pushCreationCoordinate 2001) s4 := by
+    simpa only [s4, s3, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s3) (w := Nat.toB256 2001) (G := G + 44588) (by simp only [s3, Devm.gasLeft_setMach, gVerylow]) (by simp only [s3, Devm.stack_setMach, List.length_nil]; omega))
+  have h5 : Ninst.RunCompiled sevm s4 codesize s5 := by
+    simpa only [s5, s4, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s4) (r := .codesize) (x := sevm.code.size.toB256) (cost := gBase) (G := G + 44586) (by rintro ⟨⟩) rfl (by simp only [s4, Devm.gasLeft_setMach, gBase]) (by simp only [s4, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have h6 : Ninst.RunCompiled sevm s5 eq s6 := by
+    simpa only [s6, s5, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp [B256.eqCheck]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+  have hpop2 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s6 s7 := by
+    simpa only [s7, s6, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      Devm.popBurnBy_setMach (devm := s6) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44569) (by simp only [s6, Devm.stack_setMach]) (by simp only [s6, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
+  have hroom6 : s6.stack.length < 1024 := by
+    simp only [s6, Devm.stack_setMach, List.length_cons, List.length_nil]; omega
+  have h8 : Ninst.RunCompiled sevm s7 (pushB256 scale) s8 := by
+    simpa only [s8, s7, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s7) (w := scale) (c := gVerylow) (G := G + 44566) (by decide) (by simp only [s7, Devm.gasLeft_setMach, gVerylow]) (by simp only [s7, Devm.stack_setMach, List.length_nil]; omega))
+  have h9 : Ninst.RunCompiled sevm s8 (pushB256 chiSlot) s9 := by
+    simpa only [s9, s8, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s8) (w := chiSlot) (c := gVerylow) (G := G + 44563) (by decide) (by simp only [s8, Devm.gasLeft_setMach, gVerylow]) (by simp only [s8, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have hc9 : s9.getStorVal sevm.currentTarget chiSlot = 0 := by
+    simpa only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.getStorVal_setMach] using hcurChi
+  have hrefund9 : s9.refundCounter = 0 := by
+    simpa only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.setMach_refundCounter] using hrefund
+  have haccess9 : s9.accessedStorageKeys = pre.accessedStorageKeys := by
+    simp only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.setMach_accessedStorageKeys]
+  have h10 : Ninst.RunCompiled sevm s9 sstore s10 := by
+    apply Ninst.runCompiled_sstore_cold (c := gasColdSload + gasStorageSet) (G := G + 22463) (rc := 0)
+    · rfl
+    · rw [haccess9]; exact hcoldChi
+    · simp only [s9, Devm.gasLeft_setMach, gCallStipend]; omega
+    · exact hstatic
+    · simp only [horigChi, hc9, hvcS]
+    · simp only [horigChi, hc9, hrefund9, hrcS]
+    · simp only [s9, Devm.gasLeft_setMach, gasColdSload, gasStorageSet]
+  have h11 : Ninst.RunCompiled sevm s10 timestamp s11 := by
+    simpa only [s11, s10, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s10) (r := .timestamp) (x := sevm.benvStat.time) (cost := gBase) (G := G + 22461) (by rintro ⟨⟩) rfl (by simp only [s10, Devm.gasLeft_setMach, gBase]) (by simp only [s10, Devm.stack_setMach, List.length_nil]; omega))
+  have h12 : Ninst.RunCompiled sevm s11 (pushB256 rhoSlot) s12 := by
+    simpa only [s12, s11, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s11) (w := rhoSlot) (c := gVerylow) (G := G + 22458) (by decide) (by simp only [s11, Devm.gasLeft_setMach, gVerylow]) (by simp only [s11, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have hcur9Rho : s9.getStorVal sevm.currentTarget rhoSlot = 0 := by
+    simpa only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.getStorVal_setMach] using hcurRho
+  have hcur12 : s12.getStorVal sevm.currentTarget rhoSlot = 0 := by
+    have h10w : ((((addAccessedStorageKey s9 sevm.currentTarget chiSlot).withRefundCounter 0).setStorVal sevm.currentTarget chiSlot scale)).getStorVal sevm.currentTarget rhoSlot = s9.getStorVal sevm.currentTarget rhoSlot := by
+      show (Devm.getStor (((addAccessedStorageKey s9 sevm.currentTarget chiSlot).withRefundCounter 0).setStorVal sevm.currentTarget chiSlot scale) sevm.currentTarget).get rhoSlot = (Devm.getStor s9 sevm.currentTarget).get rhoSlot
+      rw [setStorVal_getStor_self, Stor.get_set_ne _ hChiNeRho, Devm.withRefundCounter_getStor, addAccessedStorageKey_getStor]
+    simpa only [s12, s11, s10, Devm.getStorVal_setMach, h10w] using hcur9Rho
+  have hrefund12 : s12.refundCounter = 0 := rfl
+  have haccess12 : ⟨sevm.currentTarget, rhoSlot⟩ ∉ s12.accessedStorageKeys := by
+    have h10acc : s10.accessedStorageKeys = Std.HashSet.insert pre.accessedStorageKeys ⟨sevm.currentTarget, chiSlot⟩ := by rfl
+    have h1210 : s12.accessedStorageKeys = s10.accessedStorageKeys := by rfl
+    rw [h1210, h10acc]
+    intro hmem
+    rcases Std.HashSet.mem_insert.mp hmem with he | hx
+    · exact hChiNeRho (congrArg Prod.snd (eq_of_beq he))
+    · exact hcoldRho hx
+  have h13 : Ninst.RunCompiled sevm s12 sstore s13 := by
+    apply Ninst.runCompiled_sstore_cold (c := gasColdSload + gasStorageSet) (G := G + 358) (rc := 0)
+    · rfl
+    · exact haccess12
+    · simp only [s12, Devm.gasLeft_setMach, gCallStipend]; omega
+    · exact hstatic
+    · simp only [horigRho, hcur12, hvcT]
+    · simp only [horigRho, hcur12, hrefund12, hrcT]
+    · simp only [s12, Devm.gasLeft_setMach, gasColdSload, gasStorageSet]
+  have h14 : Ninst.RunCompiled sevm s13 (pushCreationCoordinate 1762) s14 := by
+    simpa only [s14, s13, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s13) (w := Nat.toB256 1762) (G := G + 355) (by simp only [s13, Devm.gasLeft_setMach, gVerylow]) (by simp only [s13, Devm.stack_setMach, List.length_nil]; omega))
+  have h15 : Ninst.RunCompiled sevm s14 (pushCreationCoordinate 239) s15 := by
+    simpa only [s15, s14, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s14) (w := Nat.toB256 239) (G := G + 352) (by simp only [s14, Devm.gasLeft_setMach, gVerylow]) (by simp only [s14, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have h16 : Ninst.RunCompiled sevm s15 (pushB256 0) s16 := by
+    simpa only [s16, s15, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s15) (w := 0) (c := gBase) (G := G + 350) (by decide) (by simp only [s15, Devm.gasLeft_setMach, gBase]) (by simp only [s15, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have hext16 : s16.extCost [⟨0, 1762⟩] = 174 :=
+    Devm.extCost_of_size (N := Mem.empty) (n := 0) (i := 0) (sz := 1762) (e := 174) (by rfl) (by decide)
+  have h17 : Ninst.RunCompiled sevm s16 codecopy s17 := by
+    apply Ninst.runCompiled_codecopy_of (c := 345) (G := G + 5) (M := Mem.empty.write 0 code)
+    · rfl
+    · simp only [B256.toNat_zero, hRL1762, hext16]; decide
+    · simp only [s16, Devm.memory_setMach, B256.toNat_zero, hRO239, hRL1762, constructorCode_slice_exact hcode]
+    · simp only [s16, Devm.gasLeft_setMach]
+  have h18 : Ninst.RunCompiled sevm s17 (pushCreationCoordinate 1762) s18 := by
+    simpa only [s18, s17, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s17) (w := Nat.toB256 1762) (G := G + 2) (by simp only [s17, Devm.gasLeft_setMach, gVerylow]) (by simp only [s17, Devm.stack_setMach, List.length_nil]; omega))
+  have h19 : Ninst.RunCompiled sevm s18 (pushB256 0) s19 := by
+    simpa only [s19, s18, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
+      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s18) (w := 0) (c := gBase) (G := G) (by decide) (by simp only [s18, Devm.gasLeft_setMach, gBase]) (by simp only [s18, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  have hMsize32 : (Mem.empty.write 0 code).size % 32 = 0 := by
+    rw [Mem.size_write_of_size (by rfl : Mem.empty.size = 0) (by decide : 0 % 32 = 0) codeSize_exact]
+    decide
+  have hMcov : 0 + 1762 ≤ (Mem.empty.write 0 code).size := by
+    rw [Mem.size_write_of_size (by rfl : Mem.empty.size = 0) (by decide : 0 % 32 = 0) codeSize_exact]
+    decide
+  have hext19 : s19.extCost [⟨0, 1762⟩] = 0 :=
+    Devm.extCost_zero_of_le hMsize32 hMcov
+  have h_read : (s19.setMach ⟨[], s19.memory, G⟩).memRead (0 : B256).toNat (Nat.toB256 1762).toNat = ⟨code, dRet.withMemory (Mem.empty.write 0 code)⟩ := by
+    have hmem19 : s19.memory = Mem.empty.write 0 code := by simp only [s19, Devm.memory_setMach]
+    simp only [B256.toNat_zero, hRL1762, hmem19, Devm.memRead, Devm.memory_setMach, dRet,
+      constructorReturnImage_read, Mem.read_snd_eq_self (memExtSize_of_le hMsize32 hMcov)]
+  have hT0 : Func.RunCompiled fs sevm s19 F0 postW :=
+    Func.runCompiled_return (i := (0 : B256)) (sz := Nat.toB256 1762) (s := []) (out := code) (d' := dRet.withMemory (Mem.empty.write 0 code)) (G := G) rfl (by simp only [B256.toNat_zero, hRL1762, hext19, s19, Devm.gasLeft_setMach]; omega) h_read
+  have hT1 : Func.RunCompiled fs sevm s18 F1 postW := .next h19 hT0
+  have hT2 : Func.RunCompiled fs sevm s17 F2 postW := .next h18 hT1
+  have hT3 : Func.RunCompiled fs sevm s16 F3 postW := .next h17 hT2
+  have hT4 : Func.RunCompiled fs sevm s15 F4 postW := .next h16 hT3
+  have hT5 : Func.RunCompiled fs sevm s14 F5 postW := .next h15 hT4
+  have hT6 : Func.RunCompiled fs sevm s13 F6 postW := .next h14 hT5
+  have hT7 : Func.RunCompiled fs sevm s12 F7 postW := .next h13 hT6
+  have hT8 : Func.RunCompiled fs sevm s11 F8 postW := .next h12 hT7
+  have hT9 : Func.RunCompiled fs sevm s10 F9 postW := .next h11 hT8
+  have hT10 : Func.RunCompiled fs sevm s9 F10 postW := .next h10 hT9
+  have hT11 : Func.RunCompiled fs sevm s8 F11 postW := .next h9 hT10
+  have hT12 : Func.RunCompiled fs sevm s7 F12 postW := .next h8 hT11
+  have hG1 : Func.RunCompiled fs sevm s6 G1 postW := .succ hne hroom6 hpop2 hT12
+  have hE0 : Func.RunCompiled fs sevm s5 E0 postW := .next h6 hG1
+  have hE1 : Func.RunCompiled fs sevm s4 E1 postW := .next h5 hE0
+  have hBODY : Func.RunCompiled fs sevm s3 BODY postW := .next h4 hE1
+  have hG0 : Func.RunCompiled fs sevm s2 G0 postW := .succ hne hroom2 hpop1 hBODY
+  have hN0 : Func.RunCompiled fs sevm s1 N0 postW := .next h2 hG0
+  have hMAIN : Func.RunCompiled fs sevm mid MAIN postW := .next h1 hN0
+  have hFunc : Func.RunCompiled (constructorProgram.main :: constructorProgram.aux) sevm mid constructorProgram.main postW := by
+    simp only [fs] at hMAIN
+    rw [constructorProgram_eq] at hMAIN ⊢
+    simp only [constructorProgramAt, nonpayable, constructorBody, constructorRuntimeOffset_exact, hlen, hAO] at hMAIN ⊢
+    exact hMAIN
+  have hProg : Prog.RunCompiled sevm pre constructorProgram postW := ⟨mid, hentry, hFunc⟩
+  have hRun : Func.Run (constructorProgram.main :: constructorProgram.aux) sevm mid constructorProgram.main postW :=
+    Func.Run.of_runCompiled hFunc
+  have hnil : ([] : Stack) <<+ mid.stack := nil_pref
+  have hwfMid : Mem.Wf mid.memory := by simp only [mid, Devm.memory_setMach]; exact Mem.wf_empty
+  have hreadsMid : Mem.Reads mid.memory [] := by simp only [mid, Devm.memory_setMach]; exact Mem.reads_empty
+  obtain ⟨-, hstorW, houtW⟩ := of_run_constructorProgram_main hnil hwfMid hreadsMid hcode hRun
+  have hrowChi : Devm.getStorVal postW sevm.currentTarget chiSlot = scale := by
+    show (Devm.getStor postW sevm.currentTarget).get chiSlot = scale
+    rw [hstorW, Stor.get_set_ne _ (Ne.symm hChiNeRho), Stor.get_set_self]
+  have hrowRho : Devm.getStorVal postW sevm.currentTarget rhoSlot = sevm.benvStat.time := by
+    show (Devm.getStor postW sevm.currentTarget).get rhoSlot = sevm.benvStat.time
+    rw [hstorW, Stor.get_set_self]
+  have herrW : postW.error = .none := by
+    simp only [postW, dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10, s9, s8, s7, s6, s5, s4, s3, s2, s1, mid]
+    exact herror
+  have hlogsW : postW.logs = [] := by
+    simp only [postW, dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10, s9, s8, s7, s6, s5, s4, s3, s2, s1, mid]
+    exact hlogs
+  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho⟩
 
 end Drip
 end Blanc
