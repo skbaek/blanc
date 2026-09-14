@@ -99,7 +99,7 @@ def sentinelGatewayPauseWorldState : State :=
         stor := controlGatewayStor
         code := gatewayCode controlDeployParams }
 
-def sentinelGatewayPauseWorldGas : Nat := 107604
+def sentinelGatewayPauseWorldGas : Nat := 103430
 
 def sentinelGatewayPauseWorldMsg : Msg :=
   { (pauseWorldMsg sentinelPauseWorldStor sentinelGatewayPauseWorldGas) with
