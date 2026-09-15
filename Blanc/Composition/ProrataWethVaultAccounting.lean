@@ -1,4 +1,5 @@
 import Blanc.Composition.ProrataWethVaultBacking
+import Blanc.ExecutionStateTrace
 import Blanc.ProrataAttackModel
 
 /-!
@@ -372,6 +373,16 @@ theorem externalCredit_price (assets : Nat) (pre : Snapshot) :
   unfold normalInbound X D
   ring
 
+/-- The source-side availability inside an exact outbound effect is already
+the natural coverage fact needed by the snapshot bridge. -/
+theorem outboundEffect_covered
+    {sevm : Sevm} {pre post : Devm}
+    {receiver owner assets shares returned : B256}
+    (effect : OutboundEffect sevm receiver owner assets shares returned pre post) :
+    assets.toNat ≤ (snapshotAt sevm pre).balance := by
+  obtain ⟨-, movement, -, -, -, -, -, -⟩ := effect
+  exact B256.toNat_le_toNat movement.1
+
 /-- The actual compiled `mint` occurrence exposes the inverse quote as a
 named natural-number charge and retains its exact configured WETH effect. -/
 theorem mint_compiled_quote
@@ -386,11 +397,13 @@ theorem mint_compiled_quote
       charged.toNat = Blanc.ProrataWethVault.previewMintN
         (Sevm.argWord sevm 0).toNat
         (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat supply.toNat ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      (Sevm.argWord sevm 0).toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
       InboundEffect sevm (Sevm.argWord sevm 1) charged (Sevm.argWord sevm 0)
         charged pre post := by
-  obtain ⟨-, supply, supplyEq, -, chargeFits, -, -, -, -, effect⟩ :=
+  obtain ⟨-, supply, supplyEq, stable, chargeFits, -, -, -, room, effect⟩ :=
     mint_compiled_effect config memoryWf run selectorEq
-  refine ⟨supply, _, supplyEq, ?_, effect⟩
+  refine ⟨supply, _, supplyEq, ?_, stable, room, effect⟩
   exact B256.toNat_toB256_of_lt chargeFits
 
 /-- The actual compiled `withdraw` occurrence exposes the inverse quote as a
@@ -408,16 +421,18 @@ theorem withdraw_compiled_quote
       burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
         (Sevm.argWord sevm 0).toNat
         (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat supply.toNat ∧
+      burned.toNat ≤ supply.toNat ∧
       OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
         (Sevm.argWord sevm 0) burned burned pre post := by
-  obtain ⟨-, supply, supplyEq, -, burnFits, -, -, -, -, -, -, -, effect⟩ :=
+  obtain ⟨-, supply, supplyEq, -, burnFits, -, -, -, -, -, -, burnable, effect⟩ :=
     withdraw_compiled_effect config memoryWf run selectorEq
-  refine ⟨supply, _, supplyEq, ?_, effect⟩
+  refine ⟨supply, _, supplyEq, ?_, ?_, effect⟩
   exact B256.toNat_toB256_of_lt burnFits
+  exact burnable
 
 /-- The compiled inverse-withdraw call reaches the actual normal outbound
-boundary whenever its receiver differs from the vault and the two local debit
-bounds hold. -/
+boundary whenever its receiver differs from the vault; the effect and compiled
+guard already provide its debit bounds. -/
 theorem withdraw_compiled_normal_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
@@ -425,26 +440,705 @@ theorem withdraw_compiled_normal_snapshot
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address])
-    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
-    (burnable : Blanc.ProrataWethVault.previewWithdrawN
-      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
-        (snapshotAt sevm pre).supply ≤ (snapshotAt sevm pre).supply)
-    (covered : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).balance) :
+    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr) :
     ∃ burned : B256,
       burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
         (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
           (snapshotAt sevm pre).supply ∧
       snapshotAt sevm post = normalOutbound (Sevm.argWord sevm 0).toNat
         burned.toNat (snapshotAt sevm pre) := by
-  obtain ⟨supply, burned, supplyEq, quote, effect⟩ :=
+  obtain ⟨supply, burned, supplyEq, quote, burnable, effect⟩ :=
     withdraw_compiled_quote config memoryWf run selectorEq
   have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
     simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
-  refine ⟨burned, quote', outboundEffect_normal_snapshot receiverNotVault ?_ covered effect⟩
-  rw [quote']
-  exact burnable
+  have burnable' : burned.toNat ≤ (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable
+  exact ⟨burned, quote', outboundEffect_normal_snapshot receiverNotVault burnable'
+    (outboundEffect_covered effect) effect⟩
+
+/-- A supply bounded by the frozen capacity, plus a quote admitted by the
+remaining share room, cannot wrap its supply-row addition. -/
+theorem supplyNof_of_capacity {supply shares : B256}
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (room : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat) :
+    B256.Nof supply shares := by
+  unfold B256.Nof
+  have bounded := Blanc.ProrataWethVault.supply_add_le_maxSupplyN_of_le_shareRoomN
+    stable room
+  unfold Blanc.ProrataWethVault.maxSupplyN Blanc.maxWordN Blanc.wordModulusN at bounded
+  omega
+
+/-- The compiled `deposit` occurrence exposes its floor quote together with
+the capacity facts that make the supply-row addition non-wrapping. -/
+theorem deposit_compiled_quote
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    ∃ supply shares : B256,
+      supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+        (Sevm.argWord sevm 0).toNat
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat supply.toNat ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+        shares shares pre post := by
+  obtain ⟨supply, shares, supplyEq, quote, stable, room, effect⟩ :=
+    deposit_compiled_effect_named config memoryWf run selectorEq
+  exact ⟨supply, shares, supplyEq, quote, stable, room, effect⟩
+
+/-- The compiled `redeem` occurrence exposes its floor asset quote in the
+same named form as the other three public endpoints. -/
+theorem redeem_compiled_quote
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ supply assets : B256,
+      supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat supply.toNat ∧
+      (Sevm.argWord sevm 0).toNat ≤ supply.toNat ∧
+      OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        assets (Sevm.argWord sevm 0) assets pre post := by
+  obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
+    redeem_compiled_effect_named config memoryWf run selectorEq
+  exact ⟨supply, assets, supplyEq, quote, burnable, effect⟩
+
+/-- A compiled `deposit` reaches the real normal inbound boundary once its
+WETH-row addition is known not to wrap; capacity and share-room guards derive
+the supply-row fact. -/
+theorem deposit_compiled_normal_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address])
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) (Sevm.argWord sevm 0)) :
+    ∃ shares : B256,
+      shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = normalInbound (Sevm.argWord sevm 0).toNat
+        shares.toNat (snapshotAt sevm pre) := by
+  obtain ⟨supply, shares, supplyEq, quote, stable, room, effect⟩ :=
+    deposit_compiled_quote config memoryWf run selectorEq
+  have quote' : shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) shares := by
+    rw [← supplyEq]
+    exact supplyNof_of_capacity stable room
+  exact ⟨shares, quote',
+    inboundEffect_normal_snapshot depositorNotVault supplyNof rowNof effect⟩
+
+/-- A compiled `mint` reaches the same real inbound boundary, retaining the
+inverse ceil quote rather than coercing it to the deposit quote. -/
+theorem mint_compiled_normal_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address])
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (rowNof : ∀ charged : B256,
+      charged.toNat = Blanc.ProrataWethVault.previewMintN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply →
+      B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) charged) :
+    ∃ charged : B256,
+      charged.toNat = Blanc.ProrataWethVault.previewMintN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = normalInbound charged.toNat
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre) := by
+  obtain ⟨supply, charged, supplyEq, quote, stable, room, effect⟩ :=
+    mint_compiled_quote config memoryWf run selectorEq
+  have quote' : charged.toNat = Blanc.ProrataWethVault.previewMintN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) (Sevm.argWord sevm 0) := by
+    rw [← supplyEq]
+    exact supplyNof_of_capacity stable room
+  exact ⟨charged, quote',
+    inboundEffect_normal_snapshot depositorNotVault supplyNof
+      (rowNof charged quote') effect⟩
+
+/-- The compiled inverse-withdraw call reaches the retained boundary when it
+pays the vault itself. -/
+theorem withdraw_compiled_retained_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address])
+    (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget) :
+    ∃ burned : B256,
+      burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = retainedOutbound burned.toNat (snapshotAt sevm pre) := by
+  obtain ⟨supply, burned, supplyEq, quote, burnable, effect⟩ :=
+    withdraw_compiled_quote config memoryWf run selectorEq
+  have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  exact ⟨burned, quote',
+    outboundEffect_retained_snapshot receiverIsVault
+      (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
+
+/-- The compiled `redeem` reaches the real normal debit boundary when its
+receiver differs from the vault. -/
+theorem redeem_compiled_normal_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address])
+    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr) :
+    ∃ assets : B256,
+      assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = normalOutbound assets.toNat
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre) := by
+  obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
+    redeem_compiled_quote config memoryWf run selectorEq
+  have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  exact ⟨assets, quote', outboundEffect_normal_snapshot receiverNotVault
+    (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable)
+    (outboundEffect_covered effect) effect⟩
+
+/-- The compiled `redeem` reaches the retained boundary when it pays the vault
+itself. -/
+theorem redeem_compiled_retained_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address])
+    (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget) :
+    ∃ assets : B256,
+      assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = retainedOutbound (Sevm.argWord sevm 0).toNat
+        (snapshotAt sevm pre) := by
+  obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
+    redeem_compiled_quote config memoryWf run selectorEq
+  have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  exact ⟨assets, quote', outboundEffect_retained_snapshot receiverIsVault
+    (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
+
+/-- A third-party WETH transfer with an unchanged vault supply row reaches the
+credited snapshot boundary.  This is deliberately a raw local effect bridge;
+configured-history admission is a later invariant obligation. -/
+theorem externalCredit_snapshot
+    {pre post : Devm} {vault source : Adr} {assets : B256}
+    (sourceNotVault : source ≠ vault)
+    (supplyKept : Devm.getStorVal post vault Blanc.ProrataWethVault.supplySlot =
+      Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault) assets)
+    (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) source assets vault
+      (Stor.rest (Devm.getStor post wethAccount))) :
+    vaultSnapshot vault post = normalInbound assets.toNat 0 (vaultSnapshot vault pre) := by
+  apply congrArg₂ Blanc.Prorata.AccountingSnapshot.mk
+  · show (Devm.getStorVal post vault Blanc.ProrataWethVault.supplySlot).toNat = _
+    rw [supplyKept]
+    simp [vaultSnapshot]
+  · show (Stor.rest (Devm.getStor post wethAccount) vault).toNat = _
+    rw [credited_of_transfer effect sourceNotVault]
+    simpa [vaultSnapshot] using
+      B256.toNat_add_eq_of_nof
+        (Stor.rest (Devm.getStor pre wethAccount) vault) assets rowNof
+
+/-- The two accounting coordinates read directly from a stable `State`
+boundary. -/
+def stateSnapshot (vault : Adr) (state : State) : Snapshot :=
+  ⟨((state.getStor vault).get Blanc.ProrataWethVault.supplySlot).toNat,
+    (Stor.rest (state.getStor wethAccount) vault).toNat⟩
+
+@[simp] theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
+    vaultSnapshot vault state = stateSnapshot vault state.state := rfl
+
+/-- The words retained by either inbound endpoint. -/
+structure InboundWords where
+  receiver : B256
+  assets : B256
+  shares : B256
+  returned : B256
+
+/-- The words retained by either outbound endpoint. -/
+structure OutboundWords where
+  receiver : B256
+  owner : B256
+  assets : B256
+  shares : B256
+  returned : B256
+
+/-- The source and amount retained by an outside WETH credit. -/
+structure CreditWords where
+  source : Adr
+  amount : B256
+
+/-- The seven actual-effect operations that a local four-quote path may use.
+Each quote and accounting contribution is retained in the constructor that
+proves its concrete WETH/vault storage movement. -/
+inductive FourQuoteOperation (vault : Adr) (sevm : Sevm) (pre post : Devm) : Type where
+  | deposit (words : InboundWords)
+      (target : sevm.currentTarget = vault)
+      (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) words.shares)
+      (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) words.assets)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.convertToSharesN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | mint (words : InboundWords)
+      (target : sevm.currentTarget = vault)
+      (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) words.shares)
+      (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) words.assets)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.previewMintN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | withdrawNormal (words : OutboundWords)
+      (target : sevm.currentTarget = vault)
+      (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | redeemNormal (words : OutboundWords)
+      (target : sevm.currentTarget = vault)
+      (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | withdrawSelf (words : OutboundWords)
+      (target : sevm.currentTarget = vault)
+      (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | redeemSelf (words : OutboundWords)
+      (target : sevm.currentTarget = vault)
+      (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+      FourQuoteOperation vault sevm pre post
+  | credit (words : CreditWords)
+      (wethTarget : sevm.currentTarget = wethAccount)
+      (sourceNotVault : words.source ≠ vault)
+      (supplyKept : Devm.getStorVal post vault Blanc.ProrataWethVault.supplySlot =
+        Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+      (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault) words.amount)
+      (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source words.amount vault
+        (Stor.rest (Devm.getStor post wethAccount))) :
+      FourQuoteOperation vault sevm pre post
+
+/-- The bounded quote-residue part of an actual operation. -/
+def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuoteOperation vault sevm pre post → Nat
+  | .deposit words _ _ _ _ _ _ =>
+      depositResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .mint words _ _ _ _ _ _ =>
+      depositResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .withdrawNormal words _ _ _ _ _ =>
+      outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .redeemNormal words _ _ _ _ _ =>
+      outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .withdrawSelf words _ _ _ _ _ =>
+      outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .redeemSelf words _ _ _ _ _ =>
+      outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
+  | .credit _ _ _ _ _ _ => 0
+
+/-- The retained-asset contribution is present only when an outbound receiver
+is the vault itself. -/
+def retainedContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuoteOperation vault sevm pre post → Nat
+  | .deposit _ _ _ _ _ _ _ => 0
+  | .mint _ _ _ _ _ _ _ => 0
+  | .withdrawNormal _ _ _ _ _ _ => 0
+  | .redeemNormal _ _ _ _ _ _ => 0
+  | .withdrawSelf words _ _ _ _ _ => words.assets.toNat * D (vaultSnapshot vault pre)
+  | .redeemSelf words _ _ _ _ _ => words.assets.toNat * D (vaultSnapshot vault pre)
+  | .credit _ _ _ _ _ _ => 0
+
+/-- The outside-credit contribution is present only for the raw third-party
+WETH transfer tag. -/
+def creditContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuoteOperation vault sevm pre post → Nat
+  | .deposit _ _ _ _ _ _ _ => 0
+  | .mint _ _ _ _ _ _ _ => 0
+  | .withdrawNormal _ _ _ _ _ _ => 0
+  | .redeemNormal _ _ _ _ _ _ => 0
+  | .withdrawSelf _ _ _ _ _ _ => 0
+  | .redeemSelf _ _ _ _ _ _ => 0
+  | .credit words _ _ _ _ _ => words.amount.toNat * D (vaultSnapshot vault pre)
+
+private theorem deposit_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : InboundWords) (target : sevm.currentTarget = vault)
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) words.shares)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) words.assets)
+    (quote : words.shares.toNat = Blanc.ProrataWethVault.convertToSharesN words.assets.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        depositResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+  have shape := inboundEffect_normal_snapshot depositorNotVault supplyNof rowNof effect
+  simp only [snapshotAt_eq] at shape quote
+  rw [target] at shape quote
+  rw [shape]
+  simpa using normalInbound_price words.assets.toNat words.shares.toNat
+    (vaultSnapshot vault pre) quote
+
+private theorem mint_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : InboundWords) (target : sevm.currentTarget = vault)
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) words.shares)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) words.assets)
+    (quote : words.assets.toNat = Blanc.ProrataWethVault.previewMintN words.shares.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        depositResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+  have shape := inboundEffect_normal_snapshot depositorNotVault supplyNof rowNof effect
+  simp only [snapshotAt_eq] at shape quote
+  rw [target] at shape quote
+  rw [quote] at shape
+  rw [shape]
+  simpa [quote] using normalInbound_price_mint words.shares.toNat (vaultSnapshot vault pre)
+
+private theorem withdrawNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : OutboundWords) (target : sevm.currentTarget = vault)
+    (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+    (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+  have covered := outboundEffect_covered effect
+  have shape := outboundEffect_normal_snapshot receiverNotVault burnable covered effect
+  simp only [snapshotAt_eq] at burnable quote covered shape
+  rw [target] at burnable quote covered shape
+  have burnable' : Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+      (vaultSnapshot vault pre).balance (vaultSnapshot vault pre).supply ≤
+      (vaultSnapshot vault pre).supply := by
+    simpa [quote] using burnable
+  rw [quote] at shape
+  rw [shape]
+  simpa [quote] using normalOutbound_price_withdraw words.assets.toNat
+    (vaultSnapshot vault pre) burnable' covered
+
+private theorem redeemNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : OutboundWords) (target : sevm.currentTarget = vault)
+    (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+    (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+  have covered := outboundEffect_covered effect
+  have shape := outboundEffect_normal_snapshot receiverNotVault burnable covered effect
+  simp only [snapshotAt_eq] at burnable quote covered shape
+  rw [target] at burnable quote covered shape
+  have covered' : Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+      (vaultSnapshot vault pre).balance (vaultSnapshot vault pre).supply ≤
+      (vaultSnapshot vault pre).balance := by
+    simpa [quote] using covered
+  rw [quote] at shape
+  rw [shape]
+  simpa [quote] using normalOutbound_price_redeem words.shares.toNat
+    (vaultSnapshot vault pre) burnable covered'
+
+private theorem withdrawSelf_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : OutboundWords) (target : sevm.currentTarget = vault)
+    (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+    (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) +
+          words.assets.toNat * D (vaultSnapshot vault pre) := by
+  have shape := outboundEffect_retained_snapshot receiverIsVault burnable effect
+  simp only [snapshotAt_eq] at burnable quote shape
+  rw [target] at burnable quote shape
+  have residue : words.shares.toNat * X (vaultSnapshot vault pre) =
+      words.assets.toNat * D (vaultSnapshot vault pre) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+    simpa [quote] using withdraw_residue_eq words.assets.toNat (vaultSnapshot vault pre)
+  rw [shape]
+  exact retainedOutbound_price words.assets.toNat words.shares.toNat
+    (vaultSnapshot vault pre) burnable residue
+
+private theorem redeemSelf_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : OutboundWords) (target : sevm.currentTarget = vault)
+    (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+    (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+      (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+    (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) +
+          words.assets.toNat * D (vaultSnapshot vault pre) := by
+  have shape := outboundEffect_retained_snapshot receiverIsVault burnable effect
+  simp only [snapshotAt_eq] at burnable quote shape
+  rw [target] at burnable quote shape
+  have residue : words.shares.toNat * X (vaultSnapshot vault pre) =
+      words.assets.toNat * D (vaultSnapshot vault pre) +
+        outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
+    simpa [quote] using redeem_residue_eq words.shares.toNat (vaultSnapshot vault pre)
+  rw [shape]
+  exact retainedOutbound_price words.assets.toNat words.shares.toNat
+    (vaultSnapshot vault pre) burnable residue
+
+private theorem credit_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : CreditWords) (_wethTarget : sevm.currentTarget = wethAccount)
+    (sourceNotVault : words.source ≠ vault)
+    (supplyKept : Devm.getStorVal post vault Blanc.ProrataWethVault.supplySlot =
+      Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault) words.amount)
+    (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source words.amount vault
+      (Stor.rest (Devm.getStor post wethAccount))) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        words.amount.toNat * D (vaultSnapshot vault pre) := by
+  have shape := externalCredit_snapshot sourceNotVault supplyKept rowNof effect
+  rw [shape]
+  exact externalCredit_price words.amount.toNat (vaultSnapshot vault pre)
+
+/-- One State-linked, actual-effect accounting transition. -/
+structure FourQuoteTransition (vault : Adr) (before after : State) : Type where
+  sevm : Sevm
+  entry : Devm
+  exit : Devm
+  /-- Separate calls may have unrelated machine-local fields, but their
+  storage states are the consecutive accounting worlds. -/
+  preState : entry.state = before
+  postState : exit.state = after
+  operation : FourQuoteOperation vault sevm entry exit
+
+/-- Forget the dynamic frame details of one actual effect, retaining the
+standard StateTrace boundary whose origin is that exact effect witness. -/
+def FourQuoteTransition.stateTransition {vault before after}
+    (event : FourQuoteTransition vault before after) :
+    StateTransition (FourQuoteOperation vault event.sevm event.entry event.exit) :=
+  { origin := event.operation
+    before := before
+    after := after }
+
+/-- Every tagged actual effect satisfies its exact price recurrence. -/
+theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (operation : FourQuoteOperation vault sevm pre post) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) +
+        roundingContribution operation + retainedContribution operation + creditContribution operation := by
+  cases operation with
+  | deposit words target depositorNotVault supplyNof rowNof quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        deposit_step_exact words target depositorNotVault supplyNof rowNof quote effect
+  | mint words target depositorNotVault supplyNof rowNof quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        mint_step_exact words target depositorNotVault supplyNof rowNof quote effect
+  | withdrawNormal words target receiverNotVault burnable quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        withdrawNormal_step_exact words target receiverNotVault burnable quote effect
+  | redeemNormal words target receiverNotVault burnable quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        redeemNormal_step_exact words target receiverNotVault burnable quote effect
+  | withdrawSelf words target receiverIsVault burnable quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        withdrawSelf_step_exact words target receiverIsVault burnable quote effect
+  | redeemSelf words target receiverIsVault burnable quote effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        redeemSelf_step_exact words target receiverIsVault burnable quote effect
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        credit_step_exact words wethTarget sourceNotVault supplyKept rowNof effect
+
+/-- One actual transition packaged with its stable-state endpoints. -/
+structure FourQuoteStep (vault : Adr) : Type where
+  before : State
+  after : State
+  event : FourQuoteTransition vault before after
+
+/-- The common state-trace boundary for a packaged tagged step. -/
+def FourQuoteStep.stateTransition {vault : Adr} (step : FourQuoteStep vault) :
+    StateTransition (FourQuoteOperation vault step.event.sevm step.event.entry step.event.exit) :=
+  step.event.stateTransition
+
+/-- The exact recurrence expressed at the standard StateTrace boundary. -/
+theorem FourQuoteStep.trace_exact {vault : Adr} (step : FourQuoteStep vault) :
+    X (stateSnapshot vault step.stateTransition.after) *
+        D (stateSnapshot vault step.stateTransition.before) =
+      X (stateSnapshot vault step.stateTransition.before) *
+          D (stateSnapshot vault step.stateTransition.after) +
+        roundingContribution step.event.operation + retainedContribution step.event.operation +
+          creditContribution step.event.operation := by
+  rcases step with ⟨before, after, sevm, entry, exit, preState, postState, operation⟩
+  have hstep := operation.step_exact
+  simpa [FourQuoteStep.stateTransition, FourQuoteTransition.stateTransition,
+    vaultSnapshot_state, preState, postState] using hstep
+
+/-- A connected finite trace of State-linked actual effects. -/
+structure FourQuotePath (vault : Adr) : Type where
+  steps : List (FourQuoteStep vault)
+  world : Fin (steps.length + 1) → State
+  pre_eq (i : Fin steps.length) :
+    world i.castSucc = (steps.get i).before
+  post_eq (i : Fin steps.length) :
+    world i.succ = (steps.get i).after
+
+namespace FourQuotePath
+
+/-- Total state lookup; the direct telescope only uses in-range indices. -/
+def worldAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : State :=
+  path.world ⟨min i path.steps.length,
+    Nat.lt_succ_of_le (Nat.min_le_right i path.steps.length)⟩
+
+def snapshotAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Snapshot :=
+  stateSnapshot vault (path.worldAt i)
+
+def xAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Nat :=
+  X (path.snapshotAt i)
+
+def dAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Nat :=
+  D (path.snapshotAt i)
+
+def roundingAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Nat :=
+  if hi : i < path.steps.length then
+    roundingContribution (path.steps.get ⟨i, hi⟩).event.operation
+  else 0
+
+def retainedAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Nat :=
+  if hi : i < path.steps.length then
+    retainedContribution (path.steps.get ⟨i, hi⟩).event.operation
+  else 0
+
+def creditAt {vault : Adr} (path : FourQuotePath vault) (i : Nat) : Nat :=
+  if hi : i < path.steps.length then
+    creditContribution (path.steps.get ⟨i, hi⟩).event.operation
+  else 0
+
+/-- An in-range boundary exposes the exact three-contribution recurrence. -/
+theorem step_exact_at {vault : Adr} (path : FourQuotePath vault)
+    {i : Nat} (hi : i < path.steps.length) :
+    path.xAt (i + 1) * path.dAt i =
+      path.xAt i * path.dAt (i + 1) +
+        path.roundingAt i + path.retainedAt i + path.creditAt i := by
+  let index : Fin path.steps.length := ⟨i, hi⟩
+  let step := path.steps.get index
+  have hpre : path.worldAt i = step.before := by
+    calc
+      path.worldAt i = path.world index.castSucc := by
+        apply congrArg path.world
+        apply Fin.ext
+        simp [index, Nat.min_eq_left (Nat.le_of_lt hi)]
+      _ = step.before := by
+        simpa only [step] using path.pre_eq index
+  have hpost : path.worldAt (i + 1) = step.after := by
+    calc
+      path.worldAt (i + 1) = path.world index.succ := by
+        apply congrArg path.world
+        apply Fin.ext
+        simp [index, Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+      _ = step.after := by
+        simpa only [step] using path.post_eq index
+  have hstep := step.trace_exact
+  simpa only [xAt, dAt, snapshotAt, roundingAt, retainedAt, creditAt,
+    FourQuoteStep.stateTransition, FourQuoteTransition.stateTransition,
+    hi, dite_true, hpre, hpost] using hstep
+
+/-- Direct Nat-semiring telescope for a connected finite trace of actual
+four-quote effects. -/
+theorem dust_telescope {vault : Adr} (path : FourQuotePath vault) :
+    let n := path.steps.length
+    path.xAt n * (∏ j ∈ Finset.range n, path.dAt j) =
+      path.xAt 0 * (∏ j ∈ Finset.Icc 1 n, path.dAt j) +
+        ∑ i ∈ Finset.range n,
+          (path.roundingAt i + path.retainedAt i + path.creditAt i) *
+              (∏ j ∈ Finset.range i, path.dAt j) *
+                (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j) := by
+  dsimp only
+  apply Blanc.Prorata.dust_telescope_of_step
+  intro i hi
+  simpa only [Nat.add_assoc] using path.step_exact_at hi
+
+/-- The same telescope with rounding, retained-asset, and external-credit
+terms exposed as three separately weighted sums. -/
+theorem dust_telescope_separate {vault : Adr} (path : FourQuotePath vault) :
+    let n := path.steps.length
+    path.xAt n * (∏ j ∈ Finset.range n, path.dAt j) =
+      path.xAt 0 * (∏ j ∈ Finset.Icc 1 n, path.dAt j) +
+        (∑ i ∈ Finset.range n,
+          path.roundingAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j)) +
+        (∑ i ∈ Finset.range n,
+          path.retainedAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j)) +
+        ∑ i ∈ Finset.range n,
+          path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j) := by
+  dsimp only
+  rw [dust_telescope]
+  simp only [Nat.add_mul, Finset.sum_add_distrib]
+  ac_rfl
+
+end FourQuotePath
 
 end FourQuote
 
