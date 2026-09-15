@@ -41,6 +41,61 @@ def Exec.rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) : List Exec.Deriv :=
   ⟨pc, sevm, pre, out, run⟩ :: Exec.rawFrameDescendants run
 
+/-- Every committed descendant frame came from an actually entered raw child
+root.  The result is deliberately a membership bridge: it does not say that
+the committed projection retains same-frame prefixes or resumed continuations. -/
+theorem Exec.mem_rawFrameDescendants_of_mem_descendantFrames :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+      (run : Exec pc sevm pre out) (frame : Exec.Frame),
+      frame ∈ Exec.descendantFrames run →
+        frame.rootDeriv ∈ Exec.rawFrameDescendants run := by
+  intro pc sevm pre out run
+  induction run with
+  | halt hstep => simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+  | cont hstep next ih =>
+      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+  | doneErr hstep henter hresume =>
+      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+  | doneOk hstep henter hresume next ih =>
+      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+  | runErr hstep henter child hresume =>
+      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+  | runOk hstep henter child hresume next childIh nextIh =>
+      intro frame member
+      simp only [Exec.descendantFrames, Exec.rawFrameDescendants] at member ⊢
+      split at member
+      next childSettles =>
+        simp only [List.mem_append, List.mem_cons] at member ⊢
+        rcases member with (rfl | childMember) | nextMember
+        · exact Or.inl rfl
+        · exact Or.inr (Or.inl (childIh _ childMember))
+        · exact Or.inr (Or.inr (nextIh _ nextMember))
+      next childDoesNotSettle =>
+        simp only [List.nil_append] at member
+        simp only [List.mem_cons, List.mem_append]
+        exact Or.inr (Or.inr (nextIh _ member))
+
+/-- A committed frame root is among the all-outcome roots of the execution
+that retained it.  This preserves invocation-root membership only; callers
+needing full storage chronology must also retain parent prefix and suffix
+steps around spawned children. -/
+theorem Exec.mem_rawFrameRoots_of_mem_committedFrames
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (frame : Exec.Frame)
+    (member : frame ∈ Exec.committedFrames run) :
+    frame.rootDeriv ∈ Exec.rawFrameRoots run := by
+  unfold Exec.committedFrames at member
+  split at member
+  next committed =>
+    simp only [List.mem_cons] at member
+    rcases member with rfl | descendant
+    · change (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈ Exec.rawFrameRoots run
+      simp [Exec.rawFrameRoots]
+    · simp only [Exec.rawFrameRoots, List.mem_cons]
+      exact Or.inr
+        (Exec.mem_rawFrameDescendants_of_mem_descendantFrames run frame descendant)
+  next notCommitted => simp at member
+
 /-- The selected outer execution always heads its raw-frame traversal. -/
 theorem Exec.mem_rawFrameRoots_self
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

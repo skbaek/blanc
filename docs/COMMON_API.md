@@ -1444,7 +1444,10 @@ consumer needs canonical interpreter ingress as one conjunct:
 
 - `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
   entered-frame traversal below both the invariant ladder and the richer
-  occurrence APIs.
+  occurrence APIs. `Exec.mem_rawFrameDescendants_of_mem_descendantFrames` and
+  `Exec.mem_rawFrameRoots_of_mem_committedFrames` carry a retained committed
+  invocation root back to that traversal; they do not supply same-frame
+  prefix/suffix or full storage chronology.
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`

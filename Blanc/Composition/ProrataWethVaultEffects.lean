@@ -1,5 +1,7 @@
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.CompiledFixedInvariance
+import Blanc.ExecutionFrameEntry
+import Blanc.ExecutionTraceFresh
 import Blanc.Ladder
 import Blanc.NonpayableInversion
 import Blanc.Solvent
@@ -511,6 +513,239 @@ structure WethAllowanceInvocation where
   selected : Sevm.selector sevm =
     if approval then selector "approve" [.address, .uint256]
     else selector "transferFrom" [.address, .address, .uint256]
+
+/-- One selected committed WETH frame.  This is deliberately an invocation
+projection: it keeps the frame root and whether it selected `approve` or
+`transferFrom`, but it does not stand for every storage event in the enclosing
+execution.  In particular a `withdraw` frame can retain a callback child
+between its own prefix and suffix; a later retained-node replay supplies that
+storage chronology. -/
+structure WethAllowanceEvent where
+  frame : Exec.Frame
+  approval : Bool
+
+/-- The exact frame-root identity and selector fact required of one allowance
+event.  Successful commitment comes from `event.frame`; code identity is
+checked here rather than inherited from a message-level WETH claim. -/
+def WethAllowanceEvent.Classified (event : WethAllowanceEvent) : Prop :=
+  event.frame.exactInvocation Blanc.weth wethAccount wethAccount ∧
+    Sevm.selector event.frame.sevm =
+      if event.approval then selector "approve" [.address, .uint256]
+      else selector "transferFrom" [.address, .address, .uint256]
+
+/-- Classify a retained frame only when its exact compiled root and selector
+both match.  Other WETH selectors are omitted here, not declared silent. -/
+def WethAllowanceEvent.classify? (frame : Exec.Frame) : Option WethAllowanceEvent :=
+  if frame.exactInvocation Blanc.weth wethAccount wethAccount then
+    if Sevm.selector frame.sevm = selector "approve" [.address, .uint256] then
+      some ⟨frame, true⟩
+    else if Sevm.selector frame.sevm =
+        selector "transferFrom" [.address, .address, .uint256] then
+      some ⟨frame, false⟩
+    else none
+  else none
+
+/-- The allowance-event projection of committed frames.  `filterMap` retains
+the order supplied by `Exec.committedFrames`, which is an invocation order
+only; use retained nodes and parent-prefix boundaries for storage replay. -/
+def retainedWethAllowanceEvents
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List WethAllowanceEvent :=
+  (Exec.committedFrames run).filterMap WethAllowanceEvent.classify?
+
+theorem WethAllowanceEvent.classification_sound
+    {frame : Exec.Frame} {event : WethAllowanceEvent}
+    (classified : WethAllowanceEvent.classify? frame = some event) :
+    event.frame = frame ∧ event.Classified := by
+  unfold WethAllowanceEvent.classify? at classified
+  split at classified
+  · rename_i identity
+    split at classified
+    · rename_i approve
+      cases classified
+      exact ⟨rfl, identity, by simpa using approve⟩
+    · rename_i notApprove
+      split at classified
+      · rename_i transferFrom
+        cases classified
+        exact ⟨rfl, identity, by simpa [notApprove] using transferFrom⟩
+      · simp at classified
+  · simp at classified
+
+/-- Every committed exact approve or transferFrom frame is retained by the
+classifier.  Together with `classification_sound`, this is frame-level coverage;
+it still says nothing about the frame's intervening child chronology. -/
+theorem WethAllowanceEvent.classification_complete
+    {frame : Exec.Frame} {approval : Bool}
+    (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
+    WethAllowanceEvent.classify? frame = some ⟨frame, approval⟩ := by
+  change frame.exactInvocation Blanc.weth wethAccount wethAccount ∧
+    Sevm.selector frame.sevm =
+      if approval then selector "approve" [.address, .uint256]
+      else selector "transferFrom" [.address, .address, .uint256] at classified
+  rcases classified with ⟨identity, selected⟩
+  cases approval with
+  | false =>
+      have distinct : selector "transferFrom" [.address, .address, .uint256] ≠
+          selector "approve" [.address, .uint256] := by decide +kernel
+      simp only [Bool.false_eq_true, ↓reduceIte] at selected
+      have notApprove : Sevm.selector frame.sevm ≠
+          selector "approve" [.address, .uint256] := by
+        intro equal
+        exact distinct (selected.symm.trans equal)
+      unfold WethAllowanceEvent.classify?
+      rw [if_pos identity, if_neg notApprove, if_pos selected]
+  | true =>
+      simp only [↓reduceIte] at selected
+      unfold WethAllowanceEvent.classify?
+      rw [if_pos identity, if_pos selected]
+
+/-! ### Entry freshness for extracted committed frames
+
+`committedFrames` is a settlement projection while `FrameAdmitted` ranges over
+raw entered roots.  The common `ExecutionFrames` membership bridge carries a
+committed invocation root back to that all-outcome traversal; it deliberately
+does not claim same-frame prefix or resumed-parent storage chronology. -/
+
+/-- The event projection does not reorder committed frame roots.  It does not
+claim that `committedFrames` includes same-frame instruction prefixes or the
+resumed parent suffix after a child. -/
+theorem retainedWethAllowanceEvents_frame_sublist
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    List.Sublist ((retainedWethAllowanceEvents run).map WethAllowanceEvent.frame)
+      (Exec.committedFrames run) := by
+  unfold retainedWethAllowanceEvents
+  induction Exec.committedFrames run with
+  | nil => exact .slnil
+  | cons frame tail ih =>
+      cases hclassified : WethAllowanceEvent.classify? frame with
+      | none =>
+          simpa only [List.filterMap_cons_none hclassified, List.map] using ih.cons frame
+      | some event =>
+          have source := WethAllowanceEvent.classification_sound hclassified
+          simpa only [List.filterMap_cons_some hclassified, List.map, source.1] using
+            (List.Sublist.cons_cons frame ih)
+
+/-- Every selected event is an actual committed frame with the exact WETH
+identity and allowance selector that classified it. -/
+theorem retainedWethAllowanceEvents_sound
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {event : WethAllowanceEvent}
+    (member : event ∈ retainedWethAllowanceEvents run) :
+    event.frame ∈ Exec.committedFrames run ∧ event.Classified := by
+  rcases List.mem_filterMap.mp member with ⟨frame, frameMember, classified⟩
+  obtain ⟨sameFrame, exact⟩ := WethAllowanceEvent.classification_sound classified
+  exact ⟨by simpa only [sameFrame] using frameMember, exact⟩
+
+/-- Conversely, every committed frame with an exact approve or transferFrom
+root is retained as the corresponding event. -/
+theorem retainedWethAllowanceEvents_complete
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {frame : Exec.Frame} {approval : Bool}
+    (member : frame ∈ Exec.committedFrames run)
+    (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
+    ⟨frame, approval⟩ ∈ retainedWethAllowanceEvents run :=
+  List.mem_filterMap.mpr
+    ⟨frame, member, WethAllowanceEvent.classification_complete classified⟩
+
+/-- Every extracted event has well-formed entry memory when its concrete
+execution is admitted as freshly entered.  This derives the side condition
+from retained-frame provenance rather than leaving it as an allowance-history
+premise. -/
+theorem retainedWethAllowanceEvent_memoryWf
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
+    {event : WethAllowanceEvent}
+    (member : event ∈ retainedWethAllowanceEvents run) :
+    Mem.Wf event.frame.pre.memory := by
+  rcases List.mem_filterMap.mp member with ⟨frame, frameMember, classified⟩
+  have source := WethAllowanceEvent.classification_sound classified
+  have committed : event.frame ∈ Exec.committedFrames run := by
+    simpa only [source.1] using frameMember
+  have raw : event.frame.rootDeriv ∈ Exec.rawFrameRoots run :=
+    Exec.mem_rawFrameRoots_of_mem_committedFrames run event.frame committed
+  have entry : Exec.FreshEntry event.frame.sevm event.frame.pre :=
+    fresh event.frame.rootDeriv raw source.2.1.2.1
+  rw [entry.2]
+  exact Mem.wf_empty
+
+/-- A classified committed frame packages the existing exact WETH invocation
+record once its actual entry supplies well-formed memory.  The only endpoint
+used is the frame's own committed post, so a callback remains represented by
+its separately retained child event. -/
+theorem WethAllowanceEvent.toInvocation
+    (event : WethAllowanceEvent) (classified : event.Classified)
+    (memoryWf : Mem.Wf event.frame.pre.memory) :
+    ∃ call : WethAllowanceInvocation,
+      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
+        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
+  rcases event with ⟨frame, approval⟩
+  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
+  rcases classified with ⟨identity, selected⟩
+  cases out with
+  | error err => simp [Execution.commits] at committed
+  | ok post =>
+      have hpc : pc = 0 := identity.1
+      subst pc
+      refine ⟨⟨sevm, pre, post, approval, identity.2.1, memoryWf, ?_, selected⟩,
+        rfl, rfl, rfl, rfl⟩
+      exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run
+        identity.2.2.2
+
+/-- An event extracted from a fresh retained execution yields the existing
+allowance-invocation record with no caller-supplied memory condition. -/
+theorem retainedWethAllowanceEvent_toInvocation
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
+    {event : WethAllowanceEvent}
+    (member : event ∈ retainedWethAllowanceEvents run) :
+    ∃ call : WethAllowanceInvocation,
+      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
+        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
+  rcases List.mem_filterMap.mp member with ⟨frame, _, classified⟩
+  exact event.toInvocation (WethAllowanceEvent.classification_sound classified).2
+    (retainedWethAllowanceEvent_memoryWf run fresh member)
+
+/-- The event-to-invocation projection attached to a retained raw slot. -/
+def RetainedWethAllowanceEventInvocations
+    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot) : Prop :=
+  match retained with
+  | .none => True
+  | .some run => ∀ event : WethAllowanceEvent,
+      event ∈ retainedWethAllowanceEvents run →
+        ∃ call : WethAllowanceInvocation,
+          call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
+            call.pre = event.frame.pre ∧ call.post = event.frame.post
+
+/-- A retained slot whose actual frame entries are fresh supplies the
+memory condition needed by every projected allowance event. -/
+theorem retainedXlot_wethAllowanceEvents_toInvocations
+    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot)
+    (fresh : _root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted retained
+      wethAccount Exec.FreshEntry) :
+    RetainedWethAllowanceEventInvocations retained := by
+  cases retained with
+  | none => trivial
+  | some run =>
+      intro event member
+      have fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run := by
+        simpa only [_root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted] using fresh
+      exact retainedWethAllowanceEvent_toInvocation run fresh member
+
+/-- An actual retained call-message trace supplies the fresh-entry admission
+needed by the allowance projection.  This is a source fact of the entering
+frame, not an additional history premise.  A slot-free message has no raw
+execution and therefore no projected events. -/
+theorem processMessageTrace_retainedWethAllowanceEvents_toInvocations
+    {msg : Msg} {messageOut : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : _root_.Blanc.ExecutionTrace.ProcessMessageTrace msg messageOut) :
+    RetainedWethAllowanceEventInvocations trace.retained :=
+  retainedXlot_wethAllowanceEvents_toInvocations trace.retained
+    (_root_.Blanc.ExecutionTrace.ProcessMessageTrace.freshFrameAdmitted
+      trace wethAccount)
 
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.
