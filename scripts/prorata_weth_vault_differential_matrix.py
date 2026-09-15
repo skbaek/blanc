@@ -62,6 +62,9 @@ CASES = (
     "supported-root-redeem-zero", "supported-root-redeem-nonzero",
     "supported-root-withdraw-vault-self-receiver",
     "supported-root-redeem-vault-self-receiver",
+    *tuple(f"supported-root-{method}-{role}" for method in ("withdraw", "redeem") for role in (
+        "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+        "owner-receiver-distinct-caller", "all-distinct")),
     "supported-root-approve-initial-finite",
     "supported-root-approve-overwrite", "supported-root-approve-zero",
     "supported-root-approve-restored-finite",

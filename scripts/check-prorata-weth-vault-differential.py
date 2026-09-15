@@ -105,6 +105,10 @@ EXECUTED_CASE_CHANNELS = {
     "supported-root-redeem-nonzero": ("jaune",),
     "supported-root-withdraw-vault-self-receiver": ("jaune",),
     "supported-root-redeem-vault-self-receiver": ("jaune",),
+    **{f"supported-root-{method}-{role}": ("jaune",)
+       for method in ("withdraw", "redeem") for role in (
+           "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+           "owner-receiver-distinct-caller", "all-distinct")},
     "supported-root-approve-initial-finite": ("jaune",),
     "supported-root-approve-overwrite": ("jaune",),
     "supported-root-approve-zero": ("jaune",),
@@ -1159,6 +1163,61 @@ def check_causal_vault_self_receiver_exits(run: Runner) -> None:
         else:
             _withdraw_events(label, steps[0], run.user, VAULT_ADDR, run.user, returned, amount)
         record_case_if_clean(case, "jaune", run.side.name, before)
+
+
+def check_causal_outbound_role_partitions(run: Runner) -> None:
+    """All caller/owner/receiver equality partitions from actual share ownership."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    # role, caller signer/address, receiver, approval (None means owner call).
+    roles = (
+        ("all-equal", KEY, run.user, None),
+        ("caller-owner-distinct-receiver", KEY, receiver, None),
+        ("caller-receiver-distinct-owner", delegate_key, delegate, 3_000),
+        ("owner-receiver-distinct-caller", delegate_key, run.user, V.U),
+        ("all-distinct", delegate_key, receiver, 3_000),
+    )
+    for method, amount in (("withdraw", 2), ("redeem", 2_000)):
+        for role, caller_key, recipient, approval in roles:
+            before = len(FAILURES)
+            label = f"outbound-role-{method}-{role}"
+            setup = funded_pair(run, label, {KEY: 100}, {KEY: 100},
+                                extra_signers=(delegate_key, receiver_key))
+            if setup is None:
+                continue
+            setup_results, model, accounts = setup
+            steps = [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY)]
+            model_steps = [("deposit", (run.user, 10, run.user))]
+            if approval is not None:
+                steps.append(("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, approval), 0, KEY))
+                model_steps.append(("approve", (run.user, delegate, approval)))
+            caller = signer_address(caller_key)
+            sig = "withdraw(uint256,address,address)" if method == "withdraw" else "redeem(uint256,address,address)"
+            steps.append((method, VAULT_ADDR, abi(sig, amount, recipient, run.user), 0, caller_key))
+            model_steps.append((method, (caller, amount, recipient, run.user)))
+            results = run_sequence(run, label, setup_results[-1]["alloc"], steps)
+            if results is None:
+                continue
+            allowance_rows = ((run.user, delegate),) if approval is not None else ()
+            for index, ((model_method, args), result) in enumerate(zip(model_steps, results, strict=True)):
+                committed, value, model = oracle_transaction(model, model_method, *args)
+                if not committed:
+                    fail(f"{label}: oracle rejected reachable {model_method}")
+                    break
+                _pair_state(run, f"{label} {model_method}", result, model, accounts,
+                            weth_allowances=((run.user, VAULT_ADDR),), share_allowances=allowance_rows)
+                if index == 0:
+                    _deposit_events(f"{label} deposit", result, run.user, run.user, 10, value)
+                elif model_method == "approve":
+                    _exact_event(f"{label} approval", result, contract=VAULT_ADDR,
+                                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate), data_words=(approval,))
+                else:
+                    if method == "withdraw":
+                        _withdraw_events(label, result, caller, recipient, run.user, amount, value)
+                    else:
+                        _withdraw_events(label, result, caller, recipient, run.user, value, amount)
+            else:
+                record_case_if_clean(f"supported-root-{method}-{role}", "jaune", run.side.name, before)
 
 
 def _response_runtime(kind: str) -> bytes:
@@ -2240,6 +2299,7 @@ CHECKS = [
     check_causal_zero_nonzero_flows,
     check_causal_inbound_role_partitions,
     check_causal_vault_self_receiver_exits,
+    check_causal_outbound_role_partitions,
     check_adversarial_child_returns_and_rollback,
     check_capacity_boundaries,
     check_explicit_arithmetic_capacity_cases,
