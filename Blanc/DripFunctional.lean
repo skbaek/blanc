@@ -759,6 +759,63 @@ theorem drip_settledRevert_projections (msg : Msg) (raw : Devm)
     unfold Devm.getCode Devm.getAcct
     rw [MessageExecution.settledRevert_state]
 
+/-! ## Deployed-byte success-effect lifts
+
+Each lift carries a G2 `of_run_*` success effect from the endpoint body to the
+full deployed call: `exec_enters_*` supplies the body run with the frame
+intact, the canonical-entry hypothesis builds the machine `Frame`, and the two
+transport equations rewrite `entry` to `pre`. -/
+
+/-- Deployed-byte `drip()`: a successful call settles the fresh index and the
+timestamp into their frozen slots and returns the new index. -/
+theorem drip_exec_effect {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = dripSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ¬ Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∧
+      ¬ sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∧
+      B256.Nofm (Devm.getStorVal pre sevm.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (sevm.benvStat.time -
+            Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat) ∧
+      ¬ maxChi <
+        (B256.rpow scale half rate
+              (sevm.benvStat.time -
+                Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+            Devm.getStorVal pre sevm.currentTarget chiSlot) / scale ∧
+      Devm.getStor post sevm.currentTarget =
+        ((Devm.getStor pre sevm.currentTarget).set chiSlot
+            ((B256.rpow scale half rate
+                  (sevm.benvStat.time -
+                    Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+                Devm.getStorVal pre sevm.currentTarget chiSlot) / scale)).set
+          rhoSlot sevm.benvStat.time ∧
+      ReturnsWord
+        ((B256.rpow scale half rate
+              (sevm.benvStat.time -
+                Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+            Devm.getStorVal pre sevm.currentTarget chiSlot) / scale) post := by
+  rcases exec_enters_drip exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := of_run_drip auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget :=
+    getStor_eq_of_state_eq hst.symm sevm.currentTarget
+  simp only [hgv, hg] at heffect
+  exact heffect
+
 end Drip
 
 end Blanc
