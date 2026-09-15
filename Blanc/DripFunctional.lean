@@ -816,6 +816,156 @@ theorem drip_exec_effect {sevm : Sevm} {pre post : Devm}
   simp only [hgv, hg] at heffect
   exact heffect
 
+/-- Deployed-byte `join()`: a successful payable call mints the exact unit
+credit, checks both caps, writes the four ledger rows in frozen order, and
+returns the minted units. -/
+theorem join_exec_effect {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = joinSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ¬ maxAsset < sevm.value ∧
+      ¬ maxUnits < Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∧
+      ¬ maxPie < Devm.getStorVal pre sevm.currentTarget totalUnitsSlot ∧
+      ¬ Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∧
+      ¬ sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∧
+      ∃ freshChi units,
+        freshChi =
+          (B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal pre sevm.currentTarget chiSlot) / scale ∧
+        units = scale * sevm.value / freshChi ∧
+        ¬ maxUnits <
+          Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 + units ∧
+        ¬ maxPie <
+          units + Devm.getStorVal pre sevm.currentTarget totalUnitsSlot ∧
+        Devm.getStor post sevm.currentTarget =
+          ((((Devm.getStor pre sevm.currentTarget).set chiSlot freshChi).set
+              rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+              (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 +
+                units)).set totalUnitsSlot
+            (units + Devm.getStorVal pre sevm.currentTarget totalUnitsSlot) ∧
+        ReturnsWord units post := by
+  rcases exec_enters_join exc hcode hsel hnonempty with
+    ⟨-, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := of_run_join auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget :=
+    getStor_eq_of_state_eq hst.symm sevm.currentTarget
+  simp only [hgv, hg] at heffect
+  exact heffect
+
+/-- Deployed-byte `exit()`: a successful call settles the ledger at the call
+boundary, delivers the exact payout through a clean child settlement, and
+returns the payout word. -/
+theorem exit_exec_effect {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ExitPaysExactly sevm pre post := by
+  rcases exec_enters_exit exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := exit_pays_exactly auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget :=
+    getStor_eq_of_state_eq hst.symm sevm.currentTarget
+  unfold ExitPaysExactly at heffect ⊢
+  dsimp at heffect ⊢
+  simp only [hgv, hg] at heffect
+  exact heffect
+
+/-- Deployed-byte `convertToAssets()`: a successful call previews the exact
+asset payout at the realized index and writes nothing. -/
+theorem convertToAssets_exec_effect {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToAssetsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ¬ maxUnits < Sevm.dataWord sevm (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∧
+      ¬ sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∧
+      Devm.getStor pre = Devm.getStor post ∧
+      ReturnsWord
+        (((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal pre sevm.currentTarget chiSlot) / scale) *
+          Sevm.dataWord sevm (32 * 0 + 4) / scale) post := by
+  rcases exec_enters_convertToAssets exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := of_run_convertToAssets auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry = Devm.getStor pre := by
+    funext a
+    exact getStor_eq_of_state_eq hst.symm a
+  simp only [hgv, hg] at heffect
+  exact heffect
+
+/-- Deployed-byte `convertToUnits()`: a successful call previews the exact unit
+mint at the realized index and writes nothing. -/
+theorem convertToUnits_exec_effect {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToUnitsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ¬ maxAsset < Sevm.dataWord sevm (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal pre sevm.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal pre sevm.currentTarget chiSlot ∧
+      ¬ sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∧
+      Devm.getStor pre = Devm.getStor post ∧
+      ReturnsWord
+        (scale * Sevm.dataWord sevm (32 * 0 + 4) /
+          ((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal pre sevm.currentTarget chiSlot) / scale)) post := by
+  rcases exec_enters_convertToUnits exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := of_run_convertToUnits auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry = Devm.getStor pre := by
+    funext a
+    exact getStor_eq_of_state_eq hst.symm a
+  simp only [hgv, hg] at heffect
+  exact heffect
+
 end Drip
 
 end Blanc
