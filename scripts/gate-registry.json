@@ -856,7 +856,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Executes both compiled sides through Jaune against the independent oracle over the registered finite matrix; pinned EELS is a separate replay, never an observation of Jaune. The matrix producer, manifest and neutral returndata recorder are exact inputs alongside the runner, frozen literals, lock and committed measurements. Foreign-child rows are canonical-return probes outside exact-pair admission; they retain Jaune rollback evidence and EELS outcome replay only.",
+      "note": "Executes both compiled sides through Jaune against the independent oracle over the registered finite matrix; pinned EELS is a separate replay, never an observation of Jaune. The matrix producer, manifest and neutral returndata recorder are exact inputs alongside the runner, frozen literals, lock and committed measurements. Converter overflow requires source-derived exact Blanc-empty/reference-Panic(0x11) returndata on both engines. The executed-ID ledger credits only completed declared case/channel/side checks; it does not credit remaining SF rows. Foreign-child rows are canonical-return probes outside exact-pair admission; they retain Jaune rollback evidence and EELS outcome replay only.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -948,7 +948,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic. A live arithmetic-capacity CHECKS entry is removed while the declaration remains, and the executed-ID coverage audit must fail. Receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
+      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic. Jaune and EELS arithmetic-capacity invocations are each removed while the declaration remains, and the matching executed-ID coverage audit must fail. Receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [

@@ -49,6 +49,7 @@ from evm_return_capture import capture_runtime, decode as decode_capture  # noqa
 from keccak import keccak256, selector  # noqa: E402
 from prorata_weth_vault_differential_matrix import (  # noqa: E402
     ARITHMETIC_CAPACITY_CASES,
+    CASES,
     validate_manifest,
 )
 
@@ -69,10 +70,76 @@ SUPPLY_SLOT = (1 << 256) - 1   # ProrataWethVault.supplySlot = B256.max
 
 FAILURES: list[str] = []
 EXECUTED_ARITHMETIC_CAPACITY: set[tuple[str, str, str]] = set()
+EXECUTED_DECLARED_CASES: set[tuple[str, str, str]] = set()
+
+# The Blanc artifact's D2 policy is an empty revert payload.  The locked
+# OpenZeppelin source calls Panic.panic(Panic.UNDER_OVERFLOW) when Math.mulDiv
+# sees denominator <= high (Math.sol:218-220; Panic.sol:32,50-54).
+BLANC_EMPTY_REVERT = b""
+REFERENCE_MULDIV_OVERFLOW = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+
+# These are only cases that the present harness actually executes.  They are
+# deliberately narrower than the matrix declaration: unimplemented SF rows
+# stay declared but cannot acquire coverage credit from this ledger.
+EXECUTED_CASE_CHANNELS = {
+    "metadata-and-zero-views": ("jaune", "eels"),
+    "nonempty-and-donated-views": ("jaune", "eels"),
+    "deposit-empty": ("jaune",),
+    "deposit-donated": ("jaune",),
+    "causal-donation-before-deposit": ("jaune",),
+    "causal-donation-before-exit": ("jaune",),
+    "causal-between-users-donation": ("jaune",),
+    "causal-delegated-redeem": ("jaune",),
+    "causal-delegated-withdraw": ("jaune",),
+    "causal-share-allowance-roles": ("jaune",),
+    "causal-zero-nonzero-flows": ("jaune",),
+    "foreign-child-canonical-return-and-rollback": ("jaune", "eels"),
+    "mint-inexact": ("jaune",),
+    "redeem-inexact": ("jaune",),
+    "withdraw-inexact": ("jaune",),
+    "zero-address-rollbacks": ("jaune",),
+    "capacity-boundaries": ("jaune", "eels"),
+    "capacity-a-u-257-bit": ("jaune", "eels"),
+    "malformed-dispatch": ("jaune",),
+    "nonpayable-rollbacks": ("jaune",),
+    "event-order": ("jaune",),
+    "return-capture-controls": ("jaune",),
+    **{case: ("jaune", "eels") for case in ARITHMETIC_CAPACITY_CASES},
+}
 
 
 def fail(msg: str) -> None:
     FAILURES.append(msg)
+
+
+def record_declared_cases(cases: tuple[str, ...], channel: str, side: str) -> None:
+    """Credit only a completed named check on its actual engine and side."""
+    for case in cases:
+        if case not in CASES:
+            fail(f"executed coverage names undeclared case {case!r}")
+            continue
+        if channel not in EXECUTED_CASE_CHANNELS.get(case, ()):
+            fail(f"executed coverage names unimplemented channel {case}/{channel}")
+            continue
+        EXECUTED_DECLARED_CASES.add((case, channel, side))
+
+
+def validate_declared_case_coverage() -> None:
+    """Require every claimed implemented case/channel to have run on both sides."""
+    expected = {
+        (case, channel, side)
+        for case, channels in EXECUTED_CASE_CHANNELS.items()
+        for channel in channels
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    unexpected = sorted(EXECUTED_DECLARED_CASES - expected)
+    if missing:
+        fail("declared executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if unexpected:
+        fail("declared executed coverage recorded undeclared IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in unexpected))
 
 
 def record_arithmetic_capacity(case: str, channel: str, side: str) -> None:
@@ -84,6 +151,11 @@ def record_arithmetic_capacity(case: str, channel: str, side: str) -> None:
         fail(f"unknown arithmetic capacity channel {channel!r}")
         return
     EXECUTED_ARITHMETIC_CAPACITY.add((case, channel, side))
+
+
+def capacity_revert_payload(run: Runner) -> bytes:
+    """Frozen Blanc D2 versus locked-OZ mulDiv overflow payloads."""
+    return REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else BLANC_EMPTY_REVERT
 
 
 def validate_arithmetic_capacity_coverage() -> None:
@@ -1207,8 +1279,9 @@ def _expect_capacity_revert(run: Runner, label: str, alloc: dict, data: str) -> 
     except RuntimeError as exc:
         fail(str(exc))
         return
-    if success != 0:
-        fail(f"{label}: captured success/{payload.hex()}, expected revert status")
+    expected = capacity_revert_payload(run)
+    if success != 0 or payload != expected:
+        fail(f"{label}: captured {success}/{payload.hex()}, expected revert/{expected.hex()}")
 
 
 def check_explicit_arithmetic_capacity_cases(run: Runner) -> None:
@@ -1724,7 +1797,6 @@ def check_eels_capacity_views(run: Runner) -> None:
         import eels_differential_common as eels
     except ImportError as exc:
         raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
-    panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
     near_supply = V.MAX_SUPPLY - 1_000
     near_assets = V.ceil_div(near_supply, V.O)
     near_world = run.alloc(2, 2, {run.user: near_supply}, near_supply,
@@ -1743,11 +1815,11 @@ def check_eels_capacity_views(run: Runner) -> None:
          V.U if run.side.name == "reference" else V.max_mint(run.user, V.U, 0)),
         ("EELS A=U convertToShares", a_u_world, abi("convertToShares(uint256)", V.U),
          "revert" if run.side.name == "reference" else "success",
-         panic_11 if run.side.name == "reference" else V.convert_to_shares(V.U, V.U, 0)),
+         REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else V.convert_to_shares(V.U, V.U, 0)),
         ("EELS A=U previewMint", a_u_world,
          abi("previewMint(uint256)", V.max_mint(run.user, V.U, 0)),
          "revert" if run.side.name == "reference" else "success",
-         panic_11 if run.side.name == "reference" else V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0)),
+         REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0)),
     ]
     for label, alloc, data, expected_outcome, expected in cases:
         state = _eels_state(alloc)
@@ -1784,7 +1856,7 @@ def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
             fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
         actual = eels.outcome(output)
         returned = bytes(output.return_data)
-        if actual != outcome or (outcome == "success" and returned != expected):
+        if actual != outcome or returned != expected:
             fail(f"{label}: EELS {actual}/{returned.hex()}, expected {outcome}/{expected.hex()}")
 
     upper = _upper_supply_world(run)
@@ -1812,10 +1884,10 @@ def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
     expect("EELS converter assets representable", converter_assets, abi("convertToAssets(uint256)", V.O),
            "success", V.U.to_bytes(32, "big"))
     expect("EELS converter shares unrepresentable", converter_shares, abi("convertToShares(uint256)", 2),
-           "revert")
+           "revert", capacity_revert_payload(run))
     expect("EELS converter assets unrepresentable", converter_assets,
            abi("convertToAssets(uint256)", V.O + 1),
-           "revert")
+           "revert", capacity_revert_payload(run))
     record_arithmetic_capacity("converter-representable-and-unrepresentable", "eels", run.side.name)
 
     donation, assets, donation_supply = _high_word_donation_world(run)
@@ -2015,6 +2087,38 @@ CHECKS = [
     check_value_bearing_call_reverts,
 ]
 
+JAUNE_CASES_BY_CHECK = {
+    "check_deposit_into_empty_vault": ("deposit-empty",),
+    "check_deposit_into_donated_vault": ("deposit-donated",),
+    "check_causal_donation_before_deposit": ("causal-donation-before-deposit",),
+    "check_causal_donation_before_exit": ("causal-donation-before-exit",),
+    "check_causal_between_users_donation": ("causal-between-users-donation",),
+    "check_causal_delegated_redeem": ("causal-delegated-redeem",),
+    "check_causal_share_allowance_roles": ("causal-share-allowance-roles",),
+    "check_causal_delegated_withdraw": ("causal-delegated-withdraw",),
+    "check_causal_zero_nonzero_flows": ("causal-zero-nonzero-flows",),
+    "check_adversarial_child_returns_and_rollback": ("foreign-child-canonical-return-and-rollback",),
+    "check_capacity_boundaries": ("capacity-boundaries", "capacity-a-u-257-bit"),
+    "check_explicit_arithmetic_capacity_cases": ARITHMETIC_CAPACITY_CASES,
+    "check_mint": ("mint-inexact",),
+    "check_redeem": ("redeem-inexact",),
+    "check_withdraw": ("withdraw-inexact",),
+    "check_zero_receiver_deposit_reverts": ("zero-address-rollbacks",),
+    "check_deposit_event_order": ("event-order",),
+    "check_share_transfer_event": ("event-order",),
+    "check_view_returns": ("metadata-and-zero-views", "nonempty-and-donated-views"),
+    "check_action_returns": ("return-capture-controls",),
+    "check_malformed_calls_revert": ("malformed-dispatch",),
+    "check_value_bearing_call_reverts": ("nonpayable-rollbacks",),
+}
+
+EELS_CASES_BY_CHECK = {
+    "check_eels_view_returns": ("metadata-and-zero-views", "nonempty-and-donated-views"),
+    "check_eels_capacity_views": ("capacity-boundaries", "capacity-a-u-257-bit"),
+    "check_eels_explicit_arithmetic_capacity_cases": ARITHMETIC_CAPACITY_CASES,
+    "check_eels_adversarial_child_returns_and_rollback": ("foreign-child-canonical-return-and-rollback",),
+}
+
 MEASURED_CASES = ["deposit_into_empty_vault", "deposit_into_donated_vault",
                   "mint", "redeem", "withdraw", "share_transfer"]
 
@@ -2027,23 +2131,31 @@ def run_side(side: Side, weth_code: bytes) -> Runner:
             check(run)
         except RuntimeError as exc:
             fail(f"{check.__name__}: {exc}")
+        if len(FAILURES) == before:
+            record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()), "jaune", side.name)
         for index in range(before, len(FAILURES)):
             FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
     return run
 
 
 def run_eels_side(run: Runner) -> None:
-    before = len(FAILURES)
-    try:
-        check_eels_view_returns(run)
-        check_eels_action_returns(run)
-        check_eels_capacity_views(run)
-        check_eels_explicit_arithmetic_capacity_cases(run)
-        check_eels_adversarial_child_returns_and_rollback(run)
-    except RuntimeError as exc:
-        fail(f"EELS view matrix: {exc}")
-    for index in range(before, len(FAILURES)):
-        FAILURES[index] = f"[{run.side.name}] {FAILURES[index]}"
+    checks = (
+        check_eels_view_returns,
+        check_eels_action_returns,
+        check_eels_capacity_views,
+        check_eels_explicit_arithmetic_capacity_cases,
+        check_eels_adversarial_child_returns_and_rollback,
+    )
+    for check in checks:
+        before = len(FAILURES)
+        try:
+            check(run)
+        except RuntimeError as exc:
+            fail(f"{check.__name__}: {exc}")
+        if len(FAILURES) == before:
+            record_declared_cases(EELS_CASES_BY_CHECK.get(check.__name__, ()), "eels", run.side.name)
+        for index in range(before, len(FAILURES)):
+            FAILURES[index] = f"[{run.side.name}] {FAILURES[index]}"
 
 
 def measurements(blanc: Runner, reference: Runner) -> dict:
@@ -2335,6 +2447,42 @@ def self_test(report_path: Path | None = None) -> int:
                 })
         else:
             missed.append("no committed measurements file to perturb")
+
+        # The independent EELS arithmetic leg must be independently required:
+        # drop only its existing invocation, keep the declaration and Jaune
+        # implementation intact, regenerate source identity in this disposable
+        # tree, and require the channel-specific executed-ID audit to fail.
+        eels_coverage_line = "        check_eels_explicit_arithmetic_capacity_cases,\n"
+        if original_checker.count(eels_coverage_line) != 1:
+            missed.append("EELS arithmetic coverage omission control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(
+                eels_coverage_line, "        # omitted by EELS coverage control\n", 1))
+            if refresh_manifest():
+                result = run_gate()
+                output = result.stdout + result.stderr
+                needle = "arithmetic capacity coverage missing executed case/channel IDs"
+                if result.returncode == 0:
+                    missed.append("the EELS arithmetic implementation was omitted and the gate still passed")
+                elif needle not in output:
+                    missed.append("EELS arithmetic coverage omission did not reach its executed-ID audit")
+                checker.write_text(original_checker)
+                restored = require_green("EELS arithmetic coverage omission")
+                if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                        and needle in output):
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("EELS arithmetic coverage omission: " + diagnostic
+                                           + "; removal restored green")
+                    control_records.append({
+                        "label": "EELS arithmetic capacity executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
         saved_lock = lock_file.read_text()
         lock = json.loads(saved_lock)
         digest = lock["artifacts"]["configuredRuntime"]["sha256"]
@@ -2380,7 +2528,7 @@ def self_test(report_path: Path | None = None) -> int:
     else:
         print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
-          f"perturbations, one arithmetic executed-ID omission, one valid-call-as-revert "
+          f"perturbations, Jaune and EELS arithmetic executed-ID omissions, one valid-call-as-revert "
           f"probe, four receipt/rollback falsifiers, five executed return-capture controls, a perturbed "
           f"measurements file and a perturbed reference identity are all caught")
     return 0
@@ -2401,6 +2549,7 @@ def main(argv: list[str]) -> int:
     if reference is not None:
         run_eels_side(reference)
     validate_arithmetic_capacity_coverage()
+    validate_declared_case_coverage()
     measured = measurements(blanc, reference) if reference else None
     if measured is not None and not FAILURES:
         text = json.dumps(measured, indent=2, sort_keys=True) + "\n"
@@ -2419,6 +2568,12 @@ def main(argv: list[str]) -> int:
     print("  arithmetic capacity executed IDs: " + ", ".join(
         f"{case}/{channel}/{side}"
         for case, channel, side in sorted(EXECUTED_ARITHMETIC_CAPACITY)))
+    print("  declared executed IDs: " + ", ".join(
+        f"{case}/{channel}/{side}"
+        for case, channel, side in sorted(EXECUTED_DECLARED_CASES)))
+    print("  converter overflow returndata: Blanc " + BLANC_EMPTY_REVERT.hex()
+          + "; reference " + REFERENCE_MULDIV_OVERFLOW.hex()
+          + " (Jaune and EELS)")
     for case, row in measured["gas"].items():
         print(f"  gas {case}: blanc {row['blanc']} reference {row['reference']}")
     print(f"OK — vault differential: {len(CHECKS)} Jaune check groups and an "
