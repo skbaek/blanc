@@ -2,6 +2,10 @@
 
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.ExecutionAdmission
+import Blanc.ReachableExecFree
+import Blanc.ExecutionTrace
+import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionHistory
 
 /-!
 # The rely rung
