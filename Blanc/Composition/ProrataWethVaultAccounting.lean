@@ -1,6 +1,7 @@
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.ExecutionStateTrace
 import Blanc.ProrataAttackModel
+import Blanc.ProrataAttackTrace
 
 /-!
 # Exact four-quote accounting for the WETH vault
@@ -1010,6 +1011,18 @@ theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : De
       simpa [roundingContribution, retainedContribution, creditContribution] using
         credit_step_exact words wethTarget sourceNotVault supplyKept rowNof effect
 
+/-- Every actual four-quote operation weakly increases the virtual-asset
+price per share. -/
+theorem FourQuoteOperation.priceLe {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (operation : FourQuoteOperation vault sevm pre post) :
+    Blanc.Prorata.PriceLe Blanc.ProrataWethVault.offsetN
+      (vaultSnapshot vault pre) (vaultSnapshot vault post) := by
+  unfold Blanc.Prorata.PriceLe
+  change X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) ≤
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre)
+  rw [operation.step_exact]
+  omega
+
 /-- One actual transition packaged with its stable-state endpoints. -/
 structure FourQuoteStep (vault : Adr) : Type where
   before : State
@@ -1102,6 +1115,66 @@ theorem step_exact_at {vault : Adr} (path : FourQuotePath vault)
   simpa only [xAt, dAt, snapshotAt, roundingAt, retainedAt, creditAt,
     FourQuoteStep.stateTransition, FourQuoteTransition.stateTransition,
     hi, dite_true, hpre, hpost] using hstep
+
+/-- The actual effect at one in-range path boundary weakly increases price. -/
+theorem priceLe_step_at {vault : Adr} (path : FourQuotePath vault)
+    {i : Nat} (hi : i < path.steps.length) :
+    Blanc.Prorata.PriceLe Blanc.ProrataWethVault.offsetN
+      (path.snapshotAt i) (path.snapshotAt (i + 1)) := by
+  let index : Fin path.steps.length := ⟨i, hi⟩
+  let step := path.steps.get index
+  have hpre : path.worldAt i = step.before := by
+    calc
+      path.worldAt i = path.world index.castSucc := by
+        apply congrArg path.world
+        apply Fin.ext
+        simp [index, Nat.min_eq_left (Nat.le_of_lt hi)]
+      _ = step.before := by
+        simpa only [step] using path.pre_eq index
+  have hpost : path.worldAt (i + 1) = step.after := by
+    calc
+      path.worldAt (i + 1) = path.world index.succ := by
+        apply congrArg path.world
+        apply Fin.ext
+        simp [index, Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+      _ = step.after := by
+        simpa only [step] using path.post_eq index
+  have hprice := step.event.operation.priceLe
+  simpa only [snapshotAt, vaultSnapshot_state, step.event.preState,
+    step.event.postState, hpre, hpost] using hprice
+
+/-- Every clamped boundary of a connected actual-effect path is priced no
+lower than its first boundary. -/
+theorem priceLe_snapshotAt {vault : Adr} (path : FourQuotePath vault) :
+    ∀ i : Nat, Blanc.Prorata.PriceLe Blanc.ProrataWethVault.offsetN
+      (path.snapshotAt 0) (path.snapshotAt i) := by
+  intro i
+  induction i with
+  | zero => exact Blanc.Prorata.PriceLe.refl _ _
+  | succ i ih =>
+      by_cases hi : i < path.steps.length
+      · exact Blanc.Prorata.PriceLe.trans Blanc.ProrataWethVault.offsetN_ne_zero
+          ih (path.priceLe_step_at hi)
+      · have hstay : path.snapshotAt (i + 1) = path.snapshotAt i := by
+          unfold snapshotAt worldAt
+          apply congrArg (stateSnapshot vault)
+          apply congrArg path.world
+          apply Fin.ext
+          have hle : path.steps.length ≤ i := Nat.le_of_not_lt hi
+          simp [Nat.min_eq_right hle,
+            Nat.min_eq_right (Nat.le_succ_of_le hle)]
+        rw [hstay]
+        exact ih
+
+/-- A zero-snapshot actual-effect path preserves the local supply/asset bound
+at every clamped boundary. -/
+theorem supply_le_offset_mul_balance {vault : Adr} (path : FourQuotePath vault)
+    (hzero : path.snapshotAt 0 = ⟨0, 0⟩) (i : Nat) :
+    (path.snapshotAt i).supply ≤ Blanc.ProrataWethVault.offsetN *
+      (path.snapshotAt i).balance := by
+  apply Blanc.Prorata.backed_of_priceLe_genesis
+  rw [← hzero]
+  exact path.priceLe_snapshotAt i
 
 /-- Direct Nat-semiring telescope for a connected finite trace of actual
 four-quote effects. -/
