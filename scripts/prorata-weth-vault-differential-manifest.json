@@ -4,7 +4,7 @@
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 1
   },
-  "producerSha256": "98e89be75002aa1db051897fa03a4ab7d93583be425789b47951327e815b5db7",
+  "producerSha256": "5cddc72b735b4559dd6a20550ccd939d121a849c508945b612cbad5692aff29d",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -17,8 +17,28 @@
       "causal-between-users-donation",
       "causal-delegated-redeem",
       "causal-delegated-withdraw",
-      "causal-share-allowance-roles",
-      "causal-zero-nonzero-flows",
+      "supported-root-deposit-zero",
+      "supported-root-deposit-nonzero",
+      "supported-root-mint-zero",
+      "supported-root-mint-nonzero",
+      "supported-root-withdraw-zero",
+      "supported-root-withdraw-nonzero",
+      "supported-root-redeem-zero",
+      "supported-root-redeem-nonzero",
+      "supported-root-approve-initial-finite",
+      "supported-root-approve-overwrite",
+      "supported-root-approve-zero",
+      "supported-root-approve-restored-finite",
+      "supported-root-approve-self",
+      "supported-root-approve-max",
+      "supported-root-transfer-from-finite",
+      "supported-root-transfer-from-owner",
+      "supported-root-transfer-from-infinite",
+      "supported-root-transfer-self",
+      "supported-root-transfer-zero",
+      "supported-root-allowance-underflow-rollback",
+      "supported-root-deposit-zero-receiver-rollback",
+      "supported-root-transfer-zero-receiver-rollback",
       "foreign-child-canonical-return-and-rollback",
       "mint-inexact",
       "redeem-inexact",
@@ -32,7 +52,8 @@
       "capacity-a-u-257-bit",
       "malformed-dispatch",
       "nonpayable-rollbacks",
-      "event-order",
+      "event-order-deposit",
+      "event-order-share-transfer",
       "return-capture-controls",
       "callback-and-attack-rollbacks",
       "capacity-supply-upper-bound",
@@ -77,7 +98,7 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "bdc833176d6da787909a9a01ffef7c47fe4862d9e4555864af8345a73af6596c",
+      "scripts/check-prorata-weth-vault-differential.py": "6763072f3a0b4662a8cfd33c2b8ed45f2e6d2fda170baba12ab69d410a14490e",
       "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
       "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
     }

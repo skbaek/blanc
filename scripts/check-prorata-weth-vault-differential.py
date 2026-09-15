@@ -91,8 +91,28 @@ EXECUTED_CASE_CHANNELS = {
     "causal-between-users-donation": ("jaune",),
     "causal-delegated-redeem": ("jaune",),
     "causal-delegated-withdraw": ("jaune",),
-    "causal-share-allowance-roles": ("jaune",),
-    "causal-zero-nonzero-flows": ("jaune",),
+    "supported-root-deposit-zero": ("jaune",),
+    "supported-root-deposit-nonzero": ("jaune",),
+    "supported-root-mint-zero": ("jaune",),
+    "supported-root-mint-nonzero": ("jaune",),
+    "supported-root-withdraw-zero": ("jaune",),
+    "supported-root-withdraw-nonzero": ("jaune",),
+    "supported-root-redeem-zero": ("jaune",),
+    "supported-root-redeem-nonzero": ("jaune",),
+    "supported-root-approve-initial-finite": ("jaune",),
+    "supported-root-approve-overwrite": ("jaune",),
+    "supported-root-approve-zero": ("jaune",),
+    "supported-root-approve-restored-finite": ("jaune",),
+    "supported-root-approve-self": ("jaune",),
+    "supported-root-approve-max": ("jaune",),
+    "supported-root-transfer-from-finite": ("jaune",),
+    "supported-root-transfer-from-owner": ("jaune",),
+    "supported-root-transfer-from-infinite": ("jaune",),
+    "supported-root-transfer-self": ("jaune",),
+    "supported-root-transfer-zero": ("jaune",),
+    "supported-root-allowance-underflow-rollback": ("jaune",),
+    "supported-root-deposit-zero-receiver-rollback": ("jaune",),
+    "supported-root-transfer-zero-receiver-rollback": ("jaune",),
     "foreign-child-canonical-return-and-rollback": ("jaune", "eels"),
     "mint-inexact": ("jaune",),
     "redeem-inexact": ("jaune",),
@@ -102,7 +122,8 @@ EXECUTED_CASE_CHANNELS = {
     "capacity-a-u-257-bit": ("jaune", "eels"),
     "malformed-dispatch": ("jaune",),
     "nonpayable-rollbacks": ("jaune",),
-    "event-order": ("jaune",),
+    "event-order-deposit": ("jaune",),
+    "event-order-share-transfer": ("jaune",),
     "return-capture-controls": ("jaune",),
     **{case: ("jaune", "eels") for case in ARITHMETIC_CAPACITY_CASES},
 }
@@ -122,6 +143,12 @@ def record_declared_cases(cases: tuple[str, ...], channel: str, side: str) -> No
             fail(f"executed coverage names unimplemented channel {case}/{channel}")
             continue
         EXECUTED_DECLARED_CASES.add((case, channel, side))
+
+
+def record_case_if_clean(case: str, channel: str, side: str, failures_before: int) -> None:
+    """Emit one SF subcase ID only after its own concrete assertions passed."""
+    if len(FAILURES) == failures_before:
+        record_declared_cases((case,), channel, side)
 
 
 def validate_declared_case_coverage() -> None:
@@ -878,40 +905,61 @@ def check_causal_share_allowance_roles(run: Runner) -> None:
         ("transfer", (run.user, receiver, 0)),
     )
     allowance_rows = ((run.user, delegate), (run.user, run.user))
-    for (method, args), result in zip(model_steps, steps, strict=True):
+    approval_cases = {
+        1: (delegate, finite, "supported-root-approve-initial-finite"),
+        2: (delegate, 2_500, "supported-root-approve-overwrite"),
+        3: (delegate, 0, "supported-root-approve-zero"),
+        4: (delegate, finite, "supported-root-approve-restored-finite"),
+        6: (run.user, self_allowance, "supported-root-approve-self"),
+        8: (delegate, maximum, "supported-root-approve-max"),
+    }
+    transfer_cases = {
+        5: (receiver, 1_000, "supported-root-transfer-from-finite"),
+        7: (receiver, 100, "supported-root-transfer-from-owner"),
+        9: (receiver, 100, "supported-root-transfer-from-infinite"),
+        10: (run.user, 200, "supported-root-transfer-self"),
+        11: (receiver, 0, "supported-root-transfer-zero"),
+    }
+    minted = V.convert_to_shares(10, 0, 0)
+    for index, ((method, args), result) in enumerate(zip(model_steps, steps, strict=True)):
+        before = len(FAILURES)
         committed, value, model = oracle_transaction(model, method, *args)
         if not committed:
             fail(f"share-allowance-roles oracle rejected {method}")
             return
         _pair_state(run, f"share-allowance-roles {method}", result, model, accounts,
                     weth_allowances=((run.user, VAULT_ADDR),), share_allowances=allowance_rows)
-    minted = V.convert_to_shares(10, 0, 0)
-    _deposit_events("share-allowance-roles deposit", steps[0], run.user, run.user, 10, minted)
-    for index, amount in ((1, finite), (2, 2_500), (3, 0), (4, finite), (6, self_allowance), (8, maximum)):
-        spender = run.user if index == 6 else delegate
-        _exact_event("share-allowance-roles approval", steps[index], contract=VAULT_ADDR,
-                     signature="Approval(address,address,uint256)", indexed=(run.user, spender),
-                     data_words=(amount,))
-    for index, caller, amount in ((5, delegate, 1_000), (7, run.user, 100), (9, delegate, 100),
-                                  (10, run.user, 200), (11, run.user, 0)):
-        source = run.user
-        target = run.user if index == 10 else receiver
-        _exact_event("share-allowance-roles transfer", steps[index], contract=VAULT_ADDR,
-                     signature="Transfer(address,address,uint256)", indexed=(source, target),
-                     data_words=(amount,))
+        if index == 0:
+            _deposit_events("share-allowance-roles deposit", result, run.user, run.user, 10, minted)
+        elif index in approval_cases:
+            spender, amount, case = approval_cases[index]
+            _exact_event("share-allowance-roles approval", result, contract=VAULT_ADDR,
+                         signature="Approval(address,address,uint256)", indexed=(run.user, spender),
+                         data_words=(amount,))
+            record_case_if_clean(case, "jaune", run.side.name, before)
+        elif index in transfer_cases:
+            receiver_, amount, case = transfer_cases[index]
+            _exact_event("share-allowance-roles transfer", result, contract=VAULT_ADDR,
+                         signature="Transfer(address,address,uint256)", indexed=(run.user, receiver_),
+                         data_words=(amount,))
+            record_case_if_clean(case, "jaune", run.side.name, before)
 
     # Each failure starts from a genuine prior post-state. The whole vault
     # account includes every share/allowance row; the WETH account includes its
     # finite residual allowance. Only payer envelope effects stay excluded.
     exhausted = steps[3]["alloc"]
+    before = len(FAILURES)
     _check_revert_evidence("share-allowance-roles exhausted finite allowance", exhausted,
                            run.call(exhausted, abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
                                     signing_key=delegate_key,
                                     nonce=_next_nonce(exhausted, delegate_key)))
+    record_case_if_clean("supported-root-allowance-underflow-rollback", "jaune", run.side.name, before)
     final = steps[-1]["alloc"]
+    before = len(FAILURES)
     _check_revert_evidence("share-allowance-roles zero receiver", final,
                            run.call(final, abi("transfer(address,uint256)", 0, 1),
                                     nonce=_next_nonce(final, KEY)))
+    record_case_if_clean("supported-root-transfer-zero-receiver-rollback", "jaune", run.side.name, before)
 
 
 def check_causal_delegated_withdraw(run: Runner) -> None:
@@ -977,7 +1025,18 @@ def check_causal_zero_nonzero_flows(run: Runner) -> None:
     ])
     if steps is None:
         return
+    flow_cases = {
+        "zero deposit": "supported-root-deposit-zero",
+        "nonzero deposit": "supported-root-deposit-nonzero",
+        "zero mint": "supported-root-mint-zero",
+        "nonzero mint": "supported-root-mint-nonzero",
+        "zero withdraw": "supported-root-withdraw-zero",
+        "nonzero withdraw": "supported-root-withdraw-nonzero",
+        "zero redeem": "supported-root-redeem-zero",
+        "nonzero redeem": "supported-root-redeem-nonzero",
+    }
     for (label, method, args, _), result in zip(flows, steps, strict=True):
+        before = len(FAILURES)
         committed, value, model = oracle_transaction(model, method, *args)
         if not committed:
             fail(f"zero-nonzero-flows oracle rejected {label}")
@@ -996,6 +1055,7 @@ def check_causal_zero_nonzero_flows(run: Runner) -> None:
         else:
             _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
                              run.user, value, args[1])
+        record_case_if_clean(flow_cases[label], "jaune", run.side.name, before)
 
 
 def _response_runtime(kind: str) -> bytes:
@@ -1433,19 +1493,23 @@ def check_share_transfer(run: Runner) -> None:
 
 def check_zero_receiver_deposit_reverts(run: Runner) -> None:
     """The oracle reverts on a zero receiver; so must the artifact."""
-    model = V.Vault(weth={run.user: 10 ** 18},
-                    weth_allowances={(run.user, 1): V.U})
+    setup = funded_pair(run, "zero-receiver-deposit", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, _ = setup
+    prestate = setup_results[-1]["alloc"]
     try:
         model.deposit(run.user, 1, 0)
         fail("the oracle accepted a zero-receiver deposit")
         return
     except V.Revert:
         pass
-    before = run.alloc(10 ** 18, 10 ** 18)
-    result = run.call(before, abi("deposit(uint256,address)", 1, 0))
-    vault, weth = vault_state(result)
-    if run.supply(vault) != 0 or storage_get(weth, VAULT_ADDR) != 0:
-        fail("a zero-receiver deposit changed state; it must roll back whole")
+    result = run.call(prestate, abi("deposit(uint256,address)", 1, 0),
+                      nonce=_next_nonce(prestate, KEY))
+    failures_before = len(FAILURES)
+    _check_revert_evidence("zero-receiver deposit", prestate, result)
+    record_case_if_clean("supported-root-deposit-zero-receiver-rollback", "jaune", run.side.name,
+                         failures_before)
 
 
 def event_topic(signature: str) -> str:
@@ -2094,9 +2158,7 @@ JAUNE_CASES_BY_CHECK = {
     "check_causal_donation_before_exit": ("causal-donation-before-exit",),
     "check_causal_between_users_donation": ("causal-between-users-donation",),
     "check_causal_delegated_redeem": ("causal-delegated-redeem",),
-    "check_causal_share_allowance_roles": ("causal-share-allowance-roles",),
     "check_causal_delegated_withdraw": ("causal-delegated-withdraw",),
-    "check_causal_zero_nonzero_flows": ("causal-zero-nonzero-flows",),
     "check_adversarial_child_returns_and_rollback": ("foreign-child-canonical-return-and-rollback",),
     "check_capacity_boundaries": ("capacity-boundaries", "capacity-a-u-257-bit"),
     "check_explicit_arithmetic_capacity_cases": ARITHMETIC_CAPACITY_CASES,
@@ -2104,8 +2166,8 @@ JAUNE_CASES_BY_CHECK = {
     "check_redeem": ("redeem-inexact",),
     "check_withdraw": ("withdraw-inexact",),
     "check_zero_receiver_deposit_reverts": ("zero-address-rollbacks",),
-    "check_deposit_event_order": ("event-order",),
-    "check_share_transfer_event": ("event-order",),
+    "check_deposit_event_order": ("event-order-deposit",),
+    "check_share_transfer_event": ("event-order-share-transfer",),
     "check_view_returns": ("metadata-and-zero-views", "nonempty-and-donated-views"),
     "check_action_returns": ("return-capture-controls",),
     "check_malformed_calls_revert": ("malformed-dispatch",),
@@ -2373,16 +2435,90 @@ def self_test(report_path: Path | None = None) -> int:
                                      "stdout": restored.stdout, "stderr": restored.stderr},
                     })
 
+        # Event ordering has two independent frozen subcases.  Removing the
+        # deposit-order check must leave its own ID missing even though the
+        # share-transfer event check still runs.
+        event_coverage_line = "    check_deposit_event_order,\n"
+        if original_checker.count(event_coverage_line) != 1:
+            missed.append("deposit event-order omission control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(
+                event_coverage_line, "    # omitted by deposit event-order coverage control\n", 1))
+            if refresh_manifest():
+                result = run_gate()
+                output = result.stdout + result.stderr
+                needle = "declared executed coverage missing case/channel IDs: event-order-deposit/jaune/blanc"
+                if result.returncode == 0:
+                    missed.append("the deposit event-order implementation was omitted and the gate still passed")
+                elif needle not in output:
+                    missed.append("deposit event-order omission did not reach its own executed-ID audit")
+                checker.write_text(original_checker)
+                restored = require_green("deposit event-order omission")
+                if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                        and needle in output):
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("deposit event-order omission: " + diagnostic
+                                           + "; removal restored green")
+                    control_records.append({
+                        "label": "deposit event-order executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
+
+        # A flow/allowance history is also ledgered at subcase granularity.
+        # Changing only the infinite-allowance credit must fail while its
+        # finite sibling continues to execute.
+        allowance_credit = '        9: (receiver, 100, "supported-root-transfer-from-infinite"),\n'
+        if original_checker.count(allowance_credit) != 1:
+            missed.append("infinite allowance omission control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(
+                allowance_credit,
+                '        9: (receiver, 100, "supported-root-transfer-from-finite"),\n', 1))
+            if refresh_manifest():
+                result = run_gate()
+                output = result.stdout + result.stderr
+                needle = ("declared executed coverage missing case/channel IDs: "
+                          "supported-root-transfer-from-infinite/jaune/blanc")
+                if result.returncode == 0:
+                    missed.append("the infinite-allowance credit was omitted and the gate still passed")
+                elif needle not in output:
+                    missed.append("infinite-allowance omission did not reach its own executed-ID audit")
+                checker.write_text(original_checker)
+                restored = require_green("infinite allowance omission")
+                if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                        and needle in output):
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("infinite allowance omission: " + diagnostic
+                                           + "; removal restored green")
+                    control_records.append({
+                        "label": "infinite allowance executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
+
         weth_code = _literal("Blanc/WethCode.lean", "wethCode")
         run = Runner(blanc_side(), weth_code)
         FAILURES.clear()
         _must_revert(run, "a genuinely valid deposit",
                      abi("deposit(uint256,address)", 10 ** 6, run.user))
-        if not FAILURES:
-            missed.append("a valid deposit passed the revert check")
-        control_records.append({"label": "valid call as revert", "expectedDiagnostic": "status is 1",
-                                "diagnostics": list(FAILURES),
-                                "verdict": "caught" if FAILURES else "missed"})
+        expected_valid_revert = "a genuinely valid deposit: the call status is 1, but the statement requires a revert"
+        valid_diagnostics = list(FAILURES)
+        if valid_diagnostics != [expected_valid_revert]:
+            missed.append("the valid-call-as-revert control did not report its exact successful-status diagnostic")
+        control_records.append({"label": "valid call as revert", "expectedDiagnostic": expected_valid_revert,
+                                "diagnostics": valid_diagnostics,
+                                "verdict": "caught" if valid_diagnostics == [expected_valid_revert] else "missed"})
         FAILURES.clear()
 
         # Receipt and rollback witnesses are deliberately checked apart from
