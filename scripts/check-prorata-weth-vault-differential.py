@@ -36,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -464,22 +465,63 @@ def check_share_transfer_event(run: Runner) -> None:
         fail("the share Transfer's amount word is wrong")
 
 
-def _must_revert(run: Runner, label: str, data: str, value: int = 0) -> None:
-    """The call must fail and leave no trace: no state change, no events."""
-    result = run.call(run.alloc(10 ** 18, 10 ** 18), data, value=value)
-    if result["result"].get("rejected"):
-        return          # rejected before execution is also a refusal
-    receipts = result["result"].get("receipts") or []
-    # The runner spells a successful status "0x1", not "0x01"; compare as a
-    # number so the check cannot silently never fire.
-    if receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
-        fail(f"{label}: the call succeeded; the statement says it reverts")
+def _check_revert_evidence(label: str, before: dict, result: dict) -> None:
+    """Require one executed reverting transaction and complete relevant rollback.
+
+    `t8n` can reject a malformed transaction before it reaches the EVM.  That
+    is not an observation of this runtime's revert behavior.  Likewise, an
+    absent receipt is not evidence of a failed execution.  The relevant state
+    for this two-contract composition is the complete WETH and vault storage
+    maps, including allowance rows which a child call might otherwise mutate.
+    Transaction nonce and payer-balance changes are deliberately excluded:
+    they are consensus effects of an accepted failed transaction, not contract
+    rollback failures.
+    """
+    body = result.get("result")
+    if not isinstance(body, dict):
+        fail(f"{label}: t8n returned no result body")
         return
-    vault, weth = vault_state(result)
-    if run.supply(vault) != 0 or storage_get(weth, VAULT_ADDR) != 0:
-        fail(f"{label}: reverted but left state behind")
-    if logs_of(result):
+    if body.get("rejected"):
+        fail(f"{label}: transaction was rejected before EVM execution: {body['rejected']}")
+        return
+    receipts = body.get("receipts")
+    if not isinstance(receipts, list) or len(receipts) != 1:
+        fail(f"{label}: expected exactly one accepted-transaction receipt, got {receipts!r}")
+        return
+    receipt = receipts[0]
+    if not isinstance(receipt, dict) or "status" not in receipt:
+        fail(f"{label}: the accepted transaction receipt has no status")
+        return
+    try:
+        status = int(receipt["status"], 16)
+    except (TypeError, ValueError):
+        fail(f"{label}: receipt status is not a hexadecimal quantity: {receipt.get('status')!r}")
+        return
+    if status != 0:
+        fail(f"{label}: the call status is {status}, but the statement requires a revert")
+        return
+    logs = receipt.get("logs")
+    if not isinstance(logs, list):
+        fail(f"{label}: reverting receipt has no log list")
+    elif logs:
         fail(f"{label}: reverted but emitted events")
+
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: t8n returned no post-state allocation")
+        return
+    for account, name in ((VAULT_ADDR, "vault"), (WETH_ADDR, "WETH")):
+        key = address(account)
+        old = before.get(key, {}).get("storage")
+        new = post.get(key, {}).get("storage")
+        if old != new:
+            fail(f"{label}: reverted but {name} storage differs from its complete pre-state")
+
+
+def _must_revert(run: Runner, label: str, data: str, value: int = 0) -> None:
+    """The call must execute, revert, and roll back contracts and logs whole."""
+    before = run.alloc(10 ** 18, 10 ** 18)
+    _check_revert_evidence(label, before, run.call(before, data, value=value))
 
 
 def check_malformed_calls_revert(run: Runner) -> None:
@@ -615,6 +657,28 @@ def self_test() -> int:
         missed.append("a valid deposit passed the revert check")
     FAILURES.clear()
 
+    # Receipt and rollback witnesses are deliberately checked apart from the
+    # real valid-call probe above.  These synthetic t8n-shaped rows exercise
+    # the exact false-positive paths that used to make an unexecuted rejection
+    # or a receiptless result look like an EVM revert.
+    before = run.alloc(10 ** 18, 10 ** 18)
+
+    def caught(label: str, result: dict) -> None:
+        _check_revert_evidence(label, before, result)
+        if not FAILURES:
+            missed.append(f"{label}: bad revert evidence passed")
+        FAILURES.clear()
+
+    caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
+                                          "alloc": before})
+    caught("a missing receipt", {"result": {"receipts": []}, "alloc": before})
+    changed = deepcopy(before)
+    changed[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(1)
+    caught("a rollback leak", {"result": {"receipts": [{"status": "0x0", "logs": []}]},
+                                 "alloc": changed})
+    caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
+                                "alloc": before})
+
     # The reference half must bite too: a perturbed measurements file and a
     # perturbed locked runtime identity are each a failure.
     if MEASUREMENTS.is_file():
@@ -651,8 +715,9 @@ def self_test() -> int:
             print(f"REGRESSION — vault differential self-test: {message}")
         return 1
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
-          f"perturbations, one valid-call-as-revert probe, a perturbed "
-          f"measurements file and a perturbed reference identity are all caught")
+          f"perturbations, one valid-call-as-revert probe, four receipt/rollback "
+          f"falsifiers, a perturbed measurements file and a perturbed reference "
+          f"identity are all caught")
     return 0
 
 
