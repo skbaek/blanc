@@ -1,6 +1,7 @@
 import Blanc.Composition.ProrataWethVaultBoundary
 import Blanc.CompiledFixedInvariance
 import Blanc.ExecutionFrameEntry
+import Blanc.ExecutionPath
 import Blanc.ExecutionTraceFresh
 import Blanc.Ladder
 import Blanc.NonpayableInversion
@@ -553,6 +554,34 @@ def retainedWethAllowanceEvents
     (run : Exec pc sevm pre out) : List WethAllowanceEvent :=
   (Exec.committedFrames run).filterMap WethAllowanceEvent.classify?
 
+/-- A classified WETH allowance invocation together with its stable retained
+path.  `located` is intentionally retained as data rather than recovered by
+frame equality: two equal-looking WETH frames may be distinct occurrences in
+one recursive execution. -/
+structure WethAllowanceLocatedEvent where
+  located : Exec.LocatedFrame
+  invocation : WethAllowanceEvent
+
+/-- Erase only the retained path after the occurrence-sensitive consumer has
+used it. -/
+def WethAllowanceLocatedEvent.toEvent
+    (event : WethAllowanceLocatedEvent) : WethAllowanceEvent :=
+  event.invocation
+
+/-- Reuse the established WETH classifier at a stable retained occurrence. -/
+def WethAllowanceLocatedEvent.classify?
+  (located : Exec.LocatedFrame) : Option WethAllowanceLocatedEvent :=
+  (WethAllowanceEvent.classify? located.frame).map fun event =>
+    ⟨located, event⟩
+
+/-- The path-preserving allowance projection keeps the exact order of
+`committedFramePaths`; erasing paths is proved below to recover the existing
+frame-only projection without deduplicating occurrences. -/
+def retainedWethAllowanceLocatedEvents
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List WethAllowanceLocatedEvent :=
+  (Exec.committedFramePaths run).filterMap WethAllowanceLocatedEvent.classify?
+
 theorem WethAllowanceEvent.classification_sound
     {frame : Exec.Frame} {event : WethAllowanceEvent}
     (classified : WethAllowanceEvent.classify? frame = some event) :
@@ -599,6 +628,62 @@ theorem WethAllowanceEvent.classification_complete
       simp only [↓reduceIte] at selected
       unfold WethAllowanceEvent.classify?
       rw [if_pos identity, if_pos selected]
+
+/-- Classifying a path-retained frame preserves that exact path and produces
+the existing frame-level WETH allowance classification. -/
+theorem WethAllowanceLocatedEvent.classification_sound
+    {located : Exec.LocatedFrame} {event : WethAllowanceLocatedEvent}
+    (classified : WethAllowanceLocatedEvent.classify? located = some event) :
+    event.located = located ∧ event.toEvent.Classified := by
+  unfold WethAllowanceLocatedEvent.classify? at classified
+  cases source : WethAllowanceEvent.classify? located.frame with
+  | none => simp [source] at classified
+  | some selected =>
+      simp [source] at classified
+      cases classified
+      exact ⟨rfl, (WethAllowanceEvent.classification_sound source).2⟩
+
+/-- Erasing stable retained paths recovers the earlier allowance-event list in
+the identical list order. -/
+theorem retainedWethAllowanceLocatedEvents_erase
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    (retainedWethAllowanceLocatedEvents run).map WethAllowanceLocatedEvent.toEvent =
+      retainedWethAllowanceEvents run := by
+  unfold retainedWethAllowanceLocatedEvents retainedWethAllowanceEvents
+  rw [List.map_filterMap]
+  rw [← Exec.committedFramePaths_map_frame]
+  rw [List.filterMap_map]
+  apply List.filterMap_congr
+  intro located _
+  simp only [Function.comp_apply]
+  unfold WethAllowanceLocatedEvent.classify?
+    WethAllowanceLocatedEvent.toEvent
+  cases WethAllowanceEvent.classify? located.frame <;> rfl
+
+/-- A path-preserving projected event retains both its exact original path
+member and the existing WETH allowance classification. -/
+theorem retainedWethAllowanceLocatedEvents_sound
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {event : WethAllowanceLocatedEvent}
+    (member : event ∈ retainedWethAllowanceLocatedEvents run) :
+    event.located ∈ Exec.committedFramePaths run ∧ event.toEvent.Classified := by
+  rcases List.mem_filterMap.mp member with ⟨located, locatedMember, classified⟩
+  obtain ⟨sameLocated, exact⟩ :=
+    WethAllowanceLocatedEvent.classification_sound classified
+  exact ⟨by simpa only [sameLocated] using locatedMember, exact⟩
+
+/-- The first path-aware WETH consumer invokes the common parent-entry bridge
+on the event's actual retained occurrence.  The root case stays an explicit
+configured-envelope obligation; it is not inferred from a raw message trace. -/
+theorem retainedWethAllowanceLocatedEvent_enteringOccurrence
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {event : WethAllowanceLocatedEvent}
+    (member : event ∈ retainedWethAllowanceLocatedEvents run)
+    (nonroot : event.located.path ≠ []) :
+    Nonempty (Exec.LocatedFrame.EnteringOccurrence run event.located) :=
+  Exec.LocatedFrame.exists_enteringOccurrence run event.located
+    (retainedWethAllowanceLocatedEvents_sound run member).1 nonroot
 
 /-! ### Entry freshness for extracted committed frames
 
@@ -648,6 +733,19 @@ theorem retainedWethAllowanceEvents_complete
     ⟨frame, approval⟩ ∈ retainedWethAllowanceEvents run :=
   List.mem_filterMap.mpr
     ⟨frame, member, WethAllowanceEvent.classification_complete classified⟩
+
+/-- The storage endpoint of a classified allowance frame is its settlement-
+retained SSTORE replay. This is the execution chronology used by the history
+adapter: a nested callback's writes occur before the resumed parent suffix,
+not merely after the parent frame in an invocation-root projection. -/
+theorem WethAllowanceEvent.storageReplay
+    (event : WethAllowanceEvent) (key : B256) :
+    (Devm.getStor event.frame.post wethAccount).get key =
+      Exec.StorageWrite.replayCell wethAccount key
+        ((Devm.getStor event.frame.pre wethAccount).get key)
+        (Exec.retainedStorageWrites event.frame.run) := by
+  exact Exec.storageReplay_committedPost event.frame.run event.frame.committed
+    wethAccount key
 
 /-- Every extracted event has well-formed entry memory when its concrete
 execution is admitted as freshly entered.  This derives the side condition
