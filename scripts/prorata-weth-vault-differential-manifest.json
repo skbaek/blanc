@@ -8,7 +8,24 @@
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
-      "metadata-and-zero-views", "nonempty-and-donated-views", "deposit-empty", "deposit-donated", "mint-inexact", "redeem-inexact", "withdraw-inexact", "approve-and-transfer", "transfer-from-finite", "transfer-from-infinite", "allowance-underflow-rollback", "zero-address-rollbacks", "capacity-boundaries", "malformed-dispatch", "nonpayable-rollbacks", "event-order", "return-capture-controls", "callback-and-attack-rollbacks"
+      "metadata-and-zero-views",
+      "nonempty-and-donated-views",
+      "deposit-empty",
+      "deposit-donated",
+      "mint-inexact",
+      "redeem-inexact",
+      "withdraw-inexact",
+      "approve-and-transfer",
+      "transfer-from-finite",
+      "transfer-from-infinite",
+      "allowance-underflow-rollback",
+      "zero-address-rollbacks",
+      "capacity-boundaries",
+      "malformed-dispatch",
+      "nonpayable-rollbacks",
+      "event-order",
+      "return-capture-controls",
+      "callback-and-attack-rollbacks"
     ],
     "channels": {
       "eels": "Pinned EELS executes an independent replay; it is never inferred from Jaune output.",
@@ -16,14 +33,38 @@
       "reference": "The locked OpenZeppelin reference is deployed and identity-checked before the Jaune leg."
     },
     "selectors": [
-      "totalAssets()", "name()", "convertToAssets(uint256)", "approve(address,uint256)", "previewWithdraw(uint256)", "totalSupply()", "transferFrom(address,address,uint256)", "decimals()", "asset()", "maxDeposit(address)", "previewRedeem(uint256)", "deposit(uint256,address)", "balanceOf(address)", "mint(uint256,address)", "symbol()", "transfer(address,uint256)", "previewMint(uint256)", "withdraw(uint256,address,address)", "redeem(uint256,address,address)", "maxMint(address)", "convertToShares(uint256)", "maxWithdraw(address)", "maxRedeem(address)", "allowance(address,address)", "previewDeposit(uint256)"
+      "totalAssets()",
+      "name()",
+      "convertToAssets(uint256)",
+      "approve(address,uint256)",
+      "previewWithdraw(uint256)",
+      "totalSupply()",
+      "transferFrom(address,address,uint256)",
+      "decimals()",
+      "asset()",
+      "maxDeposit(address)",
+      "previewRedeem(uint256)",
+      "deposit(uint256,address)",
+      "balanceOf(address)",
+      "mint(uint256,address)",
+      "symbol()",
+      "transfer(address,uint256)",
+      "previewMint(uint256)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "maxMint(address)",
+      "convertToShares(uint256)",
+      "maxWithdraw(address)",
+      "maxRedeem(address)",
+      "allowance(address,address)",
+      "previewDeposit(uint256)"
     ]
   },
   "schema": 1,
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "3ab10e0d1e4e38bf2f69abc6bad162810cd079e09d59d92c3f530f08d25798ed",
+      "scripts/check-prorata-weth-vault-differential.py": "941cc9cb03fcd46b6470ce3bc2553a2124cb581d6cfea88060eebeef2827c112",
       "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
       "scripts/prorata_weth_vault_oracle.py": "9490fc2912af5838d40ecb2acbe2c2914d4aa700e7249eb7286ea34e5a550423"
     }

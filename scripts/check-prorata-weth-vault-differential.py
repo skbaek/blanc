@@ -684,7 +684,13 @@ def _capture_caller_weth(run: Runner, assets: int, allowance: int) -> dict:
 
 
 def action_return_worlds(run: Runner) -> list[tuple[str, str, dict, bytes]]:
-    """One captured, oracle-computed canonical return for every mutation selector."""
+    """One arbitrary-state ABI return probe for every mutation selector.
+
+    These small isolated worlds prove only canonical returndata.  In
+    particular, the transfer rows deliberately use an unbacked share ledger
+    and are not pair-stable or economic evidence; reachable-state, callback,
+    and attack scenarios must instead replay prior successful post-states.
+    """
     true = (1).to_bytes(32, "big")
     other = 0xBEEF
     deposit_assets = 7
@@ -715,6 +721,23 @@ def action_return_worlds(run: Runner) -> list[tuple[str, str, dict, bytes]]:
         ("withdraw return", abi("withdraw(uint256,address,address)", withdraw_assets, CAPTURE_ADDR, CAPTURE_ADDR), withdraw,
          V.preview_withdraw(withdraw_assets, seeded_assets, seeded_shares).to_bytes(32, "big")),
     ]
+
+
+def oracle_transaction(model: V.Vault, method: str, *args):
+    """Apply one oracle endpoint atomically for causal fixture chains.
+
+    The executable oracle faithfully models local operation order, so a method
+    can mutate an allowance or burn shares before a later guard raises
+    ``Revert``.  EVM failure rolls those writes back.  Chained fixtures must
+    therefore retain the original model on a failure and commit only a fully
+    successful trial.
+    """
+    trial = deepcopy(model)
+    try:
+        value = getattr(trial, method)(*args)
+    except V.Revert as exc:
+        return False, exc, model
+    return True, value, trial
 
 
 def check_action_returns(run: Runner) -> None:
