@@ -320,6 +320,7 @@ import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultBacking
+import Blanc.Composition.ProrataWethVaultAccounting
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultRely
 

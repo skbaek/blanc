@@ -1199,6 +1199,12 @@ first stated for PRORATA's ETH-denominated shares.
   query. Its unconditional `maxWithdraw` theorem states the real word
   saturation; `maxWithdraw_compiled_effect_exact` removes it only from the
   ledger fact `balance ≤ supply`.
+- `Blanc.Composition.ProrataWethVaultAccounting` is the local accounting
+  adapter for the exact four ERC-4626 quote directions. It reuses
+  `Blanc.Prorata.dust_telescope_of_step`, exposes the compiled inverse-quote
+  mint and withdraw effects, and keeps a self-receiver outbound asset term
+  distinct from an ordinary WETH debit. It does not supply the configured
+  history/provenance transport or coalition accounting theorem.
 - For creation-code guards, `of_run_codesize` exposes the complete code-image
   length pushed by `CODESIZE`.
 - For creation-code copies, `of_run_codecopy_mem` and
