@@ -114,18 +114,26 @@ def storage_get(storage: dict, key: int) -> int:
 class Side:
     """One runtime under test and how its share ledger is laid out."""
 
-    def __init__(self, name: str, code: bytes, shares_slot, supply_slot: int,
+    def __init__(self, name: str, code: bytes, shares_slot, allowance_slot,
+                 supply_slot: int,
                  base_storage: dict | None = None) -> None:
         self.name = name
         self.code = code
         self.shares_slot = shares_slot
+        self.allowance_slot = allowance_slot
         self.supply_slot = supply_slot
         self.base_storage = base_storage or {}
 
 
+def vault_allowance_key(owner: int, spender: int) -> int:
+    """The Blanc share allowance key is `keccak(owner ‖ spender)`."""
+    return int.from_bytes(
+        keccak256(owner.to_bytes(32, "big") + spender.to_bytes(32, "big")), "big")
+
+
 def blanc_side() -> Side:
     code = _literal("Blanc/ProrataWethVaultCode.lean", "prorataWethVaultCode")
-    return Side("blanc", code, lambda account: account, SUPPLY_SLOT)
+    return Side("blanc", code, lambda account: account, vault_allowance_key, SUPPLY_SLOT)
 
 
 def t8n(alloc: dict, txs: list) -> dict:
@@ -153,12 +161,13 @@ def t8n(alloc: dict, txs: list) -> dict:
     return json.loads(out.stdout)
 
 
-def signed_tx(to: int | None, data: str, value: int, gas: int, *, nonce: int = 0) -> dict:
+def signed_tx(to: int | None, data: str, value: int, gas: int, *, nonce: int = 0,
+              signing_key: int = KEY) -> dict:
     tx = {"chainId": 1, "nonce": nonce, "maxPriorityFeePerGas": 0,
           "maxFeePerGas": 1000, "gasLimit": gas,
           "to": address(to) if to is not None else "0x",
           "value": value, "data": data, "accessList": []}
-    signed = sign_eip1559(tx, KEY)
+    signed = sign_eip1559(tx, signing_key)
     return {"type": h(2), "chainId": h(1), "nonce": h(nonce),
             "maxPriorityFeePerGas": h(0), "maxFeePerGas": h(1000),
             "gasLimit": h(gas), "gas": h(gas),
@@ -208,7 +217,8 @@ def reference_side(weth_code: bytes) -> Side | None:
         return None
     # Solidity ERC20 layout: _balances at slot 0, _allowances at 1,
     # _totalSupply at 2, _name at 3, _symbol at 4; ERC4626 adds immutables only.
-    return Side("reference", runtime, lambda account: mapping_slot(account, 0), 2,
+    return Side("reference", runtime, lambda account: mapping_slot(account, 0),
+                lambda owner, spender: mapping_slot(spender, mapping_slot(owner, 1)), 2,
                 dict(entry.get("storage", {})))
 
 
@@ -218,6 +228,18 @@ class Runner:
         self.weth_code = weth_code
         self.user = int(address_of(KEY), 16)
         self.gas: dict[str, int] = {}
+
+    def add_eoa(self, alloc: dict, signing_key: int, *, weth: int = 0,
+                weth_allowance: int = 0) -> int:
+        """Add one independent causal-fixture caller and optional WETH rows."""
+        who = int(address_of(signing_key), 16)
+        alloc[address(who)] = {"balance": h(10 ** 21), "nonce": h(0), "code": "0x", "storage": {}}
+        storage = alloc[address(WETH_ADDR)]["storage"]
+        if weth:
+            storage[word(who)] = word(weth)
+        if weth_allowance:
+            storage[word(weth_allowance_key(who, VAULT_ADDR))] = word(weth_allowance)
+        return who
 
     def alloc(self, user_weth: int, allowance: int, shares: dict | None = None,
               supply: int = 0, weth_extra=None) -> dict:
@@ -243,10 +265,25 @@ class Runner:
                                   "storage": vault_storage},
         }
 
+    def causal_root(self, signing_keys: tuple[int, ...]) -> dict:
+        """Fresh exact-code pair root for histories funded by WETH deposits.
+
+        This deliberately starts with no internal WETH rows and no ether held
+        by WETH.  Callers must establish both through payable WETH calls before
+        calling the vault, so a positive token balance is always backed by the
+        WETH account's native balance in the resulting history.
+        """
+        world = self.alloc(0, 0)
+        for signing_key in signing_keys:
+            if signing_key != KEY:
+                self.add_eoa(world, signing_key)
+        return world
+
     def call(self, alloc: dict, data: str, value: int = 0,
              gas: int = 3_000_000, label: str | None = None, *,
-             target: int = VAULT_ADDR, nonce: int = 0) -> dict:
-        result = t8n(alloc, [signed_tx(target, data, value, gas, nonce=nonce)])
+             target: int = VAULT_ADDR, nonce: int = 0, signing_key: int = KEY) -> dict:
+        result = t8n(alloc, [signed_tx(target, data, value, gas, nonce=nonce,
+                                       signing_key=signing_key)])
         receipts = result["result"].get("receipts") or []
         if label and receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
             self.gas[label] = int(receipts[0]["cumulativeGasUsed"], 16)
@@ -293,6 +330,9 @@ class Runner:
     def supply(self, vault_storage: dict) -> int:
         return storage_get(vault_storage, self.side.supply_slot)
 
+    def share_allowance(self, vault_storage: dict, owner: int, spender: int) -> int:
+        return storage_get(vault_storage, self.side.allowance_slot(owner, spender))
+
 
 def abi(sig: str, *args: int) -> str:
     return "0x" + selector(sig).hex() + "".join(format(a, "064x") for a in args)
@@ -307,6 +347,185 @@ def vault_state(result: dict) -> tuple[dict, dict]:
 def expect(label: str, got: int, want: int) -> None:
     if got != want:
         fail(f"{label}: executed {got}, oracle {want}")
+
+
+def signer_address(signing_key: int) -> int:
+    return int(address_of(signing_key), 16)
+
+
+def _next_nonce(alloc: dict, signing_key: int) -> int:
+    entry = alloc.get(address(signer_address(signing_key)), {})
+    return _quantity(entry.get("nonce", "0x0"), "causal signer nonce")
+
+
+def run_sequence(run: Runner, label: str, root: dict,
+                 steps: list[tuple[str, int, str, int, int]]) -> list[dict] | None:
+    """Run an actual serial t8n history, feeding every post-state forward.
+
+    A step is ``(name, target, calldata, value, signing_key)``.  The signer
+    nonce comes from the prior t8n allocation rather than a hand-maintained
+    counter, so mixed-signer histories cannot silently reuse a nonce.
+    """
+    current = root
+    results = []
+    for name, target, data, value, signing_key in steps:
+        result = run.call(current, data, value=value, target=target,
+                          nonce=_next_nonce(current, signing_key), signing_key=signing_key)
+        if not _causal_success(f"{label} {name}", result):
+            return None
+        post = result.get("alloc")
+        if not isinstance(post, dict):
+            fail(f"{label} {name}: successful transaction has no allocation")
+            return None
+        results.append(result)
+        current = post
+    return results
+
+
+def _exact_event(label: str, result: dict, *, contract: int, signature: str,
+                 indexed: tuple[int, ...], data_words: tuple[int, ...]) -> None:
+    """Check one complete application event, including address and word order."""
+    entries = logs_of(result)
+    if len(entries) != 1:
+        fail(f"{label}: expected exactly one event, got {len(entries)}")
+        return
+    entry = entries[0]
+    if entry.get("address") != address(contract) or entry.get("topics", [None])[0] != event_topic(signature):
+        fail(f"{label}: event contract or signature differs")
+        return
+    topics = entry.get("topics")
+    if not isinstance(topics, list) or len(topics) != len(indexed) + 1:
+        fail(f"{label}: event indexed-topic count differs")
+        return
+    if tuple(int(topic, 16) for topic in topics[1:]) != indexed:
+        fail(f"{label}: event indexed words differ")
+        return
+    raw = entry.get("data", "")
+    if not isinstance(raw, str) or not raw.startswith("0x") or len(raw) != 2 + 64 * len(data_words):
+        fail(f"{label}: event data length differs")
+        return
+    if tuple(int(raw[2 + 64 * i:2 + 64 * (i + 1)], 16) for i in range(len(data_words))) != data_words:
+        fail(f"{label}: event data words differ")
+
+
+def _deposit_events(label: str, result: dict, caller: int, receiver: int,
+                    assets: int, shares: int) -> None:
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    if [(row.get("address"), (row.get("topics") or [None])[0]) for row in entries] != [
+            (address(WETH_ADDR), transfer), (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]:
+        fail(f"{label}: WETH transfer, share mint, Deposit order differs")
+        return
+    if (tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (caller, VAULT_ADDR)
+            or int(entries[0]["data"], 16) != assets):
+        fail(f"{label}: inbound WETH Transfer words differ")
+    if (tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (0, receiver)
+            or int(entries[1]["data"], 16) != shares):
+        fail(f"{label}: share-mint Transfer words differ")
+    if (tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver)
+            or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
+                     for i in range(2)) != (assets, shares)):
+        fail(f"{label}: Deposit words differ")
+
+
+def _withdraw_events(label: str, result: dict, caller: int, receiver: int,
+                     owner: int, assets: int, shares: int) -> None:
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    withdraw = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    if [(row.get("address"), (row.get("topics") or [None])[0]) for row in entries] != [
+            (address(VAULT_ADDR), transfer), (address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), withdraw)]:
+        fail(f"{label}: share burn, WETH transfer, Withdraw order differs")
+        return
+    if (tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (owner, 0)
+            or int(entries[0]["data"], 16) != shares):
+        fail(f"{label}: share-burn Transfer words differ")
+    if (tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (VAULT_ADDR, receiver)
+            or int(entries[1]["data"], 16) != assets):
+        fail(f"{label}: outbound WETH Transfer words differ")
+    if (tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver, owner)
+            or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
+                     for i in range(2)) != (assets, shares)):
+        fail(f"{label}: Withdraw words differ")
+
+
+def _pair_state(run: Runner, label: str, result: dict, model: V.Vault,
+                accounts: tuple[int, ...], *,
+                weth_allowances: tuple[tuple[int, int], ...] = (),
+                share_allowances: tuple[tuple[int, int], ...] = ()) -> None:
+    """Project the whole relevant backed pair state after one causal step.
+
+    Native WETH ether backs every tracked internal WETH row.  Gas-payer nonce
+    and ether changes are transaction-envelope effects and intentionally are
+    not compared; WETH/vault code, full application ledgers, allowance rows,
+    and WETH's native balance are compared exactly.
+    """
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: missing post-state allocation")
+        return
+    weth_account = post.get(address(WETH_ADDR), {})
+    vault_account = post.get(address(VAULT_ADDR), {})
+    if bytes.fromhex(weth_account.get("code", "0x")[2:]) != run.weth_code:
+        fail(f"{label}: WETH code changed")
+    if bytes.fromhex(vault_account.get("code", "0x")[2:]) != run.side.code:
+        fail(f"{label}: vault code changed")
+    vault_storage, weth_storage = vault_state(result)
+    expect(f"{label} supply", run.supply(vault_storage), model.supply)
+    if not model.conserved():
+        fail(f"{label}: oracle share ledger is not conserved")
+    for account in accounts:
+        expect(f"{label} shares[{address(account)}]", run.shares(vault_storage, account),
+               model.balance_of(account))
+        expect(f"{label} weth[{address(account)}]", storage_get(weth_storage, account),
+               model.weth.get(account, 0))
+    for owner, spender in weth_allowances:
+        expect(f"{label} WETH allowance[{address(owner)},{address(spender)}]",
+               storage_get(weth_storage, weth_allowance_key(owner, spender)),
+               model.weth_allowances.get((owner, spender), 0))
+    for owner, spender in share_allowances:
+        expect(f"{label} share allowance[{address(owner)},{address(spender)}]",
+               run.share_allowance(vault_storage, owner, spender),
+               model.allowance(owner, spender))
+    backed = sum(model.weth.get(account, 0) for account in accounts)
+    expect(f"{label} WETH native backing", _quantity(weth_account.get("balance", "0x0"),
+                                                       "WETH native balance"), backed)
+
+
+def funded_pair(run: Runner, label: str, funding: dict[int, int], approvals: dict[int, int],
+                *, extra_signers: tuple[int, ...] = ()) -> tuple[list[dict], V.Vault, tuple[int, ...]] | None:
+    """Create a reachable pair history using payable WETH funding then approval."""
+    if set(approvals) - set(funding):
+        fail(f"{label}: approval signer lacks an actual WETH funding step")
+        return None
+    keys = tuple(dict.fromkeys((*funding, *extra_signers)))
+    accounts = tuple(signer_address(key) for key in keys) + (VAULT_ADDR,)
+    steps = []
+    for key, amount in funding.items():
+        steps.append(("fund WETH", WETH_ADDR, "0x", amount, key))
+    for key, amount in approvals.items():
+        steps.append(("approve WETH", WETH_ADDR,
+                      abi("approve(address,uint256)", VAULT_ADDR, amount), 0, key))
+    results = run_sequence(run, label, run.causal_root(keys), steps)
+    if results is None:
+        return None
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={signer_address(key): amount for key, amount in funding.items()},
+                    weth_allowances={(signer_address(key), VAULT_ADDR): amount
+                                     for key, amount in approvals.items()})
+    pairs = tuple((signer_address(key), VAULT_ADDR) for key in approvals)
+    _pair_state(run, f"{label} setup", results[-1], model, accounts,
+                weth_allowances=pairs)
+    approval_results = results[len(funding):]
+    for (key, amount), result in zip(approvals.items(), approval_results, strict=True):
+        owner = signer_address(key)
+        _exact_event(f"{label} WETH approval", result, contract=WETH_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(owner, VAULT_ADDR), data_words=(amount,))
+    return results, model, accounts
 
 
 def check_deposit_into_empty_vault(run: Runner) -> None:
@@ -348,36 +567,251 @@ def check_deposit_into_donated_vault(run: Runner) -> None:
 
 
 def check_causal_donation_before_deposit(run: Runner) -> None:
-    """A real WETH donation then deposit, without reseeding an intermediate state."""
+    """Fund/approve WETH, donate, then deposit from actual backed post-states."""
     donation, assets = 3, 4
-    before = run.alloc(10 ** 18, 10 ** 18)
-    donated = run.call(before, abi("transfer(address,uint256)", VAULT_ADDR, donation),
-                       target=WETH_ADDR)
-    deposited = run.call(donated.get("alloc", {}),
-                         abi("deposit(uint256,address)", assets, run.user), nonce=1)
-    receipts = [
-        *(donated.get("result", {}).get("receipts") or []),
-        *(deposited.get("result", {}).get("receipts") or []),
-    ]
-    if (donated.get("result", {}).get("rejected") or deposited.get("result", {}).get("rejected")
-            or len(receipts) != 2 or any(int(row.get("status", "0x0"), 16) != 1 for row in receipts)):
-        fail("causal donation/deposit sequence did not execute two successful transactions")
+    setup = funded_pair(run, "donation-before-deposit", {KEY: 100}, {KEY: 100})
+    if setup is None:
         return
-    model = V.Vault(vault_address=VAULT_ADDR, weth={run.user: 10 ** 18},
-                    weth_allowances={(run.user, VAULT_ADDR): 10 ** 18})
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-before-deposit", setup_results[-1]["alloc"], [
+        ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY),
+        ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", assets, run.user), 0, KEY),
+    ])
+    if steps is None:
+        return
     committed, _, model = oracle_transaction(model, "donate", run.user, donation)
     if not committed:
-        fail("oracle rejected the causal donation setup")
+        fail("donation-before-deposit oracle rejected donation")
         return
+    _pair_state(run, "donation-before-deposit donation", steps[0], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
     committed, shares, model = oracle_transaction(model, "deposit", run.user, assets, run.user)
     if not committed:
-        fail("oracle rejected the causal deposit")
+        fail("donation-before-deposit oracle rejected deposit")
         return
-    vault, weth = vault_state(deposited)
-    expect("causal donation shares", run.shares(vault, run.user), shares)
-    expect("causal donation supply", run.supply(vault), model.supply)
-    expect("causal donation vault WETH", storage_get(weth, VAULT_ADDR), model.weth[VAULT_ADDR])
-    expect("causal donation user WETH", storage_get(weth, run.user), model.weth[run.user])
+    _pair_state(run, "donation-before-deposit deposit", steps[1], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
+    _deposit_events("donation-before-deposit deposit", steps[1], run.user, run.user, assets, shares)
+
+
+def _causal_success(label: str, result: dict) -> bool:
+    body = result.get("result", {})
+    receipts = body.get("receipts") or []
+    if body.get("rejected") or len(receipts) != 1 or int(receipts[0].get("status", "0x0"), 16) != 1:
+        fail(f"{label}: expected one accepted successful causal transaction")
+        return False
+    return True
+
+
+def check_causal_donation_before_exit(run: Runner) -> None:
+    """Actual funding, deposit, outside gift, then a partial backed redemption."""
+    deposit_assets, donation, redeem_shares = 10, 3, 2000
+    setup = funded_pair(run, "donation-before-exit", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-before-exit", setup_results[-1]["alloc"], [
+        ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", deposit_assets, run.user), 0, KEY),
+        ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY),
+        ("vault redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", redeem_shares, run.user, run.user), 0, KEY),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, deposit_assets, run.user)),
+                                       ("donate", (run.user, donation)),
+                                       ("redeem", (run.user, redeem_shares, run.user, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"donation-before-exit oracle rejected {method}")
+            return
+        _pair_state(run, f"donation-before-exit {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+    _withdraw_events("donation-before-exit redeem", steps[-1], run.user, run.user, run.user,
+                     V.convert_to_assets(redeem_shares, deposit_assets + donation,
+                                         V.convert_to_shares(deposit_assets, 0, 0)), redeem_shares)
+
+
+def check_causal_between_users_donation(run: Runner) -> None:
+    """Two actual WETH funders donate and deposit without synthetic snapshots."""
+    key2 = 2
+    user2 = signer_address(key2)
+    setup = funded_pair(run, "between-users-donation", {KEY: 100, key2: 100},
+                        {KEY: 100, key2: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "between-users-donation", setup_results[-1]["alloc"], [
+        ("first deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("outside donation", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, key2),
+        ("second deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, user2), 0, key2),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("donate", (user2, 3)),
+                                       ("deposit", (user2, 4, user2))), steps, strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"between-users-donation oracle rejected {method}")
+            return
+        _pair_state(run, f"between-users-donation {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR), (user2, VAULT_ADDR)))
+    first_shares = V.convert_to_shares(10, 0, 0)
+    _deposit_events("between-users-donation first deposit", steps[0], run.user, run.user, 10, first_shares)
+    _deposit_events("between-users-donation second deposit", steps[-1], user2, user2, 4,
+                    V.convert_to_shares(4, 13, first_shares))
+
+
+def check_causal_delegated_redeem(run: Runner) -> None:
+    """Actual deposit, approval, and distinct-caller redeem consumes allowance."""
+    key2, shares = 2, 2000
+    delegate = signer_address(key2)
+    setup = funded_pair(run, "delegated-redeem", {KEY: 100}, {KEY: 100}, extra_signers=(key2,))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "delegated-redeem", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+        ("delegated redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", shares, delegate, run.user), 0, key2),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("approve", (run.user, delegate, shares)),
+                                       ("redeem", (delegate, shares, delegate, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"delegated-redeem oracle rejected {method}")
+            return
+        _pair_state(run, f"delegated-redeem {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),),
+                    share_allowances=((run.user, delegate),))
+    _exact_event("delegated-redeem share approval", steps[1], contract=VAULT_ADDR,
+                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate),
+                 data_words=(shares,))
+    _withdraw_events("delegated-redeem redeem", steps[-1], delegate, delegate, run.user,
+                     V.convert_to_assets(shares, 10, V.convert_to_shares(10, 0, 0)), shares)
+
+
+def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
+    """Read a one-word capacity/conversion result through the Jaune recorder."""
+    _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
+    success = observed["success"]
+    payload = observed["returndata"]
+    if success == 1 and (observed["length"] != 32 or len(payload) != 32):
+        fail(f"{label}: successful word result has length {observed['length']}")
+    return success, payload
+
+
+def _accepted_success(label: str, result: dict) -> bool:
+    body = result.get("result")
+    receipts = body.get("receipts") if isinstance(body, dict) else None
+    if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+        fail(f"{label}: expected one accepted successful transaction")
+        return False
+    if int(receipts[0].get("status", "0x0"), 16) != 1:
+        fail(f"{label}: expected success, got receipt {receipts[0].get('status')!r}")
+        return False
+    return True
+
+
+def check_capacity_boundaries(run: Runner) -> None:
+    """Isolated capacity ABI worlds, deliberately separate from economic traces.
+
+    These use maximal integer rows that cannot be established by the bounded
+    payable-funding histories above.  They test the frozen arithmetic/capacity
+    surface on both compiled sides; they make no PairStable, native-backing, or
+    global-balance claim.  Reference outcomes are checked only under frozen
+    deviations 5 (unbounded maxima) and 6 (`A=U` checked-add reverts).
+    """
+    supply, assets = V.MAX_SUPPLY - 3, V.U
+    world = run.alloc(V.U, V.U, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    expected_max_deposit = V.max_deposit(run.user, assets, supply)
+    expected_max_mint = V.max_mint(run.user, assets, supply)
+    for label, data, blanc_value in (
+            ("capacity maxDeposit boundary", abi("maxDeposit(address)", run.user), expected_max_deposit),
+            ("capacity maxMint boundary", abi("maxMint(address)", run.user), expected_max_mint)):
+        try:
+            success, payload = _captured_word(run, label, world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        expected = V.U if run.side.name == "reference" else blanc_value
+        if success != 1 or payload != expected.to_bytes(32, "big"):
+            deviation = "5 (reference unbounded maximum)" if run.side.name == "reference" else "oracle"
+            fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
+
+    if run.side.name == "reference":
+        for label, data in (
+                ("capacity reference deposit A=U", abi("deposit(uint256,address)", expected_max_deposit, run.user)),
+                ("capacity reference mint A=U", abi("mint(uint256,address)", expected_max_mint, run.user))):
+            _check_revert_evidence(label, world, run.call(world, data))
+    else:
+        deposited = run.call(world, abi("deposit(uint256,address)", expected_max_deposit, run.user))
+        if _accepted_success("capacity deposit exact maximum", deposited):
+            vault, _ = vault_state(deposited)
+            expect("capacity deposit reaches maximum supply", run.supply(vault), V.MAX_SUPPLY)
+        _check_revert_evidence("capacity deposit boundary plus one", world,
+                               run.call(world, abi("deposit(uint256,address)", expected_max_deposit + 1, run.user)))
+        minted = run.call(world, abi("mint(uint256,address)", expected_max_mint, run.user))
+        if _accepted_success("capacity mint exact maximum", minted):
+            vault, _ = vault_state(minted)
+            expect("capacity mint reaches maximum supply", run.supply(vault), V.MAX_SUPPLY)
+        _check_revert_evidence("capacity mint boundary plus one", world,
+                               run.call(world, abi("mint(uint256,address)", expected_max_mint + 1, run.user)))
+
+    a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+    panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+    a_u_cases = (
+        ("A=U maxDeposit", abi("maxDeposit(address)", run.user), V.U, True),
+        ("A=U maxMint", abi("maxMint(address)", run.user), V.max_mint(run.user, V.U, 0), True),
+        ("A=U convertToShares", abi("convertToShares(uint256)", V.U),
+         V.convert_to_shares(V.U, V.U, 0), False),
+        ("A=U previewMint", abi("previewMint(uint256)", V.max_mint(run.user, V.U, 0)),
+         V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0), False),
+    )
+    for label, data, blanc_value, maximum in a_u_cases:
+        try:
+            success, payload = _captured_word(run, label, a_u_world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if run.side.name == "reference" and not maximum:
+            if success != 0 or payload != panic_11:
+                fail(f"{label}: captured {success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        else:
+            expected = V.U if run.side.name == "reference" else blanc_value
+            if success != 1 or payload != expected.to_bytes(32, "big"):
+                deviation = "5" if run.side.name == "reference" else "oracle"
+                fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
+    if run.side.name == "reference":
+        _check_revert_evidence("A=U reference mint representability", a_u_world,
+                               run.call(a_u_world, abi("mint(uint256,address)", 999, run.user)))
+        capture_world = deepcopy(a_u_world)
+        capture_storage = capture_world[address(WETH_ADDR)]["storage"]
+        capture_storage[word(CAPTURE_ADDR)] = word(V.U)
+        capture_storage[word(weth_allowance_key(CAPTURE_ADDR, VAULT_ADDR))] = word(V.U)
+        try:
+            success, payload = _captured_word(run, "A=U reference mint captured revert", capture_world,
+                                              abi("mint(uint256,address)", 999, CAPTURE_ADDR))
+        except RuntimeError as exc:
+            fail(str(exc))
+        else:
+            if success != 0 or payload != panic_11:
+                fail("A=U reference mint: frozen deviation 6 did not return exact Panic(0x11)")
+    else:
+        mint = run.call(a_u_world, abi("mint(uint256,address)", 999, run.user))
+        if _accepted_success("A=U mint representability cap", mint):
+            vault, _ = vault_state(mint)
+            expect("A=U mint represents cap", run.supply(vault), 999)
+        _check_revert_evidence("A=U mint unrepresentable plus one", a_u_world,
+                               run.call(a_u_world, abi("mint(uint256,address)", 1000, run.user)))
 
 
 def check_mint(run: Runner) -> None:
@@ -811,6 +1245,58 @@ def check_eels_action_returns(run: Runner) -> None:
             fail(f"EELS {label}: action return bytes differ from its independent oracle observation")
 
 
+def check_eels_capacity_views(run: Runner) -> None:
+    """Independent EELS observations for the finite extreme capacity outputs.
+
+    These share the explicitly arbitrary arithmetic worlds in
+    ``check_capacity_boundaries``.  They are not economic traces, but they do
+    keep the Jaune and EELS capacity observations independently bound to the
+    oracle and frozen deviations 5 and 6.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+    near_supply, near_assets = V.MAX_SUPPLY - 3, V.U
+    near_world = run.alloc(V.U, V.U, {run.user: near_supply}, near_supply,
+                           {word(VAULT_ADDR): word(near_assets)})
+    a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+    cases = [
+        ("EELS capacity maxDeposit boundary", near_world,
+         abi("maxDeposit(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_deposit(run.user, near_assets, near_supply)),
+        ("EELS capacity maxMint boundary", near_world,
+         abi("maxMint(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_mint(run.user, near_assets, near_supply)),
+        ("EELS A=U maxDeposit", a_u_world, abi("maxDeposit(address)", run.user), "success", V.U),
+        ("EELS A=U maxMint", a_u_world, abi("maxMint(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_mint(run.user, V.U, 0)),
+        ("EELS A=U convertToShares", a_u_world, abi("convertToShares(uint256)", V.U),
+         "revert" if run.side.name == "reference" else "success",
+         panic_11 if run.side.name == "reference" else V.convert_to_shares(V.U, V.U, 0)),
+        ("EELS A=U previewMint", a_u_world,
+         abi("previewMint(uint256)", V.max_mint(run.user, V.U, 0)),
+         "revert" if run.side.name == "reference" else "success",
+         panic_11 if run.side.name == "reference" else V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0)),
+    ]
+    for label, alloc, data, expected_outcome, expected in cases:
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        outcome = eels.outcome(output)
+        expected_bytes = expected if isinstance(expected, bytes) else expected.to_bytes(32, "big")
+        if outcome != expected_outcome or bytes(output.return_data) != expected_bytes:
+            fail(f"{label}: EELS {outcome}/{bytes(output.return_data).hex()}, "
+                 f"expected {expected_outcome}/{expected_bytes.hex()}")
+
+
 def _quantity(value, label: str) -> int:
     if isinstance(value, int) and value >= 0:
         return value
@@ -942,6 +1428,10 @@ CHECKS = [
     check_deposit_into_empty_vault,
     check_deposit_into_donated_vault,
     check_causal_donation_before_deposit,
+    check_causal_donation_before_exit,
+    check_causal_between_users_donation,
+    check_causal_delegated_redeem,
+    check_capacity_boundaries,
     check_mint,
     check_redeem,
     check_withdraw,
@@ -977,6 +1467,7 @@ def run_eels_side(run: Runner) -> None:
     try:
         check_eels_view_returns(run)
         check_eels_action_returns(run)
+        check_eels_capacity_views(run)
     except RuntimeError as exc:
         fail(f"EELS view matrix: {exc}")
     for index in range(before, len(FAILURES)):
@@ -1013,7 +1504,7 @@ def capture_controls() -> list[str]:
     missed = []
     for label, code, success, payload in controls:
         run = Runner(Side("return-capture-control", code, lambda account: account,
-                          SUPPLY_SLOT), b"")
+                          vault_allowance_key, SUPPLY_SLOT), b"")
         try:
             _, observed = run.capture(run.alloc(0, 0), "0x", max_return_bytes=96,
                                       label=f"capture control {label}")
@@ -1024,7 +1515,7 @@ def capture_controls() -> list[str]:
         if observed != expected:
             missed.append(f"{label}: recorder observed {observed!r}, expected {expected!r}")
     oversized = Runner(Side("return-capture-control", bytes.fromhex("60806000f3"),
-                            lambda account: account, SUPPLY_SLOT), b"")
+                            lambda account: account, vault_allowance_key, SUPPLY_SLOT), b"")
     try:
         oversized.capture(oversized.alloc(0, 0), "0x", max_return_bytes=96,
                           label="capture control oversized success")

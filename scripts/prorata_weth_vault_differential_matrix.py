@@ -40,10 +40,13 @@ SELECTORS = (
 CASES = (
     "metadata-and-zero-views", "nonempty-and-donated-views",
     "deposit-empty", "deposit-donated", "causal-donation-before-deposit",
+    "causal-donation-before-exit", "causal-between-users-donation",
+    "causal-delegated-redeem",
     "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
-    "zero-address-rollbacks", "capacity-boundaries", "malformed-dispatch",
+    "zero-address-rollbacks", "capacity-boundaries", "capacity-a-u-257-bit",
+    "malformed-dispatch",
     "nonpayable-rollbacks", "event-order", "return-capture-controls",
     "callback-and-attack-rollbacks",
 )
