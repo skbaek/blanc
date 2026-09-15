@@ -591,6 +591,17 @@ Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
   descendants and the root-inclusive committed path list.
 - `Exec.committedFramePaths_map_frame` forgets paths back to the ordinary
   committed-frame list.
+- `Exec.LocatedFrame.EnteringOccurrence` is indexed by the original execution
+  and preserves the exact immediate retained parent as an original
+  `committedFramePaths` member, the actual child counter, its same-frame
+  retained instruction occurrence, and that occurrence's exact recursive child
+  slot and `runOk` equations. This keeps equal-looking frame occurrences
+  distinct.
+- `Exec.LocatedFrame.exists_enteringOccurrence` is the minimal consumer route:
+  apply it to a non-root `committedFramePaths` member, then refine the retained
+  occurrence's decoded instruction if the contract needs a particular family.
+  It deliberately does not classify the root `[]`; use configured transaction
+  or system-envelope provenance for that case.
 
 ### E8. I need an exact ordered replay of world-state changes
 
