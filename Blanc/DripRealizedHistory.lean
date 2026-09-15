@@ -118,6 +118,63 @@ theorem TransactionMessageOccurrence.msg_shouldTransferValue
   | head head tail => exact head.msg_shouldTransferValue
   | tail head tail occurrence ih => exact ih
 
+/-- The selected transaction's prepared message inherits the actual prefix's
+strict balance bound. Completed transactions include settlement; the selected
+head has only performed its nonce increment and successful fee debit. -/
+theorem TransactionMessageOccurrence.msg_sum_nof
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message)
+    (sumNof : sum benv.state.bal < 2 ^ 256) :
+    sum msg.benv.state.bal < 2 ^ 256 := by
+  revert sumNof
+  induction occurrence with
+  | head head tail =>
+      intro sumNof
+      have debitSum := State.balSum_subBal head.debit
+      dsimp only [State.balSum] at debitSum
+      rw [State.incrNonce_bal] at debitSum
+      rw [prepareMessage_benv head.prepared]
+      change sum head.debitState.bal < 2 ^ 256
+      omega
+  | tail head tail occurrence ih =>
+      intro sumNof
+      exact ih (Nat.lt_of_le_of_lt
+        (by simpa [Benv.withState] using processTransaction_sum_le head.result)
+        sumNof)
+
+/-- The actual beacon and history messages cannot increase total balance, so
+the body-entry withdrawal bound funds the selected transaction prefix. -/
+theorem TransactionMessageOccurrence.msg_sum_nof_of_body
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence body.transactions message)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    sum msg.benv.state.bal < 2 ^ 256 := by
+  have beacon := processMessageCall_sum_le body.beacon.message.result
+  have history := processMessageCall_sum_le body.history.message.result
+  rw [ExecutionTrace.systemTransactionMessage_benv_state] at beacon history
+  apply occurrence.msg_sum_nof
+  simp only [Benv.withState] at history ⊢
+  omega
+
+/-- A configured block's own consensus bound reaches its selected message
+through the retained system and transaction prefix. -/
+theorem TransactionMessageOccurrence.msg_sum_nof_of_configuredBlock
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message) :
+    sum msg.benv.state.bal < 2 ^ 256 :=
+  occurrence.msg_sum_nof_of_body block.openingBound
+
 /-- The ordered transaction occurrence retains enough prefix history to carry
 DRIP's message invariant from the actual transaction-list entry to the exact
 prepared message it selects.  The successor bound is derived from that
@@ -564,6 +621,24 @@ theorem ConfiguredDirectCall.exec_benv_rules_eq_block
       messageRules
     _ = block.rules := rfl
 
+/-- Authorization and delegated-code resolution preserve balances, so the
+exact execution message retains the configured transaction-prefix bound. -/
+theorem ConfiguredDirectCall.exec_sum_nof
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    sum call.execMsg.benv.state.bal < 2 ^ 256 := by
+  rw [call.execMsg_eq,
+    ExecutionTrace.messageCallExecutionMessage_bal_eq,
+    ExecutionTrace.messageCallDelegation_bal_eq call.delegation]
+  exact envelope.occurrence.msg_sum_nof_of_configuredBlock block
+
 /-- The resolved call keeps the selected transaction's transfer branch across
 both delegation and code-resolution wrappers. -/
 theorem ConfiguredDirectCall.exec_shouldTransferValue
@@ -586,6 +661,24 @@ theorem ConfiguredDirectCall.exec_shouldTransferValue
     _ = msg.shouldTransferValue :=
       ExecutionTrace.messageCallDelegation_shouldTransferValue_eq call.delegation
     _ = true := envelope.occurrence.msg_shouldTransferValue
+
+/-- The installed DRIP target cannot be the selected transaction caller;
+authorization and code resolution preserve that actual caller. -/
+theorem ConfiguredDirectCall.exec_caller_ne
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    call.execMsg.caller ≠ ca := by
+  rw [call.execMsg_eq,
+    ExecutionTrace.messageCallExecutionMessage_caller_eq,
+    ExecutionTrace.messageCallDelegation_caller_eq call.delegation]
+  exact envelope.ready.ne envelope.occurrence.msg_shouldTransferValue
 
 /-- The configured direct root's interpreter entry is the exact successful
 transaction-value precredit.  The debit remains in the resolved execution
@@ -1164,6 +1257,34 @@ theorem drip_exec_balance_eq {sevm : Sevm} {pre post : Devm}
   exact (congrFun hsource sevm.currentTarget).trans
     (getBal_eq_of_state_eq hstate.symm sevm.currentTarget)
 
+/-- The actual compiled join route supplies its fresh-index multiplication
+guard and preserves the target balance after message-value precredit. Both
+facts come from the same entered join source and its call-free return tail. -/
+theorem join_exec_nofm_and_balance {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = joinSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    B256.Nofm (Devm.getStorVal pre sevm.currentTarget chiSlot)
+      (B256.rpow scale half rate
+        (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat) ∧
+    Devm.getBal post sevm.currentTarget = Devm.getBal pre sevm.currentTarget := by
+  rcases exec_enters_join exc hcode hsel hnonempty with
+    ⟨-, entry, hstate, hmemory, -, -, hrun⟩
+  have hentryMemory : entry.memory = Mem.empty := hmemory.symm.trans hcanon
+  have hframe : Frame [] entry entry :=
+    ⟨by rw [hentryMemory]; exact Mem.wf_empty,
+      by rw [hentryMemory]; exact Mem.reads_empty, rfl, rfl⟩
+  rcases of_run_join_full auxLookup_runtime hframe nil_pref hrun with
+    ⟨_, _, _, _, _, _, _, _, hnofm, _⟩
+  have hbalance := of_run_join_balance_eq auxLookup_runtime hframe nil_pref hrun
+  constructor
+  · simpa only [Devm.getStorVal_of_state hstate.symm] using hnofm
+  · exact (congrFun hbalance sevm.currentTarget).trans
+      (getBal_eq_of_state_eq hstate.symm sevm.currentTarget)
+
 /-- One successful deployed `drip()` execution realizes the accounting
 `drip` segment.  The segment is derived from the executed storage writes and
 the reconstructed balance-preserving source route; its configuration premises
@@ -1486,6 +1607,75 @@ theorem ConfiguredDirectCall.clean_body_precredit
   exact ⟨afterTransfer, raw, rawPost, execution, occurrence, debit, transfer,
     rawEq, rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryStateEq,
     postStateEq, occurrenceEq, codeEq, targetEq, canonicalEntry, sub, creditEq⟩
+
+/-- Exact natural-number target credit at the retained interpreter entry.
+The successful debit and entry equation come from `clean_body_precredit`;
+caller separation and the no-wrap bound come from the configured prefix. -/
+theorem ConfiguredDirectCall.entry_balance_of_precredit
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (execution : MessageCallExecutionOccurrence message) {debit : State}
+    (sub : call.execMsg.benv.state.subBal call.execMsg.caller call.execMsg.value =
+      some debit)
+    (credit : execution.entryState.state = debit.addBal ca call.execMsg.value) :
+    (execution.entryState.state.bal ca).toNat =
+      (call.execMsg.benv.state.bal ca).toNat + call.execMsg.value.toNat := by
+  rw [credit]
+  exact of_transfer_bal_target sub call.exec_caller_ne call.exec_sum_nof
+
+/-- The configured clean root supplies the actual precredit and join source
+facts without a caller-provided bound, debit, or accounting invariant. Selector
+classification remains explicit; the result ends at the retained raw post. -/
+theorem ConfiguredDirectCall.clean_body_join_nofm_balance
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (clean : call.evm.error.isSome = false) :
+    ∃ (execution : MessageCallExecutionOccurrence message)
+      (occurrence : BodyExecutionOccurrence block.bodyTrace),
+      execution.execMsg = call.execMsg ∧ execution.evm = call.evm ∧
+      execution.postState.state = messageState ∧
+      occurrence =
+        { msg := msg
+          messageState := messageState
+          out := out
+          message := message
+          source := .transaction block.bodyTrace envelope.occurrence
+          execution := execution } ∧
+      ∀ (_selector : Sevm.selector execution.sevm = joinSelector)
+        (_nonempty : execution.sevm.data.length.toB256 ≠ 0),
+        B256.Nofm (Devm.getStorVal execution.entryState ca chiSlot)
+          (B256.rpow scale half rate
+            (execution.sevm.benvStat.time -
+              Devm.getStorVal execution.entryState ca rhoSlot).toNat) ∧
+        (execution.postState.state.bal ca).toNat =
+          (call.execMsg.benv.state.bal ca).toNat + call.execMsg.value.toNat := by
+  rcases call.clean_body_precredit clean with
+    ⟨afterTransfer, raw, rawPost, execution, occurrence, debit, transfer,
+      rawEq, rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryEq,
+      postEq, occurrenceEq, codeEq, targetEq, canonicalEntry, sub, credit⟩
+  refine ⟨execution, occurrence, execMsgEq, evmEq, ?_, occurrenceEq, ?_⟩
+  · rw [postEq, stateEq]
+  · intro selector nonempty
+    have source := join_exec_nofm_and_balance execution.run codeEq selector
+      nonempty canonicalEntry
+    rw [targetEq] at source
+    refine ⟨source.1, ?_⟩
+    have entryBalance := call.entry_balance_of_precredit execution sub credit
+    exact (congrArg B256.toNat source.2).trans entryBalance
 
 /-- The first body-level actual-occurrence bridge.  Once configured
 classification has discharged the selected frame's exact runtime and entry

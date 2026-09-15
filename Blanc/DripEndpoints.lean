@@ -576,11 +576,12 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
 
 /-! ## `join()`, end to end at source level -/
 
-theorem of_run_join_full {fs : List Func} (hlookup : AuxLookup fs)
+private theorem of_run_join_full_with_balance {fs : List Func} (hlookup : AuxLookup fs)
     {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
     (run : Func.Run fs e s Drip.join r) :
-    ¬ maxAsset < e.value ∧
+    Devm.getBal r = Devm.getBal entry ∧
+    (¬ maxAsset < e.value ∧
       ¬ maxUnits < Devm.getStorVal entry e.currentTarget e.caller.toB256 ∧
       ¬ maxPie < Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
       ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
@@ -617,7 +618,7 @@ theorem of_run_join_full {fs : List Func} (hlookup : AuxLookup fs)
               (Devm.getStorVal entry e.currentTarget e.caller.toB256 +
                 units)).set totalUnitsSlot
             (units + Devm.getStorVal entry e.currentTarget totalUnitsSlot) ∧
-        ReturnsWord units r := by
+        ReturnsWord units r) := by
   unfold Drip.join at run
   -- the call value's surface cap
   refine run_prepend_elim _ [callvalue, dup 0] ?_ run
@@ -750,12 +751,73 @@ theorem of_run_join_full {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd (htag.symm.trans htagE) (by decide +kernel)
   · exact absurd (htag.symm.trans htagU) (by decide +kernel)
   · exact absurd (htag.symm.trans htagD) (by decide +kernel)
-  · obtain ⟨hrowCap, htotalCap, hstor, hret⟩ :=
+  · have htail : Devm.getBal t16 = Devm.getBal r :=
+      Func.of_inv Devm.getBal Devm.getBal (by func_inv) run
+    have hbalance : Devm.getBal r = Devm.getBal entry := by
+      funext a
+      exact (congrFun htail a).symm.trans
+        (getBal_eq_of_state_eq frame16.state a).symm
+    obtain ⟨hrowCap, htotalCap, hstor, hret⟩ :=
       of_run_afterJoin frame16 hp16 run
     simp only [harg, hrow, htotal, hnow] at hrowCap htotalCap hstor hret
-    refine ⟨hassetCap, hrowCapPre, htotalCapPre, hlower, hupper, hclock,
+    refine ⟨hbalance, hassetCap, hrowCapPre, htotalCapPre, hlower, hupper, hclock,
       helapsed, hguards, hnofm, hcapChi, _, _, rfl, rfl, hrowCap, htotalCap,
       hstor, hret⟩
+
+/-- The successful join source preserves balances through its staged fresh
+index and call-free store/return tail. -/
+theorem of_run_join_balance_eq {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.join r) :
+    Devm.getBal r = Devm.getBal entry :=
+  (of_run_join_full_with_balance hlookup frame hp run).1
+
+/-- The complete join guards, fresh arithmetic, stores and return word.
+The original public result is the projection of the enriched source walk. -/
+theorem of_run_join_full {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.join r) :
+    ¬ maxAsset < e.value ∧
+      ¬ maxUnits < Devm.getStorVal entry e.currentTarget e.caller.toB256 ∧
+      ¬ maxPie < Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      B256.Nofm (Devm.getStorVal entry e.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat) ∧
+      ¬ maxChi <
+        (B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+      ∃ freshChi units,
+        freshChi =
+          (B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+        units = scale * e.value / freshChi ∧
+        ¬ maxUnits <
+          Devm.getStorVal entry e.currentTarget e.caller.toB256 + units ∧
+        ¬ maxPie <
+          units + Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
+        Devm.getStor r e.currentTarget =
+          ((((Devm.getStor entry e.currentTarget).set chiSlot freshChi).set
+              rhoSlot e.benvStat.time).set e.caller.toB256
+              (Devm.getStorVal entry e.currentTarget e.caller.toB256 +
+                units)).set totalUnitsSlot
+            (units + Devm.getStorVal entry e.currentTarget totalUnitsSlot) ∧
+        ReturnsWord units r :=
+  (of_run_join_full_with_balance hlookup frame hp run).2
 
 /-- Compatibility projection of `of_run_join_full` for consumers that need
 only the established public endpoint surface. -/
