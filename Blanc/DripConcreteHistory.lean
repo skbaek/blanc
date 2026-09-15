@@ -34,7 +34,7 @@ def concreteCreateTxRlp : Bytes := 0x02 :: concreteCreateTx.toBLT.toBytes
 def concreteCreateSender : Adr := 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf
 def concreteCreateTarget : Adr := 0xf2e246bb76df876cef8b38ae84130f4f55de395b
 
-/- Signature recovery and the configured transition remain to be proved.
+/- The configured transition remains to be proved.
 The decoder and CREATE-address facts below contain no success assumptions. -/
 
 theorem concreteCreateAddress : computeContractAddress concreteCreateSender 0 = concreteCreateTarget := by
@@ -146,6 +146,41 @@ theorem concreteCreateDecode :
   simp only [decodeTx, concreteCreateEncoded, List.cons_append, List.nil_append,
     Bytes.toExTx, concreteCreateEnvelopeParse, concreteCreateFields]
   rfl
+
+def concreteCreateSigningPayload : Bytes :=
+  [0x02, 0xf9, 0x07, 0xdf, 0x01, 0x80, 0x01, 0x08, 0x83, 0x07, 0xa1,
+    0x20, 0x80, 0x80, 0xb9, 0x07, 0xd1] ++ creationCode ++ [0xc0]
+
+theorem concreteCreateSigningEncoded :
+    concreteCreateTx.signingHash = some concreteCreateSigningPayload.keccak := by
+  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
+  have hn : (UInt64.toBytes 0).sig = [] := by decide +kernel
+  have h0 : Nat.toBytes 0 = [] := by simp [Nat.toBytes, Nat.toBytes.aux]
+  have h1 : Nat.toBytes 1 = [1] := by simp [Nat.toBytes, Nat.toBytes.aux]
+  have h8 : Nat.toBytes 8 = [8] := by simp [Nat.toBytes, Nat.toBytes.aux]
+  have hg : Nat.toBytes 500000 = [7, 0xa1, 0x20] := by simp [Nat.toBytes, Nat.toBytes.aux]
+  have hlen : creationCode.length = 2001 := creationCodeSize_exact
+  simp only [Tx.signingHash, concreteCreateTx, hc, hn, h0, h1, h8, hg,
+    AccessList.toBLT, List.map_nil]
+  apply congrArg some
+  apply congrArg Bytes.keccak
+  change 2 :: (BLT.list
+    [.bytes [1], .bytes [], .bytes [1], .bytes [8], .bytes [7, 0xa1, 0x20],
+     .bytes [], .bytes [], .bytes creationCode, .list []]).toBytes = _
+  simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, concreteCreationEncoded,
+    hlen, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux,
+    concreteCreateSigningPayload]
+
+theorem concreteCreateSigningHash :
+    concreteCreateTx.signingHash =
+      some (0x8b8f23d35f43a936d35980c133ac5c7303966324ed24f0cd4db79e2c78b8bfe0 : B256) := by
+  rw [concreteCreateSigningEncoded]
+  decide +kernel
+
+theorem concreteCreateRecoveredSender :
+    recoverSender 1 concreteCreateTx = .ok concreteCreateSender := by
+  rw [recoverSender, concreteCreateSigningHash]
+  decide +kernel
 
 end Drip
 end Blanc
