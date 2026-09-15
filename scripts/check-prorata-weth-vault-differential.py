@@ -893,6 +893,78 @@ def check_causal_zero_nonzero_flows(run: Runner) -> None:
                              run.user, value, args[1])
 
 
+def _response_runtime(kind: str) -> bytes:
+    """Tiny WETH-address child responses for return/rollback probes only."""
+    table = {
+        "true": bytes.fromhex("600160005260206000f3"),
+        "empty": bytes.fromhex("60006000f3"),
+        "false": bytes.fromhex("600060005260206000f3"),
+        "short": bytes.fromhex("600160005360016000f3"),
+        "revert": bytes.fromhex("60006000fd"),
+    }
+    response = table[kind]
+    # The vault first reads WETH.balanceOf(vault) to quote the withdrawal.
+    # Every other selector receives the deliberately adversarial response.
+    # CALLDATALOAD(0) >> 224 == balanceOf(address)'s four-byte selector.
+    prefix = bytes.fromhex("60003560e01c6370a0823114")
+    balance = bytes.fromhex("5b600a60005260206000f3")
+    destination = len(prefix) + 3 + len(response)
+    if destination >= 256:
+        raise ValueError("foreign WETH response jump no longer fits PUSH1")
+    jump = bytes((0x60, destination, 0x57))
+    return prefix + jump + response + balance
+
+
+def _adversarial_child_world(run: Runner, kind: str) -> tuple[dict, int]:
+    """Install foreign child code at the fixed address outside exact-pair scope.
+
+    This intentionally probes runtime canonical-return/CEI behavior, rather
+    than asserting that the vault authenticates the WETH bytecode.  Exact code
+    identity is an admission/provenance condition for pair evidence, not a
+    runtime rejection promise for a lookalike installed at `WETH_ADDR`.
+    """
+    delegate_key = 2
+    delegate = signer_address(delegate_key)
+    # With the `O = 1000` offset, 10 shares cannot withdraw two of ten assets.
+    # Seed a 10_000-share arbitrary probe state so the child return is reached.
+    world = run.alloc(0, 0, {run.user: 10_000}, 10_000,
+                      {word(VAULT_ADDR): word(10)})
+    run.add_eoa(world, delegate_key)
+    world[address(WETH_ADDR)]["code"] = "0x" + _response_runtime(kind).hex()
+    world[address(VAULT_ADDR)]["storage"][word(run.side.allowance_slot(run.user, delegate))] = word(10_000)
+    return world, delegate
+
+
+def check_adversarial_child_returns_and_rollback(run: Runner) -> None:
+    """Foreign-child canonical-return and rollback probes, outside exact pairs."""
+    data_for = lambda delegate: abi("withdraw(uint256,address,address)", 2, delegate, run.user)
+    for kind in ("false", "short", "revert"):
+        before, delegate = _adversarial_child_world(run, kind)
+        result = run.call(before, data_for(delegate), signing_key=2,
+                          label=f"foreign-child-{kind}")
+        _check_revert_evidence(f"foreign child {kind} return rolls back allowance and burn",
+                               before, result)
+
+    # A canonical true child is accepted operationally.  It is deliberately
+    # not compared as a WETH pair state because this foreign code does not
+    # implement WETH's asset movement.
+    before, delegate = _adversarial_child_world(run, "true")
+    if not _accepted_success("foreign child canonical true", run.call(
+            before, data_for(delegate), signing_key=2)):
+        return
+
+    # Frozen deviation 7: Blanc demands canonical true, while the reference's
+    # SafeERC20 accepts a successful empty return.  Neither result is labelled
+    # as an exact-WETH-pair transaction.
+    before, delegate = _adversarial_child_world(run, "empty")
+    result = run.call(before, data_for(delegate), signing_key=2)
+    if run.side.name == "reference":
+        _accepted_success("foreign child empty return (deviation 7 reference)", result)
+    else:
+        _check_revert_evidence("foreign child empty return rolls back (Blanc canonical true)",
+                               before, result)
+
+
 def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
     """Read a one-word capacity/conversion result through the Jaune recorder."""
     _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
@@ -1526,6 +1598,38 @@ def check_eels_capacity_views(run: Runner) -> None:
                  f"expected {expected_outcome}/{expected_bytes.hex()}")
 
 
+def check_eels_adversarial_child_returns_and_rollback(run: Runner) -> None:
+    """Independent EELS outcomes for the foreign-child return probes.
+
+    These are deliberately not pair/provenance admission evidence. They only
+    replay the operational canonical-return decision at the fixed child
+    address, using adversarial replacement code.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    for kind in ("true", "false", "short", "revert", "empty"):
+        alloc, delegate = _adversarial_child_world(run, kind)
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(delegate), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(abi("withdraw(uint256,address,address)", 2, delegate, run.user)[2:]),
+            value=0, timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(delegate),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        expected = "success" if kind == "true" or (kind == "empty" and run.side.name == "reference") else "revert"
+        outcome = eels.outcome(output)
+        if outcome != expected:
+            deviation = " (deviation 7)" if kind == "empty" and run.side.name == "reference" else ""
+            fail(f"EELS foreign child {kind}{deviation}: {outcome}, expected {expected}")
+
+
 def _quantity(value, label: str) -> int:
     if isinstance(value, int) and value >= 0:
         return value
@@ -1663,6 +1767,7 @@ CHECKS = [
     check_causal_share_allowance_roles,
     check_causal_delegated_withdraw,
     check_causal_zero_nonzero_flows,
+    check_adversarial_child_returns_and_rollback,
     check_capacity_boundaries,
     check_mint,
     check_redeem,
@@ -1700,6 +1805,7 @@ def run_eels_side(run: Runner) -> None:
         check_eels_view_returns(run)
         check_eels_action_returns(run)
         check_eels_capacity_views(run)
+        check_eels_adversarial_child_returns_and_rollback(run)
     except RuntimeError as exc:
         fail(f"EELS view matrix: {exc}")
     for index in range(before, len(FAILURES)):
@@ -1725,7 +1831,7 @@ def measurements(blanc: Runner, reference: Runner) -> dict:
     }
 
 
-def capture_controls() -> list[str]:
+def capture_controls() -> tuple[list[str], list[dict]]:
     """Executed t8n controls for return-data observability, not parser mocks."""
     controls = [
         ("empty success", b"\x00", 1, b""),
@@ -1734,6 +1840,7 @@ def capture_controls() -> list[str]:
         ("empty revert", bytes.fromhex("60006000fd"), 0, b""),
     ]
     missed = []
+    records = []
     for label, code, success, payload in controls:
         run = Runner(Side("return-capture-control", code, lambda account: account,
                           vault_allowance_key, SUPPLY_SLOT), b"")
@@ -1742,10 +1849,19 @@ def capture_controls() -> list[str]:
                                       label=f"capture control {label}")
         except RuntimeError as exc:
             missed.append(f"{label}: recorder did not preserve the child observation: {exc}")
+            records.append({"label": label, "expected": {"success": success,
+                            "returndata": payload.hex()}, "error": str(exc), "verdict": "missed"})
             continue
         expected = {"success": success, "length": len(payload), "returndata": payload}
         if observed != expected:
             missed.append(f"{label}: recorder observed {observed!r}, expected {expected!r}")
+            verdict = "missed"
+        else:
+            verdict = "caught"
+        records.append({"label": label, "expected": {"success": success,
+                        "returndata": payload.hex()}, "observed": {
+                            "success": observed["success"], "length": observed["length"],
+                            "returndata": observed["returndata"].hex()}, "verdict": verdict})
     oversized = Runner(Side("return-capture-control", bytes.fromhex("60806000f3"),
                             lambda account: account, vault_allowance_key, SUPPLY_SLOT), b"")
     try:
@@ -1754,9 +1870,16 @@ def capture_controls() -> list[str]:
     except RuntimeError as exc:
         if "above its 96-byte bound" not in str(exc):
             missed.append(f"oversized success: wrong rejection {exc}")
+            verdict = "missed"
+        else:
+            verdict = "caught"
+        records.append({"label": "oversized success", "expectedError": "above its 96-byte bound",
+                        "observedError": str(exc), "verdict": verdict})
     else:
         missed.append("oversized success: recorder accepted a truncated payload")
-    return missed
+        records.append({"label": "oversized success", "expectedError": "above its 96-byte bound",
+                        "verdict": "missed"})
+    return missed, records
 
 
 # --- self-test: the gate must be able to fail ---
@@ -1781,7 +1904,7 @@ PERTURBATIONS = [
 ]
 
 
-def self_test() -> int:
+def self_test(report_path: Path | None = None) -> int:
     """Perturb disposable copies and require targeted gate failures.
 
     A differential that has not been shown to fail is not evidence.  This is
@@ -1874,6 +1997,9 @@ def self_test() -> int:
                      abi("deposit(uint256,address)", 10 ** 6, run.user))
         if not FAILURES:
             missed.append("a valid deposit passed the revert check")
+        control_records.append({"label": "valid call as revert", "expectedDiagnostic": "status is 1",
+                                "diagnostics": list(FAILURES),
+                                "verdict": "caught" if FAILURES else "missed"})
         FAILURES.clear()
 
         # Receipt and rollback witnesses are deliberately checked apart from
@@ -1886,6 +2012,9 @@ def self_test() -> int:
             _check_revert_evidence(label, before, result)
             if not FAILURES:
                 missed.append(f"{label}: bad revert evidence passed")
+            control_records.append({"label": label, "input": result,
+                                    "diagnostics": list(FAILURES),
+                                    "verdict": "caught" if FAILURES else "missed"})
             FAILURES.clear()
 
         caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
@@ -1897,7 +2026,9 @@ def self_test() -> int:
                                      "alloc": changed})
         caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
                                     "alloc": before})
-        missed.extend(capture_controls())
+        capture_missed, capture_records = capture_controls()
+        missed.extend(capture_missed)
+        control_records.extend(capture_records)
 
         # The reference half must bite too.  These mutations are also confined
         # to the disposable copy, never the live measurements or runtime lock.
@@ -1972,7 +2103,11 @@ def self_test() -> int:
         return 1
     for control in caught_controls:
         print(f"OK — vault differential self-test control: {control}")
-    print("SELFTEST-CONTROLS-JSON " + json.dumps(control_records, sort_keys=True))
+    if report_path is not None:
+        report_path.write_text(json.dumps({"schema": 1, "controls": control_records},
+                                          indent=2, sort_keys=True) + "\n")
+    else:
+        print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
           f"perturbations, one valid-call-as-revert probe, four receipt/rollback "
           f"falsifiers, five executed return-capture controls, a perturbed "
@@ -2023,6 +2158,13 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    if "--self-test" in sys.argv[1:]:
-        raise SystemExit(self_test())
-    raise SystemExit(main(sys.argv[1:]))
+    args = sys.argv[1:]
+    if "--self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(self_test(report))
+    raise SystemExit(main(args))

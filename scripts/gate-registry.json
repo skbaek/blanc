@@ -856,7 +856,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Executes the committed vault literal and the locked reference creation input on the built Jaune runner; the registered matrix declaration and neutral returndata recorder are exact inputs, alongside the runner binary, frozen literals, lock and committed measurements.",
+      "note": "Executes both compiled sides through Jaune against the independent oracle over the registered finite matrix; pinned EELS is a separate replay, never an observation of Jaune. The matrix producer, manifest and neutral returndata recorder are exact inputs alongside the runner, frozen literals, lock and committed measurements. Foreign-child rows are canonical-return probes outside exact-pair admission; they retain Jaune rollback evidence and EELS outcome replay only.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -948,7 +948,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Harness self-test of the differential: oracle perturbations, a valid-call-as-revert probe, and corruptions of the committed measurements and the locked reference identity must all fail.",
+      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic, while receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
