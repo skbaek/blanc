@@ -127,6 +127,78 @@ private theorem setDelegationLoop_getStor_eq
         obtain ⟨stepMsg, stepRefund⟩ := pair
         exact (ih run).trans (setDelegationStep_getStor_eq step)
 
+/-- One authorization step preserves the block and transaction-static
+environment carried by its message. -/
+private theorem setDelegationStep_benv_stat
+    {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
+    (run : setDelegationStep auth msg refund = .ok ⟨msg', refund'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  unfold setDelegationStep at run
+  dsimp only at run
+  split at run
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    rcases run with ⟨rfl, _⟩
+    rfl
+  · split at run
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+      rcases run with ⟨rfl, _⟩
+      rfl
+    · split at run
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+        rcases run with ⟨rfl, _⟩
+        rfl
+      · cases run
+      · split at run
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+          rcases run with ⟨rfl, _⟩
+          rfl
+        · split at run
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+            rcases run with ⟨rfl, _⟩
+            rfl
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+            rcases run with ⟨rfl, _⟩
+            rfl
+
+/-- The full EIP-7702 authorization loop preserves its message's static
+environment. -/
+private theorem setDelegationLoop_benv_stat
+    {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
+    (run : setDelegationLoop auths msg refund = .ok ⟨msg', refund'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  induction auths generalizing msg refund with
+  | nil =>
+      unfold setDelegationLoop at run
+      simp only [Except.ok.injEq, Prod.mk.injEq] at run
+      rcases run with ⟨rfl, _⟩
+      rfl
+  | cons auth auths ih =>
+      unfold setDelegationLoop at run
+      simp only [bind, Except.bind] at run
+      split at run
+      · cases run
+      · rename_i pair step
+        obtain ⟨stepMsg, stepRefund⟩ := pair
+        exact (ih run).trans (setDelegationStep_benv_stat step)
+
+/-- EIP-7702 authorization processing preserves the static block environment.
+This stays private because public consumers use the normalized CALL-prefix
+transport below. -/
+private theorem setDelegation_benv_stat
+    {msg delegated : Msg} {refund : B256}
+    (run : setDelegation msg = .ok ⟨delegated, refund⟩) :
+    delegated.benv.stat = msg.benv.stat := by
+  unfold setDelegation at run
+  rcases Except.bind_eq_ok run with
+    ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
+  have stat := setDelegationLoop_benv_stat loop
+  cases codeAddress : loopMsg.codeAddress with
+  | none => simp [codeAddress] at rest
+  | some address =>
+      simp [codeAddress] at rest
+      rcases rest with ⟨rfl, rfl⟩
+      exact stat
+
 /-- EIP-7702 authorization processing preserves the complete storage map. -/
 theorem setDelegation_getStor_eq
     {msg delegated : Msg} {refund : B256}
@@ -191,6 +263,23 @@ theorem messageCallDelegation_bal_eq
     rcases rest with ⟨rfl, rfl⟩
     exact setDelegation_bal_eq delegatedRun
 
+/-- The normalized EIP-7702 delegation prefix preserves the complete static
+block environment. -/
+theorem messageCallDelegation_benv_stat
+    {msg delegated : Msg} {refund : Nat}
+    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
+    delegated.benv.stat = msg.benv.stat := by
+  unfold messageCallDelegation at run
+  split at run
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    rcases run with ⟨rfl, rfl⟩
+    rfl
+  · rcases Except.bind_eq_ok run with
+      ⟨⟨delegated', refundWord⟩, delegatedRun, rest⟩
+    simp only [Except.ok.injEq, Prod.mk.injEq] at rest
+    rcases rest with ⟨rfl, rfl⟩
+    exact setDelegation_benv_stat delegatedRun
+
 /-- Delegation processing preserves all message routing/value fields. -/
 theorem messageCallDelegation_fields
     {msg delegated : Msg} {refund : Nat}
@@ -247,6 +336,12 @@ theorem messageCallExecutionMessage_getStor_eq (msg : Msg) :
 theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state.bal =
       msg.benv.state.bal := by
+  unfold messageCallExecutionMessage
+  split <;> rfl
+
+/-- Resolving delegated code preserves the complete static block environment. -/
+theorem messageCallExecutionMessage_benv_stat (msg : Msg) :
+    (messageCallExecutionMessage msg).benv.stat = msg.benv.stat := by
   unfold messageCallExecutionMessage
   split <;> rfl
 

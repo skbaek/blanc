@@ -12,6 +12,7 @@ import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistoryEffects
 import Blanc.MessageExecutionInversion
+import Blanc.DeploymentMessage
 
 namespace Blanc
 
@@ -81,6 +82,25 @@ inductive TransactionMessageOccurrence :
       {message : ExecutionTrace.MessageCallTrace msg state out}
       (occurrence : TransactionMessageOccurrence tail message) :
       TransactionMessageOccurrence (.cons head tail) message
+
+/-- A selected transaction message keeps the block rules of the exact
+transaction-list environment that prepared it.  The occurrence induction is
+local to DRIP's ordered carrier; the preparation equation itself remains the
+generic transaction API. -/
+theorem TransactionMessageOccurrence.message_benv_rules_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message) :
+    msg.benv.stat.rules = benv.stat.rules := by
+  induction occurrence with
+  | head head tail =>
+      rw [prepareMessage_benv head.prepared]
+      rfl
+  | tail head tail occurrence ih =>
+      simpa [Benv.withState] using ih
 
 /-- The ordered transaction occurrence retains enough prefix history to carry
 DRIP's message invariant from the actual transaction-list entry to the exact
@@ -497,6 +517,37 @@ theorem ConfiguredTransactionEnvelope.directCall
   exact ⟨⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
     core, result, message_eq, exec_currentTarget, code_eq⟩⟩
 
+/-- The resolved message of a configured direct CALL keeps the fork rules
+selected for the block that contains its exact transaction occurrence.  The
+proof transports the prepared message's rule field through the real
+delegation and code-resolution equations. -/
+theorem ConfiguredDirectCall.exec_benv_rules_eq_block
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    call.execMsg.benv.stat.rules = block.rules := by
+  have messageRules := envelope.occurrence.message_benv_rules_eq
+  calc
+    call.execMsg.benv.stat.rules =
+        (ExecutionTrace.messageCallExecutionMessage call.delegated).benv.stat.rules := by
+          rw [call.execMsg_eq]
+    _ = call.delegated.benv.stat.rules :=
+      congrArg BenvStat.rules
+        (ExecutionTrace.messageCallExecutionMessage_benv_stat call.delegated)
+    _ = msg.benv.stat.rules :=
+      congrArg BenvStat.rules
+        (ExecutionTrace.messageCallDelegation_benv_stat call.delegation)
+    _ = (((initBenv block.rules pre block.block.header).withState
+          block.bodyTrace.beaconState).withState block.bodyTrace.historyState).stat.rules :=
+      messageRules
+    _ = block.rules := rfl
+
 /-- The outer CALL wrapper's recorded state is its retained core's settled
 state.  This is the bridge from transaction-envelope provenance to the raw
 message settlement branch. -/
@@ -513,6 +564,61 @@ theorem ConfiguredDirectCall.state_eq
     messageState = call.evm.state :=
   ExecutionTrace.processMessageCall_callRun_state_eq target call.delegation
     call.execMsg_eq call.coreRun call.result
+
+/-- A configured direct CALL reaches ordinary interpreter entry.  The slot is
+therefore the exact raw execution rooted at the post-transfer message state;
+this conclusion is specific to the actual configured target and is not a
+generic `ProcessMessage` success rule. -/
+theorem ConfiguredDirectCall.core_slot_some
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    ∃ (afterTransfer : Benv) (raw : Execution),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧
+      call.core.slot = .some
+        ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩ := by
+  have delegatedReady :=
+    ContractSpec.MsgInv.of_messageCallDelegation envelope.ready call.delegation
+  have execReady :=
+    ContractSpec.MsgInv.messageCallExecutionMessage delegatedReady
+  rw [← call.execMsg_eq] at execReady
+  have execTarget : call.execMsg.target.isNone = false := by
+    rw [call.execMsg_eq,
+      ExecutionTrace.messageCallExecutionMessage_target_eq,
+      ExecutionTrace.messageCallDelegation_target_eq call.delegation]
+    exact target
+  have codeAddress : call.execMsg.codeAddress = some ca :=
+    execReady.codeAddress execTarget call.exec_currentTarget
+  have entry : ∃ afterTransfer, call.execMsg.benvAfterTransfer = .ok afterTransfer := by
+    cases transfer : call.execMsg.benvAfterTransfer with
+    | error error =>
+        have coreRun := call.core.run
+        change RunFrame (Frame.ofCall call.execMsg) call.core.slot (.ok call.evm) at coreRun
+        unfold RunFrame Frame.enter Frame.ofCall at coreRun
+        rw [transfer] at coreRun
+        simp [Frame.settleMsg, processMessage.settle] at coreRun
+    | ok afterTransfer => exact ⟨afterTransfer, rfl⟩
+  rcases entry with ⟨afterTransfer, transfer⟩
+  have notPrecompile : ¬ afterTransfer.stat.rules.isPrecomp ca := by
+    rw [benvAfterTransfer_stat transfer]
+    rw [call.exec_benv_rules_eq_block]
+    exact root.target_not_precompile block.rulesAt
+  have enter : (Frame.ofCall call.execMsg).enter =
+      .run (initEvm (call.execMsg.withBenv afterTransfer)) :=
+    MessageExecution.frameEnter_eq_run_afterTransfer_of_notPrecompile
+      call.execMsg afterTransfer ca transfer codeAddress notPrecompile
+  have coreRun := call.core.run
+  change RunFrame (Frame.ofCall call.execMsg) call.core.slot (.ok call.evm) at coreRun
+  unfold RunFrame at coreRun
+  rw [enter] at coreRun
+  rcases coreRun with ⟨raw, slot, _⟩
+  exact ⟨afterTransfer, raw, transfer, slot⟩
 
 /-- An errored direct DRIP call has the exact message-entry accounting
 snapshot.  The result follows the retained core's rollback, then transports
@@ -560,9 +666,10 @@ theorem ConfiguredDirectCall.error_snapshot
       _ = msg.benv.state.bal ca :=
         congrFun (ExecutionTrace.messageCallDelegation_bal_eq call.delegation) ca
 
-/-- An errored retained direct core cannot pass complete CALL settlement.
-Thus neither its root nor any of its raw descendants may be read through the
-committed-frame chronology when the realized history emits operation tags. -/
+/-- An errored configured direct core cannot pass complete CALL settlement.
+The post-transfer raw root is recovered from the actual configured core, so
+neither it nor any raw descendant can be read through committed-frame
+chronology when the realized history emits operation tags. -/
 theorem ConfiguredDirectCall.error_no_settlement
     {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
     {root : DeploymentRoot cfg base deployed ca}
@@ -573,13 +680,18 @@ theorem ConfiguredDirectCall.error_no_settlement
     {envelope : ConfiguredTransactionEnvelope root reach block message}
     {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
     (call : ConfiguredDirectCall envelope target currentTarget)
-    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
-    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
     (error : call.evm.error.isSome) :
-    Frame.settlementCommits (Frame.ofCall call.execMsg) raw ≠ true := by
+    ∃ (afterTransfer : Benv) (raw : Execution),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧
+      call.core.slot = .some
+        ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩ ∧
+      Frame.settlementCommits (Frame.ofCall call.execMsg) raw ≠ true := by
+  rcases call.core_slot_some with ⟨afterTransfer, raw, transfer, slot⟩
+  refine ⟨afterTransfer, raw, transfer, slot, ?_⟩
   intro settles
   have process : ProcessMessage call.execMsg
-      (.some ⟨⟨pc, sevm, entry⟩, raw⟩) (.ok call.evm) := by
+      (.some ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩)
+      (.ok call.evm) := by
     have coreRun := call.core.run
     rw [slot] at coreRun
     exact coreRun
@@ -588,11 +700,11 @@ theorem ConfiguredDirectCall.error_no_settlement
   rw [← settledEq] at settles
   cases errorEq : call.evm.error <;> simp_all
 
-/-- A clean direct DRIP core exposes its actual raw interpreter root, raw
-post-state, and output.  The retained-slot witness supplies the root run; the
-settlement theorem then records that its complete CALL frame commits, so later
-child selection must use the retained-frame path chronology rather than raw
-subtree membership. -/
+/-- A clean configured direct core exposes its actual post-transfer raw
+interpreter root, post-state, and output.  The core slot is derived internally
+from the configured deployment target.  Settlement records that its complete
+CALL frame commits, so later child selection must use retained-frame path
+chronology rather than raw subtree membership. -/
 theorem ConfiguredDirectCall.clean_rawPost
     {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
     {root : DeploymentRoot cfg base deployed ca}
@@ -603,34 +715,40 @@ theorem ConfiguredDirectCall.clean_rawPost
     {envelope : ConfiguredTransactionEnvelope root reach block message}
     {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
     (call : ConfiguredDirectCall envelope target currentTarget)
-    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
-    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
     (clean : call.evm.error.isSome = false) :
-    ∃ rawPost,
-      Nonempty (Exec pc sevm entry raw) ∧
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧
+      call.core.slot = .some
+        ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩ ∧
+      Nonempty (Exec 0 (initSevm (call.execMsg.withBenv afterTransfer))
+        (initDevm (call.execMsg.withBenv afterTransfer)) raw) ∧
       raw = .ok rawPost ∧ rawPost.error = none ∧
       messageState = rawPost.state ∧ call.evm.output = rawPost.output ∧
       Frame.settlementCommits (Frame.ofCall call.execMsg) raw = true := by
+  rcases call.core_slot_some with ⟨afterTransfer, raw, transfer, slot⟩
   have process : ProcessMessage call.execMsg
-      (.some ⟨⟨pc, sevm, entry⟩, raw⟩) (.ok call.evm) := by
+      (.some ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩)
+      (.ok call.evm) := by
     have coreRun := call.core.run
     rw [slot] at coreRun
     exact coreRun
-  have retained : Nonempty (Exec pc sevm entry raw) := by
+  have retained : Nonempty
+      (Exec 0 (initSevm (call.execMsg.withBenv afterTransfer))
+        (initDevm (call.execMsg.withBenv afterTransfer)) raw) := by
     have filled := call.core.retained.toFilled
     rw [slot] at filled
     exact filled
   rcases MessageExecution.processMessage_clean_rawPost process clean with
     ⟨rawPost, rawEq, rawClean, stateEq, outputEq⟩
-  refine ⟨rawPost, retained, rawEq, rawClean, call.state_eq.trans stateEq,
-    outputEq, ?_⟩
+  refine ⟨afterTransfer, raw, rawPost, transfer, slot, retained, rawEq,
+    rawClean, call.state_eq.trans stateEq, outputEq, ?_⟩
   exact ProcessMessage.settlementCommits_of_some_ok_clean process clean
 
 /-- Every nonroot frame retained from a clean direct DRIP root has its exact
 entering instruction and parent path.  The quantification ranges over
 `committedFramePaths`, whose construction excludes every child subtree whose
-complete frame settlement rolls back; it therefore cannot be replaced by a
-raw execution-tree walk when emitting realized effects. -/
+complete frame settlement rolls back.  The root is recovered from the
+configured core rather than supplied by a caller. -/
 theorem ConfiguredDirectCall.clean_retainedChildProvenance
     {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
     {root : DeploymentRoot cfg base deployed ca}
@@ -641,19 +759,24 @@ theorem ConfiguredDirectCall.clean_retainedChildProvenance
     {envelope : ConfiguredTransactionEnvelope root reach block message}
     {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
     (call : ConfiguredDirectCall envelope target currentTarget)
-    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
-    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
     (clean : call.evm.error.isSome = false) :
-    ∃ (run : Exec pc sevm entry raw) (rawPost : Devm),
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm)
+      (run : Exec 0 (initSevm (call.execMsg.withBenv afterTransfer))
+        (initDevm (call.execMsg.withBenv afterTransfer)) raw),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧
+      call.core.slot = .some
+        ⟨initEvm (call.execMsg.withBenv afterTransfer), raw⟩ ∧
       raw = .ok rawPost ∧ rawPost.error = none ∧
       messageState = rawPost.state ∧ call.evm.output = rawPost.output ∧
       Frame.settlementCommits (Frame.ofCall call.execMsg) raw = true ∧
       ∀ child : Exec.LocatedFrame, child ∈ Exec.committedFramePaths run →
         child.path ≠ [] →
           Nonempty (Exec.LocatedFrame.EnteringOccurrence run child) := by
-  rcases call.clean_rawPost slot clean with
-    ⟨rawPost, ⟨run⟩, rawEq, rawClean, stateEq, outputEq, settles⟩
-  refine ⟨run, rawPost, rawEq, rawClean, stateEq, outputEq, settles, ?_⟩
+  rcases call.clean_rawPost clean with
+    ⟨afterTransfer, raw, rawPost, transfer, slot, ⟨run⟩, rawEq, rawClean,
+      stateEq, outputEq, settles⟩
+  refine ⟨afterTransfer, raw, rawPost, run, transfer, slot, rawEq, rawClean,
+    stateEq, outputEq, settles, ?_⟩
   intro child member nonroot
   exact Exec.LocatedFrame.exists_enteringOccurrence run child member nonroot
 

@@ -1475,10 +1475,12 @@ Use
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the
-  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world.
+  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world,
+  while `_benv_stat` carries the complete static block environment.
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
-  `_getStor_eq`, `_bal_eq`) do the same across delegated-code resolution.
+  `_getStor_eq`, `_bal_eq`, `_benv_stat`) do the same across delegated-code
+  resolution.
 - `ExecutionTrace.TransactionTrace.exists_callRun_of_target` eliminates the
   CREATE and collision constructors of an actual transaction message whose
   target is a CALL, exposing that trace's exact delegation, resolved message,
@@ -1636,6 +1638,8 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `directCreateMessageOutputOf` is the shared projection from a charged direct
   CREATE post-frame to its outer `MsgCallOutput`; contract owners may retain a
   thin historical wrapper name, but must not restate its six fields.
+  `benvAfterTransfer_stat` preserves the complete static block environment
+  across a successful message-entry transfer.
   The same module owns the shared receipt key, intrinsic/calldata gas
   projections, type-2 effective gas price and the
   `jauneListCompare_eq_compareLex` list-comparator bridge;
