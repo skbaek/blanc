@@ -16,6 +16,7 @@ import Blanc.MessageExecution
 import Blanc.MessageResult
 import Blanc.MessageExecutionInversion
 import Blanc.ExecutionPath
+import Blanc.ExecutionPathLocator
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
 import Blanc.ExecutionMessageEffects

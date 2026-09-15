@@ -603,6 +603,24 @@ Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
   It deliberately does not classify the root `[]`; use configured transaction
   or system-envelope provenance for that case.
 
+For forward location from a supplied root-frame occurrence, use
+[`Blanc/ExecutionPathLocator.lean`](../Blanc/ExecutionPathLocator.lean):
+`Exec.NinstOccurrence.exists_root_call_child` takes the root commit proof,
+the exact root-indexed occurrence and root-same-frame `ParentPrefix`, an actual
+some child slot, and its matching CALL-shaped spawn, clean `ProcessMessage`
+and successful resume. It returns committed child membership and an
+`EnteringOccurrence` whose parent is exactly the root and whose occurrence is
+the supplied one, with the exact slot and singleton child-index path. Its
+call-shaped premise is `Frame.ofCall`, not an instruction-label classification;
+the consumer must still identify the concrete source CALL. A clean
+child alone does not retain an uncommitted parent, and an immediate/no-code
+slot does not establish an entered child. The later source-route producer
+must supply that same-frame provenance; endpoint states cannot replace it.
+Existing discovery and suggestion facilities were checked. The existential
+membership goal alone does not identify the available occurrence, root-prefix,
+spawn and process witnesses; current matchers do not inspect this joint local
+context, so a broad existential trigger would not reliably select this route.
+
 ### E8. I need an exact ordered replay of world-state changes
 
 Start with [`Blanc/ExecutionStateTrace.lean`](../Blanc/ExecutionStateTrace.lean):
