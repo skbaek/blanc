@@ -867,6 +867,32 @@ theorem join_exec_effect {sevm : Sevm} {pre post : Devm}
   simp only [hgv, hg] at heffect
   exact heffect
 
+/-- The compiled exit retains the fresh-index guards and exact pre-callback
+code/storage boundary of the full source result. -/
+theorem exit_exec_effect_full {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    ExitPaysExactlyFull sevm pre post := by
+  rcases exec_enters_exit exc hcode hsel hnonempty with
+    ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+  have hframe := entryFrame_of_canonical hmm hcanon
+  have heffect := exit_pays_exactly_full auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    getStorVal_entry_of_pre hst
+  have hg : Devm.getStor entry sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget :=
+    getStor_eq_of_state_eq hst.symm sevm.currentTarget
+  have hc : Devm.getCode entry = Devm.getCode pre :=
+    congrArg State.getCode hst.symm
+  unfold ExitPaysExactlyFull at heffect ⊢
+  dsimp only at heffect ⊢
+  simp only [hgv, hg, hc] at heffect
+  exact heffect
+
 /-- Deployed-byte `exit()`: a successful call settles the ledger at the call
 boundary, delivers the exact payout through a clean child settlement, and
 returns the payout word. -/

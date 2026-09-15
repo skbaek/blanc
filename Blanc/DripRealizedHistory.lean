@@ -1485,6 +1485,97 @@ theorem BodyExecutionOccurrence.join_effect
         ReturnsWord units occurrence.execution.postState :=
   join_exec_effect occurrence.execution.run codeEq selector nonempty canonicalEntry
 
+/-- The selected body's compiled exit exposes the actual value-transfer
+entry before callback execution. The filled CALL slot is retained without
+claiming a location in the enclosing execution's frame tree. -/
+theorem BodyExecutionOccurrence.exit_preCallback
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyExecutionOccurrence body)
+    (codeEq : occurrence.execution.sevm.code.toList = code)
+    (selector : Sevm.selector occurrence.execution.sevm = exitSelector)
+    (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
+    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty) :
+    let sevm := occurrence.execution.sevm
+    let initial := occurrence.execution.entryState
+    let units := Sevm.dataWord sevm (32 * 0 + 4)
+    let freshChi := (B256.rpow scale half rate
+      (sevm.benvStat.time - Devm.getStorVal initial sevm.currentTarget rhoSlot).toNat *
+      Devm.getStorVal initial sevm.currentTarget chiSlot) / scale
+    let payout := (freshChi * units) / scale
+    ExitPaysExactlyFull sevm initial occurrence.execution.postState ∧
+      ∃ callPre callPost guardPost returnPre,
+        Devm.getStor callPre sevm.currentTarget =
+          ((((Devm.getStor initial sevm.currentTarget).set chiSlot freshChi).set
+            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+            (Devm.getStorVal initial sevm.currentTarget sevm.caller.toB256 - units)).set
+              totalUnitsSlot (Devm.getStorVal initial sevm.currentTarget totalUnitsSlot - units) ∧
+        Devm.getCode callPre = Devm.getCode initial ∧
+        AcceptedPayout sevm payout callPre callPost guardPost returnPre ∧
+        ∃ (gasWord : B256) (parent child : Devm) (xl : Xlot)
+          (delegated : Bool) (nextAddress : Adr) (childCode : ByteArray) (avail pc : Nat),
+          let childMsg := callMsg sevm parent
+            (min gasWord.toNat (except64th avail) +
+              (if payout.toNat = 0 then 0 else gCallStipend))
+            payout sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+            ((callPre.memory.read 0 0).1) childCode delegated
+          parent.state = callPre.state ∧
+          ((getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = none ∧
+              nextAddress = sevm.caller.toB256.toAdr ∧
+              childCode = callPre.getCode sevm.caller.toB256.toAdr ∧ delegated = false) ∨
+            (∃ address,
+              getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = some address ∧
+              nextAddress = address ∧ childCode = callPre.getCode address ∧ delegated = true)) ∧
+          Ninst.StepRun pc sevm callPre call xl (.ok callPost) ∧
+          Xlot.Filled xl ∧
+          ProcessMessage childMsg xl (.ok child) ∧
+          child.error.isSome = false ∧
+          (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+          ∃ (entry : Benv) (debit : State),
+            childMsg.benvAfterTransfer = .ok entry ∧
+            callPre.state.subBal sevm.currentTarget payout = some debit ∧
+            entry.state = debit.addBal sevm.caller payout ∧
+            entry.state.getStor = callPre.state.getStor ∧
+            entry.state.getCode = callPre.state.getCode ∧
+            (∀ (evm : Evm) (raw : Execution), xl = .some ⟨evm, raw⟩ →
+              evm = initEvm (childMsg.withBenv entry)) := by
+  dsimp only
+  have full := exit_exec_effect_full occurrence.execution.run codeEq selector
+    nonempty canonicalEntry
+  refine ⟨full, ?_⟩
+  rcases full with ⟨-, -, -, -, -, -, -, -, -, -, -, -,
+    callPre, callPost, guardPost, returnPre, storage, codePre, accepted, -, -, -⟩
+  refine ⟨callPre, callPost, guardPost, returnPre, storage, codePre, accepted, ?_⟩
+  rcases accepted with
+    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
+      -, -, -, -, step, -, -, parentState, -, -, -, delegation, filled, process, clean,
+      resume, -, -, -, -⟩
+  refine ⟨gasWord, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
+    parentState, delegation, step, filled, process, clean, resume, ?_⟩
+  rcases RunFrame.decompose process with
+    ⟨error, _, _, failed⟩ | ⟨entry, result, transfer, _, _⟩
+  · simp [Frame.ofCall, Frame.settleMsg, processMessage.settle] at failed
+  · rcases of_benvAfterTransfer (by rfl) transfer with ⟨debit, sub, entryEq⟩
+    refine ⟨entry, debit, transfer, ?_, ?_, ?_, ?_, ?_⟩
+    · change parent.state.subBal _ _ = some debit at sub
+      rwa [parentState] at sub
+    · rw [entryEq]
+      simp only [Benv.addBal, Benv.withState, Frame.ofCall, callMsg, toAdr_toB256]
+    · have same := benvAfterTransfer_getStor_eq transfer
+      change entry.state.getStor = parent.state.getStor at same
+      rwa [parentState] at same
+    · have same := funext (benvAfterTransfer_ok_getCode transfer)
+      change entry.state.getCode = parent.state.getCode at same
+      rwa [parentState] at same
+    · intro evm raw slot
+      rw [slot] at process
+      rcases Frame.enter_run_inv (RunFrame.some_inv process).1 with
+        ⟨entered, transferred, evmEq⟩
+      rw [transfer] at transferred
+      cases transferred
+      exact evmEq
+
 /-- Once the actual direct root is classified as `drip`, its source effect is
 derived from the configured runtime and canonical message entry.  Only the
 selector and nonempty-calldata classification remain premises; the code,
