@@ -1357,5 +1357,260 @@ private theorem concreteJoin_rpowZero (base post : Devm) (M : Mem) (G : Nat)
     omega
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hcompose
 
+private theorem concreteJoin_readChi (base post : Devm) (M : Mem) (G : Nat) (next : Func)
+    (hchi : base.getStorVal concreteCreateTarget chiSlot = scale)
+    (hcold : (concreteCreateTarget, chiSlot) ∉ base.accessedStorageKeys)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      ((addAccessedStorageKey base concreteCreateTarget chiSlot).setMach ⟨[scale], M, G⟩)
+      next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], M, G + 2103⟩)
+      (Ninst.pushB256 chiSlot ::: Ninst.sload ::: next) post := by
+  func_run (2)
+  change Func.RunCompiled _ concreteJoinSevm
+    ((addAccessedStorageKey base concreteCreateTarget chiSlot).setMach
+      ⟨[base.getStorVal concreteCreateTarget chiSlot], M, G + 2103 - 2103⟩) next post
+  simpa only [hchi, Nat.add_sub_cancel] using htail
+
+def concreteJoinClockMemory : Mem :=
+  (concreteJoinStagingMemory.write 160 scale.toBytes).write 192 (2 : B256).toBytes
+
+private theorem concreteJoin_stageClock (base post : Devm) (M C : Mem)
+    (G : Nat) (next : Func)
+    (hsize : M.size = 160)
+    (hstore : M.write (storedChiWord * 32).toNat scale.toBytes = C)
+    (hcsize : C.size = 192)
+    (hread : Bytes.toB256 (C.read (storedChiWord * 32).toNat 32).1 = scale)
+    (hmem : (C.read (storedChiWord * 32).toNat 32).2 = C)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], C.write 192 (2 : B256).toBytes, G⟩) next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[scale], M, G + 70⟩)
+      (mstoreAt storedChiWord +++
+        (Ninst.pushB256 scale ::: loadWord storedChiWord +++ Ninst.lt :::
+          (.revert <?>
+            (loadWord storedChiWord +++ Ninst.pushB256 maxChi ::: Ninst.lt :::
+              (.revert <?> (Ninst.timestamp ::: mstoreAt nowWord +++ next)))))) post := by
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hstore]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  rw [hread, hmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  rw [hread, hmem]
+  func_run (3) [0]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  change Func.RunCompiled _ concreteJoinSevm
+    (base.setMach ⟨[], C.write 192 (2 : B256).toBytes, G + 70 - 70⟩) next post
+  simpa only [Nat.add_sub_cancel] using htail
+
+private theorem concreteJoin_stageElapsed (base post : Devm) (M E : Mem)
+    (G : Nat) (next : Func)
+    (hrho : base.getStorVal concreteCreateTarget rhoSlot = 1)
+    (hcold : (concreteCreateTarget, rhoSlot) ∉ base.accessedStorageKeys)
+    (hsize : M.size = 224)
+    (hnow : Bytes.toB256 (M.read (nowWord * 32).toNat 32).1 = 2)
+    (hmem : (M.read (nowWord * 32).toNat 32).2 = M)
+    (hstore : M.write (exponentWord * 32).toNat (1 : B256).toBytes = E)
+    (hesize : E.size = 224)
+    (hexp : Bytes.toB256 (E.read (exponentWord * 32).toNat 32).1 = 1)
+    (hemem : (E.read (exponentWord * 32).toNat 32).2 = E)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      ((addAccessedStorageKey base concreteCreateTarget rhoSlot).setMach ⟨[], E, G⟩)
+      next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], M, G + 2166⟩)
+      (Ninst.pushB256 rhoSlot ::: Ninst.sload ::: Ninst.dup 0 :::
+        loadWord nowWord +++ Ninst.lt :::
+          (.revert <?> (loadWord nowWord +++ Ninst.sub :::
+            mstoreAt exponentWord +++ loadWord exponentWord +++
+            Ninst.pushB256 maxElapsed ::: Ninst.lt ::: (.revert <?> next)))) post := by
+  func_run (2)
+  change Func.RunCompiled _ concreteJoinSevm
+    ((addAccessedStorageKey base concreteCreateTarget rhoSlot).setMach
+      ⟨[base.getStorVal concreteCreateTarget rhoSlot], M, G + 2166 - 2103⟩) _ post
+  rw [hrho]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hnow, hmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hnow, hmem]
+  func_run (3) [1, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hstore]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hesize]
+    decide +kernel
+  rw [hexp, hemem]
+  func_run (3) [0]
+  simpa only [Nat.add_sub_cancel] using htail
+
+private theorem concreteJoin_initializeRpow (base post : Devm) (M B A Z : Mem)
+    (G : Nat) (zeroBase zeroExponent evenExponent : Func)
+    (hsize : M.size = 224)
+    (hbase : M.write (baseWord * 32).toNat rate.toBytes = B)
+    (hbsize : B.size = 256)
+    (hbexp : Bytes.toB256 (B.read (exponentWord * 32).toNat 32).1 = 1)
+    (hbmem : (B.read (exponentWord * 32).toNat 32).2 = B)
+    (hacc : B.write (accumulatorWord * 32).toNat rate.toBytes = A)
+    (hasize : A.size = 288)
+    (haexp : Bytes.toB256 (A.read (exponentWord * 32).toNat 32).1 = 1)
+    (hamem : (A.read (exponentWord * 32).toNat 32).2 = A)
+    (hzero : A.write (exponentWord * 32).toNat (0 : B256).toBytes = Z)
+    (hloop : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], Z, G⟩) rpowLoop post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], M, G + 122⟩)
+      (Ninst.pushB256 rate ::: Ninst.dup 0 ::: mstoreAt baseWord +++ Ninst.iszero :::
+        (zeroBase <?> (loadWord exponentWord +++ Ninst.iszero :::
+          (zeroExponent <?> (loadWord exponentWord +++ Ninst.pushB256 1 ::: Ninst.and :::
+            ((Ninst.pushB256 rate ::: mstoreAt accumulatorWord +++ loadWord exponentWord +++
+              Ninst.pushB256 2 ::: Ninst.swap 0 ::: Ninst.div ::: mstoreAt exponentWord +++
+              .call rpowLoopSlot) <?> evenExponent)))))) post := by
+  func_run (4) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hbase]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hbexp, hbmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hbexp, hbmem]
+  func_run (3) [1]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hacc]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hasize]
+    decide +kernel
+  rw [haexp, hamem]
+  func_run (5) [0, 0]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  · simp only [Devm.extCost, Devm.memory_setMach, hasize]
+    decide +kernel
+  rw [hzero]
+  apply Func.runCompiled_call' (f := rpowLoop) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hloop
+
+def concreteJoinExponentMemory : Mem := concreteJoinClockMemory.write 0 (1 : B256).toBytes
+def concreteJoinBaseMemory : Mem := concreteJoinExponentMemory.write 224 rate.toBytes
+def concreteJoinAccumulatorMemory : Mem := concreteJoinBaseMemory.write 256 rate.toBytes
+def concreteJoinRpowMemory : Mem := concreteJoinAccumulatorMemory.write 0 (0 : B256).toBytes
+
+def concreteJoinFreshBase (base : Devm) : Devm :=
+  addAccessedStorageKey (addAccessedStorageKey base concreteCreateTarget chiSlot)
+    concreteCreateTarget rhoSlot
+
+private theorem concreteJoin_stagingSize : concreteJoinStagingMemory.size = 160 := by decide +kernel
+
+private theorem concreteJoin_chiMemoryFacts :
+    (concreteJoinStagingMemory.write 160 scale.toBytes).size = 192 ∧
+    Bytes.toB256 ((concreteJoinStagingMemory.write 160 scale.toBytes).read 160 32).1 = scale ∧
+    ((concreteJoinStagingMemory.write 160 scale.toBytes).read 160 32).2 =
+      concreteJoinStagingMemory.write 160 scale.toBytes := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteJoin_clockMemoryFacts : concreteJoinClockMemory.size = 224 ∧
+    Bytes.toB256 (concreteJoinClockMemory.read 192 32).1 = 2 ∧
+    (concreteJoinClockMemory.read 192 32).2 = concreteJoinClockMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteJoin_exponentMemoryFacts : concreteJoinExponentMemory.size = 224 ∧
+    Bytes.toB256 (concreteJoinExponentMemory.read 0 32).1 = 1 ∧
+    (concreteJoinExponentMemory.read 0 32).2 = concreteJoinExponentMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteJoin_baseMemoryFacts : concreteJoinBaseMemory.size = 256 ∧
+    Bytes.toB256 (concreteJoinBaseMemory.read 0 32).1 = 1 ∧
+    (concreteJoinBaseMemory.read 0 32).2 = concreteJoinBaseMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteJoin_accumulatorMemoryFacts : concreteJoinAccumulatorMemory.size = 288 ∧
+    Bytes.toB256 (concreteJoinAccumulatorMemory.read 0 32).1 = 1 ∧
+    (concreteJoinAccumulatorMemory.read 0 32).2 = concreteJoinAccumulatorMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteJoin_rpowMemorySize : concreteJoinRpowMemory.size = 288 := by
+  decide +kernel
+
+private theorem concreteJoin_rpowMemoryRead : Bytes.toB256 (concreteJoinRpowMemory.read 0 32).1 = 0 := by
+  decide +kernel
+
+private theorem concreteJoin_rpowMemoryUnchanged :
+    (concreteJoinRpowMemory.read 0 32).2 = concreteJoinRpowMemory := by
+  apply Mem.read_snd_eq_self
+  rw [concreteJoin_rpowMemorySize]
+  decide +kernel
+
+theorem concreteJoin_freshStart (base post : Devm) (G : Nat)
+    (hchi : base.getStorVal concreteCreateTarget chiSlot = scale)
+    (hrho : base.getStorVal concreteCreateTarget rhoSlot = 1)
+    (hcoldChi : (concreteCreateTarget, chiSlot) ∉ base.accessedStorageKeys)
+    (hcoldRho : (concreteCreateTarget, rhoSlot) ∉ base.accessedStorageKeys)
+    (hcompose : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      ((concreteJoinFreshBase base).setMach ⟨[], concreteJoinRpowMemory, G⟩)
+      composeFresh post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], concreteJoinStagingMemory, G + 34 + 122 + 2166 + 70 + 2103⟩)
+      freshStart post := by
+  apply concreteJoin_readChi _ _ _ _ _ hchi hcoldChi
+  apply concreteJoin_stageClock (C := concreteJoinStagingMemory.write 160 scale.toBytes)
+  · exact concreteJoin_stagingSize
+  · rfl
+  · exact concreteJoin_chiMemoryFacts.1
+  · exact concreteJoin_chiMemoryFacts.2.1
+  · exact concreteJoin_chiMemoryFacts.2.2
+  apply concreteJoin_stageElapsed (E := concreteJoinExponentMemory)
+  · exact hrho
+  · change (concreteCreateTarget, rhoSlot) ∉ base.accessedStorageKeys.insert
+      (concreteCreateTarget, chiSlot)
+    simp only [Std.HashSet.mem_insert]
+    exact not_or.mpr ⟨by decide +kernel, hcoldRho⟩
+  · exact concreteJoin_clockMemoryFacts.1
+  · exact concreteJoin_clockMemoryFacts.2.1
+  · exact concreteJoin_clockMemoryFacts.2.2
+  · rfl
+  · exact concreteJoin_exponentMemoryFacts.1
+  · exact concreteJoin_exponentMemoryFacts.2.1
+  · exact concreteJoin_exponentMemoryFacts.2.2
+  apply concreteJoin_initializeRpow (B := concreteJoinBaseMemory)
+    (A := concreteJoinAccumulatorMemory) (Z := concreteJoinRpowMemory)
+  · exact concreteJoin_exponentMemoryFacts.1
+  · rfl
+  · exact concreteJoin_baseMemoryFacts.1
+  · exact concreteJoin_baseMemoryFacts.2.1
+  · exact concreteJoin_baseMemoryFacts.2.2
+  · rfl
+  · exact concreteJoin_accumulatorMemoryFacts.1
+  · exact concreteJoin_accumulatorMemoryFacts.2.1
+  · exact concreteJoin_accumulatorMemoryFacts.2.2
+  · rfl
+  exact concreteJoin_rpowZero _ _ _ _ concreteJoin_rpowMemorySize
+    concreteJoin_rpowMemoryRead concreteJoin_rpowMemoryUnchanged hcompose
+
 end Drip
 end Blanc
