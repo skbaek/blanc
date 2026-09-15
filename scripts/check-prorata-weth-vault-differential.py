@@ -408,6 +408,27 @@ def _exact_event(label: str, result: dict, *, contract: int, signature: str,
         fail(f"{label}: event data words differ")
 
 
+def _normalized_storage_map(storage: dict, label: str) -> dict[int, int]:
+    if not isinstance(storage, dict):
+        raise ValueError(f"{label} storage is not an object")
+    normalized = {}
+    for raw_slot, raw_value in storage.items():
+        slot = _quantity(raw_slot, f"{label} storage key")
+        value = _quantity(raw_value, f"{label} storage value")
+        if value:
+            if slot in normalized:
+                raise ValueError(f"{label} storage spells slot {slot} twice")
+            normalized[slot] = value
+    return normalized
+
+
+def _set_storage_word(storage: dict[int, int], slot: int, value: int, label: str) -> None:
+    if value:
+        storage[slot] = value
+    else:
+        storage.pop(slot, None)
+
+
 def _deposit_events(label: str, result: dict, caller: int, receiver: int,
                     assets: int, shares: int) -> None:
     entries = logs_of(result)
@@ -418,13 +439,16 @@ def _deposit_events(label: str, result: dict, caller: int, receiver: int,
             (address(VAULT_ADDR), deposit)]:
         fail(f"{label}: WETH transfer, share mint, Deposit order differs")
         return
-    if (tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (caller, VAULT_ADDR)
+    if (len(entries[0].get("topics", [])) != 3 or len(entries[0].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (caller, VAULT_ADDR)
             or int(entries[0]["data"], 16) != assets):
         fail(f"{label}: inbound WETH Transfer words differ")
-    if (tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (0, receiver)
+    if (len(entries[1].get("topics", [])) != 3 or len(entries[1].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (0, receiver)
             or int(entries[1]["data"], 16) != shares):
         fail(f"{label}: share-mint Transfer words differ")
-    if (tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver)
+    if (len(entries[2].get("topics", [])) != 3 or len(entries[2].get("data", "")) != 130
+            or tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver)
             or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
                      for i in range(2)) != (assets, shares)):
         fail(f"{label}: Deposit words differ")
@@ -440,13 +464,16 @@ def _withdraw_events(label: str, result: dict, caller: int, receiver: int,
             (address(VAULT_ADDR), withdraw)]:
         fail(f"{label}: share burn, WETH transfer, Withdraw order differs")
         return
-    if (tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (owner, 0)
+    if (len(entries[0].get("topics", [])) != 3 or len(entries[0].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (owner, 0)
             or int(entries[0]["data"], 16) != shares):
         fail(f"{label}: share-burn Transfer words differ")
-    if (tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (VAULT_ADDR, receiver)
+    if (len(entries[1].get("topics", [])) != 3 or len(entries[1].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (VAULT_ADDR, receiver)
             or int(entries[1]["data"], 16) != assets):
         fail(f"{label}: outbound WETH Transfer words differ")
-    if (tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver, owner)
+    if (len(entries[2].get("topics", [])) != 4 or len(entries[2].get("data", "")) != 130
+            or tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver, owner)
             or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
                      for i in range(2)) != (assets, shares)):
         fail(f"{label}: Withdraw words differ")
@@ -467,32 +494,37 @@ def _pair_state(run: Runner, label: str, result: dict, model: V.Vault,
     if not isinstance(post, dict):
         fail(f"{label}: missing post-state allocation")
         return
-    weth_account = post.get(address(WETH_ADDR), {})
-    vault_account = post.get(address(VAULT_ADDR), {})
-    if bytes.fromhex(weth_account.get("code", "0x")[2:]) != run.weth_code:
-        fail(f"{label}: WETH code changed")
-    if bytes.fromhex(vault_account.get("code", "0x")[2:]) != run.side.code:
-        fail(f"{label}: vault code changed")
-    vault_storage, weth_storage = vault_state(result)
-    expect(f"{label} supply", run.supply(vault_storage), model.supply)
+    try:
+        weth_account = _normalized_account(post, WETH_ADDR)
+        vault_account = _normalized_account(post, VAULT_ADDR)
+        base_vault = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize application account: {exc}")
+        return
     if not model.conserved():
         fail(f"{label}: oracle share ledger is not conserved")
+    expected_weth = {}
     for account in accounts:
-        expect(f"{label} shares[{address(account)}]", run.shares(vault_storage, account),
-               model.balance_of(account))
-        expect(f"{label} weth[{address(account)}]", storage_get(weth_storage, account),
-               model.weth.get(account, 0))
+        _set_storage_word(expected_weth, account, model.weth.get(account, 0), label)
     for owner, spender in weth_allowances:
-        expect(f"{label} WETH allowance[{address(owner)},{address(spender)}]",
-               storage_get(weth_storage, weth_allowance_key(owner, spender)),
-               model.weth_allowances.get((owner, spender), 0))
+        _set_storage_word(expected_weth, weth_allowance_key(owner, spender),
+                          model.weth_allowances.get((owner, spender), 0), label)
+    expected_vault = dict(base_vault)
+    for account in accounts:
+        _set_storage_word(expected_vault, run.side.shares_slot(account), model.balance_of(account), label)
+    _set_storage_word(expected_vault, run.side.supply_slot, model.supply, label)
     for owner, spender in share_allowances:
-        expect(f"{label} share allowance[{address(owner)},{address(spender)}]",
-               run.share_allowance(vault_storage, owner, spender),
-               model.allowance(owner, spender))
+        _set_storage_word(expected_vault, run.side.allowance_slot(owner, spender),
+                          model.allowance(owner, spender), label)
     backed = sum(model.weth.get(account, 0) for account in accounts)
-    expect(f"{label} WETH native backing", _quantity(weth_account.get("balance", "0x0"),
-                                                       "WETH native balance"), backed)
+    expected_weth_account = {"balance": backed, "nonce": 1, "code": run.weth_code,
+                             "storage": expected_weth}
+    expected_vault_account = {"balance": 0, "nonce": 1, "code": run.side.code,
+                              "storage": expected_vault}
+    if weth_account != expected_weth_account:
+        fail(f"{label}: complete normalized WETH account differs from oracle projection")
+    if vault_account != expected_vault_account:
+        fail(f"{label}: complete normalized vault account differs from oracle projection")
 
 
 def funded_pair(run: Runner, label: str, funding: dict[int, int], approvals: dict[int, int],
@@ -698,6 +730,119 @@ def check_causal_delegated_redeem(run: Runner) -> None:
                      V.convert_to_assets(shares, 10, V.convert_to_shares(10, 0, 0)), shares)
 
 
+def check_causal_share_allowance_roles(run: Runner) -> None:
+    """Backed ERC-20 history for overwrite, zero, finite/max, self, and zero flows."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    setup = funded_pair(run, "share-allowance-roles", {KEY: 100}, {KEY: 100},
+                        extra_signers=(delegate_key, receiver_key))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    finite, self_allowance, maximum = 3_000, 500, V.U
+    steps = run_sequence(run, "share-allowance-roles", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("overwrite approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 2_500), 0, KEY),
+        ("zero approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 0), 0, KEY),
+        ("restore finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("finite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 1_000),
+         0, delegate_key),
+        ("approve self", VAULT_ADDR, abi("approve(address,uint256)", run.user, self_allowance), 0, KEY),
+        ("owner transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100), 0, KEY),
+        ("approve max", VAULT_ADDR, abi("approve(address,uint256)", delegate, maximum), 0, KEY),
+        ("infinite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100),
+         0, delegate_key),
+        ("self transfer", VAULT_ADDR, abi("transfer(address,uint256)", run.user, 200), 0, KEY),
+        ("zero-value transfer", VAULT_ADDR, abi("transfer(address,uint256)", receiver, 0), 0, KEY),
+    ])
+    if steps is None:
+        return
+    model_steps = (
+        ("deposit", (run.user, 10, run.user)),
+        ("approve", (run.user, delegate, finite)),
+        ("approve", (run.user, delegate, 2_500)),
+        ("approve", (run.user, delegate, 0)),
+        ("approve", (run.user, delegate, finite)),
+        ("transfer_from", (delegate, run.user, receiver, 1_000)),
+        ("approve", (run.user, run.user, self_allowance)),
+        ("transfer_from", (run.user, run.user, receiver, 100)),
+        ("approve", (run.user, delegate, maximum)),
+        ("transfer_from", (delegate, run.user, receiver, 100)),
+        ("transfer", (run.user, run.user, 200)),
+        ("transfer", (run.user, receiver, 0)),
+    )
+    allowance_rows = ((run.user, delegate), (run.user, run.user))
+    for (method, args), result in zip(model_steps, steps, strict=True):
+        committed, value, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"share-allowance-roles oracle rejected {method}")
+            return
+        _pair_state(run, f"share-allowance-roles {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),), share_allowances=allowance_rows)
+    minted = V.convert_to_shares(10, 0, 0)
+    _deposit_events("share-allowance-roles deposit", steps[0], run.user, run.user, 10, minted)
+    for index, amount in ((1, finite), (2, 2_500), (3, 0), (4, finite), (6, self_allowance), (8, maximum)):
+        spender = run.user if index == 6 else delegate
+        _exact_event("share-allowance-roles approval", steps[index], contract=VAULT_ADDR,
+                     signature="Approval(address,address,uint256)", indexed=(run.user, spender),
+                     data_words=(amount,))
+    for index, caller, amount in ((5, delegate, 1_000), (7, run.user, 100), (9, delegate, 100),
+                                  (10, run.user, 200), (11, run.user, 0)):
+        source = run.user
+        target = run.user if index == 10 else receiver
+        _exact_event("share-allowance-roles transfer", steps[index], contract=VAULT_ADDR,
+                     signature="Transfer(address,address,uint256)", indexed=(source, target),
+                     data_words=(amount,))
+
+    # Each failure starts from a genuine prior post-state. The whole vault
+    # account includes every share/allowance row; the WETH account includes its
+    # finite residual allowance. Only payer envelope effects stay excluded.
+    exhausted = steps[3]["alloc"]
+    _check_revert_evidence("share-allowance-roles exhausted finite allowance", exhausted,
+                           run.call(exhausted, abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+                                    signing_key=delegate_key,
+                                    nonce=_next_nonce(exhausted, delegate_key)))
+    final = steps[-1]["alloc"]
+    _check_revert_evidence("share-allowance-roles zero receiver", final,
+                           run.call(final, abi("transfer(address,uint256)", 0, 1),
+                                    nonce=_next_nonce(final, KEY)))
+
+
+def check_causal_delegated_withdraw(run: Runner) -> None:
+    """Backed deposit, approval, and a distinct-caller delegated withdraw."""
+    delegate_key, shares, assets = 2, 2_000, 2
+    delegate = signer_address(delegate_key)
+    setup = funded_pair(run, "delegated-withdraw", {KEY: 100}, {KEY: 100},
+                        extra_signers=(delegate_key,))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "delegated-withdraw", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+        ("delegated withdraw", VAULT_ADDR,
+         abi("withdraw(uint256,address,address)", assets, delegate, run.user), 0, delegate_key),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("approve", (run.user, delegate, shares)),
+                                       ("withdraw", (delegate, assets, delegate, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"delegated-withdraw oracle rejected {method}")
+            return
+        _pair_state(run, f"delegated-withdraw {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),),
+                    share_allowances=((run.user, delegate),))
+    _exact_event("delegated-withdraw share approval", steps[1], contract=VAULT_ADDR,
+                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate),
+                 data_words=(shares,))
+    _withdraw_events("delegated-withdraw withdraw", steps[-1], delegate, delegate, run.user, assets, shares)
+
+
 def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
     """Read a one-word capacity/conversion result through the Jaune recorder."""
     _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
@@ -720,18 +865,58 @@ def _accepted_success(label: str, result: dict) -> bool:
     return True
 
 
+def _solvent_capacity_world(run: Runner) -> tuple[dict, int, int, int]:
+    """A nonoverflowing, pair-stable root for successful cap endpoint calls."""
+    room = 1_000
+    supply = V.MAX_SUPPLY - room
+    assets = V.ceil_div(supply, V.O)
+    user_weth = 2
+    world = run.alloc(user_weth, user_weth, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    # WETH's exact backing is the two known internal rows. This is a permitted
+    # finite root for capacity endpoints, distinct from the payable histories.
+    world[address(WETH_ADDR)]["balance"] = h(assets + user_weth)
+    return world, supply, assets, user_weth
+
+
+def _capacity_success_state(run: Runner, label: str, result: dict, *, supply: int,
+                            assets: int, paid: int, minted: int, user_weth: int) -> None:
+    """Require the complete WETH/vault application accounts after one cap call."""
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful capacity call has no allocation")
+        return
+    try:
+        got_weth = _normalized_account(post, WETH_ADDR)
+        got_vault = _normalized_account(post, VAULT_ADDR)
+        base = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize capacity account: {exc}")
+        return
+    expected_weth_storage = {run.user: user_weth - paid, VAULT_ADDR: assets + paid,
+                             weth_allowance_key(run.user, VAULT_ADDR): user_weth - paid}
+    expected_weth_storage = {slot: value for slot, value in expected_weth_storage.items() if value}
+    expected_vault_storage = dict(base)
+    _set_storage_word(expected_vault_storage, run.side.shares_slot(run.user), supply + minted, label)
+    _set_storage_word(expected_vault_storage, run.side.supply_slot, supply + minted, label)
+    if got_weth != {"balance": assets + user_weth, "nonce": 1, "code": run.weth_code,
+                    "storage": expected_weth_storage}:
+        fail(f"{label}: complete WETH post-state differs from exact endpoint projection")
+    if got_vault != {"balance": 0, "nonce": 1, "code": run.side.code,
+                     "storage": expected_vault_storage}:
+        fail(f"{label}: complete vault post-state differs from exact endpoint projection")
+
+
 def check_capacity_boundaries(run: Runner) -> None:
     """Isolated capacity ABI worlds, deliberately separate from economic traces.
 
-    These use maximal integer rows that cannot be established by the bounded
-    payable-funding histories above.  They test the frozen arithmetic/capacity
-    surface on both compiled sides; they make no PairStable, native-backing, or
-    global-balance claim.  Reference outcomes are checked only under frozen
-    deviations 5 (unbounded maxima) and 6 (`A=U` checked-add reverts).
+    Successful endpoint calls begin from a solvent, nonoverflowing capacity
+    root. `A=U` remains a view/preview-only arithmetic world: it tests the
+    257-bit denominator route but makes no global-balance or reachable-history
+    claim. Reference outcomes are checked only under frozen deviations 5
+    (unbounded maxima) and 6 (`A=U` checked-add reverts).
     """
-    supply, assets = V.MAX_SUPPLY - 3, V.U
-    world = run.alloc(V.U, V.U, {run.user: supply}, supply,
-                      {word(VAULT_ADDR): word(assets)})
+    world, supply, assets, user_weth = _solvent_capacity_world(run)
     expected_max_deposit = V.max_deposit(run.user, assets, supply)
     expected_max_mint = V.max_mint(run.user, assets, supply)
     for label, data, blanc_value in (
@@ -747,24 +932,34 @@ def check_capacity_boundaries(run: Runner) -> None:
             deviation = "5 (reference unbounded maximum)" if run.side.name == "reference" else "oracle"
             fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
 
+    deposit = run.call(world, abi("deposit(uint256,address)", expected_max_deposit, run.user))
+    if _accepted_success("capacity deposit exact maximum", deposit):
+        minted = V.convert_to_shares(expected_max_deposit, assets, supply)
+        _capacity_success_state(run, "capacity deposit exact maximum", deposit, supply=supply,
+                                assets=assets, paid=expected_max_deposit, minted=minted,
+                                user_weth=user_weth)
+    deposit_next = run.call(world, abi("deposit(uint256,address)", expected_max_deposit + 1, run.user))
+    mint = run.call(world, abi("mint(uint256,address)", expected_max_mint, run.user))
+    if _accepted_success("capacity mint exact maximum", mint):
+        paid = V.preview_mint(expected_max_mint, assets, supply)
+        _capacity_success_state(run, "capacity mint exact maximum", mint, supply=supply,
+                                assets=assets, paid=paid, minted=expected_max_mint,
+                                user_weth=user_weth)
+    mint_next = run.call(world, abi("mint(uint256,address)", expected_max_mint + 1, run.user))
     if run.side.name == "reference":
-        for label, data in (
-                ("capacity reference deposit A=U", abi("deposit(uint256,address)", expected_max_deposit, run.user)),
-                ("capacity reference mint A=U", abi("mint(uint256,address)", expected_max_mint, run.user))):
-            _check_revert_evidence(label, world, run.call(world, data))
+        # Deviation 5 is the exact unbounded reference behavior: both adjacent
+        # calls execute, with the same formulas but without Blanc's supply cap.
+        for label, result, paid, minted in (
+                ("capacity reference deposit boundary plus one", deposit_next, expected_max_deposit + 1,
+                 V.convert_to_shares(expected_max_deposit + 1, assets, supply)),
+                ("capacity reference mint boundary plus one", mint_next,
+                 V.preview_mint(expected_max_mint + 1, assets, supply), expected_max_mint + 1)):
+            if _accepted_success(label, result):
+                _capacity_success_state(run, label, result, supply=supply, assets=assets,
+                                        paid=paid, minted=minted, user_weth=user_weth)
     else:
-        deposited = run.call(world, abi("deposit(uint256,address)", expected_max_deposit, run.user))
-        if _accepted_success("capacity deposit exact maximum", deposited):
-            vault, _ = vault_state(deposited)
-            expect("capacity deposit reaches maximum supply", run.supply(vault), V.MAX_SUPPLY)
-        _check_revert_evidence("capacity deposit boundary plus one", world,
-                               run.call(world, abi("deposit(uint256,address)", expected_max_deposit + 1, run.user)))
-        minted = run.call(world, abi("mint(uint256,address)", expected_max_mint, run.user))
-        if _accepted_success("capacity mint exact maximum", minted):
-            vault, _ = vault_state(minted)
-            expect("capacity mint reaches maximum supply", run.supply(vault), V.MAX_SUPPLY)
-        _check_revert_evidence("capacity mint boundary plus one", world,
-                               run.call(world, abi("mint(uint256,address)", expected_max_mint + 1, run.user)))
+        _check_revert_evidence("capacity deposit boundary plus one", world, deposit_next)
+        _check_revert_evidence("capacity mint boundary plus one", world, mint_next)
 
     a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
     panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
@@ -790,28 +985,6 @@ def check_capacity_boundaries(run: Runner) -> None:
             if success != 1 or payload != expected.to_bytes(32, "big"):
                 deviation = "5" if run.side.name == "reference" else "oracle"
                 fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
-    if run.side.name == "reference":
-        _check_revert_evidence("A=U reference mint representability", a_u_world,
-                               run.call(a_u_world, abi("mint(uint256,address)", 999, run.user)))
-        capture_world = deepcopy(a_u_world)
-        capture_storage = capture_world[address(WETH_ADDR)]["storage"]
-        capture_storage[word(CAPTURE_ADDR)] = word(V.U)
-        capture_storage[word(weth_allowance_key(CAPTURE_ADDR, VAULT_ADDR))] = word(V.U)
-        try:
-            success, payload = _captured_word(run, "A=U reference mint captured revert", capture_world,
-                                              abi("mint(uint256,address)", 999, CAPTURE_ADDR))
-        except RuntimeError as exc:
-            fail(str(exc))
-        else:
-            if success != 0 or payload != panic_11:
-                fail("A=U reference mint: frozen deviation 6 did not return exact Panic(0x11)")
-    else:
-        mint = run.call(a_u_world, abi("mint(uint256,address)", 999, run.user))
-        if _accepted_success("A=U mint representability cap", mint):
-            vault, _ = vault_state(mint)
-            expect("A=U mint represents cap", run.supply(vault), 999)
-        _check_revert_evidence("A=U mint unrepresentable plus one", a_u_world,
-                               run.call(a_u_world, abi("mint(uint256,address)", 1000, run.user)))
 
 
 def check_mint(run: Runner) -> None:
@@ -1259,9 +1432,11 @@ def check_eels_capacity_views(run: Runner) -> None:
     except ImportError as exc:
         raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
     panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
-    near_supply, near_assets = V.MAX_SUPPLY - 3, V.U
-    near_world = run.alloc(V.U, V.U, {run.user: near_supply}, near_supply,
+    near_supply = V.MAX_SUPPLY - 1_000
+    near_assets = V.ceil_div(near_supply, V.O)
+    near_world = run.alloc(2, 2, {run.user: near_supply}, near_supply,
                            {word(VAULT_ADDR): word(near_assets)})
+    near_world[address(WETH_ADDR)]["balance"] = h(near_assets + 2)
     a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
     cases = [
         ("EELS capacity maxDeposit boundary", near_world,
@@ -1431,6 +1606,8 @@ CHECKS = [
     check_causal_donation_before_exit,
     check_causal_between_users_donation,
     check_causal_delegated_redeem,
+    check_causal_share_allowance_roles,
+    check_causal_delegated_withdraw,
     check_capacity_boundaries,
     check_mint,
     check_redeem,
@@ -1530,26 +1707,27 @@ def capture_controls() -> list[str]:
 # --- self-test: the gate must be able to fail ---
 
 PERTURBATIONS = [
-    ("the virtual-share offset", "O = 1000\n", "O = 1001\n"),
-    ("convertToShares' rounding",
+    ("the virtual-share offset", "deposit shares",
+     "O = 1000\n", "O = 1001\n"),
+    ("convertToShares' rounding", "deposit shares",
      "return representable(floor_div(a * denominator(supply), numerator(assets)))",
      "return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
-    ("previewWithdraw's rounding",
+    ("previewWithdraw's rounding", "withdraw shares",
      "return representable(ceil_div(a * denominator(supply), numerator(assets)))"
      "\n\n\npreview_deposit",
      "return representable(floor_div(a * denominator(supply), numerator(assets)))"
      "\n\n\npreview_deposit"),
-    ("convertToAssets' rounding",
+    ("convertToAssets' rounding", "redeem weth[vault]",
      "return representable(floor_div(s * numerator(assets), denominator(supply)))",
      "return representable(ceil_div(s * numerator(assets), denominator(supply)))"),
-    ("previewMint's rounding",
+    ("previewMint's rounding", "mint weth[vault]",
      "return representable(ceil_div(s * numerator(assets), denominator(supply)))",
      "return representable(floor_div(s * numerator(assets), denominator(supply)))"),
 ]
 
 
 def self_test() -> int:
-    """Perturb the oracle and require the gate to notice, every time.
+    """Perturb disposable copies and require targeted gate failures.
 
     A differential that has not been shown to fail is not evidence.  This is
     not a hypothetical: the first draft of these cases all divided evenly, so
@@ -1557,93 +1735,129 @@ def self_test() -> int:
     the revert check compared the receipt status against a spelling the runner
     never emits.  Both were found here.
     """
-    model = Path(__file__).resolve().parent / "prorata_weth_vault_oracle.py"
-    original = model.read_text()
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    original = (here / "prorata_weth_vault_oracle.py").read_text()
     missed = []
-    try:
-        for label, old, new in PERTURBATIONS:
+    with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-differential-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        scripts = sandbox / "scripts"
+        model = scripts / "prorata_weth_vault_oracle.py"
+        checker = scripts / "check-prorata-weth-vault-differential.py"
+        matrix = scripts / "prorata_weth_vault_differential_matrix.py"
+        manifest = scripts / "prorata-weth-vault-differential-manifest.json"
+        measurements_file = scripts / "prorata-weth-vault-reference-measurements.json"
+        lock_file = scripts / "prorata-weth-vault-reference.json"
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def refresh_manifest() -> bool:
+            generated = subprocess.run([sys.executable, "-B", str(matrix), "--print"],
+                                       cwd=sandbox, capture_output=True, text=True, env=env)
+            if generated.returncode:
+                missed.append("coverage producer failed in disposable mutation tree: "
+                              + generated.stderr.strip())
+                return False
+            manifest.write_text(generated.stdout)
+            return True
+
+        def run_gate() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
+                                  capture_output=True, text=True, env=env)
+
+        def require_green(label: str) -> None:
+            if not refresh_manifest():
+                return
+            restored = run_gate()
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+
+        for label, needle, old, new in PERTURBATIONS:
             if original.count(old) != 1:
                 missed.append(f"{label}: the perturbation no longer applies "
                               f"cleanly to the oracle; this self-test has "
                               f"rotted and must be repaired, not skipped")
                 continue
             model.write_text(original.replace(old, new, 1))
-            # Python's bytecode cache keys on mtime at one-second granularity,
-            # so a second write inside the same second can leave a stale .pyc
-            # looking fresh and the child would import the *unperturbed* model
-            # and pass. Drop the cache and forbid writing a new one.
-            shutil.rmtree(model.parent / "__pycache__", ignore_errors=True)
-            result = subprocess.run([sys.executable, "-B", __file__],
-                                    capture_output=True, text=True,
-                                    env={**os.environ,
-                                         "PYTHONDONTWRITEBYTECODE": "1"})
+            if not refresh_manifest():
+                model.write_text(original)
+                continue
+            result = run_gate()
+            output = result.stdout + result.stderr
             if result.returncode == 0:
                 missed.append(f"{label}: perturbed, and the gate still passed")
-    finally:
-        model.write_text(original)
+            elif "REGRESSION — vault differential:" not in output or needle not in output:
+                missed.append(f"{label}: did not reach its intended semantic check ({needle!r})")
+            model.write_text(original)
+            require_green(label)
 
-    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
-    run = Runner(blanc_side(), weth_code)
-    FAILURES.clear()
-    _must_revert(run, "a genuinely valid deposit",
-                 abi("deposit(uint256,address)", 10 ** 6, run.user))
-    if not FAILURES:
-        missed.append("a valid deposit passed the revert check")
-    FAILURES.clear()
-
-    # Receipt and rollback witnesses are deliberately checked apart from the
-    # real valid-call probe above.  These synthetic t8n-shaped rows exercise
-    # the exact false-positive paths that used to make an unexecuted rejection
-    # or a receiptless result look like an EVM revert.
-    before = run.alloc(10 ** 18, 10 ** 18)
-
-    def caught(label: str, result: dict) -> None:
-        _check_revert_evidence(label, before, result)
+        weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+        run = Runner(blanc_side(), weth_code)
+        FAILURES.clear()
+        _must_revert(run, "a genuinely valid deposit",
+                     abi("deposit(uint256,address)", 10 ** 6, run.user))
         if not FAILURES:
-            missed.append(f"{label}: bad revert evidence passed")
+            missed.append("a valid deposit passed the revert check")
         FAILURES.clear()
 
-    caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
-                                          "alloc": before})
-    caught("a missing receipt", {"result": {"receipts": []}, "alloc": before})
-    changed = deepcopy(before)
-    changed[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(1)
-    caught("a rollback leak", {"result": {"receipts": [{"status": "0x0", "logs": []}]},
-                                 "alloc": changed})
-    caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
-                                "alloc": before})
-    missed.extend(capture_controls())
+        # Receipt and rollback witnesses are deliberately checked apart from
+        # the real valid-call probe above.  These synthetic t8n-shaped rows
+        # exercise the exact false-positive paths that used to make an
+        # unexecuted rejection or a receiptless result look like an EVM revert.
+        before = run.alloc(10 ** 18, 10 ** 18)
 
-    # The reference half must bite too: a perturbed measurements file and a
-    # perturbed locked runtime identity are each a failure.
-    if MEASUREMENTS.is_file():
-        saved = MEASUREMENTS.read_text()
-        try:
+        def caught(label: str, result: dict) -> None:
+            _check_revert_evidence(label, before, result)
+            if not FAILURES:
+                missed.append(f"{label}: bad revert evidence passed")
+            FAILURES.clear()
+
+        caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
+                                              "alloc": before})
+        caught("a missing receipt", {"result": {"receipts": []}, "alloc": before})
+        changed = deepcopy(before)
+        changed[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(1)
+        caught("a rollback leak", {"result": {"receipts": [{"status": "0x0", "logs": []}]},
+                                     "alloc": changed})
+        caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
+                                    "alloc": before})
+        missed.extend(capture_controls())
+
+        # The reference half must bite too.  These mutations are also confined
+        # to the disposable copy, never the live measurements or runtime lock.
+        if measurements_file.is_file():
+            saved = measurements_file.read_text()
+            require_green("measurement baseline")
             perturbed = json.loads(saved)
             perturbed["runtimeBytes"]["reference"] += 1
-            MEASUREMENTS.write_text(json.dumps(perturbed, indent=2, sort_keys=True) + "\n")
-            result = subprocess.run([sys.executable, "-B", __file__],
-                                    capture_output=True, text=True,
-                                    env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+            measurements_file.write_text(json.dumps(perturbed, indent=2, sort_keys=True) + "\n")
+            result = run_gate()
+            output = result.stdout + result.stderr
             if result.returncode == 0:
                 missed.append("the committed measurements were perturbed, and the gate still passed")
-        finally:
-            MEASUREMENTS.write_text(saved)
-    else:
-        missed.append("no committed measurements file to perturb")
-    saved_lock = LOCK.read_text()
-    try:
+            elif "is not what this run measures" not in output:
+                missed.append("the perturbed measurements did not reach its identity check")
+            measurements_file.write_text(saved)
+            require_green("measurement mutation")
+        else:
+            missed.append("no committed measurements file to perturb")
+        saved_lock = lock_file.read_text()
         lock = json.loads(saved_lock)
         digest = lock["artifacts"]["configuredRuntime"]["sha256"]
         lock["artifacts"]["configuredRuntime"]["sha256"] = digest[:-1] + ("0" if digest[-1] != "0" else "1")
-        LOCK.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
-        result = subprocess.run([sys.executable, "-B", __file__],
-                                capture_output=True, text=True,
-                                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
-        if result.returncode == 0:
-            missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
-    finally:
-        LOCK.write_text(saved_lock)
+        lock_file.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+        if refresh_manifest():
+            result = run_gate()
+            output = result.stdout + result.stderr
+            if result.returncode == 0:
+                missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
+            elif "constructor-patched reference runtime" not in output:
+                missed.append("the perturbed runtime lock did not reach its identity check")
+        lock_file.write_text(saved_lock)
+        require_green("reference runtime lock mutation")
 
     if missed:
         for message in missed:

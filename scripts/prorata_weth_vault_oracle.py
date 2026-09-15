@@ -193,8 +193,6 @@ class Vault:
         self.weth_allowances[(owner, spender)] = current - amount
 
     def _spend_share_allowance(self, owner: int, spender: int, amount: int) -> None:
-        if owner == spender:
-            return
         current = self.allowance(owner, spender)
         if current == U:
             return
@@ -255,7 +253,8 @@ class Vault:
             raise Revert("zero-owner")
         assets, supply = self.total_assets(), self.supply
         shares = preview_withdraw(a, assets, supply)
-        self._spend_share_allowance(owner, caller, shares)
+        if caller != owner:
+            self._spend_share_allowance(owner, caller, shares)
         self._burn(owner, shares)
         self._weth_move(self.vault_address, receiver, a)
         self.logs.append(("Transfer", owner, 0, shares))
@@ -271,7 +270,8 @@ class Vault:
             raise Revert("zero-owner")
         assets, supply = self.total_assets(), self.supply
         a = convert_to_assets(s, assets, supply)
-        self._spend_share_allowance(owner, caller, s)
+        if caller != owner:
+            self._spend_share_allowance(owner, caller, s)
         self._burn(owner, s)
         self._weth_move(self.vault_address, receiver, a)
         self.logs.append(("Transfer", owner, 0, s))
