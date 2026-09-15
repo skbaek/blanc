@@ -741,4 +741,250 @@ theorem no_success_message_preserves_weth_storage
   show (out.state.getStor wethAccount) = (msg.benv.state.getStor wethAccount)
   rw [h]
 
+
+/-! ## WETH environment rungs
+
+Per-message WETH-environment facts for history projection: invocation
+packaging from projected runs, static-call silence, foreign-approve
+silence, and the named per-selector silence gap interface.  Committing
+non-static vault-cell preservation goes through the source exec-free
+route, which needs `Blanc.ReachableExecFree` — outside the current
+import closure, so it is the precise next unit once the master decides
+the Rely import delta. -/
+
+/-- The inherited WETH program has no `PC` instruction, so a raw
+execution of its compiled code is a gas-exact `Prog.RunCompiled`. -/
+theorem weth_pcFree : Prog.pcFree Blanc.weth = true := by
+  decide +kernel
+
+/-- **WETH run packages an approve invocation.**  From a projected WETH
+run with the approve selector equation. -/
+theorem weth_run_mkApproveInvocation
+    {childSevm : Sevm} {childPre rawPost : Devm}
+    (target : childSevm.currentTarget = wethAccount)
+    (memEmpty : childPre.memory = Mem.empty)
+    (run : Prog.RunCompiled childSevm childPre Blanc.weth rawPost)
+    (selected : Sevm.selector childSevm =
+      selector "approve" [.address, .uint256]) :
+    ∃ call : WethAllowanceInvocation,
+      call.approval = true ∧ call.sevm = childSevm ∧
+        call.pre = childPre ∧ call.post = rawPost := by
+  refine ⟨⟨childSevm, childPre, rawPost, true, target, ?_, run, ?_⟩,
+    rfl, rfl, rfl, rfl⟩
+  · rw [memEmpty]
+    exact Mem.wf_empty
+  · simpa using selected
+
+/-- **WETH run packages a transferFrom invocation.**  From a projected
+WETH run with the transferFrom selector equation. -/
+theorem weth_run_mkTransferFromInvocation
+    {childSevm : Sevm} {childPre rawPost : Devm}
+    (target : childSevm.currentTarget = wethAccount)
+    (memEmpty : childPre.memory = Mem.empty)
+    (run : Prog.RunCompiled childSevm childPre Blanc.weth rawPost)
+    (selected : Sevm.selector childSevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    ∃ call : WethAllowanceInvocation,
+      call.approval = false ∧ call.sevm = childSevm ∧
+        call.pre = childPre ∧ call.post = rawPost := by
+  refine ⟨⟨childSevm, childPre, rawPost, false, target, ?_, run, ?_⟩,
+    rfl, rfl, rfl, rfl⟩
+  · rw [memEmpty]
+    exact Mem.wf_empty
+  · simpa using selected
+
+/-- **Slotless message preserves every cell.**  With no interpreted
+slot the message settles to its entry world or its post-transfer
+world; value transfer moves balances only. -/
+theorem processMessage_none_preserves_cell
+    {msg : Msg} {post : Devm}
+    (process : ProcessMessage msg .none (.ok post))
+    (owner : Adr) (key : B256) :
+    (post.state.getStor owner).get key =
+      (msg.benv.state.getStor owner).get key := by
+  rcases ProcessMessage.none_ok_state_cases process with
+    rollback | ⟨benv, transfer, postEq⟩
+  · rw [rollback]
+  · rw [postEq]
+    rw [benvAfterTransfer_preserves_getStor transfer owner]
+
+/-- **Static message preserves every cell (interpreted slot).**  A
+static interpreted slot retains no storage write; a noncommitting slot
+rolls back. -/
+theorem weth_static_processMessage_some_preserves_cell
+    {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (process : ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (static : msg.isStatic = true)
+    (owner : Adr) (key : B256) :
+    (post.state.getStor owner).get key =
+      (msg.benv.state.getStor owner).get key := by
+  by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
+  · have committed := Frame.raw_commits_of_settlementCommits settles
+    have postEq : post.state = (Execution.committedPost out committed).state :=
+      ProcessMessage.ok_state_eq_committedPost process committed
+    rw [postEq]
+    have enter := (RunFrame.some_inv process).1
+    rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+    have sevmEq : sevm = initSevm (msg.withBenv entry) :=
+      congrArg Evm.sta evmEq
+    have childStatic : sevm.isStatic = true := by
+      rw [sevmEq]
+      show msg.isStatic = true
+      exact static
+    have viewEq :=
+      Exec.storageView_committedPost_eq_of_static run childStatic committed
+    have cellEq : ((Execution.committedPost out committed).state.getStor owner).get key
+        = (pre.state.getStor owner).get key := by
+      have h := congrFun (congrFun viewEq owner) key
+      simp only [Devm.storageView] at h
+      exact h
+    rw [cellEq]
+    obtain ⟨_, _, _, _, _, _, storEq, _⟩ :=
+      MessageExecution.processMessage_entry_facts owner process
+    rw [storEq]
+  · have settledEq := (RunFrame.some_inv process).2
+    have postError : post.error.isSome = true := by
+      have notNone : post.error.isNone ≠ true := by
+        intro clean
+        apply settles
+        unfold Frame.settlementCommits
+        rw [← settledEq]
+        exact clean
+      cases errorEq : post.error <;> simp_all
+    have rollback := (ProcessMessage.rollback_of_error process postError).1
+    rw [rollback]
+
+/-- **Foreign approve invocation preserves vault-owned cells.**  The
+approve writes exactly its caller/spender cell; under the D9
+no-collision hypothesis every other vault-owned touched cell is
+silent.  State linkage is by premise; history projection discharges it
+from the run package. -/
+theorem weth_approve_call_silent
+    {history : List WethAllowanceInvocation} {vault : Adr}
+    {parentPre parentPost : Devm}
+    (collision : NoVaultAllowanceKeyCollision history vault)
+    (call : WethAllowanceInvocation) (member : call ∈ history)
+    (approval : call.approval = true)
+    (foreign : call.sevm.caller ≠ vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs history)
+    (owner : p.1 = vault.toB256)
+    (preLink : call.pre.state.getStor wethAccount
+      = parentPre.state.getStor wethAccount)
+    (postLink : call.post.state.getStor wethAccount
+      = parentPost.state.getStor wethAccount) :
+    (parentPost.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+      (parentPre.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) := by
+  rw [← preLink, ← postLink]
+  have h := foreign_approve_preserves_vault_allowance collision call member
+    approval foreign p touched owner
+  simp only [Devm.getStorVal] at h
+  exact h
+
+/-- Calldata that matches none of the ten dispatched WETH selectors
+routes to the fallback deposit path. -/
+def WethFallbackCalldata (data : Bytes) : Prop :=
+  ∀ sel ∈ [selector "name" [], selector "approve" [.address, .uint256],
+      selector "totalSupply" [], selector "transferFrom" [.address, .address, .uint256],
+      selector "withdraw" [.uint256], selector "decimals" [],
+      selector "balanceOf" [.address], selector "symbol" [],
+      selector "transfer" [.address, .uint256],
+      selector "allowance" [.address, .address]],
+    data.take 4 ≠ abiSelectorBytes sel
+
+/-- **Gap: transfer-message silence.**  A non-static WETH transfer
+touches balance rows only, so every vault-owned touched allowance
+cell is silent.  Stated for history projection; the proof (per-selector
+effect + key-space separation) is the next unit after the exec-free
+import. -/
+def WethTransferSilence (vault : Adr) : Prop :=
+  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation},
+    ProcessMessage msg slot (.ok post) →
+    msg.currentTarget = wethAccount →
+    MessageUsesProgram msg Blanc.weth →
+    (∃ tail, msg.data =
+      abiSelectorBytes (selector "transfer" [.address, .uint256]) ++ tail) →
+    msg.isStatic = false →
+    NoVaultAllowanceKeyCollision history vault →
+    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
+      p.1 = vault.toB256 →
+      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
+
+/-- **Gap: empty-data deposit silence.**  Same shape as transfer, for
+the empty-calldata fallback deposit path. -/
+def WethDepositSilence (vault : Adr) : Prop :=
+  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation},
+    ProcessMessage msg slot (.ok post) →
+    msg.currentTarget = wethAccount →
+    MessageUsesProgram msg Blanc.weth →
+    msg.data = [] →
+    msg.isStatic = false →
+    NoVaultAllowanceKeyCollision history vault →
+    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
+      p.1 = vault.toB256 →
+      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
+
+/-- **Gap: non-matching-data fallback deposit silence.**  Same shape,
+for fallback deposits with non-empty non-matching calldata. -/
+def WethFallbackDepositSilence (vault : Adr) : Prop :=
+  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation},
+    ProcessMessage msg slot (.ok post) →
+    msg.currentTarget = wethAccount →
+    MessageUsesProgram msg Blanc.weth →
+    WethFallbackCalldata msg.data →
+    msg.isStatic = false →
+    NoVaultAllowanceKeyCollision history vault →
+    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
+      p.1 = vault.toB256 →
+      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
+
+/-- **Gap: withdraw-message silence.**  Same shape, for withdraw. -/
+def WethWithdrawSilence (vault : Adr) : Prop :=
+  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation},
+    ProcessMessage msg slot (.ok post) →
+    msg.currentTarget = wethAccount →
+    MessageUsesProgram msg Blanc.weth →
+    (∃ tail, msg.data =
+      abiSelectorBytes (selector "withdraw" [.uint256]) ++ tail) →
+    msg.isStatic = false →
+    NoVaultAllowanceKeyCollision history vault →
+    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
+      p.1 = vault.toB256 →
+      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
+
+/-- **Gap: non-static view-call silence.**  Same shape, for the six
+read-only entries invoked through a non-static `CALL`. -/
+def WethCallViewSilence (vault : Adr) : Prop :=
+  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation},
+    ProcessMessage msg slot (.ok post) →
+    msg.currentTarget = wethAccount →
+    MessageUsesProgram msg Blanc.weth →
+    (∃ tail, msg.data = abiSelectorBytes (selector "name" []) ++ tail) ∨
+      (∃ tail, msg.data =
+        abiSelectorBytes (selector "totalSupply" []) ++ tail) ∨
+      (∃ tail, msg.data =
+        abiSelectorBytes (selector "decimals" []) ++ tail) ∨
+      (∃ tail, msg.data =
+        abiSelectorBytes (selector "balanceOf" [.address]) ++ tail) ∨
+      (∃ tail, msg.data = abiSelectorBytes (selector "symbol" []) ++ tail) ∨
+      (∃ tail, msg.data =
+        abiSelectorBytes (selector "allowance" [.address, .address]) ++ tail) →
+    msg.isStatic = false →
+    NoVaultAllowanceKeyCollision history vault →
+    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
+      p.1 = vault.toB256 →
+      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
+
+
 end Blanc.Composition.ProrataWethVault
