@@ -37,10 +37,13 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-PY="python3"
-if ! command -v "$PY" >/dev/null 2>&1; then
-  echo "REGRESSION — vault differential: python3 not found on PATH" >&2
+EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
+export EELS_ROOT
+PY="${EELS_ROOT}/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  echo "REGRESSION — vault differential: frozen EELS python missing at $PY" >&2
   exit 2
 fi
 
-exec "$PY" "$SCRIPT_DIR/check-prorata-weth-vault-differential.py" "$@"
+PYTHONPATH="${EELS_ROOT}/src${PYTHONPATH:+:$PYTHONPATH}" \
+  exec "$PY" "$SCRIPT_DIR/check-prorata-weth-vault-differential.py" "$@"

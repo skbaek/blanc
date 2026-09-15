@@ -75,9 +75,10 @@ def capture_runtime(target: int, calldata: bytes, *, max_return_bytes: int,
 
     The outer transaction has empty calldata.  The appended target calldata is
     copied into memory with CODECOPY, then a zero-value CALL forwards all gas.
-    The recorder always stops successfully after the inner call, allowing a
-    reverted child to be distinguished from an unexecuted outer transaction by
-    the marker slot and outer receipt.
+    Given sufficient gas for the recorder's post-call storage writes, it stops
+    successfully after the inner call. This lets a reverted child be
+    distinguished from an unexecuted outer transaction by the marker slot and
+    outer receipt; it does not claim success under arbitrary gas exhaustion.
     """
     if not 0 <= target < 1 << 160:
         raise ValueError("capture target is not an address")

@@ -809,9 +809,24 @@
       ],
       "id": "prorata-weth-vault-differential",
       "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
         "files": [
           "scripts/check-prorata-weth-vault-differential.sh",
           "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_differential_matrix.py",
+          "scripts/prorata-weth-vault-differential-manifest.json",
+          "scripts/evm_return_capture.py",
           "scripts/prorata_weth_vault_oracle.py",
           "scripts/evm_tx.py",
           "scripts/keccak.py",
@@ -822,14 +837,26 @@
           ".lake/packages/jaune/scripts/sources.json",
           "scripts/prorata-weth-vault-reference.json",
           "scripts/prorata-weth-vault-reference-measurements.json",
-          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+          "@eels/.venv/pyvenv.cfg",
+          "@eels/.venv/bin/python",
+          "scripts/eels_differential_common.py"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/.venv/lib"
+          }
         ],
         "tools": [
-          "python3"
+          "git"
         ]
       },
       "kind": "cacheable",
-      "note": "Executes the committed vault literal and the locked reference creation input on the built Jaune runner; the runner binary, the frozen literals, the lock and the committed measurements are exact file inputs.",
+      "note": "Executes the committed vault literal and the locked reference creation input on the built Jaune runner; the registered matrix declaration and neutral returndata recorder are exact inputs, alongside the runner binary, frozen literals, lock and committed measurements.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -874,9 +901,24 @@
       ],
       "id": "prorata-weth-vault-differential-self-test",
       "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
         "files": [
           "scripts/check-prorata-weth-vault-differential.sh",
           "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_differential_matrix.py",
+          "scripts/prorata-weth-vault-differential-manifest.json",
+          "scripts/evm_return_capture.py",
           "scripts/prorata_weth_vault_oracle.py",
           "scripts/evm_tx.py",
           "scripts/keccak.py",
@@ -887,10 +929,22 @@
           ".lake/packages/jaune/scripts/sources.json",
           "scripts/prorata-weth-vault-reference.json",
           "scripts/prorata-weth-vault-reference-measurements.json",
-          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+          "@eels/.venv/pyvenv.cfg",
+          "@eels/.venv/bin/python",
+          "scripts/eels_differential_common.py"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/.venv/lib"
+          }
         ],
         "tools": [
-          "python3"
+          "git"
         ]
       },
       "kind": "cacheable",

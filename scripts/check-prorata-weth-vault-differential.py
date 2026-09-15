@@ -36,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 from copy import deepcopy
 from pathlib import Path
 
@@ -46,6 +47,7 @@ sys.path.insert(0, str(HERE))
 from evm_tx import address_of, sign_eip1559  # noqa: E402
 from evm_return_capture import capture_runtime, decode as decode_capture  # noqa: E402
 from keccak import keccak256, selector  # noqa: E402
+from prorata_weth_vault_differential_matrix import validate_manifest  # noqa: E402
 
 import prorata_weth_vault_oracle as V  # noqa: E402
 
@@ -54,6 +56,7 @@ SOURCES = ROOT / ".lake" / "packages" / "jaune" / "scripts" / "sources.json"
 LOCK = ROOT / "scripts" / "prorata-weth-vault-reference.json"
 OUTPUT = ROOT / "scripts" / "reference" / "prorata-weth-vault" / "inputs" / "standard-json-output.json"
 MEASUREMENTS = ROOT / "scripts" / "prorata-weth-vault-reference-measurements.json"
+EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
 
 WETH_ADDR = 0x1000       # ProrataWethVault.assetAddress, compiled in
 VAULT_ADDR = 0x2000
@@ -508,10 +511,26 @@ def abi_string(value: str) -> bytes:
         ((len(raw) + 31) // 32) * 32, b"\x00")
 
 
-def check_view_returns(run: Runner) -> None:
-    """Selected zero-state views use t8n-observed full return-data capture."""
+def view_return_worlds(run: Runner) -> list[tuple[list, dict, dict[str, int]]]:
+    """All view selectors use t8n-observed full return-data capture.
+
+    These are two deliberately distinct worlds: empty checks the virtual
+    offset's base behavior and the nonempty/donated world makes every rounding
+    direction observable.  Both compiled runtimes are compared to values
+    independently computed by the frozen-statement oracle.
+    """
     word_bytes = lambda value: value.to_bytes(32, "big")
-    cases = [
+    # SF §11 deviations 3 and 5 bind these reference-only observations.  They
+    # are not omissions: the locked OZ v5.7.0 reference deliberately exposes
+    # its default unbounded maxima, while the Blanc/oracle side implements D7
+    # and A1's truthful zero-receiver and word-cap policy.
+    reference_maximum_deviations = {
+        "max deposit zero receiver": V.U,
+        "max mint zero receiver": V.U,
+        "max deposit donated": V.U,
+        "max mint donated": V.U,
+    }
+    zero_cases = [
         ("name", abi("name()"), abi_string("PRORATA WETH Vault")),
         ("symbol", abi("symbol()"), abi_string("prWETH")),
         # ERC-4626 inherits WETH's 18 decimals and the frozen offset is 3.
@@ -521,10 +540,55 @@ def check_view_returns(run: Runner) -> None:
         ("total supply zero", abi("totalSupply()"), word_bytes(0)),
         ("balance zero", abi("balanceOf(address)", run.user), word_bytes(0)),
         ("allowance zero", abi("allowance(address,address)", run.user, VAULT_ADDR), word_bytes(0)),
+        ("convert shares empty", abi("convertToShares(uint256)", 17), word_bytes(V.convert_to_shares(17, 0, 0))),
+        ("convert assets empty", abi("convertToAssets(uint256)", 17), word_bytes(V.convert_to_assets(17, 0, 0))),
+        ("preview deposit empty", abi("previewDeposit(uint256)", 17), word_bytes(V.preview_deposit(17, 0, 0))),
+        ("preview mint empty", abi("previewMint(uint256)", 17), word_bytes(V.preview_mint(17, 0, 0))),
+        ("preview redeem empty", abi("previewRedeem(uint256)", 17), word_bytes(V.preview_redeem(17, 0, 0))),
+        ("preview withdraw empty", abi("previewWithdraw(uint256)", 17), word_bytes(V.preview_withdraw(17, 0, 0))),
+        ("max deposit zero receiver", abi("maxDeposit(address)", 0), word_bytes(0)),
+        ("max mint zero receiver", abi("maxMint(address)", 0), word_bytes(0)),
+        ("max redeem zero balance", abi("maxRedeem(address)", run.user), word_bytes(0)),
+        ("max withdraw zero balance", abi("maxWithdraw(address)", run.user), word_bytes(0)),
     ]
-    for label, data, expected in cases:
+    seeded_shares, seeded_assets, donation = 5001, 5, 3
+    assets = seeded_assets + donation
+    nonempty_cases = [
+        ("nonempty total assets", abi("totalAssets()"), word_bytes(assets)),
+        ("nonempty total supply", abi("totalSupply()"), word_bytes(seeded_shares)),
+        ("nonempty balance", abi("balanceOf(address)", run.user), word_bytes(seeded_shares)),
+        ("convert shares donated", abi("convertToShares(uint256)", 4), word_bytes(V.convert_to_shares(4, assets, seeded_shares))),
+        ("convert assets donated", abi("convertToAssets(uint256)", 2000), word_bytes(V.convert_to_assets(2000, assets, seeded_shares))),
+        ("preview deposit donated", abi("previewDeposit(uint256)", 4), word_bytes(V.preview_deposit(4, assets, seeded_shares))),
+        ("preview mint donated", abi("previewMint(uint256)", 2000), word_bytes(V.preview_mint(2000, assets, seeded_shares))),
+        ("preview redeem donated", abi("previewRedeem(uint256)", 2000), word_bytes(V.preview_redeem(2000, assets, seeded_shares))),
+        ("preview withdraw donated", abi("previewWithdraw(uint256)", 3), word_bytes(V.preview_withdraw(3, assets, seeded_shares))),
+        ("max deposit donated", abi("maxDeposit(address)", run.user), word_bytes(V.max_deposit(run.user, assets, seeded_shares))),
+        ("max mint donated", abi("maxMint(address)", run.user), word_bytes(V.max_mint(run.user, assets, seeded_shares))),
+        ("max redeem donated", abi("maxRedeem(address)", run.user), word_bytes(V.max_redeem(seeded_shares))),
+        ("max withdraw donated", abi("maxWithdraw(address)", run.user), word_bytes(V.max_withdraw(seeded_shares, assets, seeded_shares))),
+    ]
+    return [
+        (zero_cases, run.alloc(10 ** 18, 10 ** 18), reference_maximum_deviations),
+        (nonempty_cases, run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                                    {word(VAULT_ADDR): word(assets)}), reference_maximum_deviations),
+    ]
+
+
+def _view_expected(run: Runner, label: str, expected: bytes,
+                   reference_maximum_deviations: dict[str, int]) -> bytes:
+    if run.side.name == "reference" and label in reference_maximum_deviations:
+        return reference_maximum_deviations[label].to_bytes(32, "big")
+    return expected
+
+
+def check_view_returns(run: Runner) -> None:
+    """Check the Jaune recorder leg for every view selector."""
+    for cases, alloc, maximum_deviations in view_return_worlds(run):
+      for label, data, expected in cases:
+        expected = _view_expected(run, label, expected, maximum_deviations)
         try:
-            _, observed = run.capture(run.alloc(10 ** 18, 10 ** 18), data,
+            _, observed = run.capture(alloc, data,
                                       max_return_bytes=len(expected), label=label)
         except RuntimeError as exc:
             fail(str(exc))
@@ -535,6 +599,159 @@ def check_view_returns(run: Runner) -> None:
             fail(f"{label}: captured full return length is {observed['length']}, expected {len(expected)}")
         if observed["returndata"] != expected:
             fail(f"{label}: captured return bytes differ from the frozen ABI value")
+
+
+def _eels_root() -> Path:
+    raw = os.environ.get("EELS_ROOT")
+    if not raw:
+        raise RuntimeError("EELS_ROOT is required for the independent EELS leg")
+    root = Path(raw).expanduser().resolve()
+    try:
+        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        dirty = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(f"cannot inspect EELS_ROOT {root}: {exc}") from exc
+    if head != EELS_PIN or dirty:
+        raise RuntimeError(f"EELS_ROOT must be clean at {EELS_PIN}, got {head}, dirty={bool(dirty)}")
+    return root
+
+
+def _eels_state(alloc: dict):
+    """Install the exact fixture allocation in a fresh pinned-EELS State."""
+    from ethereum.prague.state import State, set_account, set_storage
+    from ethereum.prague.fork_types import Account, Address
+    from ethereum_types.bytes import Bytes, Bytes32
+    from ethereum_types.numeric import U256, Uint
+
+    state = State()
+    for raw_address, entry in alloc.items():
+        account = Address(bytes.fromhex(raw_address.removeprefix("0x")))
+        set_account(state, account, Account(
+            Uint(_quantity(entry.get("nonce", "0x0"), f"{raw_address} nonce")),
+            U256(_quantity(entry.get("balance", "0x0"), f"{raw_address} balance")),
+            Bytes(bytes.fromhex(entry.get("code", "0x").removeprefix("0x"))),
+        ))
+        for slot, value in entry.get("storage", {}).items():
+            numeric = _quantity(value, f"{raw_address} storage value")
+            if numeric:
+                set_storage(state, account,
+                            Bytes32(_quantity(slot, f"{raw_address} storage key").to_bytes(32, "big")),
+                            U256(numeric))
+    return state
+
+
+def check_eels_view_returns(run: Runner) -> None:
+    """Independent pinned-EELS direct-message observations for every view.
+
+    EELS exposes a top-level message's full return bytes directly, so this is
+    deliberately separate from Jaune's storage-recorder route.  Each EELS
+    output is compared to the same independent oracle observation, not to the
+    Jaune capture.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    for cases, alloc, maximum_deviations in view_return_worlds(run):
+      for label, data, expected in cases:
+        expected = _view_expected(run, label, expected, maximum_deviations)
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(run.user), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+            timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        if eels.outcome(output) != "success":
+            fail(f"EELS {label}: executed {eels.outcome(output)}, oracle requires success")
+        elif bytes(output.return_data) != expected:
+            fail(f"EELS {label}: full return bytes differ from its independent oracle observation")
+
+
+def _capture_caller_weth(run: Runner, assets: int, allowance: int) -> dict:
+    """Give the recorder caller its own WETH rows for a captured mutation."""
+    alloc = run.alloc(0, 0)
+    storage = alloc[address(WETH_ADDR)]["storage"]
+    storage[word(CAPTURE_ADDR)] = word(assets)
+    if allowance:
+        storage[word(weth_allowance_key(CAPTURE_ADDR, VAULT_ADDR))] = word(allowance)
+    return alloc
+
+
+def action_return_worlds(run: Runner) -> list[tuple[str, str, dict, bytes]]:
+    """One captured, oracle-computed canonical return for every mutation selector."""
+    true = (1).to_bytes(32, "big")
+    other = 0xBEEF
+    deposit_assets = 7
+    mint_shares = 2000
+    seeded_shares, seeded_assets = 5001, 5
+    redeem_shares, withdraw_assets = 2000, 3
+    deposit = _capture_caller_weth(run, deposit_assets, deposit_assets)
+    mint = _capture_caller_weth(run, 10 ** 18, 10 ** 18)
+    redeem = run.alloc(0, 0, {CAPTURE_ADDR: seeded_shares}, seeded_shares,
+                       {word(VAULT_ADDR): word(seeded_assets)})
+    withdraw = run.alloc(0, 0, {CAPTURE_ADDR: seeded_shares}, seeded_shares,
+                         {word(VAULT_ADDR): word(seeded_assets)})
+    transfer = run.alloc(0, 0, {CAPTURE_ADDR: 9}, 9)
+    transfer_from = run.alloc(0, 0, {run.user: 9}, 9)
+    approve = run.alloc(0, 0)
+    return [
+        ("approve canonical true", abi("approve(address,uint256)", other, 5), approve, true),
+        ("transfer canonical true", abi("transfer(address,uint256)", other, 4), transfer, true),
+        # Zero spends a zero allowance, so this covers transferFrom's exact
+        # true returndata without pretending the wrapper owns the EOA's row.
+        ("transferFrom canonical true", abi("transferFrom(address,address,uint256)", run.user, other, 0), transfer_from, true),
+        ("deposit return", abi("deposit(uint256,address)", deposit_assets, CAPTURE_ADDR), deposit,
+         V.convert_to_shares(deposit_assets, 0, 0).to_bytes(32, "big")),
+        ("mint return", abi("mint(uint256,address)", mint_shares, CAPTURE_ADDR), mint,
+         V.preview_mint(mint_shares, 0, 0).to_bytes(32, "big")),
+        ("redeem return", abi("redeem(uint256,address,address)", redeem_shares, CAPTURE_ADDR, CAPTURE_ADDR), redeem,
+         V.convert_to_assets(redeem_shares, seeded_assets, seeded_shares).to_bytes(32, "big")),
+        ("withdraw return", abi("withdraw(uint256,address,address)", withdraw_assets, CAPTURE_ADDR, CAPTURE_ADDR), withdraw,
+         V.preview_withdraw(withdraw_assets, seeded_assets, seeded_shares).to_bytes(32, "big")),
+    ]
+
+
+def check_action_returns(run: Runner) -> None:
+    """Jaune recorder observations for all seven mutating-selector returns."""
+    for label, data, alloc, expected in action_return_worlds(run):
+        try:
+            _, observed = run.capture(alloc, data, max_return_bytes=32, label=label)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if observed != {"success": 1, "length": 32, "returndata": expected}:
+            fail(f"{label}: captured action return differs from its independent oracle observation")
+
+
+def check_eels_action_returns(run: Runner) -> None:
+    """Pinned EELS executes the same seven mutation-return observations."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    for label, data, alloc, expected in action_return_worlds(run):
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(CAPTURE_ADDR), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+            timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(CAPTURE_ADDR),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        if eels.outcome(output) != "success":
+            fail(f"EELS {label}: executed {eels.outcome(output)}, oracle requires success")
+        elif bytes(output.return_data) != expected:
+            fail(f"EELS {label}: action return bytes differ from its independent oracle observation")
 
 
 def _quantity(value, label: str) -> int:
@@ -675,6 +892,7 @@ CHECKS = [
     check_deposit_event_order,
     check_share_transfer_event,
     check_view_returns,
+    check_action_returns,
     check_malformed_calls_revert,
     check_value_bearing_call_reverts,
 ]
@@ -694,6 +912,17 @@ def run_side(side: Side, weth_code: bytes) -> Runner:
         for index in range(before, len(FAILURES)):
             FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
     return run
+
+
+def run_eels_side(run: Runner) -> None:
+    before = len(FAILURES)
+    try:
+        check_eels_view_returns(run)
+        check_eels_action_returns(run)
+    except RuntimeError as exc:
+        fail(f"EELS view matrix: {exc}")
+    for index in range(before, len(FAILURES)):
+        FAILURES[index] = f"[{run.side.name}] {FAILURES[index]}"
 
 
 def measurements(blanc: Runner, reference: Runner) -> dict:
@@ -879,6 +1108,8 @@ def self_test() -> int:
 
 
 def main(argv: list[str]) -> int:
+    for error in validate_manifest():
+        fail(error)
     if not JAUNE.exists():
         print("REGRESSION — vault differential: the Jaune runner is not built "
               f"at {JAUNE}")
@@ -887,6 +1118,9 @@ def main(argv: list[str]) -> int:
     blanc = run_side(blanc_side(), weth_code)
     reference_runtime = reference_side(weth_code)
     reference = run_side(reference_runtime, weth_code) if reference_runtime else None
+    run_eels_side(blanc)
+    if reference is not None:
+        run_eels_side(reference)
     measured = measurements(blanc, reference) if reference else None
     if measured is not None and not FAILURES:
         text = json.dumps(measured, indent=2, sort_keys=True) + "\n"
@@ -904,11 +1138,14 @@ def main(argv: list[str]) -> int:
     assert reference is not None and measured is not None
     for case, row in measured["gas"].items():
         print(f"  gas {case}: blanc {row['blanc']} reference {row['reference']}")
-    print(f"OK — vault differential: {len(CHECKS)} cases each of the committed "
-          f"{len(blanc.side.code)}-byte runtime and of the {len(reference.side.code)}-byte "
-          f"constructor-patched reference executed on Jaune agree with the "
+    print(f"OK — vault differential: {len(CHECKS)} Jaune check groups and an "
+          f"independent EELS matrix for all 25 selectors on each compiled side; "
+          f"the {len(blanc.side.code)}-byte runtime and {len(reference.side.code)}-byte "
+          f"constructor-patched reference agree with the "
           f"independent oracle; {len(measured['gas'])} gas rows match "
-          f"{MEASUREMENTS.name}")
+          f"{MEASUREMENTS.name}. Bounded selector evidence only: the declared "
+          f"SF callback, rollback, capacity, provenance, and economics cases remain "
+          f"required and this is not G8 acceptance")
     return 0
 
 
