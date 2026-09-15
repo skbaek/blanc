@@ -1064,6 +1064,20 @@ own supply slot and predates this module.
 
 ## M — bytes and memory
 
+For concrete RLP encoding and parsing, use
+[`Blanc/RlpConcrete.lean`](../Blanc/RlpConcrete.lean).
+`RlpConcrete.splitAt_append` retains an arbitrary payload and suffix;
+`encode_bytes_many` selects the ordinary length-prefixed byte encoder;
+`decode_bytes_long_two`, `decode_bytes_32`, and `decode_list_long_two`
+apply Jaune's actual parser equations while keeping payload bytes abstract.
+`decode_byte`, `decode_empty_bytes`, `decode_empty_list`, and
+`decode_bytes_three` cover the small field headers; `parse_cons` composes
+the actual first-item and remaining-list equations.
+The list lemma requires the actual recursive child parse. These equations
+do not assert canonicality, strict transaction acceptance, or a codec roundtrip.
+Select by the known header and payload length; the common equality head also
+covers unrelated encode/decode goals, so this remains a manual registry route.
+
 ### M1. The goal is a `sliceD` normalization
 
 - Read a fixed-size ABI `bytes4` head word with `argBytes4` in

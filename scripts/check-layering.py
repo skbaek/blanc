@@ -118,7 +118,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
           "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
           "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
@@ -201,7 +201,7 @@ CONTRACTS = {
                        "BeaconDepositDeploymentRoot",
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
-    "drip": ["DripCore", "Drip", "DripCode", "DripDeploy",
+    "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory",
              "DripCreationCode", "DripRpow", "DripIngress",
              "DripFunctional", "DripAccounting", "DripMachine",
              "DripEndpoints", "DripFresh",
