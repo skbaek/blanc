@@ -13,6 +13,7 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistoryEffects
 import Blanc.MessageExecutionInversion
 import Blanc.DeploymentMessage
+import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 
 namespace Blanc
 
@@ -1043,6 +1044,19 @@ theorem MessageCallExecutionOccurrence.entry_facts
       Mem.Wf occurrence.entryState.memory :=
   (MessageExecution.processMessage_entry_facts target occurrence.raw_process).2
 
+/-- The retained entry also carries the actual resolved message's caller
+and value, so operation tags need no independent actor or asset premise. -/
+theorem MessageCallExecutionOccurrence.entry_caller_value
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {trace : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : MessageCallExecutionOccurrence trace) :
+    occurrence.sevm.caller = occurrence.execMsg.caller ∧
+      occurrence.sevm.value = occurrence.execMsg.value := by
+  rcases Frame.enter_run_inv (RunFrame.some_inv occurrence.raw_process).1 with
+    ⟨benv, _, entry⟩
+  exact ⟨congrArg (fun evm : Evm => evm.sta.caller) entry,
+    congrArg (fun evm : Evm => evm.sta.value) entry⟩
+
 /-- An interpreter root selected from one exact body message.  It is the root
 envelope carrier: the source tag, call wrapper, and raw execution remain
 attached before any nested frame is selected. -/
@@ -1676,6 +1690,232 @@ theorem ConfiguredDirectCall.clean_body_join_nofm_balance
     refine ⟨source.1, ?_⟩
     have entryBalance := call.entry_balance_of_precredit execution sub credit
     exact (congrArg B256.toNat source.2).trans entryBalance
+
+/-- The actual join's four writes change only the caller's holder row.
+The row addition is exact because its operand bound is supplied separately
+from the wrapped-word post-cap check. -/
+theorem coalitionUnits_join_write (coalition : Finset Adr) (ca caller : Adr)
+    {before after : State} {fresh now units : B256}
+    (storage : after.getStor ca =
+      ((((before.getStor ca).set chiSlot fresh).set rhoSlot now).set
+        (pieSlot caller) ((before.getStor ca).get (pieSlot caller) + units)).set
+          totalUnitsSlot (units + (before.getStor ca).get totalUnitsSlot))
+    (rowNof : B256.Nof ((before.getStor ca).get (pieSlot caller)) units) :
+    coalitionUnits coalition ca after = coalitionUnits coalition ca before +
+      if caller ∈ coalition then units.toNat else 0 := by
+  classical
+  have row : ∀ holder, pieN (after.getStor ca) holder =
+      pieN (before.getStor ca) holder +
+        if holder = caller then units.toNat else 0 := by
+    intro holder
+    by_cases same : holder = caller
+    · subst holder
+      unfold pieN
+      rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot caller).symm _,
+        Stor.get_set_self, B256.toNat_add_eq_of_nof _ _ rowNof, if_pos rfl]
+    · simp only [if_neg same, Nat.add_zero]
+      unfold pieN
+      rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot holder).symm _,
+        Stor.get_set_ne _ (fun eq => same (pieSlot_injective eq).symm) _,
+        Stor.get_set_ne _ (pieSlot_ne_rhoSlot holder).symm _,
+        Stor.get_set_ne _ (pieSlot_ne_chiSlot holder).symm _]
+  unfold coalitionUnits
+  simp_rw [row]
+  rw [Finset.sum_map_toList, Finset.sum_map_toList, Finset.sum_add_distrib,
+    Finset.sum_ite_eq']
+
+/-- Project the exact four-store join image and its actual target credit
+into the finite-coalition accounting relation. All word-to-Nat safety facts
+remain explicit here and are discharged by the retained source run below. -/
+theorem join_write_realized_effect (coalition : Finset Adr) (ca caller : Adr)
+    {before after : State} {fresh now units value : B256} {elapsed : Nat}
+    (storage : after.getStor ca =
+      ((((before.getStor ca).set chiSlot fresh).set rhoSlot now).set
+        (pieSlot caller) ((before.getStor ca).get (pieSlot caller) + units)).set
+          totalUnitsSlot (units + (before.getStor ca).get totalUnitsSlot))
+    (freshEq : fresh.toNat = freshNat (chiN (before.getStor ca)) elapsed)
+    (timeEq : now.toNat = rhoN (before.getStor ca) + elapsed)
+    (quote : units.toNat = joinUnitsOf scale.toNat value.toNat
+      (freshNat (chiN (before.getStor ca)) elapsed))
+    (rowNof : B256.Nof ((before.getStor ca).get (pieSlot caller)) units)
+    (totalNof : B256.Nof units ((before.getStor ca).get totalUnitsSlot))
+    (balance : (after.bal ca).toNat = (before.bal ca).toNat + value.toNat) :
+    Effect scale.toNat freshNat (snapshot coalition ca before)
+      (.join (decide (caller ∈ coalition)) caller value.toNat units.toNat elapsed)
+      (snapshot coalition ca after) := by
+  classical
+  have chi : chiN (after.getStor ca) =
+      freshNat (chiN (before.getStor ca)) elapsed := by
+    unfold chiN
+    rw [storage, Stor.get_set_ne _ scalarSlots_distinct.2.1.symm _,
+      Stor.get_set_ne _ (pieSlot_ne_chiSlot caller) _,
+      Stor.get_set_ne _ scalarSlots_distinct.1.symm _, Stor.get_set_self]
+    exact freshEq
+  have rho : rhoN (after.getStor ca) =
+      rhoN (before.getStor ca) + elapsed := by
+    unfold rhoN
+    rw [storage, Stor.get_set_ne _ scalarSlots_distinct.2.2.symm _,
+      Stor.get_set_ne _ (pieSlot_ne_rhoSlot caller) _, Stor.get_set_self]
+    exact timeEq
+  have total : totalN (after.getStor ca) =
+      totalN (before.getStor ca) + units.toNat := by
+    unfold totalN
+    rw [storage, Stor.get_set_self, B256.toNat_add_eq_of_nof _ _ totalNof,
+      Nat.add_comm]
+  have counted := coalitionUnits_join_write coalition ca caller storage rowNof
+  change Effect scale.toNat freshNat
+    ⟨chiN (before.getStor ca), rhoN (before.getStor ca),
+      coalitionUnits coalition ca before, totalN (before.getStor ca),
+      (before.bal ca).toNat⟩
+    (.join (decide (caller ∈ coalition)) caller value.toNat units.toNat elapsed)
+    ⟨chiN (after.getStor ca), rhoN (after.getStor ca),
+      coalitionUnits coalition ca after, totalN (after.getStor ca),
+      (after.bal ca).toNat⟩
+  rw [chi, rho, counted, total, balance]
+  by_cases member : caller ∈ coalition
+  · simp only [member, if_true, decide_true]
+    exact .joinCounted _ _ _ _ _ _ _ _ _ quote
+  · simp only [member, if_false, decide_false, Nat.add_zero]
+    exact .joinOutside _ _ _ _ _ _ _ _ _ quote
+
+/-- The runtime's operand guards justify the natural quote and both ledger
+additions without a selected-state accounting invariant. In particular, no
+addition safety is inferred from the later wrapped-word cap checks. -/
+theorem join_source_word_facts {s : Stor} {caller : Adr}
+    {value fresh units : B256} {elapsed : Nat}
+    (assetCap : ¬ maxAsset < value)
+    (rowCap : ¬ maxUnits < s.get (pieSlot caller))
+    (totalCap : ¬ maxPie < s.get totalUnitsSlot)
+    (chiLower : ¬ s.get chiSlot < scale)
+    (guards : B256.RPowGuards scale half rate elapsed)
+    (freshNof : B256.Nofm (s.get chiSlot) (B256.rpow scale half rate elapsed))
+    (freshEq : fresh = (B256.rpow scale half rate elapsed * s.get chiSlot) / scale)
+    (unitsEq : units = scale * value / fresh) :
+    fresh.toNat = freshNat (chiN s) elapsed ∧
+      units.toNat = joinUnitsOf scale.toNat value.toNat (freshNat (chiN s) elapsed) ∧
+      B256.Nof (s.get (pieSlot caller)) units ∧
+      B256.Nof units (s.get totalUnitsSlot) := by
+  have freshNatEq : fresh.toNat = freshNat (chiN s) elapsed := by
+    rw [freshEq]
+    exact freshChi_toNat _ _ guards freshNof
+  have lower : scale.toNat ≤ fresh.toNat := by
+    rw [freshNatEq]
+    exact (B256.toNat_le_toNat (le_of_not_gt chiLower)).trans (freshNat_mono _ _)
+  have scaleValue := join_scale_value_nofm assetCap
+  have unitUpper : units.toNat ≤ maxAsset.toNat :=
+    (join_units_le_value unitsEq lower scaleValue).trans
+      (B256.toNat_le_toNat (le_of_not_gt assetCap))
+  have freshNe : fresh ≠ 0 := by
+    intro zero
+    rw [zero, B256.toNat_zero] at lower
+    exact scaleNat_ne_zero (Nat.eq_zero_of_le_zero lower)
+  refine ⟨freshNatEq, ?_, ?_, ?_⟩
+  · rw [unitsEq, B256.toNat_div freshNe,
+      B256.toNat_mul_eq_of_nofm scaleValue, freshNatEq]
+    simp only [joinUnitsOf, Nat.mul_comm]
+  · unfold B256.Nof
+    exact lt_of_le_of_lt
+      (Nat.add_le_add (B256.toNat_le_toNat (le_of_not_gt rowCap)) unitUpper) (by
+        rw [maxUnits_literal, maxAsset_literal]
+        decide +kernel)
+  · unfold B256.Nof
+    exact lt_of_le_of_lt
+      (Nat.add_le_add unitUpper (B256.toNat_le_toNat (le_of_not_gt totalCap))) (by
+        rw [maxAsset_literal, maxPie_literal]
+        decide +kernel)
+
+/-- A classified clean configured join produces its counted or outside tag
+from the same retained body occurrence. The input is the actual resolved
+message state before its value credit; the output is the retained raw post. -/
+theorem ConfiguredDirectCall.clean_body_join_effect
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (coalition : Finset Adr) (clean : call.evm.error.isSome = false) :
+    ∃ (execution : MessageCallExecutionOccurrence message)
+      (occurrence : BodyExecutionOccurrence block.bodyTrace),
+      execution.execMsg = call.execMsg ∧ execution.evm = call.evm ∧
+      execution.postState.state = messageState ∧
+      occurrence =
+        { msg := msg
+          messageState := messageState
+          out := out
+          message := message
+          source := .transaction block.bodyTrace envelope.occurrence
+          execution := execution } ∧
+      ∀ (_selector : Sevm.selector execution.sevm = joinSelector)
+        (_nonempty : execution.sevm.data.length.toB256 ≠ 0),
+        ∃ units : B256, ReturnsWord units execution.postState ∧
+          Effect scale.toNat freshNat
+            (snapshot coalition ca call.execMsg.benv.state)
+            (.join (decide (call.execMsg.caller ∈ coalition)) call.execMsg.caller
+              call.execMsg.value.toNat units.toNat
+              (call.execMsg.benv.stat.time -
+                (call.execMsg.benv.state.getStor ca).get rhoSlot).toNat)
+            (snapshot coalition ca execution.postState.state) := by
+  rcases call.clean_body_join_nofm_balance clean with
+    ⟨execution, occurrence, execMsgEq, evmEq, stateEq, occurrenceEq, source⟩
+  refine ⟨execution, occurrence, execMsgEq, evmEq, stateEq, occurrenceEq, ?_⟩
+  intro selector nonempty
+  rcases execution.entry_facts ca with
+    ⟨codeEntry, targetEntry, _, _, timeEntry, storageEntry, _⟩
+  rw [execMsgEq] at codeEntry targetEntry timeEntry storageEntry
+  have targetEq : execution.sevm.currentTarget = ca :=
+    targetEntry.trans call.exec_currentTarget
+  have codeEq : execution.sevm.code.toList = code := by
+    rw [codeEntry]
+    have compiled := call.code_eq
+    rw [code_compile] at compiled
+    exact Option.some.inj compiled
+  have canonical := MessageExecution.processMessage_entry_memory execution.raw_process
+  rcases execution.entry_caller_value with ⟨callerEq, valueEq⟩
+  rw [execMsgEq] at callerEq valueEq
+  have readEntry : ∀ key, Devm.getStorVal execution.entryState ca key =
+      (call.execMsg.benv.state.getStor ca).get key :=
+    fun key => congrArg (fun s : Stor => s.get key) storageEntry
+  have joinRun := BodyExecutionOccurrence.join_effect occurrence
+  rw [occurrenceEq] at joinRun
+  have rawJoin := joinRun codeEq selector nonempty canonical
+  simp only [targetEq, callerEq, valueEq, timeEntry, readEntry] at rawJoin
+  rcases rawJoin with
+    ⟨assetCap, rowCap, totalCap, lower, _, clock, _, guards,
+      fresh, units, freshEq, unitsEq, _, _, storageRun, returned⟩
+  have bounds := source selector nonempty
+  simp only [timeEntry, readEntry] at bounds
+  rcases join_source_word_facts assetCap rowCap totalCap lower guards
+      bounds.1 freshEq unitsEq with ⟨freshNatEq, quote, rowNof, totalNof⟩
+  have storage : execution.postState.state.getStor ca =
+      ((((call.execMsg.benv.state.getStor ca).set chiSlot fresh).set rhoSlot
+        call.execMsg.benv.stat.time).set (pieSlot call.execMsg.caller)
+          ((call.execMsg.benv.state.getStor ca).get (pieSlot call.execMsg.caller) +
+            units)).set totalUnitsSlot
+              (units + (call.execMsg.benv.state.getStor ca).get totalUnitsSlot) := by
+    change execution.postState.state.getStor ca =
+      ((((execution.entryState.state.getStor ca).set chiSlot fresh).set rhoSlot
+        call.execMsg.benv.stat.time).set (pieSlot call.execMsg.caller)
+          ((call.execMsg.benv.state.getStor ca).get (pieSlot call.execMsg.caller) +
+            units)).set totalUnitsSlot
+              (units + (call.execMsg.benv.state.getStor ca).get totalUnitsSlot)
+      at storageRun
+    rw [storageEntry] at storageRun
+    exact storageRun
+  have timeNat : call.execMsg.benv.stat.time.toNat =
+      rhoN (call.execMsg.benv.state.getStor ca) +
+        (call.execMsg.benv.stat.time -
+          (call.execMsg.benv.state.getStor ca).get rhoSlot).toNat := by
+    have timeLe := le_of_not_gt clock
+    have timeLeNat := B256.toNat_le_toNat timeLe
+    unfold rhoN
+    rw [B256.toNat_sub_eq_of_le _ _ timeLe]
+    omega
+  exact ⟨units, returned, join_write_realized_effect coalition ca call.execMsg.caller
+    storage freshNatEq timeNat quote rowNof totalNof bounds.2⟩
 
 /-- The first body-level actual-occurrence bridge.  Once configured
 classification has discharged the selected frame's exact runtime and entry

@@ -184,7 +184,7 @@ theorem AccountingInv.exit_ledger_write {s : Stor} {holder : Adr} {units : B256}
 /-- A successful `join`'s unit quotient cannot exceed its bounded assets:
 the compiled fresh index is at least the scale, so the exact floor division
 is bounded by the value after the runtime's own multiplication no-wrap check. -/
-private theorem join_units_le_value {value fresh units : B256}
+theorem join_units_le_value {value fresh units : B256}
     (hunits : units = scale * value / fresh)
     (hfreshLower : scale.toNat ≤ fresh.toNat)
     (hmul : B256.Nofm scale value) : units.toNat ≤ value.toNat := by
@@ -203,7 +203,7 @@ private theorem join_units_le_value {value fresh units : B256}
 
 /-- The actual asset guard supplies the multiplication no-wrap fact used by
 the unit quotient; this is independent of the later wrapped-word cap checks. -/
-private theorem join_scale_value_nofm {value : B256}
+theorem join_scale_value_nofm {value : B256}
     (hasset : ¬ maxAsset < value) : B256.Nofm scale value := by
   unfold B256.Nofm
   apply lt_of_le_of_lt
