@@ -47,7 +47,10 @@ sys.path.insert(0, str(HERE))
 from evm_tx import address_of, sign_eip1559  # noqa: E402
 from evm_return_capture import capture_runtime, decode as decode_capture  # noqa: E402
 from keccak import keccak256, selector  # noqa: E402
-from prorata_weth_vault_differential_matrix import validate_manifest  # noqa: E402
+from prorata_weth_vault_differential_matrix import (  # noqa: E402
+    ARITHMETIC_CAPACITY_CASES,
+    validate_manifest,
+)
 
 import prorata_weth_vault_oracle as V  # noqa: E402
 
@@ -65,10 +68,40 @@ KEY = 1
 SUPPLY_SLOT = (1 << 256) - 1   # ProrataWethVault.supplySlot = B256.max
 
 FAILURES: list[str] = []
+EXECUTED_ARITHMETIC_CAPACITY: set[tuple[str, str, str]] = set()
 
 
 def fail(msg: str) -> None:
     FAILURES.append(msg)
+
+
+def record_arithmetic_capacity(case: str, channel: str, side: str) -> None:
+    """Record an executed seeded-arithmetic case for both independent engines."""
+    if case not in ARITHMETIC_CAPACITY_CASES:
+        fail(f"unknown arithmetic capacity case {case!r}")
+        return
+    if channel not in ("jaune", "eels"):
+        fail(f"unknown arithmetic capacity channel {channel!r}")
+        return
+    EXECUTED_ARITHMETIC_CAPACITY.add((case, channel, side))
+
+
+def validate_arithmetic_capacity_coverage() -> None:
+    """Fail closed when a declared arithmetic case/channel did not execute."""
+    expected = {
+        (case, channel, side)
+        for case in ARITHMETIC_CAPACITY_CASES
+        for channel in ("jaune", "eels")
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_ARITHMETIC_CAPACITY)
+    unexpected = sorted(EXECUTED_ARITHMETIC_CAPACITY - expected)
+    if missing:
+        fail("arithmetic capacity coverage missing executed case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if unexpected:
+        fail("arithmetic capacity coverage recorded undeclared IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in unexpected))
 
 
 def _literal(lean: str, name: str) -> bytes:
@@ -1113,6 +1146,140 @@ def check_capacity_boundaries(run: Runner) -> None:
                 fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
 
 
+def _upper_supply_world(run: Runner) -> dict:
+    """Seed backed `S=A=U-O`; arithmetic evidence, never a payable history."""
+    supply = V.MAX_SUPPLY
+    world = run.alloc(0, 0, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(supply)})
+    world[address(WETH_ADDR)]["balance"] = h(supply)
+    return world
+
+
+def _one_share_room_world(run: Runner) -> tuple[dict, int, int, int]:
+    """Seed exactly one remaining share with solvent WETH rows for endpoint calls."""
+    supply = V.MAX_SUPPLY - 1
+    assets = supply
+    user_weth = 2
+    world = run.alloc(user_weth, user_weth, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets + user_weth)
+    return world, supply, assets, user_weth
+
+
+def _share_converter_world(run: Runner) -> dict:
+    """Seed `D=U, X=1` solely for share-converter word representability."""
+    return run.alloc(0, 0, {run.user: V.MAX_SUPPLY}, V.MAX_SUPPLY)
+
+
+def _high_word_donation_world(run: Runner) -> tuple[dict, int, int]:
+    """A backed high-word donation prestate, deliberately not a payable trace."""
+    supply = V.O
+    assets = (1 << 255) + 17
+    world = run.alloc(0, 0, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets)
+    return world, assets, supply
+
+
+def _asset_converter_world(run: Runner) -> dict:
+    """Seed `X = U, D = O` to expose asset-converter word overflow."""
+    assets = V.U - 1
+    world = run.alloc(0, 0, {}, 0, {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets)
+    return world
+
+
+def _expect_capacity_word(run: Runner, label: str, alloc: dict, data: str,
+                          expected: int) -> None:
+    try:
+        success, payload = _captured_word(run, label, alloc, data)
+    except RuntimeError as exc:
+        fail(str(exc))
+        return
+    want = expected.to_bytes(32, "big")
+    if success != 1 or payload != want:
+        fail(f"{label}: captured {success}/{payload.hex()}, expected success/{want.hex()}")
+
+
+def _expect_capacity_revert(run: Runner, label: str, alloc: dict, data: str) -> None:
+    try:
+        success, payload = _captured_word(run, label, alloc, data)
+    except RuntimeError as exc:
+        fail(str(exc))
+        return
+    if success != 0:
+        fail(f"{label}: captured success/{payload.hex()}, expected revert status")
+
+
+def check_explicit_arithmetic_capacity_cases(run: Runner) -> None:
+    """Explicit seeded arithmetic cases required apart from causal economics.
+
+    These fixtures bind exact arithmetic ABI outputs and receipt status on both
+    compiled sides.  They are deliberately labelled seeded prestates: neither
+    the upper-supply ledger nor the high-word donation is asserted to arise
+    from a payable deployment history.
+    """
+    upper = _upper_supply_world(run)
+    for label, data, blanc_value in (
+            ("S=U-O maxDeposit", abi("maxDeposit(address)", run.user), 0),
+            ("S=U-O maxMint", abi("maxMint(address)", run.user), 0)):
+        expected = V.U if run.side.name == "reference" else blanc_value
+        _expect_capacity_word(run, label, upper, data, expected)
+    record_arithmetic_capacity("capacity-supply-upper-bound", "jaune", run.side.name)
+
+    one_room, supply, assets, user_weth = _one_share_room_world(run)
+    max_mint = V.max_mint(run.user, assets, supply)
+    _expect_capacity_word(run, "one-share-room maxMint", one_room,
+                          abi("maxMint(address)", run.user),
+                          V.U if run.side.name == "reference" else max_mint)
+    mint_one = run.call(one_room, abi("mint(uint256,address)", 1, run.user))
+    if _accepted_success("one-share-room mint one", mint_one):
+        _capacity_success_state(run, "one-share-room mint one", mint_one, supply=supply,
+                                assets=assets, paid=1, minted=1, user_weth=user_weth)
+    mint_two = run.call(one_room, abi("mint(uint256,address)", 2, run.user))
+    if run.side.name == "reference":
+        if _accepted_success("one-share-room reference mint two", mint_two):
+            _capacity_success_state(run, "one-share-room reference mint two", mint_two,
+                                    supply=supply, assets=assets, paid=2, minted=2,
+                                    user_weth=user_weth)
+    else:
+        _check_revert_evidence("one-share-room mint two", one_room, mint_two)
+    record_arithmetic_capacity("capacity-one-share-room", "jaune", run.side.name)
+
+    # `D = U, X = 1`: one unit converts to the largest word, while two units
+    # cannot be returned as a word.  This is direct representability evidence,
+    # not an asset-flow scenario.
+    converter_shares = _share_converter_world(run)
+    converter_assets = _asset_converter_world(run)
+    _expect_capacity_word(run, "converter shares representable", converter_shares,
+                          abi("convertToShares(uint256)", 1), V.U)
+    _expect_capacity_word(run, "converter assets representable", converter_assets,
+                          abi("convertToAssets(uint256)", V.O), V.U)
+    for label, data, alloc, model in (
+            ("converter shares unrepresentable", abi("convertToShares(uint256)", 2), converter_shares,
+             lambda: V.convert_to_shares(2, 0, V.MAX_SUPPLY)),
+            ("converter assets unrepresentable", abi("convertToAssets(uint256)", V.O + 1), converter_assets,
+             lambda: V.convert_to_assets(V.O + 1, V.U - 1, 0))):
+        try:
+            model()
+        except V.Revert:
+            _expect_capacity_revert(run, label, alloc, data)
+        else:
+            fail(f"{label}: independent model unexpectedly returned a word")
+    record_arithmetic_capacity("converter-representable-and-unrepresentable", "jaune", run.side.name)
+
+    donation, assets, donation_supply = _high_word_donation_world(run)
+    for label, data, expected in (
+            ("high-word donation convertToShares", abi("convertToShares(uint256)", V.U),
+             V.convert_to_shares(V.U, assets, donation_supply)),
+            ("high-word donation convertToAssets", abi("convertToAssets(uint256)", 1),
+             V.convert_to_assets(1, assets, donation_supply)),
+            ("high-word donation previewMint", abi("previewMint(uint256)", 1),
+             V.preview_mint(1, assets, donation_supply))):
+        _expect_capacity_word(run, label, donation, data, expected)
+    record_arithmetic_capacity("high-word-donation-arithmetic", "jaune", run.side.name)
+
+
 def check_mint(run: Runner) -> None:
     # Seeded, and 2000 * 6 / 6001 is 1.9996, so the upward rounding on the
     # asset input is observed. An empty vault would divide evenly and the
@@ -1598,6 +1765,71 @@ def check_eels_capacity_views(run: Runner) -> None:
                  f"expected {expected_outcome}/{expected_bytes.hex()}")
 
 
+def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
+    """Pinned EELS replay of each new explicitly declared arithmetic prestate."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+
+    def expect(label: str, alloc: dict, data: str, outcome: str, expected: bytes = b"") -> None:
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        actual = eels.outcome(output)
+        returned = bytes(output.return_data)
+        if actual != outcome or (outcome == "success" and returned != expected):
+            fail(f"{label}: EELS {actual}/{returned.hex()}, expected {outcome}/{expected.hex()}")
+
+    upper = _upper_supply_world(run)
+    for label, data, blanc_value in (
+            ("EELS S=U-O maxDeposit", abi("maxDeposit(address)", run.user), 0),
+            ("EELS S=U-O maxMint", abi("maxMint(address)", run.user), 0)):
+        value = V.U if run.side.name == "reference" else blanc_value
+        expect(label, upper, data, "success", value.to_bytes(32, "big"))
+    record_arithmetic_capacity("capacity-supply-upper-bound", "eels", run.side.name)
+
+    one_room, supply, assets, _ = _one_share_room_world(run)
+    expect("EELS one-share-room maxMint", one_room, abi("maxMint(address)", run.user), "success",
+           (V.U if run.side.name == "reference" else V.max_mint(run.user, assets, supply)).to_bytes(32, "big"))
+    expect("EELS one-share-room mint one", one_room, abi("mint(uint256,address)", 1, run.user),
+           "success", (1).to_bytes(32, "big"))
+    expect("EELS one-share-room mint two", one_room, abi("mint(uint256,address)", 2, run.user),
+           "success" if run.side.name == "reference" else "revert",
+           (2).to_bytes(32, "big") if run.side.name == "reference" else b"")
+    record_arithmetic_capacity("capacity-one-share-room", "eels", run.side.name)
+
+    converter_shares = _share_converter_world(run)
+    converter_assets = _asset_converter_world(run)
+    expect("EELS converter shares representable", converter_shares, abi("convertToShares(uint256)", 1),
+           "success", V.U.to_bytes(32, "big"))
+    expect("EELS converter assets representable", converter_assets, abi("convertToAssets(uint256)", V.O),
+           "success", V.U.to_bytes(32, "big"))
+    expect("EELS converter shares unrepresentable", converter_shares, abi("convertToShares(uint256)", 2),
+           "revert")
+    expect("EELS converter assets unrepresentable", converter_assets,
+           abi("convertToAssets(uint256)", V.O + 1),
+           "revert")
+    record_arithmetic_capacity("converter-representable-and-unrepresentable", "eels", run.side.name)
+
+    donation, assets, donation_supply = _high_word_donation_world(run)
+    for label, data, expected in (
+            ("EELS high-word donation convertToShares", abi("convertToShares(uint256)", V.U),
+             V.convert_to_shares(V.U, assets, donation_supply)),
+            ("EELS high-word donation convertToAssets", abi("convertToAssets(uint256)", 1),
+             V.convert_to_assets(1, assets, donation_supply)),
+            ("EELS high-word donation previewMint", abi("previewMint(uint256)", 1),
+             V.preview_mint(1, assets, donation_supply))):
+        expect(label, donation, data, "success", expected.to_bytes(32, "big"))
+    record_arithmetic_capacity("high-word-donation-arithmetic", "eels", run.side.name)
+
+
 def check_eels_adversarial_child_returns_and_rollback(run: Runner) -> None:
     """Independent EELS outcomes for the foreign-child return probes.
 
@@ -1769,6 +2001,7 @@ CHECKS = [
     check_causal_zero_nonzero_flows,
     check_adversarial_child_returns_and_rollback,
     check_capacity_boundaries,
+    check_explicit_arithmetic_capacity_cases,
     check_mint,
     check_redeem,
     check_withdraw,
@@ -1805,6 +2038,7 @@ def run_eels_side(run: Runner) -> None:
         check_eels_view_returns(run)
         check_eels_action_returns(run)
         check_eels_capacity_views(run)
+        check_eels_explicit_arithmetic_capacity_cases(run)
         check_eels_adversarial_child_returns_and_rollback(run)
     except RuntimeError as exc:
         fail(f"EELS view matrix: {exc}")
@@ -1933,6 +2167,7 @@ def self_test(report_path: Path | None = None) -> int:
         measurements_file = scripts / "prorata-weth-vault-reference-measurements.json"
         lock_file = scripts / "prorata-weth-vault-reference.json"
         env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        original_checker = checker.read_text()
 
         def refresh_manifest() -> bool:
             generated = subprocess.run([sys.executable, "-B", str(matrix), "--print"],
@@ -1989,6 +2224,42 @@ def self_test(report_path: Path | None = None) -> int:
                                  "cwd": str(sandbox), "returncode": restored.returncode,
                                  "stdout": restored.stdout, "stderr": restored.stderr},
                 })
+
+        # A declaration alone is not coverage: remove the live Jaune capacity
+        # implementation from CHECKS while retaining the manifest, regenerate
+        # the producer identity in this disposable tree, and require the
+        # executed-ID audit to fail.
+        coverage_line = "    check_explicit_arithmetic_capacity_cases,\n    check_mint,"
+        if original_checker.count(coverage_line) != 1:
+            missed.append("arithmetic coverage omission control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(coverage_line,
+                                                       "    # omitted by coverage control\n    check_mint,", 1))
+            if refresh_manifest():
+                result = run_gate()
+                output = result.stdout + result.stderr
+                needle = "arithmetic capacity coverage missing executed case/channel IDs"
+                if result.returncode == 0:
+                    missed.append("arithmetic capacity implementation was omitted and the gate still passed")
+                elif needle not in output:
+                    missed.append("arithmetic coverage omission did not reach its executed-ID audit")
+                checker.write_text(original_checker)
+                restored = require_green("arithmetic coverage omission")
+                if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                        and needle in output):
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("arithmetic coverage omission: " + diagnostic
+                                           + "; removal restored green")
+                    control_records.append({
+                        "label": "arithmetic capacity executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
 
         weth_code = _literal("Blanc/WethCode.lean", "wethCode")
         run = Runner(blanc_side(), weth_code)
@@ -2109,8 +2380,8 @@ def self_test(report_path: Path | None = None) -> int:
     else:
         print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
-          f"perturbations, one valid-call-as-revert probe, four receipt/rollback "
-          f"falsifiers, five executed return-capture controls, a perturbed "
+          f"perturbations, one arithmetic executed-ID omission, one valid-call-as-revert "
+          f"probe, four receipt/rollback falsifiers, five executed return-capture controls, a perturbed "
           f"measurements file and a perturbed reference identity are all caught")
     return 0
 
@@ -2129,6 +2400,7 @@ def main(argv: list[str]) -> int:
     run_eels_side(blanc)
     if reference is not None:
         run_eels_side(reference)
+    validate_arithmetic_capacity_coverage()
     measured = measurements(blanc, reference) if reference else None
     if measured is not None and not FAILURES:
         text = json.dumps(measured, indent=2, sort_keys=True) + "\n"
@@ -2144,6 +2416,9 @@ def main(argv: list[str]) -> int:
             print(f"REGRESSION — vault differential: {message}")
         return 1
     assert reference is not None and measured is not None
+    print("  arithmetic capacity executed IDs: " + ", ".join(
+        f"{case}/{channel}/{side}"
+        for case, channel, side in sorted(EXECUTED_ARITHMETIC_CAPACITY)))
     for case, row in measured["gas"].items():
         print(f"  gas {case}: blanc {row['blanc']} reference {row['reference']}")
     print(f"OK — vault differential: {len(CHECKS)} Jaune check groups and an "

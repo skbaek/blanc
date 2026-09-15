@@ -37,6 +37,13 @@ SELECTORS = (
 # represented as a required separate producer rather than an observation of
 # Jaune; callers must fail closed if they advertise it without the pinned EELS
 # runner.
+ARITHMETIC_CAPACITY_CASES = (
+    "capacity-supply-upper-bound",
+    "capacity-one-share-room",
+    "converter-representable-and-unrepresentable",
+    "high-word-donation-arithmetic",
+)
+
 CASES = (
     "metadata-and-zero-views", "nonempty-and-donated-views",
     "deposit-empty", "deposit-donated", "causal-donation-before-deposit",
@@ -51,6 +58,7 @@ CASES = (
     "malformed-dispatch",
     "nonpayable-rollbacks", "event-order", "return-capture-controls",
     "callback-and-attack-rollbacks",
+    *ARITHMETIC_CAPACITY_CASES,
 )
 
 CHANNELS = {

@@ -948,7 +948,7 @@
         ]
       },
       "kind": "cacheable",
-      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic, while receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
+      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic. A live arithmetic-capacity CHECKS entry is removed while the declaration remains, and the executed-ID coverage audit must fail. Receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
