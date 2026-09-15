@@ -34,8 +34,8 @@ def concreteCreateTxRlp : Bytes := 0x02 :: concreteCreateTx.toBLT.toBytes
 def concreteCreateSender : Adr := 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf
 def concreteCreateTarget : Adr := 0xf2e246bb76df876cef8b38ae84130f4f55de395b
 
-/- The configured transition remains to be proved.
-The decoder and CREATE-address facts below contain no success assumptions. -/
+/- The decoder and CREATE-address facts below feed the actual configured
+deployment transition at the end of this module, without success assumptions. -/
 
 theorem concreteCreateAddress : computeContractAddress concreteCreateSender 0 = concreteCreateTarget := by
   have hs : concreteCreateSender.toBytes =
@@ -764,6 +764,141 @@ theorem concreteDeploymentRoot :
     concreteDeploymentEnvelope concreteCreateTxRlp concreteCreateTx concreteCreateSender
     concreteCreateTarget concreteDeploymentBase (concreteCanonicalEnvelope _ _ _ _ _)
     concreteDeploymentStep
+
+/-- The standard retained trace of the actual deployment body. -/
+noncomputable def concreteDeploymentTrace :
+    ExecutionTrace.AppliedBodyTrace
+      (initBenv pragueRules concreteBase concreteDeploymentEnvelope.block.header)
+      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.wds
+      concreteDeploymentBody.1 concreteDeploymentBody.2 :=
+  Classical.choice (ExecutionTrace.exists_appliedBodyTrace concreteDeploymentBody_finalHeader)
+
+theorem concreteDeploymentStateForm :
+    ∃ ctx : PreparedDeploymentContext concreteConfig pragueRules concreteBase
+        (concreteCanonicalBlock 0 0 0 0 0) concreteCreateTx concreteCreateSender concreteCreateTarget,
+      ∃ entry : Benv,
+        (processCreateMessage.msg ctx.msg).benvAfterTransfer = .ok entry ∧
+        concreteDeployed.state = deploymentFinalState ctx.txInput concreteCreateTx concreteCreateSender
+          (constructorInstalledState entry.state concreteCreateTarget ctx.msg.benv.stat.time)
+          (deploymentTransactionGasBound concreteCreateTx) := by
+  let preview := concreteCanonicalBlock 0 0 0 0 0
+  have henv := concreteCanonicalEnvelope 0 0 0 0 0
+  obtain ⟨ctx⟩ := prepareCanonicalDeploymentContext concreteConfig pragueRules concreteBase
+    preview concreteCreateTx concreteCreateSender concreteCreateTarget concreteDeploymentBase henv
+  obtain ⟨post, bout, htx⟩ := canonicalDeploymentTransaction_succeeds concreteConfig pragueRules
+    concreteBase preview concreteCreateTx concreteCreateSender concreteCreateTarget
+    concreteDeploymentBase henv ctx
+  obtain ⟨suffix⟩ := canonicalDeploymentSuffix_succeeds concreteConfig pragueRules concreteBase
+    preview concreteCreateTx concreteCreateSender concreteCreateTarget concreteDeploymentBase
+    ctx post bout htx
+  have hrun := canonicalDeploymentApplyBody_succeeds concreteConfig pragueRules concreteBase
+    preview concreteCreateTxRlp concreteCreateTx concreteCreateSender concreteCreateTarget
+    henv ctx post bout htx suffix
+  change applyBody (initBenv pragueRules concreteBase (concreteDeploymentHeader 0 0 0 0 0))
+    [.inl concreteCreateTxRlp] [] = .ok (post, bout) at hrun
+  rw [concreteDeploymentHeader_benv] at hrun
+  have hpost : post = concreteDeployed.state :=
+    congrArg Prod.fst (Except.ok.inj (hrun.symm.trans concreteDeploymentBody_run))
+  obtain ⟨entry, hentry, hstate⟩ := htx.state
+  exact ⟨ctx, entry, hentry, hpost.symm.trans hstate⟩
+
+def concreteDeploymentDebit : State :=
+  let nonceState := concreteGenesisState.incrNonce concreteCreateSender
+  nonceState.setBal concreteCreateSender (nonceState.bal concreteCreateSender - 1000000)
+
+def concreteConstructorPrepared : State :=
+  (concreteDeploymentDebit.setStor concreteCreateTarget .empty).incrNonce concreteCreateTarget
+
+def concreteConstructorEntry : State :=
+  (concreteConstructorPrepared.setBal concreteCreateSender
+    (concreteConstructorPrepared.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0
+
+/-- A finite update expression for the actual deployed world, including fees. -/
+def concreteDeploymentState : State :=
+  deploymentFinalState (initBenv pragueRules concreteBase concreteExecutionHeader)
+    concreteCreateTx concreteCreateSender
+    (constructorInstalledState concreteConstructorEntry concreteCreateTarget 1) 479909
+
+theorem concreteDeployed_state : concreteDeployed.state = concreteDeploymentState := by
+  obtain ⟨ctx, entry, hentry, hstate⟩ := concreteDeploymentStateForm
+  have hdebit := (State.of_subBal ctx.debit_eq).2
+  have hbegun : ctx.begun.state = concreteGenesisState := by
+    rw [ctx.begun_eq]
+    change ctx.txInput.state = concreteGenesisState
+    exact ctx.systemPrefix.state_eq
+  have hprice : deploymentEffectiveGasPrice ctx.txInput concreteCreateTx = 2 := by
+    rw [ctx.systemPrefix.environment_eq]
+    rfl
+  have hdebitEq : ctx.debit = concreteDeploymentDebit := by
+    rw [hbegun, hprice] at hdebit
+    exact hdebit
+  obtain ⟨mid, hsub, hentryEq⟩ := of_benvAfterTransfer
+    (msg := processCreateMessage.msg ctx.msg) ctx.msg_shouldTransferValue_eq hentry
+  have hmid := (State.of_subBal hsub).2
+  have hprepared : (processCreateMessage.msg ctx.msg).benv.state = concreteConstructorPrepared := by
+    change (ctx.msg.benv.state.setStor ctx.msg.currentTarget .empty).incrNonce ctx.msg.currentTarget = _
+    rw [ctx.msg_benv_eq]
+    simp only [ctx.target_eq]
+    rw [hdebitEq]
+    rfl
+  have hentryState : entry.state = concreteConstructorEntry := by
+    rw [hentryEq]
+    change mid.addBal ctx.msg.currentTarget ctx.msg.value = _
+    rw [hmid]
+    change (((processCreateMessage.msg ctx.msg).benv.state.setBal ctx.msg.caller
+      ((processCreateMessage.msg ctx.msg).benv.state.bal ctx.msg.caller - ctx.msg.value)).addBal
+      ctx.msg.currentTarget ctx.msg.value) = _
+    rw [hprepared, ctx.msg_caller_eq, ctx.msg_value_eq]
+    simp only [ctx.target_eq]
+    rfl
+  rw [hstate, hentryState, ctx.msg_time_eq, ctx.systemPrefix.environment_eq, concreteCreateGasUsed]
+  rfl
+
+theorem concreteDeployedSenderNonce : concreteDeployed.state.getNonce concreteCreateSender = 1 := by
+  rw [concreteDeployed_state]
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  change ((((constructorInstalledState concreteConstructorEntry concreteCreateTarget 1).addBal
+    concreteCreateSender 40182).addBal 0 479909).get concreteCreateSender).nonce = 1
+  simp only [constructorInstalledState, constructorStoredState, concreteConstructorEntry,
+    concreteConstructorPrepared, concreteDeploymentDebit, State.addBal, State.setBal,
+    State.setCode, State.setStorVal, State.setStor, State.incrNonce,
+    State.get_set_self, State.get_set_ne _ ht, State.get_set_ne _ hz, concreteGenesisSender]
+  decide +kernel
+
+theorem concreteDeployedSenderBalance :
+    concreteDeployed.state.bal concreteCreateSender = 999999999999040182 := by
+  rw [concreteDeployed_state]
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  change ((((constructorInstalledState concreteConstructorEntry concreteCreateTarget 1).addBal
+    concreteCreateSender 40182).addBal 0 479909).get concreteCreateSender).bal = 999999999999040182
+  simp only [constructorInstalledState, constructorStoredState, concreteConstructorEntry,
+    concreteConstructorPrepared, concreteDeploymentDebit, State.addBal, State.setBal,
+    State.setCode, State.setStorVal, State.setStor, State.incrNonce, State.bal,
+    State.get_set_self, State.get_set_ne _ ht, State.get_set_ne _ hz, concreteGenesisSender]
+  decide +kernel
+
+theorem concreteDeployedCode (address : Adr) (hne : concreteCreateTarget ≠ address) :
+    concreteDeployed.state.getCode address = concreteGenesisState.getCode address := by
+  rw [concreteDeployed_state]
+  unfold concreteDeploymentState deploymentFinalState
+  rw [State.addBal_getCode, State.addBal_getCode]
+  simp only [constructorInstalledState, constructorStoredState, concreteConstructorEntry,
+    concreteConstructorPrepared, concreteDeploymentDebit, State.getCode,
+    State.addBal, State.setBal_get_code, State.incrNonce_get_code,
+    State.setStor_get_code, State.setCode_get_code_ne hne,
+    State.setStorVal, State.get_set_ne _ hne]
+
+theorem concreteDeployedSystemCode (address : Adr)
+    (ha : address ∈ [beaconRootsAddress, historyStorageAddress,
+      withdrawalRequestPredeployAddress, consolidationRequestPredeployAddress]) :
+    some (concreteDeployed.state.getCode address).toList = Prog.compile deploymentSystemProgram := by
+  have hne : concreteCreateTarget ≠ address := by
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
+    rcases ha with rfl | rfl | rfl | rfl <;> decide +kernel
+  rw [concreteDeployedCode address hne]
+  exact concreteGenesisSystemCode address ha
 
 end Drip
 end Blanc
