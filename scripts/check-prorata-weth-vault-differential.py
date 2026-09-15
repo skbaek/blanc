@@ -44,6 +44,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from evm_tx import address_of, sign_eip1559  # noqa: E402
+from evm_return_capture import capture_runtime, decode as decode_capture  # noqa: E402
 from keccak import keccak256, selector  # noqa: E402
 
 import prorata_weth_vault_oracle as V  # noqa: E402
@@ -56,6 +57,7 @@ MEASUREMENTS = ROOT / "scripts" / "prorata-weth-vault-reference-measurements.jso
 
 WETH_ADDR = 0x1000       # ProrataWethVault.assetAddress, compiled in
 VAULT_ADDR = 0x2000
+CAPTURE_ADDR = 0x3000
 KEY = 1
 SUPPLY_SLOT = (1 << 256) - 1   # ProrataWethVault.supplySlot = B256.max
 
@@ -245,6 +247,41 @@ class Runner:
         if label and receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
             self.gas[label] = int(receipts[0]["cumulativeGasUsed"], 16)
         return result
+
+    def capture(self, alloc: dict, data: str, *, max_return_bytes: int,
+                label: str) -> tuple[dict, dict[str, int | bytes]]:
+        """Observe a vault return through a deterministic storage recorder.
+
+        The recorder is an additional transaction shape: its inner call has
+        the recorder as ``msg.sender``.  Direct-EOA cases remain on ``call``;
+        callers of this method must therefore seed any sender-sensitive state
+        for ``CAPTURE_ADDR`` explicitly.
+        """
+        code, layout = capture_runtime(
+            VAULT_ADDR, bytes.fromhex(data.removeprefix("0x")),
+            max_return_bytes=max_return_bytes, base=0xC000)
+        world = deepcopy(alloc)
+        world[address(CAPTURE_ADDR)] = {"balance": h(0), "nonce": h(1),
+                                        "code": "0x" + code.hex(), "storage": {}}
+        result = t8n(world, [signed_tx(CAPTURE_ADDR, "0x", 0, 3_000_000)])
+        body = result.get("result")
+        receipts = body.get("receipts") if isinstance(body, dict) else None
+        if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+            raise RuntimeError(f"{label}: recorder transaction was not accepted exactly once")
+        try:
+            status = int(receipts[0]["status"], 16)
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError(f"{label}: recorder receipt has no hexadecimal status") from None
+        if status != 1:
+            raise RuntimeError(f"{label}: recorder transaction reverted with status {status}")
+        storage = result.get("alloc", {}).get(address(CAPTURE_ADDR), {}).get("storage")
+        if not isinstance(storage, dict):
+            raise RuntimeError(f"{label}: recorder post-state storage is absent")
+        try:
+            observed = decode_capture(lambda slot: storage_get(storage, slot), layout)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: {exc}") from exc
+        return result, observed
 
     def shares(self, vault_storage: dict, account: int) -> int:
         return storage_get(vault_storage, self.side.shares_slot(account))
@@ -465,7 +502,88 @@ def check_share_transfer_event(run: Runner) -> None:
         fail("the share Transfer's amount word is wrong")
 
 
-def _check_revert_evidence(label: str, before: dict, result: dict) -> None:
+def abi_string(value: str) -> bytes:
+    raw = value.encode("utf-8")
+    return (32).to_bytes(32, "big") + len(raw).to_bytes(32, "big") + raw.ljust(
+        ((len(raw) + 31) // 32) * 32, b"\x00")
+
+
+def check_view_returns(run: Runner) -> None:
+    """Selected zero-state views use t8n-observed full return-data capture."""
+    word_bytes = lambda value: value.to_bytes(32, "big")
+    cases = [
+        ("name", abi("name()"), abi_string("PRORATA WETH Vault")),
+        ("symbol", abi("symbol()"), abi_string("prWETH")),
+        # ERC-4626 inherits WETH's 18 decimals and the frozen offset is 3.
+        ("decimals", abi("decimals()"), word_bytes(21)),
+        ("asset", abi("asset()"), word_bytes(WETH_ADDR)),
+        ("total assets zero", abi("totalAssets()"), word_bytes(0)),
+        ("total supply zero", abi("totalSupply()"), word_bytes(0)),
+        ("balance zero", abi("balanceOf(address)", run.user), word_bytes(0)),
+        ("allowance zero", abi("allowance(address,address)", run.user, VAULT_ADDR), word_bytes(0)),
+    ]
+    for label, data, expected in cases:
+        try:
+            _, observed = run.capture(run.alloc(10 ** 18, 10 ** 18), data,
+                                      max_return_bytes=len(expected), label=label)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if observed["success"] != 1:
+            fail(f"{label}: captured inner call success is {observed['success']}, expected 1")
+        if observed["length"] != len(expected):
+            fail(f"{label}: captured full return length is {observed['length']}, expected {len(expected)}")
+        if observed["returndata"] != expected:
+            fail(f"{label}: captured return bytes differ from the frozen ABI value")
+
+
+def _quantity(value, label: str) -> int:
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value, 16) if value.startswith("0x") else int(value)
+        except ValueError:
+            pass
+    raise ValueError(f"{label} is not a nonnegative quantity")
+
+
+def _normalized_account(alloc: dict, account: int) -> dict:
+    """Compare semantic account content, not JSON quantity spelling.
+
+    t8n may omit zero cells or render the same quantity with different hex
+    widths.  Normalizing and dropping zero storage means the rollback witness
+    accepts those equivalent encodings while still detecting every relevant
+    balance, nonce, code, or nonzero storage difference.
+    """
+    entry = alloc.get(address(account), {})
+    if not isinstance(entry, dict):
+        raise ValueError(f"{address(account)} account is not an object")
+    storage = entry.get("storage", {})
+    if not isinstance(storage, dict):
+        raise ValueError(f"{address(account)} storage is not an object")
+    normalized_storage = {}
+    for raw_slot, raw_value in storage.items():
+        slot = _quantity(raw_slot, f"{address(account)} storage key")
+        value = _quantity(raw_value, f"{address(account)} storage value")
+        if value:
+            if slot in normalized_storage:
+                raise ValueError(f"{address(account)} storage spells slot {slot} twice")
+            normalized_storage[slot] = value
+    code = entry.get("code", "0x")
+    if not isinstance(code, str) or not code.startswith("0x"):
+        raise ValueError(f"{address(account)} code is not 0x-prefixed hex")
+    try:
+        code_bytes = bytes.fromhex(code[2:])
+    except ValueError as exc:
+        raise ValueError(f"{address(account)} code is not hexadecimal") from exc
+    return {"balance": _quantity(entry.get("balance", "0x0"), f"{address(account)} balance"),
+            "nonce": _quantity(entry.get("nonce", "0x0"), f"{address(account)} nonce"),
+            "code": code_bytes, "storage": normalized_storage}
+
+
+def _check_revert_evidence(label: str, before: dict, result: dict,
+                           relevant_accounts: tuple[int, ...] = (WETH_ADDR, VAULT_ADDR)) -> None:
     """Require one executed reverting transaction and complete relevant rollback.
 
     `t8n` can reject a malformed transaction before it reaches the EVM.  That
@@ -510,12 +628,15 @@ def _check_revert_evidence(label: str, before: dict, result: dict) -> None:
     if not isinstance(post, dict):
         fail(f"{label}: t8n returned no post-state allocation")
         return
-    for account, name in ((VAULT_ADDR, "vault"), (WETH_ADDR, "WETH")):
-        key = address(account)
-        old = before.get(key, {}).get("storage")
-        new = post.get(key, {}).get("storage")
+    for account in relevant_accounts:
+        try:
+            old = _normalized_account(before, account)
+            new = _normalized_account(post, account)
+        except ValueError as exc:
+            fail(f"{label}: cannot normalize rollback account: {exc}")
+            continue
         if old != new:
-            fail(f"{label}: reverted but {name} storage differs from its complete pre-state")
+            fail(f"{label}: reverted but {address(account)} account content differs from its complete pre-state")
 
 
 def _must_revert(run: Runner, label: str, data: str, value: int = 0) -> None:
@@ -553,6 +674,7 @@ CHECKS = [
     check_zero_receiver_deposit_reverts,
     check_deposit_event_order,
     check_share_transfer_event,
+    check_view_returns,
     check_malformed_calls_revert,
     check_value_bearing_call_reverts,
 ]
@@ -591,6 +713,40 @@ def measurements(blanc: Runner, reference: Runner) -> dict:
                 "Blanc WETH; sizes are the installed runtimes. Measured, never "
                 "compared with the oracle.",
     }
+
+
+def capture_controls() -> list[str]:
+    """Executed t8n controls for return-data observability, not parser mocks."""
+    controls = [
+        ("empty success", b"\x00", 1, b""),
+        ("one-byte success", bytes.fromhex("60ab60005360016000f3"), 1, b"\xab"),
+        ("dynamic 96-byte success", bytes.fromhex("60606000f3"), 1, bytes(96)),
+        ("empty revert", bytes.fromhex("60006000fd"), 0, b""),
+    ]
+    missed = []
+    for label, code, success, payload in controls:
+        run = Runner(Side("return-capture-control", code, lambda account: account,
+                          SUPPLY_SLOT), b"")
+        try:
+            _, observed = run.capture(run.alloc(0, 0), "0x", max_return_bytes=96,
+                                      label=f"capture control {label}")
+        except RuntimeError as exc:
+            missed.append(f"{label}: recorder did not preserve the child observation: {exc}")
+            continue
+        expected = {"success": success, "length": len(payload), "returndata": payload}
+        if observed != expected:
+            missed.append(f"{label}: recorder observed {observed!r}, expected {expected!r}")
+    oversized = Runner(Side("return-capture-control", bytes.fromhex("60806000f3"),
+                            lambda account: account, SUPPLY_SLOT), b"")
+    try:
+        oversized.capture(oversized.alloc(0, 0), "0x", max_return_bytes=96,
+                          label="capture control oversized success")
+    except RuntimeError as exc:
+        if "above its 96-byte bound" not in str(exc):
+            missed.append(f"oversized success: wrong rejection {exc}")
+    else:
+        missed.append("oversized success: recorder accepted a truncated payload")
+    return missed
 
 
 # --- self-test: the gate must be able to fail ---
@@ -678,6 +834,7 @@ def self_test() -> int:
                                  "alloc": changed})
     caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
                                 "alloc": before})
+    missed.extend(capture_controls())
 
     # The reference half must bite too: a perturbed measurements file and a
     # perturbed locked runtime identity are each a failure.
@@ -716,8 +873,8 @@ def self_test() -> int:
         return 1
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
           f"perturbations, one valid-call-as-revert probe, four receipt/rollback "
-          f"falsifiers, a perturbed measurements file and a perturbed reference "
-          f"identity are all caught")
+          f"falsifiers, five executed return-capture controls, a perturbed "
+          f"measurements file and a perturbed reference identity are all caught")
     return 0
 
 
