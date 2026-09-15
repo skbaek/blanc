@@ -399,6 +399,92 @@ theorem constructorReturnImage_read :
   rw [Bytes.sliceD_writeAt] at hread
   exact hread
 
+/-! ## Balance threading
+
+`getBal` preservation through the walk's transitions, the two `B256`
+zero-lemmas, the value-zero entry-transfer balance-map equality, and the
+`addBal`-at-another-address projection for final settlement. All eight are
+generic-shaped (S9 hoist candidates); they live here only because the packet
+owns no shared path. -/
+
+private theorem getBal_setMach_eq {d : Devm} {m : Mach} {a : Adr} :
+    (d.setMach m).getBal a = d.getBal a := rfl
+
+private theorem getBal_addAccessed_eq {d : Devm} {a : Adr} {k : B256} {b : Adr} :
+    (addAccessedStorageKey d a k).getBal b = d.getBal b := rfl
+
+private theorem getBal_withRefundCounter_eq {d : Devm} {n : Int} {b : Adr} :
+    (d.withRefundCounter n).getBal b = d.getBal b := rfl
+
+private theorem getBal_setStorVal_eq {d : Devm} {a : Adr} {k v : B256} {b : Adr} :
+    (d.setStorVal a k v).getBal b = d.getBal b := by
+  show ((d.state.setStorVal a k v).get b).bal = (d.state.get b).bal
+  unfold State.setStorVal
+  by_cases h : a = b
+  · subst h
+    rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
+private theorem b256_sub_zero (x : B256) : x - 0 = x := by
+  rcases x with ⟨xh, xl⟩
+  have hborrow : ¬ xl < (0 : B128) := by
+    intro hlt
+    rcases hlt with hlt | ⟨_, hlt⟩
+    · exact UInt64.not_lt_zero hlt
+    · exact UInt64.not_lt_zero hlt
+  show ((xh - (0 : B128)) -
+      (if xl < (0 : B128) then (1 : B128) else 0),
+    xl - (0 : B128)) = (xh, xl)
+  simp only [if_neg hborrow, B128.sub_zero]
+
+private theorem b256_add_zero (x : B256) : x + 0 = x := by
+  apply B256.toNat_inj
+  rw [B256.toNat_add, show (0 : B256).toNat = 0 from rfl, Nat.add_zero]
+  exact Nat.lo_eq_of_lt (B256.toNat_lt x)
+
+/-- A zero-value message entry preserves the complete balance map, including
+the self-call case where caller and callee coincide. -/
+private theorem benvAfterTransfer_bal_of_value_zero {msg : Msg} {post : Benv}
+    (hzero : msg.value = 0)
+    (hrun : msg.benvAfterTransfer = .ok post) :
+    post.state.bal = msg.benv.state.bal := by
+  by_cases hstv : msg.shouldTransferValue = true
+  · obtain ⟨debit, hsub, rfl⟩ := of_benvAfterTransfer hstv hrun
+    rw [hzero] at hsub ⊢
+    have hdebit : debit.bal = msg.benv.state.bal := by
+      obtain ⟨_, hdebitEq⟩ := State.of_subBal hsub
+      rw [hdebitEq]
+      funext a
+      show ((msg.benv.state.setBal msg.caller _).get a).bal = _
+      by_cases hcaller : msg.caller = a
+      · subst hcaller
+        rw [State.setBal_get_self]
+        exact b256_sub_zero _
+      · simp only [State.setBal_get_ne hcaller, State.bal]
+    have hadd : ((msg.benv.withState debit).addBal
+        msg.currentTarget 0).state.bal = debit.bal := by
+      have e : ((msg.benv.withState debit).addBal
+          msg.currentTarget 0).state =
+          debit.addBal msg.currentTarget 0 := rfl
+      rw [e]
+      funext a
+      show ((debit.addBal msg.currentTarget 0).get a).bal = _
+      unfold State.addBal
+      by_cases htarget : msg.currentTarget = a
+      · subst htarget
+        rw [State.setBal_get_self]
+        exact b256_add_zero _
+      · simp only [State.setBal_get_ne htarget, State.bal]
+    exact hadd.trans hdebit
+  · have h := of_benvAfterTransfer_no hstv hrun
+    subst post
+    rfl
+
+private theorem addBal_bal_ne {st : State} {a b : Adr} {v : B256} (h : a ≠ b) :
+    (st.addBal a v).bal b = st.bal b := by
+  show ((st.setBal a (st.bal a + v)).get b).bal = (st.get b).bal
+  rw [State.setBal_get_ne h]
+
 theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     (hcode : sevm.code.toList = creationCode)
     (hvalue : sevm.value = 0)
@@ -425,7 +511,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time ∧
       post.gasLeft = G ∧ post.refundCounter = 0 ∧
       post.accountsToDelete = pre.accountsToDelete ∧
-      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) := by
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) ∧
+      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget := by
   have hlen : code.length = 1762 := codeSize_exact
   have hsize : sevm.code.size = 2001 := by
     rw [ByteArray.size_eq_length_toList, hcode]
@@ -658,7 +745,13 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
   have hlogsW : postW.logs = [] := by
     simp only [postW, dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10, s9, s8, s7, s6, s5, s4, s3, s2, s1, mid]
     exact hlogs
-  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩
+  have hbalW : postW.getBal sevm.currentTarget = pre.getBal sevm.currentTarget := by
+    show dRet.getBal sevm.currentTarget = pre.getBal sevm.currentTarget
+    simp only [dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10,
+      s9, s8, s7, s6, s5, s4, s3, s2, s1, mid,
+      getBal_setMach_eq, getBal_setStorVal_eq, getBal_withRefundCounter_eq,
+      getBal_addAccessed_eq]
+  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩
 
 theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
     (hcode : sevm.code.toList = creationCode)
@@ -686,8 +779,9 @@ theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
       Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time ∧
       post.gasLeft = G ∧ post.refundCounter = 0 ∧
       post.accountsToDelete = pre.accountsToDelete ∧
-      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) := by
-  obtain ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩ :=
+      (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) ∧
+      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget := by
+  obtain ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩ :=
     constructorProgram_runCompiled hcode hvalue hstatic htime hstack hmem hgas
       hlogs hrefund herror horigChi horigRho hcurChi hcurRho hcurAll hcoldChi hcoldRho
   have h_compile : some constructorInitPrefix = constructorProgram.compile :=
@@ -695,7 +789,7 @@ theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
   have h_code : sevm.code.toList = constructorInitPrefix ++ code := by
     rw [hcode, creationCode_eq_prefix_append_runtime]
   have hexec := Prog.exec_of_runCompiled_appended hProg h_compile h_code
-  exact ⟨postW, hexec, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW⟩
+  exact ⟨postW, hexec, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩
 
 structure DripInitCheckpoint (msg : Msg) (initPost : Devm) : Prop where
   process : processMessage (processCreateMessage.msg msg) = .ok initPost
@@ -708,6 +802,7 @@ structure DripInitCheckpoint (msg : Msg) (initPost : Devm) : Prop where
   accountsToDelete : initPost.accountsToDelete = .emptyWithCapacity
   gas : initPost.gasLeft = msg.gas - 44611
   pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal initPost msg.currentTarget k = 0
+  bal : initPost.getBal msg.currentTarget = 0
 
 theorem processMessage_drip_checkpoint
     (msg : Msg)
@@ -720,7 +815,8 @@ theorem processMessage_drip_checkpoint
     (h_origChi : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget chiSlot = 0)
     (h_origRho : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget rhoSlot = 0)
     (h_coldChi : ⟨msg.currentTarget, chiSlot⟩ ∉ msg.accessedStorageKeys)
-    (h_coldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys) :
+    (h_coldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys)
+    (h_bal : msg.benv.state.bal msg.currentTarget = 0) :
     ∃ initPost, DripInitCheckpoint msg initPost := by
   let prepared := processCreateMessage.msg msg
   obtain ⟨benv, h_transfer⟩ :=
@@ -772,7 +868,7 @@ theorem processMessage_drip_checkpoint
     rfl
   have h_cchi : ⟨(initSevm seeded).currentTarget, chiSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldChi
   have h_crho : ⟨(initSevm seeded).currentTarget, rhoSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldRho
-  obtain ⟨initPost, hexecW, houtW, herrW, hlogsW, hchiW, hrhoW, hgasW, hrefundW, hdeleteW, hpieW⟩ :=
+  obtain ⟨initPost, hexecW, houtW, herrW, hlogsW, hchiW, hrhoW, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩ :=
     constructorExec_of_walk (sevm := initSevm seeded) (pre := initDevm seeded)
       (G := msg.gas - 44611) h_seed_code h_seed_value h_seed_static h_seed_time
       h_seed_stack h_seed_mem h_seed_gas h_seed_logs h_seed_refund h_seed_error
@@ -789,6 +885,23 @@ theorem processMessage_drip_checkpoint
   have h_delete : initPost.accountsToDelete = .emptyWithCapacity := by
     rw [hdeleteW]
     rfl
+  have h_initBal : (initDevm seeded).getBal msg.currentTarget = 0 := by
+    have h1 : (initDevm seeded).getBal msg.currentTarget =
+        benv.state.bal msg.currentTarget := rfl
+    have h2 : benv.state.bal msg.currentTarget =
+        prepared.benv.state.bal msg.currentTarget :=
+      congrFun (benvAfterTransfer_bal_of_value_zero (msg := prepared)
+        h_value h_transfer) _
+    have h3 : prepared.benv.state.bal msg.currentTarget =
+        msg.benv.state.bal msg.currentTarget :=
+      congrFun (processCreateMessage_msg_bal_eq msg) _
+    rw [h1, h2, h3]
+    exact h_bal
+  have h_balPost : initPost.getBal msg.currentTarget = 0 := by
+    show initPost.getBal (initSevm seeded).currentTarget = 0
+    rw [hbalW]
+    show (initDevm seeded).getBal msg.currentTarget = 0
+    exact h_initBal
   exact ⟨initPost,
     { process := h_pm
       output := houtW
@@ -799,7 +912,8 @@ theorem processMessage_drip_checkpoint
       refundCounter := hrefundW
       accountsToDelete := h_delete
       gas := hgasW
-      pie := hpieW }⟩
+      pie := hpieW
+      bal := h_balPost }⟩
 
 private theorem code_cons : ∃ tail, code = 0x5b :: tail := ⟨_, rfl⟩
 
@@ -905,6 +1019,7 @@ structure DripChargeCheckpoint (msg : Msg) (charged : Devm) : Prop where
   accountsToDelete : charged.accountsToDelete = .emptyWithCapacity
   gas : charged.gasLeft = msg.gas - 44611 - 352400
   pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal charged msg.currentTarget k = 0
+  bal : charged.getBal msg.currentTarget = 0
 
 theorem processCreateMessage_drip_charge_checkpoint
     (msg : Msg) {initPost : Devm}
@@ -933,6 +1048,13 @@ theorem processCreateMessage_drip_charge_checkpoint
     exact init.pie k hkc hkr
   have h_gas_charged : charged.gasLeft = msg.gas - 44611 - 352400 := by
     rw [checkpoint.gas, init.gas]
+  have h_bal : charged.getBal msg.currentTarget = 0 := by
+    have h : (charged.state.get msg.currentTarget).bal =
+        (initPost.state.get msg.currentTarget).bal := by
+      rw [checkpoint.state]
+    show (charged.state.get msg.currentTarget).bal = 0
+    rw [h]
+    exact init.bal
   exact ⟨charged,
     { process :=
         processCreateMessage_ok_of_processMessage_and_charge msg
@@ -945,7 +1067,8 @@ theorem processCreateMessage_drip_charge_checkpoint
       refundCounter := checkpoint.refundCounter.trans init.refundCounter
       accountsToDelete := checkpoint.accountsToDelete.trans init.accountsToDelete
       gas := h_gas_charged
-      pie := h_pie }⟩
+      pie := h_pie
+      bal := h_bal }⟩
 
 private theorem dripInstalledPost_certificate
     (msg : Msg) {charged : Devm}
@@ -960,7 +1083,8 @@ private theorem dripInstalledPost_certificate
     (h_error : charged.error = .none)
     (h_refund : charged.refundCounter = 0)
     (h_delete : charged.accountsToDelete = .emptyWithCapacity)
-    (h_gas : charged.gasLeft = msg.gas - 44611 - 352400) :
+    (h_gas : charged.gasLeft = msg.gas - 44611 - 352400)
+    (h_bal : charged.getBal msg.currentTarget = 0) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget = ⟨⟨code⟩⟩ ∧
@@ -972,9 +1096,10 @@ private theorem dripInstalledPost_certificate
       post.gasLeft = msg.gas - 44611 - 352400 ∧
       post.error = .none ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = .emptyWithCapacity := by
+      post.accountsToDelete = .emptyWithCapacity ∧
+      post.getBal msg.currentTarget = 0 := by
   refine ⟨charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩,
-    h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
@@ -1008,6 +1133,10 @@ private theorem dripInstalledPost_certificate
   · exact h_error
   · exact h_refund
   · exact h_delete
+  · show ((charged.state.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).get msg.currentTarget).bal = 0
+    rw [State.setCode_get_bal]
+    exact h_bal
 
 theorem processCreateMessage_drip_success
     (msg : Msg)
@@ -1021,7 +1150,8 @@ theorem processCreateMessage_drip_success
     (h_origRho : getOrigStorVal (initSevm (processCreateMessage.msg msg)) msg.currentTarget rhoSlot = 0)
     (h_coldChi : ⟨msg.currentTarget, chiSlot⟩ ∉ msg.accessedStorageKeys)
     (h_coldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys)
-    (h_max : 1762 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 1762 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (h_bal : msg.benv.state.bal msg.currentTarget = 0) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget = ⟨⟨code⟩⟩ ∧
@@ -1033,15 +1163,16 @@ theorem processCreateMessage_drip_success
       post.gasLeft = msg.gas - 44611 - 352400 ∧
       post.error = .none ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = .emptyWithCapacity := by
+      post.accountsToDelete = .emptyWithCapacity ∧
+      post.getBal msg.currentTarget = 0 := by
   obtain ⟨initPost, init⟩ :=
     processMessage_drip_checkpoint msg h_value h_codeAddress h_code
-      (by omega) h_static h_time h_origChi h_origRho h_coldChi h_coldRho
+      (by omega) h_static h_time h_origChi h_origRho h_coldChi h_coldRho h_bal
   obtain ⟨chargedPost, charged⟩ :=
     processCreateMessage_drip_charge_checkpoint msg init h_gas h_max
   exact dripInstalledPost_certificate msg charged.process charged.output
     charged.chi charged.rho charged.pie charged.logs charged.error charged.refundCounter
-    charged.accountsToDelete charged.gas
+    charged.accountsToDelete charged.gas charged.bal
 
 /-! ## F4c: schedule-parametric deployment root
 
@@ -1503,6 +1634,7 @@ structure CanonicalDeploymentMessageResult
   chi : (post.getStor ca).get chiSlot = scale
   rho : (post.getStor ca).get rhoSlot = ctx.msg.benv.stat.time
   pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → (post.getStor ca).get k = 0
+  bal : post.bal ca = 0
   logs : out.logs = []
   returnData : out.returnData = code
   gasLeft : out.gasLeft = ctx.msg.gas - 44611 - 352400
@@ -1539,11 +1671,11 @@ theorem canonicalDeploymentMessage_succeeds
     rw [ctx.msg_rules_eq]
     exact henv.runtime_code_fits
   obtain ⟨post, hcreate, hinstalled, hchi, hrho, hpie, hlogs, houtput,
-      hgasLeft, herr, hrefund, hdelete⟩ :=
+      hgasLeft, herr, hrefund, hdelete, hbalPost⟩ :=
     processCreateMessage_drip_success ctx.msg ctx.msg_value_eq
       ctx.msg_codeAddress_eq ctx.msg_code_eq hgas ctx.msg_isStatic_eq
       ctx.msg_time_ne_zero ctx.msg_origChi ctx.msg_origRho
-      ctx.msg_coldChi ctx.msg_coldRho hmax
+      ctx.msg_coldChi ctx.msg_coldRho hmax ctx.msg_balZero
   have htoNat : Int.toNat? post.refundCounter = some 0 := by
     rw [hrefund]
     rfl
@@ -1606,7 +1738,7 @@ theorem canonicalDeploymentMessage_succeeds
       hbase.consolidationRequest_ne_target hbase.consolidationRequestCode]
     exact hbase.consolidationRequestCode
   refine ⟨post.state, directCreateMessageOutputOf post, hrun, ?_, ?_, ?_, ?_,
-    ?_, ?_, ?_, ?_, ?_, ?_, hwithdrawalCode, hconsolidationCode⟩
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, hwithdrawalCode, hconsolidationCode⟩
   · rw [← ctx.target_eq]
     exact hinstalled
   · rw [← ctx.target_eq]
@@ -1616,6 +1748,8 @@ theorem canonicalDeploymentMessage_succeeds
   · intro k hkc hkr
     rw [← ctx.target_eq]
     exact hpie k hkc hkr
+  · rw [← ctx.target_eq]
+    exact hbalPost
   · show post.logs = []
     exact hlogs
   · show post.output = code
@@ -1637,6 +1771,7 @@ structure CanonicalDeploymentTransactionResult
   chi : (post.getStor ca).get chiSlot = scale
   rho : (post.getStor ca).get rhoSlot = ctx.msg.benv.stat.time
   pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → (post.getStor ca).get k = 0
+  bal : post.bal ca = 0
   blockLogs : bout.blockLogs = []
   requests : bout.requests = []
   depositRequests : parseDepositRequests bout = .ok []
@@ -1739,6 +1874,17 @@ theorem canonicalDeploymentTransaction_succeeds
     intro k hkc hkr
     rw [hstor_eq]
     exact hmessage.pie k hkc hkr
+  have hcoinbase : ctx.txInput.stat.coinbase = cb.block.header.coinbase := by
+    rw [ctx.systemPrefix.environment_eq]
+    rfl
+  have hbal : post.bal ca = 0 := by
+    have hne1 : sender ≠ ca := hbase.sender_ne_target
+    have hne2 : ctx.txInput.stat.coinbase ≠ ca := by
+      rw [hcoinbase]
+      exact henv.coinbase_ne_target
+    dsimp only [post, deploymentFinalState]
+    rw [addBal_bal_ne hne2, addBal_bal_ne hne1]
+    exact hmessage.bal
   have hblockLogs : bout.blockLogs = [] := by
     dsimp only [bout, deploymentFinalBout]
     simp [deploymentTxPreludeBout,
@@ -1795,7 +1941,7 @@ theorem canonicalDeploymentTransaction_succeeds
         (fun entry => entry.2.succeeded) = some true := by
     rw [hentry]
     simp [makeReceipt, hmessage.error]
-  exact ⟨post, bout, hrun, hcode, hchi, hrho, hpie, hblockLogs, hrequests,
+  exact ⟨post, bout, hrun, hcode, hchi, hrho, hpie, hbal, hblockLogs, hrequests,
     hdeposit, hwithdrawalCode, hconsolidationCode, hreceipt⟩
 
 /-! ## Exact post-transaction request suffix -/
@@ -1918,7 +2064,7 @@ theorem canonicalDeploymentApplyBody_succeeds
 /-! ## Deployment-root adapter -/
 
 /-- The DRIP deployment root. Time-free state facts (`installed`, `chi`,
-`pie`) are top-level; the time-valued `rho`, log, and receipt facts live in
+`pie`, `bal`) are top-level; the time-valued `rho`, log, and receipt facts live in
 the `execution` transaction result (with `msg_time_eq` linking message time
 to the deployment block timestamp), following the WETH10 scoping pattern. -/
 structure DeploymentRoot
@@ -1947,6 +2093,7 @@ structure DeploymentRoot
   installed : deployed.state.getCode ca = ⟨⟨code⟩⟩
   chi : (deployed.state.getStor ca).get chiSlot = scale
   pie : ∀ k, k ≠ chiSlot → k ≠ rhoSlot → (deployed.state.getStor ca).get k = 0
+  bal : deployed.state.bal ca = 0
   deployed_validContext : deployed.ValidContext
   deployed_chainId : cfg.chainId = deployed.chainId
 
@@ -2011,7 +2158,7 @@ theorem canonicalDeploymentStep_establishes_root
     hbase.chainId_eq.trans (stateTransitionWith_preserves_chainId hwith).symm
   refine ⟨?_, hbase.configValid, hbase.target_ne_zero,
     hbase.target_not_precompile,
-    ?_, ?_, ?_, hvalid, hchain⟩
+    ?_, ?_, ?_, ?_, hvalid, hchain⟩
   · exact ⟨rules, cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
       hbase, henv, htx, ⟨suffix⟩, hstep, happly, hstate,
       htx.receiptSucceeded⟩
@@ -2021,6 +2168,8 @@ theorem canonicalDeploymentStep_establishes_root
     exact htx.chi
   · rw [← hstate]
     exact htx.pie
+  · rw [← hstate]
+    exact htx.bal
 
 theorem DeploymentRoot.reflReach
     (hroot : DeploymentRoot cfg base deployed ca) :
