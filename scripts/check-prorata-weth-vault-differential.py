@@ -1212,6 +1212,16 @@ def check_causal_outbound_role_partitions(run: Runner) -> None:
                     _exact_event(f"{label} approval", result, contract=VAULT_ADDR,
                                  signature="Approval(address,address,uint256)", indexed=(run.user, delegate), data_words=(approval,))
                 else:
+                    if approval not in (None, V.U):
+                        spent_shares = value if method == "withdraw" else amount
+                        expected_post_spend_allowance = approval - spent_shares
+                        vault_storage, _ = vault_state(result)
+                        actual_post_spend_allowance = run.share_allowance(
+                            vault_storage, run.user, delegate)
+                        if actual_post_spend_allowance != expected_post_spend_allowance:
+                            fail(f"{label} {model_method}: pair state post-spend share allowance is "
+                                 f"{actual_post_spend_allowance}, expected "
+                                 f"{expected_post_spend_allowance}")
                     if method == "withdraw":
                         _withdraw_events(label, result, caller, recipient, run.user, amount, value)
                     else:
@@ -2477,6 +2487,13 @@ PERTURBATIONS = [
 ]
 
 
+def _matching_regression_line(output: str, category: str, needle: str) -> str | None:
+    """Return the exact named regression line, never an incidental ledger line."""
+    prefix = f"REGRESSION — vault differential: {category}"
+    return next((line for line in output.splitlines()
+                 if line.startswith(prefix) and needle in line), None)
+
+
 def self_test(report_path: Path | None = None) -> int:
     """Perturb disposable copies and require targeted gate failures.
 
@@ -2701,6 +2718,68 @@ def self_test(report_path: Path | None = None) -> int:
                                            + "; removal restored green")
                     control_records.append({
                         "label": "vault self-receiver WETH balance",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
+
+        # The new outbound partition implementation must retain its own ID.
+        outbound_line = "    check_causal_outbound_role_partitions,\n"
+        if original_checker.count(outbound_line) != 1:
+            missed.append("outbound role omission control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(outbound_line, "    # omitted outbound role coverage control\n", 1))
+            if refresh_manifest():
+                result = run_gate(); output = result.stdout + result.stderr
+                needle = "supported-root-withdraw-all-equal/jaune/blanc"
+                diagnostic = _matching_regression_line(
+                    output, "declared executed coverage missing case/channel IDs:", needle)
+                if result.returncode == 0 or diagnostic is None:
+                    missed.append("outbound role omission did not reach its named executed-ID audit")
+                checker.write_text(original_checker); restored = require_green("outbound role omission")
+                if (restored is not None and restored.returncode == 0
+                        and result.returncode != 0 and diagnostic is not None):
+                    caught_controls.append("outbound role omission: " + diagnostic + "; removal restored green")
+                    control_records.append({
+                        "label": "outbound role executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                     "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
+
+        # A finite delegated exit must consume the exact approved allowance.
+        # Development note: changing the role-table approval from 3_000 to
+        # 2_999 was rejected as a falsifier because it changed both the real
+        # approve transaction and the oracle model.  This mutation changes
+        # only the independently asserted expected post-spend allowance.
+        finite_expected = "                        expected_post_spend_allowance = approval - spent_shares\n"
+        if original_checker.count(finite_expected) != 1:
+            missed.append("outbound finite allowance control no longer applies exactly once")
+        else:
+            checker.write_text(original_checker.replace(
+                finite_expected,
+                "                        expected_post_spend_allowance = approval - spent_shares + 1\n",
+                1))
+            if refresh_manifest():
+                result = run_gate(); output = result.stdout + result.stderr
+                needle = ("outbound-role-withdraw-caller-receiver-distinct-owner withdraw: "
+                          "pair state post-spend share allowance is 1000, expected 1001")
+                if result.returncode == 0 or needle not in output:
+                    missed.append("outbound finite allowance mutation missed pair-state/event assertion")
+                checker.write_text(original_checker); restored = require_green("outbound finite allowance mutation")
+                if restored is not None and restored.returncode == 0 and result.returncode != 0 and needle in output:
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("outbound finite allowance: " + diagnostic + "; removal restored green")
+                    control_records.append({
+                        "label": "outbound finite delegated post-spend allowance",
                         "expectedDiagnostic": needle,
                         "mutant": {"argv": [sys.executable, "-B", str(checker)],
                                    "cwd": str(sandbox), "returncode": result.returncode,
