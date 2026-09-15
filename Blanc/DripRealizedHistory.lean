@@ -32,6 +32,17 @@ noncomputable def snapshot (coalition : Finset Adr) (ca : Adr) (state : State) :
   totalUnits := totalN (state.getStor ca)
   balance := (state.bal ca).toNat
 
+/-- The DRIP accounting projection reads only the target storage and target
+balance.  This local congruence is used for explicit wrapper rollback facts;
+it does not erase the source-state provenance retained by the caller. -/
+theorem snapshot_eq_of_getStor_bal
+    {coalition : Finset Adr} {ca : Adr} {before after : State}
+    (storage : after.getStor ca = before.getStor ca)
+    (balance : after.bal ca = before.bal ca) :
+    snapshot coalition ca after = snapshot coalition ca before := by
+  unfold snapshot coalitionUnits
+  simp [storage, balance]
+
 /-- The distinct body-level sources that can retain an interpreter-backed
 message call.  The tag stays with a later realized segment: a state-only
 projection cannot distinguish a zero-elapsed `drip` from a silent interval. -/
@@ -147,6 +158,178 @@ theorem TransactionMessageOccurrence.msgInv_of_configuredBlock
       (initBenv block.rules pre block.block.header) :=
     block.openingBenvInv (root.reachable_stateInv reach)
   exact occurrence.msgInv_of_body block.openingBound entryInv
+
+/-- The exhaustive classification of an actual prepared transaction message.
+The two present-target cases are deliberately separated by `currentTarget`:
+EIP-7702 delegation preserves that storage target, while a CREATE keeps no
+present target at all. -/
+inductive TransactionTargetClass (ca : Adr) (msg : Msg) : Type where
+  | targetNone (target : msg.target.isNone = true)
+  | targetCa (target : msg.target.isNone = false)
+      (currentTarget : msg.currentTarget = ca)
+  | other (target : msg.target.isNone = false)
+      (currentTarget : msg.currentTarget ≠ ca)
+
+/-- Every actual prepared transaction message has exactly one target case.
+This is a classifier over the recorded message fields, not an assumption about
+which callers or target values a configured trace may contain. -/
+def TransactionTargetClass.classify (ca : Adr) (msg : Msg) :
+    TransactionTargetClass ca msg := by
+  cases target : msg.target.isNone with
+  | false =>
+      by_cases currentTarget : msg.currentTarget = ca
+      · exact .targetCa target currentTarget
+      · exact .other target currentTarget
+  | true => exact .targetNone target
+
+/-- The concrete successful transaction that supplied one selected message,
+including its ordered debit/message/refund/coinbase/deletion chronology.  The
+head/tail constructors retain that transaction's exact position in the actual
+`ApplyTransactionsTrace`; an equal message wrapper alone is not sufficient
+provenance for a whole-transaction chronology. -/
+inductive TransactionMessageOccurrence.SelectedTransaction :
+    ∀ {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+      {bout finalBout : BlockOutput}
+      {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+      {msg : Msg} {state : State} {out : MsgCallOutput}
+      {message : ExecutionTrace.MessageCallTrace msg state out},
+      TransactionMessageOccurrence trace message → Type
+  | head {index : Nat} {tx : Tx} {txs : List (Nat × Tx)}
+      {benv : Benv} {bout : BlockOutput} {txState : State}
+      {txBout : BlockOutput} {finalBenv : Benv} {finalBout : BlockOutput}
+      (head : ExecutionTrace.TransactionTrace benv bout tx index txState txBout)
+      (tail : ExecutionTrace.ApplyTransactionsTrace txs
+        (benv.withState txState) txBout finalBenv finalBout)
+      (chronology : ExecutionTrace.TransactionStateChronology head) :
+      TransactionMessageOccurrence.SelectedTransaction
+        (TransactionMessageOccurrence.head head tail)
+  | tail {index : Nat} {tx : Tx} {txs : List (Nat × Tx)}
+      {benv : Benv} {bout : BlockOutput} {txState : State}
+      {txBout : BlockOutput} {finalBenv : Benv} {finalBout : BlockOutput}
+      (head : ExecutionTrace.TransactionTrace benv bout tx index txState txBout)
+      (tail : ExecutionTrace.ApplyTransactionsTrace txs
+        (benv.withState txState) txBout finalBenv finalBout)
+      {msg : Msg} {state : State} {out : MsgCallOutput}
+      {message : ExecutionTrace.MessageCallTrace msg state out}
+      (occurrence : TransactionMessageOccurrence tail message)
+      (selected : TransactionMessageOccurrence.SelectedTransaction occurrence) :
+      TransactionMessageOccurrence.SelectedTransaction
+        (TransactionMessageOccurrence.tail head tail occurrence)
+
+/-- Selecting a message from the transaction list also selects the one actual
+transaction chronology that produced it.  Prefix recursion retains the
+selected head instead of inventing a message-only chronology. -/
+theorem TransactionMessageOccurrence.exists_selectedTransaction
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message) :
+    Nonempty (TransactionMessageOccurrence.SelectedTransaction occurrence) := by
+  induction occurrence with
+  | head head tail =>
+      rcases head.exists_stateChronology with ⟨chronology⟩
+      exact ⟨.head head tail chronology⟩
+  | tail head tail occurrence ih =>
+      rcases ih with ⟨selected⟩
+      exact ⟨.tail head tail occurrence selected⟩
+
+/-- A selected transaction message in an arbitrary configured block, coupled
+to the invariant derived from that block's deployment root and to its actual
+whole-transaction chronology.  `ready` is constructed before `targetCase`,
+so target classification never introduces an unproved invariant premise. -/
+structure ConfiguredTransactionEnvelope
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed pre)
+    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    (message : ExecutionTrace.MessageCallTrace msg messageState out) where
+  occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message
+  ready : dripSpec.MsgInv ca msg
+  targetCase : TransactionTargetClass ca msg
+  selectedTransaction :
+    Nonempty (TransactionMessageOccurrence.SelectedTransaction occurrence)
+
+/-- Build the configured transaction envelope from recorded block execution.
+The message invariant is obtained from the deployment root and retained block
+prefix before the exhaustive `none`/`ca`/`other` target split is performed. -/
+def TransactionMessageOccurrence.configuredEnvelope
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed pre)
+    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message) :
+    ConfiguredTransactionEnvelope root reach block message := by
+  have ready : dripSpec.MsgInv ca msg :=
+    occurrence.msgInv_of_configuredBlock root reach block
+  exact
+    { occurrence := occurrence
+      ready
+      targetCase := TransactionTargetClass.classify ca msg
+      selectedTransaction := occurrence.exists_selectedTransaction }
+
+/-- The `target = none` transaction branch is still split by the actual CREATE
+wrapper.  A collision has its one recorded no-op message boundary; a non-
+collision CREATE is proved foreign from the configured message invariant and
+keeps its exact create core for any later settled-child analysis. -/
+inductive TransactionTargetNoneDisposition
+    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
+    (ready : dripSpec.MsgInv ca msg)
+    (targetNone : msg.target.isNone = true) :
+    ∀ (_ : ExecutionTrace.MessageCallTrace msg state out), Type
+  | collision (collision : ExecutionTrace.messageCreateCollision msg = true)
+      (result : processMessageCall msg = .ok ⟨state, out⟩)
+      (state_eq : state = msg.benv.state) :
+      TransactionTargetNoneDisposition ready targetNone
+        (.createCollision targetNone collision result)
+  | foreignCreate (collision : ExecutionTrace.messageCreateCollision msg = false)
+      (evm : Devm)
+      (coreRun : processCreateMessage msg = .ok evm)
+      (core : ExecutionTrace.ProcessCreateMessageTrace msg (.ok evm))
+      (result : processMessageCall msg = .ok ⟨state, out⟩)
+      (currentTarget : msg.currentTarget ≠ ca) :
+      TransactionTargetNoneDisposition ready targetNone
+        (.createRun targetNone collision evm coreRun core result)
+
+/-- Classify an actual target-none transaction wrapper without treating a
+CREATE as a CALL.  The foreign conclusion is available only in the non-
+collision arm; a CREATE aimed at an installed `ca` instead remains the exact
+collision no-op. -/
+def TransactionTargetNoneDisposition.classify
+    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
+    (ready : dripSpec.MsgInv ca msg)
+    (message : ExecutionTrace.MessageCallTrace msg state out)
+    (targetNone : msg.target.isNone = true) :
+    TransactionTargetNoneDisposition ready targetNone message := by
+  cases message with
+  | createCollision target collision result =>
+      exact .collision collision result
+        (ExecutionTrace.processMessageCall_createCollision_state_eq target collision result)
+  | createRun target collision evm coreRun core result =>
+      exact .foreignCreate collision evm coreRun core result
+        (ContractSpec.StateInv.ne_of_messageCreateCollision_false ready.state collision)
+  | callRun target delegated refund delegation execMsg execMsg_eq evm coreRun core result =>
+      have impossible : false = true := target.symm.trans targetNone
+      cases impossible
+
+/-- The target-none branch of a configured transaction envelope.  Its
+invariant has already been derived from the configured block before the CREATE
+collision/foreign split is made. -/
+def ConfiguredTransactionEnvelope.targetNoneDisposition
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (envelope : ConfiguredTransactionEnvelope root reach block message)
+    (targetNone : msg.target.isNone = true) :
+    TransactionTargetNoneDisposition envelope.ready targetNone message :=
+  TransactionTargetNoneDisposition.classify envelope.ready message targetNone
 
 /-- A configured transaction call to the deployed DRIP address keeps both the
 actual execution message's storage target and its compiled runtime.  The
@@ -264,6 +447,215 @@ theorem TransactionMessageOccurrence.callRun_runtime_of_configuredTarget
       some execMsg.code.toList = Prog.compile runtime :=
   occurrence.callRun_runtime_of_target
     (occurrence.msgInv_of_configuredBlock root reach block) target currentTarget
+
+/-- The fully sourced direct CALL branch of a configured transaction.  This
+packages the exact delegation, resolved runtime, retained `ProcessMessage`
+core, and wrapper result under the already-derived transaction envelope; no
+later effect classifier may replace them with an arbitrary execution witness. -/
+structure ConfiguredDirectCall
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (envelope : ConfiguredTransactionEnvelope root reach block message)
+    (target : msg.target.isNone = false)
+    (currentTarget : msg.currentTarget = ca) where
+  delegated : Msg
+  refund : Nat
+  delegation : ExecutionTrace.messageCallDelegation msg = .ok ⟨delegated, refund⟩
+  execMsg : Msg
+  execMsg_eq : execMsg = ExecutionTrace.messageCallExecutionMessage delegated
+  evm : Devm
+  coreRun : processMessage execMsg = .ok evm
+  core : ExecutionTrace.ProcessMessageTrace execMsg (.ok evm)
+  result : processMessageCall msg = .ok ⟨messageState, out⟩
+  message_eq : message = .callRun target delegated refund delegation execMsg
+    execMsg_eq evm coreRun core result
+  exec_currentTarget : execMsg.currentTarget = ca
+  code_eq : some execMsg.code.toList = Prog.compile runtime
+
+/-- Resolve the direct target-ca case using the envelope's already-derived
+message invariant.  The result remains tied to the selected transaction-list
+occurrence and configured block rather than only to `msg.currentTarget`. -/
+theorem ConfiguredTransactionEnvelope.directCall
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (envelope : ConfiguredTransactionEnvelope root reach block message)
+    (target : msg.target.isNone = false)
+    (currentTarget : msg.currentTarget = ca) :
+    Nonempty (ConfiguredDirectCall envelope target currentTarget) := by
+  rcases envelope.occurrence.callRun_runtime_of_target envelope.ready target
+    currentTarget with
+    ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun, core,
+      result, message_eq, exec_currentTarget, code_eq⟩
+  exact ⟨⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
+    core, result, message_eq, exec_currentTarget, code_eq⟩⟩
+
+/-- The outer CALL wrapper's recorded state is its retained core's settled
+state.  This is the bridge from transaction-envelope provenance to the raw
+message settlement branch. -/
+theorem ConfiguredDirectCall.state_eq
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    messageState = call.evm.state :=
+  ExecutionTrace.processMessageCall_callRun_state_eq target call.delegation
+    call.execMsg_eq call.coreRun call.result
+
+/-- An errored direct DRIP call has the exact message-entry accounting
+snapshot.  The result follows the retained core's rollback, then transports
+the target storage and balance through the recorded delegation and code-
+resolution equations.  Transaction refund, coinbase, and deletion boundaries
+remain outside this message-local no-op and are retained by its selected
+transaction chronology. -/
+theorem ConfiguredDirectCall.error_snapshot
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (error : call.evm.error.isSome) :
+    snapshot coalition ca messageState = snapshot coalition ca msg.benv.state := by
+  apply snapshot_eq_of_getStor_bal
+  · have rollback := (ProcessMessage.rollback_of_error call.core.run error).1
+    calc
+      messageState.getStor ca = call.evm.state.getStor ca :=
+        congrArg (fun state : State => state.getStor ca) call.state_eq
+      _ = call.execMsg.benv.state.getStor ca :=
+        congrArg (fun state : State => state.getStor ca) rollback
+      _ = (ExecutionTrace.messageCallExecutionMessage call.delegated).benv.state.getStor ca := by
+        rw [call.execMsg_eq]
+      _ = call.delegated.benv.state.getStor ca :=
+        congrFun
+          (ExecutionTrace.messageCallExecutionMessage_getStor_eq call.delegated) ca
+      _ = msg.benv.state.getStor ca :=
+        congrFun (ExecutionTrace.messageCallDelegation_getStor_eq call.delegation) ca
+  · have rollback := (ProcessMessage.rollback_of_error call.core.run error).1
+    calc
+      messageState.bal ca = call.evm.state.bal ca :=
+        congrArg (fun state : State => state.bal ca) call.state_eq
+      _ = call.execMsg.benv.state.bal ca :=
+        congrArg (fun state : State => state.bal ca) rollback
+      _ = (ExecutionTrace.messageCallExecutionMessage call.delegated).benv.state.bal ca := by
+        rw [call.execMsg_eq]
+      _ = call.delegated.benv.state.bal ca :=
+        congrFun
+          (ExecutionTrace.messageCallExecutionMessage_bal_eq call.delegated) ca
+      _ = msg.benv.state.bal ca :=
+        congrFun (ExecutionTrace.messageCallDelegation_bal_eq call.delegation) ca
+
+/-- An errored retained direct core cannot pass complete CALL settlement.
+Thus neither its root nor any of its raw descendants may be read through the
+committed-frame chronology when the realized history emits operation tags. -/
+theorem ConfiguredDirectCall.error_no_settlement
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
+    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
+    (error : call.evm.error.isSome) :
+    Frame.settlementCommits (Frame.ofCall call.execMsg) raw ≠ true := by
+  intro settles
+  have process : ProcessMessage call.execMsg
+      (.some ⟨⟨pc, sevm, entry⟩, raw⟩) (.ok call.evm) := by
+    have coreRun := call.core.run
+    rw [slot] at coreRun
+    exact coreRun
+  have settledEq := (RunFrame.some_inv process).2
+  unfold Frame.settlementCommits at settles
+  rw [← settledEq] at settles
+  cases errorEq : call.evm.error <;> simp_all
+
+/-- A clean direct DRIP core exposes its actual raw interpreter root, raw
+post-state, and output.  The retained-slot witness supplies the root run; the
+settlement theorem then records that its complete CALL frame commits, so later
+child selection must use the retained-frame path chronology rather than raw
+subtree membership. -/
+theorem ConfiguredDirectCall.clean_rawPost
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
+    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
+    (clean : call.evm.error.isSome = false) :
+    ∃ rawPost,
+      Nonempty (Exec pc sevm entry raw) ∧
+      raw = .ok rawPost ∧ rawPost.error = none ∧
+      messageState = rawPost.state ∧ call.evm.output = rawPost.output ∧
+      Frame.settlementCommits (Frame.ofCall call.execMsg) raw = true := by
+  have process : ProcessMessage call.execMsg
+      (.some ⟨⟨pc, sevm, entry⟩, raw⟩) (.ok call.evm) := by
+    have coreRun := call.core.run
+    rw [slot] at coreRun
+    exact coreRun
+  have retained : Nonempty (Exec pc sevm entry raw) := by
+    have filled := call.core.retained.toFilled
+    rw [slot] at filled
+    exact filled
+  rcases MessageExecution.processMessage_clean_rawPost process clean with
+    ⟨rawPost, rawEq, rawClean, stateEq, outputEq⟩
+  refine ⟨rawPost, retained, rawEq, rawClean, call.state_eq.trans stateEq,
+    outputEq, ?_⟩
+  exact ProcessMessage.settlementCommits_of_some_ok_clean process clean
+
+/-- Every nonroot frame retained from a clean direct DRIP root has its exact
+entering instruction and parent path.  The quantification ranges over
+`committedFramePaths`, whose construction excludes every child subtree whose
+complete frame settlement rolls back; it therefore cannot be replaced by a
+raw execution-tree walk when emitting realized effects. -/
+theorem ConfiguredDirectCall.clean_retainedChildProvenance
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    {pc : Nat} {sevm : Sevm} {entry : Devm} {raw : Execution}
+    (slot : call.core.slot = .some ⟨⟨pc, sevm, entry⟩, raw⟩)
+    (clean : call.evm.error.isSome = false) :
+    ∃ (run : Exec pc sevm entry raw) (rawPost : Devm),
+      raw = .ok rawPost ∧ rawPost.error = none ∧
+      messageState = rawPost.state ∧ call.evm.output = rawPost.output ∧
+      Frame.settlementCommits (Frame.ofCall call.execMsg) raw = true ∧
+      ∀ child : Exec.LocatedFrame, child ∈ Exec.committedFramePaths run →
+        child.path ≠ [] →
+          Nonempty (Exec.LocatedFrame.EnteringOccurrence run child) := by
+  rcases call.clean_rawPost slot clean with
+    ⟨rawPost, ⟨run⟩, rawEq, rawClean, stateEq, outputEq, settles⟩
+  refine ⟨run, rawPost, rawEq, rawClean, stateEq, outputEq, settles, ?_⟩
+  intro child member nonroot
+  exact Exec.LocatedFrame.exists_enteringOccurrence run child member nonroot
 
 /-- One actual settled message-call trace selected from the complete body
 trace.  The index keeps the original source category and the full message
