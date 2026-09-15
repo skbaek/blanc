@@ -202,6 +202,7 @@ CONTRACTS = {
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory",
+             "DripConcreteReach",
              "DripCreationCode", "DripRpow", "DripIngress",
              "DripFunctional", "DripAccounting", "DripMachine",
              "DripEndpoints", "DripFresh",

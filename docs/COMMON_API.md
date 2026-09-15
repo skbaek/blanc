@@ -1511,6 +1511,14 @@ the body-level sibling of T3:
   `ExecutionTrace.benvInv_processWithdrawalsState` moves an arbitrary
   invariant across the whole credit fold.
 - Requests: `ExecutionTrace.RequestsTrace.stateInv_and_sum_le`.
+- Empty-withdrawal body balance: use
+  `ExecutionTrace.AppliedBodyTrace.sum_le_of_empty_withdrawals` to bound the
+  final total balance by the input total, without a contract invariant. It
+  composes both retained system prefixes, all transactions, and both request
+  calls. The withdrawal list must be `[]`; it does not bound a body with
+  consensus credits. This remains COMMON_API-only: a bare natural-number
+  inequality goal does not identify the retained body or its withdrawal list,
+  so the current goal matchers cannot select this route reliably.
 
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.
