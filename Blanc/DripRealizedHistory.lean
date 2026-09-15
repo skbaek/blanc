@@ -9,6 +9,8 @@ import Blanc.DripHistory
 import Blanc.DripAccounting
 import Blanc.ExecutionPath
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionBodyEffects
+import Blanc.ExecutionHistoryEffects
 import Blanc.MessageExecutionInversion
 
 namespace Blanc
@@ -69,6 +71,83 @@ inductive TransactionMessageOccurrence :
       (occurrence : TransactionMessageOccurrence tail message) :
       TransactionMessageOccurrence (.cons head tail) message
 
+/-- The ordered transaction occurrence retains enough prefix history to carry
+DRIP's message invariant from the actual transaction-list entry to the exact
+prepared message it selects.  The successor bound is derived from that
+selected transaction's real settlement, rather than postulated for a suffix. -/
+theorem TransactionMessageOccurrence.msgInv
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (inv : dripSpec.BenvInv ca benv) :
+    dripSpec.MsgInv ca msg := by
+  revert sumNof inv
+  induction occurrence with
+  | head head tail =>
+      intro sumNof inv
+      exact head.msgInv inv.state inv.ca
+  | @tail index tx txs benv bout txState txBout finalBenv finalBout
+      head tail msg state out message occurrence ih =>
+      intro sumNof inv
+      have headInv : dripSpec.BenvInv ca (benv.withState txState) :=
+        head.benvInv (dripSpec_preserves ca) sumNof inv
+      have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 := by
+        exact Nat.lt_of_le_of_lt
+          (by simpa [Benv.withState] using processTransaction_sum_le head.result)
+          sumNof
+      exact ih nextSum headInv
+
+/-- A transaction message selected from a concrete body inherits DRIP's
+invariant from the body entry.  The two system-message traces are traversed in
+their retained order, and the transaction-list bound is derived from the
+body's actual consensus withdrawal bound. -/
+theorem TransactionMessageOccurrence.msgInv_of_body
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence body.transactions message)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (inv : dripSpec.BenvInv ca benv) :
+    dripSpec.MsgInv ca msg := by
+  have beacon := body.beacon.stateInv_and_sum_le (dripSpec_preserves ca) inv
+  have beaconInv : dripSpec.BenvInv ca (benv.withState body.beaconState) :=
+    body.beacon.benvInv (dripSpec_preserves ca) inv
+  have history := body.history.stateInv_and_sum_le (dripSpec_preserves ca) beaconInv
+  have historyInv : dripSpec.BenvInv ca
+      ((benv.withState body.beaconState).withState body.historyState) :=
+    body.history.benvInv (dripSpec_preserves ca) beaconInv
+  have startSum : sum benv.state.bal < 2 ^ 256 := by
+    omega
+  have historyLe : sum body.historyState.bal ≤ sum benv.state.bal := by
+    exact le_trans (by simpa [Benv.withState] using history.2) beacon.2
+  have historySum : sum ((benv.withState body.beaconState).withState
+      body.historyState).state.bal < 2 ^ 256 := by
+    simpa [Benv.withState] using Nat.lt_of_le_of_lt historyLe startSum
+  exact occurrence.msgInv historySum historyInv
+
+/-- A transaction occurrence in an arbitrary actual configured block receives
+the DRIP message invariant from the deployment root and the exact retained
+block entry.  No caller, target, or classifier premise is introduced here. -/
+theorem TransactionMessageOccurrence.msgInv_of_configuredBlock
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed pre)
+    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message) :
+    dripSpec.MsgInv ca msg := by
+  have entryInv : dripSpec.BenvInv ca
+      (initBenv block.rules pre block.block.header) :=
+    block.openingBenvInv (root.reachable_stateInv reach)
+  exact occurrence.msgInv_of_body block.openingBound entryInv
+
 /-- A configured transaction call to the deployed DRIP address keeps both the
 actual execution message's storage target and its compiled runtime.  The
 facts are transported through the trace's concrete delegation and code
@@ -118,6 +197,73 @@ theorem transactionCallRun_runtime_of_target
         Blanc.ExecutionTrace.messageCallExecutionMessage_currentTarget_eq,
         Blanc.ExecutionTrace.messageCallDelegation_currentTarget_eq delegation]
       exact currentTarget
+
+/-- A selected transaction message exposes its own actual CALL wrapper once
+the caller has classified its actual target.  The occurrence remains in the
+premises, so the resulting delegation, resolved runtime, and raw-process slot
+cannot be detached from the transaction-list position that supplied it. -/
+theorem TransactionMessageOccurrence.callRun_runtime_of_target
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message)
+    (ready : dripSpec.MsgInv ca msg)
+    (target : msg.target.isNone = false)
+    (currentTarget : msg.currentTarget = ca) :
+    ∃ (delegated : Msg) (refund : Nat)
+      (delegation : ExecutionTrace.messageCallDelegation msg =
+        .ok ⟨delegated, refund⟩)
+      (execMsg : Msg)
+      (execMsg_eq : execMsg =
+        ExecutionTrace.messageCallExecutionMessage delegated)
+      (evm : Devm) (coreRun : processMessage execMsg = .ok evm)
+      (core : ExecutionTrace.ProcessMessageTrace execMsg (.ok evm))
+      (result : processMessageCall msg = .ok ⟨state, out⟩),
+      message = .callRun target delegated refund delegation execMsg
+        execMsg_eq evm coreRun core result ∧
+      execMsg.currentTarget = ca ∧
+      some execMsg.code.toList = Prog.compile runtime := by
+  revert ready target currentTarget
+  induction occurrence with
+  | head head tail =>
+      intro ready target currentTarget
+      simpa using transactionCallRun_runtime_of_target head ready target currentTarget
+  | tail head tail occurrence ih =>
+      intro ready target currentTarget
+      exact ih ready target currentTarget
+
+/-- The configured form of the selected-transaction CALL bridge.  Its only
+case premises are facts about the recorded prepared message itself: the
+target-present branch and the equality branch for the deployed storage target.
+The DRIP message invariant is constructed from the deployment root, retained
+reachability prefix, and the exact block/body occurrence. -/
+theorem TransactionMessageOccurrence.callRun_runtime_of_configuredTarget
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (reach : BlockChain.ReachUsing cfg deployed pre)
+    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message)
+    (target : msg.target.isNone = false)
+    (currentTarget : msg.currentTarget = ca) :
+    ∃ (delegated : Msg) (refund : Nat)
+      (delegation : ExecutionTrace.messageCallDelegation msg =
+        .ok ⟨delegated, refund⟩)
+      (execMsg : Msg)
+      (execMsg_eq : execMsg =
+        ExecutionTrace.messageCallExecutionMessage delegated)
+      (evm : Devm) (coreRun : processMessage execMsg = .ok evm)
+      (core : ExecutionTrace.ProcessMessageTrace execMsg (.ok evm))
+      (result : processMessageCall msg = .ok ⟨messageState, out⟩),
+      message = .callRun target delegated refund delegation execMsg
+        execMsg_eq evm coreRun core result ∧
+      execMsg.currentTarget = ca ∧
+      some execMsg.code.toList = Prog.compile runtime :=
+  occurrence.callRun_runtime_of_target
+    (occurrence.msgInv_of_configuredBlock root reach block) target currentTarget
 
 /-- One actual settled message-call trace selected from the complete body
 trace.  The index keeps the original source category and the full message
