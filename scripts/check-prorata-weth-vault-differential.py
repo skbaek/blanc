@@ -95,10 +95,16 @@ EXECUTED_CASE_CHANNELS = {
     "supported-root-deposit-nonzero": ("jaune",),
     "supported-root-mint-zero": ("jaune",),
     "supported-root-mint-nonzero": ("jaune",),
+    "supported-root-deposit-caller-receiver": ("jaune",),
+    "supported-root-deposit-caller-distinct-receiver": ("jaune",),
+    "supported-root-mint-caller-receiver": ("jaune",),
+    "supported-root-mint-caller-distinct-receiver": ("jaune",),
     "supported-root-withdraw-zero": ("jaune",),
     "supported-root-withdraw-nonzero": ("jaune",),
     "supported-root-redeem-zero": ("jaune",),
     "supported-root-redeem-nonzero": ("jaune",),
+    "supported-root-withdraw-vault-self-receiver": ("jaune",),
+    "supported-root-redeem-vault-self-receiver": ("jaune",),
     "supported-root-approve-initial-finite": ("jaune",),
     "supported-root-approve-overwrite": ("jaune",),
     "supported-root-approve-zero": ("jaune",),
@@ -1056,6 +1062,103 @@ def check_causal_zero_nonzero_flows(run: Runner) -> None:
             _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
                              run.user, value, args[1])
         record_case_if_clean(flow_cases[label], "jaune", run.side.name, before)
+
+
+def check_causal_inbound_role_partitions(run: Runner) -> None:
+    """Reachable deposit/mint histories for equal and distinct receivers.
+
+    The only vault caller is the genuinely WETH-funded signer.  The distinct
+    receiver is a passive EOA, so this exercises the ERC-4626 receiver role
+    without inventing a funded vault-address caller.
+    """
+    receiver_key = 2
+    receiver_distinct = signer_address(receiver_key)
+    rows = (
+        ("deposit", "caller-receiver", run.user, 10,
+         "supported-root-deposit-caller-receiver"),
+        ("deposit", "caller-distinct-receiver", receiver_distinct, 10,
+         "supported-root-deposit-caller-distinct-receiver"),
+        ("mint", "caller-receiver", run.user, 5,
+         "supported-root-mint-caller-receiver"),
+        ("mint", "caller-distinct-receiver", receiver_distinct, 5,
+         "supported-root-mint-caller-distinct-receiver"),
+    )
+    for method, role, receiver, amount, case in rows:
+        before = len(FAILURES)
+        label = f"inbound-role-{method}-{role}"
+        setup = funded_pair(run, label, {KEY: 100}, {KEY: 100},
+                            extra_signers=(receiver_key,))
+        if setup is None:
+            continue
+        setup_results, model, accounts = setup
+        args = (run.user, amount, receiver)
+        data = (abi("deposit(uint256,address)", amount, receiver)
+                if method == "deposit" else abi("mint(uint256,address)", amount, receiver))
+        steps = run_sequence(run, label, setup_results[-1]["alloc"], [
+            (method, VAULT_ADDR, data, 0, KEY),
+        ])
+        if steps is None:
+            continue
+        committed, returned, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable {method}")
+            continue
+        _pair_state(run, label, steps[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if method == "deposit":
+            _deposit_events(label, steps[0], run.user, receiver, amount, returned)
+        else:
+            _deposit_events(label, steps[0], run.user, receiver, returned, amount)
+        record_case_if_clean(case, "jaune", run.side.name, before)
+
+
+def check_causal_vault_self_receiver_exits(run: Runner) -> None:
+    """A WETH transfer from the vault to itself leaves its WETH row unchanged."""
+    rows = (
+        ("withdraw", 2, "supported-root-withdraw-vault-self-receiver"),
+        ("redeem", 2_000, "supported-root-redeem-vault-self-receiver"),
+    )
+    for method, amount, case in rows:
+        before = len(FAILURES)
+        label = f"vault-self-receiver-{method}"
+        setup = funded_pair(run, label, {KEY: 100}, {KEY: 100})
+        if setup is None:
+            continue
+        setup_results, model, accounts = setup
+        deposit = run_sequence(run, label, setup_results[-1]["alloc"], [
+            ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ])
+        if deposit is None:
+            continue
+        committed, minted, model = oracle_transaction(model, "deposit", run.user, 10, run.user)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable funding deposit")
+            continue
+        _pair_state(run, f"{label} deposit", deposit[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        _deposit_events(f"{label} deposit", deposit[0], run.user, run.user, 10, minted)
+        vault_weth_before = model.weth.get(VAULT_ADDR, 0)
+        args = (run.user, amount, VAULT_ADDR, run.user)
+        data = (abi("withdraw(uint256,address,address)", amount, VAULT_ADDR, run.user)
+                if method == "withdraw" else abi("redeem(uint256,address,address)", amount, VAULT_ADDR, run.user))
+        steps = run_sequence(run, label, deposit[0]["alloc"], [
+            (method, VAULT_ADDR, data, 0, KEY),
+        ])
+        if steps is None:
+            continue
+        committed, returned, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable {method}")
+            continue
+        _pair_state(run, label, steps[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:
+            fail(f"{label}: vault WETH changed under self-transfer")
+        if method == "withdraw":
+            _withdraw_events(label, steps[0], run.user, VAULT_ADDR, run.user, amount, returned)
+        else:
+            _withdraw_events(label, steps[0], run.user, VAULT_ADDR, run.user, returned, amount)
+        record_case_if_clean(case, "jaune", run.side.name, before)
 
 
 def _response_runtime(kind: str) -> bytes:
@@ -2135,6 +2238,8 @@ CHECKS = [
     check_causal_share_allowance_roles,
     check_causal_delegated_withdraw,
     check_causal_zero_nonzero_flows,
+    check_causal_inbound_role_partitions,
+    check_causal_vault_self_receiver_exits,
     check_adversarial_child_returns_and_rollback,
     check_capacity_boundaries,
     check_explicit_arithmetic_capacity_cases,
@@ -2498,6 +2603,44 @@ def self_test(report_path: Path | None = None) -> int:
                                            + "; removal restored green")
                     control_records.append({
                         "label": "infinite allowance executed-ID omission",
+                        "expectedDiagnostic": needle,
+                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                                   "cwd": str(sandbox), "returncode": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr},
+                        "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                     "cwd": str(sandbox), "returncode": restored.returncode,
+                                   "stdout": restored.stdout, "stderr": restored.stderr},
+                    })
+
+        # A vault-to-vault WETH transfer is a self-transfer: it emits a
+        # Transfer log but leaves the vault's internal WETH row unchanged.
+        # Treating it as an ordinary A-a debit must fail this backed exit case.
+        self_receiver_balance = "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:\n"
+        if original_checker.count(self_receiver_balance) != 1:
+            missed.append("vault self-receiver balance control no longer applies exactly once")
+        else:
+            wrong_ordinary_debit = (
+                "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before - "
+                "(amount if method == \"withdraw\" else returned):\n"
+            )
+            checker.write_text(original_checker.replace(self_receiver_balance, wrong_ordinary_debit, 1))
+            if refresh_manifest():
+                result = run_gate()
+                output = result.stdout + result.stderr
+                needle = "vault-self-receiver-withdraw: vault WETH changed under self-transfer"
+                if result.returncode == 0:
+                    missed.append("the ordinary self-receiver WETH debit was accepted")
+                elif needle not in output:
+                    missed.append("the ordinary self-receiver WETH debit missed its semantic assertion")
+                checker.write_text(original_checker)
+                restored = require_green("vault self-receiver balance mutation")
+                if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                        and needle in output):
+                    diagnostic = next(line for line in output.splitlines() if needle in line)
+                    caught_controls.append("vault self-receiver balance: " + diagnostic
+                                           + "; removal restored green")
+                    control_records.append({
+                        "label": "vault self-receiver WETH balance",
                         "expectedDiagnostic": needle,
                         "mutant": {"argv": [sys.executable, "-B", str(checker)],
                                    "cwd": str(sandbox), "returncode": result.returncode,

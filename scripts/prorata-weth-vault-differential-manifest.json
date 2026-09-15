@@ -4,7 +4,7 @@
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 1
   },
-  "producerSha256": "5cddc72b735b4559dd6a20550ccd939d121a849c508945b612cbad5692aff29d",
+  "producerSha256": "b2e27df54d7fe9855a90a4749c1c9ab6d5795d61a63d29957b2a2969f6ea1c22",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -21,10 +21,16 @@
       "supported-root-deposit-nonzero",
       "supported-root-mint-zero",
       "supported-root-mint-nonzero",
+      "supported-root-deposit-caller-receiver",
+      "supported-root-deposit-caller-distinct-receiver",
+      "supported-root-mint-caller-receiver",
+      "supported-root-mint-caller-distinct-receiver",
       "supported-root-withdraw-zero",
       "supported-root-withdraw-nonzero",
       "supported-root-redeem-zero",
       "supported-root-redeem-nonzero",
+      "supported-root-withdraw-vault-self-receiver",
+      "supported-root-redeem-vault-self-receiver",
       "supported-root-approve-initial-finite",
       "supported-root-approve-overwrite",
       "supported-root-approve-zero",
@@ -98,7 +104,7 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "6763072f3a0b4662a8cfd33c2b8ed45f2e6d2fda170baba12ab69d410a14490e",
+      "scripts/check-prorata-weth-vault-differential.py": "94b9e5df92545f2e5ad0ae4f055f18cc2b1ebbb9ac6045f96f649dcf5ecff5d6",
       "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
       "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
     }
