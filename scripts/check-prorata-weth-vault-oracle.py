@@ -12,6 +12,7 @@ It is evidence, not a theorem: nothing checked here is reflected into Lean.
 from __future__ import annotations
 
 import random
+import json
 import os
 import shutil
 import subprocess
@@ -241,8 +242,8 @@ def check_share_allowance_distinctions() -> None:
         fail("max delegated transferFrom did not retain infinite allowance")
         return
 
-    # The owner has no self allowance after the finite self-spend above, but
-    # own withdraw/redeem must still work. This is the intentional contrast.
+    # The owner retains the finite 400 self allowance after the self-spend;
+    # own withdraw/redeem must leave it unchanged. This is the contrast.
     shares = V.preview_withdraw(1, v.total_assets(), v.supply)
     ok, v = atomic(v, "withdraw", owner, 1, owner, owner)
     if not ok or v.allowance(owner, owner) != 400:
@@ -471,6 +472,8 @@ def self_test() -> int:
          "        self._burn(owner, shares)"),
     ]
     missed = []
+    caught_controls: list[str] = []
+    control_records: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-oracle-mutant-") as tmp:
         sandbox = Path(tmp)
         shutil.copytree(here, sandbox / "scripts",
@@ -502,10 +505,26 @@ def self_test() -> int:
             restored = run_check()
             if restored.returncode != 0:
                 missed.append(f"{label}: removing only the mutation did not restore green")
+            elif result.returncode != 0 and "REGRESSION — vault oracle:" in output and needle in output:
+                diagnostic = next(line for line in output.splitlines() if needle in line)
+                caught_controls.append(f"{label}: {diagnostic}; removal restored green")
+                control_records.append({
+                    "label": label,
+                    "expectedDiagnostic": needle,
+                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                               "cwd": str(sandbox), "returncode": result.returncode,
+                               "stdout": result.stdout, "stderr": result.stderr},
+                    "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                 "cwd": str(sandbox), "returncode": restored.returncode,
+                                 "stdout": restored.stdout, "stderr": restored.stderr},
+                })
     if missed:
         for message in missed:
             print(f"REGRESSION — vault oracle self-test: {message}")
         return 1
+    for control in caught_controls:
+        print(f"OK — vault oracle self-test control: {control}")
+    print("SELFTEST-CONTROLS-JSON " + json.dumps(control_records, sort_keys=True))
     print(f"OK — vault oracle self-test: {len(probes)} perturbations of the "
           f"model are all caught")
     return 0

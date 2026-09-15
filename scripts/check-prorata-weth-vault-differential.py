@@ -843,6 +843,56 @@ def check_causal_delegated_withdraw(run: Runner) -> None:
     _withdraw_events("delegated-withdraw withdraw", steps[-1], delegate, delegate, run.user, assets, shares)
 
 
+def check_causal_zero_nonzero_flows(run: Runner) -> None:
+    """A backed history for zero/nonzero ERC-4626 flows with equal roles."""
+    setup = funded_pair(run, "zero-nonzero-flows", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    flows = [
+        ("zero deposit", "deposit", (run.user, 0, run.user),
+         abi("deposit(uint256,address)", 0, run.user)),
+        ("nonzero deposit", "deposit", (run.user, 10, run.user),
+         abi("deposit(uint256,address)", 10, run.user)),
+        ("zero mint", "mint", (run.user, 0, run.user),
+         abi("mint(uint256,address)", 0, run.user)),
+        ("nonzero mint", "mint", (run.user, 5, run.user),
+         abi("mint(uint256,address)", 5, run.user)),
+        ("zero withdraw", "withdraw", (run.user, 0, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero withdraw", "withdraw", (run.user, 2, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 2, run.user, run.user)),
+        ("zero redeem", "redeem", (run.user, 0, run.user, run.user),
+         abi("redeem(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero redeem", "redeem", (run.user, 5, run.user, run.user),
+         abi("redeem(uint256,address,address)", 5, run.user, run.user)),
+    ]
+    steps = run_sequence(run, "zero-nonzero-flows", setup_results[-1]["alloc"], [
+        (label, VAULT_ADDR, data, 0, KEY) for label, _, _, data in flows
+    ])
+    if steps is None:
+        return
+    for (label, method, args, _), result in zip(flows, steps, strict=True):
+        committed, value, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"zero-nonzero-flows oracle rejected {label}")
+            return
+        _pair_state(run, f"zero-nonzero-flows {label}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if method == "deposit":
+            _deposit_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                            args[1], value)
+        elif method == "mint":
+            _deposit_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                            value, args[1])
+        elif method == "withdraw":
+            _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                             run.user, args[1], value)
+        else:
+            _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                             run.user, value, args[1])
+
+
 def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
     """Read a one-word capacity/conversion result through the Jaune recorder."""
     _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
@@ -865,16 +915,20 @@ def _accepted_success(label: str, result: dict) -> bool:
     return True
 
 
-def _solvent_capacity_world(run: Runner) -> tuple[dict, int, int, int]:
-    """A nonoverflowing, pair-stable root for successful cap endpoint calls."""
+def _stable_capacity_prestate(run: Runner) -> tuple[dict, int, int, int]:
+    """A nonoverflowing stable seeded prestate for cap endpoint calls.
+
+    This is intentionally not presented as an inhabited deployment history:
+    high-word capacity calls are independent arithmetic endpoint evidence.
+    """
     room = 1_000
     supply = V.MAX_SUPPLY - room
     assets = V.ceil_div(supply, V.O)
     user_weth = 2
     world = run.alloc(user_weth, user_weth, {run.user: supply}, supply,
                       {word(VAULT_ADDR): word(assets)})
-    # WETH's exact backing is the two known internal rows. This is a permitted
-    # finite root for capacity endpoints, distinct from the payable histories.
+    # WETH's exact backing is the two known internal rows. This permitted
+    # finite prestate is distinct from the payable causal histories.
     world[address(WETH_ADDR)]["balance"] = h(assets + user_weth)
     return world, supply, assets, user_weth
 
@@ -916,7 +970,7 @@ def check_capacity_boundaries(run: Runner) -> None:
     claim. Reference outcomes are checked only under frozen deviations 5
     (unbounded maxima) and 6 (`A=U` checked-add reverts).
     """
-    world, supply, assets, user_weth = _solvent_capacity_world(run)
+    world, supply, assets, user_weth = _stable_capacity_prestate(run)
     expected_max_deposit = V.max_deposit(run.user, assets, supply)
     expected_max_mint = V.max_mint(run.user, assets, supply)
     for label, data, blanc_value in (
@@ -1608,6 +1662,7 @@ CHECKS = [
     check_causal_delegated_redeem,
     check_causal_share_allowance_roles,
     check_causal_delegated_withdraw,
+    check_causal_zero_nonzero_flows,
     check_capacity_boundaries,
     check_mint,
     check_redeem,
@@ -1739,6 +1794,8 @@ def self_test() -> int:
     root = here.parent
     original = (here / "prorata_weth_vault_oracle.py").read_text()
     missed = []
+    caught_controls: list[str] = []
+    control_records: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-differential-mutant-") as tmp:
         sandbox = Path(tmp)
         shutil.copytree(here, sandbox / "scripts",
@@ -1768,12 +1825,13 @@ def self_test() -> int:
             return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
                                   capture_output=True, text=True, env=env)
 
-        def require_green(label: str) -> None:
+        def require_green(label: str) -> subprocess.CompletedProcess[str] | None:
             if not refresh_manifest():
-                return
+                return None
             restored = run_gate()
             if restored.returncode:
                 missed.append(f"{label}: removing only the mutation did not restore green")
+            return restored
 
         for label, needle, old, new in PERTURBATIONS:
             if original.count(old) != 1:
@@ -1792,7 +1850,22 @@ def self_test() -> int:
             elif "REGRESSION — vault differential:" not in output or needle not in output:
                 missed.append(f"{label}: did not reach its intended semantic check ({needle!r})")
             model.write_text(original)
-            require_green(label)
+            restored = require_green(label)
+            if (restored is not None and restored.returncode == 0
+                    and result.returncode != 0
+                    and "REGRESSION — vault differential:" in output and needle in output):
+                diagnostic = next(line for line in output.splitlines() if needle in line)
+                caught_controls.append(f"{label}: {diagnostic}; removal restored green")
+                control_records.append({
+                    "label": label,
+                    "expectedDiagnostic": needle,
+                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                               "cwd": str(sandbox), "returncode": result.returncode,
+                               "stdout": result.stdout, "stderr": result.stderr},
+                    "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                 "cwd": str(sandbox), "returncode": restored.returncode,
+                                 "stdout": restored.stdout, "stderr": restored.stderr},
+                })
 
         weth_code = _literal("Blanc/WethCode.lean", "wethCode")
         run = Runner(blanc_side(), weth_code)
@@ -1840,8 +1913,24 @@ def self_test() -> int:
                 missed.append("the committed measurements were perturbed, and the gate still passed")
             elif "is not what this run measures" not in output:
                 missed.append("the perturbed measurements did not reach its identity check")
+            else:
+                diagnostic = next(line for line in output.splitlines()
+                                  if "is not what this run measures" in line)
+                caught_controls.append(f"measurement identity: {diagnostic}; removal restored green")
             measurements_file.write_text(saved)
-            require_green("measurement mutation")
+            restored = require_green("measurement mutation")
+            if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                    and "is not what this run measures" in output):
+                control_records.append({
+                    "label": "measurement identity",
+                    "expectedDiagnostic": "is not what this run measures",
+                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                               "cwd": str(sandbox), "returncode": result.returncode,
+                               "stdout": result.stdout, "stderr": result.stderr},
+                    "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                 "cwd": str(sandbox), "returncode": restored.returncode,
+                                 "stdout": restored.stdout, "stderr": restored.stderr},
+                })
         else:
             missed.append("no committed measurements file to perturb")
         saved_lock = lock_file.read_text()
@@ -1849,20 +1938,41 @@ def self_test() -> int:
         digest = lock["artifacts"]["configuredRuntime"]["sha256"]
         lock["artifacts"]["configuredRuntime"]["sha256"] = digest[:-1] + ("0" if digest[-1] != "0" else "1")
         lock_file.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+        lock_result = None
         if refresh_manifest():
-            result = run_gate()
-            output = result.stdout + result.stderr
-            if result.returncode == 0:
+            lock_result = run_gate()
+            output = lock_result.stdout + lock_result.stderr
+            if lock_result.returncode == 0:
                 missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
             elif "constructor-patched reference runtime" not in output:
                 missed.append("the perturbed runtime lock did not reach its identity check")
+            else:
+                diagnostic = next(line for line in output.splitlines()
+                                  if "constructor-patched reference runtime" in line)
+                caught_controls.append(f"reference runtime identity: {diagnostic}; removal restored green")
         lock_file.write_text(saved_lock)
-        require_green("reference runtime lock mutation")
+        restored = require_green("reference runtime lock mutation")
+        if (lock_result is not None and restored is not None and restored.returncode == 0
+                and lock_result.returncode != 0
+                and "constructor-patched reference runtime" in output):
+            control_records.append({
+                "label": "reference runtime identity",
+                "expectedDiagnostic": "constructor-patched reference runtime",
+                "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                           "cwd": str(sandbox), "returncode": lock_result.returncode,
+                           "stdout": lock_result.stdout, "stderr": lock_result.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker)],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
 
     if missed:
         for message in missed:
             print(f"REGRESSION — vault differential self-test: {message}")
         return 1
+    for control in caught_controls:
+        print(f"OK — vault differential self-test control: {control}")
+    print("SELFTEST-CONTROLS-JSON " + json.dumps(control_records, sort_keys=True))
     print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
           f"perturbations, one valid-call-as-revert probe, four receipt/rollback "
           f"falsifiers, five executed return-capture controls, a perturbed "

@@ -42,7 +42,7 @@ CASES = (
     "deposit-empty", "deposit-donated", "causal-donation-before-deposit",
     "causal-donation-before-exit", "causal-between-users-donation",
     "causal-delegated-redeem", "causal-delegated-withdraw",
-    "causal-share-allowance-roles",
+    "causal-share-allowance-roles", "causal-zero-nonzero-flows",
     "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
