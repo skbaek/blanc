@@ -205,7 +205,7 @@ CONTRACTS = {
              "DripCreationCode", "DripRpow", "DripIngress",
              "DripFunctional", "DripAccounting", "DripMachine",
              "DripEndpoints", "DripFresh",
-             "DripHistory", "DripInvariant", "DripPreservation", "DripSound",
+             "DripHistory", "DripRealizedHistory", "DripInvariant", "DripPreservation", "DripSound",
              "DripStackSafetyData", "DripStackSafety",
              "DripStackSafetyRegion214", "DripStackSafetyRegion576",
              "DripStackSafetyRegion1022", "DripStackSafetyRegion1459",

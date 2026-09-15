@@ -305,6 +305,7 @@ import Blanc.DripFresh
 import Blanc.DripFunctional
 import Blanc.DripIngress
 import Blanc.DripHistory
+import Blanc.DripRealizedHistory
 import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripPreservation
