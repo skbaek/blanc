@@ -3346,6 +3346,31 @@ def causal_return_self_test(report_path: Path | None = None) -> int:
     return 0
 
 
+def registered_self_test(report_path: Path | None = None) -> int:
+    """Compose the legacy and causal controls behind the registered flag."""
+    if report_path is None:
+        legacy_status = self_test(None)
+        causal_status = causal_return_self_test(None)
+        return 1 if legacy_status or causal_status else 0
+    with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
+        legacy_path = Path(tmp) / "legacy.json"
+        causal_path = Path(tmp) / "causal-return.json"
+        legacy_status = self_test(legacy_path)
+        causal_status = causal_return_self_test(causal_path)
+        try:
+            combined = {
+                "schema": 1,
+                "legacy": json.loads(legacy_path.read_text()),
+                "causalReturn": json.loads(causal_path.read_text()),
+                "returncodes": {"legacy": legacy_status, "causalReturn": causal_status},
+            }
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
+            return 1
+        report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
+    return 1 if legacy_status or causal_status else 0
+
+
 def causal_return_only() -> int:
     """Run the fixed-recorder cases on both compiled sides for control loops."""
     if not JAUNE.is_file():
@@ -3449,5 +3474,5 @@ if __name__ == "__main__":
             if index + 1 >= len(args):
                 raise SystemExit("--self-test-report requires a path")
             report = Path(args[index + 1])
-        raise SystemExit(self_test(report))
+        raise SystemExit(registered_self_test(report))
     raise SystemExit(main(args))
