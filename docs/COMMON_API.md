@@ -581,6 +581,16 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To identify the literal block in a retained configured transition, use
+`ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
+[`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
+Supply a successful transition with the same configuration and endpoints;
+the post-world last-block field identifies the retained block without
+reconstructing its body trace. This remains COMMON_API-only: the projected
+block equality alone does not identify an available successful-transition
+witness. Existing facilities were checked, but current matchers do not inspect
+that required local premise; a broad `Eq` trigger would not be selective.
+
 ### E7. I need stable paths to settlement-retained frames
 
 Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):

@@ -2,6 +2,7 @@
 
 import Blanc.DripConcreteHistory
 import Blanc.ExecutionBodyEffects
+import Blanc.ExecutionHistoryExact
 import Blanc.BalanceAlgebra
 
 namespace Blanc
@@ -130,11 +131,89 @@ theorem concreteExited_reach :
     (congrArg (fun n => sum concreteDripped.state.bal + n) empty).trans (Nat.add_zero _)
   exact (congrArg (fun n => n < 2 ^ 256) balance).mpr concrete_world_sum_bounds.2.2.2.1
 
-/-- Retain the actual block/body executions underlying the configured reach. -/
+/-- Typed retained traces for the four actual transitions. Each producer
+uses the bound on its input world, before the block executes. -/
+noncomputable def concreteDeploymentBlockTrace :
+    ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteBase concreteDeployed :=
+  Classical.choice (ExecutionTrace.exists_configuredBlockTrace_of_transition
+    (block := concreteDeploymentEnvelope.block) (by
+      have empty : wdsum concreteDeploymentEnvelope.block.wds = 0 := rfl
+      have balance : sum concreteBase.state.bal + wdsum concreteDeploymentEnvelope.block.wds =
+          sum concreteBase.state.bal :=
+        (congrArg (fun n => sum concreteBase.state.bal + n) empty).trans (Nat.add_zero _)
+      exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
+        concrete_world_sum_bounds.1)
+    concreteDeploymentStep)
+
+noncomputable def concreteJoinBlockTrace :
+    ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteDeployed concreteJoined :=
+  Classical.choice (ExecutionTrace.exists_configuredBlockTrace_of_transition
+    (block := concreteJoinBlock) (by
+      have empty : wdsum concreteJoinBlock.wds = 0 := rfl
+      have balance : sum concreteDeployed.state.bal + wdsum concreteJoinBlock.wds =
+          sum concreteDeployed.state.bal :=
+        (congrArg (fun n => sum concreteDeployed.state.bal + n) empty).trans (Nat.add_zero _)
+      exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
+        concrete_world_sum_bounds.2.1)
+    concreteJoin_step)
+
+noncomputable def concreteDripBlockTrace :
+    ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteJoined concreteDripped :=
+  Classical.choice (ExecutionTrace.exists_configuredBlockTrace_of_transition
+    (block := concreteDripBlock) (by
+      have empty : wdsum concreteDripBlock.wds = 0 := rfl
+      have balance : sum concreteJoined.state.bal + wdsum concreteDripBlock.wds =
+          sum concreteJoined.state.bal :=
+        (congrArg (fun n => sum concreteJoined.state.bal + n) empty).trans (Nat.add_zero _)
+      exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
+        concrete_world_sum_bounds.2.2.1)
+    concreteDrip_step)
+
+noncomputable def concreteExitBlockTrace :
+    ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteDripped concreteExited :=
+  Classical.choice (ExecutionTrace.exists_configuredBlockTrace_of_transition
+    (block := concreteExitBlock) (by
+      have empty : wdsum concreteExitBlock.wds = 0 := rfl
+      have balance : sum concreteDripped.state.bal + wdsum concreteExitBlock.wds =
+          sum concreteDripped.state.bal :=
+        (congrArg (fun n => sum concreteDripped.state.bal + n) empty).trans (Nat.add_zero _)
+      exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
+        concrete_world_sum_bounds.2.2.2.1)
+    concreteExit_step)
+
+/-- The named typed traces retain these literal blocks, not just the same
+endpoints. No transition's body evidence is reconstructed here. -/
+theorem concreteBlockTraces_blocks :
+    concreteDeploymentBlockTrace.block = concreteDeploymentEnvelope.block ∧
+    concreteJoinBlockTrace.block = concreteJoinBlock ∧
+    concreteDripBlockTrace.block = concreteDripBlock ∧
+    concreteExitBlockTrace.block = concreteExitBlock :=
+  ⟨concreteDeploymentBlockTrace.block_eq_of_transition concreteDeploymentStep,
+    concreteJoinBlockTrace.block_eq_of_transition concreteJoin_step,
+    concreteDripBlockTrace.block_eq_of_transition concreteDrip_step,
+    concreteExitBlockTrace.block_eq_of_transition concreteExit_step⟩
+
+/-- Retain the four named block/body executions as an explicit constructor
+spine, with every intermediate world fixed by the block trace's type. -/
 noncomputable def concreteConfiguredHistory :
     ExecutionTrace.ConfiguredHistoryTrace concreteConfig concreteBase concreteExited :=
-  Classical.choice
-    (ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing concreteExited_reach)
+  .step (.step (.step (.step
+    (.refl (ChainConfig.pragueOnly_valid 1) concreteBase_validContext rfl)
+    concreteDeploymentBlockTrace) concreteJoinBlockTrace)
+    concreteDripBlockTrace) concreteExitBlockTrace
+
+/-- Expose the literal constructor spine and its four block identities. -/
+theorem concreteConfiguredHistory_exact :
+    concreteConfiguredHistory =
+      .step (.step (.step (.step
+        (.refl (ChainConfig.pragueOnly_valid 1) concreteBase_validContext rfl)
+        concreteDeploymentBlockTrace) concreteJoinBlockTrace)
+        concreteDripBlockTrace) concreteExitBlockTrace ∧
+    (concreteDeploymentBlockTrace.block = concreteDeploymentEnvelope.block ∧
+      concreteJoinBlockTrace.block = concreteJoinBlock ∧
+      concreteDripBlockTrace.block = concreteDripBlock ∧
+      concreteExitBlockTrace.block = concreteExitBlock) :=
+  ⟨rfl, concreteBlockTraces_blocks⟩
 
 /-- The linked configured history ends at the proved exit storage, balances,
 receipt and return/gas observations. Family accounting realization is separate. -/

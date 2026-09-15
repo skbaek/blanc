@@ -125,7 +125,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "RevertPayload", "CompiledWalkInversion", "LinearDispatch", "LinearDispatchCorrectness",
           "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
           "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
-          "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
+          "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact", "ExecutionHistoryStateTrace",
           "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "ReachableExecFree",
           "ReachableExecFreeControl", "TransientSettlement",
           "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
