@@ -537,6 +537,34 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     exact absurd selected selNe
   | false => rfl
 
+/-- A committing interpreted message replays its WETH storage from the
+settlement-retained SSTORE chronology of the actual recursive execution.
+This preserves child-before-parent-continuation order, including writes made
+by a withdrawal callback; it is deliberately not a projection of frame-root
+order. -/
+theorem processMessage_weth_storageReplay
+    {msg : Msg} {parent post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (parentState : parent.state = msg.benv.state)
+    (committed : Execution.commits out = true)
+    (key : B256) :
+    (Devm.getStor post wethAccount).get key =
+      Exec.StorageWrite.replayCell wethAccount key
+        ((Devm.getStor parent wethAccount).get key)
+        (Exec.retainedStorageWrites run) := by
+  have settles : Frame.settlementCommits (Frame.ofCall msg) out = true :=
+    Frame.settlementCommits_ofCall_of_raw_commits committed
+  have replay : Exec.StorageReplay parent post
+      (Exec.retainedStorageWrites run) := by
+    simpa only [if_pos settles] using
+      ProcessMessage.storageReplay_of_body process parentState
+        (fun rawCommitted =>
+          Exec.storageReplay_committedPost run rawCommitted)
+  exact replay wethAccount key
+
 /-- A rooted allowance history over the full invocation list, processing `done`
 from WETH storage `s` to WETH storage `t`. The root starts from empty WETH
 storage; `invoked` links one listed call; `silent` covers every other settled

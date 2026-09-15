@@ -634,14 +634,18 @@ the existing frame-level WETH allowance classification. -/
 theorem WethAllowanceLocatedEvent.classification_sound
     {located : Exec.LocatedFrame} {event : WethAllowanceLocatedEvent}
     (classified : WethAllowanceLocatedEvent.classify? located = some event) :
-    event.located = located ∧ event.toEvent.Classified := by
+    event.located = located ∧ event.toEvent.frame = event.located.frame ∧
+      event.toEvent.Classified := by
   unfold WethAllowanceLocatedEvent.classify? at classified
   cases source : WethAllowanceEvent.classify? located.frame with
   | none => simp [source] at classified
   | some selected =>
       simp [source] at classified
       cases classified
-      exact ⟨rfl, (WethAllowanceEvent.classification_sound source).2⟩
+      rcases WethAllowanceEvent.classification_sound source with
+        ⟨frame_eq, exact⟩
+      exact ⟨rfl, by simpa [WethAllowanceLocatedEvent.toEvent] using frame_eq,
+        exact⟩
 
 /-- Erasing stable retained paths recovers the earlier allowance-event list in
 the identical list order. -/
@@ -669,7 +673,7 @@ theorem retainedWethAllowanceLocatedEvents_sound
     (member : event ∈ retainedWethAllowanceLocatedEvents run) :
     event.located ∈ Exec.committedFramePaths run ∧ event.toEvent.Classified := by
   rcases List.mem_filterMap.mp member with ⟨located, locatedMember, classified⟩
-  obtain ⟨sameLocated, exact⟩ :=
+  obtain ⟨sameLocated, _, exact⟩ :=
     WethAllowanceLocatedEvent.classification_sound classified
   exact ⟨by simpa only [sameLocated] using locatedMember, exact⟩
 
