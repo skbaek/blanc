@@ -608,4 +608,152 @@ theorem ConfiguredRoot.chain_conserved {vault : Adr} {sevm : Sevm}
   chain.preserves_conserved root.conserved
 
 
+/-! ## Vault calls preserve the ledger
+
+The one-message rung lifted across the message wrapper: a genuine
+`ProcessMessage` to the vault — with or without an interpreted slot, and
+whatever the settlement outcome — preserves `LedgerConserved` at the
+vault.  The strip follows the PRORATA settle-case pattern: a slotless
+message settles to its entry or post-transfer world, a committing slot
+exposes its gas-exact `Prog.RunCompiled` to
+`vault_message_preserves_conserved`, and a noncommitting slot rolls back
+to the entry world. -/
+
+/-- The vault program has no `PC` instruction, so a raw execution of its
+compiled code is a gas-exact `Prog.RunCompiled`. -/
+private theorem vault_call_pcFree :
+    Prog.pcFree Blanc.ProrataWethVault.vault = true := by
+  decide +kernel
+
+/-- **Vault call preserves the ledger (slotless message).**  With no
+interpreted slot the message settles to its entry world or its
+post-transfer world; value transfer moves balances only. -/
+theorem vault_processMessage_none_preserves_conserved
+    {vault : Adr} {msg : Msg} {post : Devm}
+    (process : ProcessMessage msg .none (.ok post))
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (msg.benv.state.getStor vault)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (post.state.getStor vault) := by
+  rcases ProcessMessage.none_ok_state_cases process with
+    rollback | ⟨benv, transfer, postEq⟩
+  · rw [rollback]
+    exact conserved
+  · rw [postEq]
+    have storEq : benv.state.getStor vault = msg.benv.state.getStor vault := by
+      have setStor : ∀ (s : State) (b : Adr) (v : B256),
+          (s.setBal b v).getStor vault = s.getStor vault := by
+        intro s b v
+        show ((s.setBal b v).get vault).stor = (s.get vault).stor
+        exact State.setBal_get_stor
+      cases stv : msg.shouldTransferValue with
+      | false =>
+          have benvEq := of_benvAfterTransfer_no (by simpa using stv) transfer
+          rw [benvEq]
+      | true =>
+          obtain ⟨mid, sub, rfl⟩ := of_benvAfterTransfer stv transfer
+          show ((msg.benv.withState mid).state.addBal msg.currentTarget
+            msg.value).getStor vault = msg.benv.state.getStor vault
+          unfold State.addBal
+          rw [setStor]
+          show mid.getStor vault = msg.benv.state.getStor vault
+          unfold State.subBal at sub
+          split at sub
+          · simp at sub
+          · cases sub
+            exact setStor _ _ _
+    exact conserved.of_eq storEq.symm
+
+/-- **Vault call preserves the ledger (interpreted message).**  From a
+retained interpreted slot, the committing case exposes its gas-exact run
+to the one-message rung; the noncommitting case rolls back. -/
+theorem vault_processMessage_some_preserves_conserved
+    {vault : Adr} {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (process : ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (target : msg.currentTarget = vault)
+    (code : some msg.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (distinct : wethAccount ≠ vault)
+    (nonprecompile : msg.benv.stat.rules.isPrecomp wethAccount = false)
+    (wethCode : (msg.benv.state.getCode wethAccount).toList = Blanc.wethCode)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (msg.benv.state.getStor vault)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (post.state.getStor vault) := by
+  obtain ⟨pcEq, sevmCode, sevmTarget, _, _, _, storEq, memoryWf⟩ :=
+    MessageExecution.processMessage_entry_facts vault process
+  by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
+  · have committed := Frame.raw_commits_of_settlementCommits settles
+    cases out with
+    | error err =>
+        simp [Execution.commits] at committed
+    | ok execPost =>
+        subst pcEq
+        have postEq : post.state = execPost.state :=
+          ProcessMessage.ok_state_eq_committedPost process committed
+        have ct : sevm.currentTarget = vault := sevmTarget.trans target
+        have enter := (RunFrame.some_inv process).1
+        rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+        have sevmEq : sevm = initSevm (msg.withBenv entry) :=
+          congrArg Evm.sta evmEq
+        have preEq : pre = initDevm (msg.withBenv entry) :=
+          congrArg Evm.dyna evmEq
+        have frameNonpre :
+            sevm.benvStat.rules.isPrecomp wethAccount = false := by
+          rw [sevmEq]
+          show (msg.withBenv entry).benv.stat.rules.isPrecomp wethAccount
+            = false
+          have statEq : (msg.withBenv entry).benv.stat = msg.benv.stat :=
+            benvAfterTransfer_stat transfer
+          rw [statEq]
+          exact nonprecompile
+        have frameCode : (pre.getCode wethAccount).toList = Blanc.wethCode := by
+          rw [preEq]
+          have codeEq : (initDevm (msg.withBenv entry)).getCode wethAccount
+              = msg.benv.state.getCode wethAccount := by
+            show (initDevm (msg.withBenv entry)).state.getCode wethAccount
+              = msg.benv.state.getCode wethAccount
+            rw [show (initDevm (msg.withBenv entry)).state = entry.state
+              from rfl]
+            exact benvAfterTransfer_ok_getCode transfer wethAccount
+          rw [codeEq]
+          exact wethCode
+        have frameConfig : DirectWethConfiguration sevm.currentTarget sevm pre := by
+          rw [ct]
+          exact ⟨distinct, frameNonpre, frameCode⟩
+        have codeEq : some sevm.code.toList =
+            Prog.compile Blanc.ProrataWethVault.vault := by
+          rw [sevmCode]
+          exact code
+        have compiled : Prog.RunCompiled sevm pre
+            Blanc.ProrataWethVault.vault execPost :=
+          Prog.runCompiled_of_exec sevm pre _ execPost vault_call_pcFree run
+            codeEq
+        have conservedPre : LedgerConserved Blanc.ProrataWethVault.supplySlot
+            (Devm.getStor pre sevm.currentTarget) := by
+          rw [ct]
+          show LedgerConserved _ (pre.state.getStor vault)
+          rw [storEq]
+          exact conserved
+        have conservedPost := vault_message_preserves_conserved frameConfig
+          memoryWf compiled conservedPre
+        rw [ct] at conservedPost
+        change LedgerConserved _ (execPost.state.getStor vault) at conservedPost
+        rw [postEq]
+        exact conservedPost
+  · have settledEq := (RunFrame.some_inv process).2
+    have postError : post.error.isSome = true := by
+      have notNone : post.error.isNone ≠ true := by
+        intro clean
+        apply settles
+        unfold Frame.settlementCommits
+        rw [← settledEq]
+        exact clean
+      cases errorEq : post.error <;> simp_all
+    have rollback := (ProcessMessage.rollback_of_error process postError).1
+    rw [rollback]
+    exact conserved
+
+
 end Blanc.Composition.ProrataWethVault
