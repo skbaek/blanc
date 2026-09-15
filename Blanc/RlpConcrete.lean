@@ -88,6 +88,24 @@ theorem decode_bytes_three (k : Nat) (bs tail : Bytes) (hlen : bs.length = 3) :
   rw [← hlen, splitAt_append]
   rfl
 
+/-- Any short-string tag consumes exactly the declared payload and retains
+the following bytes. This proves parser acceptance; scalar canonicality is
+checked by the enclosing field decoder. -/
+theorem decode_bytes_short (k n : Nat) (bs tail : Bytes)
+    (hn : n < 56) (hlen : bs.length = n) :
+    Bytes.toBLTDiff? (k + 1) ((0x80 + n.toUInt8) :: (bs ++ tail)) =
+      some (.bytes bs, tail) := by
+  have tags : ∀ i : Fin 56,
+      (match (0x80 + i.val.toUInt8).toBools with
+       | (true, false, true, true, true, _, _, _) => false
+       | (true, false, _, _, _, _, _, _) => true
+       | _ => false) = true ∧
+      (0x80 + i.val.toUInt8 - 0x80).toNat = i.val := by decide +kernel
+  obtain ⟨htag, hsize⟩ := tags ⟨n, hn⟩
+  rw [Bytes.toBLTDiff?]
+  split <;> simp_all
+  rw [Nat.mod_eq_of_lt (by omega), ← hlen, splitAt_append]
+
 /-- A full-width scalar retains its exact thirty-two bytes and outer suffix. -/
 theorem decode_bytes_32 (k : Nat) (bs tail : Bytes) (hlen : bs.length = 32) :
     Bytes.toBLTDiff? (k + 1) (0xa0 :: (bs ++ tail)) =
@@ -135,5 +153,26 @@ theorem parse_cons (k : Nat) (b : UInt8) (bs tail : Bytes) (r : BLT) (rs : List 
   change (do let rest ← Bytes.toBLTs? k tail; pure (r :: rest)) = _
   rw [hrest]
   rfl
+
+private theorem decode_b128_prefix (hi lo : UInt64) (tail : Bytes) :
+    Bytes.toB128Diff (hi.toBytes ++ lo.toBytes ++ tail) = some ((hi, lo), tail) := by
+  simp only [UInt64.toBytes, UInt32.toBytes, UInt16.toBytes,
+    List.cons_append, List.nil_append, Bytes.toB128Diff]
+  rw [UInt64.ofBytes_eq_toUInt64, UInt64.ofBytes_eq_toUInt64]
+  change some ((hi.toBytes.toUInt64, lo.toBytes.toUInt64), tail) = _
+  rw [UInt64.toUInt64_toBytes, UInt64.toUInt64_toBytes]
+
+/-- A full-width header commitment decodes to the original word, including
+words whose first byte is zero. -/
+theorem decode_hash (name : String) (word : B256) :
+    word.toBytes.toRlpHash name = .ok word := by
+  have h : word.toBytes.toB256? = some word := by
+    simp only [Bytes.toB256?, B256.toBytes, B128.toBytes, List.append_assoc]
+    rw [show word.2.2.toBytes = word.2.2.toBytes ++ [] from (List.append_nil _).symm]
+    rw [← List.append_assoc word.1.1.toBytes word.1.2.toBytes, decode_b128_prefix]
+    simp only [bind, Option.bind]
+    rw [← List.append_assoc, decode_b128_prefix]
+    rfl
+  simp only [Bytes.toRlpHash, h, Option.toExcept]
 
 end Blanc.RlpConcrete

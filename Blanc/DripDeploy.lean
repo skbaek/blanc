@@ -1767,6 +1767,8 @@ structure CanonicalDeploymentTransactionResult
     (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput) : Prop where
   run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout)
+  blockGasUsed : bout.blockGasUsed = deploymentTransactionGasBound deploymentTx
+  blobGasUsed : bout.blobGasUsed = 0
   installed : post.getCode ca = ⟨⟨code⟩⟩
   chi : (post.getStor ca).get chiSlot = scale
   rho : (post.getStor ca).get rhoSlot = ctx.msg.benv.stat.time
@@ -1941,7 +1943,25 @@ theorem canonicalDeploymentTransaction_succeeds
         (fun entry => entry.2.succeeded) = some true := by
     rw [hentry]
     simp [makeReceipt, hmessage.error]
-  exact ⟨post, bout, hrun, hcode, hchi, hrho, hpie, hbal, hblockLogs, hrequests,
+  have htotal : deploymentIntrinsicGas deploymentTx +
+      dripCreateMessageGasAccounting ≤ deploymentTx.gas :=
+    (le_max_right _ _).trans henv.gas_bound
+  have hused : usedGas = deploymentTransactionGasBound deploymentTx := by
+    dsimp only [usedGas, deploymentUsedGasFromMessage]
+    rw [hmessage.gasLeft, ctx.msg_gas_eq, hmessage.refundCounter]
+    simp only [Int.toNat_zero, Nat.min_zero, Nat.sub_zero]
+    have hcharge : deploymentTx.gas -
+        (deploymentTx.gas - deploymentIntrinsicGas deploymentTx - 44611 - 352400) =
+        deploymentIntrinsicGas deploymentTx + dripCreateMessageGasAccounting := by
+      simp only [dripCreateMessageGasAccounting] at htotal ⊢
+      omega
+    rw [hcharge]
+    exact Nat.max_comm _ _
+  have hblockGas : bout.blockGasUsed = deploymentTransactionGasBound deploymentTx := by
+    change 0 + usedGas = _
+    simpa only [Nat.zero_add] using hused
+  have hblobGas : bout.blobGasUsed = 0 := rfl
+  exact ⟨post, bout, hrun, hblockGas, hblobGas, hcode, hchi, hrho, hpie, hbal, hblockLogs, hrequests,
     hdeposit, hwithdrawalCode, hconsolidationCode, hreceipt⟩
 
 /-! ## Exact post-transaction request suffix -/
