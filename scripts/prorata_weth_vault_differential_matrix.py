@@ -39,7 +39,8 @@ SELECTORS = (
 # runner.
 CASES = (
     "metadata-and-zero-views", "nonempty-and-donated-views",
-    "deposit-empty", "deposit-donated", "mint-inexact", "redeem-inexact",
+    "deposit-empty", "deposit-donated", "causal-donation-before-deposit",
+    "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
     "zero-address-rollbacks", "capacity-boundaries", "malformed-dispatch",

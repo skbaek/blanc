@@ -153,13 +153,13 @@ def t8n(alloc: dict, txs: list) -> dict:
     return json.loads(out.stdout)
 
 
-def signed_tx(to: int | None, data: str, value: int, gas: int) -> dict:
-    tx = {"chainId": 1, "nonce": 0, "maxPriorityFeePerGas": 0,
+def signed_tx(to: int | None, data: str, value: int, gas: int, *, nonce: int = 0) -> dict:
+    tx = {"chainId": 1, "nonce": nonce, "maxPriorityFeePerGas": 0,
           "maxFeePerGas": 1000, "gasLimit": gas,
           "to": address(to) if to is not None else "0x",
           "value": value, "data": data, "accessList": []}
     signed = sign_eip1559(tx, KEY)
-    return {"type": h(2), "chainId": h(1), "nonce": h(0),
+    return {"type": h(2), "chainId": h(1), "nonce": h(nonce),
             "maxPriorityFeePerGas": h(0), "maxFeePerGas": h(1000),
             "gasLimit": h(gas), "gas": h(gas),
             "to": address(to) if to is not None else None,
@@ -244,8 +244,9 @@ class Runner:
         }
 
     def call(self, alloc: dict, data: str, value: int = 0,
-             gas: int = 3_000_000, label: str | None = None) -> dict:
-        result = t8n(alloc, [signed_tx(VAULT_ADDR, data, value, gas)])
+             gas: int = 3_000_000, label: str | None = None, *,
+             target: int = VAULT_ADDR, nonce: int = 0) -> dict:
+        result = t8n(alloc, [signed_tx(target, data, value, gas, nonce=nonce)])
         receipts = result["result"].get("receipts") or []
         if label and receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
             self.gas[label] = int(receipts[0]["cumulativeGasUsed"], 16)
@@ -344,6 +345,39 @@ def check_deposit_into_donated_vault(run: Runner) -> None:
     expect("donated deposit shares",
            run.shares(vault, run.user), seeded_shares + minted)
     expect("donated deposit supply", run.supply(vault), seeded_shares + minted)
+
+
+def check_causal_donation_before_deposit(run: Runner) -> None:
+    """A real WETH donation then deposit, without reseeding an intermediate state."""
+    donation, assets = 3, 4
+    before = run.alloc(10 ** 18, 10 ** 18)
+    donated = run.call(before, abi("transfer(address,uint256)", VAULT_ADDR, donation),
+                       target=WETH_ADDR)
+    deposited = run.call(donated.get("alloc", {}),
+                         abi("deposit(uint256,address)", assets, run.user), nonce=1)
+    receipts = [
+        *(donated.get("result", {}).get("receipts") or []),
+        *(deposited.get("result", {}).get("receipts") or []),
+    ]
+    if (donated.get("result", {}).get("rejected") or deposited.get("result", {}).get("rejected")
+            or len(receipts) != 2 or any(int(row.get("status", "0x0"), 16) != 1 for row in receipts)):
+        fail("causal donation/deposit sequence did not execute two successful transactions")
+        return
+    model = V.Vault(vault_address=VAULT_ADDR, weth={run.user: 10 ** 18},
+                    weth_allowances={(run.user, VAULT_ADDR): 10 ** 18})
+    committed, _, model = oracle_transaction(model, "donate", run.user, donation)
+    if not committed:
+        fail("oracle rejected the causal donation setup")
+        return
+    committed, shares, model = oracle_transaction(model, "deposit", run.user, assets, run.user)
+    if not committed:
+        fail("oracle rejected the causal deposit")
+        return
+    vault, weth = vault_state(deposited)
+    expect("causal donation shares", run.shares(vault, run.user), shares)
+    expect("causal donation supply", run.supply(vault), model.supply)
+    expect("causal donation vault WETH", storage_get(weth, VAULT_ADDR), model.weth[VAULT_ADDR])
+    expect("causal donation user WETH", storage_get(weth, run.user), model.weth[run.user])
 
 
 def check_mint(run: Runner) -> None:
@@ -907,6 +941,7 @@ def check_value_bearing_call_reverts(run: Runner) -> None:
 CHECKS = [
     check_deposit_into_empty_vault,
     check_deposit_into_donated_vault,
+    check_causal_donation_before_deposit,
     check_mint,
     check_redeem,
     check_withdraw,

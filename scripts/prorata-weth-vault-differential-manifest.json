@@ -4,7 +4,7 @@
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 1
   },
-  "producerSha256": "7d780b003107869d48b54274ccb1ef2f85f9c6ac0549efe34e71a9101fb73715",
+  "producerSha256": "f6df9d7f3b15e02f635362402129c75306def1fd61d98ff11698c353f0a5303a",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -12,6 +12,7 @@
       "nonempty-and-donated-views",
       "deposit-empty",
       "deposit-donated",
+      "causal-donation-before-deposit",
       "mint-inexact",
       "redeem-inexact",
       "withdraw-inexact",
@@ -64,7 +65,7 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "941cc9cb03fcd46b6470ce3bc2553a2124cb581d6cfea88060eebeef2827c112",
+      "scripts/check-prorata-weth-vault-differential.py": "b7e603048b1cd9ce6d32271e362d76183a71a10842f89426a8b99448eb44db08",
       "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
       "scripts/prorata_weth_vault_oracle.py": "9490fc2912af5838d40ecb2acbe2c2914d4aa700e7249eb7286ea34e5a550423"
     }
