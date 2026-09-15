@@ -7,6 +7,9 @@
 
 import Blanc.DripHistory
 import Blanc.DripAccounting
+import Blanc.ExecutionPath
+import Blanc.ExecutionMessageEffects
+import Blanc.MessageExecutionInversion
 
 namespace Blanc
 
@@ -26,6 +29,247 @@ noncomputable def snapshot (coalition : Finset Adr) (ca : Adr) (state : State) :
   coalitionUnits := coalitionUnits coalition ca state
   totalUnits := totalN (state.getStor ca)
   balance := (state.bal ca).toNat
+
+/-- The distinct body-level sources that can retain an interpreter-backed
+message call.  The tag stays with a later realized segment: a state-only
+projection cannot distinguish a zero-elapsed `drip` from a silent interval. -/
+inductive BodyMessageTag where
+  | beacon
+  | history
+  | transaction
+  | withdrawalRequest
+  | consolidationRequest
+  deriving DecidableEq
+
+/-- An exact successful transaction message, selected in transaction-list
+order.  This is local DRIP history plumbing: it does not reclassify a generic
+execution or erase the transaction trace that carried the message. -/
+inductive TransactionMessageOccurrence :
+    ∀ {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+      {bout finalBout : BlockOutput}
+      (_ : ExecutionTrace.ApplyTransactionsTrace
+        txs benv bout finalBenv finalBout)
+      {msg : Msg} {state : State} {out : MsgCallOutput},
+      ExecutionTrace.MessageCallTrace msg state out → Type
+  | head {index : Nat} {tx : Tx} {txs : List (Nat × Tx)}
+      {benv : Benv} {bout : BlockOutput} {txState : State}
+      {txBout : BlockOutput} {finalBenv : Benv} {finalBout : BlockOutput}
+      (head : ExecutionTrace.TransactionTrace benv bout tx index txState txBout)
+      (tail : ExecutionTrace.ApplyTransactionsTrace txs
+        (benv.withState txState) txBout finalBenv finalBout) :
+      TransactionMessageOccurrence (.cons head tail) head.message
+  | tail {index : Nat} {tx : Tx} {txs : List (Nat × Tx)}
+      {benv : Benv} {bout : BlockOutput} {txState : State}
+      {txBout : BlockOutput} {finalBenv : Benv} {finalBout : BlockOutput}
+      (head : ExecutionTrace.TransactionTrace benv bout tx index txState txBout)
+      (tail : ExecutionTrace.ApplyTransactionsTrace txs
+        (benv.withState txState) txBout finalBenv finalBout)
+      {msg : Msg} {state : State} {out : MsgCallOutput}
+      {message : ExecutionTrace.MessageCallTrace msg state out}
+      (occurrence : TransactionMessageOccurrence tail message) :
+      TransactionMessageOccurrence (.cons head tail) message
+
+/-- A configured transaction call to the deployed DRIP address keeps both the
+actual execution message's storage target and its compiled runtime.  The
+facts are transported through the trace's concrete delegation and code
+resolution equations, rather than being attached to a classifier witness. -/
+theorem transactionCallRun_runtime_of_target
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {ca : Adr}
+    (trace : ExecutionTrace.TransactionTrace benv bout tx index state bout')
+    (ready : dripSpec.MsgInv ca trace.msg)
+    (target : trace.msg.target.isNone = false)
+    (currentTarget : trace.msg.currentTarget = ca) :
+    ∃ (delegated : Msg) (refund : Nat)
+      (delegation : ExecutionTrace.messageCallDelegation trace.msg =
+        .ok ⟨delegated, refund⟩)
+      (execMsg : Msg)
+      (execMsg_eq : execMsg =
+        ExecutionTrace.messageCallExecutionMessage delegated)
+      (evm : Devm) (coreRun : processMessage execMsg = .ok evm)
+      (core : ExecutionTrace.ProcessMessageTrace execMsg (.ok evm))
+      (result : processMessageCall trace.msg =
+        .ok ⟨trace.messageState, trace.messageOut⟩),
+      trace.message = .callRun target delegated refund delegation execMsg
+        execMsg_eq evm coreRun core result ∧
+      execMsg.currentTarget = ca ∧
+      some execMsg.code.toList = Prog.compile runtime := by
+  obtain ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
+    core, result, message⟩ :=
+    Blanc.ExecutionTrace.TransactionTrace.exists_callRun_of_target trace target
+  refine ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
+    core, result, message, ?_, ?_⟩
+  · rw [execMsg_eq,
+      Blanc.ExecutionTrace.messageCallExecutionMessage_currentTarget_eq,
+      Blanc.ExecutionTrace.messageCallDelegation_currentTarget_eq delegation]
+    exact currentTarget
+  · have delegatedReady :=
+      Blanc.ContractSpec.MsgInv.of_messageCallDelegation ready delegation
+    have execReady :=
+      Blanc.ContractSpec.MsgInv.messageCallExecutionMessage delegatedReady
+    rw [← execMsg_eq] at execReady
+    change some execMsg.code.toList = Prog.compile runtime
+    apply execReady.code
+    · rw [execMsg_eq,
+        Blanc.ExecutionTrace.messageCallExecutionMessage_target_eq,
+        Blanc.ExecutionTrace.messageCallDelegation_target_eq delegation]
+      exact target
+    · rw [execMsg_eq,
+        Blanc.ExecutionTrace.messageCallExecutionMessage_currentTarget_eq,
+        Blanc.ExecutionTrace.messageCallDelegation_currentTarget_eq delegation]
+      exact currentTarget
+
+/-- One actual settled message-call trace selected from the complete body
+trace.  The index keeps the original source category and the full message
+trace, rather than a structural message equality or an unordered membership
+claim. -/
+inductive BodyMessageOccurrence :
+    ∀ {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+      {state : State} {bout : BlockOutput}
+      (_ : ExecutionTrace.AppliedBodyTrace benv txs wds state bout)
+      {msg : Msg} {messageState : State} {out : MsgCallOutput},
+      ExecutionTrace.MessageCallTrace msg messageState out → Type
+  | beacon {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+      {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      BodyMessageOccurrence body body.beacon.message
+  | history {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+      {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      BodyMessageOccurrence body body.history.message
+  | transaction {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+      {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout)
+      {msg : Msg} {messageState : State} {out : MsgCallOutput}
+      {message : ExecutionTrace.MessageCallTrace msg messageState out}
+      (occurrence : TransactionMessageOccurrence body.transactions message) :
+      BodyMessageOccurrence body message
+  | withdrawalRequest {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      BodyMessageOccurrence body body.requests.withdrawal.message
+  | consolidationRequest {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      BodyMessageOccurrence body body.requests.consolidation.message
+
+def BodyMessageOccurrence.tag
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    (occurrence : BodyMessageOccurrence body message) : BodyMessageTag := by
+  cases occurrence with
+  | beacon => exact .beacon
+  | history => exact .history
+  | transaction => exact .transaction
+  | withdrawalRequest => exact .withdrawalRequest
+  | consolidationRequest => exact .consolidationRequest
+
+/-- A successful raw interpreter execution retained by an actual call-message
+trace.  The full call wrapper remains attached, including its EIP-7702
+preparation and deterministic result equation; this is not an arbitrary
+`ProcessMessageTrace` supplied outside the body traversal. -/
+structure MessageCallExecutionOccurrence
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : ExecutionTrace.MessageCallTrace msg state out) where
+  target : msg.target.isNone = false
+  delegated : Msg
+  refund : Nat
+  delegation : ExecutionTrace.messageCallDelegation msg = .ok ⟨delegated, refund⟩
+  execMsg : Msg
+  execMsg_eq : execMsg = ExecutionTrace.messageCallExecutionMessage delegated
+  evm : Devm
+  coreRun : processMessage execMsg = .ok evm
+  result : processMessageCall msg = .ok ⟨state, out⟩
+  sevm : Sevm
+  entryState : Devm
+  postState : Devm
+  run : Exec 0 sevm entryState (.ok postState)
+  rawProcess : ProcessMessage execMsg
+    (.some ⟨⟨0, sevm, entryState⟩, .ok postState⟩) (.ok evm)
+  isCall : trace = .callRun target delegated refund delegation execMsg execMsg_eq
+    evm coreRun ⟨.some ⟨⟨0, sevm, entryState⟩, .ok postState⟩,
+      .some run, rawProcess⟩ result
+
+/-- Recover the exact raw interpreter invocation whose retained slot is the
+selected execution.  This is the bridge used to obtain entry caller and
+calldata facts from the staged runtime rather than taking them as assumptions
+of an accounting segment. -/
+theorem MessageCallExecutionOccurrence.raw_process
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {trace : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : MessageCallExecutionOccurrence trace) :
+    ProcessMessage occurrence.execMsg
+      (.some ⟨⟨0, occurrence.sevm, occurrence.entryState⟩,
+        .ok occurrence.postState⟩) (.ok occurrence.evm) :=
+  occurrence.rawProcess
+
+/-- The selected raw execution starts from the actual resolved-call message.
+In particular, code, target, calldata, and time are read from the runtime
+entry rather than postulated by a later DRIP classifier. -/
+theorem MessageCallExecutionOccurrence.entry_facts
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {trace : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : MessageCallExecutionOccurrence trace) (target : Adr) :
+    occurrence.sevm.code = occurrence.execMsg.code ∧
+      occurrence.sevm.currentTarget = occurrence.execMsg.currentTarget ∧
+      occurrence.sevm.codeAddress = occurrence.execMsg.codeAddress ∧
+      occurrence.sevm.data = occurrence.execMsg.data ∧
+      occurrence.sevm.benvStat.time = occurrence.execMsg.benv.stat.time ∧
+      occurrence.entryState.state.getStor target =
+        occurrence.execMsg.benv.state.getStor target ∧
+      Mem.Wf occurrence.entryState.memory :=
+  (MessageExecution.processMessage_entry_facts target occurrence.raw_process).2
+
+/-- An interpreter root selected from one exact body message.  It is the root
+envelope carrier: the source tag, call wrapper, and raw execution remain
+attached before any nested frame is selected. -/
+structure BodyExecutionOccurrence
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) where
+  msg : Msg
+  messageState : State
+  out : MsgCallOutput
+  message : ExecutionTrace.MessageCallTrace msg messageState out
+  source : BodyMessageOccurrence body message
+  execution : MessageCallExecutionOccurrence message
+
+/-- A settlement-retained frame selected from a concrete body execution.
+Both `bodyExecution` and `frameMember` are proof-relevant: a future chronology
+may distinguish equal states reached by different body sources or call-tree
+occurrences. -/
+structure BodyFrameOccurrence
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) where
+  bodyExecution : BodyExecutionOccurrence body
+  frame : Exec.LocatedFrame
+  frameMember : frame ∈ bodyExecution.execution.run.committedFramePaths
+
+def BodyFrameOccurrence.sourceTag
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyFrameOccurrence body) : BodyMessageTag :=
+  occurrence.bodyExecution.source.tag
+
+/-- A non-root frame selected from an actual body source has the exact
+immediate retained parent and spawning instruction in that source's original
+execution root.  The root `[]` is intentionally left to the transaction or
+system-message envelope case. -/
+theorem BodyFrameOccurrence.exists_enteringOccurrence
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyFrameOccurrence body)
+    (nonroot : occurrence.frame.path ≠ []) :
+    Nonempty (Exec.LocatedFrame.EnteringOccurrence occurrence.bodyExecution.execution.run
+      occurrence.frame) :=
+  Exec.LocatedFrame.exists_enteringOccurrence occurrence.bodyExecution.execution.run
+    occurrence.frame occurrence.frameMember nonroot
 
 /-- The actual source `drip` path never moves ETH.  The fresh-index machine
 retains its full entry world in its `Frame`; after selecting `afterDrip`, the
@@ -178,6 +422,78 @@ theorem drip_exec_realized_effect (coalition : Finset Adr) {sevm : Sevm}
       (Devm.getBal post sevm.currentTarget).toNat⟩
   rw [hchi, hrho, hcoal, htotal, hbalance]
   exact .drip _ _ _ _ _ _
+
+/-- Root-envelope entry facts are recovered from the exact message selected
+by the body traversal. -/
+theorem BodyExecutionOccurrence.entry_facts
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyExecutionOccurrence body) (target : Adr) :
+    occurrence.execution.sevm.code = occurrence.execution.execMsg.code ∧
+      occurrence.execution.sevm.currentTarget =
+        occurrence.execution.execMsg.currentTarget ∧
+      occurrence.execution.sevm.codeAddress =
+        occurrence.execution.execMsg.codeAddress ∧
+      occurrence.execution.sevm.data = occurrence.execution.execMsg.data ∧
+      occurrence.execution.sevm.benvStat.time =
+        occurrence.execution.execMsg.benv.stat.time ∧
+      occurrence.execution.entryState.state.getStor target =
+        occurrence.execution.execMsg.benv.state.getStor target ∧
+      Mem.Wf occurrence.execution.entryState.memory :=
+  occurrence.execution.entry_facts target
+
+/-- The root envelope of an actual body message realizes a DRIP accounting
+segment after its concrete runtime and entry shape have been classified.  The
+selected source and resolved-call runtime stay explicit; this result neither
+assumes caller provenance nor treats a state snapshot as an operation tag. -/
+theorem BodyExecutionOccurrence.drip_effect
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyExecutionOccurrence body) (coalition : Finset Adr)
+    (codeEq : occurrence.execution.sevm.code.toList = code)
+    (selector : Sevm.selector occurrence.execution.sevm = dripSelector)
+    (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
+    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty) :
+    Effect scale.toNat freshNat
+      (snapshot coalition occurrence.execution.sevm.currentTarget
+        occurrence.execution.entryState.state)
+      (.drip (occurrence.execution.sevm.benvStat.time -
+        Devm.getStorVal occurrence.execution.entryState
+          occurrence.execution.sevm.currentTarget rhoSlot).toNat)
+      (snapshot coalition occurrence.execution.sevm.currentTarget
+        occurrence.execution.postState.state) :=
+  drip_exec_realized_effect coalition occurrence.execution.run codeEq selector
+    nonempty canonicalEntry
+
+/-- The first body-level actual-occurrence bridge.  Once configured
+classification has discharged the selected frame's exact runtime and entry
+premises, the accounting segment is obtained from the frame retained by the
+body itself. -/
+theorem BodyFrameOccurrence.drip_effect
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyFrameOccurrence body) (coalition : Finset Adr)
+    {post : Devm}
+    (pc : occurrence.frame.frame.pc = 0)
+    (out : occurrence.frame.frame.out = .ok post)
+    (codeEq : occurrence.frame.frame.sevm.code.toList = code)
+    (selector : Sevm.selector occurrence.frame.frame.sevm = dripSelector)
+    (nonempty : occurrence.frame.frame.sevm.data.length.toB256 ≠ 0)
+    (canonicalEntry : occurrence.frame.frame.pre.memory = Mem.empty) :
+    Effect scale.toNat freshNat
+      (snapshot coalition occurrence.frame.frame.sevm.currentTarget
+        occurrence.frame.frame.pre.state)
+      (.drip (occurrence.frame.frame.sevm.benvStat.time -
+        Devm.getStorVal occurrence.frame.frame.pre
+          occurrence.frame.frame.sevm.currentTarget rhoSlot).toNat)
+      (snapshot coalition occurrence.frame.frame.sevm.currentTarget post.state) := by
+  have run := occurrence.frame.frame.run
+  rw [pc, out] at run
+  exact drip_exec_realized_effect coalition run codeEq selector nonempty
+    canonicalEntry
 
 end Drip
 

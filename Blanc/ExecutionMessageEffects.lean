@@ -262,6 +262,36 @@ theorem messageCallExecutionMessage_target_eq (msg : Msg) :
   unfold messageCallExecutionMessage
   split <;> rfl
 
+/-- A normal transaction whose prepared message is a call cannot take either
+CREATE branch of its retained message wrapper.  The returned CALL fields are
+extracted from the transaction's actual trace, not supplied by a consumer. -/
+theorem TransactionTrace.exists_callRun_of_target
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (target : trace.msg.target.isNone = false) :
+    ∃ (delegated : Msg) (refund : Nat)
+      (delegation : messageCallDelegation trace.msg = .ok ⟨delegated, refund⟩)
+      (execMsg : Msg)
+      (execMsg_eq : execMsg = messageCallExecutionMessage delegated)
+      (evm : Devm) (coreRun : processMessage execMsg = .ok evm)
+      (core : ProcessMessageTrace execMsg (.ok evm))
+      (result : processMessageCall trace.msg =
+        .ok ⟨trace.messageState, trace.messageOut⟩),
+      trace.message = .callRun target delegated refund delegation execMsg
+        execMsg_eq evm coreRun core result := by
+  cases message : trace.message with
+  | createCollision targetNone collision result =>
+      cases targetNone.symm.trans target
+  | createRun targetNone collision evm core coreTrace result =>
+      cases targetNone.symm.trans target
+  | callRun targetSome delegated refund delegation execMsg execMsg_eq evm
+      coreRun coreTrace result =>
+      have targetEq : targetSome = target := Subsingleton.elim _ _
+      cases targetEq
+      exact ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm,
+        coreRun, coreTrace, result, rfl⟩
+
 theorem messageCallExecutionMessage_currentTarget_eq (msg : Msg) :
     (messageCallExecutionMessage msg).currentTarget = msg.currentTarget := by
   unfold messageCallExecutionMessage

@@ -1479,6 +1479,10 @@ Use
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
   `_getStor_eq`, `_bal_eq`) do the same across delegated-code resolution.
+- `ExecutionTrace.TransactionTrace.exists_callRun_of_target` eliminates the
+  CREATE and collision constructors of an actual transaction message whose
+  target is a CALL, exposing that trace's exact delegation, resolved message,
+  core trace, and settlement equation for a consumer that must classify it.
 - `ExecutionTrace.benvAfterTransfer_getStor_eq`,
   `ProcessMessage.none_ok_getStor_eq`,
   `ProcessCreateMessage.none_ok_getStor_eq_of_empty`,
