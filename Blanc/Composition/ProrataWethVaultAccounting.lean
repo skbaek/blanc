@@ -230,6 +230,32 @@ theorem normalInbound_price_mint (shares : Nat) (pre : Snapshot) :
             (pre.balance + 1) * (pre.supply + Blanc.ProrataWethVault.offsetN) + z) h
     _ = _ := by ring
 
+/-- An inbound effect determines the joint snapshot without committing to a
+particular quote direction.  The no-wrap and distinct-caller premises are the
+local ledger facts needed to read the real WETH credit. -/
+theorem inboundEffect_normal_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    {receiver assets shares returned : B256}
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) shares)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) assets)
+    (effect : InboundEffect sevm receiver assets shares returned pre post) :
+    snapshotAt sevm post =
+      normalInbound assets.toNat shares.toNat (snapshotAt sevm pre) := by
+  obtain ⟨-, movement, vaultStorage, -, -⟩ := effect
+  apply congrArg₂ Blanc.Prorata.AccountingSnapshot.mk
+  · show (Devm.getStorVal post sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot).toNat = _
+    change ((Devm.getStor post sevm.currentTarget).get
+      Blanc.ProrataWethVault.supplySlot).toNat = _
+    rw [vaultStorage, Stor.get_set_self]
+    exact B256.toNat_add_eq_of_nof _ _ supplyNof
+  · show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat = _
+    rw [credited_of_transfer movement depositorNotVault]
+    exact B256.toNat_add_eq_of_nof _ _ rowNof
+
 /-- The common normal-debit recurrence for either outbound quote direction. -/
 theorem normalOutbound_price
     (assets shares : Nat) (pre : Snapshot)
@@ -314,6 +340,33 @@ theorem retainedOutbound_price
           shares * (balance + 1) := by ring
     _ = _ := by rw [residue]; ring
 
+/-- A successful outbound transfer paid to the vault itself burns shares but
+leaves the vault's WETH row unchanged. -/
+theorem outboundEffect_retained_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    {receiver owner assets shares returned : B256}
+    (receiverIsVault : receiver.toAdr = sevm.currentTarget)
+    (burnable : shares.toNat ≤ (snapshotAt sevm pre).supply)
+    (effect : OutboundEffect sevm receiver owner assets shares returned pre post) :
+    snapshotAt sevm post = retainedOutbound shares.toNat (snapshotAt sevm pre) := by
+  obtain ⟨-, movement, -, supplyRow, -, -, -, -⟩ := effect
+  apply congrArg₂ Blanc.Prorata.AccountingSnapshot.mk
+  · show (Devm.getStorVal post sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot).toNat = _
+    rw [supplyRow]
+    exact B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat burnable)
+  · obtain ⟨covered, mid, decrease, increase⟩ := movement
+    have hdec : Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget - assets =
+        mid sevm.currentTarget := by
+      exact (decrease sevm.currentTarget).left rfl
+    have hinc : mid sevm.currentTarget + assets =
+        Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget := by
+      simpa only [receiverIsVault] using
+        (increase sevm.currentTarget).left receiverIsVault
+    show (Stor.rest (Devm.getStor post wethAccount) sevm.currentTarget).toNat =
+      (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat
+    rw [← hinc, ← hdec, B256.sub_add_cancel]
+
 theorem externalCredit_price (assets : Nat) (pre : Snapshot) :
     X (normalInbound assets 0 pre) * D pre = X pre * D pre + assets * D pre := by
   unfold normalInbound X D
@@ -361,6 +414,37 @@ theorem withdraw_compiled_quote
     withdraw_compiled_effect config memoryWf run selectorEq
   refine ⟨supply, _, supplyEq, ?_, effect⟩
   exact B256.toNat_toB256_of_lt burnFits
+
+/-- The compiled inverse-withdraw call reaches the actual normal outbound
+boundary whenever its receiver differs from the vault and the two local debit
+bounds hold. -/
+theorem withdraw_compiled_normal_snapshot
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address])
+    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
+    (burnable : Blanc.ProrataWethVault.previewWithdrawN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply ≤ (snapshotAt sevm pre).supply)
+    (covered : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).balance) :
+    ∃ burned : B256,
+      burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply ∧
+      snapshotAt sevm post = normalOutbound (Sevm.argWord sevm 0).toNat
+        burned.toNat (snapshotAt sevm pre) := by
+  obtain ⟨supply, burned, supplyEq, quote, effect⟩ :=
+    withdraw_compiled_quote config memoryWf run selectorEq
+  have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+  refine ⟨burned, quote', outboundEffect_normal_snapshot receiverNotVault ?_ covered effect⟩
+  rw [quote']
+  exact burnable
 
 end FourQuote
 
