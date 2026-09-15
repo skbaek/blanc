@@ -102,6 +102,22 @@ theorem TransactionMessageOccurrence.message_benv_rules_eq
   | tail head tail occurrence ih =>
       simpa [Benv.withState] using ih
 
+/-- Every message selected through the transaction-list occurrence comes from
+a prepared transaction and therefore takes the value-transfer branch.  The
+induction retains the selected transaction position instead of asserting this
+property of an arbitrary call-shaped message. -/
+theorem TransactionMessageOccurrence.msg_shouldTransferValue
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message) :
+    msg.shouldTransferValue = true := by
+  induction occurrence with
+  | head head tail => exact head.msg_shouldTransferValue
+  | tail head tail occurrence ih => exact ih
+
 /-- The ordered transaction occurrence retains enough prefix history to carry
 DRIP's message invariant from the actual transaction-list entry to the exact
 prepared message it selects.  The successor bound is derived from that
@@ -548,6 +564,56 @@ theorem ConfiguredDirectCall.exec_benv_rules_eq_block
       messageRules
     _ = block.rules := rfl
 
+/-- The resolved call keeps the selected transaction's transfer branch across
+both delegation and code-resolution wrappers. -/
+theorem ConfiguredDirectCall.exec_shouldTransferValue
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget) :
+    call.execMsg.shouldTransferValue = true := by
+  calc
+    call.execMsg.shouldTransferValue =
+        (ExecutionTrace.messageCallExecutionMessage call.delegated).shouldTransferValue := by
+          rw [call.execMsg_eq]
+    _ = call.delegated.shouldTransferValue :=
+      ExecutionTrace.messageCallExecutionMessage_shouldTransferValue_eq _
+    _ = msg.shouldTransferValue :=
+      ExecutionTrace.messageCallDelegation_shouldTransferValue_eq call.delegation
+    _ = true := envelope.occurrence.msg_shouldTransferValue
+
+/-- The configured direct root's interpreter entry is the exact successful
+transaction-value precredit.  The debit remains in the resolved execution
+environment, where EIP-7702 authorization changes may be visible; no equality
+to a simpler source state or no-wrap conclusion is assumed. -/
+theorem ConfiguredDirectCall.precredit_of_afterTransfer
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    {afterTransfer : Benv}
+    (transfer : call.execMsg.benvAfterTransfer = .ok afterTransfer) :
+    ∃ debit,
+      call.execMsg.benv.state.subBal call.execMsg.caller call.execMsg.value = some debit ∧
+      (initDevm (call.execMsg.withBenv afterTransfer)).state =
+        debit.addBal ca call.execMsg.value := by
+  rcases of_benvAfterTransfer call.exec_shouldTransferValue transfer with
+    ⟨debit, sub, afterEq⟩
+  refine ⟨debit, sub, ?_⟩
+  show afterTransfer.state = debit.addBal ca call.execMsg.value
+  rw [afterEq, call.exec_currentTarget]
+  rfl
+
 /-- The outer CALL wrapper's recorded state is its retained core's settled
 state.  This is the bridge from transaction-envelope provenance to the raw
 message settlement branch. -/
@@ -898,6 +964,104 @@ structure BodyExecutionOccurrence
   source : BodyMessageOccurrence body message
   execution : MessageCallExecutionOccurrence message
 
+/-- A clean configured direct CALL supplies an interpreter occurrence tied to
+its original message wrapper and retained core.  The post-transfer entry and
+raw post are extracted from the configured core itself, so later consumers do
+not receive an arbitrary `Exec` witness or a message-only trace. -/
+theorem ConfiguredDirectCall.clean_executionOccurrence
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (clean : call.evm.error.isSome = false) :
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm)
+      (occurrence : MessageCallExecutionOccurrence message),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧ raw = .ok rawPost ∧
+      rawPost.error = none ∧ messageState = rawPost.state ∧
+      call.evm.output = rawPost.output ∧ occurrence.execMsg = call.execMsg ∧
+      occurrence.evm = call.evm ∧
+      occurrence.sevm = initSevm (call.execMsg.withBenv afterTransfer) ∧
+      occurrence.entryState = initDevm (call.execMsg.withBenv afterTransfer) ∧
+      occurrence.postState = rawPost := by
+  rcases call.clean_rawPost clean with
+    ⟨afterTransfer, raw, rawPost, transfer, slotEq, -, rawEq, rawClean,
+      stateEq, outputEq, -⟩
+  cases rawEq
+  rcases call with ⟨delegated, refund, delegation, execMsg, execMsgEq, evm,
+    coreRun, core, result, messageEq, execCurrentTarget, codeEq⟩
+  rcases core with ⟨slot, retained, process⟩
+  change slot = .some
+    ⟨initEvm (execMsg.withBenv afterTransfer), .ok rawPost⟩ at slotEq
+  subst slot
+  cases retained with
+  | some run =>
+      refine ⟨afterTransfer, .ok rawPost, rawPost,
+        { target := target
+          delegated := delegated
+          refund := refund
+          delegation := delegation
+          execMsg := execMsg
+          execMsg_eq := execMsgEq
+          evm := evm
+          coreRun := coreRun
+          result := result
+          sevm := initSevm (execMsg.withBenv afterTransfer)
+          entryState := initDevm (execMsg.withBenv afterTransfer)
+          postState := rawPost
+          run := run
+          rawProcess := process
+          isCall := messageEq },
+        transfer, rfl, rawClean, stateEq, outputEq, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- Lift the clean configured direct root through the actual selected
+transaction occurrence in the configured block body.  The body constructor
+retains the original transaction-list index; it is not reconstructed from a
+matching message value. -/
+theorem ConfiguredDirectCall.clean_bodyExecutionOccurrence
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (clean : call.evm.error.isSome = false) :
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm)
+      (execution : MessageCallExecutionOccurrence message)
+      (occurrence : BodyExecutionOccurrence block.bodyTrace),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧ raw = .ok rawPost ∧
+      rawPost.error = none ∧ messageState = rawPost.state ∧
+      call.evm.output = rawPost.output ∧
+      execution.execMsg = call.execMsg ∧ execution.evm = call.evm ∧
+      execution.sevm = initSevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.entryState = initDevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.postState = rawPost ∧ occurrence =
+        { msg := msg
+          messageState := messageState
+          out := out
+          message := message
+          source := .transaction block.bodyTrace envelope.occurrence
+          execution := execution } := by
+  rcases call.clean_executionOccurrence clean with
+    ⟨afterTransfer, raw, rawPost, execution, transfer, rawEq, rawClean,
+      stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryStateEq, postStateEq⟩
+  refine ⟨afterTransfer, raw, rawPost, execution,
+    { msg := msg
+      messageState := messageState
+      out := out
+      message := message
+      source := .transaction block.bodyTrace envelope.occurrence
+      execution := execution },
+    transfer, rawEq, rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq,
+    entryStateEq, postStateEq, rfl⟩
+
 /-- A settlement-retained frame selected from a concrete body execution.
 Both `bodyExecution` and `frameMember` are proof-relevant: a future chronology
 may distinguish equal states reached by different body sources or call-tree
@@ -1127,6 +1291,201 @@ theorem BodyExecutionOccurrence.drip_effect
         occurrence.execution.postState.state) :=
   drip_exec_realized_effect coalition occurrence.execution.run codeEq selector
     nonempty canonicalEntry
+
+/-- The root envelope of an actual body message exposes the deployed `join`
+execution's guarded ledger write.  This is deliberately a raw execution
+result: the transfer precredit and checked balance addition remain explicit
+obligations for the later accounting-step bridge. -/
+theorem BodyExecutionOccurrence.join_effect
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyExecutionOccurrence body)
+    (codeEq : occurrence.execution.sevm.code.toList = code)
+    (selector : Sevm.selector occurrence.execution.sevm = joinSelector)
+    (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
+    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty) :
+    ¬ maxAsset < occurrence.execution.sevm.value ∧
+      ¬ maxUnits < Devm.getStorVal occurrence.execution.entryState
+        occurrence.execution.sevm.currentTarget occurrence.execution.sevm.caller.toB256 ∧
+      ¬ maxPie < Devm.getStorVal occurrence.execution.entryState
+        occurrence.execution.sevm.currentTarget totalUnitsSlot ∧
+      ¬ Devm.getStorVal occurrence.execution.entryState
+        occurrence.execution.sevm.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal occurrence.execution.entryState
+        occurrence.execution.sevm.currentTarget chiSlot ∧
+      ¬ occurrence.execution.sevm.benvStat.time < Devm.getStorVal
+        occurrence.execution.entryState occurrence.execution.sevm.currentTarget rhoSlot ∧
+      ¬ maxElapsed < occurrence.execution.sevm.benvStat.time - Devm.getStorVal
+        occurrence.execution.entryState occurrence.execution.sevm.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (occurrence.execution.sevm.benvStat.time -
+          Devm.getStorVal occurrence.execution.entryState
+            occurrence.execution.sevm.currentTarget rhoSlot).toNat ∧
+      ∃ freshChi units,
+        freshChi =
+          (B256.rpow scale half rate
+                (occurrence.execution.sevm.benvStat.time -
+                  Devm.getStorVal occurrence.execution.entryState
+                    occurrence.execution.sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal occurrence.execution.entryState
+                occurrence.execution.sevm.currentTarget chiSlot) / scale ∧
+        units = scale * occurrence.execution.sevm.value / freshChi ∧
+        ¬ maxUnits < Devm.getStorVal occurrence.execution.entryState
+          occurrence.execution.sevm.currentTarget
+            occurrence.execution.sevm.caller.toB256 + units ∧
+        ¬ maxPie < units + Devm.getStorVal occurrence.execution.entryState
+          occurrence.execution.sevm.currentTarget totalUnitsSlot ∧
+        Devm.getStor occurrence.execution.postState
+          occurrence.execution.sevm.currentTarget =
+          ((((Devm.getStor occurrence.execution.entryState
+                occurrence.execution.sevm.currentTarget).set chiSlot freshChi).set
+              rhoSlot occurrence.execution.sevm.benvStat.time).set
+              occurrence.execution.sevm.caller.toB256
+              (Devm.getStorVal occurrence.execution.entryState
+                occurrence.execution.sevm.currentTarget
+                occurrence.execution.sevm.caller.toB256 + units)).set totalUnitsSlot
+            (units + Devm.getStorVal occurrence.execution.entryState
+              occurrence.execution.sevm.currentTarget totalUnitsSlot) ∧
+        ReturnsWord units occurrence.execution.postState :=
+  join_exec_effect occurrence.execution.run codeEq selector nonempty canonicalEntry
+
+/-- Once the actual direct root is classified as `drip`, its source effect is
+derived from the configured runtime and canonical message entry.  Only the
+selector and nonempty-calldata classification remain premises; the code,
+target, raw slot, and entry memory are recovered from the selected call. -/
+theorem ConfiguredDirectCall.clean_body_drip_effect
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (coalition : Finset Adr) (clean : call.evm.error.isSome = false) :
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm)
+      (execution : MessageCallExecutionOccurrence message)
+      (occurrence : BodyExecutionOccurrence block.bodyTrace),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧ raw = .ok rawPost ∧
+      rawPost.error = none ∧ messageState = rawPost.state ∧
+      call.evm.output = rawPost.output ∧
+      execution.execMsg = call.execMsg ∧ execution.evm = call.evm ∧
+      execution.sevm = initSevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.entryState = initDevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.postState = rawPost ∧
+      occurrence =
+        { msg := msg
+          messageState := messageState
+          out := out
+          message := message
+          source := .transaction block.bodyTrace envelope.occurrence
+          execution := execution } ∧
+      ∀ (_selector : Sevm.selector execution.sevm = dripSelector)
+        (_nonempty : execution.sevm.data.length.toB256 ≠ 0),
+        Effect scale.toNat freshNat
+          (snapshot coalition ca execution.entryState.state)
+          (.drip (execution.sevm.benvStat.time -
+            Devm.getStorVal execution.entryState ca rhoSlot).toNat)
+          (snapshot coalition ca execution.postState.state) := by
+  rcases call.clean_bodyExecutionOccurrence clean with
+    ⟨afterTransfer, raw, rawPost, execution, occurrence, transfer, rawEq,
+      rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryStateEq,
+      postStateEq, occurrenceEq⟩
+  subst occurrence
+  refine ⟨afterTransfer, raw, rawPost, execution,
+    { msg := msg
+      messageState := messageState
+      out := out
+      message := message
+      source := .transaction block.bodyTrace envelope.occurrence
+      execution := execution },
+    transfer, rawEq, rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq,
+    entryStateEq, postStateEq, rfl, ?_⟩
+  intro selector nonempty
+  have codeEq : execution.sevm.code.toList = code := by
+    rw [sevmEq]
+    have compiled := call.code_eq
+    rw [code_compile] at compiled
+    exact Option.some.inj compiled
+  have canonicalEntry : execution.entryState.memory = Mem.empty := by
+    rw [entryStateEq]
+    exact Msg.initDevm_memory _
+  have targetEq : execution.sevm.currentTarget = ca := by
+    rw [sevmEq]
+    exact call.exec_currentTarget
+  have realized :=
+    (BodyExecutionOccurrence.drip_effect
+      { msg := msg
+        messageState := messageState
+        out := out
+        message := message
+        source := .transaction block.bodyTrace envelope.occurrence
+        execution := execution }
+      coalition codeEq selector nonempty canonicalEntry)
+  rw [targetEq] at realized
+  exact realized
+
+/-- The clean configured direct root retains the transaction value's exact
+precredit at its actual selected body occurrence.  It exposes the runtime and
+entry links, but makes no selector classification or raw `join` effect claim.
+The later accounting bridge must still prove the target balance addition does
+not wrap. -/
+theorem ConfiguredDirectCall.clean_body_precredit
+    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
+    {root : DeploymentRoot cfg base deployed ca}
+    {reach : BlockChain.ReachUsing cfg deployed pre}
+    {block : ExecutionTrace.ConfiguredBlockTrace cfg pre post}
+    {msg : Msg} {messageState : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg messageState out}
+    {envelope : ConfiguredTransactionEnvelope root reach block message}
+    {target : msg.target.isNone = false} {currentTarget : msg.currentTarget = ca}
+    (call : ConfiguredDirectCall envelope target currentTarget)
+    (clean : call.evm.error.isSome = false) :
+    ∃ (afterTransfer : Benv) (raw : Execution) (rawPost : Devm)
+      (execution : MessageCallExecutionOccurrence message)
+      (occurrence : BodyExecutionOccurrence block.bodyTrace) (debit : State),
+      call.execMsg.benvAfterTransfer = .ok afterTransfer ∧ raw = .ok rawPost ∧
+      rawPost.error = none ∧ messageState = rawPost.state ∧
+      call.evm.output = rawPost.output ∧
+      execution.execMsg = call.execMsg ∧ execution.evm = call.evm ∧
+      execution.sevm = initSevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.entryState = initDevm (call.execMsg.withBenv afterTransfer) ∧
+      execution.postState = rawPost ∧
+      occurrence =
+        { msg := msg
+          messageState := messageState
+          out := out
+          message := message
+          source := .transaction block.bodyTrace envelope.occurrence
+          execution := execution } ∧
+      execution.sevm.code.toList = code ∧ execution.sevm.currentTarget = ca ∧
+      execution.entryState.memory = Mem.empty ∧
+      call.execMsg.benv.state.subBal call.execMsg.caller call.execMsg.value =
+        some debit ∧
+      execution.entryState.state = debit.addBal ca call.execMsg.value := by
+  rcases call.clean_bodyExecutionOccurrence clean with
+    ⟨afterTransfer, raw, rawPost, execution, occurrence, transfer, rawEq,
+      rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryStateEq,
+      postStateEq, occurrenceEq⟩
+  rcases call.precredit_of_afterTransfer transfer with ⟨debit, sub, credit⟩
+  have codeEq : execution.sevm.code.toList = code := by
+    rw [sevmEq]
+    have compiled := call.code_eq
+    rw [code_compile] at compiled
+    exact Option.some.inj compiled
+  have targetEq : execution.sevm.currentTarget = ca := by
+    rw [sevmEq]
+    exact call.exec_currentTarget
+  have canonicalEntry : execution.entryState.memory = Mem.empty := by
+    rw [entryStateEq]
+    exact Msg.initDevm_memory _
+  have creditEq : execution.entryState.state = debit.addBal ca call.execMsg.value :=
+    (congrArg Devm.state entryStateEq).trans credit
+  exact ⟨afterTransfer, raw, rawPost, execution, occurrence, debit, transfer,
+    rawEq, rawClean, stateEq, outputEq, execMsgEq, evmEq, sevmEq, entryStateEq,
+    postStateEq, occurrenceEq, codeEq, targetEq, canonicalEntry, sub, creditEq⟩
 
 /-- The first body-level actual-occurrence bridge.  Once configured
 classification has discharged the selected frame's exact runtime and entry
