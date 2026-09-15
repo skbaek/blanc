@@ -226,6 +226,68 @@ theorem segment_spread_witness :
           [1, 2] [3]) = 4 := by
   decide +kernel
 
+/-! ## Zero/exponent edge cases -/
+
+/-- At `k = 0` the factor is the scale: same-timestamp accrual is a no-op by
+arithmetic, not by a special case. (Named apart from DripAccounting's local
+`factorNat_zero`, which the G4 packet will dedup.) -/
+theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
+  Jaune.rpow_exponent_zero _ _ _
+
+/-- At `k = 0` the outer composition is the identity on any index. -/
+theorem drip_freshNat_zero (chi : Nat) : freshNat chi 0 = chi := by
+  unfold freshNat
+  rw [drip_factorNat_zero]
+  exact Nat.mul_div_cancel _ (Nat.pos_of_ne_zero scaleNat_ne_zero)
+
+/-- The frozen base word is nonzero. -/
+theorem drip_rate_ne_zero : rate ≠ 0 := by
+  decide +kernel
+
+/-- The frozen base never takes the word loop's zero arm: low-bit
+initialization followed by the halved loop, exactly the runtime's order. -/
+theorem drip_word_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
+    B256.rpow scale half rate k =
+      B256.rpowLoop scale half (if k % 2 = 1 then rate else scale) rate
+        (k / 2) := by
+  unfold B256.rpow
+  rw [if_neg drip_rate_ne_zero, if_neg hk]
+
+/-- Nat-side low-bit initialization at the frozen constants. -/
+theorem drip_nat_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
+    factorNat k =
+      Jaune.rpowLoop scale.toNat half.toNat
+        (if k % 2 = 1 then rate.toNat else scale.toNat) rate.toNat (k / 2) := by
+  unfold factorNat Jaune.rpow
+  rw [if_neg rateNat_ne_zero, if_neg hk]
+
+/-- Zero-base degenerate cases, characterized outright (SF §5): `0^0` is the
+scale, `0^(n+1)` is zero. -/
+theorem drip_rpow_zero_zero (s c : Nat) : Jaune.rpow s c 0 0 = s :=
+  Jaune.rpow_zero_zero s c
+
+theorem drip_rpow_zero_succ (s c n : Nat) :
+    Jaune.rpow s c 0 (n + 1) = 0 :=
+  Jaune.rpow_zero_succ s c n
+
+theorem drip_word_rpow_zero_zero (s c : B256) : B256.rpow s c 0 0 = s := by
+  unfold B256.rpow
+  rw [if_pos rfl, if_pos rfl]
+
+theorem drip_word_rpow_zero_succ (s c : B256) (n : Nat) :
+    B256.rpow s c 0 (n + 1) = 0 := by
+  unfold B256.rpow
+  rw [if_pos rfl, if_neg (by omega)]
+
+/-- Word-side exponent-zero: the factor word is the scale word. -/
+theorem drip_word_factor_zero : B256.rpow scale half rate 0 = scale := by
+  unfold B256.rpow
+  rw [if_neg drip_rate_ne_zero, if_pos rfl]
+
+/-- No rounded multiplications run at `k = 0`. -/
+theorem drip_rpow_ops_zero : rpowOps rate.toNat 0 = 0 := by
+  rw [drip_rpow_runtime_ops_exact, if_pos rfl]
+
 end Drip
 
 end Blanc
