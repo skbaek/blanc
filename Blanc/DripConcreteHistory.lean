@@ -6,6 +6,7 @@
 
 import Blanc.DripDeploy
 import Blanc.RlpConcrete
+import Blanc.DripRpow
 
 namespace Blanc
 namespace Drip
@@ -899,6 +900,462 @@ theorem concreteDeployedSystemCode (address : Adr)
     rcases ha with rfl | rfl | rfl | rfl <;> decide +kernel
   rw [concreteDeployedCode address hne]
   exact concreteGenesisSystemCode address ha
+
+/-- The first post-deployment transaction spends the actual sender's nonce 1. -/
+def concreteJoinTx : Tx := {
+  nonce := 1
+  gas := 500000
+  value := 100
+  data := [0xb6, 0x88, 0xa3, 0x63]
+  v := 1
+  r := (0x72cf3fe1ef8a8e6f2fde1aa9a41a2754761d914e2305a9ec3f20efeb74414849 : B256).toBytes
+  s := (0x179411568d74fce909f6fbbcffc9ad904712032504d81974e5e8d2ca2566f6d9 : B256).toBytes
+  type := .two 1 1 8 (some concreteCreateTarget) [] }
+
+def concreteJoinSigningPayload : Bytes :=
+  [0x02, 0xe4, 1, 1, 1, 8, 0x83, 7, 0xa1, 0x20, 0x94] ++
+  concreteCreateTarget.toBytes ++ [100, 0x84, 0xb6, 0x88, 0xa3, 0x63, 0xc0]
+
+theorem concreteJoinSigningEncoded :
+    concreteJoinTx.signingHash = some concreteJoinSigningPayload.keccak := by
+  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
+  have ht : (BLT.bytes concreteCreateTarget.toBytes).toBytes =
+      0x94 :: concreteCreateTarget.toBytes := by
+    rw [RlpConcrete.encode_bytes_many _ (by decide +kernel)]
+    rfl
+  have hlen : concreteCreateTarget.toBytes.length = 20 := rfl
+  simp only [Tx.signingHash, concreteJoinTx, hc, AccessList.toBLT, List.map_nil]
+  apply congrArg some
+  apply congrArg Bytes.keccak
+  change 2 :: (BLT.list [.bytes [1], .bytes [1], .bytes (Nat.toBytes 1),
+    .bytes (Nat.toBytes 8), .bytes (Nat.toBytes 500000), .bytes concreteCreateTarget.toBytes,
+    .bytes (Nat.toBytes 100), .bytes [0xb6, 0x88, 0xa3, 0x63], .list []]).toBytes = _
+  simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, ht, hlen,
+    Nat.toBytes, Nat.toBytes.aux, concreteJoinSigningPayload]
+
+theorem concreteJoinSigningHash :
+    concreteJoinTx.signingHash =
+      some (0xf0f9b2fc39cd89c110c7e4b3aa0188dabe8d5d989db1caad9c03ed226fc5357e : B256) := by
+  rw [concreteJoinSigningEncoded]
+  decide +kernel
+
+theorem concreteJoinRecoveredSender :
+    recoverSender 1 concreteJoinTx = .ok concreteCreateSender := by
+  rw [recoverSender, concreteJoinSigningHash]
+  decide +kernel
+
+def concreteJoinFields : List BLT :=
+  [.bytes [1], .bytes [1], .bytes [1], .bytes [8], .bytes [7, 0xa1, 0x20],
+   .bytes concreteCreateTarget.toBytes, .bytes [100], .bytes [0xb6, 0x88, 0xa3, 0x63],
+   .list [], .bytes [1], .bytes concreteJoinTx.r, .bytes concreteJoinTx.s]
+
+def concreteJoinPayload : Bytes :=
+  [1, 1, 1, 8, 0x83, 7, 0xa1, 0x20, 0x94] ++ concreteCreateTarget.toBytes ++
+  [100, 0x84, 0xb6, 0x88, 0xa3, 0x63, 0xc0, 1, 0xa0] ++ concreteJoinTx.r ++
+  [0xa0] ++ concreteJoinTx.s
+
+def concreteJoinTxRlp : Bytes := [2, 0xf8, 0x67] ++ concreteJoinPayload
+
+theorem concreteJoinBLT : concreteJoinTx.toBLT = .list concreteJoinFields := by
+  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
+  have hr : trimZero concreteJoinTx.r = concreteJoinTx.r := by decide +kernel
+  have hs : trimZero concreteJoinTx.s = concreteJoinTx.s := by decide +kernel
+  simp only [Tx.toBLT, concreteJoinTx, hc, AccessList.toBLT, List.map_nil]
+  simp [concreteJoinFields, concreteJoinTx, Nat.toBytes, Nat.toBytes.aux]
+  exact ⟨hr, hs⟩
+
+theorem concreteJoinPayloadParse (k : Nat) :
+    Bytes.toBLTs? (k + 12) concreteJoinPayload = some concreteJoinFields := by
+  unfold concreteJoinPayload concreteJoinFields
+  simp only [List.append_assoc, List.cons_append, List.nil_append]
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 8 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_short _ 20 _ _ (by decide) rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 100 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_short _ 4 [0xb6, 0x88, 0xa3, 0x63] _ (by decide) rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_empty_list _ _
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_32 _ _ _ rfl
+  apply RlpConcrete.parse_cons
+  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteJoinTx.s [] rfl
+  rw [Bytes.toBLTs?]
+
+theorem concreteJoinPayload_length : concreteJoinPayload.length = 103 := by
+  simp only [concreteJoinPayload, List.length_append, List.length_cons, List.length_nil]
+  rfl
+
+theorem concreteJoinEnvelopeParse :
+    Bytes.toBLT? (0xf8 :: 0x67 :: concreteJoinPayload) = some (.list concreteJoinFields) := by
+  have hsplit : Jaune.List.splitAt? 103 concreteJoinPayload = some (concreteJoinPayload, []) := by
+    simpa only [concreteJoinPayload_length, List.append_nil] using
+      RlpConcrete.splitAt_append concreteJoinPayload ([] : Bytes)
+  have hp : Bytes.toBLTDiff? 105 (0xf8 :: 0x67 :: concreteJoinPayload) =
+      some (.list concreteJoinFields, []) := by
+    rw [Bytes.toBLTDiff?]
+    change (do
+      let p ← Jaune.List.splitAt? 1 ([0x67] ++ concreteJoinPayload)
+      let q ← Jaune.List.splitAt? (Bytes.toNat p.1) p.2
+      let rs ← Bytes.toBLTs? 104 q.1
+      pure (BLT.list rs, q.2)) = _
+    rw [show Jaune.List.splitAt? 1 ([0x67] ++ concreteJoinPayload) =
+      some ([0x67], concreteJoinPayload) from
+        RlpConcrete.splitAt_append [0x67] concreteJoinPayload]
+    change (do
+      let q ← Jaune.List.splitAt? 103 concreteJoinPayload
+      let rs ← Bytes.toBLTs? 104 q.1
+      pure (BLT.list rs, q.2)) = _
+    rw [hsplit]
+    change (do let rs ← Bytes.toBLTs? 104 concreteJoinPayload; pure (BLT.list rs, [])) = _
+    rw [concreteJoinPayloadParse 92]
+    rfl
+  unfold Bytes.toBLT?
+  simp only [List.length_cons, concreteJoinPayload_length]
+  rw [hp]
+
+theorem concreteJoinDecode : decodeTx (.inl concreteJoinTxRlp) = .ok concreteJoinTx := by
+  simp only [decodeTx, concreteJoinTxRlp, List.cons_append, List.nil_append,
+    Bytes.toExTx, concreteJoinEnvelopeParse, concreteJoinFields]
+  rfl
+
+noncomputable def concreteJoinExecutionHeader : Header :=
+  { concreteDeploymentEnvelope.block.header with
+    parentHash := concreteDeploymentEnvelope.block.header.hash
+    number := 2
+    gasUsed := 0
+    timestamp := 2 }
+
+theorem concreteDeployedSenderCode :
+    concreteDeployed.state.getCode concreteCreateSender = ByteArray.empty := by
+  rw [concreteDeployedCode concreteCreateSender (by decide +kernel)]
+  change (concreteGenesisState.get concreteCreateSender).code = _
+  rw [concreteGenesisSender]
+  rfl
+
+theorem concreteJoinSenderChecked :
+    checkTransactionSenderAccount (concreteDeployed.state.get concreteCreateSender)
+      concreteJoinTx 4000000 = .ok () := by
+  have hn : (concreteDeployed.state.get concreteCreateSender).nonce = 1 := concreteDeployedSenderNonce
+  have hb : (concreteDeployed.state.get concreteCreateSender).bal = 999999999999040182 :=
+    concreteDeployedSenderBalance
+  have hc : (concreteDeployed.state.get concreteCreateSender).code = ByteArray.empty :=
+    concreteDeployedSenderCode
+  simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
+  decide +kernel
+
+theorem concreteJoinValidated :
+    validateTransaction pragueRules concreteJoinTx = .ok (calculateIntrinsicCost concreteJoinTx) := by
+  decide +kernel
+
+theorem concreteJoinChecked :
+    checkTransaction (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteJoinTx 0) concreteJoinTx =
+      .ok (concreteCreateSender, 2, [], 0) := by
+  have hgas : checkTransactionGasLimits
+      (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteJoinTx 0) concreteJoinTx = .ok 0 := by decide +kernel
+  have hchain : checkTransactionChainId
+      (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction
+      concreteJoinTx = .ok () := by decide +kernel
+  have hfee : checkTransactionGasFee
+      (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction
+      concreteJoinTx = .ok (2, 4000000) := by decide +kernel
+  rw [checkTransaction, hgas]
+  simp only [Except.mapError, bind, Except.bind]
+  rw [hchain]
+  change (do
+    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteJoinTx)
+    let (effective, maxFee) ← Except.mapError TransitionError.transaction
+      (checkTransactionGasFee (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction concreteJoinTx)
+    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
+      (checkTransactionBlobData (initBenv pragueRules concreteDeployed concreteJoinExecutionHeader).beginTransaction concreteJoinTx maxFee)
+    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteJoinTx)
+    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteJoinTx)
+    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteDeployed.state.get sender) concreteJoinTx maxFee)
+    pure (sender, effective, hashes, 0)) = _
+  rw [concreteJoinRecoveredSender, hfee]
+  change (do
+    Except.mapError TransitionError.transaction
+      (checkTransactionSenderAccount (concreteDeployed.state.get concreteCreateSender) concreteJoinTx 4000000)
+    pure (concreteCreateSender, 2, [], 0)) = _
+  rw [concreteJoinSenderChecked]
+  rfl
+
+noncomputable def concreteJoinTxInput : Benv :=
+  initBenv pragueRules concreteDeployed concreteJoinExecutionHeader
+
+noncomputable def concreteJoinDebit : State :=
+  let nonceState := concreteDeployed.state.incrNonce concreteCreateSender
+  nonceState.setBal concreteCreateSender (nonceState.bal concreteCreateSender - 1000000)
+
+theorem concreteJoinDebit_run :
+    (concreteJoinTxInput.beginTransaction.state.incrNonce concreteCreateSender).subBal
+      concreteCreateSender 1000000 = some concreteJoinDebit := by
+  have hb : (concreteDeployed.state.incrNonce concreteCreateSender).bal concreteCreateSender =
+      999999999999040182 := by
+    unfold State.bal
+    rw [State.incrNonce_get_bal]
+    exact concreteDeployedSenderBalance
+  change (concreteDeployed.state.incrNonce concreteCreateSender).subBal concreteCreateSender
+    1000000 = _
+  unfold State.subBal
+  rw [hb, if_neg (by decide +kernel)]
+  unfold concreteJoinDebit
+  dsimp only
+  rw [hb]
+
+noncomputable def concreteJoinTenv : Tenv :=
+  deploymentTenv concreteJoinTxInput concreteJoinTx concreteCreateSender 0
+
+noncomputable def concreteJoinMessage : Msg := {
+  benv := { concreteJoinTxInput.beginTransaction with state := concreteJoinDebit }
+  tenv := concreteJoinTenv
+  caller := concreteCreateSender
+  target := some concreteCreateTarget
+  currentTarget := concreteCreateTarget
+  gas := concreteJoinTenv.stat.gas
+  value := 100
+  data := concreteJoinTx.data
+  code := concreteJoinDebit.getCode concreteCreateTarget
+  codeAddress := some concreteCreateTarget
+  depth := 1024
+  shouldTransferValue := true
+  isStatic := false
+  accessedAddresses := concreteJoinTenv.stat.accessListAddresses.insertMany
+    (pragueRules.precompiles ++ [concreteCreateSender, concreteCreateTarget])
+  accessedStorageKeys := concreteJoinTenv.stat.accessListStorageKeys
+  disablePrecompiles := false }
+
+theorem concreteJoinMessage_prepared :
+    prepareMessage { concreteJoinTxInput.beginTransaction with state := concreteJoinDebit }
+      concreteJoinTenv concreteJoinTx = .ok concreteJoinMessage := rfl
+
+theorem concreteJoinMessage_code : concreteJoinMessage.code.toList = code := by
+  change (concreteJoinDebit.getCode concreteCreateTarget).toList = code
+  unfold concreteJoinDebit
+  rw [State.setBal_getCode]
+  change ((concreteDeployed.state.incrNonce concreteCreateSender).get concreteCreateTarget).code.toList = code
+  rw [State.incrNonce_get_code]
+  change (concreteDeployed.state.getCode concreteCreateTarget).toList = code
+  rw [concreteDeploymentRoot.installed]
+  simp [ByteArray.toList_eq_toList_data]
+
+theorem concreteJoinDebit_balance :
+    concreteJoinDebit.bal concreteCreateSender = 999999999998040182 := by
+  unfold concreteJoinDebit
+  change ((concreteDeployed.state.incrNonce concreteCreateSender).setBal concreteCreateSender
+    ((concreteDeployed.state.incrNonce concreteCreateSender).bal concreteCreateSender - 1000000)).bal _ = _
+  unfold State.bal
+  rw [State.setBal_get_self, State.incrNonce_get_bal]
+  change concreteDeployed.state.bal concreteCreateSender - 1000000 = _
+  rw [concreteDeployedSenderBalance]
+  decide +kernel
+
+noncomputable def concreteJoinEntry : Benv :=
+  concreteJoinMessage.benv.withState
+    ((concreteJoinDebit.setBal concreteCreateSender
+      (concreteJoinDebit.bal concreteCreateSender - 100)).addBal concreteCreateTarget 100)
+
+theorem concreteJoinEntry_run :
+    concreteJoinMessage.benvAfterTransfer = .ok concreteJoinEntry := by
+  have hs : concreteJoinDebit.subBal concreteCreateSender 100 =
+      some (concreteJoinDebit.setBal concreteCreateSender
+        (concreteJoinDebit.bal concreteCreateSender - 100)) := by
+    unfold State.subBal
+    rw [concreteJoinDebit_balance, if_neg (by decide +kernel)]
+  change (do
+    let b ← (concreteJoinMessage.benv.subBal concreteCreateSender 100).toExcept _
+    pure (b.addBal concreteCreateTarget 100)) = _
+  unfold Benv.subBal
+  change (do
+    let b ← (do
+      let st ← concreteJoinDebit.subBal concreteCreateSender 100
+      some (concreteJoinMessage.benv.withState st)).toExcept _
+    pure (b.addBal concreteCreateTarget 100)) = _
+  rw [hs]
+  rfl
+
+theorem concreteJoinEntry_storage (address : Adr) :
+    (concreteJoinEntry.state.get address).stor = (concreteDeployed.state.get address).stor := by
+  change (((concreteJoinDebit.setBal _ _).addBal _ _).get address).stor = _
+  unfold State.addBal
+  rw [State.setBal_get_stor, State.setBal_get_stor]
+  unfold concreteJoinDebit
+  dsimp only
+  rw [State.setBal_get_stor, State.incrNonce_get_stor]
+
+private theorem concreteJoin_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hdata : sevm.data = concreteJoinTx.data)
+    (hjoin : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) join post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+    (base.setMach ⟨[], Mem.empty, G + 113⟩) main post := by
+  have hd : dripSelector = (0x9f678cca : B256) := by decide +kernel
+  have hj : joinSelector = (0xb688a363 : B256) := by decide +kernel
+  have hshift : Sevm.dataWord sevm 0 >>> B256.toNat 224 = joinSelector := by
+    simp only [Sevm.dataWord, hdata, concreteJoinTx]
+    decide +kernel
+  func_run (1)
+  simp only [hdata, concreteJoinTx]
+  func_run (5) [joinSelector]
+  change Func.RunCompiled _ sevm
+    (base.setMach ⟨[joinSelector], Mem.empty, G + 113 - 27⟩) (dispatch tree) post
+  change Func.RunCompiled _ sevm
+    (base.setMach ⟨[joinSelector], Mem.empty, G + 113 - 27⟩)
+    (Ninst.dup 0 ::: Ninst.pushB256 dripSelector ::: Ninst.gt :::
+      (dispatch (.fork (.fork (.leaf convertToAssetsSelector (nonpayable (exactCalldata 36 convertToAssets)))
+          (.leaf exitSelector (nonpayable (exactCalldata 36 exit))))
+        (.leaf convertToUnitsSelector (nonpayable (exactCalldata 36 convertToUnits)))) <?>
+       dispatch (.fork (.leaf dripSelector (nonpayable (exactCalldata 4 drip)))
+         (.leaf joinSelector (exactCalldata 4 join))))) post
+  simp only [hd, hj]
+  func_run (4) [0]
+  func_run (11) [0, 1, 1]
+  all_goals first
+    | exact hjoin
+    | (simp only [hdata, concreteJoinTx]; decide +kernel)
+
+noncomputable def concreteJoinSevm : Sevm :=
+  initSevm (concreteJoinMessage.withBenv concreteJoinEntry)
+
+def concreteJoinStagingMemory : Mem :=
+  (((Mem.empty.write 64 (100 : B256).toBytes).write 96 (0 : B256).toBytes).write
+    128 (0 : B256).toBytes).write 32 (5 : B256).toBytes
+
+def concreteJoinStagingBase (base : Devm) : Devm :=
+  addAccessedStorageKey (addAccessedStorageKey base concreteCreateTarget
+    concreteCreateSender.toB256) concreteCreateTarget totalUnitsSlot
+
+private theorem concreteJoin_stage (base post : Devm) (G : Nat)
+    (hrow : base.getStorVal concreteCreateTarget concreteCreateSender.toB256 = 0)
+    (htotal : base.getStorVal concreteCreateTarget totalUnitsSlot = 0)
+    (hcoldRow : (concreteCreateTarget, concreteCreateSender.toB256) ∉ base.accessedStorageKeys)
+    (hcoldTotal : (concreteCreateTarget, totalUnitsSlot) ∉ base.accessedStorageKeys)
+    (hfresh : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      ((concreteJoinStagingBase base).setMach ⟨[], concreteJoinStagingMemory, G⟩)
+      freshStart post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], Mem.empty, G + 4327⟩) join post := by
+  func_run (8) [9, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  func_run (1)
+  simp only [Devm.getStorVal_setMach]
+  change Func.RunCompiled _ concreteJoinSevm
+    ((addAccessedStorageKey _ concreteCreateTarget concreteCreateSender.toB256).setMach
+      ⟨[base.getStorVal concreteCreateTarget concreteCreateSender.toB256],
+        Mem.empty.write 64 (100 : B256).toBytes, G + 4327 - 2141⟩) _ post
+  rw [hrow]
+  func_run (7) [3, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  change Func.RunCompiled _ concreteJoinSevm
+    ((addAccessedStorageKey base concreteCreateTarget concreteCreateSender.toB256).setMach
+      ⟨[totalUnitsSlot], (Mem.empty.write 64 (100 : B256).toBytes).write 96 (0 : B256).toBytes,
+        G + 4327 - 2175⟩) _ post
+  func_run (1)
+  · change (concreteCreateTarget, totalUnitsSlot) ∉
+      base.accessedStorageKeys.insert (concreteCreateTarget, concreteCreateSender.toB256)
+    simp only [Std.HashSet.mem_insert]
+    exact not_or.mpr ⟨by decide +kernel, hcoldTotal⟩
+  change Func.RunCompiled _ concreteJoinSevm
+    ((concreteJoinStagingBase base).setMach
+      ⟨[base.getStorVal concreteCreateTarget totalUnitsSlot],
+        (Mem.empty.write 64 (100 : B256).toBytes).write 96 (0 : B256).toBytes,
+        G + 4327 - 4275⟩) _ post
+  rw [htotal]
+  func_run (6) [3, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  func_run (3) [0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  change Func.RunCompiled _ concreteJoinSevm
+    ((concreteJoinStagingBase base).setMach ⟨[], concreteJoinStagingMemory, G + 4327 - 4315⟩)
+    (.call freshStartSlot) post
+  apply Func.runCompiled_call' (f := freshStart) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hfresh
+
+theorem concreteDeployedRho : (concreteDeployed.state.getStor concreteCreateTarget).get rhoSlot = 1 := by
+  rw [concreteDeployed_state]
+  unfold concreteDeploymentState deploymentFinalState
+  change (((((constructorInstalledState concreteConstructorEntry concreteCreateTarget 1).addBal _ _).addBal _ _).get
+    concreteCreateTarget).stor).get rhoSlot = 1
+  simp only [State.addBal, State.setBal_get_stor, constructorInstalledState,
+    State.setCode_get_stor, constructorStoredState, State.setStorVal,
+    State.get_set_self]
+  exact Stor.get_set_self _ _ _
+
+noncomputable def concreteJoinDevm : Devm :=
+  initDevm (concreteJoinMessage.withBenv concreteJoinEntry)
+
+theorem concreteJoinDevm_chi : concreteJoinDevm.getStorVal concreteCreateTarget chiSlot = scale := by
+  change (concreteJoinEntry.state.get concreteCreateTarget).stor.get chiSlot = scale
+  rw [concreteJoinEntry_storage]
+  exact concreteDeploymentRoot.chi
+
+theorem concreteJoinDevm_rho : concreteJoinDevm.getStorVal concreteCreateTarget rhoSlot = 1 := by
+  change (concreteJoinEntry.state.get concreteCreateTarget).stor.get rhoSlot = 1
+  rw [concreteJoinEntry_storage]
+  exact concreteDeployedRho
+
+theorem concreteJoinDevm_pie (k : B256) (hc : k ≠ chiSlot) (hr : k ≠ rhoSlot) :
+    concreteJoinDevm.getStorVal concreteCreateTarget k = 0 := by
+  change (concreteJoinEntry.state.get concreteCreateTarget).stor.get k = 0
+  rw [concreteJoinEntry_storage]
+  exact concreteDeploymentRoot.pie k hc hr
+
+theorem concreteJoinDevm_cold (k : B256) :
+    (concreteCreateTarget, k) ∉ concreteJoinDevm.accessedStorageKeys := by
+  change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
+  simp
+
+theorem concreteJoin_factor_one : B256.rpow scale half rate 1 = rate := by
+  rw [drip_word_rpow_unfold_nonzero (by decide : (1 : Nat) ≠ 0)]
+  decide +kernel
+
+/-- The exponent-one initialization leaves exponent zero at the loop entry. -/
+private theorem concreteJoin_rpowZero (base post : Devm) (M : Mem) (G : Nat)
+    (hsize : M.size = 288)
+    (hread : Bytes.toB256 (M.read 0 32).1 = 0)
+    (hmem : (M.read 0 32).2 = M)
+    (hcompose : Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], M, G⟩) composeFresh post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteJoinSevm
+      (base.setMach ⟨[], M, G + 34⟩) rpowLoop post := by
+  func_run (1)
+  refine Func.RunCompiled.next
+    (Ninst.runCompiled_mload_of (v := 0) (M := M) (c := 3) (G := G + 29)
+      (s := []) rfl ?_ hread hmem ?_ (by decide)) ?_
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  · simp only [Devm.gasLeft_setMach]
+    omega
+  simp only [Devm.setMach_setMach]
+  func_run (2) [1]
+  apply Func.runCompiled_call' (f := composeFresh) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hcompose
 
 end Drip
 end Blanc
