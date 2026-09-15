@@ -4084,5 +4084,1968 @@ theorem concreteDrip_observations :
     concreteDripBlock.header.timestamp = 5 := by
   exact ⟨rfl, rfl, rfl, rfl⟩
 
+private theorem concreteDripMessageState_sender :
+    concreteDripMessageState.get concreteCreateSender = concreteDripEntry.state.get concreteCreateSender := by
+  unfold concreteDripMessageState concreteDripRuntimePost
+  rw [Devm.withOutput_state, Devm.setMach_state]
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  change (((concreteDripEntry.state.setStorVal concreteCreateTarget chiSlot concreteDripChi).setStorVal
+    concreteCreateTarget rhoSlot 5).get concreteCreateSender) = _
+  simp only [State.setStorVal, State.get_set_ne _ ht]
+
+theorem concreteDrippedSenderNonce : concreteDripped.state.getNonce concreteCreateSender = 3 := by
+  change (concreteDripTransactionState.get concreteCreateSender).nonce = _
+  unfold concreteDripTransactionState deploymentFinalState
+  change (((concreteDripMessageState.addBal concreteCreateSender 935850).addBal 0 32075).get
+    concreteCreateSender).nonce = _
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.withBal]
+  rw [concreteDripMessageState_sender]
+  change ((((concreteDripDebit.setBal concreteCreateSender
+    (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+    concreteCreateSender).nonce) = _
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self]
+  unfold concreteDripDebit
+  simp only [State.setBal_get_self, State.incrNonce, State.get_set_self]
+  change (concreteJoined.state.getNonce concreteCreateSender) + 1 = 3
+  rw [concreteJoinedSenderNonce]
+  rfl
+
+theorem concreteDrippedSenderBalance : concreteDripped.state.bal concreteCreateSender = 999999999998823644 := by
+  change (concreteDripTransactionState.get concreteCreateSender).bal = _
+  unfold concreteDripTransactionState deploymentFinalState
+  change (((concreteDripMessageState.addBal concreteCreateSender 935850).addBal 0 32075).get
+    concreteCreateSender).bal = _
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.withBal]
+  change (concreteDripMessageState.get concreteCreateSender).bal + 935850 = _
+  rw [concreteDripMessageState_sender]
+  change ((((concreteDripDebit.setBal concreteCreateSender
+    (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+    concreteCreateSender).bal) + 935850 = _
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self]
+  change (concreteDripDebit.bal concreteCreateSender - 0) + 935850 = _
+  rw [concreteDripDebit_balance]
+  decide +kernel
+
+theorem concreteDrippedCode (a : Adr) :
+    concreteDripped.state.getCode a = concreteJoined.state.getCode a := concreteDripTransactionCode a
+
+def concreteExitTx : Tx := {
+  nonce := 3
+  gas := 500000
+  value := 0
+  data := [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28]
+  v := 1
+  r := (0x2c0058ac7e7b06e684ece60a8968d4fa9baee82b97db878467bc1637d680b80a : B256).toBytes
+  s := (0x149ab14861a161a3b2c4448817f8031f3516a24cd5a55220aa471fc67063a424 : B256).toBytes
+  type := .two 1 1 8 (some concreteCreateTarget) [] }
+
+def concreteExitSigningPayload : Bytes :=
+  [0x02, 0xf8, 0x44, 1, 3, 1, 8, 0x83, 7, 0xa1, 0x20, 0x94] ++
+  concreteCreateTarget.toBytes ++ [0x80, 0xa4] ++ [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28] ++ [0xc0]
+
+theorem concreteExitSigningEncoded :
+    concreteExitTx.signingHash = some concreteExitSigningPayload.keccak := by
+  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
+  have hn : (UInt64.toBytes 3).sig = [3] := by decide +kernel
+  have ht : (BLT.bytes concreteCreateTarget.toBytes).toBytes =
+      0x94 :: concreteCreateTarget.toBytes := by
+    rw [RlpConcrete.encode_bytes_many _ (by decide +kernel)]
+    rfl
+  have hlen : concreteCreateTarget.toBytes.length = 20 := rfl
+  simp only [Tx.signingHash, concreteExitTx, hc, hn, AccessList.toBLT, List.map_nil]
+  apply congrArg some
+  apply congrArg Bytes.keccak
+  change 2 :: (BLT.list [.bytes [1], .bytes [3], .bytes (Nat.toBytes 1),
+    .bytes (Nat.toBytes 8), .bytes (Nat.toBytes 500000), .bytes concreteCreateTarget.toBytes,
+    .bytes (Nat.toBytes 0), .bytes [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28], .list []]).toBytes = _
+  simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, ht, hlen,
+    Nat.toBytes, Nat.toBytes.aux, concreteExitSigningPayload]
+  rw [show Nat.toBytesPack 68 = [68] by decide +kernel]
+  exact ⟨rfl, rfl⟩
+
+theorem concreteExitSigningHash :
+    concreteExitTx.signingHash =
+      some (0x22c4bcb62ad0275fea1abcb8e2238dd2b59b0a62d83c953ed26e59ed645af53c : B256) := by
+  rw [concreteExitSigningEncoded]
+  decide +kernel
+
+theorem concreteExitRecoveredSender :
+    recoverSender 1 concreteExitTx = .ok concreteCreateSender := by
+  rw [recoverSender, concreteExitSigningHash]
+  decide +kernel
+
+def concreteExitFields : List BLT :=
+  [.bytes [1], .bytes [3], .bytes [1], .bytes [8], .bytes [7, 0xa1, 0x20],
+   .bytes concreteCreateTarget.toBytes, .bytes [], .bytes [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28],
+   .list [], .bytes [1], .bytes concreteExitTx.r, .bytes concreteExitTx.s]
+
+def concreteExitPayload : Bytes :=
+  [1, 3, 1, 8, 0x83, 7, 0xa1, 0x20, 0x94] ++ concreteCreateTarget.toBytes ++
+  [0x80, 0xa4] ++ [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28] ++ [0xc0, 1, 0xa0] ++ concreteExitTx.r ++
+  [0xa0] ++ concreteExitTx.s
+
+def concreteExitTxRlp : Bytes := [2, 0xf8, 0x87] ++ concreteExitPayload
+
+theorem concreteExitBLT : concreteExitTx.toBLT = .list concreteExitFields := by
+  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
+  have hn : (UInt64.toBytes 3).sig = [3] := by decide +kernel
+  have hr : trimZero concreteExitTx.r = concreteExitTx.r := by decide +kernel
+  have hs : trimZero concreteExitTx.s = concreteExitTx.s := by decide +kernel
+  simp only [Tx.toBLT, concreteExitTx, hc, AccessList.toBLT, List.map_nil]
+  simp [concreteExitFields, concreteExitTx, Nat.toBytes, Nat.toBytes.aux]
+  exact ⟨hr, hs⟩
+
+theorem concreteExitPayloadParse (k : Nat) :
+    Bytes.toBLTs? (k + 12) concreteExitPayload = some concreteExitFields := by
+  unfold concreteExitPayload concreteExitFields
+  simp only [List.append_assoc, List.cons_append, List.nil_append]
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 3 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 8 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_short _ 20 _ _ (by decide) rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_empty_bytes _ _
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_short _ 36 [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28] _ (by decide) rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_empty_list _ _
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_byte _ 1 _ rfl
+  apply RlpConcrete.parse_cons
+  · exact RlpConcrete.decode_bytes_32 _ _ _ rfl
+  apply RlpConcrete.parse_cons
+  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteExitTx.s [] rfl
+  rw [Bytes.toBLTs?]
+
+theorem concreteExitPayload_length : concreteExitPayload.length = 135 := by
+  simp only [concreteExitPayload, List.length_append, List.length_cons, List.length_nil]
+  rfl
+
+theorem concreteExitEnvelopeParse :
+    Bytes.toBLT? (0xf8 :: 0x87 :: concreteExitPayload) = some (.list concreteExitFields) := by
+  have hsplit : Jaune.List.splitAt? 135 concreteExitPayload = some (concreteExitPayload, []) := by
+    simpa only [concreteExitPayload_length, List.append_nil] using
+      RlpConcrete.splitAt_append concreteExitPayload ([] : Bytes)
+  have hp : Bytes.toBLTDiff? 137 (0xf8 :: 0x87 :: concreteExitPayload) =
+      some (.list concreteExitFields, []) := by
+    rw [Bytes.toBLTDiff?]
+    change (do
+      let p ← Jaune.List.splitAt? 1 ([0x87] ++ concreteExitPayload)
+      let q ← Jaune.List.splitAt? (Bytes.toNat p.1) p.2
+      let rs ← Bytes.toBLTs? 136 q.1
+      pure (BLT.list rs, q.2)) = _
+    rw [show Jaune.List.splitAt? 1 ([0x87] ++ concreteExitPayload) =
+      some ([0x87], concreteExitPayload) from
+        RlpConcrete.splitAt_append [0x87] concreteExitPayload]
+    change (do
+      let q ← Jaune.List.splitAt? 135 concreteExitPayload
+      let rs ← Bytes.toBLTs? 136 q.1
+      pure (BLT.list rs, q.2)) = _
+    rw [hsplit]
+    change (do let rs ← Bytes.toBLTs? 136 concreteExitPayload; pure (BLT.list rs, [])) = _
+    rw [concreteExitPayloadParse 124]
+    rfl
+  unfold Bytes.toBLT?
+  simp only [List.length_cons, concreteExitPayload_length]
+  rw [hp]
+
+theorem concreteExitDecode : decodeTx (.inl concreteExitTxRlp) = .ok concreteExitTx := by
+  simp only [decodeTx, concreteExitTxRlp, List.cons_append, List.nil_append,
+    Bytes.toExTx, concreteExitEnvelopeParse, concreteExitFields]
+  rfl
+
+
+noncomputable def concreteExitExecutionHeader : Header :=
+  { concreteDripBlock.header with
+    parentHash := concreteDripBlock.header.hash
+    number := 4
+    gasUsed := 0
+    timestamp := 6 }
+
+theorem concreteDrippedSenderCode : concreteDripped.state.getCode concreteCreateSender = ByteArray.empty := by
+  rw [concreteDrippedCode]
+  exact concreteJoinedSenderCode
+
+theorem concreteExitSenderChecked :
+    checkTransactionSenderAccount (concreteDripped.state.get concreteCreateSender)
+      concreteExitTx 4000000 = .ok () := by
+  have hn : (concreteDripped.state.get concreteCreateSender).nonce = 3 := concreteDrippedSenderNonce
+  have hb : (concreteDripped.state.get concreteCreateSender).bal = 999999999998823644 :=
+    concreteDrippedSenderBalance
+  have hc : (concreteDripped.state.get concreteCreateSender).code = ByteArray.empty :=
+    concreteDrippedSenderCode
+  simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
+  decide +kernel
+
+theorem concreteExitValidated :
+    validateTransaction pragueRules concreteExitTx = .ok (calculateIntrinsicCost concreteExitTx) := by
+  decide +kernel
+
+theorem concreteExitChecked :
+    checkTransaction (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteExitTx 0) concreteExitTx =
+      .ok (concreteCreateSender, 2, [], 0) := by
+  have hgas : checkTransactionGasLimits
+      (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteExitTx 0) concreteExitTx = .ok 0 := by decide +kernel
+  have hchain : checkTransactionChainId
+      (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction
+      concreteExitTx = .ok () := by decide +kernel
+  have hfee : checkTransactionGasFee
+      (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction
+      concreteExitTx = .ok (2, 4000000) := by decide +kernel
+  rw [checkTransaction, hgas]
+  simp only [Except.mapError, bind, Except.bind]
+  rw [hchain]
+  change (do
+    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteExitTx)
+    let (effective, maxFee) ← Except.mapError TransitionError.transaction
+      (checkTransactionGasFee (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction concreteExitTx)
+    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
+      (checkTransactionBlobData (initBenv pragueRules concreteDripped concreteExitExecutionHeader).beginTransaction concreteExitTx maxFee)
+    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteExitTx)
+    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteExitTx)
+    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteDripped.state.get sender) concreteExitTx maxFee)
+    pure (sender, effective, hashes, 0)) = _
+  rw [concreteExitRecoveredSender, hfee]
+  change (do
+    Except.mapError TransitionError.transaction
+      (checkTransactionSenderAccount (concreteDripped.state.get concreteCreateSender) concreteExitTx 4000000)
+    pure (concreteCreateSender, 2, [], 0)) = _
+  rw [concreteExitSenderChecked]
+  rfl
+
+noncomputable def concreteExitTxInput : Benv :=
+  initBenv pragueRules concreteDripped concreteExitExecutionHeader
+
+noncomputable def concreteExitDebit : State :=
+  let nonceState := concreteDripped.state.incrNonce concreteCreateSender
+  nonceState.setBal concreteCreateSender (nonceState.bal concreteCreateSender - 1000000)
+
+theorem concreteExitDebit_run :
+    (concreteExitTxInput.beginTransaction.state.incrNonce concreteCreateSender).subBal
+      concreteCreateSender 1000000 = some concreteExitDebit := by
+  have hb : (concreteDripped.state.incrNonce concreteCreateSender).bal concreteCreateSender =
+      999999999998823644 := by
+    unfold State.bal
+    rw [State.incrNonce_get_bal]
+    exact concreteDrippedSenderBalance
+  change (concreteDripped.state.incrNonce concreteCreateSender).subBal concreteCreateSender
+    1000000 = _
+  unfold State.subBal
+  rw [hb, if_neg (by decide +kernel)]
+  unfold concreteExitDebit
+  dsimp only
+  rw [hb]
+
+noncomputable def concreteExitTenv : Tenv :=
+  deploymentTenv concreteExitTxInput concreteExitTx concreteCreateSender 0
+
+noncomputable def concreteExitMessage : Msg := {
+  benv := { concreteExitTxInput.beginTransaction with state := concreteExitDebit }
+  tenv := concreteExitTenv
+  caller := concreteCreateSender
+  target := some concreteCreateTarget
+  currentTarget := concreteCreateTarget
+  gas := concreteExitTenv.stat.gas
+  value := 0
+  data := concreteExitTx.data
+  code := concreteExitDebit.getCode concreteCreateTarget
+  codeAddress := some concreteCreateTarget
+  depth := 1024
+  shouldTransferValue := true
+  isStatic := false
+  accessedAddresses := concreteExitTenv.stat.accessListAddresses.insertMany
+    (pragueRules.precompiles ++ [concreteCreateSender, concreteCreateTarget])
+  accessedStorageKeys := concreteExitTenv.stat.accessListStorageKeys
+  disablePrecompiles := false }
+
+theorem concreteExitMessage_prepared :
+    prepareMessage { concreteExitTxInput.beginTransaction with state := concreteExitDebit }
+      concreteExitTenv concreteExitTx = .ok concreteExitMessage := rfl
+
+theorem concreteExitMessage_code : concreteExitMessage.code.toList = code := by
+  change (concreteExitDebit.getCode concreteCreateTarget).toList = code
+  unfold concreteExitDebit
+  rw [State.setBal_getCode]
+  change ((concreteDripped.state.incrNonce concreteCreateSender).get concreteCreateTarget).code.toList = code
+  rw [State.incrNonce_get_code]
+  change (concreteDripped.state.getCode concreteCreateTarget).toList = code
+  rw [concreteDrippedCode, concreteJoinedCode, concreteDeploymentRoot.installed]
+  simp [ByteArray.toList_eq_toList_data]
+
+theorem concreteExitDebit_balance :
+    concreteExitDebit.bal concreteCreateSender = 999999999997823644 := by
+  unfold concreteExitDebit
+  change ((concreteDripped.state.incrNonce concreteCreateSender).setBal concreteCreateSender
+    ((concreteDripped.state.incrNonce concreteCreateSender).bal concreteCreateSender - 1000000)).bal _ = _
+  unfold State.bal
+  rw [State.setBal_get_self, State.incrNonce_get_bal]
+  change concreteDripped.state.bal concreteCreateSender - 1000000 = _
+  rw [concreteDrippedSenderBalance]
+  decide +kernel
+
+noncomputable def concreteExitEntry : Benv :=
+  concreteExitMessage.benv.withState
+    ((concreteExitDebit.setBal concreteCreateSender
+      (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0)
+
+theorem concreteExitEntry_run :
+    concreteExitMessage.benvAfterTransfer = .ok concreteExitEntry := by
+  unfold concreteExitEntry concreteExitMessage
+  generalize concreteExitDebit = debit
+  generalize concreteExitTxInput.beginTransaction = begun
+  generalize concreteExitTenv = tenv
+  have hnot : ¬ debit.bal concreteCreateSender < (0 : B256) := by
+    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero]
+    omega
+  simp only [Msg.benvAfterTransfer, if_true, Benv.subBal, State.subBal, hnot, if_false,
+    bind, Option.bind, Option.toExcept, Except.bind, Benv.addBal, Benv.withState]
+
+theorem concreteExitEntry_storage (address : Adr) :
+    (concreteExitEntry.state.get address).stor = (concreteDripped.state.get address).stor := by
+  change (((concreteExitDebit.setBal _ _).addBal _ _).get address).stor = _
+  unfold State.addBal
+  rw [State.setBal_get_stor, State.setBal_get_stor]
+  unfold concreteExitDebit
+  dsimp only
+  rw [State.setBal_get_stor, State.incrNonce_get_stor]
+
+
+noncomputable def concreteExitSevm : Sevm := initSevm (concreteExitMessage.withBenv concreteExitEntry)
+noncomputable def concreteExitDevm : Devm := initDevm (concreteExitMessage.withBenv concreteExitEntry)
+
+theorem concreteExitDevm_chi : concreteExitDevm.getStorVal concreteCreateTarget chiSlot = concreteDripChi := by
+  change (concreteExitEntry.state.get concreteCreateTarget).stor.get chiSlot = concreteDripChi
+  rw [concreteExitEntry_storage]
+  exact concreteDripped_values.1
+
+theorem concreteExitDevm_rho : concreteExitDevm.getStorVal concreteCreateTarget rhoSlot = 5 := by
+  change (concreteExitEntry.state.get concreteCreateTarget).stor.get rhoSlot = 5
+  rw [concreteExitEntry_storage]
+  exact concreteDripped_values.2.1
+
+theorem concreteExitDevm_cold (k : B256) :
+    (concreteCreateTarget, k) ∉ concreteExitDevm.accessedStorageKeys := by
+  change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
+  simp
+
+theorem concreteJoinedTargetBalance : concreteJoined.state.bal concreteCreateTarget = 100 := by
+  have hm : concreteJoinMessageState.bal concreteCreateTarget = concreteJoinEntry.state.bal concreteCreateTarget := by
+    unfold concreteJoinMessageState concreteJoinRuntimePost
+    rw [Devm.withOutput_state, Devm.setMach_state]
+    have hs (d : Devm) (k v : B256) :
+        (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget =
+          d.getBal concreteCreateTarget :=
+      (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
+    change (concreteJoinTotalBase).getBal concreteCreateTarget = _
+    unfold concreteJoinTotalBase
+    rw [hs]
+    change (concreteJoinRowBase).getBal concreteCreateTarget = _
+    unfold concreteJoinRowBase
+    rw [hs]
+    change (concreteJoinRhoBase).getBal concreteCreateTarget = _
+    unfold concreteJoinRhoBase
+    rw [hs]
+    change (concreteJoinChiBase).getBal concreteCreateTarget = _
+    unfold concreteJoinChiBase
+    rw [hs]
+    rfl
+  have hz : (0 : Adr) ≠ concreteCreateTarget := by decide +kernel
+  have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
+  change (concreteJoinTransactionState.get concreteCreateTarget).bal = _
+  unfold concreteJoinTransactionState deploymentFinalState
+  change (((concreteJoinMessageState.addBal concreteCreateSender 847712).addBal 0 76144).get
+    concreteCreateTarget).bal = _
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_ne ht]
+  change concreteJoinMessageState.bal concreteCreateTarget = _
+  rw [hm]
+  change (((concreteJoinDebit.setBal concreteCreateSender
+    (concreteJoinDebit.bal concreteCreateSender - 100)).addBal concreteCreateTarget 100).get
+    concreteCreateTarget).bal = _
+  simp only [State.addBal, State.setBal_get_self, State.setBal_get_ne ht, Acct.withBal]
+  simp only [State.bal, State.setBal_get_ne ht]
+  change concreteJoinDebit.bal concreteCreateTarget + 100 = _
+  unfold concreteJoinDebit State.bal
+  rw [State.setBal_get_ne ht, State.incrNonce_get_bal]
+  change concreteDeployed.state.bal concreteCreateTarget + 100 = _
+  rw [concreteDeploymentRoot.bal]
+  decide +kernel
+
+theorem concreteDrippedTargetBalance : concreteDripped.state.bal concreteCreateTarget = 100 := by
+  have hm : concreteDripMessageState.bal concreteCreateTarget = concreteDripEntry.state.bal concreteCreateTarget := by
+    unfold concreteDripMessageState concreteDripRuntimePost
+    rw [Devm.withOutput_state, Devm.setMach_state]
+    have hs (d : Devm) (k v : B256) :
+        (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget =
+          d.getBal concreteCreateTarget :=
+      (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
+    change (concreteDripRhoBase).getBal concreteCreateTarget = _
+    unfold concreteDripRhoBase
+    rw [hs]
+    change (concreteDripChiBase).getBal concreteCreateTarget = _
+    unfold concreteDripChiBase
+    rw [hs]
+    rfl
+  have hz : (0 : Adr) ≠ concreteCreateTarget := by decide +kernel
+  have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
+  change (concreteDripTransactionState.get concreteCreateTarget).bal = _
+  unfold concreteDripTransactionState deploymentFinalState
+  change (((concreteDripMessageState.addBal concreteCreateSender 935850).addBal 0 32075).get
+    concreteCreateTarget).bal = _
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_ne ht]
+  change concreteDripMessageState.bal concreteCreateTarget = _
+  rw [hm]
+  change (((concreteDripDebit.setBal concreteCreateSender
+    (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+    concreteCreateTarget).bal = _
+  simp only [State.addBal, State.setBal_get_self, State.setBal_get_ne ht, Acct.withBal]
+  simp only [State.bal, State.setBal_get_ne ht]
+  change concreteDripDebit.bal concreteCreateTarget + 0 = _
+  unfold concreteDripDebit State.bal
+  rw [State.setBal_get_ne ht, State.incrNonce_get_bal]
+  change concreteJoined.state.bal concreteCreateTarget + 0 = _
+  rw [concreteJoinedTargetBalance]
+  decide +kernel
+
+theorem concreteExitDevm_balance : concreteExitDevm.getBal concreteCreateTarget = 100 := by
+  have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
+  change (((concreteExitDebit.setBal concreteCreateSender
+    (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+    concreteCreateTarget).bal = _
+  simp only [State.addBal, State.setBal_get_self, State.setBal_get_ne ht, Acct.withBal]
+  simp only [State.bal, State.setBal_get_ne ht]
+  change concreteExitDebit.bal concreteCreateTarget + 0 = _
+  unfold concreteExitDebit State.bal
+  rw [State.setBal_get_ne ht, State.incrNonce_get_bal]
+  change concreteDripped.state.bal concreteCreateTarget + 0 = _
+  rw [concreteDrippedTargetBalance]
+  decide +kernel
+
+def concreteExitArgumentMemory : Mem :=
+  ((Mem.empty.write 64 (40 : B256).toBytes).write 96 (99 : B256).toBytes).write 128 (99 : B256).toBytes
+
+def concreteExitStagingMemory : Mem := concreteExitArgumentMemory.write 32 (2 : B256).toBytes
+
+private theorem concreteExit_stage (base post : Devm) (G : Nat)
+    (hrow : base.getStorVal concreteCreateTarget concreteCreateSender.toB256 = 99)
+    (htotal : base.getStorVal concreteCreateTarget totalUnitsSlot = 99)
+    (hcoldRow : (concreteCreateTarget, concreteCreateSender.toB256) ∉ base.accessedStorageKeys)
+    (hcoldTotal : (concreteCreateTarget, totalUnitsSlot) ∉ base.accessedStorageKeys)
+    (hfresh : Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      ((concreteJoinStagingBase base).setMach ⟨[], concreteExitStagingMemory, G⟩)
+      freshStart post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      (base.setMach ⟨[], Mem.empty, G + 4387⟩) exit post := by
+  have harg : Sevm.dataWord concreteExitSevm (32 * 0 + 4) = 40 := by
+    change Bytes.toB256 (concreteExitTx.data.sliceD 4 32 0) = 40
+    decide +kernel
+  func_run (2)
+  rw [harg]
+  func_run (7) [9, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  func_run (1)
+  simp only [Devm.getStorVal_setMach]
+  change Func.RunCompiled _ concreteExitSevm
+    ((addAccessedStorageKey _ concreteCreateTarget concreteCreateSender.toB256).setMach
+      ⟨[base.getStorVal concreteCreateTarget concreteCreateSender.toB256],
+        Mem.empty.write 64 (40 : B256).toBytes, G + 4387 - 2145⟩) _ post
+  rw [hrow]
+  func_run (7) [3, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  change Func.RunCompiled _ concreteExitSevm
+    ((addAccessedStorageKey base concreteCreateTarget concreteCreateSender.toB256).setMach
+      ⟨[totalUnitsSlot], (Mem.empty.write 64 (40 : B256).toBytes).write 96 (99 : B256).toBytes,
+        G + 4387 - 2179⟩) _ post
+  func_run (1)
+  · change (concreteCreateTarget, totalUnitsSlot) ∉
+      base.accessedStorageKeys.insert (concreteCreateTarget, concreteCreateSender.toB256)
+    simp only [Std.HashSet.mem_insert]
+    exact not_or.mpr ⟨by decide +kernel, hcoldTotal⟩
+  change Func.RunCompiled _ concreteExitSevm
+    ((concreteJoinStagingBase base).setMach
+      ⟨[base.getStorVal concreteCreateTarget totalUnitsSlot],
+        (Mem.empty.write 64 (40 : B256).toBytes).write 96 (99 : B256).toBytes,
+        G + 4387 - 4279⟩) _ post
+  rw [htotal]
+  func_run (6) [3, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  change Func.RunCompiled _ concreteExitSevm
+    ((concreteJoinStagingBase base).setMach ⟨[], concreteExitArgumentMemory, G + 4387 - 4310⟩) _ post
+  have hs : concreteExitArgumentMemory.size = 160 := by decide +kernel
+  have ha : Bytes.toB256 (concreteExitArgumentMemory.read 64 32).1 = 40 := by decide +kernel
+  have hr : Bytes.toB256 (concreteExitArgumentMemory.read 96 32).1 = 99 := by decide +kernel
+  have ht : Bytes.toB256 (concreteExitArgumentMemory.read 128 32).1 = 99 := by decide +kernel
+  have hm (n : Nat) (hn : n + 32 ≤ 160) :
+      (concreteExitArgumentMemory.read n 32).2 = concreteExitArgumentMemory :=
+    Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by decide) hn)
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hs]
+    decide +kernel
+  rw [show (argumentWord * 32).toNat = 64 by decide +kernel, ha, hm 64 (by decide)]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hs]
+    decide +kernel
+  rw [show (rowWord * 32).toNat = 96 by decide +kernel, hr, hm 96 (by decide)]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hs]
+    decide +kernel
+  rw [show (argumentWord * 32).toNat = 64 by decide +kernel, ha, hm 64 (by decide)]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hs]
+    decide +kernel
+  rw [show (totalWord * 32).toNat = 128 by decide +kernel, ht, hm 128 (by decide)]
+  func_run (2) [0]
+  func_run (3) [0]
+  · simp only [Devm.extCost, Devm.memory_setMach]
+    decide +kernel
+  change Func.RunCompiled _ concreteExitSevm
+    ((concreteJoinStagingBase base).setMach ⟨[], concreteExitStagingMemory, G + 4387 - 4375⟩)
+    (.call freshStartSlot) post
+  apply Func.runCompiled_call' (f := freshStart) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hfresh
+
+private theorem concreteExit_readChi (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat) (next : Func)
+    (hchi : base.getStorVal sevm.currentTarget chiSlot = concreteDripChi)
+    (hcold : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      ((addAccessedStorageKey base sevm.currentTarget chiSlot).setMach ⟨[concreteDripChi], M, G⟩)
+      next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], M, G + 2103⟩)
+      (Ninst.pushB256 chiSlot ::: Ninst.sload ::: next) post := by
+  func_run (2)
+  change Func.RunCompiled _ sevm
+    ((addAccessedStorageKey base sevm.currentTarget chiSlot).setMach
+      ⟨[base.getStorVal sevm.currentTarget chiSlot], M, G + 2103 - 2103⟩) next post
+  simpa only [hchi, Nat.add_sub_cancel] using htail
+
+
+private theorem concreteExit_stageClock (sevm : Sevm) (base post : Devm) (M C : Mem)
+    (G : Nat) (next : Func) (htime : sevm.benvStat.time = 6)
+    (hsize : M.size = 160)
+    (hstore : M.write (storedChiWord * 32).toNat concreteDripChi.toBytes = C)
+    (hcsize : C.size = 192)
+    (hread : Bytes.toB256 (C.read (storedChiWord * 32).toNat 32).1 = concreteDripChi)
+    (hmem : (C.read (storedChiWord * 32).toNat 32).2 = C)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], C.write 192 (6 : B256).toBytes, G⟩) next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[concreteDripChi], M, G + 70⟩)
+      (mstoreAt storedChiWord +++
+        (Ninst.pushB256 scale ::: loadWord storedChiWord +++ Ninst.lt :::
+          (.revert <?>
+            (loadWord storedChiWord +++ Ninst.pushB256 maxChi ::: Ninst.lt :::
+              (.revert <?> (Ninst.timestamp ::: mstoreAt nowWord +++ next)))))) post := by
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hstore]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  rw [hread, hmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  rw [hread, hmem]
+  func_run (3) [0]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hcsize]
+    decide +kernel
+  rw [htime]
+  change Func.RunCompiled _ sevm
+    (base.setMach ⟨[], C.write 192 (6 : B256).toBytes, G + 70 - 70⟩) next post
+  simpa only [Nat.add_sub_cancel] using htail
+
+private theorem concreteExit_stageElapsed (sevm : Sevm) (base post : Devm) (M E : Mem)
+    (G : Nat) (next : Func)
+    (hrho : base.getStorVal sevm.currentTarget rhoSlot = 5)
+    (hcold : (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys)
+    (hsize : M.size = 224)
+    (hnow : Bytes.toB256 (M.read (nowWord * 32).toNat 32).1 = 6)
+    (hmem : (M.read (nowWord * 32).toNat 32).2 = M)
+    (hstore : M.write (exponentWord * 32).toNat (1 : B256).toBytes = E)
+    (hesize : E.size = 224)
+    (hexp : Bytes.toB256 (E.read (exponentWord * 32).toNat 32).1 = 1)
+    (hemem : (E.read (exponentWord * 32).toNat 32).2 = E)
+    (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      ((addAccessedStorageKey base sevm.currentTarget rhoSlot).setMach ⟨[], E, G⟩)
+      next post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], M, G + 2166⟩)
+      (Ninst.pushB256 rhoSlot ::: Ninst.sload ::: Ninst.dup 0 :::
+        loadWord nowWord +++ Ninst.lt :::
+          (.revert <?> (loadWord nowWord +++ Ninst.sub :::
+            mstoreAt exponentWord +++ loadWord exponentWord +++
+            Ninst.pushB256 maxElapsed ::: Ninst.lt ::: (.revert <?> next)))) post := by
+  func_run (2)
+  change Func.RunCompiled _ sevm
+    ((addAccessedStorageKey base sevm.currentTarget rhoSlot).setMach
+      ⟨[base.getStorVal sevm.currentTarget rhoSlot], M, G + 2166 - 2103⟩) _ post
+  rw [hrho]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hnow, hmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hnow, hmem]
+  func_run (3) [1, 0]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hstore]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hesize]
+    decide +kernel
+  rw [hexp, hemem]
+  func_run (3) [0]
+  simpa only [Nat.add_sub_cancel] using htail
+
+private theorem concreteExit_initializeRpow (sevm : Sevm) (base post : Devm) (M B A Z : Mem)
+    (G : Nat) (zeroBase zeroExponent evenExponent : Func)
+    (hsize : M.size = 224)
+    (hbase : M.write (baseWord * 32).toNat rate.toBytes = B)
+    (hbsize : B.size = 256)
+    (hbexp : Bytes.toB256 (B.read (exponentWord * 32).toNat 32).1 = 1)
+    (hbmem : (B.read (exponentWord * 32).toNat 32).2 = B)
+    (hacc : B.write (accumulatorWord * 32).toNat rate.toBytes = A)
+    (hasize : A.size = 288)
+    (haexp : Bytes.toB256 (A.read (exponentWord * 32).toNat 32).1 = 1)
+    (hamem : (A.read (exponentWord * 32).toNat 32).2 = A)
+    (hzero : A.write (exponentWord * 32).toNat (0 : B256).toBytes = Z)
+    (hloop : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Z, G⟩) rpowLoop post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], M, G + 122⟩)
+      (Ninst.pushB256 rate ::: Ninst.dup 0 ::: mstoreAt baseWord +++ Ninst.iszero :::
+        (zeroBase <?> (loadWord exponentWord +++ Ninst.iszero :::
+          (zeroExponent <?> (loadWord exponentWord +++ Ninst.pushB256 1 ::: Ninst.and :::
+            ((Ninst.pushB256 rate ::: mstoreAt accumulatorWord +++ loadWord exponentWord +++
+              Ninst.pushB256 2 ::: Ninst.swap 0 ::: Ninst.div ::: mstoreAt exponentWord +++
+              .call rpowLoopSlot) <?> evenExponent)))))) post := by
+  func_run (4) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hbase]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hbexp, hbmem]
+  func_run (2) [0]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hbexp, hbmem]
+  func_run (3) [1]
+  func_run (3) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hbsize]
+    decide +kernel
+  rw [hacc]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hasize]
+    decide +kernel
+  rw [haexp, hamem]
+  func_run (5) [0, 0]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  · simp only [Devm.extCost, Devm.memory_setMach, hasize]
+    decide +kernel
+  rw [hzero]
+  apply Func.runCompiled_call' (f := rpowLoop) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hloop
+
+
+def concreteExitClockMemory : Mem :=
+  (concreteExitStagingMemory.write 160 concreteDripChi.toBytes).write 192 (6 : B256).toBytes
+def concreteExitExponentMemory : Mem := concreteExitClockMemory.write 0 (1 : B256).toBytes
+def concreteExitBaseMemory : Mem := concreteExitExponentMemory.write 224 rate.toBytes
+def concreteExitAccumulatorMemory : Mem := concreteExitBaseMemory.write 256 rate.toBytes
+def concreteExitLoopMemory : Mem := concreteExitAccumulatorMemory.write 0 (0 : B256).toBytes
+
+private theorem concreteExit_stagingSize : concreteExitStagingMemory.size = 160 := by decide +kernel
+
+private theorem concreteExit_chiMemoryFacts :
+    (concreteExitStagingMemory.write 160 concreteDripChi.toBytes).size = 192 ∧
+    Bytes.toB256 ((concreteExitStagingMemory.write 160 concreteDripChi.toBytes).read 160 32).1 = concreteDripChi ∧
+    ((concreteExitStagingMemory.write 160 concreteDripChi.toBytes).read 160 32).2 =
+      concreteExitStagingMemory.write 160 concreteDripChi.toBytes := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteExit_clockMemoryFacts : concreteExitClockMemory.size = 224 ∧
+    Bytes.toB256 (concreteExitClockMemory.read 192 32).1 = 6 ∧
+    (concreteExitClockMemory.read 192 32).2 = concreteExitClockMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteExit_exponentMemoryFacts : concreteExitExponentMemory.size = 224 ∧
+    Bytes.toB256 (concreteExitExponentMemory.read 0 32).1 = 1 ∧
+    (concreteExitExponentMemory.read 0 32).2 = concreteExitExponentMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteExit_baseMemoryFacts : concreteExitBaseMemory.size = 256 ∧
+    Bytes.toB256 (concreteExitBaseMemory.read 0 32).1 = 1 ∧
+    (concreteExitBaseMemory.read 0 32).2 = concreteExitBaseMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+private theorem concreteExit_accumulatorMemoryFacts : concreteExitAccumulatorMemory.size = 288 ∧
+    Bytes.toB256 (concreteExitAccumulatorMemory.read 0 32).1 = 1 ∧
+    (concreteExitAccumulatorMemory.read 0 32).2 = concreteExitAccumulatorMemory := by
+  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+
+theorem concreteExit_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
+    (htime : sevm.benvStat.time = 6)
+    (hchi : base.getStorVal sevm.currentTarget chiSlot = concreteDripChi)
+    (hrho : base.getStorVal sevm.currentTarget rhoSlot = 5)
+    (hcoldChi : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
+    (hcoldRho : (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys)
+    (hloop : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      ((concreteDripFreshBase sevm base).setMach ⟨[], concreteExitLoopMemory, G⟩)
+      rpowLoop post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], concreteExitStagingMemory, G + 122 + 2166 + 70 + 2103⟩)
+      freshStart post := by
+  apply concreteExit_readChi sevm _ _ _ _ _ hchi hcoldChi
+  apply concreteExit_stageClock (sevm := sevm) (C := concreteExitStagingMemory.write 160 concreteDripChi.toBytes)
+  · exact htime
+  · exact concreteExit_stagingSize
+  · rfl
+  · exact concreteExit_chiMemoryFacts.1
+  · exact concreteExit_chiMemoryFacts.2.1
+  · exact concreteExit_chiMemoryFacts.2.2
+  apply concreteExit_stageElapsed (E := concreteExitExponentMemory)
+  · exact hrho
+  · change (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys.insert
+      (sevm.currentTarget, chiSlot)
+    simp only [Std.HashSet.mem_insert]
+    exact not_or.mpr ⟨by simp only [beq_iff_eq, Prod.mk.injEq, true_and]; decide +kernel, hcoldRho⟩
+  · exact concreteExit_clockMemoryFacts.1
+  · exact concreteExit_clockMemoryFacts.2.1
+  · exact concreteExit_clockMemoryFacts.2.2
+  · rfl
+  · exact concreteExit_exponentMemoryFacts.1
+  · exact concreteExit_exponentMemoryFacts.2.1
+  · exact concreteExit_exponentMemoryFacts.2.2
+  apply concreteExit_initializeRpow (B := concreteExitBaseMemory)
+    (A := concreteExitAccumulatorMemory) (Z := concreteExitLoopMemory)
+  · exact concreteExit_exponentMemoryFacts.1
+  · rfl
+  · exact concreteExit_baseMemoryFacts.1
+  · exact concreteExit_baseMemoryFacts.2.1
+  · exact concreteExit_baseMemoryFacts.2.2
+  · rfl
+  · exact concreteExit_accumulatorMemoryFacts.1
+  · exact concreteExit_accumulatorMemoryFacts.2.1
+  · exact concreteExit_accumulatorMemoryFacts.2.2
+  · rfl
+  exact hloop
+
+
+def concreteExitChi : B256 := 1000000007735629813252049571
+
+private def concreteExitLoopImage : Bytes :=
+  (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt [] 64 (40 : B256).toBytes) 96 (99 : B256).toBytes) 128 (99 : B256).toBytes) 32 (2 : B256).toBytes) 160 concreteDripChi.toBytes) 192 (6 : B256).toBytes) 0 (1 : B256).toBytes) 224 rate.toBytes) 256 rate.toBytes) 0 (0 : B256).toBytes)
+
+private theorem concreteExit_loopReads : Mem.Reads concreteExitLoopMemory concreteExitLoopImage := by
+  unfold concreteExitLoopMemory concreteExitAccumulatorMemory concreteExitBaseMemory concreteExitExponentMemory concreteExitClockMemory concreteExitStagingMemory concreteExitArgumentMemory concreteExitLoopImage
+  repeat' first | apply Mem.Reads.write | apply Mem.Wf.write | exact Mem.wf_empty | exact Mem.reads_empty
+
+private theorem concreteExit_loopSize : concreteExitLoopMemory.size = 288 := by
+  unfold concreteExitLoopMemory
+  rw [Mem.size_write_of_le (by rw [B256.length_toBytes, concreteExit_accumulatorMemoryFacts.1]; decide)]
+  exact concreteExit_accumulatorMemoryFacts.1
+
+private theorem concreteExit_loopUnchanged (i : Nat) (h : i + 32 ≤ 288) :
+    (concreteExitLoopMemory.read i 32).2 = concreteExitLoopMemory := by
+  apply Mem.read_snd_eq_self
+  rw [concreteExit_loopSize]
+  exact memExtSize_of_le (by decide) h
+
+private theorem concreteExit_loopRead0 :
+    Bytes.toB256 (concreteExitLoopMemory.read 0 32).1 = (0 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead32 :
+    Bytes.toB256 (concreteExitLoopMemory.read 32 32).1 = (2 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 192 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 32 160 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead64 :
+    Bytes.toB256 (concreteExitLoopMemory.read 64 32).1 = (40 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 192 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 160 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 32 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 128 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 64 96 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead96 :
+    Bytes.toB256 (concreteExitLoopMemory.read 96 32).1 = (99 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 192 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 160 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 32 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 96 128 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead128 :
+    Bytes.toB256 (concreteExitLoopMemory.read 128 32).1 = (99 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 192 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 160 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 128 32 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead160 :
+    Bytes.toB256 (concreteExitLoopMemory.read 160 32).1 = concreteDripChi := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 160 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 160 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 160 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 160 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 160 192 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead192 :
+    Bytes.toB256 (concreteExitLoopMemory.read 192 32).1 = (6 : B256) := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 192 0 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 192 256 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 192 224 _ (by decide)]
+  rw [Bytes.readWord_writeAt_of_disjoint _ 192 0 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_loopRead256 :
+    Bytes.toB256 (concreteExitLoopMemory.read 256 32).1 = rate := by
+  rw [concreteExit_loopReads.read]
+  unfold concreteExitLoopImage
+  rw [Bytes.readWord_writeAt_of_disjoint _ 256 0 _ (by decide)]
+  exact Bytes.readWord_writeAt_self _ _ _
+
+private theorem concreteExit_composeFresh (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hsize : M.size = 288)
+    (hchi : Bytes.toB256 (M.read (storedChiWord * 32).toNat 32).1 = concreteDripChi)
+    (hchiMem : (M.read (storedChiWord * 32).toNat 32).2 = M)
+    (hfactor : Bytes.toB256 (M.read (accumulatorWord * 32).toNat 32).1 = rate)
+    (hfactorMem : (M.read (accumulatorWord * 32).toNat 32).2 = M)
+    (hroute : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[concreteExitChi], M, G⟩) freshRoute post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], M, G + 104⟩) composeFresh post := by
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hchi, hchiMem]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hfactor, hfactorMem]
+  func_run (4) [concreteDripChi * rate, 3]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hfactor, hfactorMem]
+  func_run (4) [concreteDripChi, 3]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hchi, hchiMem]
+  func_run (3) [1, 0]
+  func_run (7) [concreteExitChi, 0]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  apply Func.runCompiled_call' (f := freshRoute) (G := G) rfl
+  · simp only [Devm.stack_setMach]
+    decide
+  · simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest]
+    omega
+  · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using hroute
+
+private theorem concreteExit_freshRoute (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hsize : M.size = 288)
+    (hroute : Bytes.toB256 (M.read (routeWord * 32).toNat 32).1 = routeExit)
+    (hmem : (M.read (routeWord * 32).toNat 32).2 = M)
+    (hexit : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[concreteExitChi], M, G⟩) afterExit post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[concreteExitChi], M, G + 53⟩) freshRoute post := by
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hroute, hmem]
+  func_run (9) [0, 1]
+  simpa only [Nat.add_sub_cancel] using hexit
+
+
+private theorem concreteExit_beforeCall (sevm : Sevm) (base C R U T post : Devm) (M : Mem) (G : Nat)
+    (hstatic : sevm.isStatic = false) (hsize : M.size = 288)
+    (harg : Bytes.toB256 (M.read (argumentWord * 32).toNat 32).1 = 40)
+    (hargMem : (M.read (argumentWord * 32).toNat 32).2 = M)
+    (hrow : Bytes.toB256 (M.read (rowWord * 32).toNat 32).1 = 99)
+    (hrowMem : (M.read (rowWord * 32).toNat 32).2 = M)
+    (htotal : Bytes.toB256 (M.read (totalWord * 32).toNat 32).1 = 99)
+    (htotalMem : (M.read (totalWord * 32).toNat 32).2 = M)
+    (hnow : Bytes.toB256 (M.read (nowWord * 32).toNat 32).1 = 6)
+    (hnowMem : (M.read (nowWord * 32).toNat 32).2 = M)
+    (hchiCost : sstoreCost sevm base chiSlot concreteExitChi = 2900)
+    (hchi : afterSstore sevm base chiSlot concreteExitChi = C)
+    (hrhoCost : sstoreCost sevm C rhoSlot 6 = 2900)
+    (hrho : afterSstore sevm C rhoSlot 6 = R)
+    (hrowCost : sstoreCost sevm R sevm.caller.toB256 59 = 2900)
+    (hrowStore : afterSstore sevm R sevm.caller.toB256 59 = U)
+    (htotalCost : sstoreCost sevm U totalUnitsSlot 59 = 2900)
+    (htotalStore : afterSstore sevm U totalUnitsSlot 59 = T)
+    (hcall : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (T.setMach ⟨[40], M, G⟩)
+      (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[concreteExitChi], M, G + 11675⟩) afterExit post := by
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [harg, hargMem]
+  func_run (5) [concreteExitChi * 40, 40]
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  · simp only [Devm.gasLeft_setMach, gLow]
+    omega
+  func_run (2)
+  rw [show G + 11675 - 31 = (G + 8744) + 2900 by omega]
+  refine Func.RunCompiled.next (devm' := C.setMach ⟨[40], M, G + 8744⟩) ?_ ?_
+  · simpa only [hchiCost, hchi] using
+      (Ninst.runCompiled_sstore_selected_setMach (sevm := sevm) (base := base)
+        (key := chiSlot) (value := concreteExitChi) (stack := [40]) (memory := M) (G := G + 8744)
+        (by rw [hchiCost]; simp only [gCallStipend]; omega) hstatic)
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hnow, hnowMem]
+  func_run (1)
+  rw [show G + 8744 - 9 = (G + 5835) + 2900 by omega]
+  refine Func.RunCompiled.next (devm' := R.setMach ⟨[40], M, G + 5835⟩) ?_ ?_
+  · simpa only [hrhoCost, hrho] using
+      (Ninst.runCompiled_sstore_selected_setMach (sevm := sevm) (base := C)
+        (key := rhoSlot) (value := 6) (stack := [40]) (memory := M) (G := G + 5835)
+        (by rw [hrhoCost]; simp only [gCallStipend]; omega) hstatic)
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [harg, hargMem]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [hrow, hrowMem]
+  func_run (2) [59]
+  rw [show G + 5835 - 17 = (G + 2918) + 2900 by omega]
+  refine Func.RunCompiled.next (devm' := U.setMach ⟨[40], M, G + 2918⟩) ?_ ?_
+  · simpa only [hrowCost, hrowStore] using
+      (Ninst.runCompiled_sstore_selected_setMach (sevm := sevm) (base := R)
+        (key := sevm.caller.toB256) (value := 59) (stack := [40]) (memory := M) (G := G + 2918)
+        (by rw [hrowCost]; simp only [gCallStipend]; omega) hstatic)
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [harg, hargMem]
+  func_run (2) [3]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  rw [htotal, htotalMem]
+  func_run (2) [59]
+  rw [show G + 2918 - 18 = G + 2900 by omega]
+  refine Func.RunCompiled.next (devm' := T.setMach ⟨[40], M, G⟩) ?_ ?_
+  · simpa only [htotalCost, htotalStore] using
+      (Ninst.runCompiled_sstore_selected_setMach (sevm := sevm) (base := U)
+        (key := totalUnitsSlot) (value := 59) (stack := [40]) (memory := M) (G := G)
+        (by rw [htotalCost]; simp only [gCallStipend]; omega) hstatic)
+  exact hcall
+
+theorem concreteExitDevm_units :
+    concreteExitDevm.getStorVal concreteCreateTarget concreteCreateSender.toB256 = 99 ∧
+    concreteExitDevm.getStorVal concreteCreateTarget totalUnitsSlot = 99 := by
+  change (concreteExitEntry.state.get concreteCreateTarget).stor.get concreteCreateSender.toB256 = 99 ∧
+    (concreteExitEntry.state.get concreteCreateTarget).stor.get totalUnitsSlot = 99
+  rw [concreteExitEntry_storage]
+  exact concreteDripped_values.2.2
+
+noncomputable def concreteExitStorageBase : Devm :=
+  concreteDripFreshBase concreteExitSevm (concreteJoinStagingBase concreteExitDevm)
+noncomputable def concreteExitChiBase : Devm :=
+  (concreteExitStorageBase.withRefundCounter 0).setStorVal concreteCreateTarget chiSlot concreteExitChi
+noncomputable def concreteExitRhoBase : Devm :=
+  (concreteExitChiBase.withRefundCounter 0).setStorVal concreteCreateTarget rhoSlot 6
+noncomputable def concreteExitRowBase : Devm :=
+  (concreteExitRhoBase.withRefundCounter 0).setStorVal concreteCreateTarget concreteCreateSender.toB256 59
+noncomputable def concreteExitTotalBase : Devm :=
+  (concreteExitRowBase.withRefundCounter 0).setStorVal concreteCreateTarget totalUnitsSlot 59
+
+private theorem concreteExit_originalStorage (key : B256) :
+    getOrigStorVal concreteExitSevm concreteCreateTarget key =
+      (concreteDripped.state.getStor concreteCreateTarget).get key := by rfl
+
+private theorem concreteExitStorageBase_warm (key : B256)
+    (hk : key = chiSlot ∨ key = rhoSlot ∨ key = concreteCreateSender.toB256 ∨ key = totalUnitsSlot) :
+    (concreteCreateTarget, key) ∈ concreteExitStorageBase.accessedStorageKeys := by
+  change (concreteCreateTarget, key) ∈ (((concreteExitDevm.accessedStorageKeys.insert
+    (concreteCreateTarget, concreteCreateSender.toB256)).insert (concreteCreateTarget, totalUnitsSlot)).insert
+      (concreteCreateTarget, chiSlot)).insert (concreteCreateTarget, rhoSlot)
+  rcases hk with rfl | rfl | rfl | rfl <;> simp
+
+private theorem concreteExit_chiStore :
+    sstoreCost concreteExitSevm concreteExitStorageBase chiSlot concreteExitChi = 2900 ∧
+    afterSstore concreteExitSevm concreteExitStorageBase chiSlot concreteExitChi = concreteExitChiBase := by
+  have ht : concreteExitSevm.currentTarget = concreteCreateTarget := rfl
+  have hw : (concreteCreateTarget, chiSlot) ∈ concreteExitStorageBase.accessedStorageKeys := by
+    exact concreteExitStorageBase_warm chiSlot (Or.inl rfl)
+  have hr : concreteExitStorageBase.refundCounter = 0 := rfl
+  have hv : concreteExitStorageBase.getStorVal concreteCreateTarget chiSlot = concreteDripChi := by
+    change (Devm.getStor concreteExitStorageBase concreteCreateTarget).get chiSlot = _
+    exact concreteExitDevm_chi
+  have hc : sstoreValueCost concreteDripChi concreteDripChi concreteExitChi = 2900 := by decide +kernel
+  have hf : sstoreNewRefundCounter concreteExitChi concreteDripChi concreteDripChi 0 = 0 := by decide +kernel
+  constructor
+  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_originalStorage,
+      concreteDripped_values.1, hv, hc]
+  · simp only [afterSstore, ht, hw, if_pos, concreteExit_originalStorage,
+      concreteDripped_values.1, hv, hr, hf]
+    rfl
+
+private theorem concreteExit_rhoStore :
+    sstoreCost concreteExitSevm concreteExitChiBase rhoSlot 6 = 2900 ∧
+    afterSstore concreteExitSevm concreteExitChiBase rhoSlot 6 = concreteExitRhoBase := by
+  have ht : concreteExitSevm.currentTarget = concreteCreateTarget := rfl
+  have hw : (concreteCreateTarget, rhoSlot) ∈ concreteExitChiBase.accessedStorageKeys := by
+    rw [concreteExitChiBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    exact concreteExitStorageBase_warm rhoSlot (Or.inr (Or.inl rfl))
+  have hr : concreteExitChiBase.refundCounter = 0 := rfl
+  have hv : concreteExitChiBase.getStorVal concreteCreateTarget rhoSlot = 5 := by
+    change (Devm.getStor concreteExitChiBase concreteCreateTarget).get rhoSlot = _
+    unfold concreteExitChiBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    exact concreteExitDevm_rho
+  have hc : sstoreValueCost 5 5 6 = 2900 := by decide +kernel
+  have hf : sstoreNewRefundCounter 6 5 5 0 = 0 := by decide +kernel
+  constructor
+  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_originalStorage,
+      concreteDripped_values.2.1, hv, hc]
+  · simp only [afterSstore, ht, hw, if_pos, concreteExit_originalStorage,
+      concreteDripped_values.2.1, hv, hr, hf]
+    rfl
+
+private theorem concreteExit_rowStore :
+    sstoreCost concreteExitSevm concreteExitRhoBase concreteCreateSender.toB256 59 = 2900 ∧
+    afterSstore concreteExitSevm concreteExitRhoBase concreteCreateSender.toB256 59 = concreteExitRowBase := by
+  have ht : concreteExitSevm.currentTarget = concreteCreateTarget := rfl
+  have hw : (concreteCreateTarget, concreteCreateSender.toB256) ∈ concreteExitRhoBase.accessedStorageKeys := by
+    rw [concreteExitRhoBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    rw [concreteExitChiBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    exact concreteExitStorageBase_warm concreteCreateSender.toB256 (Or.inr (Or.inr (Or.inl rfl)))
+  have hr : concreteExitRhoBase.refundCounter = 0 := rfl
+  have hv : concreteExitRhoBase.getStorVal concreteCreateTarget concreteCreateSender.toB256 = 99 := by
+    change (Devm.getStor concreteExitRhoBase concreteCreateTarget).get concreteCreateSender.toB256 = _
+    unfold concreteExitRhoBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    unfold concreteExitChiBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    exact concreteExitDevm_units.1
+  have hc : sstoreValueCost 99 99 59 = 2900 := by decide +kernel
+  have hf : sstoreNewRefundCounter 59 99 99 0 = 0 := by decide +kernel
+  constructor
+  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_originalStorage,
+      concreteDripped_values.2.2.1, hv, hc]
+  · simp only [afterSstore, ht, hw, if_pos, concreteExit_originalStorage,
+      concreteDripped_values.2.2.1, hv, hr, hf]
+    rfl
+
+private theorem concreteExit_totalStore :
+    sstoreCost concreteExitSevm concreteExitRowBase totalUnitsSlot 59 = 2900 ∧
+    afterSstore concreteExitSevm concreteExitRowBase totalUnitsSlot 59 = concreteExitTotalBase := by
+  have ht : concreteExitSevm.currentTarget = concreteCreateTarget := rfl
+  have hw : (concreteCreateTarget, totalUnitsSlot) ∈ concreteExitRowBase.accessedStorageKeys := by
+    rw [concreteExitRowBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    rw [concreteExitRhoBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    rw [concreteExitChiBase, Devm.sstoreWarmBase_accessedStorageKeys]
+    exact concreteExitStorageBase_warm totalUnitsSlot (Or.inr (Or.inr (Or.inr rfl)))
+  have hr : concreteExitRowBase.refundCounter = 0 := rfl
+  have hv : concreteExitRowBase.getStorVal concreteCreateTarget totalUnitsSlot = 99 := by
+    change (Devm.getStor concreteExitRowBase concreteCreateTarget).get totalUnitsSlot = _
+    unfold concreteExitRowBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    unfold concreteExitRhoBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    unfold concreteExitChiBase
+    rw [setStorVal_getStor_self, Stor.get_set_ne _ (by decide +kernel), Devm.withRefundCounter_getStor]
+    exact concreteExitDevm_units.2
+  have hc : sstoreValueCost 99 99 59 = 2900 := by decide +kernel
+  have hf : sstoreNewRefundCounter 59 99 99 0 = 0 := by decide +kernel
+  constructor
+  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_originalStorage,
+      concreteDripped_values.2.2.2, hv, hc]
+  · simp only [afterSstore, ht, hw, if_pos, concreteExit_originalStorage,
+      concreteDripped_values.2.2.2, hv, hr, hf]
+    rfl
+
+private theorem concreteExit_prefix (G : Nat) (post : Devm)
+    (hcall : Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      (concreteExitTotalBase.setMach ⟨[40], concreteExitLoopMemory, G⟩)
+      (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      (concreteExitDevm.setMach ⟨[], Mem.empty, G + 20714⟩) exit post := by
+  change Func.RunCompiled _ _
+    (concreteExitDevm.setMach ⟨[], Mem.empty, G + 11675 + 53 + 104 + 34 + 122 + 2166 + 70 + 2103 + 4387⟩) _ _
+  apply concreteExit_stage
+  · exact concreteExitDevm_units.1
+  · exact concreteExitDevm_units.2
+  · exact concreteExitDevm_cold _
+  · exact concreteExitDevm_cold _
+  apply concreteExit_freshStart
+  · rfl
+  · exact concreteExitDevm_chi
+  · exact concreteExitDevm_rho
+  · change (concreteCreateTarget, chiSlot) ∉
+      (concreteExitDevm.accessedStorageKeys.insert
+        (concreteCreateTarget, concreteCreateSender.toB256)).insert (concreteCreateTarget, totalUnitsSlot)
+    simp only [Std.HashSet.mem_insert, concreteExitDevm_cold, or_false, not_or]
+    exact ⟨by decide +kernel, by decide +kernel⟩
+  · change (concreteCreateTarget, rhoSlot) ∉
+      (concreteExitDevm.accessedStorageKeys.insert
+        (concreteCreateTarget, concreteCreateSender.toB256)).insert (concreteCreateTarget, totalUnitsSlot)
+    simp only [Std.HashSet.mem_insert, concreteExitDevm_cold, or_false, not_or]
+    exact ⟨by decide +kernel, by decide +kernel⟩
+  apply concreteDrip_rpowZero
+  · exact concreteExit_loopSize
+  · exact concreteExit_loopRead0
+  · exact concreteExit_loopUnchanged 0 (by decide)
+  apply concreteExit_composeFresh
+  · exact concreteExit_loopSize
+  · exact concreteExit_loopRead160
+  · exact concreteExit_loopUnchanged 160 (by decide)
+  · exact concreteExit_loopRead256
+  · exact concreteExit_loopUnchanged 256 (by decide)
+  apply concreteExit_freshRoute
+  · exact concreteExit_loopSize
+  · exact concreteExit_loopRead32
+  · exact concreteExit_loopUnchanged 32 (by decide)
+  apply concreteExit_beforeCall _ concreteExitStorageBase concreteExitChiBase concreteExitRhoBase
+    concreteExitRowBase concreteExitTotalBase
+  · rfl
+  · exact concreteExit_loopSize
+  · exact concreteExit_loopRead64
+  · exact concreteExit_loopUnchanged 64 (by decide)
+  · exact concreteExit_loopRead96
+  · exact concreteExit_loopUnchanged 96 (by decide)
+  · exact concreteExit_loopRead128
+  · exact concreteExit_loopUnchanged 128 (by decide)
+  · exact concreteExit_loopRead192
+  · exact concreteExit_loopUnchanged 192 (by decide)
+  · exact concreteExit_chiStore.1
+  · exact concreteExit_chiStore.2
+  · exact concreteExit_rhoStore.1
+  · exact concreteExit_rhoStore.2
+  · exact concreteExit_rowStore.1
+  · exact concreteExit_rowStore.2
+  · exact concreteExit_totalStore.1
+  · exact concreteExit_totalStore.2
+  exact hcall
+
+theorem concreteExitTotalBase_balance : concreteExitTotalBase.getBal concreteCreateTarget = 100 := by
+  have hs (d : Devm) (k v : B256) :
+      (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget = d.getBal concreteCreateTarget :=
+    (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
+  unfold concreteExitTotalBase
+  rw [hs]
+  change concreteExitRowBase.getBal concreteCreateTarget = _
+  unfold concreteExitRowBase
+  rw [hs]
+  change concreteExitRhoBase.getBal concreteCreateTarget = _
+  unfold concreteExitRhoBase
+  rw [hs]
+  change concreteExitChiBase.getBal concreteCreateTarget = _
+  unfold concreteExitChiBase
+  rw [hs]
+  exact concreteExitDevm_balance
+
+theorem concreteExitTotalBase_storage : Devm.getStor concreteExitTotalBase concreteCreateTarget =
+    ((((concreteDripped.state.getStor concreteCreateTarget).set chiSlot concreteExitChi).set rhoSlot 6).set
+      concreteCreateSender.toB256 59).set totalUnitsSlot 59 := by
+  unfold concreteExitTotalBase
+  rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor]
+  unfold concreteExitRowBase
+  rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor]
+  unfold concreteExitRhoBase
+  rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor]
+  unfold concreteExitChiBase
+  rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor]
+  have hs : Devm.getStor concreteExitStorageBase concreteCreateTarget =
+      concreteDripped.state.getStor concreteCreateTarget := concreteExitEntry_storage _
+  rw [hs]
+
+theorem concreteExitTotalBase_code (a : Adr) :
+    concreteExitTotalBase.getCode a = concreteDripped.state.getCode a := by
+  unfold concreteExitTotalBase
+  rw [Devm.setStorVal_getCode]
+  change concreteExitRowBase.getCode a = _
+  unfold concreteExitRowBase
+  rw [Devm.setStorVal_getCode]
+  change concreteExitRhoBase.getCode a = _
+  unfold concreteExitRhoBase
+  rw [Devm.setStorVal_getCode]
+  change concreteExitChiBase.getCode a = _
+  unfold concreteExitChiBase
+  rw [Devm.setStorVal_getCode]
+  change concreteExitEntry.state.getCode a = _
+  change ((concreteExitDebit.setBal _ _).addBal _ _).getCode a = _
+  rw [State.addBal_getCode, State.setBal_getCode]
+  unfold concreteExitDebit
+  rw [State.setBal_getCode]
+  change ((concreteDripped.state.incrNonce concreteCreateSender).get a).code = _
+  rw [State.incrNonce_get_code]
+  rfl
+
+private theorem concreteExit_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hdata : sevm.data = concreteExitTx.data)
+    (hvalue : sevm.value = 0)
+    (hexit : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[], Mem.empty, G⟩) exit post) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+    (base.setMach ⟨[], Mem.empty, G + 156⟩) main post := by
+  have hd : dripSelector = (0x9f678cca : B256) := by decide +kernel
+  have hj : joinSelector = (0xb688a363 : B256) := by decide +kernel
+  have hx : exitSelector = (0x7f8661a1 : B256) := by decide +kernel
+  have hu : convertToUnitsSelector = (0x9227149a : B256) := by decide +kernel
+  have hshift : Sevm.dataWord sevm 0 >>> B256.toNat 224 = exitSelector := by
+    simp only [Sevm.dataWord, hdata, concreteExitTx]
+    decide +kernel
+  func_run (1)
+  simp only [hdata, concreteExitTx]
+  func_run (5) [exitSelector]
+  change Func.RunCompiled _ sevm
+    (base.setMach ⟨[exitSelector], Mem.empty, G + 156 - 27⟩) (dispatch tree) post
+  change Func.RunCompiled _ sevm
+    (base.setMach ⟨[exitSelector], Mem.empty, G + 156 - 27⟩)
+    (Ninst.dup 0 ::: Ninst.pushB256 dripSelector ::: Ninst.gt :::
+      (dispatch (.fork (.fork (.leaf convertToAssetsSelector (nonpayable (exactCalldata 36 convertToAssets)))
+          (.leaf exitSelector (nonpayable (exactCalldata 36 exit))))
+        (.leaf convertToUnitsSelector (nonpayable (exactCalldata 36 convertToUnits)))) <?>
+       dispatch (.fork (.leaf dripSelector (nonpayable (exactCalldata 4 drip)))
+         (.leaf joinSelector (exactCalldata 4 join))))) post
+  simp only [hd, hj, hx, hu]
+  func_run (4) [1]
+  func_run (4) [1]
+  func_run (4) [0]
+  func_run (3) [1]
+  func_run (1)
+  rw [hvalue]
+  func_run (2) [1]
+  func_run (4) [1]
+  all_goals first
+    | simpa only [Nat.add_sub_cancel] using hexit
+    | (simp only [hdata, concreteExitTx]; decide +kernel)
+
+noncomputable def concreteExitCallInput : Devm :=
+  concreteExitTotalBase.setMach
+    ⟨[457907, concreteCreateSender.toB256, 40, 0, 0, 0, 0, 40],
+      concreteExitLoopMemory, 457907⟩
+
+noncomputable def concreteExitCallResolved : Devm :=
+  addAccessedAddress
+    (concreteExitTotalBase.setMach ⟨[40], concreteExitLoopMemory, 457907⟩)
+    concreteCreateSender
+
+private theorem concreteExitTotalBase_senderBalance :
+    concreteExitTotalBase.getBal concreteCreateSender = 999999999997823644 := by
+  have hs (d : Devm) (k v : B256) :
+      (d.setStorVal concreteCreateTarget k v).getBal concreteCreateSender = d.getBal concreteCreateSender :=
+    (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
+  unfold concreteExitTotalBase
+  rw [hs]
+  change concreteExitRowBase.getBal concreteCreateSender = _
+  unfold concreteExitRowBase
+  rw [hs]
+  change concreteExitRhoBase.getBal concreteCreateSender = _
+  unfold concreteExitRhoBase
+  rw [hs]
+  change concreteExitChiBase.getBal concreteCreateSender = _
+  unfold concreteExitChiBase
+  rw [hs]
+  change (((concreteExitDebit.setBal concreteCreateSender
+    (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+      concreteCreateSender).bal = _
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.withBal]
+  rw [concreteExitDebit_balance]
+  decide +kernel
+
+private theorem concreteExitCallResolved_code :
+    concreteExitCallResolved.getCode concreteCreateSender = ByteArray.empty := by
+  unfold concreteExitCallResolved
+  rw [addAccessedAddress_getCode]
+  change concreteExitTotalBase.getCode concreteCreateSender = _
+  rw [concreteExitTotalBase_code, concreteDrippedSenderCode]
+
+private theorem concreteExitCallResolved_senderBalance :
+    concreteExitCallResolved.getBal concreteCreateSender = 999999999997823644 :=
+  concreteExitTotalBase_senderBalance
+
+private theorem concreteExitCallResolved_targetBalance :
+    concreteExitCallResolved.getBal concreteCreateTarget = 100 :=
+  concreteExitTotalBase_balance
+
+private theorem concreteExitCall_warm :
+    accessCost concreteCreateSender concreteExitTotalBase.accessedAddresses = 100 := by
+  change accessCost concreteCreateSender ((Std.HashSet.ofList [0]).insertMany
+    (pragueRules.precompiles ++ [concreteCreateSender, concreteCreateTarget])) = 100
+  simp [accessCost, Std.HashSet.mem_insertMany_list, gasWarmAccess]
+
+/-- Actual value-bearing empty-code child execution, with the exact parent gas split. -/
+private theorem concreteExit_call_exists :
+    ∃ post,
+      Ninst.RunCompiled concreteExitSevm concreteExitCallInput (.exec .call) post ∧
+      post.stack = [1, 40] ∧ post.memory = concreteExitLoopMemory ∧
+      post.gasLeft = 451107 ∧
+      post.error = concreteExitCallInput.error ∧ post.output = concreteExitCallInput.output ∧
+      post.returnData = [] ∧ post.logs = concreteExitCallInput.logs ∧
+      post.refundCounter = concreteExitCallInput.refundCounter ∧
+      post.accountsToDelete.isEmpty = concreteExitCallInput.accountsToDelete.isEmpty ∧
+      ∃ stmid, concreteExitCallInput.state.subBal concreteCreateTarget 40 = some stmid ∧
+        post.state = stmid.addBal concreteCreateSender 40 := by
+  have hc : (concreteCreateSender.toB256).toAdr = concreteCreateSender := by decide +kernel
+  have hext : (concreteExitCallInput.setMach
+      ⟨[40], concreteExitCallInput.memory, concreteExitCallInput.gasLeft⟩).extCost
+      [(0, 0), (0, 0)] = 0 := by
+    simp only [Devm.extCost, memExtsSize, memExtSize, if_true, Nat.sub_self]
+  have hdel : accessDelegation concreteExitCallResolved concreteCreateSender =
+      ⟨false, concreteCreateSender, ByteArray.empty, 0, concreteExitCallResolved⟩ := by
+    rw [accessDelegation_of_not_delegation]
+    · rw [concreteExitCallResolved_code]
+    · rw [concreteExitCallResolved_code]
+      decide +kernel
+  have hempty : ¬ (concreteExitCallResolved.getAcct concreteCreateSender).Empty := by
+    intro h
+    have hb := h.2.2
+    change concreteExitCallResolved.getBal concreteCreateSender = 0 at hb
+    rw [concreteExitCallResolved_senderBalance] at hb
+    exact (by decide +kernel : (999999999997823644 : B256) ≠ 0) hb
+  have hsender : ¬ (concreteExitCallResolved.getAcct concreteExitSevm.currentTarget).bal < (40 : B256) := by
+    change ¬ concreteExitCallResolved.getBal concreteCreateTarget < (40 : B256)
+    rw [concreteExitCallResolved_targetBalance]
+    decide +kernel
+  have hh := Ninst.runCompiled_call_nonzero_codeFree
+    (sevm := concreteExitSevm) (devm := concreteExitCallInput)
+    (gw := 457907) (cw := concreteCreateSender.toB256) (vw := 40)
+    (iiw := 0) (isw := 0) (oiw := 0) (osw := 0) (s := [40])
+    (dp := false) (dadr := concreteCreateSender) (code := ByteArray.empty) (dgc := 0)
+    (d1 := concreteExitCallResolved) (ext := 0) (acc := 100) (create := 0)
+    (mcc := 450895) (mcs := 444095)
+    rfl (by decide +kernel) hext
+    (by
+      simp only [hc, concreteExitCallInput, Devm.memory_setMach, Devm.gasLeft_setMach,
+        Devm.setMach_setMach]
+      exact hdel)
+    (by rw [hc]; change accessCost concreteCreateSender concreteExitTotalBase.accessedAddresses + 0 = 100; exact concreteExitCall_warm)
+    (by rw [hc, if_pos hempty])
+    (by change calculateMsgCallGas 40 457907 457907 0 (100 + 0 + gasCallValue) = _; decide +kernel)
+    (by change 450895 + 0 ≤ 457907; decide +kernel)
+    rfl hsender (by decide +kernel) (by decide +kernel) rfl (by decide +kernel)
+  have hm0 (M : Mem) : M.extends [(0, 0), (0, 0)] = M := by cases M; rfl
+  have hm : concreteExitCallInput.memory.extends [(0, 0), (0, 0)] = concreteExitLoopMemory := by
+    rw [hm0]
+    simp only [concreteExitCallInput, Devm.memory_setMach]
+  have hg : concreteExitCallResolved.gasLeft - (450895 + 0) + 444095 = 451107 := rfl
+  have ht : concreteExitSevm.currentTarget = concreteCreateTarget := rfl
+  simpa only [B256.toNat_zero, hm, hg, ht, hc] using hh
+
+noncomputable def concreteExitCallPost : Devm := Classical.choose concreteExit_call_exists
+
+theorem concreteExitCallPost_run :
+    Ninst.RunCompiled concreteExitSevm concreteExitCallInput (.exec .call) concreteExitCallPost :=
+  (Classical.choose_spec concreteExit_call_exists).1
+
+private theorem concreteExitCallPost_machine :
+    concreteExitCallPost.stack = [1, 40] ∧
+    concreteExitCallPost.memory = concreteExitLoopMemory ∧
+    concreteExitCallPost.gasLeft = 451107 := by
+  have h := (Classical.choose_spec concreteExit_call_exists).2
+  exact ⟨h.1, h.2.1, h.2.2.1⟩
+
+private theorem concreteExitCallPost_meta :
+    concreteExitCallPost.error = none ∧ concreteExitCallPost.logs = [] ∧
+    concreteExitCallPost.refundCounter = 0 ∧ concreteExitCallPost.accountsToDelete.isEmpty = true := by
+  have h := (Classical.choose_spec concreteExit_call_exists).2.2.2.2
+  exact ⟨h.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1⟩
+
+private theorem concreteExitCallPost_transfer :
+    ∃ stmid, concreteExitTotalBase.state.subBal concreteCreateTarget 40 = some stmid ∧
+      concreteExitCallPost.state = stmid.addBal concreteCreateSender 40 :=
+  (Classical.choose_spec concreteExit_call_exists).2.2.2.2.2.2.2.2.2.2
+
+noncomputable def concreteExitRuntimePost : Devm :=
+  (concreteExitCallPost.setMach
+    ⟨[], concreteExitLoopMemory.write 0 (40 : B256).toBytes, 451083⟩).withOutput (40 : B256).toBytes
+
+private theorem concreteExit_afterCall (sevm : Sevm) (base : Devm) (M : Mem) (G : Nat)
+    (hsize : M.size = 288) :
+    Func.RunCompiled (runtime.main :: runtime.aux) sevm
+      (base.setMach ⟨[1, 40], M, G + 24⟩)
+      ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)
+      ((base.setMach ⟨[], M.write 0 (40 : B256).toBytes, G⟩).withOutput (40 : B256).toBytes) := by
+  func_run (5) [0]
+  · simp only [Devm.extCost, Devm.memory_setMach, hsize]
+    decide +kernel
+  have hnsize : (M.write 0 (40 : B256).toBytes).size = 288 := by
+    rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hsize]; decide)]
+    exact hsize
+  have hnread : ((M.write 0 (40 : B256).toBytes).read 0 32).1 = (40 : B256).toBytes := by
+    simpa only [B256.length_toBytes] using
+      (Mem.read_write_zero M (ys := (40 : B256).toBytes) (by decide +kernel))
+  have hnmem : ((M.write 0 (40 : B256).toBytes).read 0 32).2 = M.write 0 (40 : B256).toBytes := by
+    apply Mem.read_snd_eq_self
+    rw [hnsize]
+    decide +kernel
+  apply Func.runCompiled_return_of (G := G) (e := 0)
+  · rfl
+  · change calculateMemoryGasCost (memExtsSize (M.write 0 (40 : B256).toBytes).size [(0, 32)]) -
+      calculateMemoryGasCost (M.write 0 (40 : B256).toBytes).size = 0
+    rw [hnsize]
+    decide +kernel
+  · simp only [Devm.gasLeft_setMach]
+    omega
+  · change (((M.write 0 (40 : B256).toBytes).read 0 32).1,
+      base.setMach ⟨[], ((M.write 0 (40 : B256).toBytes).read 0 32).2, G⟩) = _
+    rw [hnread, hnmem]
+
+private theorem concreteExit_callTail :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      (concreteExitTotalBase.setMach ⟨[40], concreteExitLoopMemory, 457925⟩)
+      (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert))
+      concreteExitRuntimePost := by
+  have hprefix (sevm : Sevm) (base post : Devm) (M : Mem)
+      (h : Func.RunCompiled (runtime.main :: runtime.aux) sevm
+        (base.setMach ⟨[457907, sevm.caller.toB256, 40, 0, 0, 0, 0, 40], M, 457907⟩)
+        (Ninst.call ::: ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post) :
+      Func.RunCompiled (runtime.main :: runtime.aux) sevm
+        (base.setMach ⟨[40], M, 457925⟩)
+        (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post := by
+    func_run (8)
+    all_goals first
+      | exact h
+      | simp only [Devm.gasLeft_setMach, gVerylow, gBase]
+  apply hprefix
+  refine Func.RunCompiled.next (devm' := concreteExitCallPost) concreteExitCallPost_run ?_
+  have heta (d : Devm) : d.setMach ⟨d.stack, d.memory, d.gasLeft⟩ = d := by cases d; rfl
+  have hm : concreteExitCallPost.setMach ⟨[1, 40], concreteExitLoopMemory, 451083 + 24⟩ =
+      concreteExitCallPost := by
+    rw [← concreteExitCallPost_machine.1, ← concreteExitCallPost_machine.2.1]
+    change concreteExitCallPost.setMach
+      ⟨concreteExitCallPost.stack, concreteExitCallPost.memory, 451107⟩ = concreteExitCallPost
+    rw [← concreteExitCallPost_machine.2.2]
+    exact heta _
+  have h := concreteExit_afterCall concreteExitSevm concreteExitCallPost concreteExitLoopMemory
+    451083 concreteExit_loopSize
+  rw [hm] at h
+  exact h
+
+theorem concreteExit_runtime :
+    Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
+      (concreteExitDevm.setMach ⟨[], Mem.empty, 478795⟩) main concreteExitRuntimePost := by
+  exact concreteExit_dispatch _ _ _ 478639 rfl rfl
+    (concreteExit_prefix 457925 concreteExitRuntimePost concreteExit_callTail)
+
+theorem concreteExitDevm_gas : concreteExitDevm.gasLeft = 478796 := by
+  change 500000 - deploymentIntrinsicGas concreteExitTx = 478796
+  decide +kernel
+
+theorem concreteExit_program :
+    Prog.RunCompiled concreteExitSevm concreteExitDevm runtime concreteExitRuntimePost := by
+  apply Prog.runCompiled_intro (G := 478795)
+    (mid := concreteExitDevm.setMach ⟨[], Mem.empty, 478795⟩)
+  · rw [concreteExitDevm_gas]
+    decide
+  · rfl
+  exact concreteExit_runtime
+
+theorem concreteExit_compiled : some concreteExitSevm.code.toList = Prog.compile runtime := by
+  change some concreteExitMessage.code.toList = _
+  rw [concreteExitMessage_code, code_compile]
+
+theorem concreteExit_exec :
+    exec (initEvm (concreteExitMessage.withBenv concreteExitEntry)) =
+      .ok concreteExitRuntimePost :=
+  Prog.exec_of_runCompiled concreteExit_program concreteExit_compiled
+
+theorem concreteExit_frameEntry :
+    (Frame.ofCall concreteExitMessage).enter =
+      .run (initEvm (concreteExitMessage.withBenv concreteExitEntry)) := by
+  have hnp : ¬ pragueRules.isPrecomp concreteCreateTarget :=
+    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 6)
+  have he : executeCode.enter (concreteExitMessage.withBenv concreteExitEntry) =
+      .inl (initEvm (concreteExitMessage.withBenv concreteExitEntry)) := by
+    unfold executeCode.enter
+    change (if !false && pragueRules.isPrecomp concreteCreateTarget then _ else _) = _
+    simp only [Bool.not_false, Bool.true_and, hnp]
+    rfl
+  unfold Frame.enter Frame.ofCall
+  rw [concreteExitEntry_run]
+  dsimp only
+  rw [he]
+
+private theorem concreteExit_postError : concreteExitRuntimePost.error = none :=
+  concreteExitCallPost_meta.1
+
+theorem concreteExit_processMessage :
+    processMessage concreteExitMessage = .ok concreteExitRuntimePost := by
+  unfold processMessage runFrame
+  rw [concreteExit_frameEntry]
+  unfold Frame.settle Frame.settleMsg processMessage.settle executeCode.handleError
+  simp only [concreteExit_exec, concreteExit_postError, Frame.ofCall, Option.isSome,
+    Bool.false_eq_true, if_false, bind, Except.bind]
+
+noncomputable def concreteExitMessageState : State := concreteExitRuntimePost.state
+
+noncomputable def concreteExitMessageOutput : MsgCallOutput := {
+  gasLeft := 451083
+  refundCounter := 0
+  logs := []
+  accountsToDelete := concreteExitCallPost.accountsToDelete
+  error := none
+  returnData := (40 : B256).toBytes }
+
+theorem concreteExit_messageCall :
+    processMessageCall concreteExitMessage = .ok (concreteExitMessageState, concreteExitMessageOutput) := by
+  have htarget : concreteExitMessage.target.isNone = false := rfl
+  have hauths : concreteExitMessage.tenv.stat.auths = [] := rfl
+  have hcode : some concreteExitMessage.code.toList = Prog.compile runtime := concreteExit_compiled
+  have hdelegation : getDelegatedCodeAddress concreteExitMessage.code = none := by
+    unfold getDelegatedCodeAddress
+    rw [if_neg (not_delegation_of_compile hcode)]
+  have hrefund : concreteExitRuntimePost.refundCounter = 0 := concreteExitCallPost_meta.2.2.1
+  have hlogs : concreteExitRuntimePost.logs = [] := concreteExitCallPost_meta.2.1
+  unfold processMessageCall
+  rw [htarget]
+  unfold processMessageCall.call
+  simp only [hauths, List.isEmpty, if_true, bind, Except.bind, hdelegation,
+    concreteExit_processMessage, Except.bimap, id_eq, concreteExit_postError,
+    Option.isNone, hrefund]
+  simp only [concreteExitRuntimePost, Devm.withOutput_logs, Devm.setMach_logs,
+    concreteExitCallPost_meta.2.1]
+  rfl
+
+noncomputable def concreteExitTransactionState : State :=
+  deploymentFinalState concreteExitTxInput concreteExitTx concreteCreateSender
+    concreteExitMessageState 48917
+
+noncomputable def concreteExitTransactionBout : BlockOutput :=
+  deploymentFinalBout .init concreteExitTx 0 concreteExitMessageOutput 48917
+
+theorem concreteExit_transaction :
+    processTransaction concreteExitTxInput .init concreteExitTx 0 =
+      .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
+  have hchecked := concreteExitChecked
+  change checkTransaction concreteExitTxInput.beginTransaction
+    (deploymentTxPreludeBout .init concreteExitTx 0) concreteExitTx =
+      .ok (concreteCreateSender, 2, [], 0) at hchecked
+  have hdebit := concreteExitDebit_run
+  simp only [Benv.beginTransaction] at hdebit
+  have hprepare := concreteExitMessage_prepared
+  have hrules : concreteExitTxInput.beginTransaction.stat.rules = pragueRules := rfl
+  unfold processTransaction
+  simp only [bind, Except.bind]
+  rw [hrules, concreteExitValidated]
+  simp only [Except.mapError]
+  simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout] at hchecked
+  rw [hchecked]
+  simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
+    concreteExitTx, Bool.false_eq_true, if_false, Nat.add_zero, Benv.beginTransaction]
+  rw [show Nat.toB256 (500000 * 2) = 1000000 by decide +kernel, hdebit]
+  simp only [Option.toExcept]
+  simp only [concreteExitTenv, deploymentTenv, deploymentIntrinsicGas, Benv.beginTransaction,
+    concreteExitTx] at hprepare
+  simp only [List.map_nil, List.flatten_nil]
+  simp only [deploymentEffectiveGasPrice] at hprepare ⊢
+  have hprice : min 1 (8 - concreteExitTxInput.stat.baseFeePerGas) +
+      concreteExitTxInput.stat.baseFeePerGas = 2 := by rfl
+  rw [hprice] at hprepare
+  simp only [hprepare, concreteExit_messageCall]
+  have hgas : max (500000 - 451083 - min ((500000 - 451083) / 5) 0)
+      (calculateIntrinsicCost concreteExitTx).2 = 48917 := by decide +kernel
+  simp only [concreteExitTx] at hgas
+  simp only [concreteExitMessageOutput]
+  rw [show Int.toNat? 0 = some 0 by rfl]
+  simp only [hgas]
+  unfold concreteExitTransactionState concreteExitTransactionBout deploymentFinalState deploymentFinalBout
+  simp only [deploymentEffectiveGasPrice, concreteExitTx, concreteExitMessageOutput, hprice]
+  have hdelete : concreteExitCallPost.accountsToDelete.toList = [] := by
+    apply List.isEmpty_iff.mp
+    rw [Std.HashSet.isEmpty_toList]
+    exact concreteExitCallPost_meta.2.2.2
+  rw [hdelete]
+  simp only [List.foldl_nil]
+  rfl
+
+
+/-- The selected actual child state has paid forty out of the funded four-store parent. -/
+theorem concreteExitMessageState_paid :
+    concreteExitMessageState = (concreteExitTotalBase.state.setBal concreteCreateTarget 60).addBal
+      concreteCreateSender 40 := by
+  obtain ⟨mid, hsub, hpost⟩ := concreteExitCallPost_transfer
+  have hm := (State.of_subBal hsub).2
+  have hb : concreteExitTotalBase.state.bal concreteCreateTarget = 100 := concreteExitTotalBase_balance
+  change concreteExitCallPost.state = _
+  rw [hpost, hm, hb, show (100 : B256) - 40 = 60 by decide +kernel]
+
+theorem concreteExitTransactionCode (a : Adr) :
+    concreteExitTransactionState.getCode a = concreteDripped.state.getCode a := by
+  unfold concreteExitTransactionState deploymentFinalState
+  rw [State.addBal_getCode, State.addBal_getCode, concreteExitMessageState_paid,
+    State.addBal_getCode, State.setBal_getCode]
+  exact concreteExitTotalBase_code a
+
+theorem concreteExit_receiptEntry :
+    concreteExitTransactionBout.receiptsTrie[deploymentReceiptKey 0]? =
+      some (makeReceipt concreteExitTx none 48917 []) := by
+  change (BlockOutput.init.receiptsTrie.insert (deploymentReceiptKey 0)
+    (makeReceipt concreteExitTx none 48917 []))[deploymentReceiptKey 0]? = _
+  rw [Std.TreeMap.getElem?_insert_self]
+
+theorem concreteExit_requestSuffix :
+    processGeneralPurposeRequests (concreteExitTxInput.withState concreteExitTransactionState)
+      concreteExitTransactionBout = .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
+  have hcode (a : Adr) (ha : a ∈ [beaconRootsAddress, historyStorageAddress,
+      withdrawalRequestPredeployAddress, consolidationRequestPredeployAddress]) :
+      some (concreteExitTransactionState.getCode a).toList = Prog.compile deploymentSystemProgram := by
+    rw [concreteExitTransactionCode]
+    rw [concreteDrippedCode, concreteJoinedCode]
+    exact concreteDeployedSystemCode a ha
+  obtain ⟨withdrawalOut, hw, _, _, _, _, hwr⟩ :=
+    processCheckedSystemTransaction_deploymentSystemProgram
+      (concreteExitTxInput.withState concreteExitTransactionState) withdrawalRequestPredeployAddress []
+      (hcode _ (by simp)) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
+  obtain ⟨consolidationOut, hc, _, _, _, _, hcr⟩ :=
+    processCheckedSystemTransaction_deploymentSystemProgram
+      ((concreteExitTxInput.withState concreteExitTransactionState).withState concreteExitTransactionState)
+      consolidationRequestPredeployAddress [] (hcode _ (by simp))
+      (by change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress; decide)
+  have hd : parseDepositRequests concreteExitTransactionBout = .ok [] := by
+    unfold parseDepositRequests
+    have hk : concreteExitTransactionBout.receiptKeys = [deploymentReceiptKey 0] := rfl
+    rw [hk]
+    simp
+    rw [concreteExit_receiptEntry]
+    unfold makeReceipt
+    rfl
+  unfold processGeneralPurposeRequests
+  rw [hd]
+  simp only [List.length_nil, Nat.lt_irrefl, if_false, bind, Except.bind]
+  rw [hw]
+  simp only [hwr, List.length_nil, Nat.lt_irrefl, if_false]
+  change (do
+    let ⟨st, out⟩ ← processCheckedSystemTransaction
+      ((concreteExitTxInput.withState concreteExitTransactionState).withState concreteExitTransactionState)
+      consolidationRequestPredeployAddress []
+    if out.returnData.length > 0 then
+      .ok (st, {concreteExitTransactionBout with requests := concreteExitTransactionBout.requests ++
+        [consolidationRequestType ++ out.returnData]})
+    else .ok (st, {concreteExitTransactionBout with requests := concreteExitTransactionBout.requests})) = _
+  simp only [hc, bind, Except.bind, hcr, List.length_nil, Nat.lt_irrefl, if_false]
+  rfl
+
+theorem concreteExit_body :
+    applyBody concreteExitTxInput [.inl concreteExitTxRlp] [] =
+      .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
+  obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
+    concreteExitTxInput beaconRootsAddress concreteExitTxInput.stat.parentBeaconBlockRoot.toBytes
+    (by change some (concreteDripped.state.getCode _).toList = _
+        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+    (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide)
+  obtain ⟨historyOut, hh, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
+    (concreteExitTxInput.withState concreteDripped.state) historyStorageAddress
+    concreteDripBlock.header.hash.toBytes
+    (by change some (concreteDripped.state.getCode _).toList = _
+        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+    (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide)
+  have hl : (concreteExitTxInput.withState concreteDripped.state).stat.blockHashes.getLast? =
+      some concreteDripBlock.header.hash := by rfl
+  have hi : (concreteExitTxInput.withState concreteDripped.state).withState concreteDripped.state =
+      concreteExitTxInput := rfl
+  unfold applyBody
+  rw [hb]
+  simp only [Except.mapError, bind, Except.bind]
+  change (do
+    let lastHash ← (concreteExitTxInput.withState concreteDripped.state).stat.blockHashes.getLast?.toExcept
+      (TransitionError.internal (.invariant (.text "block hashes is empty")))
+    let ⟨stHistory, _⟩ ← Except.mapError TransitionError.vm
+      (processUncheckedSystemTransaction (concreteExitTxInput.withState concreteDripped.state)
+        historyStorageAddress lastHash.toBytes)
+    let ⟨benvTxs, boutTxs⟩ ← applyTransactions
+      (← ([.inl concreteExitTxRlp] : List (Bytes ⊕ Tx)).mapM decodeTx).putIndex
+      ((concreteExitTxInput.withState concreteDripped.state).withState stHistory) .init
+    let ⟨stWds, boutWds⟩ := processWithdrawals benvTxs boutTxs []
+    processGeneralPurposeRequests (benvTxs.withState stWds) boutWds) = _
+  rw [hl]
+  simp only [Option.toExcept, hh, Except.mapError, bind, Except.bind]
+  rw [show (concreteExitTxInput.withState concreteDripped.state).state =
+    concreteDripped.state from rfl, hi]
+  simp only [List.mapM_cons, List.mapM_nil, concreteExitDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
+    applyTransactions, concreteExit_transaction]
+  have hwd (be : Benv) (bo : BlockOutput) : processWithdrawals be bo [] = (be.state, bo) := rfl
+  rw [hwd]
+  have hwith (be : Benv) : be.withState be.state = be := by cases be; rfl
+  simp only [hwith]
+  exact concreteExit_requestSuffix
+
+noncomputable def concreteExitHeader (sr tr rr wr rh : B256) : Header :=
+  { concreteExitExecutionHeader with
+    gasUsed := 48917
+    stateRoot := sr
+    txsRoot := tr
+    receiptRoot := rr
+    withdrawalsRoot := wr
+    requestsHash := some rh }
+
+theorem concreteExitHeader_benv (sr tr rr wr rh : B256) :
+    initBenv pragueRules concreteDripped (concreteExitHeader sr tr rr wr rh) = concreteExitTxInput := rfl
+
+theorem concreteExitHeader_valid (sr tr rr wr rh : B256) :
+    validateHeader pragueRules concreteDripped (concreteExitHeader sr tr rr wr rh) = .ok () := by
+  have hlast : concreteDripped.blocks.getLast? = some concreteDripBlock :=
+    appendBlock_getLast? concreteJoined.blocks concreteDripBlock
+  simp only [validateHeader, hlast, Option.toExcept, bind, Except.bind,
+    concreteExitHeader, concreteExitExecutionHeader, Header.hash, ne_eq, not_true_eq_false, ite_false]
+  simp only [concreteDripBlock, concreteDripHeader, concreteDripExecutionHeader, concreteJoinBlock, concreteJoinHeader, concreteJoinExecutionHeader, concreteDeploymentEnvelope, concreteCanonicalBlock, CanonicalBlock.ofDecode,
+    concreteDeploymentBlock, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader]
+  decide +kernel
+
+noncomputable def concreteExitBlock : Block := {
+  header := concreteExitHeader concreteExitTransactionState.root
+    (getTransactionsRoot concreteExitTransactionBout) (getReceiptRoot concreteExitTransactionBout)
+    (getWithdrawalsRoot concreteExitTransactionBout) (computeRequestsHash concreteExitTransactionBout.requests)
+  txs := [.inl concreteExitTxRlp]
+  ommers := []
+  wds := [] }
+
+noncomputable def concreteExited : BlockChain :=
+  ⟨appendBlock concreteDripped.blocks concreteExitBlock, concreteExitTransactionState, concreteDripped.chainId⟩
+
+theorem concreteExit_checks :
+    stateTransitionChecks concreteExitTransactionBout concreteExitBlock.header
+      (getTransactionsRoot concreteExitTransactionBout) concreteExitTransactionState.root
+      (getReceiptRoot concreteExitTransactionBout) (logsBloom concreteExitTransactionBout.blockLogs)
+      (getWithdrawalsRoot concreteExitTransactionBout)
+      (computeRequestsHash concreteExitTransactionBout.requests) = .ok () := by
+  have hg : concreteExitTransactionBout.blockGasUsed = 48917 := rfl
+  have hl : concreteExitTransactionBout.blockLogs = [] := rfl
+  have hb : concreteExitTransactionBout.blobGasUsed = 0 := rfl
+  simp only [stateTransitionChecks, hg, hl, hb, concreteExitBlock, concreteExitHeader,
+    concreteExitExecutionHeader, concreteDripBlock, concreteDripHeader, concreteDripExecutionHeader, concreteJoinBlock, concreteJoinHeader, concreteJoinExecutionHeader, concreteDeploymentEnvelope, concreteCanonicalBlock,
+    CanonicalBlock.ofDecode, concreteDeploymentBlock, concreteDeploymentHeader,
+    concreteExecutionHeader, concreteGenesisHeader, logsBloom, List.foldl_nil,
+    ne_eq, not_true_eq_false, ite_false, pure, Bind.bind, Except.bind]
+  rfl
+
+theorem concreteExit_step :
+    stateTransitionUsing concreteConfig concreteDripped concreteExitBlock = .ok concreteExited := by
+  have hchain : concreteConfig.chainId = concreteDripped.chainId := concreteDeploymentRoot.deployed_chainId
+  rw [stateTransitionUsing_eq_of_chainId_eq hchain]
+  rw [show concreteConfig.rulesAt concreteExitBlock.header.timestamp = .ok pragueRules from
+    ChainConfig.pragueOnly_rulesAt 1 _]
+  change stateTransitionWith pragueRules concreteDripped concreteExitBlock = _
+  rw [stateTransitionWith_eq_ok_iff, stateTransitionE]
+  have hh : validateHeader pragueRules concreteDripped concreteExitBlock.header = .ok () :=
+    concreteExitHeader_valid _ _ _ _ _
+  rw [hh]
+  change (do
+    let output ← applyBody (initBenv pragueRules concreteDripped concreteExitBlock.header)
+      concreteExitBlock.txs concreteExitBlock.wds
+    Except.mapError TransitionError.block (stateTransitionChecks output.2
+      concreteExitBlock.header (getTransactionsRoot output.2) output.1.root
+      (getReceiptRoot output.2) (logsBloom output.2.blockLogs)
+      (getWithdrawalsRoot output.2) (computeRequestsHash output.2.requests))
+    .ok (⟨appendBlock concreteDripped.blocks concreteExitBlock, output.1,
+      concreteDripped.chainId⟩ : BlockChain)) = .ok concreteExited
+  have hbody : applyBody (initBenv pragueRules concreteDripped concreteExitBlock.header)
+      concreteExitBlock.txs concreteExitBlock.wds =
+      .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
+    change applyBody (initBenv pragueRules concreteDripped (concreteExitHeader _ _ _ _ _))
+      [.inl concreteExitTxRlp] [] = _
+    rw [concreteExitHeader_benv]
+    exact concreteExit_body
+  rw [hbody]
+  simp only [Bind.bind, Except.bind, concreteExit_checks, Except.mapError]
+  rfl
+
+
+theorem concreteExited_storage : concreteExited.state.getStor concreteCreateTarget =
+    ((((concreteDripped.state.getStor concreteCreateTarget).set chiSlot concreteExitChi).set rhoSlot 6).set
+      concreteCreateSender.toB256 59).set totalUnitsSlot 59 := by
+  change concreteExitTransactionState.getStor concreteCreateTarget = _
+  unfold concreteExitTransactionState deploymentFinalState State.getStor State.addBal
+  rw [State.setBal_get_stor, State.setBal_get_stor, concreteExitMessageState_paid]
+  simp only [State.addBal, State.setBal_get_stor]
+  exact concreteExitTotalBase_storage
+
+theorem concreteExited_values :
+    (concreteExited.state.getStor concreteCreateTarget).get chiSlot = concreteExitChi ∧
+    (concreteExited.state.getStor concreteCreateTarget).get rhoSlot = 6 ∧
+    (concreteExited.state.getStor concreteCreateTarget).get concreteCreateSender.toB256 = 59 ∧
+    (concreteExited.state.getStor concreteCreateTarget).get totalUnitsSlot = 59 := by
+  rw [concreteExited_storage]
+  constructor
+  · rw [Stor.get_set_ne _ (by decide +kernel), Stor.get_set_ne _ (by decide +kernel),
+      Stor.get_set_ne _ (by decide +kernel), Stor.get_set_self]
+  constructor
+  · rw [Stor.get_set_ne _ (by decide +kernel), Stor.get_set_ne _ (by decide +kernel), Stor.get_set_self]
+  constructor
+  · rw [Stor.get_set_ne _ (by decide +kernel), Stor.get_set_self]
+  · exact Stor.get_set_self _ _ _
+
+theorem concreteExitedTargetBalance : concreteExited.state.bal concreteCreateTarget = 60 := by
+  change (concreteExitTransactionState.get concreteCreateTarget).bal = _
+  unfold concreteExitTransactionState deploymentFinalState
+  change (((concreteExitMessageState.addBal concreteCreateSender 902166).addBal 0 48917).get
+    concreteCreateTarget).bal = _
+  have hz : (0 : Adr) ≠ concreteCreateTarget := by decide +kernel
+  have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_ne ht]
+  rw [concreteExitMessageState_paid]
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.withBal]
+
+theorem concreteExitedSenderBalance :
+    concreteExited.state.bal concreteCreateSender = 999999999998725850 := by
+  change (concreteExitTransactionState.get concreteCreateSender).bal = _
+  unfold concreteExitTransactionState deploymentFinalState
+  change (((concreteExitMessageState.addBal concreteCreateSender 902166).addBal 0 48917).get
+    concreteCreateSender).bal = _
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.withBal]
+  rw [concreteExitMessageState_paid]
+  simp only [State.addBal, State.setBal_get_self, Acct.withBal,
+    State.bal, State.setBal_get_ne ht]
+  change (concreteExitTotalBase.getBal concreteCreateSender + 40) + 902166 = _
+  rw [concreteExitTotalBase_senderBalance]
+  decide +kernel
+
+private theorem concreteExitTotalBase_sender :
+    concreteExitTotalBase.state.get concreteCreateSender = concreteExitEntry.state.get concreteCreateSender := by
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  change (((((concreteExitEntry.state.setStorVal concreteCreateTarget chiSlot concreteExitChi).setStorVal
+    concreteCreateTarget rhoSlot 6).setStorVal concreteCreateTarget concreteCreateSender.toB256 59).setStorVal
+    concreteCreateTarget totalUnitsSlot 59).get concreteCreateSender) = _
+  simp only [State.setStorVal, State.get_set_ne _ ht]
+
+theorem concreteExitedSenderNonce : concreteExited.state.getNonce concreteCreateSender = 4 := by
+  change (concreteExitTransactionState.get concreteCreateSender).nonce = _
+  unfold concreteExitTransactionState deploymentFinalState
+  change (((concreteExitMessageState.addBal concreteCreateSender 902166).addBal 0 48917).get
+    concreteCreateSender).nonce = _
+  have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
+  have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.withBal]
+  rw [concreteExitMessageState_paid]
+  simp only [State.addBal, State.setBal_get_self, State.setBal_get_ne ht, Acct.withBal]
+  rw [concreteExitTotalBase_sender]
+  change ((((concreteExitDebit.setBal concreteCreateSender
+    (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
+    concreteCreateSender).nonce) = _
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self]
+  unfold concreteExitDebit
+  simp only [State.setBal_get_self, State.incrNonce, State.get_set_self]
+  change (concreteDripped.state.getNonce concreteCreateSender) + 1 = 4
+  rw [concreteDrippedSenderNonce]
+  rfl
+
+theorem concreteExit_receiptSucceeded :
+    (concreteExitTransactionBout.receiptsTrie[deploymentReceiptKey 0]?).map
+      (fun entry => entry.2.succeeded) = some true := by
+  rw [concreteExit_receiptEntry]
+  rfl
+
+theorem concreteExit_observations :
+    concreteExitMessageOutput.returnData = (40 : B256).toBytes ∧
+    concreteExitTransactionBout.blockGasUsed = 48917 ∧
+    concreteExitTransactionBout.blockLogs = [] ∧
+    concreteExitBlock.header.timestamp = 6 ∧ concreteExitBlock.header.number = 4 := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+/-- One actual configured exit block, its funded child payment, and its observable accounting. -/
+theorem concreteExit_checkpoint :
+    stateTransitionUsing concreteConfig concreteDripped concreteExitBlock = .ok concreteExited ∧
+    concreteExitMessageState = (concreteExitTotalBase.state.setBal concreteCreateTarget 60).addBal
+      concreteCreateSender 40 ∧
+    concreteExited.state.getStor concreteCreateTarget =
+      ((((concreteDripped.state.getStor concreteCreateTarget).set chiSlot concreteExitChi).set rhoSlot 6).set
+        concreteCreateSender.toB256 59).set totalUnitsSlot 59 ∧
+    ((concreteExited.state.getStor concreteCreateTarget).get chiSlot = concreteExitChi ∧
+      (concreteExited.state.getStor concreteCreateTarget).get rhoSlot = 6 ∧
+      (concreteExited.state.getStor concreteCreateTarget).get concreteCreateSender.toB256 = 59 ∧
+      (concreteExited.state.getStor concreteCreateTarget).get totalUnitsSlot = 59) ∧
+    concreteExited.state.bal concreteCreateTarget = 60 ∧
+    concreteExited.state.bal concreteCreateSender = 999999999998725850 ∧
+    concreteExited.state.getNonce concreteCreateSender = 4 ∧
+    (concreteExitTransactionBout.receiptsTrie[deploymentReceiptKey 0]?).map
+      (fun entry => entry.2.succeeded) = some true ∧
+    (concreteExitMessageOutput.returnData = (40 : B256).toBytes ∧
+      concreteExitTransactionBout.blockGasUsed = 48917 ∧
+      concreteExitTransactionBout.blockLogs = [] ∧
+      concreteExitBlock.header.timestamp = 6 ∧ concreteExitBlock.header.number = 4) :=
+  ⟨concreteExit_step, concreteExitMessageState_paid, concreteExited_storage, concreteExited_values,
+    concreteExitedTargetBalance, concreteExitedSenderBalance, concreteExitedSenderNonce,
+    concreteExit_receiptSucceeded, concreteExit_observations⟩
+
 end Drip
 end Blanc
