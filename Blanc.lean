@@ -300,6 +300,7 @@ import Blanc.DripCode
 import Blanc.DripCore
 import Blanc.DripCreationCode
 import Blanc.DripDeploy
+import Blanc.DripConcreteHistory
 import Blanc.DripEndpoints
 import Blanc.DripFresh
 import Blanc.DripFunctional
