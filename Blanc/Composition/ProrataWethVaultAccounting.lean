@@ -708,7 +708,26 @@ structure CreditWords where
   source : Adr
   amount : B256
 
-/-- The seven actual-effect operations that a local four-quote path may use.
+/-- The actual owner, receiver and amount words of `transfer`. -/
+structure ShareTransferWords where
+  owner : Adr
+  receiver : B256
+  amount : B256
+
+/-- The actual spender, owner, receiver and amount words of `transferFrom`. -/
+structure ShareTransferFromWords where
+  spender : Adr
+  owner : B256
+  receiver : B256
+  amount : B256
+
+/-- The actual owner, spender and amount words of `approve`. -/
+structure ShareApprovalWords where
+  owner : Adr
+  spender : B256
+  amount : B256
+
+/-- The ten actual-effect operations that a local four-quote path may use.
 Each quote and accounting contribution is retained in the constructor that
 proves its concrete WETH/vault storage movement. -/
 inductive FourQuoteOperation (vault : Adr) (sevm : Sevm) (pre post : Devm) : Type where
@@ -775,6 +794,38 @@ inductive FourQuoteOperation (vault : Adr) (sevm : Sevm) (pre post : Devm) : Typ
       (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source words.amount vault
         (Stor.rest (Devm.getStor post wethAccount))) :
       FourQuoteOperation vault sevm pre post
+  | transfer (words : ShareTransferWords)
+      (target : sevm.currentTarget = vault)
+      (owner : words.owner = sevm.caller)
+      (receiver : words.receiver = Sevm.argWord sevm 0)
+      (amount : words.amount = Sevm.argWord sevm 1)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+      FourQuoteOperation vault sevm pre post
+  | transferFrom (words : ShareTransferFromWords)
+      (target : sevm.currentTarget = vault)
+      (spender : words.spender = sevm.caller)
+      (owner : words.owner = Sevm.argWord sevm 0)
+      (receiver : words.receiver = Sevm.argWord sevm 1)
+      (amount : words.amount = Sevm.argWord sevm 2)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm =
+        selector "transferFrom" [.address, .address, .uint256]) :
+      FourQuoteOperation vault sevm pre post
+  | approve (words : ShareApprovalWords)
+      (target : sevm.currentTarget = vault)
+      (owner : words.owner = sevm.caller)
+      (spender : words.spender = Sevm.argWord sevm 0)
+      (amount : words.amount = Sevm.argWord sevm 1)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+      FourQuoteOperation vault sevm pre post
 
 /-- The bounded quote-residue part of an actual operation. -/
 def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
@@ -792,6 +843,9 @@ def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
   | .redeemSelf words _ _ _ _ _ =>
       outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre)
   | .credit _ _ _ _ _ _ => 0
+  | .transfer _ _ _ _ _ _ _ _ _ => 0
+  | .transferFrom _ _ _ _ _ _ _ _ _ _ => 0
+  | .approve _ _ _ _ _ _ _ _ _ => 0
 
 /-- The retained-asset contribution is present only when an outbound receiver
 is the vault itself. -/
@@ -804,6 +858,9 @@ def retainedContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
   | .withdrawSelf words _ _ _ _ _ => words.assets.toNat * D (vaultSnapshot vault pre)
   | .redeemSelf words _ _ _ _ _ => words.assets.toNat * D (vaultSnapshot vault pre)
   | .credit _ _ _ _ _ _ => 0
+  | .transfer _ _ _ _ _ _ _ _ _ => 0
+  | .transferFrom _ _ _ _ _ _ _ _ _ _ => 0
+  | .approve _ _ _ _ _ _ _ _ _ => 0
 
 /-- The outside-credit contribution is present only for the raw third-party
 WETH transfer tag. -/
@@ -816,6 +873,9 @@ def creditContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
   | .withdrawSelf _ _ _ _ _ _ => 0
   | .redeemSelf _ _ _ _ _ _ => 0
   | .credit words _ _ _ _ _ => words.amount.toNat * D (vaultSnapshot vault pre)
+  | .transfer _ _ _ _ _ _ _ _ _ => 0
+  | .transferFrom _ _ _ _ _ _ _ _ _ _ => 0
+  | .approve _ _ _ _ _ _ _ _ _ => 0
 
 private theorem deposit_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : InboundWords) (target : sevm.currentTarget = vault)
@@ -962,6 +1022,19 @@ private theorem credit_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
   rw [shape]
   exact externalCredit_price words.amount.toNat (vaultSnapshot vault pre)
 
+/-- A compiled share operation preserves both accounting coordinates. -/
+private theorem silent_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (effect : Blanc.Prorata.ProrataAccountingEffect Blanc.ProrataWethVault.offsetN
+      (snapshotAt sevm pre) .silent (snapshotAt sevm post)) :
+    X (vaultSnapshot vault post) * D (vaultSnapshot vault pre) =
+      X (vaultSnapshot vault pre) * D (vaultSnapshot vault post) + 0 + 0 + 0 := by
+  have shape := Blanc.Prorata.ProrataAccountingEffect.silent_inv effect
+  simp only [snapshotAt_eq] at shape
+  rw [target] at shape
+  rw [shape]
+  simp
+
 /-- One State-linked, actual-effect accounting transition. -/
 structure FourQuoteTransition (vault : Adr) (before after : State) : Type where
   sevm : Sevm
@@ -1010,6 +1083,16 @@ theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : De
   | credit words wethTarget sourceNotVault supplyKept rowNof effect =>
       simpa [roundingContribution, retainedContribution, creditContribution] using
         credit_step_exact words wethTarget sourceNotVault supplyKept rowNof effect
+  | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        silent_step_exact target (transferEffect_accountingStep config memoryWf run selectorEq)
+  | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        silent_step_exact target
+          (transferFromEffect_accountingStep config memoryWf run selectorEq)
+  | approve words target owner spender amount config memoryWf run selectorEq =>
+      simpa [roundingContribution, retainedContribution, creditContribution] using
+        silent_step_exact target (approveEffect_accountingStep config memoryWf run selectorEq)
 
 /-- Every actual four-quote operation weakly increases the virtual-asset
 price per share. -/
