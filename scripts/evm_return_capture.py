@@ -122,6 +122,59 @@ def capture_runtime(target: int, calldata: bytes, *, max_return_bytes: int,
     return bytes(code) + calldata, layout
 
 
+def forwarding_capture_runtime(*, max_return_bytes: int,
+                               base: int) -> tuple[bytes, CaptureLayout]:
+    """Emit one reusable zero-value CALL recorder for causal histories.
+
+    The outer calldata is a 32-byte target word followed by the exact child
+    calldata.  Unlike ``capture_runtime``, this code is installed at the
+    history root and stays byte-identical while the same contract performs
+    approvals and vault operations.  Its marker is a monotonically increasing
+    observation counter, allowing the caller to reject a stale record when an
+    intended inner call was omitted.
+    """
+    layout = capture_layout(base, max_return_bytes)
+    code = bytearray()
+
+    # Reject a malformed envelope before CALL or marker advancement.
+    code += push(32) + b"\x36\x10"  # CALLDATASIZE < 32
+    malformed_at = len(code) + 1
+    code += push(0, 2) + b"\x57"
+
+    # Copy calldata[32:] to memory[0:].
+    code += push(32) + b"\x36\x03"
+    code += push(32) + push(0) + b"\x37"
+
+    # CALL(gas, calldata_word_0, 0, 0, calldata.length - 32, 0, 0).
+    code += push(0) + push(0)
+    code += push(32) + b"\x36\x03"
+    code += push(0) + push(0) + push(0) + b"\x35\x5a\xf1"
+    code += push(layout.success) + b"\x55"
+    code += b"\x3d" + push(layout.length) + b"\x55"
+    code += push(layout.marker) + b"\x54" + push(1) + b"\x01"
+    code += push(layout.marker) + b"\x55"
+
+    if max_return_bytes:
+        code += push(max_return_bytes) + b"\x3d\x11"
+        skip_copy_at = len(code) + 1
+        code += push(0, 2) + b"\x57"
+        code += b"\x3d" + push(0) + push(SCRATCH) + b"\x3e"
+        for word in range(layout.words):
+            code += push(SCRATCH + 32 * word) + b"\x51"
+            code += push(layout.first_word + word) + b"\x55"
+        if len(code) >= 1 << 16:
+            raise ValueError("forwarding recorder copy block exceeds PUSH2 jump offset")
+        code[skip_copy_at:skip_copy_at + 2] = len(code).to_bytes(2, "big")
+        code += b"\x5b"
+    code += b"\x00"
+
+    if len(code) >= 1 << 16:
+        raise ValueError("forwarding recorder exceeds PUSH2 malformed jump offset")
+    code[malformed_at:malformed_at + 2] = len(code).to_bytes(2, "big")
+    code += b"\x5b\x5f\x5f\xfd"  # JUMPDEST; REVERT(0, 0)
+    return bytes(code), layout
+
+
 def decode(storage_get, layout: CaptureLayout) -> dict[str, int | bytes]:
     """Read one capture record through the host fixture's storage accessor."""
     marker = storage_get(layout.marker)
@@ -129,6 +182,25 @@ def decode(storage_get, layout: CaptureLayout) -> dict[str, int | bytes]:
     length = storage_get(layout.length)
     if marker != 1:
         raise ValueError(f"capture marker is {marker}, expected 1")
+    if success not in (0, 1):
+        raise ValueError(f"capture CALL success flag is {success}, expected 0 or 1")
+    capacity = 32 * layout.words
+    if length > capacity:
+        raise ValueError(f"capture returned {length} bytes, above its {capacity}-byte bound")
+    words = b"".join(storage_get(layout.first_word + i).to_bytes(32, "big")
+                     for i in range(layout.words))
+    return {"success": success, "length": length,
+            "returndata": words[:length]}
+
+
+def decode_fresh(storage_get, layout: CaptureLayout, expected_marker: int
+                 ) -> dict[str, int | bytes]:
+    """Decode a reusable recorder result at one required counter value."""
+    marker = storage_get(layout.marker)
+    if marker != expected_marker:
+        raise ValueError(f"capture marker is {marker}, expected {expected_marker}")
+    success = storage_get(layout.success)
+    length = storage_get(layout.length)
     if success not in (0, 1):
         raise ValueError(f"capture CALL success flag is {success}, expected 0 or 1")
     capacity = 32 * layout.words

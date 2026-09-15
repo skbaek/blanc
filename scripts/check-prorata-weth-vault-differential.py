@@ -45,7 +45,12 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 from evm_tx import address_of, sign_eip1559  # noqa: E402
-from evm_return_capture import capture_runtime, decode as decode_capture  # noqa: E402
+from evm_return_capture import (  # noqa: E402
+    capture_runtime,
+    decode as decode_capture,
+    decode_fresh as decode_fresh_capture,
+    forwarding_capture_runtime,
+)
 from keccak import keccak256, selector  # noqa: E402
 from prorata_weth_vault_differential_matrix import (  # noqa: E402
     ARITHMETIC_CAPACITY_CASES,
@@ -135,6 +140,14 @@ EXECUTED_CASE_CHANNELS = {
     "event-order-deposit": ("jaune",),
     "event-order-share-transfer": ("jaune",),
     "return-capture-controls": ("jaune",),
+    "causal-return-deposit-caller-receiver": ("jaune",),
+    "causal-return-deposit-caller-distinct-receiver": ("jaune",),
+    "causal-return-mint-caller-receiver": ("jaune",),
+    "causal-return-mint-caller-distinct-receiver": ("jaune",),
+    **{f"causal-return-{method}-{role}": ("jaune",)
+       for method in ("withdraw", "redeem") for role in (
+           "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+           "owner-receiver-distinct-caller", "all-distinct")},
     **{case: ("jaune", "eels") for case in ARITHMETIC_CAPACITY_CASES},
 }
 
@@ -421,6 +434,19 @@ class Runner:
                 self.add_eoa(world, signing_key)
         return world
 
+    def causal_capture_root(self, signing_keys: tuple[int, ...], *,
+                            max_return_bytes: int = 32
+                            ) -> tuple[dict, bytes, object]:
+        """Install the reusable recorder once in the otherwise fresh root."""
+        code, layout = forwarding_capture_runtime(
+            max_return_bytes=max_return_bytes, base=0xC000)
+        world = self.causal_root(signing_keys)
+        world[address(CAPTURE_ADDR)] = {
+            "balance": h(0), "nonce": h(1),
+            "code": "0x" + code.hex(), "storage": {},
+        }
+        return world, code, layout
+
     def call(self, alloc: dict, data: str, value: int = 0,
              gas: int = 3_000_000, label: str | None = None, *,
              target: int = VAULT_ADDR, nonce: int = 0, signing_key: int = KEY) -> dict:
@@ -464,6 +490,59 @@ class Runner:
             observed = decode_capture(lambda slot: storage_get(storage, slot), layout)
         except ValueError as exc:
             raise RuntimeError(f"{label}: {exc}") from exc
+        return result, observed
+
+    def causal_capture(self, alloc: dict, target: int, data: str, *,
+                       code: bytes, layout, label: str,
+                       signing_key: int = KEY
+                       ) -> tuple[dict, dict[str, int | bytes]]:
+        """Execute one call through the root-installed recorder and decode it.
+
+        Code identity is checked before and after the transaction.  The
+        expected marker derives from the actual prior storage, so omission or
+        reuse of an older observation cannot satisfy this call.
+        """
+        try:
+            before = _normalized_account(alloc, CAPTURE_ADDR)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: recorder root account is malformed: {exc}") from exc
+        if (before["balance"] != 0 or before["nonce"] != 1
+                or before["code"] != code):
+            raise RuntimeError(f"{label}: recorder code identity changed during causal history")
+        prior_marker = storage_get(alloc[address(CAPTURE_ADDR)].get("storage", {}),
+                                   layout.marker)
+        payload = target.to_bytes(32, "big") + bytes.fromhex(data.removeprefix("0x"))
+        result = self.call(
+            alloc, "0x" + payload.hex(), target=CAPTURE_ADDR,
+            nonce=_next_nonce(alloc, signing_key), signing_key=signing_key)
+        body = result.get("result")
+        receipts = body.get("receipts") if isinstance(body, dict) else None
+        if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+            raise RuntimeError(f"{label}: recorder transaction was not accepted exactly once")
+        try:
+            status = int(receipts[0]["status"], 16)
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError(f"{label}: recorder receipt has no hexadecimal status") from None
+        if status != 1:
+            raise RuntimeError(f"{label}: recorder transaction reverted with status {status}")
+        post = result.get("alloc", {})
+        try:
+            after = _normalized_account(post, CAPTURE_ADDR)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: recorder post-state is malformed: {exc}") from exc
+        if (after["balance"] != 0 or after["nonce"] != 1
+                or after["code"] != code):
+            raise RuntimeError(f"{label}: recorder code identity changed during causal history")
+        storage = post.get(address(CAPTURE_ADDR), {}).get("storage")
+        if not isinstance(storage, dict):
+            raise RuntimeError(f"{label}: recorder post-state storage is absent")
+        try:
+            observed = decode_fresh_capture(
+                lambda slot: storage_get(storage, slot), layout, prior_marker + 1)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: {exc}") from exc
+        if set(after["storage"]) - set(layout.slots()):
+            raise RuntimeError(f"{label}: recorder owns unexpected nonzero storage slots")
         return result, observed
 
     def shares(self, vault_storage: dict, account: int) -> int:
@@ -1995,6 +2074,219 @@ def check_action_returns(run: Runner) -> None:
             fail(f"{label}: captured action return differs from its independent oracle observation")
 
 
+def _causal_return_observation(label: str, observed: dict[str, int | bytes],
+                               expected_value: int) -> None:
+    expected = expected_value.to_bytes(32, "big")
+    if observed["success"] != 1:
+        fail(f"{label}: observed inner success {observed['success']}, expected 1")
+    if observed["length"] != 32:
+        fail(f"{label}: observed full return length {observed['length']}, expected 32")
+    if observed["returndata"] != expected:
+        fail(f"{label}: observed return word differs from independent oracle value {expected_value}")
+
+
+def _fixed_recorder_prefix(label: str, alloc: dict, code: bytes) -> None:
+    """Require the root recorder to remain exact across a direct prefix step."""
+    try:
+        account = _normalized_account(alloc, CAPTURE_ADDR)
+    except ValueError as exc:
+        fail(f"{label}: recorder account is malformed: {exc}")
+        return
+    expected = {"balance": 0, "nonce": 1, "code": code, "storage": {}}
+    if account != expected:
+        fail(f"{label}: fixed recorder identity or pristine storage changed during prefix")
+
+
+def _funded_recorder(run: Runner, label: str, funding: int,
+                     signing_keys: tuple[int, ...]
+                     ) -> tuple[dict, V.Vault, tuple[int, ...], bytes, object] | None:
+    """Fund the fixed recorder through actual WETH calls and approve the vault."""
+    root, code, layout = run.causal_capture_root(signing_keys)
+    funder = signer_address(KEY)
+    prefix = run_sequence(run, label, root, [
+        ("fund EOA WETH", WETH_ADDR, "0x", funding, KEY),
+        ("transfer WETH to recorder", WETH_ADDR,
+         abi("transfer(address,uint256)", CAPTURE_ADDR, funding), 0, KEY),
+    ])
+    if prefix is None:
+        return None
+    accounts = tuple(dict.fromkeys(
+        (funder, CAPTURE_ADDR, *(signer_address(key) for key in signing_keys), VAULT_ADDR)))
+    _fixed_recorder_prefix(f"{label} causal root", root, code)
+    model = V.Vault(vault_address=VAULT_ADDR, weth={funder: funding})
+    _fixed_recorder_prefix(f"{label} EOA WETH funding", prefix[0]["alloc"], code)
+    _exact_event(f"{label} EOA WETH funding", prefix[0], contract=WETH_ADDR,
+                 signature="Deposit(address,uint256)", indexed=(funder,),
+                 data_words=(funding,))
+    _pair_state(run, f"{label} EOA WETH funding", prefix[0], model, accounts)
+    model._weth_move(funder, CAPTURE_ADDR, funding)
+    _fixed_recorder_prefix(f"{label} recorder WETH transfer", prefix[1]["alloc"], code)
+    _exact_event(f"{label} recorder funding", prefix[-1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(funder, CAPTURE_ADDR), data_words=(funding,))
+    _pair_state(run, f"{label} recorder funding", prefix[-1], model, accounts)
+    try:
+        approval, observed = run.causal_capture(
+            prefix[-1]["alloc"], WETH_ADDR,
+            abi("approve(address,uint256)", VAULT_ADDR, funding),
+            code=code, layout=layout, label=f"{label} recorder WETH approval")
+    except RuntimeError as exc:
+        fail(str(exc))
+        return None
+    _causal_return_observation(f"{label} recorder WETH approval", observed, 1)
+    model.weth_allowances[(CAPTURE_ADDR, VAULT_ADDR)] = funding
+    _exact_event(f"{label} recorder WETH approval", approval, contract=WETH_ADDR,
+                 signature="Approval(address,address,uint256)",
+                 indexed=(CAPTURE_ADDR, VAULT_ADDR), data_words=(funding,))
+    _pair_state(run, f"{label} recorder WETH approval", approval, model, accounts,
+                weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),))
+    return approval["alloc"], model, accounts, code, layout
+
+
+def check_causal_inbound_action_returns(run: Runner) -> None:
+    """Observe actual deposit/mint returns from a funded fixed recorder."""
+    other_key = 2
+    other = signer_address(other_key)
+    cases = (
+        ("deposit", "caller-receiver", CAPTURE_ADDR, 7),
+        ("deposit", "caller-distinct-receiver", other, 7),
+        ("mint", "caller-receiver", CAPTURE_ADDR, 2000),
+        ("mint", "caller-distinct-receiver", other, 2000),
+    )
+    for method, role, receiver, amount in cases:
+        case = f"causal-return-{method}-{role}"
+        failures_before = len(FAILURES)
+        setup = _funded_recorder(run, case, 100, (KEY, other_key))
+        if setup is not None:
+            world, model, accounts, code, layout = setup
+            committed, expected, next_model = oracle_transaction(
+                model, method, CAPTURE_ADDR, amount, receiver)
+            if not committed:
+                fail(f"{case}: independent oracle rejected the funded inbound call")
+            else:
+                try:
+                    result, observed = run.causal_capture(
+                        world, VAULT_ADDR, abi(f"{method}(uint256,address)", amount, receiver),
+                        code=code, layout=layout, label=case)
+                except RuntimeError as exc:
+                    fail(str(exc))
+                else:
+                    _causal_return_observation(case, observed, expected)
+                    _pair_state(run, case, result, next_model, accounts,
+                                weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),))
+                    if method == "deposit":
+                        _deposit_events(case, result, CAPTURE_ADDR, receiver, amount, expected)
+                    else:
+                        _deposit_events(case, result, CAPTURE_ADDR, receiver, expected, amount)
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+
+
+def _outbound_return_case(run: Runner, method: str, role: str,
+                          owner: int, receiver: int, allowance: int | None) -> None:
+    """Build shares causally, then observe one recorder-owned or delegated exit."""
+    case = f"causal-return-{method}-{role}"
+    failures_before = len(FAILURES)
+    root, code, layout = run.causal_capture_root((KEY, 2))
+    funder = signer_address(KEY)
+    deposit_assets = 11
+    prefix_steps = [
+        ("fund owner WETH", WETH_ADDR, "0x", 100, KEY),
+        ("approve owner WETH", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+        ("deposit owner shares", VAULT_ADDR,
+         abi("deposit(uint256,address)", deposit_assets, owner), 0, KEY),
+    ]
+    if allowance is not None:
+        prefix_steps.append(("approve recorder shares", VAULT_ADDR,
+                             abi("approve(address,uint256)", CAPTURE_ADDR, allowance), 0, KEY))
+    prefix = run_sequence(run, case, root, prefix_steps)
+    if prefix is None:
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    accounts = (funder, CAPTURE_ADDR, signer_address(2), VAULT_ADDR)
+    _fixed_recorder_prefix(f"{case} causal root", root, code)
+    model = V.Vault(vault_address=VAULT_ADDR, weth={funder: 100})
+    _fixed_recorder_prefix(f"{case} owner WETH funding", prefix[0]["alloc"], code)
+    _exact_event(f"{case} owner WETH funding", prefix[0], contract=WETH_ADDR,
+                 signature="Deposit(address,uint256)", indexed=(funder,), data_words=(100,))
+    _pair_state(run, f"{case} owner WETH funding", prefix[0], model, accounts)
+    model.weth_allowances[(funder, VAULT_ADDR)] = 100
+    _fixed_recorder_prefix(f"{case} owner WETH approval", prefix[1]["alloc"], code)
+    _exact_event(f"{case} owner WETH approval", prefix[1], contract=WETH_ADDR,
+                 signature="Approval(address,address,uint256)",
+                 indexed=(funder, VAULT_ADDR), data_words=(100,))
+    _pair_state(run, f"{case} owner WETH approval", prefix[1], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),))
+    committed, minted, model = oracle_transaction(
+        model, "deposit", funder, deposit_assets, owner)
+    if not committed:
+        fail(f"{case}: independent oracle rejected share setup")
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    _fixed_recorder_prefix(f"{case} owner deposit", prefix[2]["alloc"], code)
+    _deposit_events(f"{case} owner deposit", prefix[2], funder, owner,
+                    deposit_assets, minted)
+    _pair_state(run, f"{case} owner deposit", prefix[2], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),))
+    if allowance is not None:
+        committed, _, model = oracle_transaction(
+            model, "approve", funder, CAPTURE_ADDR, allowance)
+        if not committed:
+            fail(f"{case}: independent oracle rejected share approval setup")
+            record_case_if_clean(case, "jaune", run.side.name, failures_before)
+            return
+        _exact_event(f"{case} share approval", prefix[-1], contract=VAULT_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(funder, CAPTURE_ADDR), data_words=(allowance,))
+        _fixed_recorder_prefix(f"{case} share approval", prefix[-1]["alloc"], code)
+    share_pairs = ((owner, CAPTURE_ADDR),) if allowance is not None else ()
+    _pair_state(run, f"{case} setup", prefix[-1], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),), share_allowances=share_pairs)
+    if method == "withdraw":
+        amount = 3
+        calldata = abi("withdraw(uint256,address,address)", amount, receiver, owner)
+    else:
+        amount = 2000
+        calldata = abi("redeem(uint256,address,address)", amount, receiver, owner)
+    committed, expected, next_model = oracle_transaction(
+        model, method, CAPTURE_ADDR, amount, receiver, owner)
+    if not committed:
+        fail(f"{case}: independent oracle rejected funded outbound call")
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    try:
+        result, observed = run.causal_capture(
+            prefix[-1]["alloc"], VAULT_ADDR, calldata,
+            code=code, layout=layout, label=case)
+    except RuntimeError as exc:
+        fail(str(exc))
+    else:
+        _causal_return_observation(case, observed, expected)
+        _pair_state(run, case, result, next_model, accounts,
+                    weth_allowances=((funder, VAULT_ADDR),), share_allowances=share_pairs)
+        if method == "withdraw":
+            _withdraw_events(case, result, CAPTURE_ADDR, receiver, owner, amount, expected)
+        else:
+            _withdraw_events(case, result, CAPTURE_ADDR, receiver, owner, expected, amount)
+    record_case_if_clean(case, "jaune", run.side.name, failures_before)
+
+
+def check_causal_outbound_action_returns(run: Runner) -> None:
+    """Observe withdraw/redeem returns across all five role partitions."""
+    owner_eoa = signer_address(KEY)
+    other = signer_address(2)
+    roles = (
+        ("all-equal", CAPTURE_ADDR, CAPTURE_ADDR, None),
+        ("caller-owner-distinct-receiver", CAPTURE_ADDR, other, None),
+        ("caller-receiver-distinct-owner", owner_eoa, CAPTURE_ADDR, 10_000),
+        ("owner-receiver-distinct-caller", owner_eoa, owner_eoa, V.U),
+        ("all-distinct", owner_eoa, other, 10_000),
+    )
+    for method in ("withdraw", "redeem"):
+        for role, owner, receiver, allowance in roles:
+            _outbound_return_case(run, method, role, owner, receiver, allowance)
+
+
 def check_eels_action_returns(run: Runner) -> None:
     """Pinned EELS executes the same seven mutation-return observations."""
     _eels_root()
@@ -2322,6 +2614,8 @@ CHECKS = [
     check_share_transfer_event,
     check_view_returns,
     check_action_returns,
+    check_causal_inbound_action_returns,
+    check_causal_outbound_action_returns,
     check_malformed_calls_revert,
     check_value_bearing_call_reverts,
 ]
@@ -2485,6 +2779,30 @@ PERTURBATIONS = [
      "return representable(ceil_div(s * numerator(assets), denominator(supply)))",
      "return representable(floor_div(s * numerator(assets), denominator(supply)))"),
 ]
+
+CAUSAL_RETURN_PERTURBATIONS = (
+    ("stale recorder observation", "capture marker is 0, expected 1", "helper",
+     'code += push(layout.marker) + b"\\x54" + push(1) + b"\\x01"',
+     'code += push(layout.marker) + b"\\x54"'),
+    ("wrong observed return word", "observed return word differs", "checker",
+     'expected = expected_' 'value.to_bytes(32, "big")',
+     'expected = (expected_value + 1).to_bytes(32, "big")'),
+    ("wrong observed return length", "observed full return length 32, expected 31", "checker",
+     'if observed["length"] != 32:\n        fail(f"{label}: observed full return length {observed[\'length\']}, expected 32")',
+     'if observed["length"] != 31:\n        fail(f"{label}: observed full return length {observed[\'length\']}, expected 31")'),
+    ("wrong observed inner status", "observed inner success 1, expected 0", "checker",
+     'if observed["success"] != 1:\n        fail(f"{label}: observed inner success {observed[\'success\']}, expected 1")',
+     'if observed["success"] != 0:\n        fail(f"{label}: observed inner success {observed[\'success\']}, expected 0")'),
+    ("missing real recorder approval", "observed inner success 0, expected 1", "checker",
+     'abi("approve(address,uint256)", VAULT_ADDR, funding),\n            code=code',
+     'abi("approve(address,uint256)", VAULT_ADDR, 0),\n            code=code'),
+    ("missing real recorder funding", "observed inner success 0, expected 1", "checker",
+     'abi("transfer(address,uint256)", CAPTURE_ADDR, ' 'funding), 0, KEY),',
+     'abi("transfer(address,uint256)", CAPTURE_ADDR, 0), 0, KEY),'),
+    ("changed recorder code", "recorder code identity changed during causal history", "checker",
+     'try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,',
+     'prefix[-1]["alloc"][address(CAPTURE_ADDR)]["code"] = "0x00"\n    try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,'),
+)
 
 
 def _matching_regression_line(output: str, category: str, needle: str) -> str | None:
@@ -2952,6 +3270,113 @@ def self_test(report_path: Path | None = None) -> int:
     return 0
 
 
+def causal_return_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test the causal recorder's observation and setup controls."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-causal-return-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        helper = sandbox / "scripts" / "evm_return_capture.py"
+        originals = {"checker": checker.read_text(), "helper": helper.read_text()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--causal-return-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("causal-return baseline is not green before mutations")
+        for label, needle, file_key, old, new in CAUSAL_RETURN_PERTURBATIONS:
+            path = checker if file_key == "checker" else helper
+            original = originals[file_key]
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — causal return differential:")
+                and needle in line
+            ), None)
+            path.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--causal-return-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--causal-return-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--causal-return-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — causal return self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — causal return self-test control: {record['label']}")
+    print(f"OK — causal return self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+def causal_return_only() -> int:
+    """Run the fixed-recorder cases on both compiled sides for control loops."""
+    if not JAUNE.is_file():
+        print(f"REGRESSION — causal return differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        check_causal_inbound_action_returns(run)
+        check_causal_outbound_action_returns(run)
+    expected = {
+        (case, "jaune", side)
+        for case in EXECUTED_CASE_CHANNELS
+        if case.startswith("causal-return-")
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("causal return executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — causal return differential: {message}")
+        return 1
+    print(f"OK — causal return differential: {len(expected)} case/side observations")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     for error in validate_manifest():
         fail(error)
@@ -3007,6 +3432,16 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    if "--causal-return-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(causal_return_self_test(report))
+    if "--causal-return-only" in args:
+        raise SystemExit(causal_return_only())
     if "--self-test" in args:
         report = None
         if "--self-test-report" in args:

@@ -84,6 +84,13 @@ CASES = (
     "malformed-dispatch",
     "nonpayable-rollbacks", "event-order-deposit",
     "event-order-share-transfer", "return-capture-controls",
+    "causal-return-deposit-caller-receiver",
+    "causal-return-deposit-caller-distinct-receiver",
+    "causal-return-mint-caller-receiver",
+    "causal-return-mint-caller-distinct-receiver",
+    *tuple(f"causal-return-{method}-{role}" for method in ("withdraw", "redeem") for role in (
+        "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+        "owner-receiver-distinct-caller", "all-distinct")),
     "callback-and-attack-rollbacks",
     *ARITHMETIC_CAPACITY_CASES,
 )

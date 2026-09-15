@@ -4,7 +4,7 @@
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 1
   },
-  "producerSha256": "9a80b330ff57db6592f0f7f95fe9a5dce2f8a35a8b6bc8646efceef00cb0f5eb",
+  "producerSha256": "98f046a30ef0d09f9620bee70ef07d6c58b0c0ea3c4c907215d0b83e618efff7",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -71,6 +71,20 @@
       "event-order-deposit",
       "event-order-share-transfer",
       "return-capture-controls",
+      "causal-return-deposit-caller-receiver",
+      "causal-return-deposit-caller-distinct-receiver",
+      "causal-return-mint-caller-receiver",
+      "causal-return-mint-caller-distinct-receiver",
+      "causal-return-withdraw-all-equal",
+      "causal-return-withdraw-caller-owner-distinct-receiver",
+      "causal-return-withdraw-caller-receiver-distinct-owner",
+      "causal-return-withdraw-owner-receiver-distinct-caller",
+      "causal-return-withdraw-all-distinct",
+      "causal-return-redeem-all-equal",
+      "causal-return-redeem-caller-owner-distinct-receiver",
+      "causal-return-redeem-caller-receiver-distinct-owner",
+      "causal-return-redeem-owner-receiver-distinct-caller",
+      "causal-return-redeem-all-distinct",
       "callback-and-attack-rollbacks",
       "capacity-supply-upper-bound",
       "capacity-one-share-room",
@@ -114,8 +128,8 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "a6f1360a7f14921d9d12cfe91c88ef2f386bbbca57e11b407924b82320e9d6a7",
-      "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
+      "scripts/check-prorata-weth-vault-differential.py": "a1952a37928abc2aa78c71ca6685131c55ea1d31c1ab812665c5925396c6eaa5",
+      "scripts/evm_return_capture.py": "1b02fa9c00abe0761cad3c54e69282828a20d2ee5a96d929274b9b095e3d1adf",
       "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
     }
   }
