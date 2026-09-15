@@ -576,7 +576,7 @@ theorem of_run_afterJoin {fs : List Func} {e : Sevm}
 
 /-! ## `join()`, end to end at source level -/
 
-theorem of_run_join {fs : List Func} (hlookup : AuxLookup fs)
+theorem of_run_join_full {fs : List Func} (hlookup : AuxLookup fs)
     {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
     (run : Func.Run fs e s Drip.join r) :
@@ -591,6 +591,15 @@ theorem of_run_join {fs : List Func} (hlookup : AuxLookup fs)
       B256.RPowGuards scale half rate
         (e.benvStat.time -
           Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      B256.Nofm (Devm.getStorVal entry e.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat) ∧
+      ¬ maxChi <
+        (B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
       ∃ freshChi units,
         freshChi =
           (B256.rpow scale half rate
@@ -745,7 +754,49 @@ theorem of_run_join {fs : List Func} (hlookup : AuxLookup fs)
       of_run_afterJoin frame16 hp16 run
     simp only [harg, hrow, htotal, hnow] at hrowCap htotalCap hstor hret
     refine ⟨hassetCap, hrowCapPre, htotalCapPre, hlower, hupper, hclock,
-      helapsed, hguards, _, _, rfl, rfl, hrowCap, htotalCap, hstor, hret⟩
+      helapsed, hguards, hnofm, hcapChi, _, _, rfl, rfl, hrowCap, htotalCap,
+      hstor, hret⟩
+
+/-- Compatibility projection of `of_run_join_full` for consumers that need
+only the established public endpoint surface. -/
+theorem of_run_join {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.join r) :
+    ¬ maxAsset < e.value ∧
+      ¬ maxUnits < Devm.getStorVal entry e.currentTarget e.caller.toB256 ∧
+      ¬ maxPie < Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      ∃ freshChi units,
+        freshChi =
+          (B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+        units = scale * e.value / freshChi ∧
+        ¬ maxUnits <
+          Devm.getStorVal entry e.currentTarget e.caller.toB256 + units ∧
+        ¬ maxPie <
+          units + Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
+        Devm.getStor r e.currentTarget =
+          ((((Devm.getStor entry e.currentTarget).set chiSlot freshChi).set
+              rhoSlot e.benvStat.time).set e.caller.toB256
+              (Devm.getStorVal entry e.currentTarget e.caller.toB256 +
+                units)).set totalUnitsSlot
+            (units + Devm.getStorVal entry e.currentTarget totalUnitsSlot) ∧
+        ReturnsWord units r := by
+  rcases of_run_join_full hlookup frame hp run with
+    ⟨hasset, hrow, htotal, hlower, hupper, hclock, helapsed, hguards,
+      -, -, fresh, units, hfresh, hunits, hrowPost, htotalPost, hstor, hret⟩
+  exact ⟨hasset, hrow, htotal, hlower, hupper, hclock, helapsed, hguards,
+    fresh, units, hfresh, hunits, hrowPost, htotalPost, hstor, hret⟩
 
 /-! ## `exit`'s checks-effects-interactions boundary
 
@@ -767,6 +818,7 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
             (scratch image rowWord - scratch image argumentWord)).set
           totalUnitsSlot
           (scratch image totalWord - scratch image argumentWord) ∧
+      Devm.getCode t = Devm.getCode entry ∧
       (((chi * scratch image argumentWord) / scale) :: tail <<+ t.stack) ∧
       Mem.Wf t.memory ∧
       Mem.Reads t.memory image ∧
@@ -940,7 +992,32 @@ theorem of_run_afterExit_settles {fs : List Func} {e : Sevm}
   have hp14 : payout :: tail <<+ s14.stack := prefix_of_sstore hstore4 hpx2
   have hmem14 : s13.memory = s14.memory :=
     Line.of_inv Devm.memory (by line_inv) hline14
-  exact ⟨s14, hstor14, hp14, hmem14 ▸ hwf13, hmem14 ▸ hreads13, run⟩
+  have hcode14 : Devm.getCode s14 = Devm.getCode entry := by
+    calc
+      Devm.getCode s14 = Devm.getCode s13 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline14).symm
+      _ = Devm.getCode s12 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline13).symm
+      _ = Devm.getCode s11 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline12).symm
+      _ = Devm.getCode s10 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline11).symm
+      _ = Devm.getCode s9 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline10).symm
+      _ = Devm.getCode s8 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline9).symm
+      _ = Devm.getCode s7 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline8).symm
+      _ = Devm.getCode s6 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline7).symm
+      _ = Devm.getCode s5 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline6).symm
+      _ = Devm.getCode s3 :=
+        (Line.of_inv Devm.getCode (by line_inv) hline5).symm
+      _ = Devm.getCode entry := by
+        funext a
+        exact getCode_eq_of_state_eq frame3.state.symm a
+  exact ⟨s14, hstor14, hcode14, hp14, hmem14 ▸ hwf13, hmem14 ▸ hreads13, run⟩
 
 /-! ## `exit(units)`, end to end at source level up to the outbound call
 
@@ -950,7 +1027,7 @@ commits all four ledger writes before the outbound `CALL` is reached.  The
 child crossing and the whole-frame rollback on a failed child are the one
 remaining piece of the endpoint. -/
 
-theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
+theorem of_run_exit_settles_full {fs : List Func} (hlookup : AuxLookup fs)
     {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
     (run : Func.Run fs e s Drip.exit r) :
@@ -969,12 +1046,22 @@ theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
       B256.RPowGuards scale half rate
         (e.benvStat.time -
           Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      B256.Nofm (Devm.getStorVal entry e.currentTarget chiSlot)
+        (B256.rpow scale half rate
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat) ∧
+      ¬ maxChi <
+        (B256.rpow scale half rate
+              (e.benvStat.time -
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
       ∃ t freshChi settledImage,
         freshChi =
           (B256.rpow scale half rate
                 (e.benvStat.time -
-                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
               Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+        Devm.getCode t = Devm.getCode entry ∧
         ((freshChi * Sevm.dataWord e (32 * 0 + 4)) / scale) :: tail <<+ t.stack ∧
         Mem.Wf t.memory ∧
         Mem.Reads t.memory settledImage ∧
@@ -1161,15 +1248,61 @@ theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
   rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
     ⟨htagD, run⟩ | ⟨htagJ, run⟩
   · exact absurd (htag.symm.trans htagA) (by decide +kernel)
-  · obtain ⟨t26, hstor, hp26, hwf26, hreads26, run⟩ :=
+  · obtain ⟨t26, hstor, hcode26, hp26, hwf26, hreads26, run⟩ :=
       of_run_afterExit_settles frame25 hp25 run
     simp only [harg, hrow, htotal, hnow] at hstor hp26
     exact ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
-      helapsed, hguards, t26, _,
-      image24, rfl, hp26, hwf26, hreads26, hstor, run⟩
+      helapsed, hguards, hnofm, hcapChi, t26, _,
+      image24, rfl, hcode26, hp26, hwf26, hreads26, hstor, run⟩
   · exact absurd (htag.symm.trans htagU) (by decide +kernel)
   · exact absurd (htag.symm.trans htagD) (by decide +kernel)
   · exact absurd (htag.symm.trans htagJ) (by decide +kernel)
+
+ /-- Compatibility projection of `of_run_exit_settles_full` for consumers that
+only need the established public settlement surface. -/
+theorem of_run_exit_settles {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s Drip.exit r) :
+    ¬ maxUnits < Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ maxUnits < Devm.getStorVal entry e.currentTarget e.caller.toB256 ∧
+      ¬ maxPie < Devm.getStorVal entry e.currentTarget totalUnitsSlot ∧
+      ¬ Devm.getStorVal entry e.currentTarget e.caller.toB256 <
+        Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal entry e.currentTarget totalUnitsSlot <
+        Sevm.dataWord e (32 * 0 + 4) ∧
+      ¬ Devm.getStorVal entry e.currentTarget chiSlot < scale ∧
+      ¬ maxChi < Devm.getStorVal entry e.currentTarget chiSlot ∧
+      ¬ e.benvStat.time < Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      ¬ maxElapsed <
+        e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot ∧
+      B256.RPowGuards scale half rate
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
+      ∃ t freshChi settledImage,
+        freshChi =
+          (B256.rpow scale half rate
+                (e.benvStat.time -
+                  Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry e.currentTarget chiSlot) / scale ∧
+        ((freshChi * Sevm.dataWord e (32 * 0 + 4)) / scale) :: tail <<+ t.stack ∧
+        Mem.Wf t.memory ∧
+        Mem.Reads t.memory settledImage ∧
+        Devm.getStor t e.currentTarget =
+          ((((Devm.getStor entry e.currentTarget).set chiSlot freshChi).set
+              rhoSlot e.benvStat.time).set e.caller.toB256
+              (Devm.getStorVal entry e.currentTarget e.caller.toB256 -
+                Sevm.dataWord e (32 * 0 + 4))).set totalUnitsSlot
+            (Devm.getStorVal entry e.currentTarget totalUnitsSlot -
+              Sevm.dataWord e (32 * 0 + 4)) ∧
+        Func.Run fs e t
+          (dup 0 ::: sendToCaller +++
+            ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> Func.revert)) r := by
+  rcases of_run_exit_settles_full hlookup frame hp run with
+    ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
+      hguards, -, -, t, fresh, image, hfresh, -, hp, hwf, hreads, hstor, hrun⟩
+  exact ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
+    hguards, t, fresh, image, hfresh, hp, hwf, hreads, hstor, hrun⟩
 
 /-! ## `exit`'s entered child and exact return
 
@@ -1328,20 +1461,56 @@ def ExitPaysExactly (sevm : Sevm) (entry post : Devm) : Prop :=
       Devm.getBal post = Devm.getBal callPost ∧
       ReturnsWord payout post
 
-theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
+/-- The full successful-source carrier for `exit`.  It retains the compiled
+fresh-index no-wrap/cap facts and the pre-callback code equality needed to
+apply the retained-execution induction hypothesis at the actual child call. -/
+def ExitPaysExactlyFull (sevm : Sevm) (entry post : Devm) : Prop :=
+  let units := Sevm.dataWord sevm (32 * 0 + 4)
+  let oldRow := Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256
+  let oldTotal := Devm.getStorVal entry sevm.currentTarget totalUnitsSlot
+  let oldChi := Devm.getStorVal entry sevm.currentTarget chiSlot
+  let oldRho := Devm.getStorVal entry sevm.currentTarget rhoSlot
+  let elapsed := sevm.benvStat.time - oldRho
+  let freshChi :=
+    (B256.rpow scale half rate elapsed.toNat * oldChi) / scale
+  let payout := (freshChi * units) / scale
+  ¬ maxUnits < units ∧
+    ¬ maxUnits < oldRow ∧
+    ¬ maxPie < oldTotal ∧
+    ¬ oldRow < units ∧
+    ¬ oldTotal < units ∧
+    ¬ oldChi < scale ∧
+    ¬ maxChi < oldChi ∧
+    ¬ sevm.benvStat.time < oldRho ∧
+    ¬ maxElapsed < elapsed ∧
+    B256.RPowGuards scale half rate elapsed.toNat ∧
+    B256.Nofm oldChi (B256.rpow scale half rate elapsed.toNat) ∧
+    ¬ maxChi < freshChi ∧
+    ∃ callPre callPost guardPost returnPre,
+      Devm.getStor callPre sevm.currentTarget =
+        ((((Devm.getStor entry sevm.currentTarget).set chiSlot freshChi).set
+              rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+              (oldRow - units)).set totalUnitsSlot (oldTotal - units) ∧
+      Devm.getCode callPre = Devm.getCode entry ∧
+      AcceptedPayout sevm payout callPre callPost guardPost returnPre ∧
+      Devm.getStor post = Devm.getStor callPost ∧
+      Devm.getBal post = Devm.getBal callPost ∧
+      ReturnsWord payout post
+
+theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
     {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
     (run : Func.Run fs sevm s Drip.exit post) :
-    ExitPaysExactly sevm entry post := by
-  unfold ExitPaysExactly
+    ExitPaysExactlyFull sevm entry post := by
+  unfold ExitPaysExactlyFull
   dsimp only
-  rcases of_run_exit_settles hlookup frame hp run with
+  rcases of_run_exit_settles_full hlookup frame hp run with
     ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
-      helapsed, hguards, callStart, freshChi, settledImage, hfresh,
-      hpStart, hwfStart, hreadsStart, hstorStart, suffix⟩
+      helapsed, hguards, hnofm, hcapChi, callStart, freshChi, settledImage,
+      hfresh, hcodeStart, hpStart, hwfStart, hreadsStart, hstorStart, suffix⟩
   subst freshChi
   refine ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper,
-    hclock, helapsed, hguards, ?_⟩
+    hclock, helapsed, hguards, hnofm, hcapChi, ?_⟩
   let payout :=
     ((B256.rpow scale half rate
       (sevm.benvStat.time - Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
@@ -1406,7 +1575,14 @@ theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
     rw [hstorSend,
       ← congrFun (getStor_of_state hstateSend) sevm.currentTarget,
       hstorStart]
-  refine ⟨callPre, callPost, guardPost, returnPre, hstorCallPre, ?_,
+  have hcodeCallPre : Devm.getCode callPre = Devm.getCode entry := by
+    calc
+      Devm.getCode callPre = Devm.getCode sendPre := hcodeSend
+      _ = Devm.getCode callStart := by
+        funext a
+        exact getCode_eq_of_state_eq hstateSend.symm a
+      _ = Devm.getCode entry := hcodeStart
+  refine ⟨callPre, callPost, guardPost, returnPre, hstorCallPre, hcodeCallPre, ?_,
     hstorTail.symm, hbalTail.symm, ?_⟩
   · unfold AcceptedPayout
     exact ⟨gasWord, payout :: tail, parent, child, xl, delegated, nextAddress, code,
@@ -1415,6 +1591,23 @@ theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
       hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
       hpostMemory, hpostStack⟩
   · exact (returnsWord_of_storeReturn hreturnPrefix hreturn).1
+
+/-- Compatibility projection of `exit_pays_exactly_full` for consumers whose
+claims do not require the derived no-wrap, cap, or call-preimage code facts. -/
+theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
+    {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs sevm s Drip.exit post) :
+    ExitPaysExactly sevm entry post := by
+  unfold ExitPaysExactly at ⊢
+  dsimp only
+  rcases exit_pays_exactly_full hlookup frame hp run with
+    ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
+      hguards, -, -, callPre, callPost, guardPost, returnPre, hstor, -,
+      haccepted, hstorPost, hbalPost, hret⟩
+  exact ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
+    hguards, callPre, callPost, guardPost, returnPre, hstor, haccepted,
+    hstorPost, hbalPost, hret⟩
 
 /-! ## `exit`'s failed-child outcome
 

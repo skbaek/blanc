@@ -304,8 +304,11 @@ import Blanc.DripEndpoints
 import Blanc.DripFresh
 import Blanc.DripFunctional
 import Blanc.DripIngress
+import Blanc.DripInvariant
 import Blanc.DripMachine
+import Blanc.DripPreservation
 import Blanc.DripRpow
+import Blanc.DripSound
 import Blanc.DripStackSafetyCertificate
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
