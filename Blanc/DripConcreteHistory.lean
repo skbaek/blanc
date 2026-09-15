@@ -182,5 +182,157 @@ theorem concreteCreateRecoveredSender :
   rw [recoverSender, concreteCreateSigningHash]
   decide +kernel
 
+/-- A funded private Prague chain; the protocol addresses execute STOP. -/
+def concreteConfig : ChainConfig := ChainConfig.pragueOnly 1
+
+def concreteGenesisState : State := State.ofList
+  [(concreteCreateSender, { Acct.nil with bal := 1000000000000000000 }),
+   (beaconRootsAddress, { Acct.nil with code := ⟨#[0x5b, 0]⟩ }),
+   (historyStorageAddress, { Acct.nil with code := ⟨#[0x5b, 0]⟩ }),
+   (withdrawalRequestPredeployAddress, { Acct.nil with code := ⟨#[0x5b, 0]⟩ }),
+   (consolidationRequestPredeployAddress, { Acct.nil with code := ⟨#[0x5b, 0]⟩ })]
+
+def concreteGenesisHeader : Header := {
+  parentHash := 0, ommersHash := emptyOmmerHash, coinbase := 0,
+  stateRoot := concreteGenesisState.root, txsRoot := 0, receiptRoot := 0,
+  bloom := List.replicate 256 0, difficulty := 0, number := 0,
+  gasLimit := 10000000, gasUsed := 5000000, timestamp := 0,
+  extraData := [], prevRandao := 0, nonce := 0, baseFeePerGas := 1,
+  withdrawalsRoot := 0, blobGasUsed := 0, excessBlobGas := 0,
+  parentBeaconBlockRoot := 0, requestsHash := some 0 }
+
+def concreteGenesisBlock : Block :=
+  { header := concreteGenesisHeader, txs := [], ommers := [], wds := [] }
+
+def concreteBase : BlockChain :=
+  ⟨[concreteGenesisBlock], concreteGenesisState, 1⟩
+
+theorem concreteGenesisTarget : concreteGenesisState.get concreteCreateTarget = Acct.nil := by
+  simp (disch := decide +kernel) only [concreteGenesisState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne]
+  rfl
+
+theorem concreteGenesisSender :
+    concreteGenesisState.get concreteCreateSender =
+      { Acct.nil with bal := 1000000000000000000 } := by
+  simp (disch := decide +kernel) only [concreteGenesisState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem concreteGenesisSystemCode (a : Adr)
+    (ha : a ∈ [beaconRootsAddress, historyStorageAddress,
+      withdrawalRequestPredeployAddress, consolidationRequestPredeployAddress]) :
+    some (concreteGenesisState.getCode a).toList = Prog.compile deploymentSystemProgram := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
+  rcases ha with rfl | rfl | rfl | rfl
+  all_goals
+    simp (disch := decide +kernel) only [State.getCode, concreteGenesisState,
+      State.ofList, List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+    decide +kernel
+
+theorem concreteBase_validContext : concreteBase.ValidContext := by
+  refine ⟨by decide +kernel, ?_, ?_, ?_⟩
+  · change concreteGenesisState.Canonical
+    apply State.canonical_ofList
+    intro e he
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+    rcases he with rfl | rfl | rfl | rfl | rfl <;> exact Stor.canonical_empty
+  · decide +kernel
+  · intro tip htip
+    have ht : tip = concreteGenesisBlock := by
+      simpa only [concreteBase, List.getLast?_singleton, Option.mem_def,
+        Option.some.injEq] using htip.symm
+    subst tip
+    rfl
+
+theorem concreteDeploymentBase :
+    CanonicalDeploymentBase concreteConfig pragueRules concreteBase
+      concreteCreateSender concreteCreateTarget := by
+  refine {
+    configValid := ChainConfig.pragueOnly_valid 1
+    chainId_eq := rfl
+    validContext := concreteBase_validContext
+    target_eq := ?_
+    target_ne_zero := by decide +kernel
+    target_not_precompile := ?_
+    beacon_not_precompile := by decide +kernel
+    history_not_precompile := by decide +kernel
+    withdrawalRequest_not_precompile := by decide +kernel
+    consolidationRequest_not_precompile := by decide +kernel
+    sender_ne_target := by decide +kernel
+    withdrawalRequest_ne_target := by decide +kernel
+    consolidationRequest_ne_target := by decide +kernel
+    target_noCodeOrNonce := by
+      change accountHasCodeOrNonce concreteGenesisState _ = false
+      simp only [accountHasCodeOrNonce, State.getNonce, State.getCode, concreteGenesisTarget]
+      decide +kernel
+    target_noStorage := by
+      change accountHasStorage concreteGenesisState _ = false
+      simp only [accountHasStorage, State.getStor, concreteGenesisTarget]
+      decide +kernel
+    target_zeroBalance := by
+      change (concreteGenesisState.get concreteCreateTarget).bal = 0
+      rw [concreteGenesisTarget]; rfl
+    lastBlockHash := ?_
+    beaconCode := concreteGenesisSystemCode _ (by decide +kernel)
+    historyCode := concreteGenesisSystemCode _ (by decide +kernel)
+    withdrawalRequestCode := concreteGenesisSystemCode _ (by decide +kernel)
+    consolidationRequestCode := concreteGenesisSystemCode _ (by decide +kernel) }
+  · have hn : concreteBase.state.getNonce concreteCreateSender = 0 := by
+      change (concreteGenesisState.get concreteCreateSender).nonce = 0
+      rw [concreteGenesisSender]; rfl
+    rw [hn]
+    exact concreteCreateAddress.symm
+  · intro timestamp selected hrules
+    have hr : selected = pragueRules := by
+      exact (Except.ok.inj hrules).symm
+    subst selected
+    decide +kernel
+  · exact ⟨concreteGenesisHeader.hash, rfl⟩
+
+/-- Header fields read by execution; commitment fields are filled from the
+actual block-body output in the final envelope. -/
+def concreteExecutionHeader : Header :=
+  { concreteGenesisHeader with
+    parentHash := concreteGenesisHeader.hash
+    number := 1
+    gasUsed := 0
+    timestamp := 1 }
+
+theorem concreteCreateValidated :
+    validateTransaction pragueRules concreteCreateTx =
+      .ok (calculateIntrinsicCost concreteCreateTx) := by
+  decide +kernel
+
+theorem concreteCreateGasBound :
+    deploymentTransactionGasBound concreteCreateTx ≤ concreteCreateTx.gas := by
+  decide +kernel
+
+theorem concreteCreateChecked :
+    checkTransaction (initBenv pragueRules concreteBase concreteExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteCreateTx 0) concreteCreateTx =
+      .ok (concreteCreateSender, 2, [], 0) := by
+  have hgas : checkTransactionGasLimits
+      (initBenv pragueRules concreteBase concreteExecutionHeader).beginTransaction
+      (deploymentTxPreludeBout .init concreteCreateTx 0) concreteCreateTx = .ok 0 := by decide +kernel
+  have hchain : checkTransactionChainId
+      (initBenv pragueRules concreteBase concreteExecutionHeader).beginTransaction
+      concreteCreateTx = .ok () := by decide +kernel
+  rw [checkTransaction, hgas]
+  simp only [Except.mapError, bind, Except.bind]
+  rw [hchain]
+  change (do
+    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteCreateTx)
+    let (effective, maxFee) ← Except.mapError TransitionError.transaction
+      (checkTransactionGasFee (initBenv pragueRules concreteBase concreteExecutionHeader).beginTransaction concreteCreateTx)
+    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
+      (checkTransactionBlobData (initBenv pragueRules concreteBase concreteExecutionHeader).beginTransaction concreteCreateTx maxFee)
+    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteCreateTx)
+    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteCreateTx)
+    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteGenesisState.get sender) concreteCreateTx maxFee)
+    pure (sender, effective, hashes, 0)) = _
+  rw [concreteCreateRecoveredSender]
+  simp only [Except.mapError, bind, Except.bind, concreteGenesisSender]
+  decide +kernel
+
 end Drip
 end Blanc
