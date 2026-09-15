@@ -1041,6 +1041,27 @@ predicate.  These adapters live beside the protocol in
 [`Blanc/PinnedPauseTarget.lean`](../Blanc/PinnedPauseTarget.lean); do not
 repeat their byte-slice normalization in a contract family.
 
+### S7. I need a token-ledger conservation invariant
+
+A token contract that keeps balances at address-shaped keys and a total
+supply at one reserved non-address key satisfies one invariant: the word at
+the supply slot is exactly the sum of the balances.  That invariant is
+`LedgerConserved` in
+[`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean), and
+everything it needs rests on the single bit fact `¬ ValidAdr slot`:
+`toB256_ne_of_not_validAdr` is the fact in the form the storage lemmas want,
+`rest_set_slot` says a supply write cannot move the sum, `get_slot_set` says
+a balance write cannot move the supply, and `rest_set_of_not_validAdr` says a
+write at any other non-address key is invisible to the balances.
+`transfer_of_debit_credit` is the two-`set` transfer step, and
+`LedgerConserved.transfer`/`mint`/`burn` (with the `mint_set`/`burn_set`
+`Stor.set` forms) carry the invariant across a booked movement.
+`LedgerConserved.sumNof` says the sum never overflows (it *is* a word),
+`le_supply` bounds every balance by the supply, and `of_empty`, `of_eq`,
+`of_get_eq`, and `of_rest_eq` seed and transport the invariant.  Nothing here
+names a contract; `Blanc/Conserved.lean` proves the same algebra for fmint's
+own supply slot and predates this module.
+
 ## M — bytes and memory
 
 ### M1. The goal is a `sliceD` normalization
@@ -1826,6 +1847,22 @@ equation and therefore has `Eq` at its head; and `goal-head:LinkCertificate`
 matches certificate construction, which is the one goal in the flow whose head
 really is one of this module's declarations.  A `goal-head:resolve` trigger would
 never have fired.
+
+### C7. I need a storage-determined contract specification
+
+`ContractSpec` carries an invariant over storage, in-flight callvalue, and
+ETH balance, and a contract whose invariant reads only storage still owes the
+record's eight balance obligations.  `ContractSpec.ofStorageOnly` in
+[`Blanc/StorageOnlySpec.lean`](../Blanc/StorageOnlySpec.lean) packages that
+argument once: `getStor_addBal`/`getStor_subBal_addBal` say balance movement
+never moves storage, `ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
+reduce the frame invariants to the storage predicate, and
+`ofStorageOnly_funcSound` reduces each per-target obligation to the bare
+storage walk, declining the `nof`-class side condition a storage-determined
+invariant never needs.  The module's no-write and `STATICCALL` sections
+discharge targets that never write storage, and `ofStorageOnly_of_call`
+carries the invariant across a child `call` under the deeper-frame
+hypothesis.
 
 ## Common-library-first workflow
 
