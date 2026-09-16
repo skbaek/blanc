@@ -6123,33 +6123,6 @@ def capacity_provenance_self_test(report_path: Path | None = None) -> int:
     return 0
 
 
-DISPOSITION_PERTURBATIONS = (
-    # Dropping a successor must leave the superseded obligation visibly
-    # uncovered rather than quietly discharged by a name that no longer runs.
-    ("dropped superseded successor",
-     "superseded case 'transfer-from-infinite' names successor "
-     "'supported-root-transfer-from-infinite', which no channel implements",
-     "checker",
-     '    "supported-root-transfer-from-infinite": ("jaune", "eels"),\n',
-     ""),
-    # A case cannot be both executed and excused; the partition is exact.
-    ("double disposition",
-     "has 2 dispositions (implemented, unimplemented)",
-     "matrix",
-     'UNIMPLEMENTED_CASES = {\n',
-     'UNIMPLEMENTED_CASES = {\n    "supported-root-transfer-self": "double '
-     'disposition control",\n'),
-    # An unimplemented case must be declared, not invented in the excuse list.
-    ("undeclared disposition name",
-     "disposition names undeclared case 'not-a-declared-case'",
-     "matrix",
-     'UNIMPLEMENTED_CASES = {\n',
-     'UNIMPLEMENTED_CASES = {\n    "not-a-declared-case": "undeclared '
-     'disposition control",\n'),
-)
-
-
-
 def main(argv: list[str]) -> int:
     for error in validate_manifest():
         fail(error)
