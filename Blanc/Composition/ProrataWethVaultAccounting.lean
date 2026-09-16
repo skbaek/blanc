@@ -2101,7 +2101,9 @@ def FourQuoteTransition.stateTransition {vault before after}
     after := after }
 
 /-- The actual credit yields one State-linked transition over the exact retained
-pre/post states, carrying precisely the accepted credit operation. -/
+pre/post states, carrying precisely the accepted credit operation: the retained
+`FourQuoteShareEvidence` for the credit tag together with a transition whose
+operation is that tag. -/
 theorem credit_compiled_transition
     {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : CreditWords)
@@ -2116,15 +2118,18 @@ theorem credit_compiled_transition
       (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source
         words.amount vault (Stor.rest (Devm.getStor post wethAccount)))
       (t : FourQuoteTransition vault pre.state post.state),
-      t = ⟨sevm, pre, post, rfl, rfl,
-        .credit words actual.target sourceNotVault supplyKept rowNof
-          effect⟩ := by
-  obtain ⟨supplyKept, effect, _⟩ :=
+      FourQuoteShareEvidence
+        (.credit words actual.target sourceNotVault supplyKept rowNof
+          effect) ∧
+      HEq t.operation
+        (FourQuoteOperation.credit words actual.target sourceNotVault
+          supplyKept rowNof effect) := by
+  obtain ⟨supplyKept, effect, evidence⟩ :=
     credit_compiled_share_evidence words actual sourceNotVault separation
       rowNof
   exact ⟨supplyKept, effect, ⟨sevm, pre, post, rfl, rfl,
     .credit words actual.target sourceNotVault supplyKept rowNof effect⟩,
-    rfl⟩
+    evidence, HEq.rfl⟩
 
 /-- Every tagged actual effect satisfies its exact price recurrence. -/
 theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
