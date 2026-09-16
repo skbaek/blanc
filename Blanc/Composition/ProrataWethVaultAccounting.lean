@@ -876,9 +876,68 @@ inductive FourQuoteOperation (vault : Adr) (sevm : Sevm) (pre post : Devm) : Typ
       (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
       FourQuoteOperation vault sevm pre post
 
-/-- Actual non-credit share evidence is indexed by the accepted ten-tag
-operation.  It retains endpoint guards and canonical ABI roles; public
-projections derive, rather than assume, the resulting row movement. -/
+/-- Bounded-entry actual-root evidence for one direct WETH `transfer` credit.
+
+The record retains the exact bounded entry that G6 will later derive from an
+actual body occurrence: WETH target and code address, the credited source as
+caller, zero value, the exact `transferCalldata` payload, empty entry stack,
+memory and logs, the exact compiled-code identity, one actual `Exec` ending in
+the retained post state, and a clean post error.  It claims no history
+closure. -/
+structure ActualDirectWethCredit (vault : Adr) (words : CreditWords)
+    (sevm : Sevm) (pre post : Devm) : Type where
+  target : sevm.currentTarget = wethAccount
+  codeAddress : sevm.codeAddress = some wethAccount
+  caller : sevm.caller = words.source
+  value : sevm.value = 0
+  data : sevm.data = transferCalldata vault words.amount
+  stack : pre.stack = []
+  memory : pre.memory = Mem.empty
+  logs : pre.logs = []
+  code : some sevm.code.toList = Prog.compile Blanc.weth
+  run : Exec 0 sevm pre (.ok post)
+  clean : post.error = none
+
+/-- The closed WETH program has no dangling program counters.  Proved locally
+so the frozen WETH program keeps its existing visibility. -/
+private theorem directWethCredit_pcFree : Prog.pcFree Blanc.weth = true := by
+  decide +kernel
+
+/-- The bounded entry recovers the exact world-strength WETH program run: the
+actual `Exec` becomes a gas-exact compiled run through `runCompiled_of_exec`,
+and the retained pre/post storage worlds with the exact log frame are the
+initial and final observations. -/
+theorem ActualDirectWethCredit.worldProgramRun
+    {vault : Adr} {words : CreditWords} {sevm : Sevm} {pre post : Devm}
+    (actual : ActualDirectWethCredit vault words sevm pre post) :
+    SuccessfulWethWorldProgramRun words.source
+      (transferCalldata vault words.amount) post.output
+      (Devm.getStor pre) (Devm.getStor post) [] post.logs := by
+  rcases actual with ⟨target, codeAddress, caller, valueZero, dataEq,
+    stackEmpty, memoryEmpty, logsEmpty, codeEq, run, clean⟩
+  have compiled : Prog.RunCompiled sevm pre Blanc.weth post :=
+    Prog.runCompiled_of_exec sevm pre Blanc.weth post
+      directWethCredit_pcFree run codeEq
+  have logsEq : post.logs = [] ++ post.logs := (List.nil_append _).symm
+  exact ⟨sevm, pre, post, target, codeAddress, caller, valueZero, dataEq,
+    stackEmpty, memoryEmpty, logsEmpty, rfl, compiled, clean, rfl, logsEq,
+    rfl⟩
+
+/-- The actual foreign-storage frame at the vault: WETH execution leaves every
+non-WETH account untouched, so the vault's own storage is exactly kept. -/
+private theorem actual_credit_vault_storage_eq
+    {vault : Adr} {words : CreditWords} {sevm : Sevm} {pre post : Devm}
+    (actual : ActualDirectWethCredit vault words sevm pre post)
+    (separation : wethAccount ≠ vault) :
+    Devm.getStor post vault = Devm.getStor pre vault := by
+  obtain ⟨_, foreign, _, _⟩ :=
+    SuccessfulWethWorldProgramRun.transfer_effect actual.worldProgramRun
+  exact foreign vault separation
+
+/-- Actual share evidence is indexed by the accepted ten-tag operation.  It
+retains endpoint guards and canonical ABI roles; public projections derive,
+rather than assume, the resulting row movement.  The credit case retains the
+bounded-entry actual root instead of endpoint guards. -/
 inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
     FourQuoteOperation vault sevm pre post → Prop where
   | deposit (words : InboundWords) (target : sevm.currentTarget = vault)
@@ -965,6 +1024,20 @@ inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
       (covered : words.shares.toNat ≤
         (Devm.getStorVal pre sevm.currentTarget words.owner).toNat) :
       FourQuoteShareEvidence (.redeemSelf words target receiverIsVault burnable quote effect)
+  | credit (words : CreditWords)
+      (wethTarget : sevm.currentTarget = wethAccount)
+      (sourceNotVault : words.source ≠ vault)
+      (supplyKept : Devm.getStorVal post vault
+        Blanc.ProrataWethVault.supplySlot =
+        Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+      (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault)
+        words.amount)
+      (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source
+        words.amount vault (Stor.rest (Devm.getStor post wethAccount)))
+      (actual : ActualDirectWethCredit vault words sevm pre post)
+      (separation : wethAccount ≠ vault) :
+      FourQuoteShareEvidence
+        (.credit words wethTarget sourceNotVault supplyKept rowNof effect)
   | transfer (words : ShareTransferWords) (target : sevm.currentTarget = vault)
       (owner : words.owner = sevm.caller) (receiver : words.receiver = Sevm.argWord sevm 0)
       (amount : words.amount = Sevm.argWord sevm 1)
@@ -992,7 +1065,7 @@ inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
       FourQuoteShareEvidence (.approve words target owner spender amount config memoryWf run selectorEq)
 
 /-- The actual address-shaped share-row movement selected by an accepted
-operation.  Credit deliberately has no non-credit witness or movement claim. -/
+operation.  A credit leaves the vault rows exactly unchanged. -/
 def FourQuoteShareRowsMove {vault : Adr} {sevm : Sevm} {pre post : Devm} :
     FourQuoteOperation vault sevm pre post → Prop
   | .deposit words _ _ _ _ _ _ =>
@@ -1019,7 +1092,9 @@ def FourQuoteShareRowsMove {vault : Adr} {sevm : Sevm} {pre post : Devm} :
       Decrease words.owner.toAdr words.shares
         (Stor.rest (Devm.getStor pre sevm.currentTarget))
         (Stor.rest (Devm.getStor post sevm.currentTarget))
-  | .credit _ _ _ _ _ _ => False
+  | .credit _ _ _ _ _ _ =>
+      Stor.rest (Devm.getStor post vault) =
+        Stor.rest (Devm.getStor pre vault)
   | .transfer words _ _ _ _ _ _ _ _ =>
       Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget)) words.owner
         words.amount words.receiver.toAdr
@@ -1032,8 +1107,9 @@ def FourQuoteShareRowsMove {vault : Adr} {sevm : Sevm} {pre post : Devm} :
       Stor.rest (Devm.getStor post sevm.currentTarget) =
         Stor.rest (Devm.getStor pre sevm.currentTarget)
 
-/-- The exact finite-coalition share movement for each non-credit operation.
-Its use still explicitly requires a pre-state ledger conservation witness. -/
+/-- The exact finite-coalition share movement for each operation; a credit
+leaves the vault coalition sum exactly unchanged.  Its use still explicitly
+requires a pre-state ledger conservation witness. -/
 def FourQuoteShareCoalition {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (coalition : Finset Adr) : FourQuoteOperation vault sevm pre post → Prop
   | .deposit words _ _ _ _ _ _ =>
@@ -1060,7 +1136,9 @@ def FourQuoteShareCoalition {vault : Adr} {sevm : Sevm} {pre post : Devm}
       ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
           (if words.owner.toAdr ∈ coalition then words.shares.toNat else 0) =
         ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
-  | .credit _ _ _ _ _ _ => False
+  | .credit _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post vault)) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre vault))
   | .transfer words _ _ _ _ _ _ _ _ =>
       ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
           (if words.owner ∈ coalition then words.amount.toNat else 0) =
@@ -1226,38 +1304,52 @@ private theorem approve_share_rows_of_compiled
     Blanc.ProrataWethVault.approve_compiled_effect memoryWf run selectorEq
   rw [storageEq, rest_set_of_not_validAdr keyNotAddress]
 
-/-- The retained endpoint guards let every non-credit companion reuse the
-existing ledger-preservation adapter for its actual operation. -/
+/-- The retained endpoint guards let every vault-target companion reuse the
+existing ledger-preservation adapter for its actual operation; the credit case
+keeps vault conservation through the actual foreign-storage frame. -/
 theorem FourQuoteShareEvidence.preserves_conserved
     {vault : Adr} {sevm : Sevm} {pre post : Devm}
     {operation : FourQuoteOperation vault sevm pre post}
     (evidence : FourQuoteShareEvidence operation)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor pre sevm.currentTarget)) :
+      (Devm.getStor pre vault)) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor post sevm.currentTarget) := by
+      (Devm.getStor post vault) := by
   cases evidence with
   | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      rw [← target] at conserved ⊢
       exact inboundEffect_preserves_conserved receiverValid supplyEq stable room effect conserved
   | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      rw [← target] at conserved ⊢
       exact inboundEffect_preserves_conserved receiverValid supplyEq stable room effect conserved
   | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      rw [← target] at conserved ⊢
       exact outboundEffect_preserves_conserved ownerValid covered effect conserved
   | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      rw [← target] at conserved ⊢
       exact outboundEffect_preserves_conserved ownerValid covered effect conserved
   | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      rw [← target] at conserved ⊢
       exact outboundEffect_preserves_conserved ownerValid covered effect conserved
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      rw [← target] at conserved ⊢
       exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
+      rw [actual_credit_vault_storage_eq actual separation]
+      exact conserved
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      rw [← target] at conserved ⊢
       exact Blanc.ProrataWethVault.transfer_preserves_conserved memoryWf run selectorEq conserved
   | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      rw [← target] at conserved ⊢
       exact Blanc.ProrataWethVault.transferFrom_preserves_conserved memoryWf run selectorEq conserved
   | approve words target owner spender amount config memoryWf run selectorEq =>
+      rw [← target] at conserved ⊢
       exact Blanc.ProrataWethVault.approve_preserves_conserved memoryWf run selectorEq conserved
 
-/-- Each non-credit companion projects the exact address-shaped share-row
-movement produced by its retained operation evidence. -/
+/-- Each companion projects the exact address-shaped share-row movement
+produced by its retained operation evidence; a credit projects exact
+unchanged vault rows. -/
 theorem FourQuoteShareEvidence.actual_share_rows_move
     {vault : Adr} {sevm : Sevm} {pre post : Devm}
     {operation : FourQuoteOperation vault sevm pre post}
@@ -1282,6 +1374,9 @@ theorem FourQuoteShareEvidence.actual_share_rows_move
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
       dsimp [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
+      dsimp [FourQuoteShareRowsMove]
+      rw [actual_credit_vault_storage_eq actual separation]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
       dsimp [FourQuoteShareRowsMove]
       exact transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
@@ -1292,10 +1387,10 @@ theorem FourQuoteShareEvidence.actual_share_rows_move
       dsimp [FourQuoteShareRowsMove]
       exact approve_share_rows_of_compiled memoryWf run selectorEq
 
-/-- A conserved pre-state turns each actual non-credit row movement into its
-exact finite-coalition equation.  The inbound share-row no-wrap fact comes
-from the supply capacity guard and the conserved pre-state, not from an
-endpoint postcondition. -/
+/-- A conserved pre-state turns each actual row movement into its exact
+finite-coalition equation.  The inbound share-row no-wrap fact comes from the
+supply capacity guard and the conserved pre-state, not from an endpoint
+postcondition; a credit contributes an exact unchanged coalition sum. -/
 theorem FourQuoteShareEvidence.coalition
     {vault : Adr} {sevm : Sevm} {pre post : Devm}
     {operation : FourQuoteOperation vault sevm pre post} {coalition : Finset Adr}
@@ -1334,6 +1429,9 @@ theorem FourQuoteShareEvidence.coalition
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
+      dsimp [FourQuoteShareCoalition]
+      rw [actual_credit_vault_storage_eq actual separation]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
       dsimp [FourQuoteShareCoalition]
       exact ledgerSumOn_transfer conserved.sumNof
@@ -1742,6 +1840,38 @@ theorem approve_compiled_share_evidence
     (words := ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1⟩)
     target rfl rfl rfl config memoryWf run selectorEq
 
+/-- An actual direct WETH transfer into the vault carries the accepted credit
+tag: the WETH-row `Transfer` and the kept vault supply row are both read off
+the actual run, while `sourceNotVault`, separation and the receiver-row
+no-wrap fact stay explicit until G6 derives them. -/
+theorem credit_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : CreditWords)
+    (actual : ActualDirectWethCredit vault words sevm pre post)
+    (sourceNotVault : words.source ≠ vault)
+    (separation : wethAccount ≠ vault)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault)
+      words.amount) :
+    ∃ (supplyKept : Devm.getStorVal post vault
+          Blanc.ProrataWethVault.supplySlot =
+          Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+      (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source
+        words.amount vault (Stor.rest (Devm.getStor post wethAccount))),
+      FourQuoteShareEvidence
+        (.credit words actual.target sourceNotVault supplyKept rowNof
+          effect) := by
+  obtain ⟨movement, _, _, _⟩ :=
+    SuccessfulWethWorldProgramRun.transfer_effect actual.worldProgramRun
+  have vaultStor := actual_credit_vault_storage_eq actual separation
+  have supplyKept : Devm.getStorVal post vault
+      Blanc.ProrataWethVault.supplySlot =
+      Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot := by
+    show (Devm.getStor post vault).get _ = (Devm.getStor pre vault).get _
+    rw [vaultStor]
+  exact ⟨supplyKept, movement,
+    .credit words actual.target sourceNotVault supplyKept rowNof movement
+      actual separation⟩
+
 /-- The bounded quote-residue part of an actual operation. -/
 def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
     FourQuoteOperation vault sevm pre post → Nat
@@ -1969,6 +2099,32 @@ def FourQuoteTransition.stateTransition {vault before after}
   { origin := event.operation
     before := before
     after := after }
+
+/-- The actual credit yields one State-linked transition over the exact retained
+pre/post states, carrying precisely the accepted credit operation. -/
+theorem credit_compiled_transition
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (words : CreditWords)
+    (actual : ActualDirectWethCredit vault words sevm pre post)
+    (sourceNotVault : words.source ≠ vault)
+    (separation : wethAccount ≠ vault)
+    (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount) vault)
+      words.amount) :
+    ∃ (supplyKept : Devm.getStorVal post vault
+          Blanc.ProrataWethVault.supplySlot =
+          Devm.getStorVal pre vault Blanc.ProrataWethVault.supplySlot)
+      (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source
+        words.amount vault (Stor.rest (Devm.getStor post wethAccount)))
+      (t : FourQuoteTransition vault pre.state post.state),
+      t = ⟨sevm, pre, post, rfl, rfl,
+        .credit words actual.target sourceNotVault supplyKept rowNof
+          effect⟩ := by
+  obtain ⟨supplyKept, effect, _⟩ :=
+    credit_compiled_share_evidence words actual sourceNotVault separation
+      rowNof
+  exact ⟨supplyKept, effect, ⟨sevm, pre, post, rfl, rfl,
+    .credit words actual.target sourceNotVault supplyKept rowNof effect⟩,
+    rfl⟩
 
 /-- Every tagged actual effect satisfies its exact price recurrence. -/
 theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
