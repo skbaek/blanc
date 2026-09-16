@@ -46,6 +46,23 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- For the loose gas-free walk prefix reaching an intermediate cut of a
+  successful source run, with source-path accumulation, use
+  [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
+  `Func.RunPrefix` ends at an explicit target path, state, and body rather
+  than a terminal result, and every crossed instruction carries a
+  `Ninst.gasFree` certificate. `RunPrefix.line` builds a prefix across a
+  gas-free line, `RunPrefix.trans` composes prefixes, `Func.Run.of_prefix`
+  splices a completion run back onto a prefix, and the `of_run_prepend`,
+  `of_run_branch`, and `of_run_call` twins expose the prefix alongside the
+  corresponding elimination. Paths accumulate exactly as in
+  `Func.sourceSites`, with the extended path in the premise so elimination
+  never reduces paths. A prefix into a line is unconstructible without that
+  line's gas-free certificate. Registered triggers were checked: the
+  `implication-premise:Func.Run` tag advises splitting a run hypothesis
+  rather than constructing or consuming a prefix, and no goal-head or
+  goal-shape trigger names the prefix conclusion, so discovery remains in
+  this registry.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
@@ -543,6 +560,8 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `SourceCursor.branchFlagToward`, and `ninstRun_of_nextEdge` retain the exact
   same-frame chronology and stack effects across compiler glue; they do not
   assert liveness or a final execution outcome.
+- For a loose gas-free walk prefix with source-path accumulation, see E1 and
+  [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
