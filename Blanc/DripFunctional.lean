@@ -11,6 +11,7 @@
 
 import Blanc.DripEndpoints
 import Blanc.DripIngress
+import Blanc.RunPrefix
 import Blanc.Ladder
 import Blanc.MessageExecution
 
@@ -34,18 +35,23 @@ DRIP endpoint crosses before its own body.  Both are stated as inversions: a
 *successful* run forces the guard's condition, because the rejecting arm is
 `Func.revert` and has no successful run at all. -/
 
-/-- A successful run through an exact-length guard forces the frozen calldata
-size and leaves world state, memory, logs and output untouched. -/
-theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
-    {size : B256} {body : Func}
+/-- Prefix twin of `of_run_exactCalldata`: the same guard inversion exposing
+the crossed length-check prefix. -/
+theorem of_run_exactCalldata_prefix {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {size : B256} {body : Func} {path : Prog.SourcePath}
     (run : Func.Run fs sevm s (exactCalldata size body) r) :
-    ∃ mid, sevm.data.length.toB256 = size ∧
+    ∃ mid target, sevm.data.length.toB256 = size ∧
       s.state = mid.state ∧ s.memory = mid.memory ∧
       s.logs = mid.logs ∧ s.output = mid.output ∧
+      Func.RunPrefix fs sevm path s (exactCalldata size body) target mid body ∧
       Func.Run fs sevm mid body r := by
   unfold exactCalldata at run
-  refine run_prepend_elim _ [pushB256 size, calldatasize, eq] ?_ run
-  intro s1 hline hbranch
+  rcases run_prefix_prepend (l := [pushB256 size, calldatasize, eq])
+    (path := path)
+    (by simp only [Line.gasFree, Ninst.pushB256, Ninst.gasFree, Rinst.gasFree,
+      Bool.true_and] : Line.gasFree [pushB256 size, calldatasize, eq] = true)
+    run with
+    ⟨s1, mid1, hline, hbranch, hpre1⟩
   have hframe := hline
   rcases Line.of_run_cons hline with ⟨a, hpush, htail⟩
   rcases Line.of_run_cons htail with ⟨b, hsize, htail⟩
@@ -57,8 +63,9 @@ theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
     prefix_of_push (of_run_calldatasize hsize) hp0
   have hp2 : (sevm.data.length.toB256 =? size) :: [] <<+ s1.stack :=
     prefix_of_eq heq hp1
-  rcases of_run_branch hbranch with
-    ⟨u, hpop, hrev⟩ | ⟨w, u, v, hnz, hpop, hburn, hbody⟩
+  rcases run_prefix_branch (path := mid1) hbranch with
+    ⟨u, midU, hpop, hrev, hpreB⟩
+    | ⟨w, u, v, midV, hnz, hpop, hburn, hbody, hpreB⟩
   · exact absurd hrev not_run_revert
   · have hw : w = (sevm.data.length.toB256 =? size) :=
       (popBurn_pref hpop hp2).1
@@ -66,7 +73,7 @@ theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
       by_cases h : sevm.data.length.toB256 = size
       · exact h
       · exact absurd (by rw [hw, B256.eqCheck, if_neg h]) hnz
-    exact ⟨v, hsize',
+    exact ⟨v, midV, hsize',
       (Line.of_inv Devm.state (by line_inv) hframe).trans
         (hpop.state.trans hburn.state),
       (Line.of_inv Devm.memory (by line_inv) hframe).trans
@@ -75,10 +82,89 @@ theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
         (hpop.logs.trans hburn.logs),
       (Line.of_inv Devm.output (by line_inv) hframe).trans
         (hpop.output.trans hburn.output),
-      hbody⟩
+      Func.RunPrefix.trans hpre1 hpreB, hbody⟩
+
+
+/-- A successful run through an exact-length guard forces the frozen calldata
+size and leaves world state, memory, logs and output untouched. -/
+theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
+    {size : B256} {body : Func}
+    (run : Func.Run fs sevm s (exactCalldata size body) r) :
+    ∃ mid, sevm.data.length.toB256 = size ∧
+      s.state = mid.state ∧ s.memory = mid.memory ∧
+      s.logs = mid.logs ∧ s.output = mid.output ∧
+      Func.Run fs sevm mid body r := by
+  obtain ⟨mid, _, hsize, hst, hmm, hlg, hou, _, hbody⟩ :=
+    of_run_exactCalldata_prefix (path := ⟨0, []⟩) run
+  exact ⟨mid, hsize, hst, hmm, hlg, hou, hbody⟩
+/-- Local prefix twin of `run_body_of_run_nonpayable_logs`: a successful run
+through `nonpayable` forces zero call value, preserves the log/output frame,
+and exposes the crossed guard prefix. Lives here (rather than next to the
+original) because this unit's CommonProofs scope is the dispatch pair only. -/
+private theorem run_body_of_run_nonpayable_logs_prefix {fs : List Func}
+    {sevm : Sevm} {s r : Devm} {body : Func} {path : Prog.SourcePath}
+    (run : Func.Run fs sevm s (nonpayable body) r) :
+    ∃ mid target, sevm.value = 0 ∧ s.state = mid.state ∧
+      s.memory = mid.memory ∧ s.logs = mid.logs ∧ s.output = mid.output ∧
+      Func.RunPrefix fs sevm path s (nonpayable body) target mid body ∧
+      Func.Run fs sevm mid body r := by
+  unfold nonpayable at run
+  rcases run_prefix_prepend (l := [callvalue, iszero]) (path := path)
+    (by decide : Line.gasFree [callvalue, iszero] = true) run with
+    ⟨s1, mid1, hline, hbranch, hpre1⟩
+  rcases Line.of_run_cons hline with ⟨s0, hcv, hline'⟩
+  rcases Line.of_run_cons hline' with ⟨s1', hiz, hnil⟩
+  cases hnil
+  have hpv : [sevm.value] <<+ s0.stack :=
+    prefix_of_push (of_run_callvalue hcv) nil_pref
+  have hpflag : [sevm.value =? 0] <<+ s1.stack :=
+    prefix_of_iszero hiz hpv
+  rcases run_prefix_branch (path := mid1) hbranch with
+    ⟨s2, mid2, hpop, hrev, hpreB⟩
+    | ⟨w, s2, s3, mid3, hnz, hpop, hburn, hbody, hpreB⟩
+  · exact absurd hrev not_run_revert
+  · have hpop' := hpop.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
+    rw [hpop'] at hpflag
+    have hw : (sevm.value =? 0) = w :=
+      pref_head_unique hpflag (pref_append [w] s2.stack)
+    have hflag : (sevm.value =? 0) ≠ 0 := by
+      rw [hw]
+      exact hnz
+    have hv : sevm.value = 0 := by
+      by_cases hv : sevm.value = 0
+      · exact hv
+      · simp [B256.eqCheck, hv] at hflag
+    exact ⟨s3, mid3, hv,
+      (Line.of_inv Devm.state (by line_inv) hline).trans
+        (hpop.state.trans hburn.state),
+      (Line.of_inv Devm.memory (by line_inv) hline).trans
+        (hpop.memory.trans hburn.memory),
+      (Line.of_inv Devm.logs (by line_inv) hline).trans
+        (hpop.logs.trans hburn.logs),
+      (Line.of_inv Devm.output (by line_inv) hline).trans
+        (hpop.output.trans hburn.output),
+      Func.RunPrefix.trans hpre1 hpreB, hbody⟩
 
 /-- The four nonpayable endpoints: a successful run forces zero call value and
 the frozen calldata size together. -/
+theorem of_run_nonpayable_exactCalldata_prefix {fs : List Func} {sevm : Sevm}
+    {s r : Devm} {size : B256} {body : Func} {path : Prog.SourcePath}
+    (run : Func.Run fs sevm s (nonpayable (exactCalldata size body)) r) :
+    ∃ mid target, sevm.value = 0 ∧ sevm.data.length.toB256 = size ∧
+      s.state = mid.state ∧ s.memory = mid.memory ∧
+      s.logs = mid.logs ∧ s.output = mid.output ∧
+      Func.RunPrefix fs sevm path s (nonpayable (exactCalldata size body))
+        target mid body ∧
+      Func.Run fs sevm mid body r := by
+  rcases run_body_of_run_nonpayable_logs_prefix (path := path) run with
+    ⟨t, midT, hvalue, hst, hmm, hlg, hou, hpreN, hguarded⟩
+  rcases of_run_exactCalldata_prefix (path := midT) hguarded with
+    ⟨mid, midM, hsize, hst', hmm', hlg', hou', hpreE, hbody⟩
+  exact ⟨mid, midM, hvalue, hsize, hst.trans hst', hmm.trans hmm',
+    hlg.trans hlg', hou.trans hou',
+    Func.RunPrefix.trans hpreN hpreE, hbody⟩
+
 theorem of_run_nonpayable_exactCalldata {fs : List Func} {sevm : Sevm}
     {s r : Devm} {size : B256} {body : Func}
     (run : Func.Run fs sevm s (nonpayable (exactCalldata size body)) r) :
@@ -86,12 +172,9 @@ theorem of_run_nonpayable_exactCalldata {fs : List Func} {sevm : Sevm}
       s.state = mid.state ∧ s.memory = mid.memory ∧
       s.logs = mid.logs ∧ s.output = mid.output ∧
       Func.Run fs sevm mid body r := by
-  rcases run_body_of_run_nonpayable_logs run with
-    ⟨t, hvalue, hst, hmm, hlg, hou, hguarded⟩
-  rcases of_run_exactCalldata hguarded with
-    ⟨mid, hsize, hst', hmm', hlg', hou', hbody⟩
-  exact ⟨mid, hvalue, hsize, hst.trans hst', hmm.trans hmm',
-    hlg.trans hlg', hou.trans hou', hbody⟩
+  obtain ⟨mid, _, hvalue, hsize, hst, hmm, hlg, hou, _, hbody⟩ :=
+    of_run_nonpayable_exactCalldata_prefix (path := ⟨0, []⟩) run
+  exact ⟨mid, hvalue, hsize, hst, hmm, hlg, hou, hbody⟩
 
 /-! ## Ingress classification -/
 
@@ -124,28 +207,34 @@ theorem main_receive {fs : List Func} {sevm : Sevm} {pre post : Devm}
 
 /-- Nonempty calldata reaches the shared dispatcher with the frame intact and
 the selector alone on the stack. -/
-private theorem dispatch_entry_of_run_main {fs : List Func} {sevm : Sevm}
-    {pre post : Devm}
+private theorem dispatch_entry_of_run_main_prefix {fs : List Func}
+    {sevm : Sevm} {pre post : Devm} {path : Prog.SourcePath}
     (run : Func.Run fs sevm pre main post)
     (hnonempty : sevm.data.length.toB256 ≠ 0) :
-    ∃ entry, pre.state = entry.state ∧ pre.memory = entry.memory ∧
+    ∃ entry target, pre.state = entry.state ∧ pre.memory = entry.memory ∧
       pre.logs = entry.logs ∧ pre.output = entry.output ∧
       (Sevm.selector sevm :: [] <<+ entry.stack) ∧
+      Func.RunPrefix fs sevm path pre main target entry (dispatch tree) ∧
       Func.Run fs sevm entry (dispatch tree) post := by
   unfold main at run
-  refine run_prepend_elim _ [calldatasize] ?_ run
-  intro s1 hline hbranch
+  rcases run_prefix_prepend (l := [calldatasize]) (path := path)
+    (by decide : Line.gasFree [calldatasize] = true) run with
+    ⟨s1, mid1, hline, hbranch, hpre1⟩
   have hframe := hline
   rcases Line.of_run_cons hline with ⟨a, hsize, hnil⟩
   cases hnil
   have hp : sevm.data.length.toB256 :: [] <<+ s1.stack :=
     prefix_of_push (of_run_calldatasize hsize) nil_pref
-  rcases of_run_branch hbranch with
-    ⟨u, hpop, hstop⟩ | ⟨w, u, v, hnz, hpop, hburn, hmain⟩
+  rcases run_prefix_branch (path := mid1) hbranch with
+    ⟨u, midU, hpop, hstop, hpreB⟩
+    | ⟨w, u, v, midV, hnz, hpop, hburn, hmain, hpreB⟩
   · exact absurd (popBurn_pref hpop hp).1.symm hnonempty
-  · refine run_prepend_elim _ fsig ?_ hmain
-    intro s2 hfsig hdispatch
-    refine ⟨s2, ?_, ?_, ?_, ?_, ?_, hdispatch⟩
+  · rcases run_prefix_prepend (l := fsig) (path := midV)
+      (by decide : Line.gasFree fsig = true) hmain with
+      ⟨s2, mid2, hfsig, hdispatch, hpre2⟩
+    refine ⟨s2, mid2, ?_, ?_, ?_, ?_, ?_,
+      Func.RunPrefix.trans hpre1 (Func.RunPrefix.trans hpreB hpre2),
+      hdispatch⟩
     · exact (Line.of_inv Devm.state (by line_inv) hframe).trans
         (hpop.state.trans (hburn.state.trans
           (Line.of_inv Devm.state (by line_inv) hfsig)))
@@ -157,6 +246,18 @@ private theorem dispatch_entry_of_run_main {fs : List Func} {sevm : Sevm}
     · exact (Line.of_inv Devm.output (by line_inv) hframe).trans
         (hpop.output.trans (hburn.output.trans (fsig_output hfsig)))
     · exact prefix_of_fsig nil_pref hfsig
+
+private theorem dispatch_entry_of_run_main {fs : List Func} {sevm : Sevm}
+    {pre post : Devm}
+    (run : Func.Run fs sevm pre main post)
+    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    ∃ entry, pre.state = entry.state ∧ pre.memory = entry.memory ∧
+      pre.logs = entry.logs ∧ pre.output = entry.output ∧
+      (Sevm.selector sevm :: [] <<+ entry.stack) ∧
+      Func.Run fs sevm entry (dispatch tree) post := by
+  obtain ⟨entry, _, hst, hmm, hlg, hou, hsel, _, hdispatch⟩ :=
+    dispatch_entry_of_run_main_prefix (path := ⟨0, []⟩) run hnonempty
+  exact ⟨entry, hst, hmm, hlg, hou, hsel, hdispatch⟩
 
 /-- A successful nonempty call reaches the frozen endpoint its selector names,
 with the selector removed and the frame intact. -/
@@ -213,6 +314,20 @@ theorem run_main_of_exec {sevm : Sevm} {pre post : Devm}
   rename Devm => entry
   cases heq
   exact ⟨entry, burn.state, burn.memory, burn.logs, burn.output, run⟩
+
+/-- Prefix twin of `run_main_of_exec`: the Exec-to-source handoff crosses no
+source steps, so the exposed prefix is reflexivity at the entry state. -/
+theorem main_prefix_of_exec {sevm : Sevm} {pre post : Devm}
+    {path : Prog.SourcePath}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code) :
+    ∃ entry, pre.state = entry.state ∧ pre.memory = entry.memory ∧
+      pre.logs = entry.logs ∧ pre.output = entry.output ∧
+      Func.Run (runtime.main :: runtime.aux) sevm entry main post ∧
+      Func.RunPrefix (runtime.main :: runtime.aux) sevm path entry main path
+        entry main := by
+  rcases run_main_of_exec exc hcode with ⟨entry, hst, hmm, hlg, hou, run⟩
+  exact ⟨entry, hst, hmm, hlg, hou, run, Func.RunPrefix.refl⟩
 
 /-- Deployed-byte receive: an empty-calldata call to the installed runtime
 leaves world state, memory, logs and output exactly as it found them. -/
