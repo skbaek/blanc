@@ -88,6 +88,7 @@ CASES = (
     "event-order-redeem",
     "quote-timing-pre-transfer",
     "capacity-a-u-zero-flows",
+    "capacity-a-u-nonzero-redeem",
     "capacity-supply-ceiling-flows",
     "composition-exact-child-provenance",
     "composition-collision-premise-pairs",

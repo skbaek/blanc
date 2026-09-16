@@ -152,6 +152,7 @@ EXECUTED_CASE_CHANNELS = {
     "event-order-redeem": ("jaune",),
     "quote-timing-pre-transfer": ("jaune",),
     "capacity-a-u-zero-flows": ("jaune",),
+    "capacity-a-u-nonzero-redeem": ("jaune", "eels"),
     "capacity-supply-ceiling-flows": ("jaune",),
     "composition-exact-child-provenance": ("jaune",),
     "composition-collision-premise-pairs": ("jaune",),
@@ -2704,9 +2705,12 @@ def check_pre_transfer_quotes(run: Runner) -> None:
 def _a_u_zero_world(run: Runner) -> dict:
     """The A=U prestate with a funded user: views plus zero-amount flows only.
 
-    Any nonzero flow would move a WETH row across the word ceiling, where the
-    exact program wraps and the oracle reverts (decision packet in the G8
-    report); those flows stay uncredited until that packet is resolved.
+    This world seeds the *user's* WETH row at `U` as well as the vault's,
+    so every nonzero flow here would move a row across the word ceiling,
+    where the exact program wraps and the oracle reverts (decision packet
+    in the G8 report).  Non-crossing nonzero flows are covered separately
+    (`check_a_u_nonzero_redeem`, review F15); crossing flows stay
+    uncredited until that packet is resolved.
     """
     return run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
 
@@ -2856,6 +2860,73 @@ def check_a_u_zero_flows(run: Runner) -> None:
     expect("a-u-zero redeem paid", storage_get(weth, run.user) - V.U, paid)
     _zero_flow_ledger(run, "a-u-zero redeem", result)
     _zero_flow_withdraw_logs(run, "a-u-zero redeem", result)
+
+
+def _a_u_nonzero_redeem_world(run: Runner) -> dict:
+    """The A=U prestate with an empty user row: a nonzero redeem crosses no ceiling.
+
+    Unlike `_a_u_zero_world` (whose user row also sits at `U`, so every
+    nonzero flow there would wrap), this world funds only the vault row.
+    A nonzero `redeem` pays the user out of the full vault -- vault row
+    `U -> U-a`, user row `0 -> a` -- exercising the 257-bit `A+1`
+    denominator route as a state-changing flow with no wrap (review F15).
+    """
+    return run.alloc(0, 0, {run.user: V.MAX_SUPPLY}, V.MAX_SUPPLY,
+                      {word(VAULT_ADDR): word(V.U)})
+
+
+def _a_u_nonzero_redeem_model(run: Runner) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR,
+                   balances={run.user: V.MAX_SUPPLY}, supply=V.MAX_SUPPLY,
+                   weth={run.user: 0, VAULT_ADDR: V.U})
+
+
+def check_a_u_nonzero_redeem(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero redeem out of a full vault (review F15).
+
+    `redeem(1, user, user)` from `S=MAX_SUPPLY, A=U` with an empty user row
+    pays exactly 1 through the 257-bit `A+1` denominator.  Blanc executes
+    against the full oracle projection (supply, shares, both WETH rows,
+    burn/transfer/Withdraw words); the reference reverts under frozen
+    deviation 6 with the `Panic(0x11)` returndata pinned.  Neither row
+    crosses the word ceiling, so nothing wraps and the oracle commits.
+    """
+    world = _a_u_nonzero_redeem_world(run)
+    data = abi("redeem(uint256,address,address)", 1, run.user, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference redeem", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference redeem panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference redeem panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_nonzero_redeem_model(run)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 1,
+                                            run.user, run.user)
+    if not committed:
+        fail("a-u-nonzero redeem: the oracle unexpectedly reverted")
+        return
+    if paid != 1:
+        fail(f"a-u-nonzero redeem: oracle paid {paid}, the 257-bit route pays 1")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero redeem", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero redeem supply", run.supply(vault), V.MAX_SUPPLY - 1)
+    expect("a-u-nonzero redeem user shares", run.shares(vault, run.user),
+           V.MAX_SUPPLY - 1)
+    expect("a-u-nonzero redeem vault row", storage_get(weth, VAULT_ADDR),
+           V.U - paid)
+    expect("a-u-nonzero redeem user row", storage_get(weth, run.user), paid)
+    _withdraw_events("a-u-nonzero redeem", result, run.user, run.user,
+                     run.user, paid, 1)
 
 
 def _ceiling_world(run: Runner) -> tuple[dict, int]:
@@ -3352,6 +3423,64 @@ def check_eels_capacity_views(run: Runner) -> None:
                  f"expected {expected_outcome}/{expected_bytes.hex()}")
 
 
+def check_eels_a_u_nonzero_redeem(run: Runner) -> None:
+    """Independent EELS replay of the nonzero redeem out of a full vault.
+
+    The same world the Jaune leg executes: Blanc succeeds paying exactly
+    1 with the complete post-state bound to the oracle projection, while
+    the reference reverts under frozen deviation 6 with the `Panic(0x11)`
+    payload pinned and complete state rolled back (review F15).
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    failures_before = len(FAILURES)
+    alloc = _a_u_nonzero_redeem_world(run)
+    data = abi("redeem(uint256,address,address)", 1, run.user, run.user)
+    state = _eels_state(alloc)
+    before_root = bytes(state_root(state))
+    tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                         calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                         timestamp=1000, gas=3_000_000)
+    output, _, _, _, _ = eels.execute_tx(
+        state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+        coinbase=address(2), default_origin=address(run.user),
+        fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+    if run.side.name == "reference":
+        if eels.outcome(output) != "revert":
+            fail("EELS a-u-nonzero redeem: succeeded, "
+                 "frozen deviation 6 requires a revert")
+        elif bytes(output.return_data) != REFERENCE_MULDIV_OVERFLOW:
+            fail("EELS a-u-nonzero redeem: revert payload differs from Panic(0x11)")
+        if output.logs:
+            fail("EELS a-u-nonzero redeem: failed call retained logs")
+        if bytes(state_root(state)) != before_root:
+            fail("EELS a-u-nonzero redeem: failed call did not roll back complete state")
+    else:
+        paid = V.convert_to_assets(1, V.U, V.MAX_SUPPLY)
+        if paid != 1:
+            fail(f"EELS a-u-nonzero redeem: oracle paid {paid}, the 257-bit route pays 1")
+        elif eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero redeem: reverted, the oracle commits")
+        elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero redeem: return bytes differ from the paid asset word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(V.MAX_SUPPLY - 1)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(V.MAX_SUPPLY - 1)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(V.U - paid)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(paid)
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero redeem: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-redeem", "eels", run.side.name,
+                         failures_before)
+
+
 def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
     """Pinned EELS replay of each new explicitly declared arithmetic prestate."""
     _eels_root()
@@ -3658,6 +3787,7 @@ CHECKS = [
     check_outbound_event_order,
     check_pre_transfer_quotes,
     check_a_u_zero_flows,
+    check_a_u_nonzero_redeem,
     check_supply_ceiling_flows,
     check_exact_child_provenance,
     check_collision_premise_pairs,
@@ -3690,6 +3820,7 @@ JAUNE_CASES_BY_CHECK = {
     "check_outbound_event_order": ("event-order-withdraw", "event-order-redeem"),
     "check_pre_transfer_quotes": ("quote-timing-pre-transfer",),
     "check_a_u_zero_flows": ("capacity-a-u-zero-flows",),
+    "check_a_u_nonzero_redeem": ("capacity-a-u-nonzero-redeem",),
     "check_supply_ceiling_flows": ("capacity-supply-ceiling-flows",),
     "check_exact_child_provenance": ("composition-exact-child-provenance",),
     "check_collision_premise_pairs": ("composition-collision-premise-pairs",),
@@ -3727,6 +3858,7 @@ def run_eels_side(run: Runner) -> None:
         check_eels_view_returns,
         check_eels_action_returns,
         check_eels_capacity_views,
+        check_eels_a_u_nonzero_redeem,
         check_eels_explicit_arithmetic_capacity_cases,
         check_eels_adversarial_child_returns_and_rollback,
     )
