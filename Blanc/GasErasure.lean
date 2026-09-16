@@ -583,8 +583,7 @@ private theorem run_sload {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
   simp only [Rinst.run, Rinst.runCore] at h1 h2
   rcases Except.bind_eq_ok h1 with ⟨⟨k1, a1⟩, hp1, h1⟩
   rcases Except.bind_eq_ok h2 with ⟨⟨k2, b1⟩, hp2, h2⟩
-  rcases Except.bind_eq_ok h1 with ⟨m1, hif1, hpush1⟩
-  rcases Except.bind_eq_ok h2 with ⟨m2, hif2, hpush2⟩
+  dsimp only at h1 h2
   obtain ⟨hkey, hag1⟩ := h.of_pop (Devm.pop_of_pop hp1) (Devm.pop_of_pop hp2)
   have hasa1 : a1.accessedStorageKeys = b1.accessedStorageKeys := by
     rcases hag1 with ⟨_, _, _, _, _, _, _, _, _, _, has, _, _, _⟩
@@ -592,24 +591,31 @@ private theorem run_sload {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
   have hcond : (⟨e.currentTarget, k1⟩ ∈ a1.accessedStorageKeys) ↔
       (⟨e.currentTarget, k2⟩ ∈ b1.accessedStorageKeys) := by
     rw [hkey, hasa1]
-  have hag2 : Devm.EqModGas m1 m2 := by
-    by_cases hwarm : ⟨e.currentTarget, k1⟩ ∈ a1.accessedStorageKeys
-    · have hwarm2 := hcond.mp hwarm
-      rw [if_pos hwarm] at hif1
-      rw [if_pos hwarm2] at hif2
-      exact hag1.of_burn (Devm.burn_of_chargeGas hif1) (Devm.burn_of_chargeGas hif2)
-    · have hcold2 : ¬ ⟨e.currentTarget, k2⟩ ∈ b1.accessedStorageKeys :=
-        fun hc => hwarm (hcond.mpr hc)
-      rw [if_neg hwarm] at hif1
-      rw [if_neg hcold2] at hif2
-      rw [← hkey] at hif2
-      have hag1' := hag1.of_addAccessedStorageKey
-      exact hag1'.of_burn (Devm.burn_of_chargeGas hif1) (Devm.burn_of_chargeGas hif2)
-  have hword : m1.getStorVal e.currentTarget k1 =
-      m2.getStorVal e.currentTarget k2 := by
-    rw [hkey]; exact hag2.getStorVal_congr
-  rw [hword] at hpush1
-  exact hag2.of_push (Devm.push_of_push hpush1) (Devm.push_of_push hpush2)
+  by_cases hwarm : ⟨e.currentTarget, k1⟩ ∈ a1.accessedStorageKeys
+  · have hwarm2 := hcond.mp hwarm
+    simp only [if_pos hwarm] at h1
+    simp only [if_pos hwarm2] at h2
+    rcases Except.bind_eq_ok h1 with ⟨m1, hc1, hpush1⟩
+    rcases Except.bind_eq_ok h2 with ⟨m2, hc2, hpush2⟩
+    have hag2 := hag1.of_burn (Devm.burn_of_chargeGas hc1) (Devm.burn_of_chargeGas hc2)
+    have hword : m1.getStorVal e.currentTarget k1 =
+        m2.getStorVal e.currentTarget k2 := by
+      rw [hkey]; exact hag2.getStorVal_congr
+    rw [hword] at hpush1
+    exact hag2.of_push (Devm.push_of_push hpush1) (Devm.push_of_push hpush2)
+  · have hcold2 : ¬ ⟨e.currentTarget, k2⟩ ∈ b1.accessedStorageKeys :=
+      fun hc => hwarm (hcond.mpr hc)
+    simp only [if_neg hwarm] at h1
+    simp only [if_neg hcold2] at h2
+    rw [← hkey] at h2
+    rcases Except.bind_eq_ok h1 with ⟨m1, hc1, hpush1⟩
+    rcases Except.bind_eq_ok h2 with ⟨m2, hc2, hpush2⟩
+    have hag1' := hag1.of_addAccessedStorageKey (t := e.currentTarget) (k := k1)
+    have hag2 := hag1'.of_burn (Devm.burn_of_chargeGas hc1) (Devm.burn_of_chargeGas hc2)
+    have hword : m1.getStorVal e.currentTarget k1 =
+        m2.getStorVal e.currentTarget k1 := hag2.getStorVal_congr
+    rw [hword] at hpush1
+    exact hag2.of_push (Devm.push_of_push hpush1) (Devm.push_of_push hpush2)
 
 private theorem run_sstore {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     (h1 : Rinst.run ⟨pc1, e, a⟩ .sstore = .ok a')
@@ -757,29 +763,30 @@ theorem Rinst.run_eqModGas {e : Sevm} {a a' b b' : Devm} {r : Rinst}
     (h1 : Rinst.run ⟨pc1, e, a⟩ r = .ok a')
     (h2 : Rinst.run ⟨pc2, e, b⟩ r = .ok b')
     (h : Devm.EqModGas a b) : Devm.EqModGas a' b' := by
-  cases r <;> simp [Rinst.gasFree] at hfree <;> first
-    | exact run_add h1 h2 h
-    | exact run_mul h1 h2 h
-    | exact run_sub h1 h2 h
-    | exact run_div h1 h2 h
-    | exact run_lt h1 h2 h
-    | exact run_gt h1 h2 h
-    | exact run_eq h1 h2 h
-    | exact run_iszero h1 h2 h
-    | exact run_and h1 h2 h
-    | exact run_shr h1 h2 h
-    | exact run_caller h1 h2 h
-    | exact run_callvalue h1 h2 h
-    | exact run_calldataload h1 h2 h
-    | exact run_calldatasize h1 h2 h
-    | exact run_timestamp h1 h2 h
-    | exact run_pop h1 h2 h
-    | exact run_mload h1 h2 h
-    | exact run_mstore h1 h2 h
-    | exact run_sload h1 h2 h
-    | exact run_sstore h1 h2 h
-    | exact run_dup h1 h2 h
-    | exact run_swap h1 h2 h
+  cases r <;> simp only [Rinst.gasFree] at hfree
+  case add => exact run_add h1 h2 h
+  case mul => exact run_mul h1 h2 h
+  case sub => exact run_sub h1 h2 h
+  case div => exact run_div h1 h2 h
+  case lt => exact run_lt h1 h2 h
+  case gt => exact run_gt h1 h2 h
+  case eq => exact run_eq h1 h2 h
+  case iszero => exact run_iszero h1 h2 h
+  case and => exact run_and h1 h2 h
+  case shr => exact run_shr h1 h2 h
+  case caller => exact run_caller h1 h2 h
+  case callvalue => exact run_callvalue h1 h2 h
+  case calldataload => exact run_calldataload h1 h2 h
+  case calldatasize => exact run_calldatasize h1 h2 h
+  case timestamp => exact run_timestamp h1 h2 h
+  case pop => exact run_pop h1 h2 h
+  case mload => exact run_mload h1 h2 h
+  case mstore => exact run_mstore h1 h2 h
+  case sload => exact run_sload h1 h2 h
+  case sstore => exact run_sstore h1 h2 h
+  case dup => exact run_dup h1 h2 h
+  case swap => exact run_swap h1 h2 h
+  all_goals exact absurd hfree (by decide)
 
 /-- Two successful runs of a gas-free instruction from agreeing states land on
 agreeing states.
@@ -810,18 +817,21 @@ theorem Line.run_eqModGas {e : Sevm} {a a' b b' : Devm} {l : Line}
     (hfree : Line.gasFree l = true)
     (h1 : Line.Run e a l a') (h2 : Line.Run e b l b')
     (h : Devm.EqModGas a b) : Devm.EqModGas a' b' := by
-  revert b b' h2 h hfree
-  induction h1 with
+  revert a a' b b' hfree h1 h2 h
+  induction l with
   | nil =>
-    intro b b' h2 h _
+    intro a a' b b' hfree h1 h2 h
+    cases h1
     cases h2
     exact h
-  | cons hstep htail ih =>
-    intro b b' h2 h hfree
-    cases h2 with
-    | cons hstep2 htail2 =>
-      simp only [Line.gasFree, Bool.and_eq_true] at hfree
-      rcases hfree with ⟨hfi, hfl⟩
-      exact ih htail2 (Ninst.run_eqModGas hfi hstep hstep2 h) hfl
+  | cons hd tl ih =>
+    intro a a' b b' hfree h1 h2 h
+    cases h1 with
+    | cons hstep htail =>
+      cases h2 with
+      | cons hstep2 htail2 =>
+        simp only [Line.gasFree, Bool.and_eq_true] at hfree
+        exact ih hfree.2 htail htail2
+          (Ninst.run_eqModGas hfree.1 hstep hstep2 h)
 
 end Blanc
