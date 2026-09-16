@@ -177,10 +177,11 @@ class Vault:
         if self.weth.get(src, 0) < amount:
             raise Revert("weth-insufficient-balance")
         self.weth[src] = self.weth.get(src, 0) - amount
-        after = self.weth.get(dst, 0) + amount
-        if after > U:
-            raise Revert("weth-balance-overflow")
-        self.weth[dst] = after
+        # The exact WETH credit wraps modulo 2^256 (bare `add`, no ceiling
+        # check: incrWbal), so the oracle wraps too (user decision
+        # vault-oracle-weth-wrap-20260916, option A). Only the credit wraps;
+        # the debit above still guards.
+        self.weth[dst] = (self.weth.get(dst, 0) + amount) & U
 
     def _spend_weth_allowance(self, owner: int, spender: int, amount: int) -> None:
         if owner == spender:
