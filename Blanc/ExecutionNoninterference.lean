@@ -74,6 +74,29 @@ theorem Exec.Deriv.ParentStep.sevm_eq
     (edge : Exec.Deriv.ParentStep next root) : next.sevm = root.sevm := by
   cases edge <;> rfl
 
+/-- One actual same-frame continuation edge preserves nonempty code, whether
+it is a plain step, an immediately completed spawn, or a resumed child. -/
+theorem Exec.Deriv.ParentStep.codePreserve
+    {next node : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next node) :
+    Devm.CodePreserve node.devm next.devm := by
+  intro a nonempty
+  cases edge with
+  | cont hstep next =>
+      exact lift_core.stepCode (xl := .none) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩) a nonempty
+  | doneOk hstep henter hresume next =>
+      exact lift_core.stepCode (xl := .none) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
+        a nonempty
+  | runOk hstep henter child hresume next =>
+      exact lift_core.stepCode (xl := .some ⟨_, _⟩)
+        (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+          Linst.codePreserve_effect child)
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
+        a nonempty
+
 /-- Every endpoint of a same-frame prefix has the root's static environment. -/
 theorem Exec.Deriv.ParentPrefix.sevm_eq
     {root tail : Exec.Deriv}

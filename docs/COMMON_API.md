@@ -444,6 +444,11 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `SourceCursor.branchFlagToward`, and `ninstRun_of_nextEdge` retain the exact
   same-frame chronology and stack effects across compiler glue; they do not
   assert liveness or a final execution outcome.
+- Every actual same-frame continuation edge preserves nonempty code:
+  `Exec.Deriv.ParentStep.codePreserve` in
+  [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean),
+  beside `ParentStep.sevm_eq`; it covers the plain step, the immediately
+  completed spawn, and the resumed child.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
