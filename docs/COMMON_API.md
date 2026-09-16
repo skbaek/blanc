@@ -493,6 +493,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   The existing stack-certificate recipe advises the `StepSafe` head; selecting
   a transfer wrapper additionally needs the exact instruction and successful
   check, so discovery remains in this registry.
+- For per-instruction equality modulo gas over the same opcode family minus
+  `gas`, see I1 and
+  [`Blanc/GasErasure.lean`](../Blanc/GasErasure.lean).
 - For a finite table of actual decoded stack patterns, use
   [`Blanc/AbstractStackCertificate.lean`](../Blanc/AbstractStackCertificate.lean).
   `AbstractStackSafety.Table` stores full patterns in a finite search tree.
@@ -853,6 +856,27 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `Devm.getCode` preservation for both `Linst.stop` and `Linst.revert`.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
+- For equality of EVM states modulo `gasLeft` across two successful runs of a
+  gas-free instruction or line, use
+  [`Blanc/GasErasure.lean`](../Blanc/GasErasure.lean).
+  `Devm.EqModGas` relates states agreeing on every `Devm.Rels` column except
+  `gasLeft`, with `refl`/`symm`/`trans`, the `of_burn`, `of_pop`, `of_push`,
+  `of_popBurn`, and `of_pushBurn` step adapters, update congruences
+  (`of_memWrite`, `of_addAccessedStorageKey`, `of_withRefundCounter`,
+  `of_setStorVal`, `of_withMemory`, `of_withStack`), and read congruences
+  (`extCost_congr`, `getStorVal_congr`, `memRead_congr`, `of_popToNat`).
+  `Rinst.gasFree` whitelists the `regularTransfer` opcode family minus `gas`;
+  `Ninst.gasFree` adds `push` and `Line.gasFree` covers lines.
+  `Rinst.run_eqModGas` replays two successful per-op runs against each other,
+  `Ninst.run_eqModGas` lifts that to instructions, and `Line.run_eqModGas`
+  to gas-free lines. The whitelist never contains `pc`, `gas`, or an
+  `Xinst`; adding `gas` makes the instruction theorem unprovable, since two
+  runs differing only in gas push different words. The identity is modulo
+  exactly the columns outside `Devm.Rels` as pinned: a Jaune bump adding
+  columns there widens it silently, so revisit `Devm.Rels` and the whitelist
+  at any such bump. Existing suggestion facilities were checked and no
+  registered trigger matches the two-run congruence goal shape, so discovery
+  remains in this registry.
 
 ### I2. The property concerns a complete execution or child frames
 
