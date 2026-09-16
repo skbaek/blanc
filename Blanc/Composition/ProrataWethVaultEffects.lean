@@ -665,17 +665,19 @@ theorem retainedWethAllowanceLocatedEvents_erase
     WethAllowanceLocatedEvent.toEvent
   cases WethAllowanceEvent.classify? located.frame <;> rfl
 
-/-- A path-preserving projected event retains both its exact original path
-member and the existing WETH allowance classification. -/
+/-- A path-preserving projected event retains its exact original path member,
+the frame alignment with that path, and the existing WETH allowance
+classification. -/
 theorem retainedWethAllowanceLocatedEvents_sound
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) {event : WethAllowanceLocatedEvent}
     (member : event ∈ retainedWethAllowanceLocatedEvents run) :
-    event.located ∈ Exec.committedFramePaths run ∧ event.toEvent.Classified := by
+    event.located ∈ Exec.committedFramePaths run ∧
+      event.toEvent.frame = event.located.frame ∧ event.toEvent.Classified := by
   rcases List.mem_filterMap.mp member with ⟨located, locatedMember, classified⟩
-  obtain ⟨sameLocated, _, exact⟩ :=
+  obtain ⟨sameLocated, aligned, exact⟩ :=
     WethAllowanceLocatedEvent.classification_sound classified
-  exact ⟨by simpa only [sameLocated] using locatedMember, exact⟩
+  exact ⟨by simpa only [sameLocated] using locatedMember, aligned, exact⟩
 
 /-- The first path-aware WETH consumer invokes the common parent-entry bridge
 on the event's actual retained occurrence.  The root case stays an explicit
