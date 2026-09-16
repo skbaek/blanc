@@ -89,6 +89,11 @@ CASES = (
     "quote-timing-pre-transfer",
     "capacity-a-u-zero-flows",
     "capacity-a-u-nonzero-redeem",
+    "capacity-a-u-nonzero-deposit",
+    "capacity-a-u-nonzero-mint",
+    "capacity-a-u-nonzero-withdraw",
+    "capacity-receiver-wrap-withdraw",
+    "capacity-receiver-wrap-redeem",
     "capacity-supply-ceiling-flows",
     "composition-exact-child-provenance",
     "composition-collision-premise-pairs",
@@ -153,6 +158,7 @@ SOURCE_INPUTS = (
     "scripts/check-prorata-weth-vault-differential.py",
     "scripts/evm_return_capture.py",
     "scripts/prorata_weth_vault_oracle.py",
+    "scripts/gen-prorata-weth-wrap-proof.py",
 )
 
 

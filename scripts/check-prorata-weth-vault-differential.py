@@ -153,6 +153,11 @@ EXECUTED_CASE_CHANNELS = {
     "quote-timing-pre-transfer": ("jaune",),
     "capacity-a-u-zero-flows": ("jaune", "eels"),
     "capacity-a-u-nonzero-redeem": ("jaune", "eels"),
+    "capacity-a-u-nonzero-deposit": ("jaune", "eels"),
+    "capacity-a-u-nonzero-mint": ("jaune", "eels"),
+    "capacity-a-u-nonzero-withdraw": ("jaune", "eels"),
+    "capacity-receiver-wrap-withdraw": ("jaune", "eels"),
+    "capacity-receiver-wrap-redeem": ("jaune", "eels"),
     "capacity-supply-ceiling-flows": ("jaune", "eels"),
     "composition-exact-child-provenance": ("jaune",),
     "composition-collision-premise-pairs": ("jaune",),
@@ -236,6 +241,29 @@ def validate_declared_case_coverage() -> None:
     if unexpected:
         fail("declared executed coverage recorded undeclared IDs: "
              + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in unexpected))
+
+
+def verify_wrap_proof(run: Runner) -> None:
+    """The committed wrap proof regenerates byte-for-byte (review F14).
+
+    Re-executes the registered wrap-probe generator against the exact
+    program and requires the committed JSON to match, so the F14 claim
+    cannot rot.  Execution-only: no oracle query, so oracle mutants in
+    the self-test campaigns cannot disturb it.
+    """
+    path = HERE / "gen-prorata-weth-wrap-proof.py"
+    spec = importlib.util.spec_from_file_location("weth_wrap_proof", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        payload = module.build(run)
+    except (RuntimeError, AssertionError) as exc:
+        fail(f"wrap proof regeneration failed: {exc}")
+        return
+    committed = HERE / "prorata-weth-wrap-proof.json"
+    if not committed.is_file() or committed.read_bytes() != payload:
+        fail("prorata-weth-wrap-proof.json is not what the registered "
+             "generator produces; regenerate it with gen-prorata-weth-wrap-proof.py")
 
 
 def record_arithmetic_capacity(case: str, channel: str, side: str) -> None:
@@ -1651,10 +1679,11 @@ def check_exact_child_failure_rollback(run: Runner) -> None:
     status 1, matching the wrap-aware ``creditLoss`` algebra), so the
     receiver credit cannot fail either.  Burn-rollback-on-outbound-failure
     therefore executes only against a foreign child, which the existing
-    foreign-child withdraw/redeem revert rows already cover.  The oracle's
-    ``weth-balance-overflow`` revert class predicts a revert the exact
-    program does not perform; changing that prediction is a reserved oracle
-    semantic decision, so no case here exercises a wrapping credit.
+    foreign-child withdraw/redeem revert rows already cover.  The oracle
+    used to predict a ``weth-balance-overflow`` revert the exact program
+    does not perform; user decision vault-oracle-weth-wrap-20260916
+    (option A) resolved that packet, so the oracle wraps with the exact
+    program and the near-ceiling cases below exercise wrapping credits.
 
     Exact WETH transfer/transferFrom carries no recipient callback (SF
     section 5), so the failed-child trace contains no callback frame; that
@@ -2928,12 +2957,13 @@ def check_pre_transfer_quotes(run: Runner) -> None:
 def _a_u_zero_world(run: Runner) -> dict:
     """The A=U prestate with a funded user: views plus zero-amount flows only.
 
-    This world seeds the *user's* WETH row at `U` as well as the vault's,
-    so every nonzero flow here would move a row across the word ceiling,
-    where the exact program wraps and the oracle reverts (decision packet
-    in the G8 report).  Non-crossing nonzero flows are covered separately
-    (`check_a_u_nonzero_redeem`, review F15); crossing flows stay
-    uncredited until that packet is resolved.
+    This world seeds the *user's WETH row at `U` as well as the vault's,
+    so every nonzero flow here moves a row across the word ceiling, where
+    both the exact program and (since user decision
+    vault-oracle-weth-wrap-20260916, option A) the oracle wrap.
+    Non-crossing nonzero flows are covered separately
+    (`check_a_u_nonzero_redeem`, `check_a_u_nonzero_withdraw`, review
+    F15); the crossing deposit and mint run from this world.
     """
     return run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
 
@@ -3150,6 +3180,221 @@ def check_a_u_nonzero_redeem(run: Runner) -> None:
     expect("a-u-nonzero redeem user row", storage_get(weth, run.user), paid)
     _withdraw_events("a-u-nonzero redeem", result, run.user, run.user,
                      run.user, paid, 1)
+
+
+def _wrap_receiver_world(run: Runner, receiver: int) -> dict:
+    """A funded ordinary world whose receiver WETH row sits at `U - 5`.
+
+    Vault row and supply are small; only the receiver row is near the
+    ceiling, so an outbound payout wraps exactly that row (review F15 /
+    decision vault-oracle-weth-wrap-20260916).
+    """
+    return run.alloc(100, V.U, {run.user: 1000}, 1000,
+                     {word(VAULT_ADDR): word(10000),
+                      word(receiver): word(V.U - 5)})
+
+
+def _wrap_receiver_model(run: Runner, receiver: int) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR, balances={run.user: 1000},
+                   supply=1000,
+                   weth={run.user: 100, VAULT_ADDR: 10000,
+                         receiver: V.U - 5},
+                   weth_allowances={(run.user, VAULT_ADDR): V.U})
+
+
+def check_a_u_nonzero_deposit(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero deposit into a full vault (review F15).
+
+    `deposit(10, user)` from `S=0, A=U` with the user's row also at `U`:
+    the user row lands on `U-10` while the vault row wraps `U -> 9`.
+    Blanc executes against the full oracle projection; the reference
+    reverts under frozen deviation 6 with `Panic(0x11)` pinned.
+    """
+    world = _a_u_zero_world(run)
+    data = abi("deposit(uint256,address)", 10, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference deposit", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference deposit panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference deposit panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, shares, _ = oracle_transaction(model, "deposit", run.user, 10,
+                                              run.user)
+    if not committed:
+        fail("a-u-nonzero deposit: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero deposit", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero deposit supply", run.supply(vault), shares)
+    expect("a-u-nonzero deposit user shares", run.shares(vault, run.user),
+           shares)
+    expect("a-u-nonzero deposit vault row", storage_get(weth, VAULT_ADDR),
+           (V.U + 10) & V.U)
+    expect("a-u-nonzero deposit user row", storage_get(weth, run.user),
+           V.U - 10)
+    _deposit_events("a-u-nonzero deposit", result, run.user, run.user, 10,
+                    shares)
+
+
+def check_a_u_nonzero_mint(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero mint into a full vault (review F15).
+
+    `mint(10, user)` from `S=0, A=U` with the user's row also at `U`:
+    the user pays the 257-bit quote while the vault row wraps past the
+    ceiling.  Blanc executes against the full oracle projection; the
+    reference reverts under frozen deviation 6 with `Panic(0x11)` pinned.
+    """
+    world = _a_u_zero_world(run)
+    data = abi("mint(uint256,address)", 10, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference mint", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference mint panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference mint panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, paid, _ = oracle_transaction(model, "mint", run.user, 10,
+                                            run.user)
+    if not committed:
+        fail("a-u-nonzero mint: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero mint", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero mint supply", run.supply(vault), 10)
+    expect("a-u-nonzero mint user shares", run.shares(vault, run.user), 10)
+    expect("a-u-nonzero mint vault row", storage_get(weth, VAULT_ADDR),
+           (V.U + paid) & V.U)
+    expect("a-u-nonzero mint user row", storage_get(weth, run.user),
+           V.U - paid)
+    _deposit_events("a-u-nonzero mint", result, run.user, run.user, paid, 10)
+
+
+def check_a_u_nonzero_withdraw(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero withdraw out of a full vault (review F15).
+
+    `withdraw(1, user, user)` from `S=MAX_SUPPLY, A=U` with an empty user
+    row pays exactly 1 through the 257-bit `A+1` denominator.  Blanc
+    executes against the full oracle projection (supply, shares, both
+    WETH rows, burn/transfer/Withdraw words); the reference reverts
+    under frozen deviation 6 with the `Panic(0x11)` returndata pinned.
+    """
+    world = _a_u_nonzero_redeem_world(run)
+    data = abi("withdraw(uint256,address,address)", 1, run.user, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference withdraw", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference withdraw panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference withdraw panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_nonzero_redeem_model(run)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 1,
+                                              run.user, run.user)
+    if not committed:
+        fail("a-u-nonzero withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero withdraw", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero withdraw supply", run.supply(vault),
+           V.MAX_SUPPLY - burned)
+    expect("a-u-nonzero withdraw user shares", run.shares(vault, run.user),
+           V.MAX_SUPPLY - burned)
+    expect("a-u-nonzero withdraw vault row", storage_get(weth, VAULT_ADDR),
+           V.U - 1)
+    expect("a-u-nonzero withdraw user row", storage_get(weth, run.user), 1)
+    _withdraw_events("a-u-nonzero withdraw", result, run.user, run.user,
+                     run.user, 1, burned)
+
+
+def check_receiver_wrap_withdraw(run: Runner) -> None:
+    """SF section 11 capacity: a withdraw payout wraps the receiver row (review F15).
+
+    `withdraw(10, receiver, user)` with the receiver row at `U-5` wraps
+    it to 4 with status 1.  Both compiled sides execute against the
+    wrapping oracle projection: the reference vault calls the same exact
+    WETH child, so no deviation is involved.
+    """
+    receiver = signer_address(3)
+    world = _wrap_receiver_world(run, receiver)
+    data = abi("withdraw(uint256,address,address)", 10, receiver, run.user)
+    model = _wrap_receiver_model(run, receiver)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 10,
+                                              receiver, run.user)
+    if not committed:
+        fail("receiver-wrap withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("receiver-wrap withdraw", result):
+        return
+    vault, weth = vault_state(result)
+    expect("receiver-wrap withdraw supply", run.supply(vault), 1000 - burned)
+    expect("receiver-wrap withdraw user shares", run.shares(vault, run.user),
+           1000 - burned)
+    expect("receiver-wrap withdraw vault row", storage_get(weth, VAULT_ADDR),
+           10000 - 10)
+    expect("receiver-wrap withdraw receiver row",
+           storage_get(weth, receiver), (V.U - 5 + 10) & V.U)
+    _withdraw_events("receiver-wrap withdraw", result, run.user, receiver,
+                     run.user, 10, burned)
+
+
+def check_receiver_wrap_redeem(run: Runner) -> None:
+    """SF section 11 capacity: a redeem payout wraps the receiver row (review F15).
+
+    `redeem(10, receiver, user)` with the receiver row at `U-5` wraps
+    it past the ceiling with status 1.  Both compiled sides execute
+    against the wrapping oracle projection: the reference vault calls
+    the same exact WETH child, so no deviation is involved.
+    """
+    receiver = signer_address(3)
+    world = _wrap_receiver_world(run, receiver)
+    data = abi("redeem(uint256,address,address)", 10, receiver, run.user)
+    model = _wrap_receiver_model(run, receiver)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 10,
+                                            receiver, run.user)
+    if not committed:
+        fail("receiver-wrap redeem: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("receiver-wrap redeem", result):
+        return
+    vault, weth = vault_state(result)
+    expect("receiver-wrap redeem supply", run.supply(vault), 1000 - 10)
+    expect("receiver-wrap redeem user shares", run.shares(vault, run.user),
+           1000 - 10)
+    expect("receiver-wrap redeem vault row", storage_get(weth, VAULT_ADDR),
+           10000 - paid)
+    expect("receiver-wrap redeem receiver row",
+           storage_get(weth, receiver), (V.U - 5 + paid) & V.U)
+    _withdraw_events("receiver-wrap redeem", result, run.user, receiver,
+                     run.user, paid, 10)
 
 
 def _ceiling_world(run: Runner) -> tuple[dict, int]:
@@ -3701,6 +3946,207 @@ def check_eels_a_u_nonzero_redeem(run: Runner) -> None:
             if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
                 fail("EELS a-u-nonzero redeem: complete successful state differs")
     record_case_if_clean("capacity-a-u-nonzero-redeem", "eels", run.side.name,
+                         failures_before)
+
+
+def _eels_single_tx(run: Runner, alloc: dict, data: str):
+    """Execute one vault call on pinned EELS, returning (output, before_root, state)."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    state = _eels_state(alloc)
+    before_root = bytes(state_root(state))
+    tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                         calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                         timestamp=1000, gas=3_000_000)
+    output, _, _, _, _ = eels.execute_tx(
+        state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+        coinbase=address(2), default_origin=address(run.user),
+        fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+    return eels, output, before_root, state
+
+
+def _eels_expect_dev6_revert(run: Runner, label: str, eels, output,
+                             before_root: bytes, state) -> None:
+    """The reference side of an A=U flow: dev-6 revert, panic pinned, rolled back."""
+    from ethereum.prague.state import state_root
+    if eels.outcome(output) != "revert":
+        fail(f"{label}: succeeded, frozen deviation 6 requires a revert")
+    elif bytes(output.return_data) != REFERENCE_MULDIV_OVERFLOW:
+        fail(f"{label}: revert payload differs from Panic(0x11)")
+    if output.logs:
+        fail(f"{label}: failed call retained logs")
+    if bytes(state_root(state)) != before_root:
+        fail(f"{label}: failed call did not roll back complete state")
+
+
+def check_eels_a_u_nonzero_deposit(run: Runner) -> None:
+    """Independent EELS replay of the nonzero deposit into a full vault.
+
+    Blanc wraps the vault row `U -> 9` with the complete post-state bound
+    to the oracle projection, while the reference reverts under frozen
+    deviation 6 with the `Panic(0x11)` payload pinned (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_zero_world(run)
+    data = abi("deposit(uint256,address)", 10, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero deposit", eels,
+                                 output, before_root, state)
+    else:
+        shares = V.convert_to_shares(10, V.U, 0)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero deposit: reverted, the oracle commits")
+        elif bytes(output.return_data) != shares.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero deposit: return bytes differ from the minted shares word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(shares)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(shares)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word((V.U + 10) & V.U)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(V.U - 10)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero deposit: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-deposit", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_a_u_nonzero_mint(run: Runner) -> None:
+    """Independent EELS replay of the nonzero mint into a full vault.
+
+    Blanc collects the 257-bit quote and wraps the vault row past the
+    ceiling with the complete post-state bound to the oracle projection,
+    while the reference reverts under frozen deviation 6 (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_zero_world(run)
+    data = abi("mint(uint256,address)", 10, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero mint", eels, output,
+                                 before_root, state)
+    else:
+        paid = V.preview_mint(10, V.U, 0)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero mint: reverted, the oracle commits")
+        elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero mint: return bytes differ from the paid assets word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(10)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(10)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word((V.U + paid) & V.U)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(V.U - paid)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero mint: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-mint", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_a_u_nonzero_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the nonzero withdraw out of a full vault.
+
+    Blanc pays exactly 1 through the 257-bit route with the complete
+    post-state bound to the oracle projection, while the reference
+    reverts under frozen deviation 6 (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_nonzero_redeem_world(run)
+    data = abi("withdraw(uint256,address,address)", 1, run.user, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero withdraw", eels,
+                                 output, before_root, state)
+    else:
+        burned = V.preview_withdraw(1, V.U, V.MAX_SUPPLY)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero withdraw: reverted, the oracle commits")
+        elif bytes(output.return_data) != burned.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero withdraw: return bytes differ from the burned shares word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(V.MAX_SUPPLY - burned)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(V.MAX_SUPPLY - burned)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(V.U - 1)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(1)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero withdraw: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-withdraw", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_receiver_wrap_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the receiver-row wrap on withdraw (review F15).
+
+    Both compiled sides wrap the `U-5` receiver row to 4 with status 1
+    against the wrapping oracle projection.
+    """
+    failures_before = len(FAILURES)
+    receiver = signer_address(3)
+    alloc = _wrap_receiver_world(run, receiver)
+    data = abi("withdraw(uint256,address,address)", 10, receiver, run.user)
+    eels, output, _, state = _eels_single_tx(run, alloc, data)
+    burned = V.preview_withdraw(10, 10000, 1000)
+    if eels.outcome(output) != "success":
+        fail("EELS receiver-wrap withdraw: reverted, the oracle commits")
+    elif bytes(output.return_data) != burned.to_bytes(32, "big"):
+        fail("EELS receiver-wrap withdraw: return bytes differ from the burned shares word")
+    else:
+        expected = deepcopy(alloc)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.shares_slot(run.user))] = word(1000 - burned)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.supply_slot)] = word(1000 - burned)
+        expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(10000 - 10)
+        expected[address(WETH_ADDR)]["storage"][word(receiver)] = word((V.U - 5 + 10) & V.U)
+        from ethereum.prague.state import state_root
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail("EELS receiver-wrap withdraw: complete successful state differs")
+    record_case_if_clean("capacity-receiver-wrap-withdraw", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_receiver_wrap_redeem(run: Runner) -> None:
+    """Independent EELS replay of the receiver-row wrap on redeem (review F15).
+
+    Both compiled sides wrap the `U-5` receiver row past the ceiling
+    with status 1 against the wrapping oracle projection.
+    """
+    failures_before = len(FAILURES)
+    receiver = signer_address(3)
+    alloc = _wrap_receiver_world(run, receiver)
+    data = abi("redeem(uint256,address,address)", 10, receiver, run.user)
+    eels, output, _, state = _eels_single_tx(run, alloc, data)
+    paid = V.convert_to_assets(10, 10000, 1000)
+    if eels.outcome(output) != "success":
+        fail("EELS receiver-wrap redeem: reverted, the oracle commits")
+    elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+        fail("EELS receiver-wrap redeem: return bytes differ from the paid assets word")
+    else:
+        expected = deepcopy(alloc)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.shares_slot(run.user))] = word(1000 - 10)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.supply_slot)] = word(1000 - 10)
+        expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(10000 - paid)
+        expected[address(WETH_ADDR)]["storage"][word(receiver)] = word((V.U - 5 + paid) & V.U)
+        from ethereum.prague.state import state_root
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail("EELS receiver-wrap redeem: complete successful state differs")
+    record_case_if_clean("capacity-receiver-wrap-redeem", "eels", run.side.name,
                          failures_before)
 
 
@@ -4532,6 +4978,11 @@ CHECKS = [
     check_pre_transfer_quotes,
     check_a_u_zero_flows,
     check_a_u_nonzero_redeem,
+    check_a_u_nonzero_deposit,
+    check_a_u_nonzero_mint,
+    check_a_u_nonzero_withdraw,
+    check_receiver_wrap_withdraw,
+    check_receiver_wrap_redeem,
     check_supply_ceiling_flows,
     check_exact_child_provenance,
     check_collision_premise_pairs,
@@ -4565,6 +5016,11 @@ JAUNE_CASES_BY_CHECK = {
     "check_pre_transfer_quotes": ("quote-timing-pre-transfer",),
     "check_a_u_zero_flows": ("capacity-a-u-zero-flows",),
     "check_a_u_nonzero_redeem": ("capacity-a-u-nonzero-redeem",),
+    "check_a_u_nonzero_deposit": ("capacity-a-u-nonzero-deposit",),
+    "check_a_u_nonzero_mint": ("capacity-a-u-nonzero-mint",),
+    "check_a_u_nonzero_withdraw": ("capacity-a-u-nonzero-withdraw",),
+    "check_receiver_wrap_withdraw": ("capacity-receiver-wrap-withdraw",),
+    "check_receiver_wrap_redeem": ("capacity-receiver-wrap-redeem",),
     "check_supply_ceiling_flows": ("capacity-supply-ceiling-flows",),
     "check_exact_child_provenance": ("composition-exact-child-provenance",),
     "check_collision_premise_pairs": ("composition-collision-premise-pairs",),
@@ -4603,6 +5059,11 @@ def run_eels_side(run: Runner) -> None:
         check_eels_action_returns,
         check_eels_capacity_views,
         check_eels_a_u_nonzero_redeem,
+        check_eels_a_u_nonzero_deposit,
+        check_eels_a_u_nonzero_mint,
+        check_eels_a_u_nonzero_withdraw,
+        check_eels_receiver_wrap_withdraw,
+        check_eels_receiver_wrap_redeem,
         check_eels_explicit_arithmetic_capacity_cases,
         check_eels_adversarial_child_returns_and_rollback,
         check_eels_causal_donation_before_deposit,
@@ -6147,6 +6608,7 @@ def main(argv: list[str]) -> int:
         run_eels_side(reference)
     validate_arithmetic_capacity_coverage()
     validate_declared_case_coverage()
+    verify_wrap_proof(blanc)
     measured = measurements(blanc, reference) if reference else None
     if measured is not None and not FAILURES:
         text = json.dumps(measured, indent=2, sort_keys=True) + "\n"
