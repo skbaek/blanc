@@ -151,6 +151,9 @@ EXECUTED_CASE_CHANNELS = {
     "event-order-withdraw": ("jaune",),
     "event-order-redeem": ("jaune",),
     "quote-timing-pre-transfer": ("jaune",),
+    "capacity-a-u-zero-flows": ("jaune",),
+    "capacity-supply-ceiling-flows": ("jaune",),
+    "composition-exact-child-provenance": ("jaune",),
     "causal-return-deposit-caller-receiver": ("jaune",),
     "causal-return-deposit-caller-distinct-receiver": ("jaune",),
     "causal-return-mint-caller-receiver": ("jaune",),
@@ -2696,6 +2699,379 @@ def check_pre_transfer_quotes(run: Runner) -> None:
     expect("quote-timing redeem paid", storage_get(weth, run.user) - user_weth, pre)
 
 
+def _a_u_zero_world(run: Runner) -> dict:
+    """The A=U prestate with a funded user: views plus zero-amount flows only.
+
+    Any nonzero flow would move a WETH row across the word ceiling, where the
+    exact program wraps and the oracle reverts (decision packet in the G8
+    report); those flows stay uncredited until that packet is resolved.
+    """
+    return run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+
+
+def _a_u_zero_model(run: Runner) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR,
+                   weth={run.user: V.U, VAULT_ADDR: V.U},
+                   weth_allowances={(run.user, VAULT_ADDR): V.U})
+
+
+def _zero_flow_ledger(run: Runner, label: str, result: dict) -> None:
+    """A zero-amount flow at A=U moves no row on the Blanc side."""
+    vault, weth = vault_state(result)
+    expect(f"{label} supply", run.supply(vault), 0)
+    expect(f"{label} user shares", run.shares(vault, run.user), 0)
+    expect(f"{label} vault row", storage_get(weth, VAULT_ADDR), V.U)
+    expect(f"{label} user row", storage_get(weth, run.user), V.U)
+    expect(f"{label} allowance",
+           storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)), V.U)
+
+
+def _zero_flow_deposit_logs(run: Runner, label: str, result: dict) -> None:
+    """The child Transfer still fires for a zero inbound flow, in order."""
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"{label}: got {got}, statement says {want}")
+        return
+    child, mint, receipt = entries
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (run.user, VAULT_ADDR, 0):
+        fail(f"{label}: child Transfer words differ")
+    if (int(mint["topics"][1], 16), int(mint["topics"][2], 16),
+            int(mint["data"], 16)) != (0, run.user, 0):
+        fail(f"{label}: share mint words differ")
+    if int(receipt["data"][2:66], 16) != 0 or int(receipt["data"][66:130], 16) != 0:
+        fail(f"{label}: Deposit words differ")
+
+
+def _zero_flow_withdraw_logs(run: Runner, label: str, result: dict) -> None:
+    """The child Transfer still fires for a zero outbound flow, in order."""
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    withdraw = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    want = [(address(VAULT_ADDR), transfer),
+            (address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), withdraw)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"{label}: got {got}, statement says {want}")
+        return
+    burn, child, receipt = entries
+    if (int(burn["topics"][1], 16), int(burn["topics"][2], 16),
+            int(burn["data"], 16)) != (run.user, 0, 0):
+        fail(f"{label}: share burn words differ")
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (VAULT_ADDR, run.user, 0):
+        fail(f"{label}: child Transfer words differ")
+    if int(receipt["data"][2:66], 16) != 0 or int(receipt["data"][66:130], 16) != 0:
+        fail(f"{label}: Withdraw words differ")
+
+
+def check_a_u_zero_flows(run: Runner) -> None:
+    """SF section 11 capacity: the 257-bit route executes zero-amount flows.
+
+    Views at A=U already exist; these are the four flows.  Blanc executes
+    each one through the 257-bit A+1 denominator, minting, burning and moving
+    nothing, with the child still invoked (its zero Transfer is emitted in
+    statement order).  The reference reverts every one of them under frozen
+    deviation 6, with the Panic(0x11) returndata pinned on the deposit leg.
+    """
+    world = _a_u_zero_world(run)
+    if run.side.name == "reference":
+        for label, data in (
+                ("a-u-zero reference deposit",
+                 abi("deposit(uint256,address)", 0, run.user)),
+                ("a-u-zero reference mint",
+                 abi("mint(uint256,address)", 0, run.user)),
+                ("a-u-zero reference withdraw",
+                 abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+                ("a-u-zero reference redeem",
+                 abi("redeem(uint256,address,address)", 0, run.user, run.user))):
+            _check_revert_evidence(label, world, run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-zero reference deposit panic", world,
+                abi("deposit(uint256,address)", 0, run.user))
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+        if success != 0 or payload != panic_11:
+            fail("a-u-zero reference deposit panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, shares, _ = oracle_transaction(model, "deposit", run.user, 0, run.user)
+    if not committed:
+        fail("a-u-zero deposit: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("deposit(uint256,address)", 0, run.user))
+    if not _accepted_success("a-u-zero deposit", result):
+        return
+    vault, _ = vault_state(result)
+    expect("a-u-zero deposit minted", run.supply(vault), shares)
+    _zero_flow_ledger(run, "a-u-zero deposit", result)
+    _zero_flow_deposit_logs(run, "a-u-zero deposit", result)
+    committed, paid, _ = oracle_transaction(model, "mint", run.user, 0, run.user)
+    if not committed:
+        fail("a-u-zero mint: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("mint(uint256,address)", 0, run.user))
+    if not _accepted_success("a-u-zero mint", result):
+        return
+    _, weth = vault_state(result)
+    expect("a-u-zero mint paid", V.U - storage_get(weth, run.user), paid)
+    _zero_flow_ledger(run, "a-u-zero mint", result)
+    _zero_flow_deposit_logs(run, "a-u-zero mint", result)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 0,
+                                              run.user, run.user)
+    if not committed:
+        fail("a-u-zero withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 0, run.user, run.user))
+    if not _accepted_success("a-u-zero withdraw", result):
+        return
+    vault, _ = vault_state(result)
+    expect("a-u-zero withdraw burned", 0 - run.supply(vault), burned)
+    _zero_flow_ledger(run, "a-u-zero withdraw", result)
+    _zero_flow_withdraw_logs(run, "a-u-zero withdraw", result)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 0,
+                                            run.user, run.user)
+    if not committed:
+        fail("a-u-zero redeem: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 0, run.user, run.user))
+    if not _accepted_success("a-u-zero redeem", result):
+        return
+    _, weth = vault_state(result)
+    expect("a-u-zero redeem paid", storage_get(weth, run.user) - V.U, paid)
+    _zero_flow_ledger(run, "a-u-zero redeem", result)
+    _zero_flow_withdraw_logs(run, "a-u-zero redeem", result)
+
+
+def _ceiling_world(run: Runner) -> tuple[dict, int]:
+    """The S=A=U-O prestate with a funded user: cap flows, not a history."""
+    supply = V.MAX_SUPPLY
+    world = run.alloc(100, 100, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(supply)})
+    world[address(WETH_ADDR)]["balance"] = h(supply + 100)
+    return world, supply
+
+
+def _ceiling_model(run: Runner, supply: int) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR, balances={run.user: supply},
+                   supply=supply, weth={run.user: 100, VAULT_ADDR: supply},
+                   weth_allowances={(run.user, VAULT_ADDR): 100})
+
+
+def check_supply_ceiling_flows(run: Runner) -> None:
+    """SF section 11 capacity: flows at the S=U-O supply ceiling.
+
+    Blanc reports zero maxima and reverts any minting flow with the
+    oracle-predicted supply-cap class and complete rollback, while exits
+    execute against the full oracle projection.  The reference has no cap
+    under frozen deviation 5: its maxima read U and the same minting flows
+    succeed with the same formulas.
+    """
+    world, supply = _ceiling_world(run)
+    is_reference = run.side.name == "reference"
+    _expect_capacity_word(run, "ceiling maxDeposit", world,
+                          abi("maxDeposit(address)", run.user),
+                          V.U if is_reference else 0)
+    _expect_capacity_word(run, "ceiling maxMint", world,
+                          abi("maxMint(address)", run.user),
+                          V.U if is_reference else 0)
+    model = _ceiling_model(run, supply)
+    accounts = (run.user, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    deposit = run.call(world, abi("deposit(uint256,address)", 1, run.user))
+    if is_reference:
+        if _accepted_success("ceiling reference deposit one", deposit):
+            _capacity_success_state(run, "ceiling reference deposit one", deposit,
+                                    supply=supply, assets=supply, paid=1,
+                                    minted=V.convert_to_shares(1, supply, supply),
+                                    user_weth=100)
+    else:
+        if not _expect_oracle_revert("ceiling deposit one", model, "supply-cap",
+                                     "deposit", run.user, 1, run.user):
+            return
+        _check_revert_evidence("ceiling deposit one", world, deposit)
+    mint = run.call(world, abi("mint(uint256,address)", 1, run.user))
+    if is_reference:
+        if _accepted_success("ceiling reference mint one", mint):
+            _capacity_success_state(run, "ceiling reference mint one", mint,
+                                    supply=supply, assets=supply,
+                                    paid=V.preview_mint(1, supply, supply), minted=1,
+                                    user_weth=100)
+    else:
+        if not _expect_oracle_revert("ceiling mint one", model, "supply-cap",
+                                     "mint", run.user, 1, run.user):
+            return
+        _check_revert_evidence("ceiling mint one", world, mint)
+    committed, burned, trial = oracle_transaction(model, "withdraw", run.user, 1,
+                                                  run.user, run.user)
+    if not committed:
+        fail("ceiling withdraw one: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 1, run.user, run.user))
+    if _accepted_success("ceiling withdraw one", result):
+        vault, _ = vault_state(result)
+        expect("ceiling withdraw one burned", supply - run.supply(vault), burned)
+        _pair_state(run, "ceiling withdraw one", result, trial, accounts,
+                    weth_allowances=pairs)
+    committed, paid, trial = oracle_transaction(model, "redeem", run.user, 1,
+                                                run.user, run.user)
+    if not committed:
+        fail("ceiling redeem one: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 1, run.user, run.user))
+    if _accepted_success("ceiling redeem one", result):
+        _, weth = vault_state(result)
+        expect("ceiling redeem one paid",
+               storage_get(weth, run.user) - 100, paid)
+        _pair_state(run, "ceiling redeem one", result, trial, accounts,
+                    weth_allowances=pairs)
+
+
+DECOY_WETH_ADDR = 0x1001
+
+
+def _provenance_world(run: Runner, shares: int, supply: int,
+                      assets: int) -> dict:
+    """A funded world with a byte-identical WETH decoy at a second address.
+
+    The decoy mirrors the user's row so that any child call routed to it
+    would visibly move decoy state; the check requires it to be untouched.
+    """
+    world = run.alloc(10 ** 18, 10 ** 18,
+                      {run.user: shares} if shares else None, supply,
+                      {word(VAULT_ADDR): word(assets)} if assets else None)
+    world[address(DECOY_WETH_ADDR)] = {
+        "balance": h(0), "nonce": h(1),
+        "code": "0x" + run.weth_code.hex(),
+        "storage": {word(run.user): word(10 ** 18)}}
+    return world
+
+
+def _provenance_codes(run: Runner, world: dict) -> bool:
+    """The exact child and the decoy both carry the committed WETH bytes."""
+    for label, account in (("provenance exact child code", WETH_ADDR),
+                           ("provenance decoy code", DECOY_WETH_ADDR)):
+        try:
+            code = _normalized_account(world, account)["code"]
+        except ValueError as exc:
+            fail(f"{label}: {exc}")
+            return False
+        if code != run.weth_code:
+            fail(f"{label}: differs from the committed wethCode literal")
+            return False
+    return True
+
+
+def _provenance_decoy_untouched(label: str, before: dict, result: dict) -> None:
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful provenance call has no allocation")
+        return
+    try:
+        old = _normalized_account(before, DECOY_WETH_ADDR)
+        new = _normalized_account(post, DECOY_WETH_ADDR)
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize decoy account: {exc}")
+        return
+    if old != new:
+        fail(f"{label}: decoy account content differs; the child call escaped "
+             f"the exact target")
+
+
+def check_exact_child_provenance(run: Runner) -> None:
+    """SF section 11 composition: the child call provably hits the exact WETH.
+
+    One inbound and one outbound flow execute with a byte-identical decoy
+    deployed beside the exact child.  The check binds the child target (the
+    Transfer is emitted by 0x1000 and only 0x1000's rows move), the child
+    code (both accounts carry the committed literal, and the decoy is
+    byte-identical yet untouched), the caller (the vault's allowance is
+    spent on the inbound leg), and the calldata (event words and state
+    deltas equal the oracle projection).  Both compiled sides route their
+    child calls identically.
+    """
+    assets = 10 ** 6
+    world = _provenance_world(run, 0, 0, 0)
+    if not _provenance_codes(run, world):
+        return
+    shares = V.convert_to_shares(assets, 0, 0)
+    result = run.call(world, abi("deposit(uint256,address)", assets, run.user))
+    if not _accepted_success("provenance deposit", result):
+        return
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"provenance deposit: got {got}, statement says {want}")
+        return
+    child, mint, receipt = entries
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (run.user, VAULT_ADDR, assets):
+        fail("provenance deposit: child Transfer words differ")
+    if (int(mint["topics"][1], 16), int(mint["topics"][2], 16),
+            int(mint["data"], 16)) != (0, run.user, shares):
+        fail("provenance deposit: share mint words differ")
+    if int(receipt["data"][2:66], 16) != assets:
+        fail("provenance deposit: Deposit asset word differs")
+    if int(receipt["data"][66:130], 16) != shares:
+        fail("provenance deposit: Deposit share word differs")
+    _, weth = vault_state(result)
+    expect("provenance deposit vault allowance spent",
+           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),
+           assets)
+    _provenance_decoy_untouched("provenance deposit decoy", world, result)
+
+    seeded_shares, seeded_assets, want = 5000, 5, 3
+    world = _provenance_world(run, seeded_shares, seeded_shares, seeded_assets)
+    if not _provenance_codes(run, world):
+        return
+    burned = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 want, run.user, run.user))
+    if not _accepted_success("provenance withdraw", result):
+        return
+    entries = logs_of(result)
+    withdraw_sig = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    want_logs = [(address(VAULT_ADDR), transfer),
+                 (address(WETH_ADDR), transfer),
+                 (address(VAULT_ADDR), withdraw_sig)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want_logs:
+        fail(f"provenance withdraw: got {got}, statement says {want_logs}")
+        return
+    burn, child, receipt = entries
+    if (int(burn["topics"][1], 16), int(burn["topics"][2], 16),
+            int(burn["data"], 16)) != (run.user, 0, burned):
+        fail("provenance withdraw: share burn words differ")
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (VAULT_ADDR, run.user, want):
+        fail("provenance withdraw: child Transfer words differ")
+    if int(receipt["data"][2:66], 16) != want:
+        fail("provenance withdraw: Withdraw asset word differs")
+    if int(receipt["data"][66:130], 16) != burned:
+        fail("provenance withdraw: Withdraw share word differs")
+    _provenance_decoy_untouched("provenance withdraw decoy", world, result)
+
+
 def check_eels_action_returns(run: Runner) -> None:
     """Pinned EELS executes the same seven mutation-return observations."""
     _eels_root()
@@ -3079,6 +3455,9 @@ CHECKS = [
     check_mint_event_order,
     check_outbound_event_order,
     check_pre_transfer_quotes,
+    check_a_u_zero_flows,
+    check_supply_ceiling_flows,
+    check_exact_child_provenance,
 ]
 
 JAUNE_CASES_BY_CHECK = {
@@ -3106,6 +3485,9 @@ JAUNE_CASES_BY_CHECK = {
     "check_mint_event_order": ("event-order-mint",),
     "check_outbound_event_order": ("event-order-withdraw", "event-order-redeem"),
     "check_pre_transfer_quotes": ("quote-timing-pre-transfer",),
+    "check_a_u_zero_flows": ("capacity-a-u-zero-flows",),
+    "check_supply_ceiling_flows": ("capacity-supply-ceiling-flows",),
+    "check_exact_child_provenance": ("composition-exact-child-provenance",),
 }
 
 EELS_CASES_BY_CHECK = {
@@ -3319,6 +3701,45 @@ ROLLBACK_ORDER_PERTURBATIONS = (
      '                     run.user, want, shar' 'es)',
      '    _withdraw_events("outbound-order withdraw", result, run.user, run.user,\n'
      '                     run.user, want, shares + 1)'),
+)
+
+
+CAPACITY_PROVENANCE_PERTURBATIONS = (
+    ("a-u-zero omission",
+     "capacity-a-u-zero-flows/jaune/blanc",
+     "    check_a_u_zero_flows,\n",
+     "    # omitted by a-u-zero coverage control\n"),
+    ("ceiling omission",
+     "capacity-supply-ceiling-flows/jaune/blanc",
+     "    check_supply_ceiling_flows,\n",
+     "    # omitted by ceiling coverage control\n"),
+    ("provenance omission",
+     "composition-exact-child-provenance/jaune/blanc",
+     "    check_exact_child_provenance,\n",
+     "    # omitted by provenance coverage control\n"),
+    ("257-bit zero-mint expectation", "a-u-zero deposit minted",
+     '    expect("a-u-zero deposit minted", run.supply(vault), shar' 'es)',
+     '    expect("a-u-zero deposit minted", run.supply(vault), shar' 'es + 1)'),
+    ("max-capacity honesty", "ceiling maxDeposit",
+     '    _expect_capacity_word(run, "ceiling maxDeposit", world,\n'
+     '                          abi("maxDeposit(address)", run.user),\n'
+     '                          V.U if is_reference else 0)',
+     '    _expect_capacity_word(run, "ceiling maxDeposit", world,\n'
+     '                          abi("maxDeposit(address)", run.user),\n'
+     '                          V.U if is_reference else 1)'),
+    ("reference deviation-5 confusion", "ceiling reference deposit one",
+     '                                    minted=V.convert_to_shares(1, supply, supp' 'ly),',
+     '                                    minted=V.convert_to_shares(1, supply, supp' 'ly) + 1,'),
+    ("provenance decoy confusion", "decoy account content differs",
+     '        old = _normalized_account(before, DECOY_WETH_AD' 'DR)',
+     '        old = _normalized_account(before, WETH_AD' 'DR)'),
+    ("provenance caller confusion", "provenance deposit vault allowance spent",
+     '    expect("provenance deposit vault allowance spent",\n'
+     '           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),\n'
+     '           assets)',
+     '    expect("provenance deposit vault allowance spent",\n'
+     '           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),\n'
+     '           assets + 1)'),
 )
 
 
@@ -4130,26 +4551,31 @@ def disposition_self_test(report_path: Path | None = None) -> int:
 
 
 def registered_self_test(report_path: Path | None = None) -> int:
-    """Compose the legacy, causal-return, child-return, disposition, and rollback-order controls."""
+    """Compose the legacy, causal-return, child-return, disposition, rollback-order,
+    and capacity-provenance controls."""
     if report_path is None:
         legacy_status = self_test(None)
         causal_status = causal_return_self_test(None)
         child_status = child_return_self_test(None)
         disposition_status = disposition_self_test(None)
         rollback_order_status = rollback_order_self_test(None)
+        capacity_provenance_status = capacity_provenance_self_test(None)
         return 1 if (legacy_status or causal_status or child_status
-                     or disposition_status or rollback_order_status) else 0
+                     or disposition_status or rollback_order_status
+                     or capacity_provenance_status) else 0
     with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
         legacy_path = Path(tmp) / "legacy.json"
         causal_path = Path(tmp) / "causal-return.json"
         child_path = Path(tmp) / "child-return.json"
         disposition_path = Path(tmp) / "disposition.json"
         rollback_order_path = Path(tmp) / "rollback-order.json"
+        capacity_provenance_path = Path(tmp) / "capacity-provenance.json"
         legacy_status = self_test(legacy_path)
         causal_status = causal_return_self_test(causal_path)
         child_status = child_return_self_test(child_path)
         disposition_status = disposition_self_test(disposition_path)
         rollback_order_status = rollback_order_self_test(rollback_order_path)
+        capacity_provenance_status = capacity_provenance_self_test(capacity_provenance_path)
         try:
             combined = {
                 "schema": 2,
@@ -4158,17 +4584,20 @@ def registered_self_test(report_path: Path | None = None) -> int:
                 "childReturn": json.loads(child_path.read_text()),
                 "disposition": json.loads(disposition_path.read_text()),
                 "rollbackOrder": json.loads(rollback_order_path.read_text()),
+                "capacityProvenance": json.loads(capacity_provenance_path.read_text()),
                 "returncodes": {"legacy": legacy_status, "causalReturn": causal_status,
                                 "childReturn": child_status,
                                 "disposition": disposition_status,
-                                "rollbackOrder": rollback_order_status},
+                                "rollbackOrder": rollback_order_status,
+                                "capacityProvenance": capacity_provenance_status},
             }
         except (OSError, json.JSONDecodeError) as exc:
             print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
             return 1
         report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
     return 1 if (legacy_status or causal_status or child_status
-                 or disposition_status or rollback_order_status) else 0
+                 or disposition_status or rollback_order_status
+                 or capacity_provenance_status) else 0
 
 
 def causal_return_only() -> int:
@@ -4296,6 +4725,164 @@ def rollback_order_only() -> int:
     return 0
 
 
+CAPACITY_PROVENANCE_CASES = (
+    "capacity-a-u-zero-flows",
+    "capacity-supply-ceiling-flows",
+    "composition-exact-child-provenance",
+)
+
+CAPACITY_PROVENANCE_CHECK_NAMES = frozenset({
+    "check_a_u_zero_flows",
+    "check_supply_ceiling_flows",
+    "check_exact_child_provenance",
+})
+
+
+def capacity_provenance_only() -> int:
+    """Run the capacity/provenance checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — capacity provenance differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in CAPACITY_PROVENANCE_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in CAPACITY_PROVENANCE_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("capacity provenance executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — capacity provenance differential: {message}")
+        return 1
+    print(f"OK — capacity provenance differential: {len(expected)} case/side observations")
+    return 0
+
+
+
+def capacity_provenance_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test capacity extremes and exact-child provenance."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-capacity-provenance-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--capacity-provenance-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("capacity-provenance baseline is not green before mutations")
+        for label, needle, old, new in CAPACITY_PROVENANCE_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — capacity provenance differential:")
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--capacity-provenance-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--capacity-provenance-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--capacity-provenance-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — capacity provenance self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — capacity provenance self-test control: {record['label']}")
+    print(f"OK — capacity provenance self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+DISPOSITION_PERTURBATIONS = (
+    # Dropping a successor must leave the superseded obligation visibly
+    # uncovered rather than quietly discharged by a name that no longer runs.
+    ("dropped superseded successor",
+     "superseded case 'transfer-from-infinite' names successor "
+     "'supported-root-transfer-from-infinite', which no channel implements",
+     "checker",
+     '    "supported-root-transfer-from-infinite": ("jaune",),\n',
+     ""),
+    # A case cannot be both executed and excused; the partition is exact.
+    ("double disposition",
+     "has 2 dispositions (implemented, unimplemented)",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "supported-root-transfer-self": "double '
+     'disposition control",\n'),
+    # An unimplemented case must be declared, not invented in the excuse list.
+    ("undeclared disposition name",
+     "disposition names undeclared case 'not-a-declared-case'",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "not-a-declared-case": "undeclared '
+     'disposition control",\n'),
+)
+
+
+
 def main(argv: list[str]) -> int:
     for error in validate_manifest():
         fail(error)
@@ -4402,6 +4989,16 @@ if __name__ == "__main__":
         raise SystemExit(rollback_order_self_test(report))
     if "--rollback-order-only" in args:
         raise SystemExit(rollback_order_only())
+    if "--capacity-provenance-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(capacity_provenance_self_test(report))
+    if "--capacity-provenance-only" in args:
+        raise SystemExit(capacity_provenance_only())
     if "--self-test" in args:
         report = None
         if "--self-test-report" in args:
