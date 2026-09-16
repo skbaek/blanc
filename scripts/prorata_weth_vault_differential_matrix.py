@@ -77,6 +77,12 @@ CASES = (
     "supported-root-deposit-zero-receiver-rollback",
     "supported-root-transfer-zero-receiver-rollback",
     "foreign-child-canonical-return-and-rollback",
+    *tuple(f"foreign-child-{flow}-{kind}"
+           for flow in ("deposit", "mint", "withdraw", "redeem") for kind in (
+               "true", "false", "short-1", "short-31", "long-64-leading-one",
+               "boolean-2", "revert")),
+    "callback-and-child-failure-rollback",
+    "attack-economics-offset-comparator",
     "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
@@ -91,9 +97,46 @@ CASES = (
     *tuple(f"causal-return-{method}-{role}" for method in ("withdraw", "redeem") for role in (
         "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
         "owner-receiver-distinct-caller", "all-distinct")),
-    "callback-and-attack-rollbacks",
     *ARITHMETIC_CAPACITY_CASES,
 )
+
+# A declared case that no channel implements would otherwise sit in the
+# declaration forever without ever being credited or missed.  Every such name
+# must therefore appear in exactly one of the two records below, and the
+# runner cross-checks that partition against its own executed ledger.
+#
+# Superseded names are discharged by later cases that do execute.  The
+# successors are named so that dropping one cannot quietly leave the original
+# obligation uncovered.
+SUPERSEDED_CASES = {
+    "allowance-underflow-rollback": (
+        "supported-root-allowance-underflow-rollback",),
+    "approve-and-transfer": (
+        "supported-root-approve-initial-finite",
+        "supported-root-approve-overwrite",
+        "supported-root-transfer-from-finite",
+    ),
+    "transfer-from-finite": ("supported-root-transfer-from-finite",),
+    "transfer-from-infinite": ("supported-root-transfer-from-infinite",),
+}
+
+# Required SF rows that this harness does not execute yet.  Each carries its
+# own reason, so an uncovered obligation is inspectable rather than silent.
+# Being listed here is never coverage: these cases stay declared and
+# uncredited until an implemented channel exists.
+UNIMPLEMENTED_CASES = {
+    "callback-and-child-failure-rollback":
+        "SF section 11 rollback/order: storage and logs before and after a "
+        "failed child on the exact pair, including the spent share allowance "
+        "and the outbound burn, distinguishing a rejected transaction from an "
+        "accepted reverting execution. Not yet implemented.",
+    "attack-economics-offset-comparator":
+        "SF section 11 economics: the frozen attack transcript and the "
+        "profitable offset-disabled comparator. Blocked on the reserved "
+        "decision prorata-vault-offset-control-definition, which is with the "
+        "user; the comparator's definition is not settled, so no case here "
+        "may assume one.",
+}
 
 CHANNELS = {
     "jaune": "Jaune t8n executes each compiled side against the independent Python oracle.",
@@ -124,9 +167,9 @@ def manifest_data() -> dict:
     result allowlist, deviation entry, or measurement belongs here.
     """
     return {
-        "schema": 1,
+        "schema": 2,
         "kind": "coverage-declaration",
-        "producer": {"path": "scripts/prorata_weth_vault_differential_matrix.py", "schema": 1},
+        "producer": {"path": "scripts/prorata_weth_vault_differential_matrix.py", "schema": 2},
         "producerSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "sourceIdentity": {"algorithm": "sha256", "files": source_identity()},
         "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
@@ -135,6 +178,15 @@ def manifest_data() -> dict:
             "cases": list(CASES),
             "channels": CHANNELS,
         },
+        "disposition": {
+            "note": "Every declared case is executed by the runner, superseded "
+                    "by named executed successors, or listed as unimplemented "
+                    "with a reason. The runner fails closed if that partition "
+                    "is not exact. Neither record below is coverage.",
+            "superseded": {case: list(successors)
+                           for case, successors in sorted(SUPERSEDED_CASES.items())},
+            "unimplemented": dict(sorted(UNIMPLEMENTED_CASES.items())),
+        },
     }
 
 
@@ -142,14 +194,49 @@ def render_manifest() -> str:
     return json.dumps(manifest_data(), indent=2, sort_keys=True) + "\n"
 
 
+def validate_declaration() -> list[str]:
+    """Return every internal inconsistency in the declaration itself.
+
+    This is the half of the disposition rule that needs no runtime: the two
+    non-executing records must name declared cases, must not overlap, and must
+    not point at a successor that is not itself declared.  The runner owns the
+    other half, because only it knows which cases have an implemented channel.
+    """
+    errors = []
+    declared = set(CASES)
+    if len(declared) != len(CASES):
+        errors.append("the case declaration repeats a name")
+    both = sorted(set(SUPERSEDED_CASES) & set(UNIMPLEMENTED_CASES))
+    if both:
+        errors.append("cases are both superseded and unimplemented: "
+                      + ", ".join(both))
+    for case in sorted(set(SUPERSEDED_CASES) | set(UNIMPLEMENTED_CASES)):
+        if case not in declared:
+            errors.append(f"disposition names undeclared case {case!r}")
+    for case, successors in sorted(SUPERSEDED_CASES.items()):
+        if not successors:
+            errors.append(f"superseded case {case!r} names no successor")
+        for successor in successors:
+            if successor not in declared:
+                errors.append(f"superseded case {case!r} names undeclared "
+                              f"successor {successor!r}")
+    for case, reason in sorted(UNIMPLEMENTED_CASES.items()):
+        if not reason.strip():
+            errors.append(f"unimplemented case {case!r} records no reason")
+    return errors
+
+
 def validate_manifest(path: Path = MANIFEST) -> list[str]:
     """Return every schema drift; an unreadable declaration is a failure."""
+    errors = validate_declaration()
+    if errors:
+        return errors
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"matrix manifest is unreadable: {exc}"]
-    if not isinstance(value, dict) or value.get("schema") != 1:
-        return ["matrix manifest must be a schema-1 object"]
+    if not isinstance(value, dict) or value.get("schema") != 2:
+        return ["matrix manifest must be a schema-2 object"]
     if value != manifest_data():
         return ["matrix manifest is not the deterministic producer output; regenerate it before running"]
     return []
@@ -168,7 +255,10 @@ def main(argv: list[str]) -> int:
             for error in errors:
                 print(f"REGRESSION — vault differential matrix: {error}")
             return 1
-        print(f"OK — vault differential matrix: {len(SELECTORS)} selectors and {len(CASES)} required cases")
+        print(f"OK — vault differential matrix: {len(SELECTORS)} selectors and "
+              f"{len(CASES)} required cases, of which {len(SUPERSEDED_CASES)} are "
+              f"superseded by named successors and {len(UNIMPLEMENTED_CASES)} are "
+              f"declared unimplemented with a recorded reason")
     return 0
 
 

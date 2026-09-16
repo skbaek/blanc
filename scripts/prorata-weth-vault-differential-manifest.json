@@ -1,10 +1,33 @@
 {
+  "disposition": {
+    "note": "Every declared case is executed by the runner, superseded by named executed successors, or listed as unimplemented with a reason. The runner fails closed if that partition is not exact. Neither record below is coverage.",
+    "superseded": {
+      "allowance-underflow-rollback": [
+        "supported-root-allowance-underflow-rollback"
+      ],
+      "approve-and-transfer": [
+        "supported-root-approve-initial-finite",
+        "supported-root-approve-overwrite",
+        "supported-root-transfer-from-finite"
+      ],
+      "transfer-from-finite": [
+        "supported-root-transfer-from-finite"
+      ],
+      "transfer-from-infinite": [
+        "supported-root-transfer-from-infinite"
+      ]
+    },
+    "unimplemented": {
+      "attack-economics-offset-comparator": "SF section 11 economics: the frozen attack transcript and the profitable offset-disabled comparator. Blocked on the reserved decision prorata-vault-offset-control-definition, which is with the user; the comparator's definition is not settled, so no case here may assume one.",
+      "callback-and-child-failure-rollback": "SF section 11 rollback/order: storage and logs before and after a failed child on the exact pair, including the spent share allowance and the outbound burn, distinguishing a rejected transaction from an accepted reverting execution. Not yet implemented."
+    }
+  },
   "kind": "coverage-declaration",
   "producer": {
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
-    "schema": 1
+    "schema": 2
   },
-  "producerSha256": "98f046a30ef0d09f9620bee70ef07d6c58b0c0ea3c4c907215d0b83e618efff7",
+  "producerSha256": "216c4216fc1fba26603242ae4eb0c2a19d0c856364de7b38902eef4b06e671a1",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -56,6 +79,36 @@
       "supported-root-deposit-zero-receiver-rollback",
       "supported-root-transfer-zero-receiver-rollback",
       "foreign-child-canonical-return-and-rollback",
+      "foreign-child-deposit-true",
+      "foreign-child-deposit-false",
+      "foreign-child-deposit-short-1",
+      "foreign-child-deposit-short-31",
+      "foreign-child-deposit-long-64-leading-one",
+      "foreign-child-deposit-boolean-2",
+      "foreign-child-deposit-revert",
+      "foreign-child-mint-true",
+      "foreign-child-mint-false",
+      "foreign-child-mint-short-1",
+      "foreign-child-mint-short-31",
+      "foreign-child-mint-long-64-leading-one",
+      "foreign-child-mint-boolean-2",
+      "foreign-child-mint-revert",
+      "foreign-child-withdraw-true",
+      "foreign-child-withdraw-false",
+      "foreign-child-withdraw-short-1",
+      "foreign-child-withdraw-short-31",
+      "foreign-child-withdraw-long-64-leading-one",
+      "foreign-child-withdraw-boolean-2",
+      "foreign-child-withdraw-revert",
+      "foreign-child-redeem-true",
+      "foreign-child-redeem-false",
+      "foreign-child-redeem-short-1",
+      "foreign-child-redeem-short-31",
+      "foreign-child-redeem-long-64-leading-one",
+      "foreign-child-redeem-boolean-2",
+      "foreign-child-redeem-revert",
+      "callback-and-child-failure-rollback",
+      "attack-economics-offset-comparator",
       "mint-inexact",
       "redeem-inexact",
       "withdraw-inexact",
@@ -85,7 +138,6 @@
       "causal-return-redeem-caller-receiver-distinct-owner",
       "causal-return-redeem-owner-receiver-distinct-caller",
       "causal-return-redeem-all-distinct",
-      "callback-and-attack-rollbacks",
       "capacity-supply-upper-bound",
       "capacity-one-share-room",
       "converter-representable-and-unrepresentable",
@@ -124,11 +176,11 @@
       "previewDeposit(uint256)"
     ]
   },
-  "schema": 1,
+  "schema": 2,
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "61c91db6c05c801fc33ce9bbcfeca4d2a8173434097907cfb0a8461c91e56f03",
+      "scripts/check-prorata-weth-vault-differential.py": "f433629d2e0a634263b59f5406f7fbfff80e0e9c6abffb7a341d39b0dc25b4fb",
       "scripts/evm_return_capture.py": "1b02fa9c00abe0761cad3c54e69282828a20d2ee5a96d929274b9b095e3d1adf",
       "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
     }

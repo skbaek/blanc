@@ -55,6 +55,8 @@ from keccak import keccak256, selector  # noqa: E402
 from prorata_weth_vault_differential_matrix import (  # noqa: E402
     ARITHMETIC_CAPACITY_CASES,
     CASES,
+    SUPERSEDED_CASES,
+    UNIMPLEMENTED_CASES,
     validate_manifest,
 )
 
@@ -129,6 +131,10 @@ EXECUTED_CASE_CHANNELS = {
     "supported-root-deposit-zero-receiver-rollback": ("jaune",),
     "supported-root-transfer-zero-receiver-rollback": ("jaune",),
     "foreign-child-canonical-return-and-rollback": ("jaune", "eels"),
+    **{f"foreign-child-{flow}-{kind}": ("jaune", "eels")
+       for flow in ("deposit", "mint", "withdraw", "redeem") for kind in (
+           "true", "false", "short-1", "short-31", "long-64-leading-one",
+           "boolean-2", "revert")},
     "mint-inexact": ("jaune",),
     "redeem-inexact": ("jaune",),
     "withdraw-inexact": ("jaune",),
@@ -172,6 +178,35 @@ def record_case_if_clean(case: str, channel: str, side: str, failures_before: in
     """Emit one SF subcase ID only after its own concrete assertions passed."""
     if len(FAILURES) == failures_before:
         record_declared_cases((case,), channel, side)
+
+
+def validate_case_disposition() -> None:
+    """Require every declared case to have exactly one honest disposition.
+
+    A declared case is either implemented here, or discharged by named
+    successors that are themselves implemented, or recorded as unimplemented
+    with a reason.  Without this the declaration can accumulate names that are
+    never credited and never missed, which is indistinguishable from coverage
+    to anyone reading the case count.
+    """
+    for case in CASES:
+        dispositions = [
+            label for label, holds in (
+                ("implemented", case in EXECUTED_CASE_CHANNELS),
+                ("superseded", case in SUPERSEDED_CASES),
+                ("unimplemented", case in UNIMPLEMENTED_CASES),
+            ) if holds
+        ]
+        if len(dispositions) != 1:
+            fail(f"declared case {case!r} has {len(dispositions)} dispositions "
+                 f"({', '.join(dispositions) or 'none'}); it must be exactly one "
+                 f"of implemented, superseded, or unimplemented")
+    for case, successors in sorted(SUPERSEDED_CASES.items()):
+        for successor in successors:
+            if successor not in EXECUTED_CASE_CHANNELS:
+                fail(f"superseded case {case!r} names successor {successor!r}, "
+                     f"which no channel implements; the original obligation is "
+                     f"uncovered")
 
 
 def validate_declared_case_coverage() -> None:
@@ -1316,6 +1351,9 @@ def _response_runtime(kind: str) -> bytes:
         "empty": bytes.fromhex("60006000f3"),
         "false": bytes.fromhex("600060005260206000f3"),
         "short": bytes.fromhex("600160005360016000f3"),
+        "short31": bytes.fromhex("6001600052601f6001f3"),
+        "long": bytes.fromhex("6001600052602a60205260406000f3"),
+        "malformed": bytes.fromhex("600260005260206000f3"),
         "revert": bytes.fromhex("60006000fd"),
     }
     response = table[kind]
@@ -1351,15 +1389,151 @@ def _adversarial_child_world(run: Runner, kind: str) -> tuple[dict, int]:
     return world, delegate
 
 
+FOREIGN_CHILD_KINDS = (
+    ("true", "true"),
+    ("false", "false"),
+    ("short-1", "short"),
+    ("short-31", "short31"),
+    ("long-64-leading-one", "long"),
+    ("boolean-2", "malformed"),
+    ("revert", "revert"),
+)
+
+
+def _foreign_child_success_expected(side: str, case_kind: str) -> bool:
+    """Source-derived operational result for deliberately foreign token code."""
+    return case_kind == "true" or (
+        case_kind == "long-64-leading-one" and side == "reference")
+
+
+def _foreign_rollback_expected(run: Runner, before: dict) -> dict:
+    """Independent rollback projection, kept separate from execution input."""
+    return deepcopy(before)
+
+
+def _foreign_child_case(run: Runner, flow: str, runtime_kind: str
+                        ) -> tuple[dict, int, int, int, str, int, dict, list[dict]]:
+    """Build one arbitrary foreign-code probe and its successful projection."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    if flow in ("deposit", "mint"):
+        before = run.alloc(0, 0)
+        run.add_eoa(before, receiver_key)
+        caller, owner = run.user, run.user
+        supply, assets_before = 0, 10
+        if flow == "deposit":
+            assets = 2
+            shares = V.convert_to_shares(assets, assets_before, supply)
+            data = abi("deposit(uint256,address)", assets, receiver)
+            returned = shares
+        else:
+            shares = 200
+            assets = V.preview_mint(shares, assets_before, supply)
+            data = abi("mint(uint256,address)", shares, receiver)
+            returned = assets
+        signing_key = KEY
+    else:
+        before = run.alloc(0, 0, {run.user: 10_000}, 10_000,
+                           {word(VAULT_ADDR): word(10)})
+        run.add_eoa(before, delegate_key)
+        run.add_eoa(before, receiver_key)
+        caller, owner = delegate, run.user
+        before[address(VAULT_ADDR)]["storage"][
+            word(run.side.allowance_slot(owner, caller))] = word(3_000)
+        if flow == "withdraw":
+            assets = 2
+            shares = V.preview_withdraw(assets, 10, 10_000)
+            data = abi("withdraw(uint256,address,address)", assets, receiver, owner)
+            returned = shares
+        else:
+            shares = 2_000
+            assets = V.convert_to_assets(shares, 10, 10_000)
+            data = abi("redeem(uint256,address,address)", shares, receiver, owner)
+            returned = assets
+        signing_key = delegate_key
+    before[address(WETH_ADDR)]["code"] = "0x" + _response_runtime(runtime_kind).hex()
+    expected = deepcopy(before)
+    expected_vault = expected[address(VAULT_ADDR)]["storage"]
+    if flow in ("deposit", "mint"):
+        expected_vault[word(run.side.shares_slot(receiver))] = word(shares)
+        expected_vault[word(run.side.supply_slot)] = word(shares)
+    else:
+        expected_vault[word(run.side.shares_slot(owner))] = word(10_000 - shares)
+        expected_vault[word(run.side.supply_slot)] = word(10_000 - shares)
+        expected_vault[word(run.side.allowance_slot(owner, caller))] = word(3_000 - shares)
+    logs = _foreign_child_expected_logs(
+        flow, caller, receiver, owner, assets, shares)
+    return before, signing_key, caller, receiver, data, returned, expected, logs
+
+
+def _foreign_child_expected_logs(flow: str, caller: int, receiver: int,
+                                 owner: int, assets: int, shares: int) -> list[dict]:
+    """Exact two vault logs when foreign code returns success without a log."""
+    transfer = {
+        "address": address(VAULT_ADDR),
+        "topics": [event_topic("Transfer(address,address,uint256)"),
+                   word(0 if flow in ("deposit", "mint") else owner),
+                   word(receiver if flow in ("deposit", "mint") else 0)],
+        "data": word(shares),
+    }
+    if flow in ("deposit", "mint"):
+        operation = {
+            "address": address(VAULT_ADDR),
+            "topics": [event_topic("Deposit(address,address,uint256,uint256)"),
+                       word(caller), word(receiver)],
+            "data": word(assets) + word(shares)[2:],
+        }
+    else:
+        operation = {
+            "address": address(VAULT_ADDR),
+            "topics": [event_topic("Withdraw(address,address,address,uint256,uint256)"),
+                       word(caller), word(receiver), word(owner)],
+            "data": word(assets) + word(shares)[2:],
+        }
+    return [transfer, operation]
+
+
+def _foreign_child_success(run: Runner, label: str, result: dict,
+                           expected: dict, expected_logs: list[dict]) -> None:
+    """Require the intended vault operation, without claiming WETH movement."""
+    if not _accepted_success(label, result):
+        return
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful transaction has no allocation")
+        return
+    for account in (WETH_ADDR, VAULT_ADDR):
+        try:
+            actual_account = _normalized_account(post, account)
+            expected_account = _normalized_account(expected, account)
+        except ValueError as exc:
+            fail(f"{label}: cannot normalize successful foreign-code state: {exc}")
+            return
+        if actual_account != expected_account:
+            fail(f"{label}: successful foreign-code application state differs")
+    if logs_of(result) != expected_logs:
+        fail(f"{label}: successful foreign-code vault logs differ")
+
+
 def check_adversarial_child_returns_and_rollback(run: Runner) -> None:
     """Foreign-child canonical-return and rollback probes, outside exact pairs."""
     data_for = lambda delegate: abi("withdraw(uint256,address,address)", 2, delegate, run.user)
-    for kind in ("false", "short", "revert"):
-        before, delegate = _adversarial_child_world(run, kind)
-        result = run.call(before, data_for(delegate), signing_key=2,
-                          label=f"foreign-child-{kind}")
-        _check_revert_evidence(f"foreign child {kind} return rolls back allowance and burn",
-                               before, result)
+    for flow in ("deposit", "mint", "withdraw", "redeem"):
+        for case_kind, runtime_kind in FOREIGN_CHILD_KINDS:
+            case = f"foreign-child-{flow}-{case_kind}"
+            failures_before = len(FAILURES)
+            before, signing_key, _, _, data, _, expected, expected_logs = \
+                _foreign_child_case(run, flow, runtime_kind)
+            result = run.call(before, data, signing_key=signing_key, label=case)
+            success_expected = _foreign_child_success_expected(run.side.name, case_kind)
+            if success_expected:
+                _foreign_child_success(run, case, result, expected, expected_logs)
+            else:
+                rollback_expected = _foreign_rollback_expected(run, before)
+                _check_revert_evidence(
+                    f"{case}: failed child rolls back complete state and logs",
+                    rollback_expected, result)
+            record_case_if_clean(case, "jaune", run.side.name, failures_before)
 
     # A canonical true child is accepted operationally.  It is deliberately
     # not compared as a WETH pair state because this foreign code does not
@@ -2442,6 +2616,53 @@ def check_eels_adversarial_child_returns_and_rollback(run: Runner) -> None:
         import eels_differential_common as eels
     except ImportError as exc:
         raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    for flow in ("deposit", "mint", "withdraw", "redeem"):
+        for case_kind, runtime_kind in FOREIGN_CHILD_KINDS:
+            case = f"foreign-child-{flow}-{case_kind}"
+            failures_before = len(FAILURES)
+            alloc, _, caller, _, data, returned, expected_alloc, expected_logs = \
+                _foreign_child_case(run, flow, runtime_kind)
+            state = _eels_state(alloc)
+            before_root = bytes(state_root(state))
+            tx = SimpleNamespace(
+                caller=address(caller), target=address(VAULT_ADDR),
+                calldata=bytes.fromhex(data[2:]),
+                value=0, timestamp=1000, gas=3_000_000,
+            )
+            output, _, _, _, _ = eels.execute_tx(
+                state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+                coinbase=address(2), default_origin=address(caller),
+                fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            )
+            expected = "success" if _foreign_child_success_expected(
+                run.side.name, case_kind) else "revert"
+            outcome = eels.outcome(output)
+            if outcome != expected:
+                fail(f"EELS {case}: {outcome}, expected {expected}")
+            elif expected == "success":
+                expected_word = returned.to_bytes(32, "big")
+                if bytes(output.return_data) != expected_word:
+                    fail(f"EELS {case}: return bytes differ from expected operational word")
+                if eels.normalized_logs(output.logs) != expected_logs:
+                    fail(f"EELS {case}: successful foreign-code vault logs differ")
+                expected_state = _eels_state(expected_alloc)
+                if bytes(state_root(state)) != bytes(state_root(expected_state)):
+                    fail(f"EELS {case}: complete successful state differs")
+            else:
+                expected_revert = b""
+                if run.side.name == "reference" and case_kind != "revert":
+                    expected_revert = selector("SafeERC20FailedOperation(address)") \
+                        + WETH_ADDR.to_bytes(32, "big")
+                if bytes(output.return_data) != expected_revert:
+                    fail(f"EELS {case}: failed foreign child revert payload differs")
+                if output.logs:
+                    fail(f"EELS {case}: failed foreign child retained logs")
+                if bytes(state_root(state)) != before_root:
+                    fail(f"EELS {case}: failed foreign child did not roll back complete state")
+            record_case_if_clean(case, "eels", run.side.name, failures_before)
+
+    # Retain the frozen empty-return observation as a separate historical row.
     for kind in ("true", "false", "short", "revert", "empty"):
         alloc, delegate = _adversarial_child_world(run, kind)
         state = _eels_state(alloc)
@@ -2455,7 +2676,8 @@ def check_eels_adversarial_child_returns_and_rollback(run: Runner) -> None:
             coinbase=address(2), default_origin=address(delegate),
             fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
         )
-        expected = "success" if kind == "true" or (kind == "empty" and run.side.name == "reference") else "revert"
+        expected = "success" if kind == "true" or (
+            kind == "empty" and run.side.name == "reference") else "revert"
         outcome = eels.outcome(output)
         if outcome != expected:
             deviation = " (deviation 7)" if kind == "empty" and run.side.name == "reference" else ""
@@ -2802,6 +3024,22 @@ CAUSAL_RETURN_PERTURBATIONS = (
     ("changed recorder code", "recorder code identity changed during causal history", "checker",
      'try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,',
      'prefix[-1]["alloc"][address(CAPTURE_ADDR)]["code"] = "0x00"\n    try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,'),
+)
+
+CHILD_RETURN_PERTURBATIONS = (
+    ("foreign child executed-ID omission",
+     "foreign-child-deposit-false/jaune/blanc",
+     '("false", ' '"false"),\n    ("short-1", "short"),',
+     '("short-1", "short"),'),
+    ("foreign child long-return policy", "long-64-leading-one: expected success",
+     'return case_kind == "true" or (\n        case_kind == "long-64-leading-one" and side == ' '"reference")',
+     'return case_kind == "true" or (\n        case_kind == "long-64-leading-one" and side == "blanc")'),
+    ("foreign child rollback projection", "account content differs from its complete pre-state",
+     'return deep' 'copy(before)\n\n\ndef _foreign_child_case',
+     'expected = deepcopy(before)\n    storage = expected[address(VAULT_ADDR)]["storage"]\n    slot = word(run.side.supply_slot)\n    storage[slot] = word(storage_get(storage, run.side.supply_slot) + 1)\n    return expected\n\n\ndef _foreign_child_case'),
+    ("foreign child operational return word", "return bytes differ from expected operational word",
+     'expected_word = returned.' 'to_bytes(32, "big")',
+     'expected_word = (returned + 1).to_bytes(32, "big")'),
 )
 
 
@@ -3346,29 +3584,234 @@ def causal_return_self_test(report_path: Path | None = None) -> int:
     return 0
 
 
+def child_return_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test cross-flow foreign-child outcomes and rollback checks."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-child-return-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--child-return-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("child-return baseline is not green before mutations")
+        for label, needle, old, new in CHILD_RETURN_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            required_prefix = "REGRESSION — child return differential:"
+            if label == "foreign child executed-ID omission":
+                required_prefix += " child return executed coverage missing case/channel IDs:"
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith(required_prefix)
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--child-return-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--child-return-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--child-return-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — child return self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — child return self-test control: {record['label']}")
+    print(f"OK — child return self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+DISPOSITION_PERTURBATIONS = (
+    # Dropping a successor must leave the superseded obligation visibly
+    # uncovered rather than quietly discharged by a name that no longer runs.
+    ("dropped superseded successor",
+     "superseded case 'transfer-from-infinite' names successor "
+     "'supported-root-transfer-from-infinite', which no channel implements",
+     "checker",
+     '    "supported-root-transfer-from-infinite": ("jaune",),\n',
+     ""),
+    # A case cannot be both executed and excused; the partition is exact.
+    ("double disposition",
+     "has 2 dispositions (implemented, unimplemented)",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "supported-root-transfer-self": "double '
+     'disposition control",\n'),
+    # An unimplemented case must be declared, not invented in the excuse list.
+    ("undeclared disposition name",
+     "disposition names undeclared case 'not-a-declared-case'",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "not-a-declared-case": "undeclared '
+     'disposition control",\n'),
+)
+
+
+def disposition_self_test(report_path: Path | None = None) -> int:
+    """Require the declared-case disposition partition to be load-bearing.
+
+    The partition is what stops the declaration accumulating names that are
+    never credited and never missed.  A rule that cannot fail is decoration,
+    so each mutation below removes exactly one of its guarantees and must be
+    caught at its own named diagnostic.
+    """
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-disposition-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        matrix = sandbox / "scripts" / "prorata_weth_vault_differential_matrix.py"
+        manifest = sandbox / "scripts" / "prorata-weth-vault-differential-manifest.json"
+        files = {"checker": checker, "matrix": matrix}
+        originals = {name: path.read_text() for name, path in files.items()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def refresh_manifest() -> bool:
+            generated = subprocess.run([sys.executable, "-B", str(matrix), "--print"],
+                                       cwd=sandbox, capture_output=True, text=True, env=env)
+            if generated.returncode:
+                return False
+            manifest.write_text(generated.stdout)
+            return True
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
+                                  capture_output=True, text=True, env=env)
+
+        refresh_manifest()
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("disposition baseline is not green before mutations")
+        for label, needle, target, old, new in DISPOSITION_PERTURBATIONS:
+            path = files[target]
+            if originals[target].count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(originals[target].replace(old, new, 1))
+            # The producer is regenerated in the mutant tree so the failure is
+            # the disposition rule, never a stale manifest hash.
+            refresh_manifest()
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((line for line in output.splitlines()
+                               if line.startswith("REGRESSION — vault differential:")
+                               and needle in line), None)
+            path.write_text(originals[target])
+            refresh_manifest()
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "mutatedFile": target,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker)],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker)],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — disposition self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — disposition self-test control: {record['label']}")
+    print(f"OK — disposition self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
 def registered_self_test(report_path: Path | None = None) -> int:
-    """Compose the legacy and causal controls behind the registered flag."""
+    """Compose the legacy, causal-return, child-return, and disposition controls."""
     if report_path is None:
         legacy_status = self_test(None)
         causal_status = causal_return_self_test(None)
-        return 1 if legacy_status or causal_status else 0
+        child_status = child_return_self_test(None)
+        disposition_status = disposition_self_test(None)
+        return 1 if (legacy_status or causal_status or child_status
+                     or disposition_status) else 0
     with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
         legacy_path = Path(tmp) / "legacy.json"
         causal_path = Path(tmp) / "causal-return.json"
+        child_path = Path(tmp) / "child-return.json"
+        disposition_path = Path(tmp) / "disposition.json"
         legacy_status = self_test(legacy_path)
         causal_status = causal_return_self_test(causal_path)
+        child_status = child_return_self_test(child_path)
+        disposition_status = disposition_self_test(disposition_path)
         try:
             combined = {
-                "schema": 1,
+                "schema": 2,
                 "legacy": json.loads(legacy_path.read_text()),
                 "causalReturn": json.loads(causal_path.read_text()),
-                "returncodes": {"legacy": legacy_status, "causalReturn": causal_status},
+                "childReturn": json.loads(child_path.read_text()),
+                "disposition": json.loads(disposition_path.read_text()),
+                "returncodes": {"legacy": legacy_status, "causalReturn": causal_status,
+                                "childReturn": child_status,
+                                "disposition": disposition_status},
             }
         except (OSError, json.JSONDecodeError) as exc:
             print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
             return 1
         report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
-    return 1 if legacy_status or causal_status else 0
+    return 1 if (legacy_status or causal_status or child_status
+                 or disposition_status) else 0
 
 
 def causal_return_only() -> int:
@@ -3402,9 +3845,51 @@ def causal_return_only() -> int:
     return 0
 
 
+def child_return_only() -> int:
+    """Run every foreign-child case on Jaune and pinned EELS for controls."""
+    if not JAUNE.is_file():
+        print(f"REGRESSION — child return differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        before = len(FAILURES)
+        check_adversarial_child_returns_and_rollback(run)
+        check_eels_adversarial_child_returns_and_rollback(run)
+        for index in range(before, len(FAILURES)):
+            FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    cases = tuple(case for case in EXECUTED_CASE_CHANNELS
+                  if case.startswith("foreign-child-")
+                  and case != "foreign-child-canonical-return-and-rollback")
+    expected = {(case, channel, side) for case in cases
+                for channel in ("jaune", "eels")
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("child return executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — child return differential: {message}")
+        return 1
+    print(f"OK — child return differential: {len(expected)} case/channel/side observations")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     for error in validate_manifest():
         fail(error)
+    # The disposition partition reads only the static declaration, so it is
+    # settled before any execution: a declaration that cannot account for its
+    # own cases must not be able to spend twenty seconds looking healthy.
+    validate_case_disposition()
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — vault differential: {message}")
+        return 1
     if not JAUNE.exists():
         print("REGRESSION — vault differential: the Jaune runner is not built "
               f"at {JAUNE}")
@@ -3444,6 +3929,11 @@ def main(argv: list[str]) -> int:
           + " (Jaune and EELS)")
     for case, row in measured["gas"].items():
         print(f"  gas {case}: blanc {row['blanc']} reference {row['reference']}")
+    print(f"  declared case disposition: {len(CASES)} declared, "
+          f"{len(EXECUTED_CASE_CHANNELS)} implemented here, "
+          f"{len(SUPERSEDED_CASES)} superseded by named executed successors, "
+          f"{len(UNIMPLEMENTED_CASES)} recorded unimplemented: "
+          + ", ".join(sorted(UNIMPLEMENTED_CASES)))
     print(f"OK — vault differential: {len(CHECKS)} Jaune check groups and an "
           f"independent EELS matrix for all 25 selectors on each compiled side; "
           f"the {len(blanc.side.code)}-byte runtime and {len(reference.side.code)}-byte "
@@ -3457,6 +3947,24 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    if "--child-return-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(child_return_self_test(report))
+    if "--child-return-only" in args:
+        raise SystemExit(child_return_only())
+    if "--disposition-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(disposition_self_test(report))
     if "--causal-return-self-test" in args:
         report = None
         if "--self-test-report" in args:
