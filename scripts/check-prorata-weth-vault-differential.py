@@ -3956,301 +3956,273 @@ def _matching_regression_line(output: str, category: str, needle: str) -> str | 
                  if line.startswith(prefix) and needle in line), None)
 
 
-def self_test(report_path: Path | None = None) -> int:
-    """Perturb disposable copies and require targeted gate failures.
+# --- legacy slice plan: the registered --self-test composition in eight
+# foreground slices (review F13). The patch strings below are the single
+# definition consumed both by the whole-campaign self_test and by the
+# registered --slice mode; the retired evidence driver transcribed them
+# from here, never the reverse.
+LEGACY_INLINE_SPECS = [
+    {
+        # A declaration alone is not coverage: remove the live Jaune
+        # capacity implementation from CHECKS while retaining the manifest.
+        "label": "arithmetic capacity executed-ID omission",
+        "needle": "arithmetic capacity coverage missing executed case/channel IDs",
+        "old": "    check_explicit_arithmetic_capacity_cases,\n    check_mint,",
+        "new": "    # omitted by coverage control\n    check_mint,",
+        "rot": "arithmetic coverage omission control no longer applies exactly once",
+        "passed": "arithmetic capacity implementation was omitted and the gate still passed",
+        "unreached": "arithmetic coverage omission did not reach its executed-ID audit",
+        "restore": "arithmetic coverage omission",
+        "caught": "arithmetic coverage omission",
+    },
+    {
+        # Event ordering has two independent frozen subcases. Removing the
+        # deposit-order check must leave its own ID missing even though the
+        # share-transfer event check still runs.
+        "label": "deposit event-order executed-ID omission",
+        "needle": "declared executed coverage missing case/channel IDs: event-order-deposit/jaune/blanc",
+        "old": "    check_deposit_event_order,\n",
+        "new": "    # omitted by deposit event-order coverage control\n",
+        "rot": "deposit event-order omission control no longer applies exactly once",
+        "passed": "the deposit event-order implementation was omitted and the gate still passed",
+        "unreached": "deposit event-order omission did not reach its own executed-ID audit",
+        "restore": "deposit event-order omission",
+        "caught": "deposit event-order omission",
+    },
+    {
+        # A flow/allowance history is also ledgered at subcase granularity.
+        # Changing only the infinite-allowance credit must fail while its
+        # finite sibling continues to execute.
+        "label": "infinite allowance executed-ID omission",
+        "needle": ("declared executed coverage missing case/channel IDs: "
+                   "supported-root-transfer-from-infinite/jaune/blanc"),
+        "old": '        9: (receiver, 100, "supported-root-transfer-from-infinite"),\n',
+        "new": '        9: (receiver, 100, "supported-root-transfer-from-finite"),\n',
+        "rot": "infinite allowance omission control no longer applies exactly once",
+        "passed": "the infinite-allowance credit was omitted and the gate still passed",
+        "unreached": "infinite-allowance omission did not reach its own executed-ID audit",
+        "restore": "infinite allowance omission",
+        "caught": "infinite allowance omission",
+    },
+    {
+        # A vault-to-vault WETH transfer is a self-transfer: it emits a
+        # Transfer log but leaves the vault's internal WETH row unchanged.
+        # Treating it as an ordinary A-a debit must fail this backed exit case.
+        "label": "vault self-receiver WETH balance",
+        "needle": "vault-self-receiver-withdraw: vault WETH changed under self-transfer",
+        "old": "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:\n",
+        "new": ("        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before - "
+                '(amount if method == "withdraw" else returned):\n'),
+        "rot": "vault self-receiver balance control no longer applies exactly once",
+        "passed": "the ordinary self-receiver WETH debit was accepted",
+        "unreached": "the ordinary self-receiver WETH debit missed its semantic assertion",
+        "restore": "vault self-receiver balance mutation",
+        "caught": "vault self-receiver balance",
+    },
+    {
+        # The new outbound partition implementation must retain its own ID.
+        "label": "outbound role executed-ID omission",
+        "needle": "supported-root-withdraw-all-equal/jaune/blanc",
+        "category": "declared executed coverage missing case/channel IDs:",
+        "old": "    check_causal_outbound_role_partitions,\n",
+        "new": "    # omitted outbound role coverage control\n",
+        "rot": "outbound role omission control no longer applies exactly once",
+        "unreached": "outbound role omission did not reach its named executed-ID audit",
+        "restore": "outbound role omission",
+        "caught": "outbound role omission",
+    },
+    {
+        # A finite delegated exit must consume the exact approved allowance.
+        # Development note: changing the role-table approval from 3_000 to
+        # 2_999 was rejected as a falsifier because it changed both the real
+        # approve transaction and the oracle model. This mutation changes
+        # only the independently asserted expected post-spend allowance.
+        "label": "outbound finite delegated post-spend allowance",
+        "needle": ("outbound-role-withdraw-caller-receiver-distinct-owner withdraw: "
+                   "pair state post-spend share allowance is 1000, expected 1001"),
+        "old": "                        expected_post_spend_allowance = approval - spent_shares\n",
+        "new": "                        expected_post_spend_allowance = approval - spent_shares + 1\n",
+        "rot": "outbound finite allowance control no longer applies exactly once",
+        "unreached": "outbound finite allowance mutation missed pair-state/event assertion",
+        "restore": "outbound finite allowance mutation",
+        "caught": "outbound finite allowance",
+    },
+    {
+        # The independent EELS arithmetic leg must be independently required:
+        # drop only its existing invocation, keep the declaration and Jaune
+        # implementation intact.
+        "label": "EELS arithmetic capacity executed-ID omission",
+        "needle": "arithmetic capacity coverage missing executed case/channel IDs",
+        "old": "        check_eels_explicit_arithmetic_capacity_cases,\n",
+        "new": "        # omitted by EELS coverage control\n",
+        "rot": "EELS arithmetic coverage omission control no longer applies exactly once",
+        "passed": "the EELS arithmetic implementation was omitted and the gate still passed",
+        "unreached": "EELS arithmetic coverage omission did not reach its executed-ID audit",
+        "restore": "EELS arithmetic coverage omission",
+        "caught": "EELS arithmetic coverage omission",
+    },
+]
 
-    A differential that has not been shown to fail is not evidence.  This is
-    not a hypothetical: the first draft of these cases all divided evenly, so
-    every rounding direction could be flipped without the gate noticing, and
-    the revert check compared the receipt status against a spelling the runner
-    never emits.  Both were found here.
+# Slice plan: ("pert", index) reuses PERTURBATIONS[i]; ("inline", index)
+# reuses LEGACY_INLINE_SPECS[i]; "measurements", "lock", "inprocess" are
+# the remaining self_test blocks in campaign order.
+LEGACY_SLICES = {
+    "L1": [("pert", 0), ("pert", 1)],
+    "L2": [("pert", 2), ("pert", 3)],
+    "L3": [("pert", 4), ("inline", 0)],
+    "L4": [("inline", 1), ("inline", 2)],
+    "L5": [("inline", 3), ("inline", 4)],
+    "L6": [("inline", 5), "measurements"],
+    "L7": [("inline", 6), "lock"],
+    "L8": ["inprocess"],
+}
+
+_LEGACY_ALL = ([("pert", index) for index in range(len(PERTURBATIONS))]
+               + [("inline", 0), ("inline", 1), ("inline", 2), ("inline", 3),
+                  ("inline", 4), ("inline", 5), "inprocess", "measurements",
+                  ("inline", 6), "lock"])
+
+
+class _LegacyCampaign:
+    """One disposable sandbox plus the shared legacy block runners.
+
+    Both the whole-campaign self_test and the registered --slice mode run
+    their blocks through here, so a slice executes byte-identical gate runs
+    to the composition it reconstructs. Block methods return record dicts
+    carrying matchedDiagnosticLine; self_test strips that key to keep its
+    long-standing report schema, the slice mode keeps it.
     """
-    here = Path(__file__).resolve().parent
-    root = here.parent
-    original = (here / "prorata_weth_vault_oracle.py").read_text()
-    missed = []
-    caught_controls: list[str] = []
-    control_records: list[dict] = []
-    with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-differential-mutant-") as tmp:
-        sandbox = Path(tmp)
+
+    def __init__(self, prefix: str):
+        self._prefix = prefix
+        self.missed: list[str] = []
+        self.caught: list[str] = []
+
+    def __enter__(self) -> _LegacyCampaign:
+        here = Path(__file__).resolve().parent
+        root = here.parent
+        self._tmp = tempfile.TemporaryDirectory(prefix=self._prefix)
+        sandbox = Path(self._tmp.name)
         shutil.copytree(here, sandbox / "scripts",
                         ignore=shutil.ignore_patterns("__pycache__"))
         (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
         (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
-        scripts = sandbox / "scripts"
-        model = scripts / "prorata_weth_vault_oracle.py"
-        checker = scripts / "check-prorata-weth-vault-differential.py"
-        matrix = scripts / "prorata_weth_vault_differential_matrix.py"
-        manifest = scripts / "prorata-weth-vault-differential-manifest.json"
-        measurements_file = scripts / "prorata-weth-vault-reference-measurements.json"
-        lock_file = scripts / "prorata-weth-vault-reference.json"
-        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-        original_checker = checker.read_text()
+        self.sandbox = sandbox
+        self.model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
+        self.checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        self.matrix = sandbox / "scripts" / "prorata_weth_vault_differential_matrix.py"
+        self.manifest = sandbox / "scripts" / "prorata-weth-vault-differential-manifest.json"
+        self.measurements_file = (
+            sandbox / "scripts" / "prorata-weth-vault-reference-measurements.json")
+        self.lock_file = sandbox / "scripts" / "prorata-weth-vault-reference.json"
+        self.env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        self.original_oracle = self.model.read_text()
+        self.original_checker = self.checker.read_text()
+        return self
 
-        def refresh_manifest() -> bool:
-            generated = subprocess.run([sys.executable, "-B", str(matrix), "--print"],
-                                       cwd=sandbox, capture_output=True, text=True, env=env)
-            if generated.returncode:
-                missed.append("coverage producer failed in disposable mutation tree: "
-                              + generated.stderr.strip())
-                return False
-            manifest.write_text(generated.stdout)
-            return True
+    def __exit__(self, *exc) -> bool:
+        self._tmp.cleanup()
+        return False
 
-        def run_gate() -> subprocess.CompletedProcess[str]:
-            return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
-                                  capture_output=True, text=True, env=env)
+    def refresh_manifest(self) -> bool:
+        generated = subprocess.run([sys.executable, "-B", str(self.matrix), "--print"],
+                                   cwd=self.sandbox, capture_output=True, text=True, env=self.env)
+        if generated.returncode:
+            self.missed.append("coverage producer failed in disposable mutation tree: "
+                               + generated.stderr.strip())
+            return False
+        self.manifest.write_text(generated.stdout)
+        return True
 
-        def require_green(label: str) -> subprocess.CompletedProcess[str] | None:
-            if not refresh_manifest():
-                return None
-            restored = run_gate()
-            if restored.returncode:
-                missed.append(f"{label}: removing only the mutation did not restore green")
-            return restored
+    def run_gate(self) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-B", str(self.checker)], cwd=self.sandbox,
+                              capture_output=True, text=True, env=self.env)
 
-        for label, needle, old, new in PERTURBATIONS:
-            if original.count(old) != 1:
-                missed.append(f"{label}: the perturbation no longer applies "
-                              f"cleanly to the oracle; this self-test has "
-                              f"rotted and must be repaired, not skipped")
-                continue
-            model.write_text(original.replace(old, new, 1))
-            if not refresh_manifest():
-                model.write_text(original)
-                continue
-            result = run_gate()
-            output = result.stdout + result.stderr
-            if result.returncode == 0:
-                missed.append(f"{label}: perturbed, and the gate still passed")
-            elif "REGRESSION — vault differential:" not in output or needle not in output:
-                missed.append(f"{label}: did not reach its intended semantic check ({needle!r})")
-            model.write_text(original)
-            restored = require_green(label)
-            if (restored is not None and restored.returncode == 0
-                    and result.returncode != 0
-                    and "REGRESSION — vault differential:" in output and needle in output):
-                diagnostic = next(line for line in output.splitlines() if needle in line)
-                caught_controls.append(f"{label}: {diagnostic}; removal restored green")
-                control_records.append({
-                    "label": label,
-                    "expectedDiagnostic": needle,
-                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                               "cwd": str(sandbox), "returncode": result.returncode,
-                               "stdout": result.stdout, "stderr": result.stderr},
-                    "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                 "cwd": str(sandbox), "returncode": restored.returncode,
-                                 "stdout": restored.stdout, "stderr": restored.stderr},
-                })
+    def require_green(self, label: str) -> subprocess.CompletedProcess[str] | None:
+        if not self.refresh_manifest():
+            return None
+        restored = self.run_gate()
+        if restored.returncode:
+            self.missed.append(f"{label}: removing only the mutation did not restore green")
+        return restored
 
-        # A declaration alone is not coverage: remove the live Jaune capacity
-        # implementation from CHECKS while retaining the manifest, regenerate
-        # the producer identity in this disposable tree, and require the
-        # executed-ID audit to fail.
-        coverage_line = "    check_explicit_arithmetic_capacity_cases,\n    check_mint,"
-        if original_checker.count(coverage_line) != 1:
-            missed.append("arithmetic coverage omission control no longer applies exactly once")
+    def record(self, proc) -> dict:
+        return {"argv": proc.args, "cwd": str(self.sandbox),
+                "returncode": proc.returncode, "stdout": proc.stdout,
+                "stderr": proc.stderr}
+
+    def run_item(self, item) -> list[dict]:
+        """Run one slice item; returns its record dicts (empty on a miss)."""
+        if item == "measurements":
+            record = self.run_measurements()
+            return [record] if record is not None else []
+        if item == "lock":
+            record = self.run_lock()
+            return [record] if record is not None else []
+        if item == "inprocess":
+            return self.run_inprocess()
+        kind, index = item
+        if kind == "pert":
+            record = self.run_oracle_perturbation(index)
         else:
-            checker.write_text(original_checker.replace(coverage_line,
-                                                       "    # omitted by coverage control\n    check_mint,", 1))
-            if refresh_manifest():
-                result = run_gate()
-                output = result.stdout + result.stderr
-                needle = "arithmetic capacity coverage missing executed case/channel IDs"
-                if result.returncode == 0:
-                    missed.append("arithmetic capacity implementation was omitted and the gate still passed")
-                elif needle not in output:
-                    missed.append("arithmetic coverage omission did not reach its executed-ID audit")
-                checker.write_text(original_checker)
-                restored = require_green("arithmetic coverage omission")
-                if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                        and needle in output):
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("arithmetic coverage omission: " + diagnostic
-                                           + "; removal restored green")
-                    control_records.append({
-                        "label": "arithmetic capacity executed-ID omission",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
+            record = self.run_inline(index)
+        return [record] if record is not None else []
 
-        # Event ordering has two independent frozen subcases.  Removing the
-        # deposit-order check must leave its own ID missing even though the
-        # share-transfer event check still runs.
-        event_coverage_line = "    check_deposit_event_order,\n"
-        if original_checker.count(event_coverage_line) != 1:
-            missed.append("deposit event-order omission control no longer applies exactly once")
+    def run_oracle_perturbation(self, index: int) -> dict | None:
+        label, needle, old, new = PERTURBATIONS[index]
+        return self._run_patch(
+            target=self.model, original=self.original_oracle,
+            label=label, needle=needle, old=old, new=new, category=None,
+            rot=(f"{label}: the perturbation no longer applies cleanly to the oracle; "
+                 "this self-test has rotted and must be repaired, not skipped"),
+            unreached=f"{label}: did not reach its intended semantic check ({needle!r})",
+            passed=f"{label}: perturbed, and the gate still passed",
+            restore=label, caught=label, require_header=True)
+
+    def run_inline(self, index: int) -> dict | None:
+        spec = LEGACY_INLINE_SPECS[index]
+        return self._run_patch(
+            target=self.checker, original=self.original_checker,
+            label=spec["label"], needle=spec["needle"], old=spec["old"], new=spec["new"],
+            category=spec.get("category"), rot=spec["rot"], unreached=spec["unreached"],
+            passed=spec.get("passed"), restore=spec["restore"], caught=spec["caught"],
+            require_header=False)
+
+    def _run_patch(self, *, target: Path, original: str, label: str, needle: str,
+                   old: str, new: str, category: str | None, rot: str, unreached: str,
+                   passed: str | None, restore: str, caught: str,
+                   require_header: bool) -> dict | None:
+        if original.count(old) != 1:
+            self.missed.append(rot)
+            return None
+        target.write_text(original.replace(old, new, 1))
+        if not self.refresh_manifest():
+            target.write_text(original)
+            return None
+        result = self.run_gate()
+        output = result.stdout + result.stderr
+        if category is not None:
+            diagnostic = _matching_regression_line(output, category, needle)
         else:
-            checker.write_text(original_checker.replace(
-                event_coverage_line, "    # omitted by deposit event-order coverage control\n", 1))
-            if refresh_manifest():
-                result = run_gate()
-                output = result.stdout + result.stderr
-                needle = "declared executed coverage missing case/channel IDs: event-order-deposit/jaune/blanc"
-                if result.returncode == 0:
-                    missed.append("the deposit event-order implementation was omitted and the gate still passed")
-                elif needle not in output:
-                    missed.append("deposit event-order omission did not reach its own executed-ID audit")
-                checker.write_text(original_checker)
-                restored = require_green("deposit event-order omission")
-                if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                        and needle in output):
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("deposit event-order omission: " + diagnostic
-                                           + "; removal restored green")
-                    control_records.append({
-                        "label": "deposit event-order executed-ID omission",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
+            diagnostic = next((line for line in output.splitlines() if needle in line), None)
+        header_ok = not require_header or "REGRESSION — vault differential:" in output
+        if result.returncode == 0:
+            self.missed.append(passed if passed is not None else unreached)
+        elif diagnostic is None or not header_ok:
+            self.missed.append(unreached)
+        target.write_text(original)
+        restored = self.require_green(restore)
+        if (restored is not None and restored.returncode == 0
+                and result.returncode != 0 and diagnostic is not None and header_ok):
+            self.caught.append(f"{caught}: {diagnostic}; removal restored green")
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(result), "restored": self.record(restored)}
+        return None
 
-        # A flow/allowance history is also ledgered at subcase granularity.
-        # Changing only the infinite-allowance credit must fail while its
-        # finite sibling continues to execute.
-        allowance_credit = '        9: (receiver, 100, "supported-root-transfer-from-infinite"),\n'
-        if original_checker.count(allowance_credit) != 1:
-            missed.append("infinite allowance omission control no longer applies exactly once")
-        else:
-            checker.write_text(original_checker.replace(
-                allowance_credit,
-                '        9: (receiver, 100, "supported-root-transfer-from-finite"),\n', 1))
-            if refresh_manifest():
-                result = run_gate()
-                output = result.stdout + result.stderr
-                needle = ("declared executed coverage missing case/channel IDs: "
-                          "supported-root-transfer-from-infinite/jaune/blanc")
-                if result.returncode == 0:
-                    missed.append("the infinite-allowance credit was omitted and the gate still passed")
-                elif needle not in output:
-                    missed.append("infinite-allowance omission did not reach its own executed-ID audit")
-                checker.write_text(original_checker)
-                restored = require_green("infinite allowance omission")
-                if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                        and needle in output):
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("infinite allowance omission: " + diagnostic
-                                           + "; removal restored green")
-                    control_records.append({
-                        "label": "infinite allowance executed-ID omission",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                   "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
-
-        # A vault-to-vault WETH transfer is a self-transfer: it emits a
-        # Transfer log but leaves the vault's internal WETH row unchanged.
-        # Treating it as an ordinary A-a debit must fail this backed exit case.
-        self_receiver_balance = "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:\n"
-        if original_checker.count(self_receiver_balance) != 1:
-            missed.append("vault self-receiver balance control no longer applies exactly once")
-        else:
-            wrong_ordinary_debit = (
-                "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before - "
-                "(amount if method == \"withdraw\" else returned):\n"
-            )
-            checker.write_text(original_checker.replace(self_receiver_balance, wrong_ordinary_debit, 1))
-            if refresh_manifest():
-                result = run_gate()
-                output = result.stdout + result.stderr
-                needle = "vault-self-receiver-withdraw: vault WETH changed under self-transfer"
-                if result.returncode == 0:
-                    missed.append("the ordinary self-receiver WETH debit was accepted")
-                elif needle not in output:
-                    missed.append("the ordinary self-receiver WETH debit missed its semantic assertion")
-                checker.write_text(original_checker)
-                restored = require_green("vault self-receiver balance mutation")
-                if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                        and needle in output):
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("vault self-receiver balance: " + diagnostic
-                                           + "; removal restored green")
-                    control_records.append({
-                        "label": "vault self-receiver WETH balance",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
-
-        # The new outbound partition implementation must retain its own ID.
-        outbound_line = "    check_causal_outbound_role_partitions,\n"
-        if original_checker.count(outbound_line) != 1:
-            missed.append("outbound role omission control no longer applies exactly once")
-        else:
-            checker.write_text(original_checker.replace(outbound_line, "    # omitted outbound role coverage control\n", 1))
-            if refresh_manifest():
-                result = run_gate(); output = result.stdout + result.stderr
-                needle = "supported-root-withdraw-all-equal/jaune/blanc"
-                diagnostic = _matching_regression_line(
-                    output, "declared executed coverage missing case/channel IDs:", needle)
-                if result.returncode == 0 or diagnostic is None:
-                    missed.append("outbound role omission did not reach its named executed-ID audit")
-                checker.write_text(original_checker); restored = require_green("outbound role omission")
-                if (restored is not None and restored.returncode == 0
-                        and result.returncode != 0 and diagnostic is not None):
-                    caught_controls.append("outbound role omission: " + diagnostic + "; removal restored green")
-                    control_records.append({
-                        "label": "outbound role executed-ID omission",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
-
-        # A finite delegated exit must consume the exact approved allowance.
-        # Development note: changing the role-table approval from 3_000 to
-        # 2_999 was rejected as a falsifier because it changed both the real
-        # approve transaction and the oracle model.  This mutation changes
-        # only the independently asserted expected post-spend allowance.
-        finite_expected = "                        expected_post_spend_allowance = approval - spent_shares\n"
-        if original_checker.count(finite_expected) != 1:
-            missed.append("outbound finite allowance control no longer applies exactly once")
-        else:
-            checker.write_text(original_checker.replace(
-                finite_expected,
-                "                        expected_post_spend_allowance = approval - spent_shares + 1\n",
-                1))
-            if refresh_manifest():
-                result = run_gate(); output = result.stdout + result.stderr
-                needle = ("outbound-role-withdraw-caller-receiver-distinct-owner withdraw: "
-                          "pair state post-spend share allowance is 1000, expected 1001")
-                if result.returncode == 0 or needle not in output:
-                    missed.append("outbound finite allowance mutation missed pair-state/event assertion")
-                checker.write_text(original_checker); restored = require_green("outbound finite allowance mutation")
-                if restored is not None and restored.returncode == 0 and result.returncode != 0 and needle in output:
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("outbound finite allowance: " + diagnostic + "; removal restored green")
-                    control_records.append({
-                        "label": "outbound finite delegated post-spend allowance",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
-
+    def run_inprocess(self) -> list[dict]:
+        """Valid-call, receipt/rollback falsifiers, and capture probes (L8)."""
+        records: list[dict] = []
         weth_code = _literal("Blanc/WethCode.lean", "wethCode")
         run = Runner(blanc_side(), weth_code)
         FAILURES.clear()
@@ -4259,14 +4231,13 @@ def self_test(report_path: Path | None = None) -> int:
         expected_valid_revert = "a genuinely valid deposit: the call status is 1, but the statement requires a revert"
         valid_diagnostics = list(FAILURES)
         if valid_diagnostics != [expected_valid_revert]:
-            missed.append("the valid-call-as-revert control did not report its exact successful-status diagnostic")
-        control_records.append({"label": "valid call as revert", "expectedDiagnostic": expected_valid_revert,
-                                "diagnostics": valid_diagnostics,
-                                "verdict": "caught" if valid_diagnostics == [expected_valid_revert] else "missed"})
+            self.missed.append("the valid-call-as-revert control did not report its exact successful-status diagnostic")
+        records.append({"label": "valid call as revert", "expectedDiagnostic": expected_valid_revert,
+                        "diagnostics": valid_diagnostics,
+                        "verdict": "caught" if valid_diagnostics == [expected_valid_revert] else "missed"})
         FAILURES.clear()
-
         # Receipt and rollback witnesses are deliberately checked apart from
-        # the real valid-call probe above.  These synthetic t8n-shaped rows
+        # the real valid-call probe above. These synthetic t8n-shaped rows
         # exercise the exact false-positive paths that used to make an
         # unexecuted rejection or a receiptless result look like an EVM revert.
         before = run.alloc(10 ** 18, 10 ** 18)
@@ -4274,10 +4245,10 @@ def self_test(report_path: Path | None = None) -> int:
         def caught(label: str, result: dict) -> None:
             _check_revert_evidence(label, before, result)
             if not FAILURES:
-                missed.append(f"{label}: bad revert evidence passed")
-            control_records.append({"label": label, "input": result,
-                                    "diagnostics": list(FAILURES),
-                                    "verdict": "caught" if FAILURES else "missed"})
+                self.missed.append(f"{label}: bad revert evidence passed")
+            records.append({"label": label, "input": result,
+                            "diagnostics": list(FAILURES),
+                            "verdict": "caught" if FAILURES else "missed"})
             FAILURES.clear()
 
         caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
@@ -4290,112 +4261,88 @@ def self_test(report_path: Path | None = None) -> int:
         caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
                                     "alloc": before})
         capture_missed, capture_records = capture_controls()
-        missed.extend(capture_missed)
-        control_records.extend(capture_records)
+        self.missed.extend(capture_missed)
+        records.extend(capture_records)
+        return records
 
-        # The reference half must bite too.  These mutations are also confined
-        # to the disposable copy, never the live measurements or runtime lock.
-        if measurements_file.is_file():
-            saved = measurements_file.read_text()
-            require_green("measurement baseline")
-            perturbed = json.loads(saved)
-            perturbed["runtimeBytes"]["reference"] += 1
-            measurements_file.write_text(json.dumps(perturbed, indent=2, sort_keys=True) + "\n")
-            result = run_gate()
-            output = result.stdout + result.stderr
-            if result.returncode == 0:
-                missed.append("the committed measurements were perturbed, and the gate still passed")
-            elif "is not what this run measures" not in output:
-                missed.append("the perturbed measurements did not reach its identity check")
-            else:
-                diagnostic = next(line for line in output.splitlines()
-                                  if "is not what this run measures" in line)
-                caught_controls.append(f"measurement identity: {diagnostic}; removal restored green")
-            measurements_file.write_text(saved)
-            restored = require_green("measurement mutation")
-            if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                    and "is not what this run measures" in output):
-                control_records.append({
-                    "label": "measurement identity",
-                    "expectedDiagnostic": "is not what this run measures",
-                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                               "cwd": str(sandbox), "returncode": result.returncode,
-                               "stdout": result.stdout, "stderr": result.stderr},
-                    "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                 "cwd": str(sandbox), "returncode": restored.returncode,
-                                 "stdout": restored.stdout, "stderr": restored.stderr},
-                })
+    def run_measurements(self) -> dict | None:
+        label = "measurement identity"
+        needle = "is not what this run measures"
+        if not self.measurements_file.is_file():
+            self.missed.append("no committed measurements file to perturb")
+            return None
+        saved = self.measurements_file.read_text()
+        self.require_green("measurement baseline")
+        perturbed = json.loads(saved)
+        perturbed["runtimeBytes"]["reference"] += 1
+        self.measurements_file.write_text(json.dumps(perturbed, indent=2, sort_keys=True) + "\n")
+        result = self.run_gate()
+        output = result.stdout + result.stderr
+        if result.returncode == 0:
+            self.missed.append("the committed measurements were perturbed, and the gate still passed")
+        elif needle not in output:
+            self.missed.append("the perturbed measurements did not reach its identity check")
         else:
-            missed.append("no committed measurements file to perturb")
+            diagnostic = next(line for line in output.splitlines() if needle in line)
+            self.caught.append(f"measurement identity: {diagnostic}; removal restored green")
+        self.measurements_file.write_text(saved)
+        restored = self.require_green("measurement mutation")
+        if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                and needle in output):
+            diagnostic = next(line for line in output.splitlines() if needle in line)
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(result), "restored": self.record(restored)}
+        return None
 
-        # The independent EELS arithmetic leg must be independently required:
-        # drop only its existing invocation, keep the declaration and Jaune
-        # implementation intact, regenerate source identity in this disposable
-        # tree, and require the channel-specific executed-ID audit to fail.
-        eels_coverage_line = "        check_eels_explicit_arithmetic_capacity_cases,\n"
-        if original_checker.count(eels_coverage_line) != 1:
-            missed.append("EELS arithmetic coverage omission control no longer applies exactly once")
-        else:
-            checker.write_text(original_checker.replace(
-                eels_coverage_line, "        # omitted by EELS coverage control\n", 1))
-            if refresh_manifest():
-                result = run_gate()
-                output = result.stdout + result.stderr
-                needle = "arithmetic capacity coverage missing executed case/channel IDs"
-                if result.returncode == 0:
-                    missed.append("the EELS arithmetic implementation was omitted and the gate still passed")
-                elif needle not in output:
-                    missed.append("EELS arithmetic coverage omission did not reach its executed-ID audit")
-                checker.write_text(original_checker)
-                restored = require_green("EELS arithmetic coverage omission")
-                if (restored is not None and restored.returncode == 0 and result.returncode != 0
-                        and needle in output):
-                    diagnostic = next(line for line in output.splitlines() if needle in line)
-                    caught_controls.append("EELS arithmetic coverage omission: " + diagnostic
-                                           + "; removal restored green")
-                    control_records.append({
-                        "label": "EELS arithmetic capacity executed-ID omission",
-                        "expectedDiagnostic": needle,
-                        "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                                   "cwd": str(sandbox), "returncode": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr},
-                        "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                     "cwd": str(sandbox), "returncode": restored.returncode,
-                                     "stdout": restored.stdout, "stderr": restored.stderr},
-                    })
-        saved_lock = lock_file.read_text()
+    def run_lock(self) -> dict | None:
+        label = "reference runtime identity"
+        needle = "constructor-patched reference runtime"
+        saved_lock = self.lock_file.read_text()
         lock = json.loads(saved_lock)
         digest = lock["artifacts"]["configuredRuntime"]["sha256"]
         lock["artifacts"]["configuredRuntime"]["sha256"] = digest[:-1] + ("0" if digest[-1] != "0" else "1")
-        lock_file.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+        self.lock_file.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
         lock_result = None
-        if refresh_manifest():
-            lock_result = run_gate()
-            output = lock_result.stdout + lock_result.stderr
+        lock_output = ""
+        if self.refresh_manifest():
+            lock_result = self.run_gate()
+            lock_output = lock_result.stdout + lock_result.stderr
             if lock_result.returncode == 0:
-                missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
-            elif "constructor-patched reference runtime" not in output:
-                missed.append("the perturbed runtime lock did not reach its identity check")
+                self.missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
+            elif needle not in lock_output:
+                self.missed.append("the perturbed runtime lock did not reach its identity check")
             else:
-                diagnostic = next(line for line in output.splitlines()
-                                  if "constructor-patched reference runtime" in line)
-                caught_controls.append(f"reference runtime identity: {diagnostic}; removal restored green")
-        lock_file.write_text(saved_lock)
-        restored = require_green("reference runtime lock mutation")
+                diagnostic = next(line for line in lock_output.splitlines() if needle in line)
+                self.caught.append(f"reference runtime identity: {diagnostic}; removal restored green")
+        self.lock_file.write_text(saved_lock)
+        restored = self.require_green("reference runtime lock mutation")
         if (lock_result is not None and restored is not None and restored.returncode == 0
-                and lock_result.returncode != 0
-                and "constructor-patched reference runtime" in output):
-            control_records.append({
-                "label": "reference runtime identity",
-                "expectedDiagnostic": "constructor-patched reference runtime",
-                "mutant": {"argv": [sys.executable, "-B", str(checker)],
-                           "cwd": str(sandbox), "returncode": lock_result.returncode,
-                           "stdout": lock_result.stdout, "stderr": lock_result.stderr},
-                "restored": {"argv": [sys.executable, "-B", str(checker)],
-                             "cwd": str(sandbox), "returncode": restored.returncode,
-                             "stdout": restored.stdout, "stderr": restored.stderr},
-            })
+                and lock_result.returncode != 0 and needle in lock_output):
+            diagnostic = next(line for line in lock_output.splitlines() if needle in line)
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(lock_result), "restored": self.record(restored)}
+        return None
 
+
+def self_test(report_path: Path | None = None) -> int:
+    """Perturb disposable copies and require targeted gate failures.
+
+    A differential that has not been shown to fail is not evidence.  This is
+    not a hypothetical: the first draft of these cases all divided evenly, so
+    every rounding direction could be flipped without the gate noticing, and
+    the revert check compared the receipt status against a spelling the runner
+    never emits.  Both were found here.
+    """
+    control_records: list[dict] = []
+    with _LegacyCampaign("prorata-weth-vault-differential-mutant-") as campaign:
+        for item in _LEGACY_ALL:
+            for record in campaign.run_item(item):
+                control_records.append({key: value for key, value in record.items()
+                                        if key != "matchedDiagnosticLine"})
+        missed = list(campaign.missed)
+        caught_controls = list(campaign.caught)
     if missed:
         for message in missed:
             print(f"REGRESSION — vault differential self-test: {message}")
@@ -4411,6 +4358,52 @@ def self_test(report_path: Path | None = None) -> int:
           f"perturbations, Jaune and EELS arithmetic executed-ID omissions, one valid-call-as-revert "
           f"probe, four receipt/rollback falsifiers, five executed return-capture controls, a perturbed "
           f"measurements file and a perturbed reference identity are all caught")
+    return 0
+
+
+def legacy_slice_self_test(name: str, report_path: Path | None = None) -> int:
+    """Run one registered foreground slice (L1..L8) of the legacy campaign.
+
+    The legacy campaign needs ~29 full-gate runs, which does not fit one
+    foreground window; each slice re-executes its campaign blocks through
+    the same shared runners as the whole composition, so reassembling the
+    eight slice reports in campaign order reproduces it.
+    """
+    if name not in LEGACY_SLICES:
+        print(f"unknown slice {name}; want one of {sorted(LEGACY_SLICES)}")
+        return 2
+    items = LEGACY_SLICES[name]
+    controls: list[dict] = []
+    baseline = None
+    with _LegacyCampaign("prorata-legacy-slice-mutant-") as campaign:
+        if items != ["inprocess"]:
+            base = campaign.run_gate()
+            baseline = campaign.record(base)
+            if base.returncode:
+                campaign.missed.append(f"slice {name} baseline is not green before mutations")
+            else:
+                for item in items:
+                    controls.extend(campaign.run_item(item))
+        else:
+            controls.extend(campaign.run_inprocess())
+        missed = list(campaign.missed)
+    if report_path is not None:
+        report_path.write_text(json.dumps(
+            {"schema": 1, "slice": name, "baseline": baseline,
+             "controls": controls, "missed": missed},
+            indent=2, sort_keys=True) + "\n")
+    else:
+        print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — vault differential self-test slice {name}: {message}")
+        return 1
+    for control in controls:
+        line = control.get("matchedDiagnosticLine", control.get("verdict", "caught"))
+        print(f"OK — vault differential self-test slice {name} control: "
+              f"{control['label']}: {line}; removal restored green")
+    print(f"OK — vault differential self-test slice {name}: "
+          f"{len(controls)} records caught")
     return 0
 
 
@@ -5391,6 +5384,8 @@ if __name__ == "__main__":
         raise SystemExit(collision_donation_self_test(report))
     if "--collision-donation-only" in args:
         raise SystemExit(collision_donation_only())
+    if "--slice" in args and "--self-test" not in args:
+        raise SystemExit("--slice requires --self-test")
     if "--self-test" in args:
         report = None
         if "--self-test-report" in args:
@@ -5398,5 +5393,10 @@ if __name__ == "__main__":
             if index + 1 >= len(args):
                 raise SystemExit("--self-test-report requires a path")
             report = Path(args[index + 1])
+        if "--slice" in args:
+            index = args.index("--slice")
+            if index + 1 >= len(args):
+                raise SystemExit("--slice requires a slice name (L1..L8)")
+            raise SystemExit(legacy_slice_self_test(args[index + 1], report))
         raise SystemExit(registered_self_test(report))
     raise SystemExit(main(args))
