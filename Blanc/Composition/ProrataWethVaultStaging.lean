@@ -71,10 +71,62 @@ def transferStaging (receiverWord assetsWord : B256) : Line :=
 
 /-! ## Whole-source external-call closure -/
 
-private def lineCodeEndsWith (whole suffix : Line) : Bool :=
-  let wholeCode := whole.flatMap Ninst.toBytes
-  let suffixCode := suffix.flatMap Ninst.toBytes
-  decide (wholeCode.drop (wholeCode.length - suffixCode.length) = suffixCode)
+/- The source closure must retain the actual `Ninst` line, rather than merely
+the bytes it emits: the former is what `SourceCursor` turns into an exact
+`Line.Run` before the external crossing. -/
+private theorem rinst_toUInt8_injective {x y : Jaune.Rinst}
+    (equal : Blanc.Rinst.toUInt8 x = Blanc.Rinst.toUInt8 y) : x = y := by
+  have decoded : some x = some y := by
+    rw [← Blanc.toUInt8_toRinst (i := x), equal, Blanc.toUInt8_toRinst]
+  exact Option.some.inj decoded
+
+private def rinstDecidableEq
+    (x y : Jaune.Rinst) : Decidable (x = y) :=
+  if h : Blanc.Rinst.toUInt8 x = Blanc.Rinst.toUInt8 y then
+    isTrue (rinst_toUInt8_injective h)
+  else
+    isFalse (fun equal => h (congrArg Blanc.Rinst.toUInt8 equal))
+
+private def ninstDecidableEq :
+    (x y : Jaune.Ninst) → Decidable (x = y)
+  | .reg x, .reg y =>
+      match rinstDecidableEq x y with
+      | isTrue h => isTrue (by cases h; rfl)
+      | isFalse h => isFalse (by intro equal; cases equal; exact h rfl)
+  | .exec x, .exec y =>
+      match decEq x y with
+      | isTrue h => isTrue (by cases h; rfl)
+      | isFalse h => isFalse (by intro equal; cases equal; exact h rfl)
+  | .push xs xle, .push ys yle =>
+      if h : xs = ys then
+        isTrue (Jaune.Ninst.push_ext xle yle h)
+      else
+        isFalse (by intro equal; cases equal; exact h rfl)
+  | .reg _, .exec _ => isFalse (by intro equal; cases equal)
+  | .reg _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .exec _, .reg _ => isFalse (by intro equal; cases equal)
+  | .exec _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .push _ _, .reg _ => isFalse (by intro equal; cases equal)
+  | .push _ _, .exec _ => isFalse (by intro equal; cases equal)
+
+private instance : DecidableEq Jaune.Ninst := ninstDecidableEq
+
+private def lineEndsWith (whole suffix : Line) : Bool :=
+  decide (whole.drop (whole.length - suffix.length) = suffix)
+
+private theorem lineEndsWith_sound {whole suffix : Line}
+    (ends : lineEndsWith whole suffix = true) :
+    ∃ before, whole = before ++ suffix := by
+  unfold lineEndsWith at ends
+  have suffixEq : whole.drop (whole.length - suffix.length) = suffix :=
+    of_decide_eq_true ends
+  refine ⟨List.take (whole.length - suffix.length) whole, ?_⟩
+  calc
+    whole = List.take (whole.length - suffix.length) whole ++
+        List.drop (whole.length - suffix.length) whole :=
+      (List.take_append_drop (whole.length - suffix.length) whole).symm
+    _ = List.take (whole.length - suffix.length) whole ++ suffix := by
+      rw [suffixEq]
 
 /-- Scan one complete source body, on both branch arms, and accept an external
 instruction only when the instructions immediately before it are one of the
@@ -83,27 +135,83 @@ quote word). Internal Blanc table calls are checked separately when their body
 appears in the program table. -/
 private def exactWethSourceBody (history : Line) : Func → Bool
   | .branch left right =>
-      exactWethSourceBody history left && exactWethSourceBody history right
+      exactWethSourceBody [] left && exactWethSourceBody [] right
   | .last _ => true
   | .call _ => true
   | .next instruction tail =>
       let allowed :=
         match instruction with
-        | .exec .staticcall => lineCodeEndsWith history balanceOfStaging
+        | .exec .staticcall => lineEndsWith history balanceOfStaging
         | .exec .call =>
-            lineCodeEndsWith history
+            lineEndsWith history
                 (transferFromStaging Blanc.ProrataWethVault.amountWord) ||
-              lineCodeEndsWith history
+              lineEndsWith history
                 (transferFromStaging Blanc.ProrataWethVault.quoteWord) ||
-              lineCodeEndsWith history
+              lineEndsWith history
                 (transferStaging Blanc.ProrataWethVault.receiverWord
                   Blanc.ProrataWethVault.amountWord) ||
-              lineCodeEndsWith history
+              lineEndsWith history
                 (transferStaging Blanc.ProrataWethVault.receiverWord
                   Blanc.ProrataWethVault.quoteWord)
         | .exec _ => false
         | _ => true
       allowed && exactWethSourceBody (history ++ [instruction]) tail
+
+/-- The only external source forms admitted by the exact vault closure.  The
+constructor retains the operation-word choice so a later runtime boundary can
+recover the exact calldata source without re-scanning the program. -/
+private inductive WethCallSourceForm
+  | balanceOf
+  | transferFromAmount
+  | transferFromQuote
+  | transferAmount
+  | transferQuote
+
+private def WethCallSourceForm.staging : WethCallSourceForm → Line
+  | .balanceOf => balanceOfStaging
+  | .transferFromAmount => transferFromStaging Blanc.ProrataWethVault.amountWord
+  | .transferFromQuote => transferFromStaging Blanc.ProrataWethVault.quoteWord
+  | .transferAmount =>
+      transferStaging Blanc.ProrataWethVault.receiverWord
+        Blanc.ProrataWethVault.amountWord
+  | .transferQuote =>
+      transferStaging Blanc.ProrataWethVault.receiverWord
+        Blanc.ProrataWethVault.quoteWord
+
+private def WethCallSourceForm.instruction : WethCallSourceForm → Ninst
+  | .balanceOf => staticcall
+  | .transferFromAmount | .transferFromQuote |
+      .transferAmount | .transferQuote => call
+
+private theorem exactWethSourceBody_external
+    {history : Line} {tail : Func} {instruction : Ninst}
+    (closed : exactWethSourceBody history (.next instruction tail) = true)
+    (external : ∃ x, instruction = .exec x) :
+    ∃ (form : WethCallSourceForm) (before : Line),
+      history = before ++ form.staging ∧ instruction = form.instruction := by
+  rcases external with ⟨x, rfl⟩
+  cases x with
+  | staticcall =>
+      have allowed : lineEndsWith history balanceOfStaging = true :=
+        (Bool.and_eq_true_iff.mp closed).1
+      obtain ⟨before, historyEq⟩ := lineEndsWith_sound allowed
+      exact ⟨WethCallSourceForm.balanceOf, before, historyEq, rfl⟩
+  | call =>
+      have allowed := (Bool.and_eq_true_iff.mp closed).1
+      rcases Bool.or_eq_true_iff.mp allowed with firstThree | fourth
+      · rcases Bool.or_eq_true_iff.mp firstThree with firstTwo | third
+        · rcases Bool.or_eq_true_iff.mp firstTwo with first | second
+          · obtain ⟨before, historyEq⟩ := lineEndsWith_sound first
+            exact ⟨WethCallSourceForm.transferFromAmount, before, historyEq, rfl⟩
+          · obtain ⟨before, historyEq⟩ := lineEndsWith_sound second
+            exact ⟨WethCallSourceForm.transferFromQuote, before, historyEq, rfl⟩
+        · obtain ⟨before, historyEq⟩ := lineEndsWith_sound third
+          exact ⟨WethCallSourceForm.transferAmount, before, historyEq, rfl⟩
+      · obtain ⟨before, historyEq⟩ := lineEndsWith_sound fourth
+        exact ⟨WethCallSourceForm.transferQuote, before, historyEq, rfl⟩
+  | create | callcode | delegatecall | create2 =>
+      simp only [exactWethSourceBody] at closed
+      cases closed
 
 /-- Executable whole-program closure for the exact vault source. It scans the
 main dispatcher, every auxiliary function, every branch arm, and rejects any
