@@ -160,14 +160,15 @@ private def exactWethSourceBody (history : Line) : Func → Bool
 /-- The only external source forms admitted by the exact vault closure.  The
 constructor retains the operation-word choice so a later runtime boundary can
 recover the exact calldata source without re-scanning the program. -/
-private inductive WethCallSourceForm
+inductive WethCallSourceForm
   | balanceOf
   | transferFromAmount
   | transferFromQuote
   | transferAmount
   | transferQuote
 
-private def WethCallSourceForm.staging : WethCallSourceForm → Line
+/-- The exact staging line of one admitted form. -/
+def WethCallSourceForm.staging : WethCallSourceForm → Line
   | .balanceOf => balanceOfStaging
   | .transferFromAmount => transferFromStaging Blanc.ProrataWethVault.amountWord
   | .transferFromQuote => transferFromStaging Blanc.ProrataWethVault.quoteWord
@@ -178,7 +179,8 @@ private def WethCallSourceForm.staging : WethCallSourceForm → Line
       transferStaging Blanc.ProrataWethVault.receiverWord
         Blanc.ProrataWethVault.quoteWord
 
-private def WethCallSourceForm.instruction : WethCallSourceForm → Ninst
+/-- The external opcode one admitted form crosses with. -/
+def WethCallSourceForm.instruction : WethCallSourceForm → Ninst
   | .balanceOf => staticcall
   | .transferFromAmount | .transferFromQuote |
       .transferAmount | .transferQuote => call
@@ -228,6 +230,120 @@ path makes this kernel decision false. -/
 theorem vault_externalWethCallSites_complete :
     exactWethSourceClosure Blanc.ProrataWethVault.vault = true := by
   decide +kernel
+
+/-! ## Actual source traversal to an external crossing
+
+The closure above is a decision about the source text.  The theorems here
+connect it to an actual execution: following the actual target-directed
+`SourceCursor.Toward` route through a closed body, the linear source run since
+the last branch or internal-call entry is retained as a `Line.Run`
+continuation over the current cursor's pre-state, and at the external target
+that run is split at the classifier's structural suffix.  No generic list
+lemma about `Line.Run` is needed: extending the continuation by one actual
+`.next` edge is `Line.Run.cons` applied to `ninstRun_of_nextEdge`. -/
+
+private theorem externalSource_of_toward
+    {root target : Exec.Deriv} {program : Prog} {x : Xinst}
+    {initialPath path : Prog.SourcePath} {initialSource source : Func}
+    {initial : Exec.Deriv.SourceCursor root program initialPath initialSource}
+    {cursor : Exec.Deriv.SourceCursor root program path source}
+    (closed : exactWethSourceClosure program = true)
+    (route : Exec.Deriv.SourceCursor.Toward initial target (.exec x) cursor) :
+    ∀ (history : Line) (start : Devm),
+      exactWethSourceBody history source = true →
+      (∀ rest post, Line.Run root.sevm cursor.pre rest post →
+        Line.Run root.sevm start (history ++ rest) post) →
+      ∃ (form : WethCallSourceForm) (entry : Devm),
+        Line.Run root.sevm entry form.staging target.devm ∧
+          Ninst.exec x = form.instruction ∧
+          target.sevm = root.sevm := by
+  induction route with
+  | @atTarget path instruction tail cursor chronology site siteEq sourceMember
+      targetEq instructionEq =>
+      intro history start closedBody extend
+      obtain ⟨form, before, historyEq, formInstruction⟩ :=
+        exactWethSourceBody_external closedBody ⟨x, instructionEq⟩
+      have whole : Line.Run root.sevm start history cursor.pre := by
+        simpa using extend [] cursor.pre Line.Run.nil
+      rw [historyEq] at whole
+      obtain ⟨entry, -, staging⟩ := of_run_append before whole
+      refine ⟨form, entry, ?_, ?_, ?_⟩
+      · rw [← targetEq]
+        exact staging
+      · rw [← instructionEq]
+        exact formInstruction
+      · rw [← targetEq]
+        rfl
+  | @next path instruction tail cursor chronology tailCursor edge rest ih =>
+      intro history start closedBody extend
+      have closedTail :
+          exactWethSourceBody (history ++ [instruction]) tail = true :=
+        (Bool.and_eq_true_iff.mp closedBody).2
+      refine ih (history ++ [instruction]) start closedTail ?_
+      intro rest post run
+      have extended := extend (instruction :: rest) post
+        (Line.Run.cons (cursor.ninstRun_of_nextEdge edge) run)
+      simpa [List.append_assoc] using extended
+  | @branchLeft path left right cursor chronology arm compilerPrefix rest ih =>
+      intro history start closedBody extend
+      exact ih [] arm.pre (Bool.and_eq_true_iff.mp closedBody).1
+        (fun rest post run => by simpa using run)
+  | @branchRight path left right cursor chronology arm compilerPrefix rest ih =>
+      intro history start closedBody extend
+      exact ih [] arm.pre (Bool.and_eq_true_iff.mp closedBody).2
+        (fun rest post run => by simpa using run)
+  | @call path index body cursor chronology lookup bodyCursor compilerPrefix
+      rest ih =>
+      intro history start closedBody extend
+      have closedCallee : exactWethSourceBody [] body = true :=
+        List.all_eq_true.mp closed body (List.mem_of_getElem? lookup)
+      exact ih [] bodyCursor.pre closedCallee
+        (fun rest post run => by simpa using run)
+
+/-- **SourceCursor traversal.**  Every actually reached external opcode of a
+same-frame execution of the exact vault code is preceded, in that frame, by
+the exact `Line.Run` of one of the five admitted staging forms, ending at the
+occurrence's own pre-state, and the opcode is that form's crossing
+instruction.  No liveness, outcome, or child fact is asserted: the theorem
+locates the source of an arbitrary-outcome occurrence, so the Rely/history
+layer can derive child caller and calldata from the configured parent frame. -/
+theorem vault_externalSource_run
+    {root target : Exec.Deriv} {storageTarget codeAddress : Adr} {x : Xinst}
+    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault
+      storageTarget codeAddress)
+    (sameFrame : Exec.Deriv.ParentPrefix root target)
+    (execAt : Ninst.At target.sevm.code target.pc (.exec x)) :
+    ∃ (form : WethCallSourceForm) (entry : Devm),
+      Line.Run root.sevm entry form.staging target.devm ∧
+        Ninst.exec x = form.instruction ∧
+        target.sevm = root.sevm := by
+  have compiled :
+      some root.sevm.code.toList = Blanc.ProrataWethVault.vault.compile :=
+    invocation.2.2.2
+  rcases Exec.Deriv.SourceCursor.mainToward invocation sameFrame execAt with
+    ⟨mainCursor, _compilerPrefix, mainReached⟩
+  have route := mainCursor.toward compiled mainReached (by trivial) execAt
+  have closedMain :
+      exactWethSourceBody [] Blanc.ProrataWethVault.vault.main = true :=
+    List.all_eq_true.mp vault_externalWethCallSites_complete _
+      List.mem_cons_self
+  exact externalSource_of_toward vault_externalWethCallSites_complete route
+    [] mainCursor.pre closedMain (fun rest post run => by simpa using run)
+
+/-- The traversal at an exact instruction occurrence of the frame, in the shape
+`Exec.LocatedFrame.EnteringOccurrence` retains (`occurrence`, `sameFrame`). -/
+theorem vault_externalSource_run_of_occurrence
+    {root : Exec.Deriv} {storageTarget codeAddress : Adr} {x : Xinst}
+    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault
+      storageTarget codeAddress)
+    (occurrence : Exec.NinstOccurrence root)
+    (sameFrame : Exec.Deriv.ParentPrefix root occurrence.node)
+    (decoded : occurrence.instruction = .exec x) :
+    ∃ (form : WethCallSourceForm) (entry : Devm),
+      Line.Run root.sevm entry form.staging occurrence.node.devm ∧
+        Ninst.exec x = form.instruction ∧
+        occurrence.node.sevm = root.sevm :=
+  vault_externalSource_run invocation sameFrame (decoded ▸ occurrence.decoded)
 
 theorem readTotalAssets_sourceShape (body : Func) :
     Blanc.ProrataWethVault.readTotalAssets body =
