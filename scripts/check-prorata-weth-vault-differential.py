@@ -154,6 +154,8 @@ EXECUTED_CASE_CHANNELS = {
     "capacity-a-u-zero-flows": ("jaune",),
     "capacity-supply-ceiling-flows": ("jaune",),
     "composition-exact-child-provenance": ("jaune",),
+    "composition-collision-premise-pairs": ("jaune",),
+    "donation-classification": ("jaune",),
     "causal-return-deposit-caller-receiver": ("jaune",),
     "causal-return-deposit-caller-distinct-receiver": ("jaune",),
     "causal-return-mint-caller-receiver": ("jaune",),
@@ -3072,6 +3074,206 @@ def check_exact_child_provenance(run: Runner) -> None:
     _provenance_decoy_untouched("provenance withdraw decoy", world, result)
 
 
+def _collision_key_report(keyed):
+    """Report every raw key shared by two different allowance pairs.
+
+    Pure over ``((owner, spender), key)`` rows: the collision check calls it
+    on executed keys (which must report nothing) and on a synthetic
+    colliding set (which must report the collision).  A weakened evaluator
+    that always returns empty passes the first call and fails the second,
+    so the weakening mutant bites at the synthetic probe.
+    """
+    seen = {}
+    collisions = []
+    for pair, key in keyed:
+        if key in seen:
+            if seen[key] != pair:
+                collisions.append((seen[key], pair, key))
+        else:
+            seen[key] = pair
+    return collisions
+
+
+def check_collision_premise_pairs(run: Runner) -> None:
+    """SF section 11 composition: the finite collision premise, executed.
+
+    Six distinct raw allowance pairs are touched by real WETH calls: four
+    approvals (including the role-order pair ``(B,A)``/``(A,B)``), one
+    successful third-party ``transferFrom`` that spends ``(B,A)`` down, and
+    two reverting foreign attempts to spend the vault's own row, which read
+    the zero ``(vault,C)`` and ``(vault,B)`` cells.  Reads count as touches:
+    SF section 6 puts approves and ``transferFrom`` reads in the same raw
+    key space, and the premise quantifies over the finite touched set.
+
+    The evaluator has four legs.  The recorded set must equal the required
+    six pairs exactly; every recorded pair's executed cell must hold its
+    independently modelled allowance; the executed keys must be pairwise
+    distinct with a vault-owned pair present (non-vacuous, so the SF section
+    6 vault leg is covered by the pairwise report); and a synthetic
+    colliding set must be reported, proving the evaluator is not vacuous.
+    No global Keccak claim is made and no practical collision is exhibited.
+    """
+    key_b, key_c = 2, 3
+    user_a = signer_address(KEY)
+    user_b = signer_address(key_b)
+    user_c = signer_address(key_c)
+    root = run.causal_root((KEY, key_b, key_c))
+    steps = run_sequence(run, "collision-premise", root, [
+        ("fund A", WETH_ADDR, "0x", 100, KEY),
+        ("fund B", WETH_ADDR, "0x", 100, key_b),
+        ("fund C", WETH_ADDR, "0x", 100, key_c),
+        ("A approves vault", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+        ("B approves A", WETH_ADDR,
+         abi("approve(address,uint256)", user_a, 50), 0, key_b),
+        ("A approves B", WETH_ADDR,
+         abi("approve(address,uint256)", user_b, 60), 0, KEY),
+        ("C approves vault", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 70), 0, key_c),
+        ("A spends B allowance", WETH_ADDR,
+         abi("transferFrom(address,address,uint256)", user_b, user_a, 20),
+         0, KEY),
+    ])
+    if steps is None:
+        return
+    for name, owner, spender, amount in (
+            ("A approves vault", user_a, VAULT_ADDR, 100),
+            ("B approves A", user_b, user_a, 50),
+            ("A approves B", user_a, user_b, 60),
+            ("C approves vault", user_c, VAULT_ADDR, 70)):
+        index = {"A approves vault": 3, "B approves A": 4,
+                 "A approves B": 5, "C approves vault": 6}[name]
+        _exact_event(f"collision-premise {name}", steps[index],
+                     contract=WETH_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(owner, spender), data_words=(amount,))
+    _exact_event("collision-premise A spends B allowance", steps[7],
+                 contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(user_b, user_a), data_words=(20,))
+    final = steps[-1]["alloc"]
+    for key, caller in ((key_c, user_c), (key_b, user_b)):
+        attempt = run.call(final,
+                           abi("transferFrom(address,address,uint256)",
+                               VAULT_ADDR, caller, 1),
+                           target=WETH_ADDR,
+                           nonce=_next_nonce(final, key), signing_key=key)
+        receipts = attempt["result"].get("receipts") or []
+        if (attempt["result"].get("rejected") or len(receipts) != 1
+                or int(receipts[0].get("status", "0x1"), 16) != 0):
+            fail(f"collision-premise vault debit by {caller:#x}: expected one "
+                 "accepted reverting execution")
+            return
+    required_pairs = frozenset({
+        (user_a, VAULT_ADDR),
+        (user_b, user_a),
+        (user_a, user_b),
+        (user_c, VAULT_ADDR),
+        (VAULT_ADDR, user_c),
+        (VAULT_ADDR, user_b),
+    })
+    touched_pairs = [
+        (user_a, VAULT_ADDR),  # approved by the A setup step
+        (user_b, user_a),  # B-approved cell spent by the A transferFrom
+        (user_a, user_b),  # A-approved cell held against the B approval
+        (user_c, VAULT_ADDR),  # approved by the C setup step
+        (VAULT_ADDR, user_c),  # read by the reverting C vault debit
+        (VAULT_ADDR, user_b),  # read by the reverting B vault debit
+    ]
+    if set(touched_pairs) != required_pairs:
+        fail("collision-premise pair set differs from the required touched pairs")
+        return
+    _, weth = vault_state(steps[-1])
+    expected_allowances = {
+        (user_a, VAULT_ADDR): 100,
+        (user_b, user_a): 30,
+        (user_a, user_b): 60,
+        (user_c, VAULT_ADDR): 70,
+        (VAULT_ADDR, user_c): 0,
+        (VAULT_ADDR, user_b): 0,
+    }
+    for owner, spender in touched_pairs:
+        cell = weth_allowance_key(owner, spender)
+        expect(f"collision-premise binding {owner:#x}/{spender:#x}",
+               storage_get(weth, cell), expected_allowances[(owner, spender)])
+    keyed = [(pair, weth_allowance_key(*pair)) for pair in touched_pairs]
+    collisions = _collision_key_report(keyed)
+    if collisions:
+        (owner_a, spender_a), (owner_b, spender_b), key = collisions[0]
+        fail(f"collision-premise violation: distinct pairs "
+             f"{owner_a:#x}/{spender_a:#x} and {owner_b:#x}/{spender_b:#x} "
+             f"share key {key:#x}")
+        return
+    if not [pair for pair in touched_pairs if pair[0] == VAULT_ADDR]:
+        fail("collision-premise evaluator ran with no vault-owned pair touched")
+        return
+    synthetic = _collision_key_report([((11, 22), 0xAB), ((33, 44), 0xAB)])
+    if len(synthetic) != 1:
+        fail("collision-premise evaluator accepted a synthetic colliding pair set")
+        return
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={user_a: 120, user_b: 80, user_c: 100},
+                    weth_allowances={(user_a, VAULT_ADDR): 100,
+                                     (user_b, user_a): 30,
+                                     (user_a, user_b): 60,
+                                     (user_c, VAULT_ADDR): 70})
+    _pair_state(run, "collision-premise final", steps[-1], model,
+                (user_a, user_b, user_c, VAULT_ADDR),
+                weth_allowances=((user_a, VAULT_ADDR), (user_b, user_a),
+                                 (user_a, user_b), (user_c, VAULT_ADDR)))
+
+
+def check_donation_classification(run: Runner) -> None:
+    """SF section 11 donations: a donation mints no shares.
+
+    A backed user deposits, then donates outside the vault's inbound child.
+    The settled WETH increase is classified as a donation: the vault row
+    grows by the gift while supply and the giver's shares are exactly what
+    the deposit left.  The full post-state is projected through the
+    independent oracle, so a classifier that minted on donation fails both
+    the explicit no-mint expects and the whole-account comparison.
+    """
+    assets, donation = 10, 3
+    setup = funded_pair(run, "donation-classification", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-classification",
+                         setup_results[-1]["alloc"], [
+                             ("deposit", VAULT_ADDR,
+                              abi("deposit(uint256,address)", assets, run.user),
+                              0, KEY),
+                             ("donate", WETH_ADDR,
+                              abi("transfer(address,uint256)", VAULT_ADDR, donation),
+                              0, KEY),
+                         ])
+    if steps is None:
+        return
+    committed, _, model = oracle_transaction(model, "deposit", run.user, assets,
+                                             run.user)
+    if not committed:
+        fail("donation-classification oracle rejected deposit")
+        return
+    supply_before = model.supply
+    user_shares_before = model.balance_of(run.user)
+    committed, _, model = oracle_transaction(model, "donate", run.user, donation)
+    if not committed:
+        fail("donation-classification oracle rejected donation")
+        return
+    if model.supply != supply_before or \
+            model.balance_of(run.user) != user_shares_before:
+        fail("donation-classification oracle model minted shares on donation")
+    _exact_event("donation-classification gift", steps[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(donation,))
+    _pair_state(run, "donation-classification final", steps[-1], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
+    vault, weth = vault_state(steps[-1])
+    expect("donation mints no shares supply", run.supply(vault), model.supply)
+    expect("donation mints no shares balance",
+           run.shares(vault, run.user), model.balance_of(run.user))
+    expect("donation vault row grows by the gift",
+           storage_get(weth, VAULT_ADDR), assets + donation)
 def check_eels_action_returns(run: Runner) -> None:
     """Pinned EELS executes the same seven mutation-return observations."""
     _eels_root()
@@ -3458,6 +3660,8 @@ CHECKS = [
     check_a_u_zero_flows,
     check_supply_ceiling_flows,
     check_exact_child_provenance,
+    check_collision_premise_pairs,
+    check_donation_classification,
 ]
 
 JAUNE_CASES_BY_CHECK = {
@@ -3488,6 +3692,8 @@ JAUNE_CASES_BY_CHECK = {
     "check_a_u_zero_flows": ("capacity-a-u-zero-flows",),
     "check_supply_ceiling_flows": ("capacity-supply-ceiling-flows",),
     "check_exact_child_provenance": ("composition-exact-child-provenance",),
+    "check_collision_premise_pairs": ("composition-collision-premise-pairs",),
+    "check_donation_classification": ("donation-classification",),
 }
 
 EELS_CASES_BY_CHECK = {
@@ -4433,6 +4639,175 @@ def rollback_order_self_test(report_path: Path | None = None) -> int:
     return 0
 
 
+COLLISION_DONATION_CASES = (
+    "composition-collision-premise-pairs",
+    "donation-classification",
+)
+
+COLLISION_DONATION_CHECK_NAMES = frozenset({
+    "check_collision_premise_pairs",
+    "check_donation_classification",
+})
+
+COLLISION_DONATION_PERTURBATIONS = (
+    ("collision-check omission",
+     "composition-collision-premise-pairs/jaune/blanc",
+     "checker",
+     "    check_collision_premise_pairs,\n",
+     "    # omitted by collision coverage control\n"),
+    ("donation-check omission",
+     "donation-classification/jaune/blanc",
+     "checker",
+     "    check_donation_classification,\n",
+     "    # omitted by donation coverage control\n"),
+    ("pair-set drop",
+     "collision-premise pair set differs",
+     "checker",
+     "        (user_b, user_a),  # B-approved cell spent by the A transferFrom\n",
+     ""),
+    ("allowance key-order confusion",
+     "collision-premise binding",
+     "checker",
+     "        cell = weth_allowance_key(owner, spender)\n",
+     "        cell = weth_allowance_key(spender, owner)\n"),
+    ("evaluator weakening",
+     "accepted a synthetic colliding pair set",
+     "checker",
+     "    return collisions\n",
+     "    return []\n"),
+    ("donation mint confusion",
+     "donation mints no shares",
+     "oracle",
+     '    def donate(self, giver: int, amount: int) -> None:\n'
+     '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+     "        self._weth_move(giver, self.vault_address, amount)\n",
+     '    def donate(self, giver: int, amount: int) -> None:\n'
+     '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+     "        self._weth_move(giver, self.vault_address, amount)\n"
+     "        self._mint(giver, amount)\n"),
+)
+
+
+def collision_donation_only() -> int:
+    """Run the collision/donation checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — collision donation differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in COLLISION_DONATION_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in COLLISION_DONATION_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("collision donation executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — collision donation differential: {message}")
+        return 1
+    print(f"OK — collision donation differential: {len(expected)} case/side observations")
+    return 0
+
+
+def collision_donation_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test the collision evaluator and donation classifier."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-collision-donation-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
+        originals = {"checker": checker.read_text(), "oracle": model.read_text()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--collision-donation-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("collision-donation baseline is not green before mutations")
+        for label, needle, file_key, old, new in COLLISION_DONATION_PERTURBATIONS:
+            path = checker if file_key == "checker" else model
+            original = originals[file_key]
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — collision donation differential:")
+                and needle in line
+            ), None)
+            path.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--collision-donation-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--collision-donation-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--collision-donation-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — collision donation self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — collision donation self-test control: {record['label']}")
+    print(f"OK — collision donation self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
 DISPOSITION_PERTURBATIONS = (
     # Dropping a successor must leave the superseded obligation visibly
     # uncovered rather than quietly discharged by a name that no longer runs.
@@ -4552,7 +4927,7 @@ def disposition_self_test(report_path: Path | None = None) -> int:
 
 def registered_self_test(report_path: Path | None = None) -> int:
     """Compose the legacy, causal-return, child-return, disposition, rollback-order,
-    and capacity-provenance controls."""
+    capacity-provenance, and collision-donation controls."""
     if report_path is None:
         legacy_status = self_test(None)
         causal_status = causal_return_self_test(None)
@@ -4560,9 +4935,11 @@ def registered_self_test(report_path: Path | None = None) -> int:
         disposition_status = disposition_self_test(None)
         rollback_order_status = rollback_order_self_test(None)
         capacity_provenance_status = capacity_provenance_self_test(None)
+        collision_donation_status = collision_donation_self_test(None)
         return 1 if (legacy_status or causal_status or child_status
                      or disposition_status or rollback_order_status
-                     or capacity_provenance_status) else 0
+                     or capacity_provenance_status
+                     or collision_donation_status) else 0
     with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
         legacy_path = Path(tmp) / "legacy.json"
         causal_path = Path(tmp) / "causal-return.json"
@@ -4570,12 +4947,14 @@ def registered_self_test(report_path: Path | None = None) -> int:
         disposition_path = Path(tmp) / "disposition.json"
         rollback_order_path = Path(tmp) / "rollback-order.json"
         capacity_provenance_path = Path(tmp) / "capacity-provenance.json"
+        collision_donation_path = Path(tmp) / "collision-donation.json"
         legacy_status = self_test(legacy_path)
         causal_status = causal_return_self_test(causal_path)
         child_status = child_return_self_test(child_path)
         disposition_status = disposition_self_test(disposition_path)
         rollback_order_status = rollback_order_self_test(rollback_order_path)
         capacity_provenance_status = capacity_provenance_self_test(capacity_provenance_path)
+        collision_donation_status = collision_donation_self_test(collision_donation_path)
         try:
             combined = {
                 "schema": 2,
@@ -4585,11 +4964,13 @@ def registered_self_test(report_path: Path | None = None) -> int:
                 "disposition": json.loads(disposition_path.read_text()),
                 "rollbackOrder": json.loads(rollback_order_path.read_text()),
                 "capacityProvenance": json.loads(capacity_provenance_path.read_text()),
+                "collisionDonation": json.loads(collision_donation_path.read_text()),
                 "returncodes": {"legacy": legacy_status, "causalReturn": causal_status,
                                 "childReturn": child_status,
                                 "disposition": disposition_status,
                                 "rollbackOrder": rollback_order_status,
-                                "capacityProvenance": capacity_provenance_status},
+                                "capacityProvenance": capacity_provenance_status,
+                                "collisionDonation": collision_donation_status},
             }
         except (OSError, json.JSONDecodeError) as exc:
             print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
@@ -4597,7 +4978,8 @@ def registered_self_test(report_path: Path | None = None) -> int:
         report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
     return 1 if (legacy_status or causal_status or child_status
                  or disposition_status or rollback_order_status
-                 or capacity_provenance_status) else 0
+                 or capacity_provenance_status
+                 or collision_donation_status) else 0
 
 
 def causal_return_only() -> int:
@@ -4999,6 +5381,16 @@ if __name__ == "__main__":
         raise SystemExit(capacity_provenance_self_test(report))
     if "--capacity-provenance-only" in args:
         raise SystemExit(capacity_provenance_only())
+    if "--collision-donation-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(collision_donation_self_test(report))
+    if "--collision-donation-only" in args:
+        raise SystemExit(collision_donation_only())
     if "--self-test" in args:
         report = None
         if "--self-test-report" in args:

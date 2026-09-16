@@ -90,6 +90,8 @@ CASES = (
     "capacity-a-u-zero-flows",
     "capacity-supply-ceiling-flows",
     "composition-exact-child-provenance",
+    "composition-collision-premise-pairs",
+    "donation-classification",
     "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
