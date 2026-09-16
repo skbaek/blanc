@@ -18,8 +18,7 @@
       ]
     },
     "unimplemented": {
-      "attack-economics-offset-comparator": "SF section 11 economics: the frozen attack transcript and the profitable offset-disabled comparator. Blocked on the reserved decision prorata-vault-offset-control-definition, which is with the user; the comparator's definition is not settled, so no case here may assume one.",
-      "callback-and-child-failure-rollback": "SF section 11 rollback/order: storage and logs before and after a failed child on the exact pair, including the spent share allowance and the outbound burn, distinguishing a rejected transaction from an accepted reverting execution. Not yet implemented."
+      "attack-economics-offset-comparator": "SF section 11 economics: the frozen attack transcript and the profitable offset-disabled comparator. Blocked on the reserved decision prorata-vault-offset-control-definition, which is with the user; the comparator's definition is not settled, so no case here may assume one."
     }
   },
   "kind": "coverage-declaration",
@@ -27,7 +26,7 @@
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 2
   },
-  "producerSha256": "216c4216fc1fba26603242ae4eb0c2a19d0c856364de7b38902eef4b06e671a1",
+  "producerSha256": "ef44bb263b4bdb06970c731851e6e8cd87009be6ee2b983fc9054619f3aa06de",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -109,6 +108,10 @@
       "foreign-child-redeem-revert",
       "callback-and-child-failure-rollback",
       "attack-economics-offset-comparator",
+      "event-order-mint",
+      "event-order-withdraw",
+      "event-order-redeem",
+      "quote-timing-pre-transfer",
       "mint-inexact",
       "redeem-inexact",
       "withdraw-inexact",
@@ -180,7 +183,7 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "f433629d2e0a634263b59f5406f7fbfff80e0e9c6abffb7a341d39b0dc25b4fb",
+      "scripts/check-prorata-weth-vault-differential.py": "24c4307f041b965675681e2187d43ff2420b88d877f239227189b9474ecc7782",
       "scripts/evm_return_capture.py": "1b02fa9c00abe0761cad3c54e69282828a20d2ee5a96d929274b9b095e3d1adf",
       "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
     }

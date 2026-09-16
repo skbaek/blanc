@@ -83,6 +83,10 @@ CASES = (
                "boolean-2", "revert")),
     "callback-and-child-failure-rollback",
     "attack-economics-offset-comparator",
+    "event-order-mint",
+    "event-order-withdraw",
+    "event-order-redeem",
+    "quote-timing-pre-transfer",
     "mint-inexact", "redeem-inexact",
     "withdraw-inexact", "approve-and-transfer", "transfer-from-finite",
     "transfer-from-infinite", "allowance-underflow-rollback",
@@ -125,11 +129,6 @@ SUPERSEDED_CASES = {
 # Being listed here is never coverage: these cases stay declared and
 # uncredited until an implemented channel exists.
 UNIMPLEMENTED_CASES = {
-    "callback-and-child-failure-rollback":
-        "SF section 11 rollback/order: storage and logs before and after a "
-        "failed child on the exact pair, including the spent share allowance "
-        "and the outbound burn, distinguishing a rejected transaction from an "
-        "accepted reverting execution. Not yet implemented.",
     "attack-economics-offset-comparator":
         "SF section 11 economics: the frozen attack transcript and the "
         "profitable offset-disabled comparator. Blocked on the reserved "

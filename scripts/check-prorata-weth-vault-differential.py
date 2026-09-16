@@ -146,6 +146,11 @@ EXECUTED_CASE_CHANNELS = {
     "event-order-deposit": ("jaune",),
     "event-order-share-transfer": ("jaune",),
     "return-capture-controls": ("jaune",),
+    "callback-and-child-failure-rollback": ("jaune",),
+    "event-order-mint": ("jaune",),
+    "event-order-withdraw": ("jaune",),
+    "event-order-redeem": ("jaune",),
+    "quote-timing-pre-transfer": ("jaune",),
     "causal-return-deposit-caller-receiver": ("jaune",),
     "causal-return-deposit-caller-distinct-receiver": ("jaune",),
     "causal-return-mint-caller-receiver": ("jaune",),
@@ -1555,6 +1560,130 @@ def check_adversarial_child_returns_and_rollback(run: Runner) -> None:
                                before, result)
 
 
+def _exact_rollback_before(before: dict) -> dict:
+    """The expected pre-state projection for exact-pair rollback evidence.
+
+    The flagship rollback check compares the post-state of an accepted
+    reverting execution against this projection.  It is a plain copy: any
+    divergence the comparison reports is a real rollback leak, and mutants
+    corrupt this projection to prove the comparison bites.
+    """
+    return deepcopy(before)
+
+
+def _expect_oracle_revert(label: str, model: V.Vault, cls: str, method: str,
+                          *args) -> bool:
+    """Require the independent oracle to predict one revert class exactly."""
+    committed, exc, _ = oracle_transaction(model, method, *args)
+    if committed:
+        fail(f"{label}: the oracle unexpectedly accepted the call")
+        return False
+    if exc.cls != cls:
+        fail(f"{label}: the oracle reverted with {exc.cls}, expected {cls}")
+        return False
+    return True
+
+
+def check_exact_child_failure_rollback(run: Runner) -> None:
+    """Failed-child storage/log rollback on the exact pair (SF section 11).
+
+    Every sub-case executes against the exact WETH runtime at the configured
+    account: no foreign code, no lookalike.  The outbound cases fail after
+    the vault's own allowance spend, so the rollback must restore the spent
+    allowance; the inbound cases fail at the child before any vault write.
+    The oracle predicts each revert class independently, and every revert
+    is required to be an accepted transaction with exactly one status-0
+    receipt and no logs.
+
+    A post-burn child failure is unreachable on the exact pair, and this is
+    shown rather than assumed.  A withdraw above the vault row always needs
+    at least ``D = S + O`` shares, which exceeds the supply, and a redeem
+    payout never exceeds the row, so the vault debit cannot fail after a
+    successful burn; and the exact WETH credit wraps instead of reverting
+    (executed: receiver ``U - 5`` credited ``10`` lands on ``4`` with
+    status 1, matching the wrap-aware ``creditLoss`` algebra), so the
+    receiver credit cannot fail either.  Burn-rollback-on-outbound-failure
+    therefore executes only against a foreign child, which the existing
+    foreign-child withdraw/redeem revert rows already cover.  The oracle's
+    ``weth-balance-overflow`` revert class predicts a revert the exact
+    program does not perform; changing that prediction is a reserved oracle
+    semantic decision, so no case here exercises a wrapping credit.
+
+    Exact WETH transfer/transferFrom carries no recipient callback (SF
+    section 5), so the failed-child trace contains no callback frame; that
+    negative is established by the exact zero-log and complete-rollback
+    assertions below, which any callback with observable effects would
+    break.  No callback is manufactured.
+    """
+    delegate_key = 2
+    delegate = signer_address(delegate_key)
+    setup = funded_pair(run, "child-failure-rollback", {KEY: 1000}, {KEY: 2000},
+                        extra_signers=(delegate_key,))
+    if setup is None:
+        return
+    setup_results, model, _ = setup
+    funding_alloc = setup_results[-1]["alloc"]
+    funded_model = deepcopy(model)
+    steps = run_sequence(run, "child-failure-rollback", funding_alloc, [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("approve delegate", VAULT_ADDR,
+         abi("approve(address,uint256)", delegate, 150_000), 0, KEY),
+    ])
+    if steps is None:
+        return
+    for method, args in (("deposit", (run.user, 100, run.user)),
+                         ("approve", (run.user, delegate, 150_000))):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"child-failure-rollback oracle rejected {method}")
+            return
+    funded = steps[1]["alloc"]
+    if not _expect_oracle_revert("child-failure withdraw burn-after-spend", model,
+                                 "insufficient-balance", "withdraw",
+                                 delegate, 101, delegate, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure withdraw burn-after-spend",
+        _exact_rollback_before(funded),
+        run.call(funded,
+                 abi("withdraw(uint256,address,address)", 101, delegate, run.user),
+                 signing_key=delegate_key,
+                 nonce=_next_nonce(funded, delegate_key)))
+    if not _expect_oracle_revert("child-failure withdraw owner-burn", model,
+                                 "insufficient-balance", "withdraw",
+                                 run.user, 101, run.user, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure withdraw owner-burn",
+        _exact_rollback_before(funded),
+        run.call(funded,
+                 abi("withdraw(uint256,address,address)", 101, run.user, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funded, KEY)))
+    if not _expect_oracle_revert("child-failure deposit allowance", funded_model,
+                                 "weth-insufficient-allowance", "deposit",
+                                 run.user, 2001, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure deposit allowance", _exact_rollback_before(funding_alloc),
+        run.call(funding_alloc, abi("deposit(uint256,address)", 2001, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funding_alloc, KEY)))
+    if not _expect_oracle_revert("child-failure deposit balance", model,
+                                 "weth-insufficient-balance", "deposit",
+                                 run.user, 901, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure deposit balance", _exact_rollback_before(funded),
+        run.call(funded, abi("deposit(uint256,address)", 901, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funded, KEY)))
+    rejected = run.call(funding_alloc, abi("deposit(uint256,address)", 1, run.user),
+                        signing_key=KEY, nonce=999999)
+    rejected_body = rejected.get("result", {})
+    if not rejected_body.get("rejected"):
+        fail("child-failure rejected transaction was not rejected before EVM execution")
+    elif rejected_body.get("receipts"):
+        fail("child-failure rejected transaction unexpectedly carries receipts")
+
+
 def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
     """Read a one-word capacity/conversion result through the Jaune recorder."""
     _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
@@ -1999,6 +2128,44 @@ def check_share_transfer_event(run: Runner) -> None:
         fail("the share Transfer's from/to topics are wrong")
     if int(entry["data"], 16) != 1500:
         fail("the share Transfer's amount word is wrong")
+
+
+def check_mint_event_order(run: Runner) -> None:
+    """SF section 5: mint emits the same inbound order as a deposit.
+
+    The child's Transfer, then the share Transfer, then Deposit, with the
+    oracle-quoted asset input and the exact share output as words.
+    """
+    shares = 2000
+    assets = V.preview_mint(shares, 0, 0)
+    result = run.call(run.alloc(10 ** 18, 10 ** 18),
+                      abi("mint(uint256,address)", shares, run.user))
+    _deposit_events("mint event order", result, run.user, run.user,
+                    assets, shares)
+
+
+def check_outbound_event_order(run: Runner) -> None:
+    """SF section 5 D8: burn, then the outbound WETH child, then Withdraw.
+
+    This is the explicit outbound order the inbound-only deposit check never
+    observed.  Both flows share it: withdraw burns the quoted shares for
+    exact assets, redeem burns exact shares for the quoted assets.
+    """
+    seeded_shares, seeded_assets = 5001, 7
+    world = run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares},
+                      seeded_shares, {word(VAULT_ADDR): word(seeded_assets)})
+    want = 3
+    shares = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 want, run.user, run.user))
+    _withdraw_events("outbound-order withdraw", result, run.user, run.user,
+                     run.user, want, shares)
+    burn = 2000
+    assets = V.convert_to_assets(burn, seeded_assets, seeded_shares)
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 burn, run.user, run.user))
+    _withdraw_events("outbound-order redeem", result, run.user, run.user,
+                     run.user, assets, burn)
 
 
 def abi_string(value: str) -> bytes:
@@ -2461,6 +2628,74 @@ def check_causal_outbound_action_returns(run: Runner) -> None:
             _outbound_return_case(run, method, role, owner, receiver, allowance)
 
 
+def check_pre_transfer_quotes(run: Runner) -> None:
+    """SF section 5: every flow quotes at the pre-transfer state.
+
+    Each flow executes from a fresh seeded prestate and its observed output
+    must equal the oracle quote at that pre-state.  The post-transfer quote
+    — the value a moved quote would produce — is computed alongside and must
+    *differ*: a witness that agrees both ways could not tell the orders
+    apart, so an insensitive witness fails the check instead of passing
+    vacuously.
+    """
+    seeded_shares, seeded_assets = 5001, 7
+    user_weth = 10 ** 18
+
+    def world() -> dict:
+        return run.alloc(user_weth, user_weth, {run.user: seeded_shares},
+                         seeded_shares,
+                         {word(VAULT_ADDR): word(seeded_assets)})
+
+    assets = 4
+    pre = V.convert_to_shares(assets, seeded_assets, seeded_shares)
+    post = V.convert_to_shares(assets, seeded_assets + assets, seeded_shares)
+    if post == pre:
+        fail("quote-timing deposit witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("deposit(uint256,address)", assets, run.user))
+    if not _accepted_success("quote-timing deposit", result):
+        return
+    vault, _ = vault_state(result)
+    expect("quote-timing deposit minted", run.supply(vault) - seeded_shares, pre)
+
+    shares = 2000
+    pre = V.preview_mint(shares, seeded_assets, seeded_shares)
+    post = V.preview_mint(shares, seeded_assets + pre, seeded_shares)
+    if post == pre:
+        fail("quote-timing mint witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("mint(uint256,address)", shares, run.user))
+    if not _accepted_success("quote-timing mint", result):
+        return
+    _, weth = vault_state(result)
+    expect("quote-timing mint paid", user_weth - storage_get(weth, run.user), pre)
+
+    want = 3
+    pre = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    post = V.preview_withdraw(want, seeded_assets - want, seeded_shares)
+    if post == pre:
+        fail("quote-timing withdraw witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("withdraw(uint256,address,address)",
+                                   want, run.user, run.user))
+    if not _accepted_success("quote-timing withdraw", result):
+        return
+    vault, _ = vault_state(result)
+    expect("quote-timing withdraw burned", seeded_shares - run.supply(vault), pre)
+
+    pre = V.convert_to_assets(shares, seeded_assets, seeded_shares)
+    post = V.convert_to_assets(shares, seeded_assets - pre, seeded_shares)
+    if post == pre:
+        fail("quote-timing redeem witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("redeem(uint256,address,address)",
+                                   shares, run.user, run.user))
+    if not _accepted_success("quote-timing redeem", result):
+        return
+    _, weth = vault_state(result)
+    expect("quote-timing redeem paid", storage_get(weth, run.user) - user_weth, pre)
+
+
 def check_eels_action_returns(run: Runner) -> None:
     """Pinned EELS executes the same seven mutation-return observations."""
     _eels_root()
@@ -2840,6 +3075,10 @@ CHECKS = [
     check_causal_outbound_action_returns,
     check_malformed_calls_revert,
     check_value_bearing_call_reverts,
+    check_exact_child_failure_rollback,
+    check_mint_event_order,
+    check_outbound_event_order,
+    check_pre_transfer_quotes,
 ]
 
 JAUNE_CASES_BY_CHECK = {
@@ -2863,6 +3102,10 @@ JAUNE_CASES_BY_CHECK = {
     "check_action_returns": ("return-capture-controls",),
     "check_malformed_calls_revert": ("malformed-dispatch",),
     "check_value_bearing_call_reverts": ("nonpayable-rollbacks",),
+    "check_exact_child_failure_rollback": ("callback-and-child-failure-rollback",),
+    "check_mint_event_order": ("event-order-mint",),
+    "check_outbound_event_order": ("event-order-withdraw", "event-order-redeem"),
+    "check_pre_transfer_quotes": ("quote-timing-pre-transfer",),
 }
 
 EELS_CASES_BY_CHECK = {
@@ -3040,6 +3283,42 @@ CHILD_RETURN_PERTURBATIONS = (
     ("foreign child operational return word", "return bytes differ from expected operational word",
      'expected_word = returned.' 'to_bytes(32, "big")',
      'expected_word = (returned + 1).to_bytes(32, "big")'),
+)
+
+
+ROLLBACK_ORDER_PERTURBATIONS = (
+    ("rollback executed-ID omission",
+     "callback-and-child-failure-rollback/jaune/blanc",
+     "    check_exact_child_failure_rollback,\n",
+     "    # omitted by rollback-order coverage control\n"),
+    ("outbound event-order omission",
+     "event-order-withdraw/jaune/blanc",
+     "    check_outbound_event_order,\n",
+     "    # omitted by outbound-order coverage control\n"),
+    ("mint event-order omission",
+     "event-order-mint/jaune/blanc",
+     "    check_mint_event_order,\n",
+     "    # omitted by mint-order coverage control\n"),
+    ("quote-timing omission",
+     "quote-timing-pre-transfer/jaune/blanc",
+     "    check_pre_transfer_quotes,\n",
+     "    # omitted by quote-timing coverage control\n"),
+    ("exact rollback projection", "account content differs from its complete pre-state",
+     '    return deep' 'copy(before)\n\n\ndef _expect_oracle_revert',
+     '    expected = deepcopy(before)\n    expected[address(VAULT_ADDR)]["storage"]'
+     '[word(0)] = word(1)\n    return expected\n\n\ndef _expect_oracle_revert'),
+    ("rejected transaction distinction", "was not rejected before EVM execution",
+     'nonce=999' '999',
+     'nonce=_next_nonce(funding_alloc, KEY)'),
+    ("post-transfer quote confusion", "quote-timing deposit minted",
+     '    expect("quote-timing deposit minted", run.supply(vault) - seeded'
+     '_shares, pre)',
+     '    expect("quote-timing deposit minted", run.supply(vault) - seeded_shares, post)'),
+    ("outbound event words", "outbound-order withdraw: Withdraw words differ",
+     '    _withdraw_events("outbound-order withdraw", result, run.user, run.user,\n'
+     '                     run.user, want, shar' 'es)',
+     '    _withdraw_events("outbound-order withdraw", result, run.user, run.user,\n'
+     '                     run.user, want, shares + 1)'),
 )
 
 
@@ -3660,6 +3939,79 @@ def child_return_self_test(report_path: Path | None = None) -> int:
     return 0
 
 
+def rollback_order_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test exact-pair rollback, outbound order, and quote timing."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-rollback-order-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--rollback-order-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("rollback-order baseline is not green before mutations")
+        for label, needle, old, new in ROLLBACK_ORDER_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — rollback order differential:")
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--rollback-order-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--rollback-order-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--rollback-order-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — rollback order self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — rollback order self-test control: {record['label']}")
+    print(f"OK — rollback order self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
 DISPOSITION_PERTURBATIONS = (
     # Dropping a successor must leave the superseded obligation visibly
     # uncovered rather than quietly discharged by a name that no longer runs.
@@ -3778,23 +4130,26 @@ def disposition_self_test(report_path: Path | None = None) -> int:
 
 
 def registered_self_test(report_path: Path | None = None) -> int:
-    """Compose the legacy, causal-return, child-return, and disposition controls."""
+    """Compose the legacy, causal-return, child-return, disposition, and rollback-order controls."""
     if report_path is None:
         legacy_status = self_test(None)
         causal_status = causal_return_self_test(None)
         child_status = child_return_self_test(None)
         disposition_status = disposition_self_test(None)
+        rollback_order_status = rollback_order_self_test(None)
         return 1 if (legacy_status or causal_status or child_status
-                     or disposition_status) else 0
+                     or disposition_status or rollback_order_status) else 0
     with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
         legacy_path = Path(tmp) / "legacy.json"
         causal_path = Path(tmp) / "causal-return.json"
         child_path = Path(tmp) / "child-return.json"
         disposition_path = Path(tmp) / "disposition.json"
+        rollback_order_path = Path(tmp) / "rollback-order.json"
         legacy_status = self_test(legacy_path)
         causal_status = causal_return_self_test(causal_path)
         child_status = child_return_self_test(child_path)
         disposition_status = disposition_self_test(disposition_path)
+        rollback_order_status = rollback_order_self_test(rollback_order_path)
         try:
             combined = {
                 "schema": 2,
@@ -3802,16 +4157,18 @@ def registered_self_test(report_path: Path | None = None) -> int:
                 "causalReturn": json.loads(causal_path.read_text()),
                 "childReturn": json.loads(child_path.read_text()),
                 "disposition": json.loads(disposition_path.read_text()),
+                "rollbackOrder": json.loads(rollback_order_path.read_text()),
                 "returncodes": {"legacy": legacy_status, "causalReturn": causal_status,
                                 "childReturn": child_status,
-                                "disposition": disposition_status},
+                                "disposition": disposition_status,
+                                "rollbackOrder": rollback_order_status},
             }
         except (OSError, json.JSONDecodeError) as exc:
             print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
             return 1
         report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
     return 1 if (legacy_status or causal_status or child_status
-                 or disposition_status) else 0
+                 or disposition_status or rollback_order_status) else 0
 
 
 def causal_return_only() -> int:
@@ -3876,6 +4233,66 @@ def child_return_only() -> int:
             print(f"REGRESSION — child return differential: {message}")
         return 1
     print(f"OK — child return differential: {len(expected)} case/channel/side observations")
+    return 0
+
+
+ROLLBACK_ORDER_CASES = (
+    "callback-and-child-failure-rollback",
+    "event-order-mint",
+    "event-order-withdraw",
+    "event-order-redeem",
+    "quote-timing-pre-transfer",
+)
+
+ROLLBACK_ORDER_CHECK_NAMES = frozenset({
+    "check_exact_child_failure_rollback",
+    "check_mint_event_order",
+    "check_outbound_event_order",
+    "check_pre_transfer_quotes",
+})
+
+
+def rollback_order_only() -> int:
+    """Run the rollback/order checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — rollback order differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in ROLLBACK_ORDER_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in ROLLBACK_ORDER_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("rollback order executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — rollback order differential: {message}")
+        return 1
+    print(f"OK — rollback order differential: {len(expected)} case/side observations")
     return 0
 
 
@@ -3975,6 +4392,16 @@ if __name__ == "__main__":
         raise SystemExit(causal_return_self_test(report))
     if "--causal-return-only" in args:
         raise SystemExit(causal_return_only())
+    if "--rollback-order-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(rollback_order_self_test(report))
+    if "--rollback-order-only" in args:
+        raise SystemExit(rollback_order_only())
     if "--self-test" in args:
         report = None
         if "--self-test-report" in args:
