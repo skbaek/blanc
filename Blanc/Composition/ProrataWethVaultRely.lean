@@ -245,6 +245,199 @@ theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
       ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩
       ⟨⟨pre_, memoryWf⟩, config, code⟩).inv
 
+/-! ## Vault-frame configuration over actual retained frames
+
+`VaultFrameInv` carries the ledger, the memory well-formedness, and the
+configuration together because the rung's target-frame obligation needs all
+three at once.  A history consumer that walks the actual retained frame tree
+(`Exec.LocatedFrame.EnteringOccurrence`) needs only the configuration — the
+exact vault runtime at `vault`, the exact WETH runtime at the asset account,
+distinctness and non-precompile, and the vault's own frames running the vault
+code — at three places: the parent's spawning instruction, the child's root,
+and the parent's resumed continuation.  The configuration is a code fact, so
+it transports through every same-frame edge and into every child by code
+preservation alone, with no rely obligation about the child's behaviour and
+no settlement filter: a child that later rolls back still entered with the
+configuration in force. -/
+
+/-- The code half of `VaultFrameInv`. -/
+structure VaultFrameConfiguration (vault : Adr) (sevm : Sevm) (pre : Devm) :
+    Prop where
+  /-- The asset pinned to the exact WETH runtime at a distinct, non-precompile
+  account. -/
+  config : DirectWethConfiguration vault sevm pre
+  /-- The vault account holds the exact vault runtime. -/
+  installed : some (pre.getCode vault).toList =
+    Prog.compile Blanc.ProrataWethVault.vault
+  /-- A frame at the vault runs the vault's code. -/
+  code : sevm.currentTarget = vault →
+    some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault
+
+/-- The rung's frame invariant carries the configuration. -/
+theorem VaultFrameInv.configuration {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (inv : VaultFrameInv vault sevm pre) :
+    VaultFrameConfiguration vault sevm pre :=
+  ⟨inv.config, inv.preWf.pre.code, inv.code⟩
+
+/-- The configured root supplies the configuration of a frame at that state
+whose own code is the vault's whenever the frame is the vault's. -/
+theorem ConfiguredRoot.configuration {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (root : ConfiguredRoot vault sevm pre)
+    (code : sevm.currentTarget = vault →
+      some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault) :
+    VaultFrameConfiguration vault sevm pre :=
+  ⟨root.configured, root.installed, code⟩
+
+/-- The installed vault runtime is nonempty. -/
+private theorem vaultCode_toList_ne_nil {vault : Adr} {pre : Devm}
+    (installed : some (pre.getCode vault).toList =
+      Prog.compile Blanc.ProrataWethVault.vault) :
+    (pre.getCode vault).toList ≠ [] := by
+  intro empty
+  rw [empty] at installed
+  exact Prog.compile_ne_nil installed.symm
+
+/-- The configuration survives any same-frame step that preserves nonempty
+code. -/
+theorem VaultFrameConfiguration.of_codePreserve
+    {vault : Adr} {sevm : Sevm} {pre inter : Devm}
+    (configuration : VaultFrameConfiguration vault sevm pre)
+    (preserve : Devm.CodePreserve pre inter) :
+    VaultFrameConfiguration vault sevm inter := by
+  refine ⟨configuration.config.of_codePreserve rfl preserve, ?_,
+    configuration.code⟩
+  rw [preserve vault (vaultCode_toList_ne_nil configuration.installed)]
+  exact configuration.installed
+
+/-- One actual same-frame continuation edge preserves nonempty code, whether
+it is a plain step, an immediately completed spawn, or a resumed child. -/
+private theorem _root_.Blanc.Exec.Deriv.ParentStep.codePreserve
+    {next node : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next node) :
+    Devm.CodePreserve node.devm next.devm := by
+  intro a nonempty
+  cases edge with
+  | cont hstep next =>
+      exact lift_core.stepCode (xl := .none) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩) a nonempty
+  | doneOk hstep henter hresume next =>
+      exact lift_core.stepCode (xl := .none) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
+        a nonempty
+  | runOk hstep henter child hresume next =>
+      exact lift_core.stepCode (xl := .some ⟨_, _⟩)
+        (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+          Linst.codePreserve_effect child)
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
+        a nonempty
+
+/-- **Same-frame transport.**  The configuration at a frame root holds at
+every node of that frame's actual same-frame chronology, including every
+continuation resumed after a child. -/
+theorem VaultFrameConfiguration.parentPrefix {vault : Adr}
+    {root node : Exec.Deriv}
+    (sameFrame : Exec.Deriv.ParentPrefix root node)
+    (configuration : VaultFrameConfiguration vault root.sevm root.devm) :
+    VaultFrameConfiguration vault node.sevm node.devm := by
+  induction sameFrame with
+  | refl => exact configuration
+  | step head _ ih =>
+      apply ih
+      rw [head.sevm_eq]
+      exact configuration.of_codePreserve head.codePreserve
+
+/-- **Child-entry transport.**  A spawned interpreter child inherits the
+world's code and the block statics from the spawning instruction's pre-state.
+Its own frame runs the vault code whenever its target is the vault, provided
+the spawn is not a `CALLCODE`/`DELEGATECALL` from the vault's own frame —
+excluded either because the parent frame is foreign or because the child does
+not target the vault, which is what the vault's staged children satisfy (they
+target the asset, `wethAccount ≠ vault`). -/
+theorem VaultFrameConfiguration.childEntry {vault : Adr}
+    {pc nextPc : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
+    (entered : frame.enter = .run childEvm)
+    (configuration : VaultFrameConfiguration vault sevm pre)
+    (foreign : sevm.currentTarget ≠ vault ∨
+      childEvm.sta.currentTarget ≠ vault) :
+    VaultFrameConfiguration vault childEvm.sta childEvm.dyna := by
+  obtain ⟨x, _execAt, spawn, _⟩ := Evm.step_spawn_inv step
+  have childCode : Devm.CodePreserve pre childEvm.dyna := by
+    intro a _
+    rw [Frame.enter_run_getCode entered a]
+    exact Xinst.step_spawn_getCode spawn a
+  have childStat : childEvm.sta.benvStat = sevm.benvStat := by
+    rw [Frame.enter_run_benvStat entered]
+    exact Xinst.step_spawn_benvStat spawn
+  refine ⟨configuration.config.of_codePreserve childStat childCode, ?_, ?_⟩
+  · rw [childCode vault (vaultCode_toList_ne_nil configuration.installed)]
+    exact configuration.installed
+  · intro childTarget
+    have targetEq := Frame.enter_run_currentTarget entered
+    rw [Frame.enter_run_code entered]
+    rw [childTarget] at targetEq
+    rcases Xinst.step_spawn_source spawn with empty | same | source
+    · rw [← targetEq] at empty
+      exact absurd empty (not_empty_of_compile configuration.installed)
+    · rw [← targetEq] at same
+      rcases foreign with parentNe | childNe
+      · exact absurd same.symm parentNe
+      · exact absurd childTarget childNe
+    · rw [← targetEq] at source
+      rw [source (not_delegation_of_compile configuration.installed)]
+      exact configuration.installed
+
+/-- **Retained-frame transport.**  The configuration at a retained parent
+frame's root holds at the parent's actual spawning occurrence, at the entered
+child's root, and at the parent's resumed continuation, for every retained
+child that `Exec.LocatedFrame.EnteringOccurrence` exhibits.  The resumed
+continuation is re-exported in the shape of `EnteringOccurrence.spawns` so a
+consumer keeps the exact `runOk` equations. -/
+theorem VaultFrameConfiguration.enteringOccurrence {vault : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
+    (entering : Exec.LocatedFrame.EnteringOccurrence run child)
+    (configuration : VaultFrameConfiguration vault
+      entering.parent.frame.sevm entering.parent.frame.pre)
+    (foreign : entering.parent.frame.sevm.currentTarget ≠ vault ∨
+      child.frame.sevm.currentTarget ≠ vault) :
+    VaultFrameConfiguration vault
+        entering.occurrence.node.sevm entering.occurrence.node.devm ∧
+      VaultFrameConfiguration vault child.frame.sevm child.frame.pre ∧
+      ∃ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat) (post : Devm)
+          (step : Evm.step ⟨entering.occurrence.node.pc,
+            entering.occurrence.node.sevm, entering.occurrence.node.devm⟩ =
+              .spawn frame resume nextPc)
+          (entered : frame.enter = .run
+            ⟨child.frame.pc, child.frame.sevm, child.frame.pre⟩)
+          (resumed : resume.run (frame.settle child.frame.out) = .ok post)
+          (next : Exec nextPc entering.occurrence.node.sevm post
+            entering.occurrence.node.exn),
+        entering.occurrence.node.exc =
+            .runOk step entered child.frame.run resumed next ∧
+          VaultFrameConfiguration vault entering.occurrence.node.sevm post := by
+  have nodeConfiguration := configuration.parentPrefix entering.sameFrame
+  have frameEq := entering.sameFrame.sevm_eq
+  obtain ⟨frame, resume, nextPc, post, step, entered, resumed, next, exc⟩ :=
+    entering.spawns
+  refine ⟨nodeConfiguration, ?_, frame, resume, nextPc, post, step, entered,
+    resumed, next, exc, ?_⟩
+  · refine nodeConfiguration.childEntry step entered ?_
+    rw [frameEq]
+    exact foreign
+  · refine nodeConfiguration.of_codePreserve ?_
+    intro a nonempty
+    exact lift_core.stepCode
+      (xl := .some ⟨⟨child.frame.pc, child.frame.sevm, child.frame.pre⟩,
+        child.frame.out⟩)
+      (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+        Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+        Linst.codePreserve_effect child.frame.run)
+      (by rw [step]; exact ⟨_, RunFrame.of_run entered, resumed.symm⟩)
+      a nonempty
+
 /-! ## Allowance-debit authorization
 
 The 09-08 transferFrom seam classifies each retained invocation's allowance
