@@ -5171,19 +5171,19 @@ PERTURBATIONS = [
     ("the virtual-share offset", "deposit shares",
      "O = 1000\n", "O = 1001\n"),
     ("convertToShares' rounding", "deposit shares",
-     "return representable(floor_div(a * denominator(supply), numerator(assets)))",
-     "return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
+     "return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))",
+     "return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))"),
     ("previewWithdraw's rounding", "withdraw shares",
-     "return representable(ceil_div(a * denominator(supply), numerator(assets)))"
+     "return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))"
      "\n\n\npreview_deposit",
-     "return representable(floor_div(a * denominator(supply), numerator(assets)))"
+     "return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))"
      "\n\n\npreview_deposit"),
     ("convertToAssets' rounding", "redeem weth[vault]",
-     "return representable(floor_div(s * numerator(assets), denominator(supply)))",
-     "return representable(ceil_div(s * numerator(assets), denominator(supply)))"),
+     "return representable(floor_div(s * numerator(assets, offset), denominator(supply, offset)))",
+     "return representable(ceil_div(s * numerator(assets, offset), denominator(supply, offset)))"),
     ("previewMint's rounding", "mint weth[vault]",
-     "return representable(ceil_div(s * numerator(assets), denominator(supply)))",
-     "return representable(floor_div(s * numerator(assets), denominator(supply)))"),
+     "return representable(ceil_div(s * numerator(assets, offset), denominator(supply, offset)))",
+     "return representable(floor_div(s * numerator(assets, offset), denominator(supply, offset)))"),
 ]
 
 CAUSAL_RETURN_PERTURBATIONS = (

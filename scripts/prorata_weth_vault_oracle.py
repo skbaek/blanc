@@ -47,18 +47,24 @@ def ceil_div(n: int, d: int) -> int:
     return -((-n) // d)
 
 
-def denominator(supply: int) -> int:
-    """`D = S + O`.  Nonzero because the root invariant caps `S` at `U - O`."""
-    return supply + O
+def denominator(supply: int, offset: int = O) -> int:
+    """`D = S + O`.  Nonzero on the frozen path, where the root invariant
+    caps `S` at `U - O`; zero at `O = 0, S = 0`, where the conversions
+    take the explicit bootstrap branch instead of dividing."""
+    return supply + offset
 
 
-def numerator(assets: int) -> int:
-    """`X = A + 1`, a mathematical integer in `[1, 2^256]`.
+def numerator(assets: int, offset: int = O) -> int:
+    """`X = A + 1` on the frozen path, a mathematical integer in `[1, 2^256]`;
+    `X = A` for the unoffset comparator.
 
-    The `A = U` case is why this is not a word: the model keeps it exact
-    rather than wrapping, exactly as the SF requires of the implementation.
+    The `+1` virtual-asset term belongs to the offset mechanism: the
+    approved unoffset comparator (user decision
+    `prorata-vault-offset-control-definition`) drops all virtual terms.
+    The `A = U` case is why the frozen path keeps it exact rather than
+    wrapping, exactly as the SF requires of the implementation.
     """
-    return assets + 1
+    return assets + (1 if offset else 0)
 
 
 def representable(value: int) -> int:
@@ -70,24 +76,36 @@ def representable(value: int) -> int:
 
 # --- the four exact conversions, in the SF's own order and rounding ---
 
-def convert_to_shares(a: int, assets: int, supply: int) -> int:
-    """`a * D / X`, rounded down."""
-    return representable(floor_div(a * denominator(supply), numerator(assets)))
+def convert_to_shares(a: int, assets: int, supply: int, offset: int = O) -> int:
+    """`a * D / X`, rounded down; `a` on the `O = 0, S = 0` bootstrap."""
+    if offset == 0 and supply == 0:
+        return representable(a)
+    return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))
 
 
-def preview_mint(s: int, assets: int, supply: int) -> int:
-    """`ceil(s * X / D)`."""
-    return representable(ceil_div(s * numerator(assets), denominator(supply)))
+def preview_mint(s: int, assets: int, supply: int, offset: int = O) -> int:
+    """`ceil(s * X / D)`; `s` on the `O = 0, S = 0` bootstrap."""
+    if offset == 0 and supply == 0:
+        return representable(s)
+    return representable(ceil_div(s * numerator(assets, offset), denominator(supply, offset)))
 
 
-def convert_to_assets(s: int, assets: int, supply: int) -> int:
-    """`s * X / D`, rounded down."""
-    return representable(floor_div(s * numerator(assets), denominator(supply)))
+def convert_to_assets(s: int, assets: int, supply: int, offset: int = O) -> int:
+    """`s * X / D`, rounded down; the empty comparator vault holds nothing."""
+    if offset == 0 and supply == 0:
+        if s == 0:
+            return 0
+        raise Revert("insufficient-balance")
+    return representable(floor_div(s * numerator(assets, offset), denominator(supply, offset)))
 
 
-def preview_withdraw(a: int, assets: int, supply: int) -> int:
-    """`ceil(a * D / X)`."""
-    return representable(ceil_div(a * denominator(supply), numerator(assets)))
+def preview_withdraw(a: int, assets: int, supply: int, offset: int = O) -> int:
+    """`ceil(a * D / X)`; the empty comparator vault holds nothing."""
+    if offset == 0 and supply == 0:
+        if a == 0:
+            return 0
+        raise Revert("insufficient-balance")
+    return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))
 
 
 preview_deposit = convert_to_shares
@@ -96,8 +114,10 @@ preview_redeem = convert_to_assets
 
 # --- capacity policy ---
 
-def share_room(supply: int) -> int:
-    return MAX_SUPPLY - supply
+def share_room(supply: int, offset: int = O) -> int:
+    """`U - O - S`: the root invariant caps `S` at `U - O`, so at
+    `offset == 0` the comparator vault may fill the whole word."""
+    return (U - offset) - supply
 
 
 def max_mint(receiver: int, assets: int, supply: int) -> int:
@@ -148,6 +168,9 @@ class Vault:
     weth_allowances: dict[tuple[int, int], int] = field(default_factory=dict)
     vault_address: int = 1
     logs: list = field(default_factory=list)
+    offset: int = O
+    """The virtual-share offset: frozen `O` on the production path, `0`
+    for the unoffset comparator (control 6 / review F5)."""
 
     # --- views ---
 
@@ -202,7 +225,7 @@ class Vault:
         self.allowances[(owner, spender)] = current - amount
 
     def _mint(self, receiver: int, shares: int) -> None:
-        if shares > share_room(self.supply):
+        if shares > share_room(self.supply, self.offset):
             raise Revert("supply-cap")
         self._credit(receiver, shares)
         self.supply += shares
@@ -219,8 +242,8 @@ class Vault:
         if receiver == 0:
             raise Revert("zero-receiver")
         assets, supply = self.total_assets(), self.supply
-        shares = convert_to_shares(a, assets, supply)
-        if shares > share_room(supply):
+        shares = convert_to_shares(a, assets, supply, self.offset)
+        if shares > share_room(supply, self.offset):
             raise Revert("supply-cap")
         self._spend_weth_allowance(caller, self.vault_address, a)
         self._weth_move(caller, self.vault_address, a)
@@ -235,8 +258,8 @@ class Vault:
         if receiver == 0:
             raise Revert("zero-receiver")
         assets, supply = self.total_assets(), self.supply
-        a = preview_mint(s, assets, supply)
-        if s > share_room(supply):
+        a = preview_mint(s, assets, supply, self.offset)
+        if s > share_room(supply, self.offset):
             raise Revert("supply-cap")
         self._spend_weth_allowance(caller, self.vault_address, a)
         self._weth_move(caller, self.vault_address, a)
@@ -253,7 +276,7 @@ class Vault:
         if owner == 0:
             raise Revert("zero-owner")
         assets, supply = self.total_assets(), self.supply
-        shares = preview_withdraw(a, assets, supply)
+        shares = preview_withdraw(a, assets, supply, self.offset)
         if caller != owner:
             self._spend_share_allowance(owner, caller, shares)
         self._burn(owner, shares)
@@ -270,7 +293,7 @@ class Vault:
         if owner == 0:
             raise Revert("zero-owner")
         assets, supply = self.total_assets(), self.supply
-        a = convert_to_assets(s, assets, supply)
+        a = convert_to_assets(s, assets, supply, self.offset)
         if caller != owner:
             self._spend_share_allowance(owner, caller, s)
         self._burn(owner, s)

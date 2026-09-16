@@ -258,14 +258,16 @@ def check_share_allowance_distinctions() -> None:
 def check_offset_bounds_the_first_depositor_attack() -> None:
     """The classic first-depositor inflation attack does not profit.
 
-    The control is a self-contained *unoffset* ERC-4626 reference — the
-    textbook `shares = assets` bootstrap and `a*S/A` thereafter — run on the
-    identical transcript.  It must either profit the attacker or mint the
-    victim nothing; if it does neither, this test is not testing the offset
-    and says so.  The reference is written out here rather than obtained by
-    setting `O = 0` in the oracle, because at `O = 0` and zero supply the
-    oracle's denominator is zero: having no bootstrap case is precisely what
-    the offset buys.
+    Goal control 6: removing the virtual offset makes the pre-registered
+    attack *profitable* in the independent oracle.  The control drives the
+    identical transcript through the production oracle itself with
+    `offset = 0` — no virtual terms, the explicit `O = 0, S = 0`
+    bootstrap minting `shares = assets` — and requires strictly positive
+    attacker profit (user decision
+    `prorata-vault-offset-control-definition`).  A bespoke re-implementation
+    would witness nothing about the oracle (review F5); the victim-starvation
+    disjunct the old predicate carried is dropped, since control 6 names
+    profitability specifically.
     """
     seed, donation, victim_assets = 1, 10 ** 6, 10 ** 6
 
@@ -280,38 +282,19 @@ def check_offset_bounds_the_first_depositor_attack() -> None:
     if victim_shares == 0:
         fail("offset-live victim was minted nothing")
 
-    supply, assets, shares = 0, 0, {}
-
-    def ref_deposit(who: int, a: int) -> int:
-        nonlocal supply, assets
-        minted = a if supply == 0 else a * supply // assets
-        shares[who] = shares.get(who, 0) + minted
-        supply += minted
-        assets += a
-        return minted
-
-    def ref_donate(a: int) -> None:
-        nonlocal assets
-        assets += a
-
-    def ref_redeem(who: int, s: int) -> int:
-        nonlocal supply, assets
-        out = s * assets // supply
-        shares[who] -= s
-        supply -= s
-        assets -= out
-        return out
-
-    ref_deposit(2, seed)
-    ref_donate(donation)
-    control_victim_shares = ref_deposit(3, victim_assets)
-    control_out = ref_redeem(2, shares[2])
+    control = V.Vault(offset=0)
+    control.weth = {2: seed + donation, 3: victim_assets}
+    control.weth_allowances = {(2, control.vault_address): V.U,
+                               (3, control.vault_address): V.U}
+    control.deposit(2, seed, 2)
+    control.donate(2, donation)
+    control_victim_shares = control.deposit(3, victim_assets, 3)
+    control_out = control.redeem(2, control.balance_of(2), 2, 2)
     control_profit = control_out - (seed + donation)
-    if control_profit <= 0 and control_victim_shares != 0:
+    if control_profit <= 0:
         fail("offset-disabled control does not bite: on the same transcript "
-             f"the unoffset reference neither profits (profit="
-             f"{control_profit}) nor starves the victim "
-             f"(shares={control_victim_shares})")
+             f"the unoffset production oracle does not profit (profit="
+             f"{control_profit}, victim shares={control_victim_shares})")
 
 
 
@@ -451,12 +434,8 @@ def self_test() -> int:
          "        self._weth_move(giver, self.vault_address, amount)\n"
          "        self._credit(giver, 1)"),
         ("a conversion rounds the wrong way", "convertToShares rounded up",
-         "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
-         '    """`a * D / X`, rounded down."""\n'
-         "    return representable(floor_div(a * denominator(supply), numerator(assets)))",
-         "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
-         '    """`a * D / X`, rounded down."""\n'
-         "    return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
+         "    return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))",
+         "    return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))"),
         ("transferFrom skips self allowance", "caller=owner transferFrom did not spend",
          "    def _spend_share_allowance(self, owner: int, spender: int, amount: int) -> None:\n"
          "        current = self.allowance(owner, spender)",
