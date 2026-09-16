@@ -83,6 +83,9 @@ CASES = (
                "boolean-2", "revert")),
     "callback-and-child-failure-rollback",
     "attack-economics-offset-comparator",
+    "attack-transcript-frozen",
+    "economics-cumulative-residue",
+    "economics-coalition-partition",
     "event-order-mint",
     "event-order-withdraw",
     "event-order-redeem",
@@ -139,13 +142,11 @@ SUPERSEDED_CASES = {
 # own reason, so an uncovered obligation is inspectable rather than silent.
 # Being listed here is never coverage: these cases stay declared and
 # uncredited until an implemented channel exists.
+# Empty: A5 implements the last blocked case (the comparator definition is
+# now settled by resolved user decision
+# `prorata-vault-offset-control-definition`).  The disposition mutants anchor
+# on the opening line below; keep it on its own line.
 UNIMPLEMENTED_CASES = {
-    "attack-economics-offset-comparator":
-        "SF section 11 economics: the frozen attack transcript and the "
-        "profitable offset-disabled comparator. Blocked on the reserved "
-        "decision prorata-vault-offset-control-definition, which is with the "
-        "user; the comparator's definition is not settled, so no case here "
-        "may assume one.",
 }
 
 CHANNELS = {

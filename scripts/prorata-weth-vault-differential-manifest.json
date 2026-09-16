@@ -17,16 +17,14 @@
         "supported-root-transfer-from-infinite"
       ]
     },
-    "unimplemented": {
-      "attack-economics-offset-comparator": "SF section 11 economics: the frozen attack transcript and the profitable offset-disabled comparator. Blocked on the reserved decision prorata-vault-offset-control-definition, which is with the user; the comparator's definition is not settled, so no case here may assume one."
-    }
+    "unimplemented": {}
   },
   "kind": "coverage-declaration",
   "producer": {
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
     "schema": 2
   },
-  "producerSha256": "d15e5241079d99787209e6ab2239f51c402213d64f9bae682d6ec5eb5c3dbb84",
+  "producerSha256": "7c4abaf9d0b046826a5b4a9dc317a90b473260ad55d58d223c0e5fda983db755",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -108,6 +106,9 @@
       "foreign-child-redeem-revert",
       "callback-and-child-failure-rollback",
       "attack-economics-offset-comparator",
+      "attack-transcript-frozen",
+      "economics-cumulative-residue",
+      "economics-coalition-partition",
       "event-order-mint",
       "event-order-withdraw",
       "event-order-redeem",
@@ -194,7 +195,7 @@
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "ab1265f18b174334a8f3f24ff864a4632fa7d1c147c561193437e0d9adf09033",
+      "scripts/check-prorata-weth-vault-differential.py": "06603b2f5d7423e4e5905e278945e3b81a9a8758867df981937cbde8edb1eb52",
       "scripts/evm_return_capture.py": "1b02fa9c00abe0761cad3c54e69282828a20d2ee5a96d929274b9b095e3d1adf",
       "scripts/gen-prorata-weth-wrap-proof.py": "954a826c222b670dad9f44f8ec7dc11edd1193626e79b5539d833bef41e43b3b",
       "scripts/prorata_weth_vault_oracle.py": "45115f726a344ce3f5fa8bf94483b788121508aa05fb8a88b1e5485f0f6cdeab"

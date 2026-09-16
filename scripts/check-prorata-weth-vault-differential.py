@@ -162,6 +162,10 @@ EXECUTED_CASE_CHANNELS = {
     "composition-exact-child-provenance": ("jaune",),
     "composition-collision-premise-pairs": ("jaune",),
     "donation-classification": ("jaune", "eels"),
+    "attack-transcript-frozen": ("jaune", "eels"),
+    "attack-economics-offset-comparator": ("jaune", "eels"),
+    "economics-cumulative-residue": ("jaune", "eels"),
+    "economics-coalition-partition": ("jaune", "eels"),
     "causal-return-deposit-caller-receiver": ("jaune", "eels"),
     "causal-return-deposit-caller-distinct-receiver": ("jaune", "eels"),
     "causal-return-mint-caller-receiver": ("jaune", "eels"),
@@ -4943,6 +4947,677 @@ def check_value_bearing_call_reverts(run: Runner) -> None:
                  abi("transfer(address,uint256)", 0xBEEF, 1), value=1)
 
 
+# --- A5 economics: cumulative residue, coalition partition, frozen transcript,
+# --- and the offset comparator (reviews F5/F6; decisions
+# --- g8-economics-rows-requeued-20260916, g8-attack-transcript-split-20260916,
+# --- prorata-vault-offset-control-definition) ---
+
+FROZEN_SEED, FROZEN_DONATION, FROZEN_VICTIM_ASSETS = 1, 10 ** 6, 10 ** 6
+"""The frozen first-depositor inflation transcript (control 6 / SF section 11)."""
+
+
+def _replay_model(label, funding, approvals, ops):
+    """Pure-model replay of a fixed funded history; per-step (out, post-model).
+
+    The Jaune legs bind each post-model to executed state with `_pair_state`;
+    the EELS legs bind theirs through `_eels_history`'s per-step state-root
+    projection and return pins.  Identities computed on these records
+    therefore speak about executed values, not just the model.
+    """
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={signer_address(key): amount
+                          for key, amount in funding.items()},
+                    weth_allowances={(signer_address(key), VAULT_ADDR): amount
+                                     for key, amount in approvals.items()})
+    records = []
+    for method, args in ops:
+        committed, out, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected fixed step {method}")
+            return None
+        records.append((out, model))
+    return records
+
+
+def _executed_supply_assets(run, result):
+    """`(S, A)` read from an executed post-state allocation."""
+    vault, weth = vault_state(result)
+    return run.supply(vault), storage_get(weth, VAULT_ADDR)
+
+
+def _dust_step(label, kind, pre, amount_in, out, post):
+    """Assert the one-step dust equation and residue bounds; return (rho, kappa).
+
+    All inputs are executed values the caller already bound to the oracle.
+    Mirrors `ProrataAccountingStep.dust_exact` and `rho_lt_price_divisor`
+    at the frozen offset: deposit `rho = a*D - m*X < X`, redeem
+    `rho = s*X - p*D < D`, donation `kappa = d*D`.
+    """
+    (pre_S, pre_A), (post_S, post_A) = pre, post
+    D_pre, X_pre = pre_S + V.O, pre_A + 1
+    D_post, X_post = post_S + V.O, post_A + 1
+    if kind == "deposit":
+        rho, kappa = amount_in * D_pre - out * X_pre, 0
+        if not 0 <= rho < X_pre:
+            fail(f"{label}: deposit residue {rho} outside [0, {X_pre})")
+    elif kind == "redeem":
+        rho, kappa = amount_in * X_pre - out * D_pre, 0
+        if not 0 <= rho < D_pre:
+            fail(f"{label}: redeem residue {rho} outside [0, {D_pre})")
+    elif kind == "donate":
+        rho, kappa = 0, amount_in * D_pre
+    else:
+        fail(f"{label}: unknown dust kind {kind!r}")
+        return (0, 0)
+    if X_post * D_pre != X_pre * D_post + rho + kappa:
+        fail(f"{label}: one-step dust equation fails")
+    return (rho, kappa)
+
+
+def _dust_cumulative(label, snaps, rhos_kappas):
+    """Assert `dust_trace_exact` over `(S, A)` snapshots: an exact equality.
+
+    `X_n * Prod D = X_0 * Prod D + Sum (rho + kappa) * weights`, with the
+    Lean identity's own weighting: steps before `i` contribute their `D`
+    below `i`, steps after `i + 1` above it.
+    """
+    n = len(rhos_kappas)
+    if len(snaps) != n + 1:
+        fail(f"{label}: {n} steps but {len(snaps)} snapshots")
+        return
+    D = [s + V.O for s, _ in snaps]
+    X = [a + 1 for _, a in snaps]
+
+    def prod(values):
+        total = 1
+        for value in values:
+            total *= value
+        return total
+
+    lhs = X[n] * prod(D[j] for j in range(n))
+    rhs = X[0] * prod(D[j] for j in range(1, n + 1))
+    for i, (rho, kappa) in enumerate(rhos_kappas):
+        rhs += ((rho + kappa) * prod(D[j] for j in range(i))
+                * prod(D[j] for j in range(i + 2, n + 1)))
+    if lhs != rhs:
+        fail(f"{label}: cumulative dust identity fails")
+
+
+def _coalition_identities(label, fin_S, fin_A, nonvictim_shares,
+                          victim_shares, inA, outA, sub, outO,
+                          phase_in, phase_out):
+    """Assert the P4 finite counterpart on executed accumulators.
+
+    The exact shares partition and flow-exact conservation, the open-context
+    bound `outA <= inA + outsideSubsidy`, and the stronger claim bound that
+    prices the coalition's remaining shares at the final state.  Mirrors
+    `ProrataAttackState.SharesPartition/FlowExact` and
+    `attacker_open_context` at the frozen offset.
+    """
+    if nonvictim_shares + victim_shares != fin_S:
+        fail(f"{label}: shares partition fails")
+    if fin_A + (outA + outO) + phase_out != (inA + sub) + phase_in:
+        fail(f"{label}: flow-exact conservation fails")
+    if not outA <= inA + sub:
+        fail(f"{label}: open-context bound fails")
+    claim = V.convert_to_assets(nonvictim_shares, fin_A, fin_S)
+    if not (outA + outO) + claim <= inA + sub:
+        fail(f"{label}: claim bound fails")
+
+
+def _frozen_transcript_steps(run, victim_key):
+    """Static calldata for the frozen transcript: the seed is first from empty,
+    so the attacker's shares are the static `convert_to_shares(1, 0, 0)`."""
+    victim = signer_address(victim_key)
+    attacker_shares = V.convert_to_shares(FROZEN_SEED, 0, 0)
+    return attacker_shares, [
+        ("seed deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", FROZEN_SEED, run.user), 0, KEY),
+        ("seed donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, FROZEN_DONATION), 0, KEY),
+        ("victim deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", FROZEN_VICTIM_ASSETS, victim), 0, victim_key),
+        ("attacker exit", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", attacker_shares, run.user, run.user), 0, KEY),
+    ]
+
+
+def _frozen_transcript_ops(run, victim, attacker_shares):
+    return [
+        ("deposit", (run.user, FROZEN_SEED, run.user)),
+        ("donate", (run.user, FROZEN_DONATION)),
+        ("deposit", (victim, FROZEN_VICTIM_ASSETS, victim)),
+        ("redeem", (run.user, attacker_shares, run.user, run.user)),
+    ]
+
+
+def _assert_transcript_model(label, records):
+    """The frozen transcript against the O=1000 oracle: exact values, no profit."""
+    (m_seed, _), (_, _), (m_victim, _), (m_paid, _) = records
+    expect(f"{label} attacker seed shares", m_seed, 1000)
+    expect(f"{label} victim shares", m_victim, 1999)
+    expect(f"{label} attacker payout", m_paid, 500125)
+    profit = m_paid - (FROZEN_SEED + FROZEN_DONATION)
+    expect(f"{label} attacker profit", profit, -499876)
+    if profit > 0:
+        fail(f"{label}: frozen transcript profits")
+
+
+def _assert_comparator_profit(label, attacker, victim):
+    """The frozen transcript against `Vault(offset=0)`: strictly positive profit.
+
+    The approved unoffset comparator (no virtual terms, empty 1:1
+    bootstrap, floor throughout): the victim is starved to nothing and the
+    attacker exits 2000001 against 1000001 put in.
+    """
+    try:
+        control = V.Vault(
+            offset=0,
+            vault_address=VAULT_ADDR,
+            weth={attacker: FROZEN_SEED + FROZEN_DONATION,
+                  victim: FROZEN_VICTIM_ASSETS},
+            weth_allowances={(attacker, VAULT_ADDR): V.U,
+                             (victim, VAULT_ADDR): V.U})
+        c_seed = control.deposit(attacker, FROZEN_SEED, attacker)
+        control.donate(attacker, FROZEN_DONATION)
+        c_victim = control.deposit(victim, FROZEN_VICTIM_ASSETS, victim)
+        c_out = control.redeem(attacker, control.balance_of(attacker),
+                               attacker, attacker)
+    except V.Revert as exc:
+        fail(f"{label}: comparator reverted: {exc.cls}")
+        return
+    c_profit = c_out - (FROZEN_SEED + FROZEN_DONATION)
+    expect(f"{label} comparator seed shares", c_seed, 1)
+    expect(f"{label} comparator victim shares", c_victim, 0)
+    expect(f"{label} comparator attacker payout", c_out, 2000001)
+    expect(f"{label} comparator attacker profit", c_profit, 10 ** 6)
+    if c_profit <= 0:
+        fail(f"{label}: comparator does not profit strictly")
+
+
+def _coalition_plan(run):
+    """The static coalition history; the victim exit amount is precomputed.
+
+    Four signers partitioned into coalition `{KEY, 2}`, outside `{3}` and
+    victim `{4}`.  The victim's minted shares come from a pure-model replay
+    of the fixed prefix, so the exit calldata names the exact full-exit
+    amount the oracle predicts.
+    """
+    a2, o1, victim = signer_address(2), signer_address(3), signer_address(4)
+    funding = {KEY: 1000, 2: 1000, 3: 1000, 4: 1000}
+    approvals = dict(funding)
+    prefix_ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("deposit", (o1, 60, o1)),
+        ("deposit", (a2, 40, a2)),
+        ("donate", (run.user, 10)),
+        ("donate", (o1, 5)),
+        ("deposit", (victim, 50, victim)),
+    ]
+    prefix = _replay_model("coalition-partition prefix", funding, approvals,
+                           prefix_ops)
+    if prefix is None:
+        return None
+    victim_minted = prefix[-1][0]
+    ops = prefix_ops + [
+        ("redeem", (run.user, 30000, run.user, run.user)),
+        ("withdraw", (o1, 20, o1, o1)),
+        ("transfer", (run.user, a2, 10)),
+        ("redeem", (victim, victim_minted, victim, victim)),
+        ("redeem", (a2, 20000, a2, a2)),
+    ]
+    steps = [
+        ("a1 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("o1 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 60, o1), 0, 3),
+        ("a2 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 40, a2), 0, 2),
+        ("a1 donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 10), 0, KEY),
+        ("o1 donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 5), 0, 3),
+        ("victim deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 50, victim), 0, 4),
+        ("a1 redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 30000, run.user, run.user), 0, KEY),
+        ("o1 withdraw", VAULT_ADDR,
+         abi("withdraw(uint256,address,address)", 20, o1, o1), 0, 3),
+        ("a1 to a2 transfer", VAULT_ADDR,
+         abi("transfer(address,uint256)", a2, 10), 0, KEY),
+        ("victim exit", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", victim_minted, victim, victim), 0, 4),
+        ("a2 redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, a2, a2), 0, 2),
+    ]
+    return (a2, o1, victim, funding, approvals, ops, steps, victim_minted)
+
+
+def check_economics_cumulative_residue(run: Runner) -> None:
+    """SF section 11 economics: cumulative floor/ceil residue, exactly.
+
+    A six-step carrier history (deposit, donation, deposit, redeem,
+    redeem, deposit) with one exact step and four inexact ones.  Every
+    step binds executed state to the frozen oracle, then asserts its
+    one-step dust equation and residue bound on executed values; the end
+    asserts the `dust_trace_exact` cumulative identity as an exact
+    integer equality over the executed snapshots.
+    """
+    label = "cumulative-residue"
+    funding, approvals = {KEY: 1000}, {KEY: 1000}
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    kinds = ("deposit", "donate", "deposit", "redeem", "redeem", "deposit")
+    inputs = (100, 50, 7, 50000, 20000, 3)
+    ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("donate", (run.user, 50)),
+        ("deposit", (run.user, 7, run.user)),
+        ("redeem", (run.user, 50000, run.user, run.user)),
+        ("redeem", (run.user, 20000, run.user, run.user)),
+        ("deposit", (run.user, 3, run.user)),
+    ]
+    case_steps = [
+        ("deposit 100", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("donate 50", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 50), 0, KEY),
+        ("deposit 7", VAULT_ADDR,
+         abi("deposit(uint256,address)", 7, run.user), 0, KEY),
+        ("redeem 50000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 50000, run.user, run.user), 0, KEY),
+        ("redeem 20000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, run.user, run.user), 0, KEY),
+        ("deposit 3", VAULT_ADDR,
+         abi("deposit(uint256,address)", 3, run.user), 0, KEY),
+    ]
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR),)
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    rhos_kappas = []
+    for index, (kind, amount_in) in enumerate(zip(kinds, inputs, strict=True)):
+        (pre_S, pre_A), (post_S, post_A) = snaps[index], snaps[index + 1]
+        out_model = records[index][0]
+        if kind == "deposit":
+            out_exec = post_S - pre_S
+            expect(f"{label} step {index} minted", out_exec, out_model)
+        elif kind == "redeem":
+            out_exec = pre_A - post_A
+            expect(f"{label} step {index} paid", out_exec, out_model)
+        else:
+            expect(f"{label} step {index} donated", post_A - pre_A, amount_in)
+            expect(f"{label} step {index} supply still", post_S, pre_S)
+            out_exec = 0
+        rhos_kappas.append(_dust_step(f"{label} step {index}", kind,
+                                     snaps[index], amount_in, out_exec,
+                                     snaps[index + 1]))
+    expect(f"{label} exact first residue", rhos_kappas[0][0], 0)
+    for index in (2, 3, 4, 5):
+        if rhos_kappas[index][0] == 0:
+            fail(f"{label} step {index} residue unexpectedly exact")
+    _dust_cumulative(label, snaps, rhos_kappas)
+    _deposit_events(f"{label} first deposit", results[0], run.user, run.user,
+                    100, records[0][0])
+    _exact_event(f"{label} donation", results[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(50,))
+    _deposit_events(f"{label} second deposit", results[2], run.user, run.user,
+                    7, records[2][0])
+    _withdraw_events(f"{label} first redeem", results[3], run.user, run.user,
+                     run.user, records[3][0], 50000)
+    _withdraw_events(f"{label} second redeem", results[4], run.user, run.user,
+                     run.user, records[4][0], 20000)
+    _deposit_events(f"{label} third deposit", results[5], run.user, run.user,
+                    3, records[5][0])
+
+
+def check_economics_coalition_partition(run: Runner) -> None:
+    """SF section 11 economics: a four-signer coalition partition, accumulated.
+
+    Coalition `{KEY, 2}`, outside `{3}`, victim `{4}`: attributed deposits
+    and donations feed `inA`/`outsideSubsidy`, coalition and outside exits
+    feed `outA`/`outsideOut`, a coalition share transfer moves no
+    accumulator, and the victim deposits then fully exits.  The end
+    asserts the shares partition, flow-exact conservation, the
+    open-context bound and the claim bound on executed values.
+    """
+    label = "coalition-partition"
+    plan = _coalition_plan(run)
+    if plan is None:
+        return
+    a2, o1, victim, funding, approvals, ops, case_steps, victim_minted = plan
+    expect(f"{label} victim minted", victim_minted, 46527)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = tuple((holder, VAULT_ADDR) for holder in (run.user, a2, o1, victim))
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    inA = 100 + 40 + 10
+    sub = 60 + 5
+    paid_a1 = snaps[6][1] - snaps[7][1]
+    paid_a2 = snaps[10][1] - snaps[11][1]
+    outA = paid_a1 + paid_a2
+    outO = 20
+    phase_in, phase_out = 50, snaps[9][1] - snaps[10][1]
+    expect(f"{label} a1 payout", paid_a1, records[6][0])
+    expect(f"{label} a1 payout pinned", paid_a1, 32)
+    expect(f"{label} o1 burned", snaps[7][0] - snaps[8][0], records[7][0])
+    expect(f"{label} victim payout", phase_out, records[9][0])
+    expect(f"{label} victim payout pinned", phase_out, 50)
+    expect(f"{label} a2 payout", paid_a2, records[10][0])
+    expect(f"{label} a2 payout pinned", paid_a2, 21)
+    expect(f"{label} transfer keeps supply", snaps[9][0], snaps[8][0])
+    expect(f"{label} transfer keeps assets", snaps[9][1], snaps[8][1])
+    fin_vault, _ = vault_state(results[-1])
+    victim_exec = run.shares(fin_vault, victim)
+    expect(f"{label} victim fully exited", victim_exec, 0)
+    nonvictim_exec = (run.shares(fin_vault, run.user)
+                      + run.shares(fin_vault, a2) + run.shares(fin_vault, o1))
+    _coalition_identities(label, snaps[11][0], snaps[11][1], nonvictim_exec,
+                          victim_exec, inA, outA, sub, outO,
+                          phase_in, phase_out)
+    _deposit_events(f"{label} a1 deposit", results[0], run.user, run.user,
+                    100, records[0][0])
+    _deposit_events(f"{label} o1 deposit", results[1], o1, o1, 60, records[1][0])
+    _deposit_events(f"{label} a2 deposit", results[2], a2, a2, 40, records[2][0])
+    _exact_event(f"{label} a1 donation", results[3], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(10,))
+    _exact_event(f"{label} o1 donation", results[4], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(o1, VAULT_ADDR), data_words=(5,))
+    _deposit_events(f"{label} victim deposit", results[5], victim, victim,
+                    50, victim_minted)
+    _withdraw_events(f"{label} a1 redeem", results[6], run.user, run.user,
+                     run.user, paid_a1, 30000)
+    _withdraw_events(f"{label} o1 withdraw", results[7], o1, o1, o1,
+                     20, records[7][0])
+    _exact_event(f"{label} coalition transfer", results[8], contract=VAULT_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, a2), data_words=(10,))
+    _withdraw_events(f"{label} victim exit", results[9], victim, victim,
+                     victim, phase_out, victim_minted)
+    _withdraw_events(f"{label} a2 redeem", results[10], a2, a2, a2,
+                     paid_a2, 20000)
+
+
+def check_attack_transcript_frozen(run: Runner) -> None:
+    """SF section 11 economics: the frozen attack transcript, executed.
+
+    Seed 1, donate a million, victim deposits a million, attacker exits
+    all: both runtimes must reproduce the frozen oracle's exact values
+    (victim 1999 shares, attacker out 500125, profit -499876).
+    """
+    label = "attack-transcript-frozen"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION, victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR), (victim, VAULT_ADDR))
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    _assert_transcript_model(label, records)
+    expect(f"{label} executed seed shares", snaps[1][0] - snaps[0][0], 1000)
+    expect(f"{label} executed victim shares", snaps[3][0] - snaps[2][0], 1999)
+    expect(f"{label} executed attacker payout", snaps[3][1] - snaps[4][1], 500125)
+    _deposit_events(f"{label} seed", results[0], run.user, run.user,
+                    FROZEN_SEED, records[0][0])
+    _exact_event(f"{label} donation", results[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(FROZEN_DONATION,))
+    _deposit_events(f"{label} victim deposit", results[2], victim, victim,
+                    FROZEN_VICTIM_ASSETS, records[2][0])
+    _withdraw_events(f"{label} attacker exit", results[3], run.user, run.user,
+                     run.user, records[3][0], records[0][0])
+
+
+def check_attack_economics_offset_comparator(run: Runner) -> None:
+    """SF section 11 economics: the frozen transcript against the comparator.
+
+    The same executed transcript as `attack-transcript-frozen` (no profit
+    at `O = 1000`), plus the approved unoffset comparator on the same
+    inputs: the victim is starved to nothing and the attacker profits
+    exactly a million, strictly positive.
+    """
+    label = "attack-economics-offset-comparator"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION, victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR), (victim, VAULT_ADDR))
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+    _assert_transcript_model(label, records)
+    _assert_comparator_profit(label, run.user, victim)
+
+
+def check_eels_economics_cumulative_residue(run: Runner) -> None:
+    """Independent EELS replay of the cumulative-residue history.
+
+    Return pins bind every priced output to the oracle word and the
+    per-step state-root projection binds the whole allocation; the dust
+    identities then run on the replay the projection verified.
+    """
+    label = "eels-cumulative-residue"
+    funding, approvals = {KEY: 1000}, {KEY: 1000}
+    ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("donate", (run.user, 50)),
+        ("deposit", (run.user, 7, run.user)),
+        ("redeem", (run.user, 50000, run.user, run.user)),
+        ("redeem", (run.user, 20000, run.user, run.user)),
+        ("deposit", (run.user, 3, run.user)),
+    ]
+    case_steps = [
+        ("deposit 100", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("donate 50", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 50), 0, KEY),
+        ("deposit 7", VAULT_ADDR,
+         abi("deposit(uint256,address)", 7, run.user), 0, KEY),
+        ("redeem 50000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 50000, run.user, run.user), 0, KEY),
+        ("redeem 20000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, run.user, run.user), 0, KEY),
+        ("deposit 3", VAULT_ADDR,
+         abi("deposit(uint256,address)", 3, run.user), 0, KEY),
+    ]
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY,)), funding, approvals,
+        case_steps, ops, (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        returns={0: None, 2: None, 3: None, 4: None, 5: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    kinds = ("deposit", "donate", "deposit", "redeem", "redeem", "deposit")
+    inputs = (100, 50, 7, 50000, 20000, 3)
+    snaps = [(0, 0)]
+    for _, post_model in records:
+        snaps.append((post_model.supply, post_model.total_assets()))
+    rhos_kappas = []
+    for index, (kind, amount_in) in enumerate(zip(kinds, inputs, strict=True)):
+        out = records[index][0] or 0
+        rhos_kappas.append(_dust_step(f"{label} step {index}", kind,
+                                     snaps[index], amount_in, out,
+                                     snaps[index + 1]))
+    expect(f"{label} exact first residue", rhos_kappas[0][0], 0)
+    for index in (2, 3, 4, 5):
+        if rhos_kappas[index][0] == 0:
+            fail(f"{label} step {index} residue unexpectedly exact")
+    _dust_cumulative(label, snaps, rhos_kappas)
+    record_case_if_clean("economics-cumulative-residue", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_economics_coalition_partition(run: Runner) -> None:
+    """Independent EELS replay of the coalition-partition history."""
+    label = "eels-coalition-partition"
+    plan = _coalition_plan(run)
+    if plan is None:
+        return
+    a2, o1, victim, funding, approvals, ops, case_steps, victim_minted = plan
+    expect(f"{label} victim minted", victim_minted, 46527)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, 2, 3, 4)), funding, approvals,
+        case_steps, ops, (run.user, a2, o1, victim, VAULT_ADDR),
+        weth_allowances=tuple((holder, VAULT_ADDR)
+                              for holder in (run.user, a2, o1, victim)),
+        returns={0: None, 1: None, 2: None, 5: None, 6: None,
+                 7: None, 9: None, 10: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    snaps = [(0, 0)]
+    for _, post_model in records:
+        snaps.append((post_model.supply, post_model.total_assets()))
+    inA = 100 + 40 + 10
+    sub = 60 + 5
+    paid_a1 = snaps[6][1] - snaps[7][1]
+    paid_a2 = snaps[10][1] - snaps[11][1]
+    outA = paid_a1 + paid_a2
+    outO = 20
+    phase_in, phase_out = 50, snaps[9][1] - snaps[10][1]
+    expect(f"{label} a1 payout", paid_a1, 32)
+    expect(f"{label} victim payout", phase_out, 50)
+    expect(f"{label} a2 payout", paid_a2, 21)
+    victim_exec = final.balance_of(victim)
+    expect(f"{label} victim fully exited", victim_exec, 0)
+    nonvictim_exec = (final.balance_of(run.user) + final.balance_of(a2)
+                      + final.balance_of(o1))
+    _coalition_identities(label, snaps[11][0], snaps[11][1], nonvictim_exec,
+                          victim_exec, inA, outA, sub, outO,
+                          phase_in, phase_out)
+    record_case_if_clean("economics-coalition-partition", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_attack_transcript_frozen(run: Runner) -> None:
+    """Independent EELS replay of the frozen attack transcript."""
+    label = "eels-attack-transcript-frozen"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION,
+               victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, victim_key)), funding, approvals,
+        case_steps, ops, (run.user, victim, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (victim, VAULT_ADDR)),
+        returns={0: None, 2: None, 3: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    _assert_transcript_model(label, records)
+    record_case_if_clean("attack-transcript-frozen", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_attack_economics_offset_comparator(run: Runner) -> None:
+    """Independent EELS replay of the transcript plus the comparator verdict."""
+    label = "eels-attack-economics-offset-comparator"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION,
+               victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, victim_key)), funding, approvals,
+        case_steps, ops, (run.user, victim, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (victim, VAULT_ADDR)),
+        returns={0: None, 2: None, 3: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    _assert_transcript_model(label, records)
+    _assert_comparator_profit(label, run.user, victim)
+    record_case_if_clean("attack-economics-offset-comparator", "eels",
+                         run.side.name, failures_before)
+
+
+
 CHECKS = [
     check_deposit_into_empty_vault,
     check_deposit_into_donated_vault,
@@ -4987,6 +5662,10 @@ CHECKS = [
     check_exact_child_provenance,
     check_collision_premise_pairs,
     check_donation_classification,
+    check_economics_cumulative_residue,
+    check_economics_coalition_partition,
+    check_attack_transcript_frozen,
+    check_attack_economics_offset_comparator,
 ]
 
 JAUNE_CASES_BY_CHECK = {
@@ -5025,6 +5704,10 @@ JAUNE_CASES_BY_CHECK = {
     "check_exact_child_provenance": ("composition-exact-child-provenance",),
     "check_collision_premise_pairs": ("composition-collision-premise-pairs",),
     "check_donation_classification": ("donation-classification",),
+    "check_economics_cumulative_residue": ("economics-cumulative-residue",),
+    "check_economics_coalition_partition": ("economics-coalition-partition",),
+    "check_attack_transcript_frozen": ("attack-transcript-frozen",),
+    "check_attack_economics_offset_comparator": ("attack-economics-offset-comparator",),
 }
 
 EELS_CASES_BY_CHECK = {
@@ -5082,6 +5765,10 @@ def run_eels_side(run: Runner) -> None:
         check_eels_donation_classification,
         check_eels_a_u_zero_flows,
         check_eels_supply_ceiling_flows,
+        check_eels_economics_cumulative_residue,
+        check_eels_economics_coalition_partition,
+        check_eels_attack_transcript_frozen,
+        check_eels_attack_economics_offset_comparator,
     )
     for check in checks:
         before = len(FAILURES)
