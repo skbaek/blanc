@@ -688,6 +688,55 @@ def stateSnapshot (vault : Adr) (state : State) : Snapshot :=
 @[simp] theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
     vaultSnapshot vault state = stateSnapshot vault state.state := rfl
 
+/-- The vault-side storage equation of an actual inbound effect is one exact
+share-ledger credit.  The supply write is invisible to `Stor.rest`. -/
+theorem inboundEffect_share_increase
+    {sevm : Sevm} {pre post : Devm} {receiver assets shares returned : B256}
+    {receiverAdr : Adr}
+    (receiverWord : receiverAdr.toB256 = receiver)
+    (effect : InboundEffect sevm receiver assets shares returned pre post) :
+    Increase receiverAdr shares
+      (Stor.rest (Devm.getStor pre sevm.currentTarget))
+      (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+  obtain ⟨-, -, vaultStorage, -, -⟩ := effect
+  rw [vaultStorage, ← receiverWord]
+  intro account
+  constructor
+  · intro same
+    subst same
+    rw [rest_set_slot Blanc.ProrataWethVault.supplySlot_not_validAdr,
+      Stor.rest_set_self]
+    rfl
+  · intro different
+    rw [rest_set_slot Blanc.ProrataWethVault.supplySlot_not_validAdr,
+      Stor.rest_set_ne _ (Ne.symm different)]
+
+/-- The vault-side storage equation of an actual outbound effect is one exact
+share-ledger debit.  The allowance write remains outside `Stor.rest`. -/
+theorem outboundEffect_share_decrease
+    {sevm : Sevm} {pre post : Devm} {receiver owner assets shares returned : B256}
+    {ownerAdr : Adr}
+    (ownerWord : ownerAdr.toB256 = owner)
+    (effect : OutboundEffect sevm receiver owner assets shares returned pre post) :
+    Decrease ownerAdr shares
+      (Stor.rest (Devm.getStor pre sevm.currentTarget))
+      (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+  obtain ⟨-, -, ownerRow, -, otherRows, -, -, -⟩ := effect
+  intro account
+  constructor
+  · intro same
+    subst same
+    change (Devm.getStor pre sevm.currentTarget).get ownerAdr.toB256 - shares =
+      (Devm.getStor post sevm.currentTarget).get ownerAdr.toB256
+    rw [ownerWord]
+    exact ownerRow.symm
+  · intro different
+    change (Devm.getStor pre sevm.currentTarget).get account.toB256 =
+      (Devm.getStor post sevm.currentTarget).get account.toB256
+    exact (otherRows account.toB256 ⟨account, rfl⟩ (by
+      intro keyEq
+      exact different (Adr.toB256_inj (keyEq.trans ownerWord.symm)).symm)).symm
+
 /-- The words retained by either inbound endpoint. -/
 structure InboundWords where
   receiver : B256
@@ -826,6 +875,872 @@ inductive FourQuoteOperation (vault : Adr) (sevm : Sevm) (pre post : Devm) : Typ
       (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
       (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
       FourQuoteOperation vault sevm pre post
+
+/-- Actual non-credit share evidence is indexed by the accepted ten-tag
+operation.  It retains endpoint guards and canonical ABI roles; public
+projections derive, rather than assume, the resulting row movement. -/
+inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuoteOperation vault sevm pre post → Prop where
+  | deposit (words : InboundWords) (target : sevm.currentTarget = vault)
+      (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) words.shares)
+      (wethRowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) words.assets)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.convertToSharesN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (receiverValid : ValidAdr words.receiver) (supply : B256)
+      (supplyEq : supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot)
+      (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+      (room : words.shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat) :
+      FourQuoteShareEvidence (.deposit words target depositorNotVault supplyNof wethRowNof quote effect)
+  | mint (words : InboundWords) (target : sevm.currentTarget = vault)
+      (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) words.shares)
+      (wethRowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) words.assets)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.previewMintN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm words.receiver words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (receiverValid : ValidAdr words.receiver) (supply : B256)
+      (supplyEq : supply = Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot)
+      (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+      (room : words.shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat) :
+      FourQuoteShareEvidence (.mint words target depositorNotVault supplyNof wethRowNof quote effect)
+  | withdrawNormal (words : OutboundWords) (target : sevm.currentTarget = vault)
+      (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (ownerArg : words.owner = Sevm.argWord sevm 2)
+      (receiverValid : ValidAdr words.receiver)
+      (ownerValid : ValidAdr words.owner)
+      (covered : words.shares.toNat ≤
+        (Devm.getStorVal pre sevm.currentTarget words.owner).toNat) :
+      FourQuoteShareEvidence (.withdrawNormal words target receiverNotVault burnable quote effect)
+  | redeemNormal (words : OutboundWords) (target : sevm.currentTarget = vault)
+      (receiverNotVault : sevm.currentTarget ≠ words.receiver.toAdr)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (ownerArg : words.owner = Sevm.argWord sevm 2)
+      (receiverValid : ValidAdr words.receiver)
+      (ownerValid : ValidAdr words.owner)
+      (covered : words.shares.toNat ≤
+        (Devm.getStorVal pre sevm.currentTarget words.owner).toNat) :
+      FourQuoteShareEvidence (.redeemNormal words target receiverNotVault burnable quote effect)
+  | withdrawSelf (words : OutboundWords) (target : sevm.currentTarget = vault)
+      (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.shares.toNat = Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (ownerArg : words.owner = Sevm.argWord sevm 2)
+      (receiverValid : ValidAdr words.receiver)
+      (ownerValid : ValidAdr words.owner)
+      (covered : words.shares.toNat ≤
+        (Devm.getStorVal pre sevm.currentTarget words.owner).toNat) :
+      FourQuoteShareEvidence (.withdrawSelf words target receiverIsVault burnable quote effect)
+  | redeemSelf (words : OutboundWords) (target : sevm.currentTarget = vault)
+      (receiverIsVault : words.receiver.toAdr = sevm.currentTarget)
+      (burnable : words.shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : words.assets.toNat = Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm words.receiver words.owner words.assets words.shares words.returned pre post)
+      (receiverArg : words.receiver = Sevm.argWord sevm 1)
+      (ownerArg : words.owner = Sevm.argWord sevm 2)
+      (receiverValid : ValidAdr words.receiver)
+      (ownerValid : ValidAdr words.owner)
+      (covered : words.shares.toNat ≤
+        (Devm.getStorVal pre sevm.currentTarget words.owner).toNat) :
+      FourQuoteShareEvidence (.redeemSelf words target receiverIsVault burnable quote effect)
+  | transfer (words : ShareTransferWords) (target : sevm.currentTarget = vault)
+      (owner : words.owner = sevm.caller) (receiver : words.receiver = Sevm.argWord sevm 0)
+      (amount : words.amount = Sevm.argWord sevm 1)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+      FourQuoteShareEvidence (.transfer words target owner receiver amount config memoryWf run selectorEq)
+  | transferFrom (words : ShareTransferFromWords) (target : sevm.currentTarget = vault)
+      (spender : words.spender = sevm.caller) (owner : words.owner = Sevm.argWord sevm 0)
+      (receiver : words.receiver = Sevm.argWord sevm 1) (amount : words.amount = Sevm.argWord sevm 2)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm =
+        selector "transferFrom" [.address, .address, .uint256]) :
+      FourQuoteShareEvidence (.transferFrom words target spender owner receiver amount config memoryWf run selectorEq)
+  | approve (words : ShareApprovalWords) (target : sevm.currentTarget = vault)
+      (owner : words.owner = sevm.caller) (spender : words.spender = Sevm.argWord sevm 0)
+      (amount : words.amount = Sevm.argWord sevm 1)
+      (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+      (memoryWf : Mem.Wf pre.memory)
+      (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+      (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+      FourQuoteShareEvidence (.approve words target owner spender amount config memoryWf run selectorEq)
+
+/-- The actual address-shaped share-row movement selected by an accepted
+operation.  Credit deliberately has no non-credit witness or movement claim. -/
+def FourQuoteShareRowsMove {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuoteOperation vault sevm pre post → Prop
+  | .deposit words _ _ _ _ _ _ =>
+      Increase words.receiver.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .mint words _ _ _ _ _ _ =>
+      Increase words.receiver.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .withdrawNormal words _ _ _ _ _ =>
+      Decrease words.owner.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .redeemNormal words _ _ _ _ _ =>
+      Decrease words.owner.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .withdrawSelf words _ _ _ _ _ =>
+      Decrease words.owner.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .redeemSelf words _ _ _ _ _ =>
+      Decrease words.owner.toAdr words.shares
+        (Stor.rest (Devm.getStor pre sevm.currentTarget))
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .credit _ _ _ _ _ _ => False
+  | .transfer words _ _ _ _ _ _ _ _ =>
+      Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget)) words.owner
+        words.amount words.receiver.toAdr
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .transferFrom words _ _ _ _ _ _ _ _ _ =>
+      Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget)) words.owner.toAdr
+        words.amount words.receiver.toAdr
+        (Stor.rest (Devm.getStor post sevm.currentTarget))
+  | .approve _ _ _ _ _ _ _ _ _ =>
+      Stor.rest (Devm.getStor post sevm.currentTarget) =
+        Stor.rest (Devm.getStor pre sevm.currentTarget)
+
+/-- The exact finite-coalition share movement for each non-credit operation.
+Its use still explicitly requires a pre-state ledger conservation witness. -/
+def FourQuoteShareCoalition {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (coalition : Finset Adr) : FourQuoteOperation vault sevm pre post → Prop
+  | .deposit words _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget)) +
+          if words.receiver.toAdr ∈ coalition then words.shares.toNat else 0
+  | .mint words _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget)) +
+          if words.receiver.toAdr ∈ coalition then words.shares.toNat else 0
+  | .withdrawNormal words _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner.toAdr ∈ coalition then words.shares.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
+  | .redeemNormal words _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner.toAdr ∈ coalition then words.shares.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
+  | .withdrawSelf words _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner.toAdr ∈ coalition then words.shares.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
+  | .redeemSelf words _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner.toAdr ∈ coalition then words.shares.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
+  | .credit _ _ _ _ _ _ => False
+  | .transfer words _ _ _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner ∈ coalition then words.amount.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget)) +
+          (if words.receiver.toAdr ∈ coalition then words.amount.toNat else 0)
+  | .transferFrom words _ _ _ _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) +
+          (if words.owner.toAdr ∈ coalition then words.amount.toNat else 0) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget)) +
+          (if words.receiver.toAdr ∈ coalition then words.amount.toNat else 0)
+  | .approve _ _ _ _ _ _ _ _ _ =>
+      ledgerSumOn coalition (Stor.rest (Devm.getStor post sevm.currentTarget)) =
+        ledgerSumOn coalition (Stor.rest (Devm.getStor pre sevm.currentTarget))
+
+private theorem inbound_share_nof_of_conserved
+    {sevm : Sevm} {pre : Devm} {receiver : Adr} {shares supply : B256}
+    (supplyEq : supply = Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (room : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    B256.Nof (Stor.rest (Devm.getStor pre sevm.currentTarget) receiver) shares := by
+  have supplyNof : B256.Nof supply shares := supplyNof_of_capacity stable room
+  rw [supplyEq] at supplyNof
+  unfold B256.Nof at supplyNof ⊢
+  exact lt_of_le_of_lt
+    (Nat.add_le_add_right (conserved.le_supply receiver) _) supplyNof
+
+private theorem share_covered_of_nat
+    {sevm : Sevm} {pre : Devm} {owner shares : B256}
+    (ownerValid : ValidAdr owner)
+    (covered : shares.toNat ≤
+      (Devm.getStorVal pre sevm.currentTarget owner).toNat) :
+    shares ≤ Stor.rest (Devm.getStor pre sevm.currentTarget) owner.toAdr := by
+  apply B256.le_of_toNat_le_toNat
+  change shares.toNat ≤
+    ((Devm.getStor pre sevm.currentTarget).get owner.toAdr.toB256).toNat
+  rw [toB256_toAdr ownerValid]
+  exact covered
+
+private theorem transfer_share_rows_of_compiled
+    {sevm : Sevm} {pre post : Devm} (words : ShareTransferWords)
+    (owner : words.owner = sevm.caller)
+    (receiver : words.receiver = Sevm.argWord sevm 0)
+    (amount : words.amount = Sevm.argWord sevm 1)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+    Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget)) words.owner
+      words.amount words.receiver.toAdr
+      (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+  obtain ⟨-, -, receiverValid, -, -, -, ownerBalance, receiverBalance,
+      ownerBalanceEq, covered, receiverBalanceEq, -, settleStorage, -, -⟩ :=
+    Blanc.ProrataWethVault.transfer_compiled_effect memoryWf run selectorEq
+  have receiverValid' := receiverValid
+  obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid'
+  have coveredRest :
+      Sevm.argWord sevm 1 ≤ Stor.rest (Devm.getStor pre sevm.currentTarget)
+        sevm.caller := by
+    have ownerRest : Stor.rest (Devm.getStor pre sevm.currentTarget)
+        sevm.caller = ownerBalance := ownerBalanceEq.symm
+    rw [ownerRest]
+    exact B256.le_of_toNat_le_toNat covered
+  have raw : Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget))
+      sevm.caller (Sevm.argWord sevm 1) receiverAdr
+      (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+    have shape := transfer_of_debit_credit
+      (s := Devm.getStor pre sevm.currentTarget) (owner := sevm.caller)
+      (receiver := receiverAdr) (amount := Sevm.argWord sevm 1) coveredRest
+    rw [settleStorage]
+    have ownerRest : Stor.rest (Devm.getStor pre sevm.currentTarget)
+        sevm.caller = ownerBalance := ownerBalanceEq.symm
+    have receiverRest :
+        Stor.rest ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+          (ownerBalance - Sevm.argWord sevm 1)) receiverAdr = receiverBalance := by
+      rw [← receiverAdrEq] at receiverBalanceEq
+      exact receiverBalanceEq.symm
+    rw [← receiverAdrEq]
+    rw [ownerRest] at shape
+    rw [receiverRest] at shape
+    exact shape
+  have wordsReceiverValid : ValidAdr words.receiver := by
+    rw [receiver]
+    exact receiverValid
+  have receiverEq : receiverAdr = words.receiver.toAdr := by
+    apply Adr.toB256_inj
+    rw [receiverAdrEq, toB256_toAdr wordsReceiverValid, receiver]
+  simpa [owner, amount, receiverEq] using raw
+
+private theorem transferFrom_share_rows_of_compiled
+    {sevm : Sevm} {pre post : Devm} (words : ShareTransferFromWords)
+    (owner : words.owner = Sevm.argWord sevm 0)
+    (receiver : words.receiver = Sevm.argWord sevm 1)
+    (amount : words.amount = Sevm.argWord sevm 2)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    Transfer (Stor.rest (Devm.getStor pre sevm.currentTarget)) words.owner.toAdr
+      words.amount words.receiver.toAdr
+      (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+  obtain ⟨-, -, ownerValid, -, receiverValid, -, -, keyNotAddress, -, -,
+      allowance, afterAllowance, ownerBalance, receiverBalance, -, -, route,
+      ownerBalanceEq, covered, receiverBalanceEq, -, settleStorage, -, -⟩ :=
+    Blanc.ProrataWethVault.transferFrom_compiled_effect memoryWf run selectorEq
+  have ownerValid' := ownerValid
+  have receiverValid' := receiverValid
+  obtain ⟨ownerAdr, ownerAdrEq⟩ := ownerValid'
+  obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid'
+  have afterRest : Stor.rest afterAllowance =
+      Stor.rest (Devm.getStor pre sevm.currentTarget) := by
+    rcases route with ⟨-, unchanged⟩ | decremented
+    · rw [unchanged]
+    · rw [decremented, rest_set_of_not_validAdr keyNotAddress]
+  have coveredRest : Sevm.argWord sevm 2 ≤ Stor.rest afterAllowance ownerAdr := by
+    have ownerRest : Stor.rest afterAllowance ownerAdr = ownerBalance := by
+      rw [← ownerAdrEq] at ownerBalanceEq
+      exact ownerBalanceEq.symm
+    rw [ownerRest]
+    exact B256.le_of_toNat_le_toNat covered
+  have raw : Transfer (Stor.rest afterAllowance) ownerAdr (Sevm.argWord sevm 2)
+      receiverAdr (Stor.rest (Devm.getStor post sevm.currentTarget)) := by
+    have shape := transfer_of_debit_credit (s := afterAllowance)
+      (owner := ownerAdr) (receiver := receiverAdr) (amount := Sevm.argWord sevm 2)
+      coveredRest
+    rw [settleStorage]
+    have ownerRest : Stor.rest afterAllowance ownerAdr = ownerBalance := by
+      rw [← ownerAdrEq] at ownerBalanceEq
+      exact ownerBalanceEq.symm
+    have receiverRest :
+        Stor.rest (afterAllowance.set ownerAdr.toB256
+          (ownerBalance - Sevm.argWord sevm 2)) receiverAdr = receiverBalance := by
+      rw [← ownerAdrEq, ← receiverAdrEq] at receiverBalanceEq
+      exact receiverBalanceEq.symm
+    rw [← ownerAdrEq, ← receiverAdrEq]
+    rw [ownerRest] at shape
+    rw [receiverRest] at shape
+    exact shape
+  rw [afterRest] at raw
+  have wordsOwnerValid : ValidAdr words.owner := by
+    rw [owner]
+    exact ownerValid
+  have wordsReceiverValid : ValidAdr words.receiver := by
+    rw [receiver]
+    exact receiverValid
+  have ownerEq : ownerAdr = words.owner.toAdr := by
+    apply Adr.toB256_inj
+    rw [ownerAdrEq, toB256_toAdr wordsOwnerValid, owner]
+  have receiverEq : receiverAdr = words.receiver.toAdr := by
+    apply Adr.toB256_inj
+    rw [receiverAdrEq, toB256_toAdr wordsReceiverValid, receiver]
+  simpa [amount, ownerEq, receiverEq] using raw
+
+private theorem approve_share_rows_of_compiled
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+    Stor.rest (Devm.getStor post sevm.currentTarget) =
+      Stor.rest (Devm.getStor pre sevm.currentTarget) := by
+  obtain ⟨-, -, -, -, keyNotAddress, -, -, storageEq, -, -⟩ :=
+    Blanc.ProrataWethVault.approve_compiled_effect memoryWf run selectorEq
+  rw [storageEq, rest_set_of_not_validAdr keyNotAddress]
+
+/-- The retained endpoint guards let every non-credit companion reuse the
+existing ledger-preservation adapter for its actual operation. -/
+theorem FourQuoteShareEvidence.preserves_conserved
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    {operation : FourQuoteOperation vault sevm pre post}
+    (evidence : FourQuoteShareEvidence operation)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor post sevm.currentTarget) := by
+  cases evidence with
+  | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      exact inboundEffect_preserves_conserved receiverValid supplyEq stable room effect conserved
+  | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      exact inboundEffect_preserves_conserved receiverValid supplyEq stable room effect conserved
+  | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+  | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+  | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+  | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      exact outboundEffect_preserves_conserved ownerValid covered effect conserved
+  | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      exact Blanc.ProrataWethVault.transfer_preserves_conserved memoryWf run selectorEq conserved
+  | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      exact Blanc.ProrataWethVault.transferFrom_preserves_conserved memoryWf run selectorEq conserved
+  | approve words target owner spender amount config memoryWf run selectorEq =>
+      exact Blanc.ProrataWethVault.approve_preserves_conserved memoryWf run selectorEq conserved
+
+/-- Each non-credit companion projects the exact address-shaped share-row
+movement produced by its retained operation evidence. -/
+theorem FourQuoteShareEvidence.actual_share_rows_move
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    {operation : FourQuoteOperation vault sevm pre post}
+    (evidence : FourQuoteShareEvidence operation) :
+    FourQuoteShareRowsMove operation := by
+  cases evidence with
+  | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      dsimp [FourQuoteShareRowsMove]
+      exact inboundEffect_share_increase (toB256_toAdr receiverValid) effect
+  | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      dsimp [FourQuoteShareRowsMove]
+      exact inboundEffect_share_increase (toB256_toAdr receiverValid) effect
+  | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareRowsMove]
+      exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
+  | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareRowsMove]
+      exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
+  | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareRowsMove]
+      exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
+  | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareRowsMove]
+      exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
+  | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareRowsMove]
+      exact transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
+  | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareRowsMove]
+      exact transferFrom_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
+  | approve words target owner spender amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareRowsMove]
+      exact approve_share_rows_of_compiled memoryWf run selectorEq
+
+/-- A conserved pre-state turns each actual non-credit row movement into its
+exact finite-coalition equation.  The inbound share-row no-wrap fact comes
+from the supply capacity guard and the conserved pre-state, not from an
+endpoint postcondition. -/
+theorem FourQuoteShareEvidence.coalition
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    {operation : FourQuoteOperation vault sevm pre post} {coalition : Finset Adr}
+    (evidence : FourQuoteShareEvidence operation)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    FourQuoteShareCoalition coalition operation := by
+  cases evidence with
+  | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_increase
+        (inboundEffect_share_increase (toB256_toAdr receiverValid) effect)
+        (inbound_share_nof_of_conserved supplyEq stable room conserved)
+  | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_increase
+        (inboundEffect_share_increase (toB256_toAdr receiverValid) effect)
+        (inbound_share_nof_of_conserved supplyEq stable room conserved)
+  | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_decrease
+        (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
+        (share_covered_of_nat ownerValid covered)
+  | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_decrease
+        (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
+        (share_covered_of_nat ownerValid covered)
+  | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_decrease
+        (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
+        (share_covered_of_nat ownerValid covered)
+  | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_decrease
+        (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
+        (share_covered_of_nat ownerValid covered)
+  | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_transfer conserved.sumNof
+        (transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq)
+  | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareCoalition]
+      exact ledgerSumOn_transfer conserved.sumNof
+        (transferFrom_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq)
+  | approve words target owner spender amount config memoryWf run selectorEq =>
+      dsimp [FourQuoteShareCoalition]
+      rw [approve_share_rows_of_compiled memoryWf run selectorEq]
+
+/-- A real `deposit` run supplies the indexed operation and its non-credit
+share companion.  The WETH-row addition guard remains an explicit boundary
+premise; it is distinct from the share-row guard derived later from
+conservation. -/
+theorem deposit_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (wethRowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) (Sevm.argWord sevm 0))
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    ∃ (shares : B256)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) shares)
+      (quote : shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+        shares shares pre post),
+      FourQuoteShareEvidence (.deposit ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 0,
+        shares, shares⟩ target depositorNotVault supplyNof wethRowNof quote effect) := by
+  obtain ⟨-, supply, supplyEq, stable, quoteFits, -, receiverValid, -, room,
+      rawEffect⟩ :=
+    deposit_compiled_effect config memoryWf run selectorEq
+  let shares := Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+    (Sevm.argWord sevm 0).toNat
+    ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
+  let words : InboundWords := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 0,
+    shares, shares⟩
+  have room' : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat := by
+    simpa only [shares] using room
+  have supplyNof' : B256.Nof supply shares :=
+    supplyNof_of_capacity (supply := supply) (shares := shares) stable room'
+  have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) words.shares := by
+    change B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) shares
+    rw [← supplyEq]
+    exact supplyNof'
+  have quoteRaw : shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+      (Sevm.argWord sevm 0).toNat
+        ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat :=
+    B256.toNat_toB256_of_lt quoteFits
+  have balanceEq :
+      ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat =
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat := rfl
+  have quote : words.shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+      words.assets.toNat (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply := by
+    change shares.toNat = Blanc.ProrataWethVault.convertToSharesN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply
+    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using
+      quoteRaw
+  have effect : InboundEffect sevm words.receiver words.assets words.shares
+      words.returned pre post := by
+    change InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+      shares shares pre post
+    exact rawEffect
+  refine ⟨shares, supplyNof, quote, effect, ?_⟩
+  exact .deposit words target depositorNotVault supplyNof wethRowNof quote effect
+    rfl receiverValid supply supplyEq stable room
+
+/-- A real `mint` run supplies the indexed operation and its non-credit share
+companion.  Its charged WETH amount is named only after the compiled endpoint
+has fixed the ceil quote. -/
+theorem mint_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
+    (wethRowNof : ∀ charged : B256,
+      charged.toNat = Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+        (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply →
+      B256.Nof (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget) charged)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address]) :
+    ∃ (assets : B256)
+      (supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot) (Sevm.argWord sevm 0))
+      (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+        sevm.currentTarget) assets)
+      (quote : assets.toNat = Blanc.ProrataWethVault.previewMintN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : InboundEffect sevm (Sevm.argWord sevm 1) assets
+        (Sevm.argWord sevm 0) assets pre post),
+      FourQuoteShareEvidence (.mint ⟨Sevm.argWord sevm 1, assets,
+        Sevm.argWord sevm 0, assets⟩ target depositorNotVault supplyNof rowNof quote effect) := by
+  obtain ⟨-, supply, supplyEq, stable, quoteFits, -, receiverValid, -, room,
+      rawEffect⟩ :=
+    mint_compiled_effect config memoryWf run selectorEq
+  let assets := Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+    (Sevm.argWord sevm 0).toNat
+    ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
+  let words : InboundWords := ⟨Sevm.argWord sevm 1, assets, Sevm.argWord sevm 0,
+    assets⟩
+  have room' : (Sevm.argWord sevm 0).toNat ≤
+      Blanc.ProrataWethVault.shareRoomN supply.toNat := room
+  have supplyNof' : B256.Nof supply (Sevm.argWord sevm 0) :=
+    supplyNof_of_capacity (supply := supply) (shares := Sevm.argWord sevm 0)
+      stable room'
+  have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) words.shares := by
+    change B256.Nof (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot) (Sevm.argWord sevm 0)
+    rw [← supplyEq]
+    exact supplyNof'
+  have quoteRaw : assets.toNat = Blanc.ProrataWethVault.previewMintN
+      (Sevm.argWord sevm 0).toNat
+        ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat :=
+    B256.toNat_toB256_of_lt quoteFits
+  have balanceEq :
+      ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat =
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat := rfl
+  have quote : words.assets.toNat = Blanc.ProrataWethVault.previewMintN
+      words.shares.toNat (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply := by
+    change assets.toNat = Blanc.ProrataWethVault.previewMintN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply
+    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using
+      quoteRaw
+  have effect : InboundEffect sevm words.receiver words.assets words.shares
+      words.returned pre post := by
+    change InboundEffect sevm (Sevm.argWord sevm 1) assets
+      (Sevm.argWord sevm 0) assets pre post
+    exact rawEffect
+  have rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
+      sevm.currentTarget) words.assets :=
+    wethRowNof words.assets quote
+  refine ⟨assets, supplyNof, rowNof, quote, effect, ?_⟩
+  exact .mint words target depositorNotVault supplyNof rowNof quote effect
+    rfl receiverValid supply supplyEq stable room
+
+private theorem withdraw_compiled_share_raw
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    ∃ (shares : B256)
+      (_ : shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (_ : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (_ : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        (Sevm.argWord sevm 0) shares shares pre post),
+      ValidAdr (Sevm.argWord sevm 1) ∧ ValidAdr (Sevm.argWord sevm 2) ∧
+        shares.toNat ≤ (Devm.getStorVal pre sevm.currentTarget
+          (Sevm.argWord sevm 2)).toNat := by
+  obtain ⟨-, supply, supplyEq, -, quoteFits, -, receiverValid, -, ownerValid,
+      -, covered, rawBurnable, rawEffect⟩ :=
+    withdraw_compiled_effect config memoryWf run selectorEq
+  let shares := Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+    (Sevm.argWord sevm 0).toNat
+    ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
+  have quoteRaw : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
+      (Sevm.argWord sevm 0).toNat
+        ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat :=
+    B256.toNat_toB256_of_lt quoteFits
+  have balanceEq :
+      ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat =
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat := rfl
+  have quote : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using quoteRaw
+  have burnable : shares.toNat ≤ (snapshotAt sevm pre).supply := by
+    change shares.toNat ≤ (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot).toNat
+    rw [← supplyEq]
+    exact rawBurnable
+  have effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+      (Sevm.argWord sevm 0) shares shares pre post := by
+    exact rawEffect
+  exact ⟨shares, burnable, quote, effect, receiverValid, ownerValid, covered⟩
+
+private theorem redeem_compiled_share_raw
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ (assets : B256)
+      (_ : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).supply)
+      (_ : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (_ : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        assets (Sevm.argWord sevm 0) assets pre post),
+      ValidAdr (Sevm.argWord sevm 1) ∧ ValidAdr (Sevm.argWord sevm 2) ∧
+        (Sevm.argWord sevm 0).toNat ≤ (Devm.getStorVal pre sevm.currentTarget
+          (Sevm.argWord sevm 2)).toNat := by
+  obtain ⟨-, supply, supplyEq, -, quoteFits, -, receiverValid, -, ownerValid,
+      -, covered, rawBurnable, rawEffect⟩ :=
+    redeem_compiled_effect config memoryWf run selectorEq
+  let assets := Nat.toB256 (Blanc.ProrataWethVault.convertToAssetsN
+    (Sevm.argWord sevm 0).toNat
+    ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
+  have quoteRaw : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+      (Sevm.argWord sevm 0).toNat
+        ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat :=
+    B256.toNat_toB256_of_lt quoteFits
+  have balanceEq :
+      ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat =
+        (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat := rfl
+  have quote : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+      (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+        (snapshotAt sevm pre).supply := by
+    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using quoteRaw
+  have burnable : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).supply := by
+    change (Sevm.argWord sevm 0).toNat ≤ (Devm.getStorVal pre sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot).toNat
+    rw [← supplyEq]
+    exact rawBurnable
+  have effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+      assets (Sevm.argWord sevm 0) assets pre post := by
+    exact rawEffect
+  exact ⟨assets, burnable, quote, effect, receiverValid, ownerValid, covered⟩
+
+/-- A real `withdraw` with a non-vault receiver yields the normal outbound
+tag and its actual share companion. -/
+theorem withdrawNormal_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    ∃ (shares : B256)
+      (burnable : shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        (Sevm.argWord sevm 0) shares shares pre post),
+      FourQuoteShareEvidence (.withdrawNormal
+        ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0, shares, shares⟩
+        target receiverNotVault burnable quote effect) := by
+  obtain ⟨shares, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
+    withdraw_compiled_share_raw config memoryWf run selectorEq
+  refine ⟨shares, burnable, quote, effect, ?_⟩
+  exact .withdrawNormal
+    (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0,
+      shares, shares⟩)
+    target receiverNotVault burnable quote effect
+    rfl rfl receiverValid ownerValid covered
+
+/-- A real `withdraw` that names the vault as receiver yields the retained
+outbound tag and its actual share companion. -/
+theorem withdrawSelf_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    ∃ (shares : B256)
+      (burnable : shares.toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        (Sevm.argWord sevm 0) shares shares pre post),
+      FourQuoteShareEvidence (.withdrawSelf
+        ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0, shares, shares⟩
+        target receiverIsVault burnable quote effect) := by
+  obtain ⟨shares, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
+    withdraw_compiled_share_raw config memoryWf run selectorEq
+  refine ⟨shares, burnable, quote, effect, ?_⟩
+  exact .withdrawSelf
+    (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0,
+      shares, shares⟩)
+    target receiverIsVault burnable quote effect
+    rfl rfl receiverValid ownerValid covered
+
+/-- A real `redeem` with a non-vault receiver yields the normal outbound tag
+and its actual share companion. -/
+theorem redeemNormal_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ (assets : B256)
+      (burnable : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        assets (Sevm.argWord sevm 0) assets pre post),
+      FourQuoteShareEvidence (.redeemNormal
+        ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets, Sevm.argWord sevm 0, assets⟩
+        target receiverNotVault burnable quote effect) := by
+  obtain ⟨assets, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
+    redeem_compiled_share_raw config memoryWf run selectorEq
+  refine ⟨assets, burnable, quote, effect, ?_⟩
+  exact .redeemNormal
+    (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets,
+      Sevm.argWord sevm 0, assets⟩)
+    target receiverNotVault burnable quote effect
+    rfl rfl receiverValid ownerValid covered
+
+/-- A real `redeem` that names the vault as receiver yields the retained
+outbound tag and its actual share companion. -/
+theorem redeemSelf_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    ∃ (assets : B256)
+      (burnable : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).supply)
+      (quote : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
+        (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
+          (snapshotAt sevm pre).supply)
+      (effect : OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+        assets (Sevm.argWord sevm 0) assets pre post),
+      FourQuoteShareEvidence (.redeemSelf
+        ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets, Sevm.argWord sevm 0, assets⟩
+        target receiverIsVault burnable quote effect) := by
+  obtain ⟨assets, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
+    redeem_compiled_share_raw config memoryWf run selectorEq
+  refine ⟨assets, burnable, quote, effect, ?_⟩
+  exact .redeemSelf
+    (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets,
+      Sevm.argWord sevm 0, assets⟩)
+    target receiverIsVault burnable quote effect
+    rfl rfl receiverValid ownerValid covered
+
+/-- The compiled direct-share transfer carries all canonical role words in the
+accepted transfer tag; its exact `Transfer` row projection is derived from the
+same retained run by `actual_share_rows_move`. -/
+theorem transfer_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+    FourQuoteShareEvidence (.transfer
+      ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1⟩
+      target rfl rfl rfl config memoryWf run selectorEq) := by
+  exact .transfer
+    (words := ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1⟩)
+    target rfl rfl rfl config memoryWf run selectorEq
+
+/-- The compiled delegated transfer preserves the distinct caller/spender and
+owner roles even when their concrete addresses coincide. -/
+theorem transferFrom_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    FourQuoteShareEvidence (.transferFrom
+      ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1, Sevm.argWord sevm 2⟩
+      target rfl rfl rfl rfl config memoryWf run selectorEq) := by
+  exact .transferFrom
+    (words := ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1,
+      Sevm.argWord sevm 2⟩)
+    target rfl rfl rfl rfl config memoryWf run selectorEq
+
+/-- The compiled approval changes only its proven non-address allowance row,
+so the accepted approval tag has exact unchanged-share-row evidence. -/
+theorem approve_compiled_share_evidence
+    {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (target : sevm.currentTarget = vault)
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+    FourQuoteShareEvidence (.approve
+      ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1⟩
+      target rfl rfl rfl config memoryWf run selectorEq) := by
+  exact .approve
+    (words := ⟨sevm.caller, Sevm.argWord sevm 0, Sevm.argWord sevm 1⟩)
+    target rfl rfl rfl config memoryWf run selectorEq
 
 /-- The bounded quote-residue part of an actual operation. -/
 def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :

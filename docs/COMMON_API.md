@@ -900,6 +900,16 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
   growth of an address-prefix sum by the value credited including the wrapping
   case, and `transfer_does_not_increase_sum` is the paired-movement form.
   These are upper bounds; they do not establish that no wrap occurred.
+- For an exact observation of a finite coalition, import
+  [`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean) and use
+  `ledgerSumOn`. `ledgerSumOn_congr` transports pointwise agreement;
+  `ledgerSumOn_increase` needs the credited row's `B256.Nof`,
+  `ledgerSumOn_decrease` needs debit cover, and `ledgerSumOn_transfer` needs
+  pre-state `SumNof`. The transfer law already covers a self transfer and all
+  coalition-membership overlaps. These are local equations only: they neither
+  supply those guard facts nor establish an execution path or history. The
+  `finite-coalition-ledger` recipe reaches this branch from a target containing
+  `ledgerSumOn`.
 
 ### S6. I need a basic EVM-word identity
 
