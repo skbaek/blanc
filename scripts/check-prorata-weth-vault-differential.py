@@ -93,43 +93,43 @@ EXECUTED_CASE_CHANNELS = {
     "nonempty-and-donated-views": ("jaune", "eels"),
     "deposit-empty": ("jaune",),
     "deposit-donated": ("jaune",),
-    "causal-donation-before-deposit": ("jaune",),
-    "causal-donation-before-exit": ("jaune",),
-    "causal-between-users-donation": ("jaune",),
-    "causal-delegated-redeem": ("jaune",),
-    "causal-delegated-withdraw": ("jaune",),
-    "supported-root-deposit-zero": ("jaune",),
-    "supported-root-deposit-nonzero": ("jaune",),
-    "supported-root-mint-zero": ("jaune",),
-    "supported-root-mint-nonzero": ("jaune",),
-    "supported-root-deposit-caller-receiver": ("jaune",),
-    "supported-root-deposit-caller-distinct-receiver": ("jaune",),
-    "supported-root-mint-caller-receiver": ("jaune",),
-    "supported-root-mint-caller-distinct-receiver": ("jaune",),
-    "supported-root-withdraw-zero": ("jaune",),
-    "supported-root-withdraw-nonzero": ("jaune",),
-    "supported-root-redeem-zero": ("jaune",),
-    "supported-root-redeem-nonzero": ("jaune",),
-    "supported-root-withdraw-vault-self-receiver": ("jaune",),
-    "supported-root-redeem-vault-self-receiver": ("jaune",),
-    **{f"supported-root-{method}-{role}": ("jaune",)
+    "causal-donation-before-deposit": ("jaune", "eels"),
+    "causal-donation-before-exit": ("jaune", "eels"),
+    "causal-between-users-donation": ("jaune", "eels"),
+    "causal-delegated-redeem": ("jaune", "eels"),
+    "causal-delegated-withdraw": ("jaune", "eels"),
+    "supported-root-deposit-zero": ("jaune", "eels"),
+    "supported-root-deposit-nonzero": ("jaune", "eels"),
+    "supported-root-mint-zero": ("jaune", "eels"),
+    "supported-root-mint-nonzero": ("jaune", "eels"),
+    "supported-root-deposit-caller-receiver": ("jaune", "eels"),
+    "supported-root-deposit-caller-distinct-receiver": ("jaune", "eels"),
+    "supported-root-mint-caller-receiver": ("jaune", "eels"),
+    "supported-root-mint-caller-distinct-receiver": ("jaune", "eels"),
+    "supported-root-withdraw-zero": ("jaune", "eels"),
+    "supported-root-withdraw-nonzero": ("jaune", "eels"),
+    "supported-root-redeem-zero": ("jaune", "eels"),
+    "supported-root-redeem-nonzero": ("jaune", "eels"),
+    "supported-root-withdraw-vault-self-receiver": ("jaune", "eels"),
+    "supported-root-redeem-vault-self-receiver": ("jaune", "eels"),
+    **{f"supported-root-{method}-{role}": ("jaune", "eels")
        for method in ("withdraw", "redeem") for role in (
            "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
            "owner-receiver-distinct-caller", "all-distinct")},
-    "supported-root-approve-initial-finite": ("jaune",),
-    "supported-root-approve-overwrite": ("jaune",),
-    "supported-root-approve-zero": ("jaune",),
-    "supported-root-approve-restored-finite": ("jaune",),
-    "supported-root-approve-self": ("jaune",),
-    "supported-root-approve-max": ("jaune",),
-    "supported-root-transfer-from-finite": ("jaune",),
-    "supported-root-transfer-from-owner": ("jaune",),
-    "supported-root-transfer-from-infinite": ("jaune",),
-    "supported-root-transfer-self": ("jaune",),
-    "supported-root-transfer-zero": ("jaune",),
-    "supported-root-allowance-underflow-rollback": ("jaune",),
-    "supported-root-deposit-zero-receiver-rollback": ("jaune",),
-    "supported-root-transfer-zero-receiver-rollback": ("jaune",),
+    "supported-root-approve-initial-finite": ("jaune", "eels"),
+    "supported-root-approve-overwrite": ("jaune", "eels"),
+    "supported-root-approve-zero": ("jaune", "eels"),
+    "supported-root-approve-restored-finite": ("jaune", "eels"),
+    "supported-root-approve-self": ("jaune", "eels"),
+    "supported-root-approve-max": ("jaune", "eels"),
+    "supported-root-transfer-from-finite": ("jaune", "eels"),
+    "supported-root-transfer-from-owner": ("jaune", "eels"),
+    "supported-root-transfer-from-infinite": ("jaune", "eels"),
+    "supported-root-transfer-self": ("jaune", "eels"),
+    "supported-root-transfer-zero": ("jaune", "eels"),
+    "supported-root-allowance-underflow-rollback": ("jaune", "eels"),
+    "supported-root-deposit-zero-receiver-rollback": ("jaune", "eels"),
+    "supported-root-transfer-zero-receiver-rollback": ("jaune", "eels"),
     "foreign-child-canonical-return-and-rollback": ("jaune", "eels"),
     **{f"foreign-child-{flow}-{kind}": ("jaune", "eels")
        for flow in ("deposit", "mint", "withdraw", "redeem") for kind in (
@@ -151,17 +151,17 @@ EXECUTED_CASE_CHANNELS = {
     "event-order-withdraw": ("jaune",),
     "event-order-redeem": ("jaune",),
     "quote-timing-pre-transfer": ("jaune",),
-    "capacity-a-u-zero-flows": ("jaune",),
+    "capacity-a-u-zero-flows": ("jaune", "eels"),
     "capacity-a-u-nonzero-redeem": ("jaune", "eels"),
-    "capacity-supply-ceiling-flows": ("jaune",),
+    "capacity-supply-ceiling-flows": ("jaune", "eels"),
     "composition-exact-child-provenance": ("jaune",),
     "composition-collision-premise-pairs": ("jaune",),
-    "donation-classification": ("jaune",),
-    "causal-return-deposit-caller-receiver": ("jaune",),
-    "causal-return-deposit-caller-distinct-receiver": ("jaune",),
-    "causal-return-mint-caller-receiver": ("jaune",),
-    "causal-return-mint-caller-distinct-receiver": ("jaune",),
-    **{f"causal-return-{method}-{role}": ("jaune",)
+    "donation-classification": ("jaune", "eels"),
+    "causal-return-deposit-caller-receiver": ("jaune", "eels"),
+    "causal-return-deposit-caller-distinct-receiver": ("jaune", "eels"),
+    "causal-return-mint-caller-receiver": ("jaune", "eels"),
+    "causal-return-mint-caller-distinct-receiver": ("jaune", "eels"),
+    **{f"causal-return-{method}-{role}": ("jaune", "eels")
        for method in ("withdraw", "redeem") for role in (
            "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
            "owner-receiver-distinct-caller", "all-distinct")},
@@ -746,6 +746,40 @@ def _withdraw_events(label: str, result: dict, caller: int, receiver: int,
         fail(f"{label}: Withdraw words differ")
 
 
+def _projected_pair_accounts(run: Runner, label: str, model: V.Vault,
+                             accounts: tuple[int, ...], *,
+                             weth_allowances: tuple[tuple[int, int], ...] = (),
+                             share_allowances: tuple[tuple[int, int], ...] = ()
+                             ) -> tuple[dict, dict]:
+    """Project the oracle model into normalized WETH/vault accounts.
+
+    The single projection consumed both by `_pair_state` (Jaune
+    post-states) and by the EELS history replays (review F27), so the two
+    engines assert the identical oracle picture after every step.
+    """
+    base_vault = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+    if not model.conserved():
+        fail(f"{label}: oracle share ledger is not conserved")
+    expected_weth = {}
+    for account in accounts:
+        _set_storage_word(expected_weth, account, model.weth.get(account, 0), label)
+    for owner, spender in weth_allowances:
+        _set_storage_word(expected_weth, weth_allowance_key(owner, spender),
+                          model.weth_allowances.get((owner, spender), 0), label)
+    expected_vault = dict(base_vault)
+    for account in accounts:
+        _set_storage_word(expected_vault, run.side.shares_slot(account), model.balance_of(account), label)
+    _set_storage_word(expected_vault, run.side.supply_slot, model.supply, label)
+    for owner, spender in share_allowances:
+        _set_storage_word(expected_vault, run.side.allowance_slot(owner, spender),
+                          model.allowance(owner, spender), label)
+    backed = sum(model.weth.get(account, 0) for account in accounts)
+    return ({"balance": backed, "nonce": 1, "code": run.weth_code,
+             "storage": expected_weth},
+            {"balance": 0, "nonce": 1, "code": run.side.code,
+             "storage": expected_vault})
+
+
 def _pair_state(run: Runner, label: str, result: dict, model: V.Vault,
                 accounts: tuple[int, ...], *,
                 weth_allowances: tuple[tuple[int, int], ...] = (),
@@ -764,30 +798,12 @@ def _pair_state(run: Runner, label: str, result: dict, model: V.Vault,
     try:
         weth_account = _normalized_account(post, WETH_ADDR)
         vault_account = _normalized_account(post, VAULT_ADDR)
-        base_vault = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+        expected_weth_account, expected_vault_account = _projected_pair_accounts(
+            run, label, model, accounts, weth_allowances=weth_allowances,
+            share_allowances=share_allowances)
     except ValueError as exc:
         fail(f"{label}: cannot normalize application account: {exc}")
         return
-    if not model.conserved():
-        fail(f"{label}: oracle share ledger is not conserved")
-    expected_weth = {}
-    for account in accounts:
-        _set_storage_word(expected_weth, account, model.weth.get(account, 0), label)
-    for owner, spender in weth_allowances:
-        _set_storage_word(expected_weth, weth_allowance_key(owner, spender),
-                          model.weth_allowances.get((owner, spender), 0), label)
-    expected_vault = dict(base_vault)
-    for account in accounts:
-        _set_storage_word(expected_vault, run.side.shares_slot(account), model.balance_of(account), label)
-    _set_storage_word(expected_vault, run.side.supply_slot, model.supply, label)
-    for owner, spender in share_allowances:
-        _set_storage_word(expected_vault, run.side.allowance_slot(owner, spender),
-                          model.allowance(owner, spender), label)
-    backed = sum(model.weth.get(account, 0) for account in accounts)
-    expected_weth_account = {"balance": backed, "nonce": 1, "code": run.weth_code,
-                             "storage": expected_weth}
-    expected_vault_account = {"balance": 0, "nonce": 1, "code": run.side.code,
-                              "storage": expected_vault}
     if weth_account != expected_weth_account:
         fail(f"{label}: complete normalized WETH account differs from oracle projection")
     if vault_account != expected_vault_account:
@@ -1082,12 +1098,37 @@ def check_causal_share_allowance_roles(run: Runner) -> None:
     # Each failure starts from a genuine prior post-state. The whole vault
     # account includes every share/allowance row; the WETH account includes its
     # finite residual allowance. Only payer envelope effects stay excluded.
-    exhausted = steps[3]["alloc"]
+    # The first probe underflows from an allowance zeroed by `approve(0)`;
+    # the true partial-spend probe below exhausts its approval by spending.
+    zeroed = steps[3]["alloc"]
     before = len(FAILURES)
-    _check_revert_evidence("share-allowance-roles exhausted finite allowance", exhausted,
-                           run.call(exhausted, abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+    _check_revert_evidence("share-allowance-roles zeroed allowance underflow", zeroed,
+                           run.call(zeroed, abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
                                     signing_key=delegate_key,
-                                    nonce=_next_nonce(exhausted, delegate_key)))
+                                    nonce=_next_nonce(zeroed, delegate_key)))
+    record_case_if_clean("supported-root-allowance-underflow-rollback", "jaune", run.side.name, before)
+    # A true partial spend (review F27): the restored finite approval is
+    # exhausted by an exact transferFrom, and the next unit underflows with
+    # whole-call rollback. Blanc's updateAllowance runs after the balance
+    # move and log, so this is exactly the path where a rollback failure
+    # would show.
+    partial = steps[4]["alloc"]
+    before = len(FAILURES)
+    exact = run.call(partial,
+                     abi("transferFrom(address,address,uint256)", run.user, receiver, finite),
+                     signing_key=delegate_key,
+                     nonce=_next_nonce(partial, delegate_key))
+    if _accepted_success("share-allowance-roles partial spend exact", exact):
+        spent_vault, _ = vault_state(exact)
+        if run.share_allowance(spent_vault, run.user, delegate) != 0:
+            fail("share-allowance-roles partial spend did not exhaust the approval")
+        else:
+            _check_revert_evidence(
+                "share-allowance-roles partial spend over-spend", exact["alloc"],
+                run.call(exact["alloc"],
+                         abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+                         signing_key=delegate_key,
+                         nonce=_next_nonce(exact["alloc"], delegate_key)))
     record_case_if_clean("supported-root-allowance-underflow-rollback", "jaune", run.side.name, before)
     final = steps[-1]["alloc"]
     before = len(FAILURES)
@@ -2309,6 +2350,188 @@ def _eels_state(alloc: dict):
     return state
 
 
+def _eels_history(run: Runner, label: str, root_alloc: dict,
+                  setup_funding: dict[int, int], setup_approvals: dict[int, int],
+                  case_steps: list[tuple[str, int, str, int, int]],
+                  model_ops: list, accounts: tuple[int, ...], *,
+                  weth_allowances: tuple[tuple[int, int], ...] = (),
+                  share_allowances: tuple[tuple[int, int], ...] = (),
+                  records: dict[int, str] | None = None,
+                  returns: dict[int, int | None] | None = None,
+                  reverts: dict[int, bytes | None] | None = None,
+                  model_rejects: tuple[int, ...] = (),
+                  initial_model: V.Vault | None = None,
+                  callers: dict[int, int] | None = None,
+                  backed: bool = True) -> V.Vault | None:
+    """Replay a funded history on pinned EELS against the oracle projection.
+
+    The setup rebuilds `funded_pair` exactly (payable WETH funding, then
+    vault approvals) as direct EELS messages, unless `initial_model`
+    carries the prestate picture for a seeded (non-`funded_pair`) root;
+    `case_steps` are `(name, target, calldata, value, signing_key)`
+    tuples like `run_sequence` consumes, each paired with its `model_ops`
+    oracle call.  Pseudo-ops `("fund", (holder, amount))`,
+    `("approve_weth", (holder, amount))` and `("weth_move", (src, dst,
+    amount))` advance the model for setup-shaped steps in either
+    position.  Every step projects the live model into a full expected
+    allocation and requires the EELS state-root to match, so both engines
+    assert the identical oracle picture.  `records` maps a case-step
+    index to its matrix case for eels-channel credit, `returns` pins a
+    32-byte return word (an int, or None for the oracle step's own
+    returned value), and `reverts` requires a revert with rollback (plus
+    payload when given; steps listed in `model_rejects` must also be
+    rejected by the oracle).  `backed` requires native WETH ether to back
+    the projected ledger (the funded-pair histories); seeded arithmetic
+    roots pass False and keep their own native balances.  Returns the
+    final model, or None after recording a failure.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.fork_types import Address
+    from ethereum.prague.state import get_account, state_root
+    records = records or {}
+    returns = returns or {}
+    reverts = reverts or {}
+    callers = callers or {}
+    addr_bytes = lambda raw: bytes.fromhex(raw.removeprefix("0x"))
+    plan: list[tuple[str, tuple[str, int, str, int, int], tuple | None]] = []
+    for key, amount in setup_funding.items():
+        plan.append((f"{label} fund WETH",
+                     ("fund WETH", WETH_ADDR, "0x", amount, key),
+                     ("fund", (signer_address(key), amount))))
+    for key, amount in setup_approvals.items():
+        plan.append((f"{label} approve WETH",
+                     ("approve WETH", WETH_ADDR,
+                      abi("approve(address,uint256)", VAULT_ADDR, amount), 0, key),
+                     ("approve_weth", (signer_address(key), amount))))
+    if len(case_steps) != len(model_ops):
+        fail(f"{label}: {len(case_steps)} case steps but {len(model_ops)} model ops")
+        return None
+    base = len(plan)
+    for (name, target, data, value, key), op in zip(case_steps, model_ops):
+        plan.append((f"{label} {name}", (name, target, data, value, key), op))
+    if initial_model is not None and (setup_funding or setup_approvals):
+        fail(f"{label}: initial model with a funded_pair setup is contradictory")
+        return None
+    model = initial_model if initial_model is not None else V.Vault(vault_address=VAULT_ADDR)
+    state = _eels_state(root_alloc)
+    expected = deepcopy(root_alloc)
+    for position, (step_label, (_, target, data, value, key), op) in enumerate(plan):
+        case_index = position - base
+        if case_index in callers:
+            caller = callers[case_index]
+        else:
+            caller = signer_address(key)
+        step_failures = len(FAILURES)
+        have = int(get_account(state, Address(addr_bytes(address(caller)))).balance)
+        if have < value:
+            fail(f"{step_label}: EELS caller cannot fund value {value}; "
+                 f"refusing auto-funded replay")
+            return None
+        pre_root = bytes(state_root(state))
+        tx = SimpleNamespace(caller=address(caller), target=address(target),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=value,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=addr_bytes, coinbase=address(2),
+            default_origin=address(caller),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        if case_index in reverts:
+            want = reverts[case_index]
+            if eels.outcome(output) != "revert":
+                fail(f"{step_label}: EELS {eels.outcome(output)}, expected a revert")
+                return None
+            if want is not None and bytes(output.return_data) != want:
+                fail(f"{step_label}: EELS revert payload differs")
+                return None
+            if output.logs:
+                fail(f"{step_label}: EELS reverted but retained logs")
+                return None
+            if bytes(state_root(state)) != pre_root:
+                fail(f"{step_label}: EELS reverted but state differs from its pre-state")
+                return None
+            if case_index in model_rejects:
+                if op is None or op[0] != "reject":
+                    fail(f"{step_label}: revert step without a reject model op")
+                    return None
+                committed, _, _ = oracle_transaction(model, op[1][0], *op[1][1])
+                if committed:
+                    fail(f"{step_label}: oracle committed a step both engines revert")
+                    return None
+            elif op is not None and op[0] not in ("revert",):
+                fail(f"{step_label}: revert step carries a success model op")
+                return None
+            if case_index in records and len(FAILURES) == step_failures:
+                record_declared_cases((records[case_index],), "eels", run.side.name)
+            continue
+        if eels.outcome(output) != "success":
+            fail(f"{step_label}: EELS {eels.outcome(output)}, expected success")
+            return None
+        if op is None:
+            fail(f"{step_label}: success step without a model op")
+            return None
+        observed: int | None = None
+        if op[0] == "fund":
+            holder, amount = op[1]
+            model.weth[holder] = model.weth.get(holder, 0) + amount
+        elif op[0] == "approve_weth":
+            holder, amount = op[1]
+            model.weth_allowances[(holder, VAULT_ADDR)] = amount
+        elif op[0] == "weth_move":
+            src, dst, amount = op[1]
+            try:
+                model._weth_move(src, dst, amount)
+            except V.Revert as exc:
+                fail(f"{step_label}: oracle WETH move rejected: {exc.cls}")
+                return None
+        else:
+            committed, observed, model = oracle_transaction(model, op[0], *op[1])
+            if not committed:
+                fail(f"{step_label}: oracle rejected a step EELS executed")
+                return None
+        if case_index in returns:
+            pinned = returns[case_index]
+            if pinned is None:
+                if observed is None:
+                    fail(f"{step_label}: return pin needs an oracle step")
+                    return None
+                pinned = observed
+            if bytes(output.return_data) != pinned.to_bytes(32, "big"):
+                fail(f"{step_label}: EELS return differs from the oracle word")
+                return None
+        if value:
+            for account, delta in ((caller, -value), (target, value)):
+                entry = expected[address(account)]
+                entry["balance"] = h(_quantity(entry.get("balance", "0x0"),
+                                               f"{step_label} balance") + delta)
+        try:
+            weth_acct, vault_acct = _projected_pair_accounts(
+                run, step_label, model, accounts,
+                weth_allowances=weth_allowances, share_allowances=share_allowances)
+        except ValueError as exc:
+            fail(f"{step_label}: cannot project oracle accounts: {exc}")
+            return None
+        weth_balance = (h(weth_acct["balance"]) if backed
+                        else expected[address(WETH_ADDR)]["balance"])
+        expected[address(WETH_ADDR)] = {
+            "balance": weth_balance, "nonce": h(weth_acct["nonce"]),
+            "code": "0x" + weth_acct["code"].hex(),
+            "storage": {word(slot): word(val) for slot, val in weth_acct["storage"].items()}}
+        expected[address(VAULT_ADDR)] = {
+            "balance": h(vault_acct["balance"]), "nonce": h(vault_acct["nonce"]),
+            "code": "0x" + vault_acct["code"].hex(),
+            "storage": {word(slot): word(val) for slot, val in vault_acct["storage"].items()}}
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail(f"{step_label}: EELS state differs from the oracle projection")
+            return None
+        if case_index in records and len(FAILURES) == step_failures:
+            record_declared_cases((records[case_index],), "eels", run.side.name)
+    return model
+
+
 def check_eels_view_returns(run: Runner) -> None:
     """Independent pinned-EELS direct-message observations for every view.
 
@@ -3481,6 +3704,527 @@ def check_eels_a_u_nonzero_redeem(run: Runner) -> None:
                          failures_before)
 
 
+def check_eels_causal_donation_before_deposit(run: Runner) -> None:
+    """Independent EELS replay of the donation-before-deposit history."""
+    _eels_history(
+        run, "eels-donation-before-deposit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, KEY),
+         ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, run.user), 0, KEY)],
+        [("donate", (run.user, 3)),
+         ("deposit", (run.user, 4, run.user))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={1: "causal-donation-before-deposit"})
+
+
+def check_eels_causal_donation_before_exit(run: Runner) -> None:
+    """Independent EELS replay of the donation-before-exit history."""
+    _eels_history(
+        run, "eels-donation-before-exit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, KEY),
+         ("vault redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", 2000, run.user, run.user), 0, KEY)],
+        [("deposit", (run.user, 10, run.user)),
+         ("donate", (run.user, 3)),
+         ("redeem", (run.user, 2000, run.user, run.user))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={2: "causal-donation-before-exit"})
+
+
+def check_eels_causal_between_users_donation(run: Runner) -> None:
+    """Independent EELS replay of the two-funder donation history."""
+    key2 = 2
+    user2 = signer_address(key2)
+    _eels_history(
+        run, "eels-between-users-donation", run.causal_root((KEY, key2)),
+        {KEY: 100, key2: 100}, {KEY: 100, key2: 100},
+        [("first deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("outside donation", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, key2),
+         ("second deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, user2), 0, key2)],
+        [("deposit", (run.user, 10, run.user)),
+         ("donate", (user2, 3)),
+         ("deposit", (user2, 4, user2))],
+        (run.user, user2, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (user2, VAULT_ADDR)),
+        records={2: "causal-between-users-donation"})
+
+
+def check_eels_causal_delegated_redeem(run: Runner) -> None:
+    """Independent EELS replay of the delegated-redeem history."""
+    key2, shares = 2, 2000
+    delegate = signer_address(key2)
+    _eels_history(
+        run, "eels-delegated-redeem", run.causal_root((KEY, key2)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+         ("delegated redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", shares, delegate, run.user), 0, key2)],
+        [("deposit", (run.user, 10, run.user)),
+         ("approve", (run.user, delegate, shares)),
+         ("redeem", (delegate, shares, delegate, run.user))],
+        (run.user, delegate, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        share_allowances=((run.user, delegate),),
+        records={2: "causal-delegated-redeem"})
+
+
+def check_eels_causal_delegated_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the delegated-withdraw history."""
+    delegate_key, shares, assets = 2, 2_000, 2
+    delegate = signer_address(delegate_key)
+    _eels_history(
+        run, "eels-delegated-withdraw", run.causal_root((KEY, delegate_key)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+         ("delegated withdraw", VAULT_ADDR,
+          abi("withdraw(uint256,address,address)", assets, delegate, run.user), 0, delegate_key)],
+        [("deposit", (run.user, 10, run.user)),
+         ("approve", (run.user, delegate, shares)),
+         ("withdraw", (delegate, assets, delegate, run.user))],
+        (run.user, delegate, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        share_allowances=((run.user, delegate),),
+        records={2: "causal-delegated-withdraw"})
+
+
+def check_eels_share_allowance_roles(run: Runner) -> None:
+    """Independent EELS replay of the share-allowance history and its probes."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    keys = (KEY, delegate_key, receiver_key)
+    accounts = (run.user, delegate, receiver, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    share_rows = ((run.user, delegate), (run.user, run.user))
+    finite, self_allowance, maximum = 3_000, 500, V.U
+    steps = [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("overwrite approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 2_500), 0, KEY),
+        ("zero approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 0), 0, KEY),
+        ("restore finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("finite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 1_000),
+         0, delegate_key),
+        ("approve self", VAULT_ADDR, abi("approve(address,uint256)", run.user, self_allowance), 0, KEY),
+        ("owner transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100), 0, KEY),
+        ("approve max", VAULT_ADDR, abi("approve(address,uint256)", delegate, maximum), 0, KEY),
+        ("infinite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100),
+         0, delegate_key),
+        ("self transfer", VAULT_ADDR, abi("transfer(address,uint256)", run.user, 200), 0, KEY),
+        ("zero-value transfer", VAULT_ADDR, abi("transfer(address,uint256)", receiver, 0), 0, KEY),
+    ]
+    ops = [
+        ("deposit", (run.user, 10, run.user)),
+        ("approve", (run.user, delegate, finite)),
+        ("approve", (run.user, delegate, 2_500)),
+        ("approve", (run.user, delegate, 0)),
+        ("approve", (run.user, delegate, finite)),
+        ("transfer_from", (delegate, run.user, receiver, 1_000)),
+        ("approve", (run.user, run.user, self_allowance)),
+        ("transfer_from", (run.user, run.user, receiver, 100)),
+        ("approve", (run.user, delegate, maximum)),
+        ("transfer_from", (delegate, run.user, receiver, 100)),
+        ("transfer", (run.user, run.user, 200)),
+        ("transfer", (run.user, receiver, 0)),
+    ]
+    _eels_history(
+        run, "eels-share-allowance-roles", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100}, steps, ops, accounts,
+        weth_allowances=pairs, share_allowances=share_rows,
+        records={1: "supported-root-approve-initial-finite",
+                 2: "supported-root-approve-overwrite",
+                 3: "supported-root-approve-zero",
+                 4: "supported-root-approve-restored-finite",
+                 5: "supported-root-transfer-from-finite",
+                 6: "supported-root-approve-self",
+                 7: "supported-root-transfer-from-owner",
+                 8: "supported-root-approve-max",
+                 9: "supported-root-transfer-from-infinite",
+                 10: "supported-root-transfer-self",
+                 11: "supported-root-transfer-zero"})
+    over = [("over-spend", VAULT_ADDR,
+             abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+             0, delegate_key)]
+    reject_over = ("reject", ("transfer_from", (delegate, run.user, receiver, 1)))
+    _eels_history(
+        run, "eels-share-allowance-roles zeroed", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100}, steps[:4] + over, ops[:4] + [reject_over],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={4: "supported-root-allowance-underflow-rollback"},
+        reverts={4: None}, model_rejects=(4,))
+    _eels_history(
+        run, "eels-share-allowance-roles partial spend", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100},
+        steps[:5] + [("exact spend", VAULT_ADDR,
+                      abi("transferFrom(address,address,uint256)", run.user, receiver, finite),
+                      0, delegate_key)] + over,
+        ops[:5] + [("transfer_from", (delegate, run.user, receiver, finite)), reject_over],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={6: "supported-root-allowance-underflow-rollback"},
+        reverts={6: None}, model_rejects=(6,))
+    _eels_history(
+        run, "eels-share-allowance-roles zero receiver", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100},
+        steps + [("zero receiver", VAULT_ADDR,
+                  abi("transfer(address,uint256)", 0, 1), 0, KEY)],
+        ops + [("reject", ("transfer", (run.user, 0, 1)))],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={12: "supported-root-transfer-zero-receiver-rollback"},
+        reverts={12: None}, model_rejects=(12,))
+
+
+def check_eels_zero_nonzero_flows(run: Runner) -> None:
+    """Independent EELS replay of the zero/nonzero flow history."""
+    flows = [
+        ("zero deposit", "deposit", (run.user, 0, run.user),
+         abi("deposit(uint256,address)", 0, run.user)),
+        ("nonzero deposit", "deposit", (run.user, 10, run.user),
+         abi("deposit(uint256,address)", 10, run.user)),
+        ("zero mint", "mint", (run.user, 0, run.user),
+         abi("mint(uint256,address)", 0, run.user)),
+        ("nonzero mint", "mint", (run.user, 5, run.user),
+         abi("mint(uint256,address)", 5, run.user)),
+        ("zero withdraw", "withdraw", (run.user, 0, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero withdraw", "withdraw", (run.user, 2, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 2, run.user, run.user)),
+        ("zero redeem", "redeem", (run.user, 0, run.user, run.user),
+         abi("redeem(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero redeem", "redeem", (run.user, 5, run.user, run.user),
+         abi("redeem(uint256,address,address)", 5, run.user, run.user)),
+    ]
+    flow_cases = {
+        "zero deposit": "supported-root-deposit-zero",
+        "nonzero deposit": "supported-root-deposit-nonzero",
+        "zero mint": "supported-root-mint-zero",
+        "nonzero mint": "supported-root-mint-nonzero",
+        "zero withdraw": "supported-root-withdraw-zero",
+        "nonzero withdraw": "supported-root-withdraw-nonzero",
+        "zero redeem": "supported-root-redeem-zero",
+        "nonzero redeem": "supported-root-redeem-nonzero",
+    }
+    _eels_history(
+        run, "eels-zero-nonzero-flows", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [(label, VAULT_ADDR, data, 0, KEY) for label, _, _, data in flows],
+        [(method, args) for _, method, args, _ in flows],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={index: flow_cases[label] for index, (label, _, _, _) in enumerate(flows)})
+
+
+def check_eels_inbound_role_partitions(run: Runner) -> None:
+    """Independent EELS replays of the inbound receiver histories."""
+    receiver_key = 2
+    receiver_distinct = signer_address(receiver_key)
+    for method, role, receiver, amount, case in (
+            ("deposit", "caller-receiver", run.user, 10,
+             "supported-root-deposit-caller-receiver"),
+            ("deposit", "caller-distinct-receiver", receiver_distinct, 10,
+             "supported-root-deposit-caller-distinct-receiver"),
+            ("mint", "caller-receiver", run.user, 5,
+             "supported-root-mint-caller-receiver"),
+            ("mint", "caller-distinct-receiver", receiver_distinct, 5,
+             "supported-root-mint-caller-distinct-receiver")):
+        data = (abi("deposit(uint256,address)", amount, receiver)
+                if method == "deposit" else abi("mint(uint256,address)", amount, receiver))
+        _eels_history(
+            run, f"eels-inbound-role-{method}-{role}",
+            run.causal_root((KEY, receiver_key)),
+            {KEY: 100}, {KEY: 100}, [(method, VAULT_ADDR, data, 0, KEY)],
+            [(method, (run.user, amount, receiver))],
+            (run.user, receiver_distinct, VAULT_ADDR),
+            weth_allowances=((run.user, VAULT_ADDR),),
+            records={0: case})
+
+
+def check_eels_vault_self_receiver_exits(run: Runner) -> None:
+    """Independent EELS replays of the vault-self-receiver exits."""
+    for method, amount, case in (
+            ("withdraw", 2, "supported-root-withdraw-vault-self-receiver"),
+            ("redeem", 2_000, "supported-root-redeem-vault-self-receiver")):
+        data = (abi("withdraw(uint256,address,address)", amount, VAULT_ADDR, run.user)
+                if method == "withdraw"
+                else abi("redeem(uint256,address,address)", amount, VAULT_ADDR, run.user))
+        _eels_history(
+            run, f"eels-vault-self-receiver-{method}", run.causal_root((KEY,)),
+            {KEY: 100}, {KEY: 100},
+            [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+             (method, VAULT_ADDR, data, 0, KEY)],
+            [("deposit", (run.user, 10, run.user)),
+             (method, (run.user, amount, VAULT_ADDR, run.user))],
+            (run.user, VAULT_ADDR),
+            weth_allowances=((run.user, VAULT_ADDR),),
+            records={1: case})
+
+
+def check_eels_outbound_role_partitions(run: Runner) -> None:
+    """Independent EELS replays of the outbound role histories."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    roles = (
+        ("all-equal", KEY, run.user, None),
+        ("caller-owner-distinct-receiver", KEY, receiver, None),
+        ("caller-receiver-distinct-owner", delegate_key, delegate, 3_000),
+        ("owner-receiver-distinct-caller", delegate_key, run.user, V.U),
+        ("all-distinct", delegate_key, receiver, 3_000),
+    )
+    for method, amount in (("withdraw", 2), ("redeem", 2_000)):
+        for role, caller_key, recipient, approval in roles:
+            sig = "withdraw(uint256,address,address)" if method == "withdraw" else "redeem(uint256,address,address)"
+            steps = [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY)]
+            ops = [("deposit", (run.user, 10, run.user))]
+            if approval is not None:
+                steps.append(("approve shares", VAULT_ADDR,
+                              abi("approve(address,uint256)", delegate, approval), 0, KEY))
+                ops.append(("approve", (run.user, delegate, approval)))
+            caller = signer_address(caller_key)
+            steps.append((method, VAULT_ADDR, abi(sig, amount, recipient, run.user), 0, caller_key))
+            ops.append((method, (caller, amount, recipient, run.user)))
+            _eels_history(
+                run, f"eels-outbound-role-{method}-{role}",
+                run.causal_root((KEY, delegate_key, receiver_key)),
+                {KEY: 100}, {KEY: 100}, steps, ops,
+                (run.user, delegate, receiver, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                share_allowances=((run.user, delegate),) if approval is not None else (),
+                records={len(steps) - 1: f"supported-root-{method}-{role}"})
+
+
+def check_eels_zero_receiver_deposit(run: Runner) -> None:
+    """Independent EELS replay of the zero-receiver deposit revert."""
+    _eels_history(
+        run, "eels-zero-receiver-deposit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 1, 0), 0, KEY)],
+        [("reject", ("deposit", (run.user, 1, 0)))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={0: "supported-root-deposit-zero-receiver-rollback"},
+        reverts={0: None}, model_rejects=(0,))
+
+
+def check_eels_inbound_action_returns(run: Runner) -> None:
+    """Independent EELS observations of the funded inbound returns.
+
+    No recorder is needed: EELS exposes the top-level return bytes
+    directly, with the vault call issued as a direct message from the
+    recorder's address.
+    """
+    other_key = 2
+    other = signer_address(other_key)
+    funder = signer_address(KEY)
+    for method, role, receiver, amount in (
+            ("deposit", "caller-receiver", CAPTURE_ADDR, 7),
+            ("deposit", "caller-distinct-receiver", other, 7),
+            ("mint", "caller-receiver", CAPTURE_ADDR, 2000),
+            ("mint", "caller-distinct-receiver", other, 2000)):
+        case = f"causal-return-{method}-{role}"
+        root, _, _ = run.causal_capture_root((KEY, other_key))
+        accounts = tuple(dict.fromkeys(
+            (funder, CAPTURE_ADDR, *(signer_address(key) for key in (KEY, other_key)),
+             VAULT_ADDR)))
+        _eels_history(
+            run, f"eels-{case}", root, {}, {},
+            [("fund EOA WETH", WETH_ADDR, "0x", 100, KEY),
+             ("transfer WETH to recorder", WETH_ADDR,
+              abi("transfer(address,uint256)", CAPTURE_ADDR, 100), 0, KEY),
+             ("approve WETH", WETH_ADDR,
+              abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+             (method, VAULT_ADDR,
+              abi(f"{method}(uint256,address)", amount, receiver), 0, KEY)],
+            [("fund", (funder, 100)),
+             ("weth_move", (funder, CAPTURE_ADDR, 100)),
+             ("approve_weth", (CAPTURE_ADDR, 100)),
+             (method, (CAPTURE_ADDR, amount, receiver))],
+            accounts,
+            weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),),
+            records={3: case}, returns={2: 1, 3: None},
+            callers={2: CAPTURE_ADDR, 3: CAPTURE_ADDR})
+
+
+def check_eels_outbound_action_returns(run: Runner) -> None:
+    """Independent EELS observations of the outbound returns by role."""
+    owner_eoa = signer_address(KEY)
+    funder = owner_eoa
+    other = signer_address(2)
+    roles = (
+        ("all-equal", CAPTURE_ADDR, CAPTURE_ADDR, None),
+        ("caller-owner-distinct-receiver", CAPTURE_ADDR, other, None),
+        ("caller-receiver-distinct-owner", owner_eoa, CAPTURE_ADDR, 10_000),
+        ("owner-receiver-distinct-caller", owner_eoa, owner_eoa, V.U),
+        ("all-distinct", owner_eoa, other, 10_000),
+    )
+    for method in ("withdraw", "redeem"):
+        for role, owner, receiver, allowance in roles:
+            case = f"causal-return-{method}-{role}"
+            root, _, _ = run.causal_capture_root((KEY, 2))
+            if method == "withdraw":
+                amount = 3
+                calldata = abi("withdraw(uint256,address,address)", amount, receiver, owner)
+            else:
+                amount = 2000
+                calldata = abi("redeem(uint256,address,address)", amount, receiver, owner)
+            steps = [
+                ("fund owner WETH", WETH_ADDR, "0x", 100, KEY),
+                ("approve owner WETH", WETH_ADDR,
+                 abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+                ("deposit owner shares", VAULT_ADDR,
+                 abi("deposit(uint256,address)", 11, owner), 0, KEY),
+            ]
+            ops = [
+                ("fund", (funder, 100)),
+                ("approve_weth", (funder, 100)),
+                ("deposit", (funder, 11, owner)),
+            ]
+            if allowance is not None:
+                steps.append(("approve recorder shares", VAULT_ADDR,
+                              abi("approve(address,uint256)", CAPTURE_ADDR, allowance), 0, KEY))
+                ops.append(("approve", (funder, CAPTURE_ADDR, allowance)))
+            steps.append(("exit", VAULT_ADDR, calldata, 0, KEY))
+            ops.append((method, (CAPTURE_ADDR, amount, receiver, owner)))
+            last = len(steps) - 1
+            _eels_history(
+                run, f"eels-{case}", root, {}, {}, steps, ops,
+                (funder, CAPTURE_ADDR, signer_address(2), VAULT_ADDR),
+                weth_allowances=((funder, VAULT_ADDR),),
+                share_allowances=((owner, CAPTURE_ADDR),) if allowance is not None else (),
+                records={last: case}, returns={last: None},
+                callers={last: CAPTURE_ADDR})
+
+
+def check_eels_donation_classification(run: Runner) -> None:
+    """Independent EELS replay of the donation-classification history."""
+    assets, donation = 10, 3
+    _eels_history(
+        run, "eels-donation-classification", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", assets, run.user), 0, KEY),
+         ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY)],
+        [("deposit", (run.user, assets, run.user)),
+         ("donate", (run.user, donation))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={1: "donation-classification"})
+
+
+def check_eels_a_u_zero_flows(run: Runner) -> None:
+    """Independent EELS replay of the A=U zero-amount flows.
+
+    Blanc executes each flow through the 257-bit route; the reference
+    reverts every one under frozen deviation 6, with `Panic(0x11)`
+    pinned on the deposit leg exactly as the Jaune side pins it.
+    """
+    legs = (
+        ("deposit", abi("deposit(uint256,address)", 0, run.user),
+         ("deposit", (run.user, 0, run.user)), True),
+        ("mint", abi("mint(uint256,address)", 0, run.user),
+         ("mint", (run.user, 0, run.user)), False),
+        ("withdraw", abi("withdraw(uint256,address,address)", 0, run.user, run.user),
+         ("withdraw", (run.user, 0, run.user, run.user)), False),
+        ("redeem", abi("redeem(uint256,address,address)", 0, run.user, run.user),
+         ("redeem", (run.user, 0, run.user, run.user)), False),
+    )
+    for name, data, op, pin_panic in legs:
+        if run.side.name == "reference":
+            _eels_history(
+                run, f"eels-a-u-zero reference {name}", _a_u_zero_world(run),
+                {}, {}, [(name, VAULT_ADDR, data, 0, KEY)], [("revert", None)],
+                (run.user, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                records={0: "capacity-a-u-zero-flows"},
+                reverts={0: REFERENCE_MULDIV_OVERFLOW if pin_panic else None})
+        else:
+            _eels_history(
+                run, f"eels-a-u-zero {name}", _a_u_zero_world(run),
+                {}, {}, [(name, VAULT_ADDR, data, 0, KEY)], [op],
+                (run.user, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                records={0: "capacity-a-u-zero-flows"},
+                initial_model=_a_u_zero_model(run), backed=False)
+
+
+def check_eels_supply_ceiling_flows(run: Runner) -> None:
+    """Independent EELS replay of the supply-ceiling flows.
+
+    Blanc reverts the minting flows under the oracle supply-cap class
+    and executes the exits; the reference succeeds unbounded under
+    frozen deviation 5, projected with the same endpoint formulas.
+    """
+    world, supply = _ceiling_world(run)
+    accounts = (run.user, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    if run.side.name == "reference":
+        _eels_history(
+            run, "eels-ceiling reference exits", world, {}, {},
+            [("withdraw", VAULT_ADDR,
+              abi("withdraw(uint256,address,address)", 1, run.user, run.user), 0, KEY),
+             ("redeem", VAULT_ADDR,
+              abi("redeem(uint256,address,address)", 1, run.user, run.user), 0, KEY)],
+            [("withdraw", (run.user, 1, run.user, run.user)),
+             ("redeem", (run.user, 1, run.user, run.user))],
+            accounts, weth_allowances=pairs,
+            records={1: "capacity-supply-ceiling-flows"},
+            initial_model=_ceiling_model(run, supply), backed=False)
+        # Unbounded minting under deviation 5: the same endpoint formulas
+        # `_capacity_success_state` asserts, as an expected allocation.
+        _eels_root()
+        try:
+            import eels_differential_common as eels
+        except ImportError as exc:
+            raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+        from ethereum.prague.state import state_root
+        for name, data, paid, minted in (
+                ("deposit", abi("deposit(uint256,address)", 1, run.user), 1,
+                 V.convert_to_shares(1, supply, supply)),
+                ("mint", abi("mint(uint256,address)", 1, run.user),
+                 V.preview_mint(1, supply, supply), 1)):
+            state = _eels_state(world)
+            tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                                 calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                                 timestamp=1000, gas=3_000_000)
+            output, _, _, _, _ = eels.execute_tx(
+                state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+                coinbase=address(2), default_origin=address(run.user),
+                fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+            if eels.outcome(output) != "success":
+                fail(f"eels-ceiling reference {name}: EELS reverted, deviation 5 succeeds")
+                return
+            expected = deepcopy(world)
+            weth_storage = expected[address(WETH_ADDR)]["storage"]
+            weth_storage[word(run.user)] = word(100 - paid)
+            weth_storage[word(VAULT_ADDR)] = word(supply + paid)
+            weth_storage[word(weth_allowance_key(run.user, VAULT_ADDR))] = word(100 - paid)
+            vault_storage = expected[address(VAULT_ADDR)]["storage"]
+            vault_storage[word(run.side.shares_slot(run.user))] = word(supply + minted)
+            vault_storage[word(run.side.supply_slot)] = word(supply + minted)
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail(f"eels-ceiling reference {name}: EELS state differs from the endpoint projection")
+                return
+        return
+    _eels_history(
+        run, "eels-ceiling flows", world, {}, {},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 1, run.user), 0, KEY),
+         ("mint", VAULT_ADDR, abi("mint(uint256,address)", 1, run.user), 0, KEY),
+         ("withdraw", VAULT_ADDR,
+          abi("withdraw(uint256,address,address)", 1, run.user, run.user), 0, KEY),
+         ("redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", 1, run.user, run.user), 0, KEY)],
+        [("reject", ("deposit", (run.user, 1, run.user))),
+         ("reject", ("mint", (run.user, 1, run.user))),
+         ("withdraw", (run.user, 1, run.user, run.user)),
+         ("redeem", (run.user, 1, run.user, run.user))],
+        accounts, weth_allowances=pairs,
+        records={3: "capacity-supply-ceiling-flows"},
+        reverts={0: None, 1: None}, model_rejects=(0, 1),
+        initial_model=_ceiling_model(run, supply), backed=False)
+
+
 def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
     """Pinned EELS replay of each new explicitly declared arithmetic prestate."""
     _eels_root()
@@ -3861,6 +4605,22 @@ def run_eels_side(run: Runner) -> None:
         check_eels_a_u_nonzero_redeem,
         check_eels_explicit_arithmetic_capacity_cases,
         check_eels_adversarial_child_returns_and_rollback,
+        check_eels_causal_donation_before_deposit,
+        check_eels_causal_donation_before_exit,
+        check_eels_causal_between_users_donation,
+        check_eels_causal_delegated_redeem,
+        check_eels_causal_delegated_withdraw,
+        check_eels_share_allowance_roles,
+        check_eels_zero_nonzero_flows,
+        check_eels_inbound_role_partitions,
+        check_eels_vault_self_receiver_exits,
+        check_eels_outbound_role_partitions,
+        check_eels_zero_receiver_deposit,
+        check_eels_inbound_action_returns,
+        check_eels_outbound_action_returns,
+        check_eels_donation_classification,
+        check_eels_a_u_zero_flows,
+        check_eels_supply_ceiling_flows,
     )
     for check in checks:
         before = len(FAILURES)
@@ -4940,7 +5700,7 @@ DISPOSITION_PERTURBATIONS = (
      "superseded case 'transfer-from-infinite' names successor "
      "'supported-root-transfer-from-infinite', which no channel implements",
      "checker",
-     '    "supported-root-transfer-from-infinite": ("jaune",),\n',
+     '    "supported-root-transfer-from-infinite": ("jaune", "eels"),\n',
      ""),
     # A case cannot be both executed and excused; the partition is exact.
     ("double disposition",
@@ -5370,7 +6130,7 @@ DISPOSITION_PERTURBATIONS = (
      "superseded case 'transfer-from-infinite' names successor "
      "'supported-root-transfer-from-infinite', which no channel implements",
      "checker",
-     '    "supported-root-transfer-from-infinite": ("jaune",),\n',
+     '    "supported-root-transfer-from-infinite": ("jaune", "eels"),\n',
      ""),
     # A case cannot be both executed and excused; the partition is exact.
     ("double disposition",
