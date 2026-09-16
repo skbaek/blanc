@@ -951,6 +951,26 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-07"
 
 [[recipe]]
+id = "finite-coalition-ledger"
+status = "active"
+triggers = ["goal-shape:finite-coalition-ledger"]
+preferred_path = "Import `Blanc.LedgerConservation` and express the observation as `ledgerSumOn coalition balances`. Use `ledgerSumOn_congr` for pointwise equality, `ledgerSumOn_increase` for an actual `Increase` plus receiver-row `B256.Nof`, `ledgerSumOn_decrease` for an actual `Decrease` plus owner cover, and `ledgerSumOn_transfer` for an actual `Transfer` plus pre-state `SumNof`. The transfer theorem handles a self-transfer and every coalition-membership overlap; do not split them into an owner-not-receiver side condition."
+boundary = "These are local finite-coalition equations. An `Increase` alone permits receiver-side word wrap, a `Decrease` needs cover, and a `Transfer` needs pre-state `SumNof`; prove those facts at the operation boundary. Neither the equations nor `LedgerConserved` establish configured-history admission, an actual endpoint run, or path-level preservation."
+owner_module = "Blanc/LedgerConservation.lean"
+canonical_example = "Blanc/LedgerConservation.lean:ledgerSumOn_transfer"
+symbols = [
+  "module:Blanc/LedgerConservation.lean",
+  "declaration:Blanc.ledgerSumOn",
+  "declaration:Blanc.ledgerSumOn_congr",
+  "declaration:Blanc.ledgerSumOn_increase",
+  "declaration:Blanc.ledgerSumOn_decrease",
+  "declaration:Blanc.ledgerSumOn_transfer",
+  "declaration:Blanc.LedgerConserved.sumNof",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-16"
+
+[[recipe]]
 id = "symbolic-label-linking"
 status = "active"
 triggers = [

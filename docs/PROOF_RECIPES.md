@@ -449,6 +449,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/AbstractStackCertificate.lean`, `module:Blanc/AbstractStackTransfer.lean`, `module:Blanc/AbstractStackSafety.lean`, `module:Blanc/CompiledStackSafety.lean`, `declaration:Blanc.CompiledStackSafety.StackFault`, `declaration:Blanc.CompiledStackSafety.NoStackFault`, `declaration:Blanc.CompiledStackSafety.InheritedStackFault`, `declaration:Blanc.CompiledStackSafety.ResumeSafe`, `declaration:Blanc.CompiledStackSafety.StepSafe`, `declaration:Blanc.CompiledStackSafety.Certificate`, `declaration:Blanc.CompiledStackSafety.Certificate.parentStep`, `declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix`, `declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix`, `declaration:Blanc.AbstractStackSafety.Pattern`, `declaration:Blanc.AbstractStackSafety.Matches`, `declaration:Blanc.AbstractStackSafety.SafeResult`, `declaration:Blanc.AbstractStackSafety.regularTransfer`, `declaration:Blanc.AbstractStackSafety.terminalTransfer`, `declaration:Blanc.AbstractStackSafety.callTransfer`, `declaration:Blanc.AbstractStackSafety.Table`, `declaration:Blanc.AbstractStackSafety.Table.Invariant`, `declaration:Blanc.AbstractStackSafety.Table.all_node`, `declaration:Blanc.AbstractStackSafety.Table.count_le_one`, `declaration:Blanc.AbstractStackSafety.Table.checkLayout`, `declaration:Blanc.AbstractStackSafety.checkTable`, `declaration:Blanc.AbstractStackSafety.checkTable_certificate`, `declaration:Blanc.AbstractStackSafety.exampleTable_checked`, `declaration:Blanc.AbstractStackSafety.exampleTable_certificate`
 - Review: `proof-infrastructure` on `2026-09-07`
 
+## `finite-coalition-ledger`
+
+- Status: `active`
+- Triggers: `goal-shape:finite-coalition-ledger`
+- Preferred path: Import `Blanc.LedgerConservation` and express the observation as `ledgerSumOn coalition balances`. Use `ledgerSumOn_congr` for pointwise equality, `ledgerSumOn_increase` for an actual `Increase` plus receiver-row `B256.Nof`, `ledgerSumOn_decrease` for an actual `Decrease` plus owner cover, and `ledgerSumOn_transfer` for an actual `Transfer` plus pre-state `SumNof`. The transfer theorem handles a self-transfer and every coalition-membership overlap; do not split them into an owner-not-receiver side condition.
+- Boundary: These are local finite-coalition equations. An `Increase` alone permits receiver-side word wrap, a `Decrease` needs cover, and a `Transfer` needs pre-state `SumNof`; prove those facts at the operation boundary. Neither the equations nor `LedgerConserved` establish configured-history admission, an actual endpoint run, or path-level preservation.
+- Owner module: [Blanc/LedgerConservation.lean](../Blanc/LedgerConservation.lean)
+- Canonical example: [Blanc/LedgerConservation.lean](../Blanc/LedgerConservation.lean) — `ledgerSumOn_transfer`
+- Registered symbols: `module:Blanc/LedgerConservation.lean`, `declaration:Blanc.ledgerSumOn`, `declaration:Blanc.ledgerSumOn_congr`, `declaration:Blanc.ledgerSumOn_increase`, `declaration:Blanc.ledgerSumOn_decrease`, `declaration:Blanc.ledgerSumOn_transfer`, `declaration:Blanc.LedgerConserved.sumNof`
+- Review: `proof-infrastructure` on `2026-09-16`
+
 ## `symbolic-label-linking`
 
 - Status: `active`

@@ -7,10 +7,18 @@ namespace Blanc
 
 open Lean.Elab.Tactic
 
+def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
+  match trigger with
+  | "goal-shape:finite-coalition-ledger" =>
+      return proofRecipeContainsName `Blanc.ledgerSumOn target
+  | _ => return false
+
 def proofRecipeMatches (target : Lean.Expr)
     (recipe : ProofRecipes.Recipe) : TacticM Bool := do
   for trigger in recipe.triggers do
     if ← proofRecipeTriggerMatches target trigger then
+      return true
+    if ← proofRecipeLeafTriggerMatches target trigger then
       return true
   return false
 

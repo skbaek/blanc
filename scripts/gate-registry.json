@@ -3359,6 +3359,35 @@
           "^OK — checked Lido CircuitBreaker × TWG BPO2 replay: 2 composed duration arms \\+ 2 family pause/query arms, 2 execution mutants rejected, zero semantic mismatches$"
         ]
       }
+    },
+    {
+      "command": [
+        "scripts/check.sh",
+        "--suggestions-only"
+      ],
+      "id": "recipe-dispatch-controls",
+      "inputs": {
+        "files": [
+          "scripts/check.sh",
+          "scripts/gate-semaphore.sh"
+        ],
+        "lean_entries": [
+          "scripts/ProofRecipeSuggestions.lean"
+        ],
+        "tools": [
+          "lean",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The isolated recipe-dispatch controls. Its verdict is determined by the elaborated suggestions file and by scripts/check.sh's own bytes, which carry this mode's population floors and its verdict format string. The dispatch the controls exercise — Blanc/ProofRecipeTactic.lean, Blanc/Tactics.lean and the generated Blanc/ProofRecipesGenerated.lean — is reached through the Lean entry's import closure rather than declared again here, so deleting the leaf delegation inside proofRecipeMatches both invalidates this row and fails it. It is registered separately from axiom-audit on purpose: that row couples these controls to the whole AxiomCheck.lean artifact set, so one unrelated missing object leaves them with no green baseline and no way to show that a mutation bites.",
+      "order": 73,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — recipe dispatch controls: "
+        ]
+      }
     }
   ],
   "schema": 1

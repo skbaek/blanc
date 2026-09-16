@@ -94,6 +94,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "prorata-weth-vault-differential-self-test",
             "prorata-weth-vault-reference-self-test",
             "lido-twg-pinned-target-current-mainnet",
+            "recipe-dispatch-controls",
         ],
     }
     for key, expected in expected_meta.items():
@@ -211,7 +212,7 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-        "- Fourteen gates landed after the launch inventory: BeaconDeposit assurance runs early;",
+        "- Fifteen gates landed after the launch inventory: BeaconDeposit assurance runs early;",
         "  BeaconDeposit deployment and WETH10 current-mainnet retain their reviewed output-aware",
         "  boundaries; Keccak rate-boundary is a static row; the local-draft DRIP stack",
         "  certificate data row runs deterministic source comparison and corruption controls;",
@@ -221,8 +222,11 @@ def render() -> str:
         "  rows run early among the cheap static gates: the vendored-reference identity,",
         "  the independent oracle, the two-runtime differential, and their three harness",
         "  self-tests; and the TWG pinned-target row replays composed and family pause/query",
-        "  arms under literal BPO2 with exact compiler-owned artifacts as direct inputs.",
-        "  The final population is therefore 53 + 5 + 14 = 72; no required content was dropped.",
+        "  arms under literal BPO2 with exact compiler-owned artifacts as direct inputs;",
+        "  and the isolated recipe-dispatch controls row elaborates the committed suggestion",
+        "  harness alone, so a mutation of the production dispatch has a green baseline that",
+        "  the coupled axiom-audit row cannot give it.",
+        "  The final population is therefore 53 + 5 + 15 = 73; no required content was dropped.",
         "- CI makes the same five splits and adds the cheap assurance row, so its registered",
         "  command population moves from 34 to 40. Deployment, the DRIP certificate, and the",
         "  TWG pinned-target replay remain local merge-candidate rows. The prerequisite column",
