@@ -539,6 +539,49 @@ abbrev RealizedStep : Type := Step scale.toNat freshNat
 abbrev RealizedChain : Snapshot → List RealizedStep → Snapshot → Prop :=
   Chain scale.toNat freshNat
 
+/-- The pure accounting step for one elapsed DRIP interval. -/
+def dripPost (s : Snapshot) (elapsed : Nat) : Snapshot :=
+  ⟨freshNat s.chi elapsed, s.rho + elapsed,
+    s.coalitionUnits, s.totalUnits, s.balance⟩
+
+def dripStep (s : Snapshot) (elapsed : Nat) : RealizedStep :=
+  { pre := s
+    kind := .drip elapsed
+    post := dripPost s elapsed
+    effect := .drip s.chi s.rho s.coalitionUnits s.totalUnits s.balance elapsed }
+
+/-- The state-threaded list of pure DRIP steps for a segment schedule. -/
+def dripSteps (s : Snapshot) : List Nat → List RealizedStep
+  | [] => []
+  | elapsed :: rest => dripStep s elapsed ::
+      dripSteps (dripPost s elapsed) rest
+
+private theorem dripSteps_chain_chi (s : Snapshot) (ks : List Nat)
+    {t : Snapshot} (chain : RealizedChain s (dripSteps s ks) t) :
+    t.chi = segmentIndex scale.toNat half.toNat rate.toNat s.chi ks := by
+  induction ks generalizing s t with
+  | nil =>
+      cases chain
+      rfl
+  | cons elapsed rest ih =>
+      change RealizedChain s (dripStep s elapsed ::
+        dripSteps (dripPost s elapsed) rest) t at chain
+      cases chain with
+      | cons entry tail =>
+          have htail := ih (dripStep s elapsed).post tail
+          simpa [dripStep, dripPost, freshNat, factorNat, mulr,
+            segmentIndex, segmentIndexFrom] using htail
+
+/-! ## G5 — pure segmentation -/
+
+/-- A chain of pure DRIP steps computes Jaune's segment index. -/
+theorem chain_drips_eq_segmentIndex {chi rho cu tu b : Nat} {ks : List Nat}
+    {t : Snapshot}
+    (chain : RealizedChain ⟨chi, rho, cu, tu, b⟩
+      (dripSteps ⟨chi, rho, cu, tu, b⟩ ks) t) :
+    t.chi = segmentIndex scale.toNat half.toNat rate.toNat chi ks :=
+  dripSteps_chain_chi ⟨chi, rho, cu, tu, b⟩ ks chain
+
 theorem realized_freshNat_mono : ∀ chi k, chi ≤ freshNat chi k :=
   fun chi k => freshNat_mono chi k
 
@@ -588,18 +631,12 @@ theorem realized_rho_mono {s t : Snapshot} {steps : List RealizedStep}
 
 /-! ## Same-timestamp identities -/
 
-/-- The frozen factor at zero elapsed time is the scale itself: a
-same-timestamp call performs the identity accrual. -/
-theorem factorNat_zero : factorNat 0 = scale.toNat := by
-  unfold factorNat Jaune.rpow
-  split <;> rfl
-
 /-- A same-timestamp operation leaves the realized index exactly where it
 was.  Repeated calls in one block are therefore exact identities, not a
 rounding opportunity. -/
 theorem freshNat_zero (chi : Nat) : freshNat chi 0 = chi := by
   unfold freshNat
-  rw [factorNat_zero]
+  rw [drip_factorNat_zero]
   exact Nat.mul_div_cancel _ (Nat.pos_of_ne_zero scaleNat_ne_zero)
 
 private theorem scale_pos : 0 < scale.toNat :=

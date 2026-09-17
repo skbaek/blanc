@@ -229,8 +229,7 @@ theorem segment_spread_witness :
 /-! ## Zero/exponent edge cases -/
 
 /-- At `k = 0` the factor is the scale: same-timestamp accrual is a no-op by
-arithmetic, not by a special case. (Named apart from DripAccounting's local
-`factorNat_zero`, which the G4 packet will dedup.) -/
+arithmetic, not by a special case. -/
 theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
   Jaune.rpow_exponent_zero _ _ _
 
