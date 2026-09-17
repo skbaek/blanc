@@ -1436,7 +1436,38 @@ Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_cold_runtime_runCompiledTo
 Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause|$STANDARD
-Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel|$STANDARD"
+Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel|$STANDARD
+Blanc.Drip.sound_of_stepClosed|$STANDARD
+Blanc.Drip.accountingInv_stepClosed|$STANDARD
+Blanc.Drip.dripSpec_sound|$STANDARD
+Blanc.Drip.dripSpec_preserves|$STANDARD
+Blanc.Drip.monoInv_stepClosed|$STANDARD
+Blanc.Drip.dripMonoSpec_sound|$STANDARD
+Blanc.Drip.dripMonoSpec_preserves|$STANDARD
+Blanc.Drip.DeploymentRoot.monoStateInv|$STANDARD
+Blanc.Drip.DeploymentRoot.rho|$STANDARD
+Blanc.Drip.DeploymentRoot.reachable_chi_mono|$STANDARD
+Blanc.Drip.DeploymentRoot.reachable_rho_mono|$STANDARD
+Blanc.Drip.reach_chi_rho_mono|$STANDARD
+Blanc.Drip.rho_le_timestamp_at_boundary|$STANDARD
+Blanc.Drip.bodyOccurrence_mono|$STANDARD
+Blanc.Drip.exec_monoInv|$STANDARD
+Blanc.Drip.processMessage_mono|$STANDARD
+Blanc.Drip.message_error_mono|$STANDARD
+Blanc.Drip.transaction_mono|$STANDARD
+Blanc.Drip.transactionList_mono|$STANDARD
+Blanc.Drip.systemMessage_mono|$STANDARD
+Blanc.Drip.requests_mono|$STANDARD
+Blanc.Drip.withdrawals_mono|$STANDARD
+Blanc.Drip.body_mono|$STANDARD
+Blanc.Drip.configuredBlock_mono|$STANDARD
+Blanc.Drip.configuredHistory_mono|$STANDARD
+Blanc.Drip.drip_compiled_join|$STANDARD
+Blanc.Drip.drip_compiled_exit|$STANDARD
+Blanc.Drip.no_stale_index_success_callback_free|$STANDARD
+Blanc.Drip.no_stale_index_settlement_exit|$STANDARD
+Blanc.Drip.view_eq_same_timestamp_join|$STANDARD
+Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

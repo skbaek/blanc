@@ -96,6 +96,11 @@ import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
 import Blanc.AbstractStackCertificate
 import Blanc.ProxyPairUpgradeStackSafety
+import Blanc.DripSound
+import Blanc.DripMonotone
+import Blanc.DripMonotoneHistory
+import Blanc.DripFresh
+import Blanc.DripAccounting
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1185,3 +1190,34 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause
 #print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause
 #print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
+#print axioms Blanc.Drip.sound_of_stepClosed
+#print axioms Blanc.Drip.accountingInv_stepClosed
+#print axioms Blanc.Drip.dripSpec_sound
+#print axioms Blanc.Drip.dripSpec_preserves
+#print axioms Blanc.Drip.monoInv_stepClosed
+#print axioms Blanc.Drip.dripMonoSpec_sound
+#print axioms Blanc.Drip.dripMonoSpec_preserves
+#print axioms Blanc.Drip.DeploymentRoot.monoStateInv
+#print axioms Blanc.Drip.DeploymentRoot.rho
+#print axioms Blanc.Drip.DeploymentRoot.reachable_chi_mono
+#print axioms Blanc.Drip.DeploymentRoot.reachable_rho_mono
+#print axioms Blanc.Drip.reach_chi_rho_mono
+#print axioms Blanc.Drip.rho_le_timestamp_at_boundary
+#print axioms Blanc.Drip.bodyOccurrence_mono
+#print axioms Blanc.Drip.exec_monoInv
+#print axioms Blanc.Drip.processMessage_mono
+#print axioms Blanc.Drip.message_error_mono
+#print axioms Blanc.Drip.transaction_mono
+#print axioms Blanc.Drip.transactionList_mono
+#print axioms Blanc.Drip.systemMessage_mono
+#print axioms Blanc.Drip.requests_mono
+#print axioms Blanc.Drip.withdrawals_mono
+#print axioms Blanc.Drip.body_mono
+#print axioms Blanc.Drip.configuredBlock_mono
+#print axioms Blanc.Drip.configuredHistory_mono
+#print axioms Blanc.Drip.drip_compiled_join
+#print axioms Blanc.Drip.drip_compiled_exit
+#print axioms Blanc.Drip.no_stale_index_success_callback_free
+#print axioms Blanc.Drip.no_stale_index_settlement_exit
+#print axioms Blanc.Drip.view_eq_same_timestamp_join
+#print axioms Blanc.Drip.chain_drips_eq_segmentIndex
