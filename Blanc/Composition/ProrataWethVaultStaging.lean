@@ -1793,7 +1793,7 @@ private theorem checkedCall_depth_ne_zero
 
 /-- The actual zero-value CALL paid the parent-side gas charge that its
 configured occurrence needs. -/
-private theorem callGasAvailable_of_runCompiled
+theorem callGasAvailable_of_runCompiled
     {sevm : Sevm} {pre post : Devm} {inputSize : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (run : Ninst.RunCompiled sevm pre call post) :
@@ -2406,7 +2406,7 @@ private theorem readTotalAssets_depth_ne_zero
     exact Nat.ne_of_gt positiveDepth
 
 /-- The actual configured WETH crossing paid its parent-side gas charge. -/
-private theorem staticGasAvailable_of_runCompiled
+theorem staticGasAvailable_of_runCompiled
     {sevm : Sevm} {pre post : Devm} {inputSize : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
     (run : Ninst.RunCompiled sevm pre staticcall post) :
@@ -2667,6 +2667,251 @@ theorem quoteSnapshot_effect
       decide +kernel
   · unfold Blanc.ProrataWethVault.conversionStagingImage
     exact toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _)
+
+/-! ## Vault-parent child provenance
+
+`vault_externalSource_run_of_occurrence` locates the exact staging `Line.Run`
+in front of an arbitrary-outcome external occurrence of the vault's own frame.
+This section turns that into the child fact the history layer consumes: an
+occurrence of that frame whose step actually entered a child is an
+`ExactWethChildOccurrence` at `wethAccount`, carrying exactly one of the three
+staged calldata shapes with the vault frame's own account as the caller.
+
+No child behaviour is assumed anywhere below.  Call depth comes from the actual
+spawn (`Xinst.step_spawn_depth`), both gas premises come from the actual
+crossing (`callGasAvailable_of_runCompiled`, `staticGasAvailable_of_runCompiled`),
+and the two facts that are genuinely about the *parent's own machine* are named
+in `StagedSourceFrame` rather than smuggled in as a child assumption. -/
+
+/-- The three exact calldata shapes the vault source is allowed to stage at its
+WETH boundary, as the raw bytes of one actual crossing.  `caller` is the vault
+frame's own caller and `vault` its own account: the delegated-transfer form
+always pulls to the vault, and the asset query always reads the vault's row. -/
+def StagedWethCalldata (caller vault : Adr) (data : Bytes) : Prop :=
+  data = balanceOfCalldata vault ∨
+    (∃ assets : B256, data = transferFromCalldata caller vault assets) ∨
+    (∃ (receiver : Adr) (assets : B256), data = transferCalldata receiver assets)
+
+/-- The parent-frame side conditions of a staged calldata window, in the shape
+of `TotalAssetsResources`: both are quantified over the staging entry, because
+the source traversal exhibits that state existentially.
+
+`memoryWf` is the structural machine invariant `Mem.Wf`, which frame entry
+establishes (`Frame.enter_run_memory`, `Mem.wf_empty`) and no step destroys;
+without it `Mem.write` may truncate and the staged window is not readable.
+`receiverShaped` is the address shape of the staged receiver word, which the
+vault's own `nonzeroStagedAddress` guard enforces before either outbound
+transfer form is reached — `arg` is a raw `CALLDATALOAD`, so the shape is a
+theorem about the executed guard, not a property of the word's provenance.
+Neither field says anything about the child. -/
+structure StagedSourceFrame (sevm : Sevm) (callPre : Devm) : Prop where
+  /-- The machine memory is well-formed where the staging line started. -/
+  memoryWf : ∀ (form : WethCallSourceForm) (entry : Devm),
+    Line.Run sevm entry form.staging callPre → Mem.Wf entry.memory
+  /-- The staged receiver word is an address word. -/
+  receiverShaped : ∀ (assetsWord : B256) (entry : Devm),
+    Line.Run sevm entry
+        (transferStaging Blanc.ProrataWethVault.receiverWord assetsWord)
+        callPre →
+      ∃ receiver : Adr,
+        ImageWordAt entry.memory.data.toList
+          Blanc.ProrataWethVault.receiverWord receiver.toB256
+
+/-- A step that actually spawned a child frame ran at nonzero call depth: every
+spawning step function is depth-guarded. -/
+private theorem depth_ne_zero_of_spawn
+    {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume}
+    (spawn : Xinst.step sevm devm x = .spawn frame resume) :
+    sevm.depth ≠ 0 :=
+  Nat.ne_of_gt (Nat.lt_of_le_of_lt (Nat.zero_le _) (Xinst.step_spawn_depth spawn))
+
+/-- The exact compiled run of an occurrence whose step entered a child frame.
+`Ninst.RunCompiled` quantifies the program counter, and a call-family step does
+not read it (`Ninst.step_exec`, `XStep.run_toStep`), so the one actual child
+slot serves every counter. -/
+private theorem runCompiled_of_spawn
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok post) :
+    Ninst.RunCompiled sevm pre (.exec x) post := by
+  refine ⟨.some ⟨childEvm, raw⟩, ⟨child⟩, fun pc => ?_⟩
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, spawn]
+  exact ⟨_, RunFrame.of_run entered, resumed.symm⟩
+
+/-- Any padded 32-byte window of a concrete image is the image word of the
+value it reads back. -/
+private theorem imageWordAt_self (image : Bytes) (word : B256) :
+    ImageWordAt image word (Bytes.toB256 (image.sliceD (word * 32).toNat 32 0)) :=
+  sliceBytes_of_toB256 rfl
+
+/-- **Vault-parent child provenance.**  An external opcode actually reached by
+a same-frame execution of the exact vault code, whose step entered a child
+frame, is one exact retained WETH child occurrence: the child's target is
+`wethAccount`, its caller is the vault, and its calldata is exactly one of the
+three staged shapes.
+
+This is the first consumer of `vault_externalSource_run_of_occurrence`, and the
+theorem that discharges `VaultStagedCalldata` and the `foreign` arm of
+`VaultFrameConfiguration.childEntry` for a vault parent. -/
+theorem vault_exactWethChild_of_occurrence
+    {root : Exec.Deriv} {vault codeAddress : Adr} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
+    {post : Devm}
+    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault vault
+      codeAddress)
+    (occurrence : Exec.NinstOccurrence root)
+    (sameFrame : Exec.Deriv.ParentPrefix root occurrence.node)
+    (decoded : occurrence.instruction = .exec x)
+    (config : DirectWethConfiguration vault occurrence.node.sevm
+      occurrence.node.devm)
+    (source : StagedSourceFrame occurrence.node.sevm occurrence.node.devm)
+    (dynamic : Ninst.exec x = call → occurrence.node.sevm.isStatic = false)
+    (spawn : Xinst.step occurrence.node.sevm occurrence.node.devm x =
+      .spawn frame resume)
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok post) :
+    ∃ (calldata : Bytes) (static : Bool),
+      ExactWethChildOccurrence occurrence.node.sevm occurrence.node.devm post
+          (.exec x) calldata static ∧
+        StagedWethCalldata occurrence.node.sevm.caller vault calldata := by
+  obtain ⟨form, entry, staging, instruction, sevmEq⟩ :=
+    vault_externalSource_run_of_occurrence invocation occurrence sameFrame
+      decoded
+  have targetEq : occurrence.node.sevm.currentTarget = vault := by
+    rw [sevmEq]
+    exact invocation.2.1
+  have config' : DirectWethConfiguration occurrence.node.sevm.currentTarget
+      occurrence.node.sevm occurrence.node.devm := by
+    rw [targetEq]
+    exact config
+  have staging' :
+      Line.Run occurrence.node.sevm entry form.staging occurrence.node.devm := by
+    rw [sevmEq]
+    exact staging
+  have depth : occurrence.node.sevm.depth ≠ 0 := depth_ne_zero_of_spawn spawn
+  have run : Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm
+      (.exec x) post :=
+    runCompiled_of_spawn spawn entered child resumed
+  have memory : MemoryImage entry entry.memory.data.toList := by
+    refine ⟨source.memoryWf form entry staging', ?_⟩
+    intro index
+    simp
+  cases form with
+  | balanceOf =>
+      have crossing :
+          Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm staticcall
+            post := by
+        rw [instruction] at run
+        exact run
+      have gasAvailable : StaticGasAvailable occurrence.node.devm 36 :=
+        staticGasAvailable_of_runCompiled config' crossing
+      have result := balanceOfStaging_occurrence config' memory staging' depth
+        gasAvailable crossing
+      refine ⟨balanceOfCalldata occurrence.node.sevm.currentTarget, true, ?_, ?_⟩
+      · rw [instruction]
+        exact result
+      · exact Or.inl (by rw [targetEq])
+  | transferFromAmount =>
+      have crossing :
+          Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm call
+            post := by
+        rw [instruction] at run
+        exact run
+      have gasAvailable : CallGasAvailable occurrence.node.devm 100 :=
+        callGasAvailable_of_runCompiled config' crossing
+      have above : 96 ≤ (Blanc.ProrataWethVault.amountWord * 32).toNat := by
+        decide +kernel
+      obtain ⟨assets, assetsAt⟩ :
+          ∃ assets : B256, ImageWordAt entry.memory.data.toList
+            Blanc.ProrataWethVault.amountWord assets :=
+        ⟨_, imageWordAt_self _ _⟩
+      have result := transferFromStaging_occurrence config' memory assetsAt
+        above staging' depth (dynamic instruction) gasAvailable crossing
+      refine ⟨transferFromCalldata occurrence.node.sevm.caller
+        occurrence.node.sevm.currentTarget assets, false, ?_, ?_⟩
+      · rw [instruction]
+        exact result
+      · exact Or.inr (Or.inl ⟨_, by rw [targetEq]⟩)
+  | transferFromQuote =>
+      have crossing :
+          Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm call
+            post := by
+        rw [instruction] at run
+        exact run
+      have gasAvailable : CallGasAvailable occurrence.node.devm 100 :=
+        callGasAvailable_of_runCompiled config' crossing
+      have above : 96 ≤ (Blanc.ProrataWethVault.quoteWord * 32).toNat := by
+        decide +kernel
+      obtain ⟨assets, assetsAt⟩ :
+          ∃ assets : B256, ImageWordAt entry.memory.data.toList
+            Blanc.ProrataWethVault.quoteWord assets :=
+        ⟨_, imageWordAt_self _ _⟩
+      have result := transferFromStaging_occurrence config' memory assetsAt
+        above staging' depth (dynamic instruction) gasAvailable crossing
+      refine ⟨transferFromCalldata occurrence.node.sevm.caller
+        occurrence.node.sevm.currentTarget assets, false, ?_, ?_⟩
+      · rw [instruction]
+        exact result
+      · exact Or.inr (Or.inl ⟨_, by rw [targetEq]⟩)
+  | transferAmount =>
+      have crossing :
+          Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm call
+            post := by
+        rw [instruction] at run
+        exact run
+      have gasAvailable : CallGasAvailable occurrence.node.devm 68 :=
+        callGasAvailable_of_runCompiled config' crossing
+      obtain ⟨receiver, receiverAt⟩ :=
+        source.receiverShaped Blanc.ProrataWethVault.amountWord entry staging'
+      have receiverAbove :
+          32 ≤ (Blanc.ProrataWethVault.receiverWord * 32).toNat := by
+        decide +kernel
+      have assetsAbove :
+          64 ≤ (Blanc.ProrataWethVault.amountWord * 32).toNat := by
+        decide +kernel
+      obtain ⟨assets, assetsAt⟩ :
+          ∃ assets : B256, ImageWordAt entry.memory.data.toList
+            Blanc.ProrataWethVault.amountWord assets :=
+        ⟨_, imageWordAt_self _ _⟩
+      have result := transferStaging_occurrence config' memory receiverAt
+        assetsAt receiverAbove assetsAbove staging' depth
+        (dynamic instruction) gasAvailable crossing
+      refine ⟨transferCalldata receiver assets, false, ?_, ?_⟩
+      · rw [instruction]
+        exact result
+      · exact Or.inr (Or.inr ⟨receiver, _, rfl⟩)
+  | transferQuote =>
+      have crossing :
+          Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm call
+            post := by
+        rw [instruction] at run
+        exact run
+      have gasAvailable : CallGasAvailable occurrence.node.devm 68 :=
+        callGasAvailable_of_runCompiled config' crossing
+      obtain ⟨receiver, receiverAt⟩ :=
+        source.receiverShaped Blanc.ProrataWethVault.quoteWord entry staging'
+      have receiverAbove :
+          32 ≤ (Blanc.ProrataWethVault.receiverWord * 32).toNat := by
+        decide +kernel
+      have assetsAbove :
+          64 ≤ (Blanc.ProrataWethVault.quoteWord * 32).toNat := by
+        decide +kernel
+      obtain ⟨assets, assetsAt⟩ :
+          ∃ assets : B256, ImageWordAt entry.memory.data.toList
+            Blanc.ProrataWethVault.quoteWord assets :=
+        ⟨_, imageWordAt_self _ _⟩
+      have result := transferStaging_occurrence config' memory receiverAt
+        assetsAt receiverAbove assetsAbove staging' depth
+        (dynamic instruction) gasAvailable crossing
+      refine ⟨transferCalldata receiver assets, false, ?_, ?_⟩
+      · rw [instruction]
+        exact result
+      · exact Or.inr (Or.inr ⟨receiver, _, rfl⟩)
 
 end Source
 

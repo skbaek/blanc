@@ -707,6 +707,73 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     exact absurd selected selNe
   | false => rfl
 
+/-- The Staging adapter's data-level conclusion is exactly this predicate's
+content, so a vault-parent provenance result discharges the bridge premise
+without re-deriving any calldata fact. -/
+theorem VaultStagedCalldata.of_stagedWethCalldata
+    {call : WethAllowanceInvocation} {caller vault : Adr}
+    (staged : Source.StagedWethCalldata caller vault call.sevm.data) :
+    VaultStagedCalldata call := by
+  rcases staged with data | ⟨assets, data⟩ | ⟨receiver, assets, data⟩
+  · exact Or.inl ⟨vault, data⟩
+  · exact Or.inr (Or.inl ⟨caller, vault, assets, data⟩)
+  · exact Or.inr (Or.inr ⟨receiver, assets, data⟩)
+
+/-- **Vault-parent child provenance over the retained frame tree.**  At a
+retained entering occurrence whose parent frame is an exact invocation of the
+vault runtime, the entered child is the configured asset: its target is
+`wethAccount`, it carries one of the three staged calldata shapes with the
+vault frame's own caller, and the configuration transports into it.
+
+This is the vault-parent discharge of `childEntry`'s `foreign` disjunction:
+the parent frame *is* the vault, so the arm that has to hold is the child's,
+and it holds because the staged child targets the asset.  The `foreign`
+premise therefore never escapes into a history-level statement. -/
+theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
+    {vault codeAddress : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
+    (entering : Exec.LocatedFrame.EnteringOccurrence run child)
+    (invocation : entering.parent.frame.rootDeriv.exactInvocation
+      Blanc.ProrataWethVault.vault vault codeAddress)
+    (configuration : VaultFrameConfiguration vault
+      entering.parent.frame.sevm entering.parent.frame.pre)
+    (source : Source.StagedSourceFrame entering.occurrence.node.sevm
+      entering.occurrence.node.devm)
+    (dynamic : entering.occurrence.instruction = Ninst.call →
+      entering.occurrence.node.sevm.isStatic = false) :
+    child.frame.sevm.currentTarget = wethAccount ∧
+      VaultFrameConfiguration vault child.frame.sevm child.frame.pre ∧
+      ∃ (calldata : Bytes) (static : Bool) (post : Devm),
+        ExactWethChildOccurrence entering.occurrence.node.sevm
+            entering.occurrence.node.devm post entering.occurrence.instruction
+            calldata static ∧
+          Source.StagedWethCalldata entering.occurrence.node.sevm.caller vault
+            calldata := by
+  have nodeConfiguration := configuration.parentPrefix entering.sameFrame
+  obtain ⟨frame, resume, nextPc, post, step, entered, resumed, next, exc⟩ :=
+    entering.spawns
+  obtain ⟨x, instructionAt, spawn, -⟩ := Evm.step_spawn_inv step
+  have decoded : entering.occurrence.instruction = .exec x :=
+    Ninst.at_unique entering.occurrence.decoded instructionAt
+  obtain ⟨calldata, static, occurrence, staged⟩ :=
+    Source.vault_exactWethChild_of_occurrence invocation entering.occurrence
+      entering.sameFrame decoded nodeConfiguration.config source
+      (fun h => dynamic (decoded.trans h)) spawn entered child.frame.run resumed
+  have childTarget : child.frame.sevm.currentTarget = wethAccount := by
+    obtain ⟨msg, xl, childDevm, spawnPc, spawnNextPc, spawnResume, target, -, -,
+      -, spawnEq, -⟩ := occurrence
+    rw [Ninst.step_exec, spawn] at spawnEq
+    simp only [XStep.toStep, Step.spawn.injEq] at spawnEq
+    rw [Frame.enter_run_currentTarget entered, spawnEq.1]
+    exact target.currentTarget
+  have distinct : wethAccount ≠ vault := nodeConfiguration.config.distinct
+  refine ⟨childTarget, nodeConfiguration.childEntry step entered
+    (Or.inr ?_), calldata, static, post, ?_, staged⟩
+  · rw [childTarget]
+    exact distinct
+  · rw [decoded]
+    exact occurrence
+
 /-- A committing interpreted message replays its WETH storage from the
 settlement-retained SSTORE chronology of the actual recursive execution.
 This preserves child-before-parent-continuation order, including writes made
