@@ -690,4 +690,418 @@ theorem weth_withdraw_preCall_effect {sevm : Sevm} {pre post : Devm}
       ← congrFun midStorage account, ← congrFun popStorage account,
       ← congrFun guardStorage account, ← congrFun entryStorage account]
 
+/-! ## The unconditional vault-row classification -/
+
+/-- A committed exact WETH frame is a gas-exact compiled WETH run of its own
+machine. -/
+theorem wethFrame_runCompiled {frame : Exec.Frame}
+    (identity : frame.exactInvocation Blanc.weth wethAccount wethAccount) :
+    Prog.RunCompiled frame.sevm frame.pre Blanc.weth frame.post := by
+  obtain ⟨pcZero, -, -, code⟩ := identity
+  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
+  cases pcZero
+  cases out with
+  | error error => simp [Execution.commits] at committed
+  | ok post =>
+      show Prog.RunCompiled sevm pre Blanc.weth post
+      exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run code
+
+/-- A successful compiled `transferFrom` really passed its source-address
+guard.  `transferFromBody_exactEffect` derives this internally and then
+projects only `.toAdr`; a classifier that must name the raw allowance cell
+needs the ABI word itself. -/
+private theorem transferFromBody_src_valid
+    {fs : List Func} {sevm : Sevm} {s r : Devm}
+    (run : Func.Run fs sevm s Blanc.transferFrom r) :
+    ValidAdr (Sevm.argWord sevm 0) := by
+  simp only [Blanc.transferFrom] at run
+  rcases of_run_prepend (arg 0) _ run with ⟨a1, h1, run⟩
+  have hs1 : Sevm.argWord sevm 0 :: [] <<+ a1.stack := prefix_of_arg nil_pref h1
+  rcases of_run_next run with ⟨a2, dupRun, run⟩
+  have hs2 : [Sevm.argWord sevm 0, Sevm.argWord sevm 0] <<+ a2.stack :=
+    prefix_of_dup_val dupRun (Stack.Nth.head _ _) hs1
+  rcases of_run_prepend checkNonAddress _ run with ⟨a3, h3, run⟩
+  rcases of_check_non_address hs2 h3 with ⟨invalid, hs3, validIff⟩
+  rcases of_run_branch_revert run with ⟨a4, pop4, -⟩
+  exact validIff.mp (popBurn_pref pop4 hs3).1.symm
+
+/-- Source-address validity at the general caller. -/
+theorem weth_transferFrom_compiled_src_valid {sevm : Sevm} {pre post : Devm}
+    (run : Prog.RunCompiled sevm pre Blanc.weth post)
+    (selected : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    ValidAdr (Sevm.argWord sevm 0) := by
+  obtain ⟨bodyPre, -, -, -, -, -, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable (body := Blanc.transferFrom) run selected
+      (by simp [Blanc.wethFuncs])
+  exact transferFromBody_src_valid bodyRun
+
+/-- A balance transfer between two rows that are both distinct from the vault,
+or whose credited row is the vault's with a zero amount, leaves the vault's row
+exactly where it was. -/
+private theorem transfer_vault_row_quiet {b d : Adr → B256}
+    {source dest vault : Adr} {wad : B256}
+    (move : Transfer b source wad dest d)
+    (sourceNe : source ≠ vault) (quiet : dest ≠ vault ∨ wad.toNat = 0) :
+    d vault = b vault := by
+  obtain ⟨-, c, decrease, increase⟩ := move
+  have first : b vault = c vault := (decrease vault).2 sourceNe
+  rcases quiet with destNe | zero
+  · rw [first]
+    exact ((increase vault).2 destNe).symm
+  · by_cases same : dest = vault
+    · subst same
+      have credited := (increase dest).1 rfl
+      have wadZero : wad = 0 := B256.toNat_inj _ _ (by rw [zero]; rfl)
+      rw [wadZero] at credited
+      rw [first, ← credited]
+      exact B256.toNat_inj _ _ (by
+        rw [B256.toNat_add, B256.toNat_zero, Nat.add_zero, Nat.lo_eq,
+          Nat.mod_eq_of_lt (B256.toNat_lt _)])
+    · rw [first]
+      exact ((increase vault).2 same).symm
+
+/-- **The unconditional vault-row classification.**
+
+A successful exact WETH frame whose caller is not the vault does exactly one of
+four things to the vault's WETH row:
+
+* leaves it alone;
+* raises it by a positive amount from a source that is not the vault (a
+  donation);
+* is a `transferFrom` whose executed branch read the raw allowance cell
+  `wethAllowanceKey vault.toB256 caller.toB256` (a runtime-authorized debit);
+* is a `withdraw`, whose value-bearing callback to the caller is handed back
+  as an actual retained crossing, with the vault's row untouched up to it and
+  the whole storage frame after it equal to the crossing's post.
+
+No honesty assumption is made about any callee.  The fourth arm is the one the
+design's three-way statement omits, and it cannot be removed: `Blanc.weth` is
+not `reachableExecFree`, so nothing at this rung excludes the callback's own
+writes, and a consumer must recurse into it. -/
+theorem wethFrame_vaultRow_classified (vault : Adr) (frame : Exec.Frame)
+    (weth : frame.exactInvocation Blanc.weth wethAccount wethAccount)
+    (fresh : Exec.FreshEntry frame.sevm frame.pre)
+    (callerNotVault : frame.sevm.caller ≠ vault) :
+    (Stor.rest (Devm.getStor frame.post wethAccount) vault =
+        Stor.rest (Devm.getStor frame.pre wethAccount) vault) ∨
+      (∃ (source : Adr) (wad : B256), source ≠ vault ∧ 0 < wad.toNat ∧
+        Transfer (Stor.rest (Devm.getStor frame.pre wethAccount)) source wad
+          vault (Stor.rest (Devm.getStor frame.post wethAccount))) ∨
+      (∃ call : WethAllowanceInvocation, call.approval = false ∧
+        call.sevm = frame.sevm ∧ call.pre = frame.pre ∧
+        call.post = frame.post ∧
+        Sevm.argWord call.sevm 0 = vault.toB256 ∧
+        call.pair? = some (vault.toB256, call.sevm.caller.toB256)) ∨
+      (∃ callPre callPost : Devm,
+        Stor.rest (Devm.getStor callPre wethAccount) vault =
+            Stor.rest (Devm.getStor frame.pre wethAccount) vault ∧
+          Ninst.Run frame.sevm callPre Ninst.call callPost ∧
+          Devm.getStor frame.post = Devm.getStor callPost) := by
+  have target : frame.sevm.currentTarget = wethAccount := weth.2.1
+  have run : Prog.RunCompiled frame.sevm frame.pre Blanc.weth frame.post :=
+    wethFrame_runCompiled weth
+  have memoryWf : Mem.Wf frame.pre.memory := by
+    rw [fresh.2]; exact Mem.wf_empty
+  have vaultKeyNe : ∀ {a : Adr}, a ≠ vault → a.toB256 ≠ vault.toB256 := by
+    intro a different equal
+    exact different (by rw [← toAdr_toB256 a, equal, toAdr_toB256])
+  obtain ⟨cls, -, -, fit⟩ := WethFrameClass.classification_total weth
+  cases cls with
+  | view =>
+      left
+      rw [← weth_view_compiled_effect run fit]
+  | approve owner spender wad =>
+      obtain ⟨selected, -, -, -⟩ := fit
+      obtain ⟨keyInvalid, written⟩ :=
+        weth_approve_compiled_raw_effect memoryWf run selected
+      rw [target] at written
+      left
+      have keyNe : wethAllowanceKey frame.sevm.caller.toB256
+          (Sevm.argWord frame.sevm 0) ≠ vault.toB256 := by
+        intro equal
+        exact keyInvalid (equal ▸ ⟨vault, rfl⟩)
+      simp only [Stor.rest, Function.comp_apply, written,
+        Stor.get_set_ne _ keyNe]
+  | deposit caller value =>
+      obtain ⟨miss, callerEq, -⟩ := fit
+      obtain ⟨mid, entryState, -, -, -, depositRun⟩ :=
+        runCompiled_enters_wethDeposit run miss
+      obtain ⟨written, -⟩ := depositBody_effect depositRun
+      have entryStorage : Devm.getStor frame.pre = Devm.getStor mid :=
+        funext (getStor_eq_of_state_eq entryState)
+      rw [target] at written
+      left
+      simp only [Stor.rest, Function.comp_apply, written,
+        Stor.get_set_ne _ (vaultKeyNe callerNotVault), ← congrFun entryStorage]
+  | withdraw caller wad =>
+      obtain ⟨selected, -, -⟩ := fit
+      obtain ⟨callPre, callPost, -, written, -, crossing, after⟩ :=
+        weth_withdraw_preCall_effect run selected
+      rw [target] at written
+      exact Or.inr (Or.inr (Or.inr ⟨callPre, callPost, by
+        simp only [Stor.rest, Function.comp_apply, written,
+          Stor.get_set_ne _ (vaultKeyNe callerNotVault)], crossing, after⟩))
+  | transfer caller dst wad =>
+      obtain ⟨selected, -, -, -⟩ := fit
+      obtain ⟨move, -, -⟩ := weth_transfer_compiled_effect run selected
+      rw [target] at move
+      by_cases credited : (Sevm.argWord frame.sevm 0).toAdr = vault
+      · by_cases positive : 0 < (Sevm.argWord frame.sevm 1).toNat
+        · exact Or.inr (Or.inl ⟨frame.sevm.caller, Sevm.argWord frame.sevm 1,
+            callerNotVault, positive, credited ▸ move⟩)
+        · left
+          exact transfer_vault_row_quiet move callerNotVault (Or.inr (by omega))
+      · left
+        exact transfer_vault_row_quiet move callerNotVault (Or.inl credited)
+  | transferFrom caller src dst wad =>
+      obtain ⟨selected, -, -, -, -⟩ := fit
+      obtain ⟨move, -⟩ := weth_transferFrom_compiled_row_effect run selected
+      rw [target] at move
+      by_cases debited : (Sevm.argWord frame.sevm 0).toAdr = vault
+      · have srcValid : ValidAdr (Sevm.argWord frame.sevm 0) :=
+          weth_transferFrom_compiled_src_valid run selected
+        obtain ⟨sourceAdr, sourceEq⟩ := srcValid
+        have owner : Sevm.argWord frame.sevm 0 = vault.toB256 := by
+          rw [← sourceEq] at debited ⊢
+          rw [toAdr_toB256] at debited
+          rw [debited]
+        refine Or.inr (Or.inr (Or.inl ⟨⟨frame.sevm, frame.pre, frame.post,
+          false, target, memoryWf, run, by simpa using selected⟩,
+          rfl, rfl, rfl, rfl, owner, ?_⟩))
+        simp only [WethAllowanceInvocation.pair?, owner,
+          if_neg (Ne.symm (vaultKeyNe callerNotVault)), Bool.false_eq_true,
+          if_false]
+      · by_cases credited : (Sevm.argWord frame.sevm 1).toAdr = vault
+        · by_cases positive : 0 < (Sevm.argWord frame.sevm 2).toNat
+          · exact Or.inr (Or.inl ⟨(Sevm.argWord frame.sevm 0).toAdr,
+              Sevm.argWord frame.sevm 2, debited, positive, credited ▸ move⟩)
+          · left
+            exact transfer_vault_row_quiet move debited (Or.inr (by omega))
+        · left
+          exact transfer_vault_row_quiet move debited (Or.inl credited)
+
+/-! ## The five former silence gaps, as theorems
+
+`ProrataWethVaultRely` carried five `def … : Prop` gaps naming per-selector
+message-level silence.  As written they were not merely unproved: a bare
+`ProcessMessage msg slot (.ok post)` constrains the retained slot's raw
+outcome only through `Frame.settle`, so an arbitrary `raw` satisfies it and the
+gaps are false.  Each theorem below therefore also takes the slot's own
+`Xlot.Filled` witness, which is what says the retained execution exists.
+
+The `withdraw` gap is additionally *not* a silence statement: its frame
+contains a value-bearing callback to an arbitrary callee, which can itself call
+WETH.  It is replaced by the split that exposes that crossing. -/
+
+/-- The calldata-only view of a frame's selector.  `Sevm.selector` reads
+nothing but `data`, and this is that reading, so a message-level premise can be
+stated before any frame exists. -/
+def calldataSelector (data : Bytes) : B256 :=
+  Bytes.toB256 (data.sliceD (0 : B256).toNat 32 0) >>> 224
+
+theorem selector_eq_calldataSelector (sevm : Sevm) :
+    Sevm.selector sevm = calldataSelector sevm.data := rfl
+
+theorem calldataSelector_nil_not_mem :
+    ∀ sel ∈ wethSelectors, calldataSelector [] ≠ sel := by
+  decide +kernel
+
+/-- **The settled WETH message reduction.**  A retained committing message to
+`wethAccount` running the inherited WETH program either changed no cell at all
+(no interpreted slot, or a rolled-back settlement) or exposes the actual
+gas-exact compiled run whose WETH storage frame is the message's. -/
+theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth) :
+    (∀ (owner : Adr) (key : B256),
+        (post.state.getStor owner).get key =
+          (msg.benv.state.getStor owner).get key) ∨
+      (∃ (sevm : Sevm) (pre rawPost : Devm),
+        sevm.currentTarget = wethAccount ∧ sevm.data = msg.data ∧
+          Mem.Wf pre.memory ∧
+          Prog.RunCompiled sevm pre Blanc.weth rawPost ∧
+          Devm.getStor pre wethAccount =
+            msg.benv.state.getStor wethAccount ∧
+          post.state.getStor wethAccount =
+            Devm.getStor rawPost wethAccount) := by
+  cases slot with
+  | none =>
+      exact Or.inl (fun owner key =>
+        processMessage_none_preserves_cell process owner key)
+  | some entry =>
+      obtain ⟨⟨pc, sevm, pre⟩, raw⟩ := entry
+      by_cases clean : post.error.isSome = false
+      · obtain ⟨rawPost, rawEq, -, stateEq, -⟩ :=
+          MessageExecution.processMessage_clean_rawPost process clean
+        subst rawEq
+        obtain ⟨exc⟩ := filled
+        obtain ⟨pcZero, codeEq, current, -, dataEq, -, entryStorage, memoryWf⟩ :=
+          MessageExecution.processMessage_entry_facts wethAccount process
+        subst pcZero
+        have code : some sevm.code.toList = Prog.compile Blanc.weth := by
+          rw [codeEq]; exact uses
+        refine Or.inr ⟨sevm, pre, rawPost, current.trans target, dataEq,
+          memoryWf,
+          Prog.runCompiled_of_exec sevm pre Blanc.weth rawPost weth_pcFree
+            exc code, entryStorage, ?_⟩
+        rw [stateEq]
+        rfl
+      · refine Or.inl (fun owner key => ?_)
+        have postError : post.error.isSome = true := by
+          cases errorEq : post.error <;> simp_all
+        rw [(ProcessMessage.rollback_of_error process postError).1]
+
+/-- **Gap 1 (transfer), as a theorem.**  A non-static WETH `transfer` message
+touches balance rows only, so every non-address cell — in particular every
+vault-owned allowance cell the history touched — is silent. -/
+theorem weth_transfer_message_silence {vault : Adr}
+    {msg : Msg} {post : Devm} {slot : Xlot}
+    {history : List WethAllowanceInvocation}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (data : ∃ tail, msg.data =
+      abiSelectorBytes (selector "transfer" [.address, .uint256]) ++ tail)
+    (_collision : NoVaultAllowanceKeyCollision history vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs history)
+    (_owner : p.1 = vault.toB256) :
+    (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
+      (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) := by
+  obtain ⟨tail, dataEq⟩ := data
+  have invalid := touchedWethAllowancePairs_keys_nonaddress touched
+  rcases weth_message_run_or_quiet filled process target uses with
+    silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
+  · exact silent _ _
+  · have selected : Sevm.selector sevm =
+        selector "transfer" [.address, .uint256] :=
+      selector_eq_of_data_eq_abiSelectorBytes_append (by decide +kernel)
+        (sevmData.trans dataEq)
+    obtain ⟨-, off, -⟩ := weth_transfer_compiled_effect run selected
+    rw [current] at off
+    rw [exit, ← entry]
+    exact (off _ invalid).symm
+
+/-- **Gap 5 (non-static view call), as a theorem.**  The six read-only entries
+write no storage at all, so every cell is silent — not only the allowance
+cells the history touched. -/
+theorem weth_view_message_silence
+    {msg : Msg} {post : Devm} {slot : Xlot}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (data : ∃ sel ∈ wethViewSelectors, ∃ tail,
+      msg.data = abiSelectorBytes sel ++ tail ∧
+        Bytes.toB256 (abiSelectorBytes sel) = sel)
+    (key : B256) :
+    (post.state.getStor wethAccount).get key =
+      (msg.benv.state.getStor wethAccount).get key := by
+  obtain ⟨sel, member, tail, dataEq, canonical⟩ := data
+  rcases weth_message_run_or_quiet filled process target uses with
+    silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
+  · exact silent _ _
+  · have selected : Sevm.selector sevm = sel :=
+      selector_eq_of_data_eq_abiSelectorBytes_append canonical
+        (sevmData.trans dataEq)
+    have quiet := weth_view_compiled_effect run (selected ▸ member)
+    rw [exit, ← entry, ← congrFun quiet wethAccount]
+
+/-- **Gaps 2 and 3 (fallback deposit), as one theorem.**  Calldata matching
+none of the ten dispatched selectors — empty calldata included — routes to the
+payable fallback, which credits the caller's own balance row and writes nothing
+else.  The premise is stated at the selector the dispatcher actually computes
+rather than at a four-byte calldata prefix, because that is what WETH's
+`fsig`/`dispatchWith` pair compares and it is total on short calldata. -/
+theorem weth_fallback_message_silence
+    {msg : Msg} {post : Devm} {slot : Xlot}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (miss : ∀ sel ∈ wethSelectors, calldataSelector msg.data ≠ sel)
+    (key : B256) (invalid : ¬ ValidAdr key) :
+    (post.state.getStor wethAccount).get key =
+      (msg.benv.state.getStor wethAccount).get key := by
+  rcases weth_message_run_or_quiet filled process target uses with
+    silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
+  · exact silent _ _
+  · have selectorMiss : ∀ sel ∈ wethSelectors, Sevm.selector sevm ≠ sel := by
+      intro sel member
+      rw [selector_eq_calldataSelector, sevmData]
+      exact miss sel member
+    obtain ⟨mid, entryState, -, -, -, depositRun⟩ :=
+      runCompiled_enters_wethDeposit run selectorMiss
+    obtain ⟨written, -⟩ := depositBody_effect depositRun
+    rw [current] at written
+    have midStorage : Devm.getStor pre = Devm.getStor mid :=
+      funext (getStor_eq_of_state_eq entryState)
+    have callerNe : sevm.caller.toB256 ≠ key := by
+      intro equal
+      exact invalid (by rw [← equal]; exact ⟨sevm.caller, rfl⟩)
+    rw [exit, ← entry]
+    change (Devm.getStor rawPost wethAccount).get key = _
+    rw [written, Stor.get_set_ne _ callerNe, ← congrFun midStorage wethAccount]
+
+/-- Empty calldata is a fallback deposit. -/
+theorem weth_empty_message_silence
+    {msg : Msg} {post : Devm} {slot : Xlot}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (empty : msg.data = [])
+    (key : B256) (invalid : ¬ ValidAdr key) :
+    (post.state.getStor wethAccount).get key =
+      (msg.benv.state.getStor wethAccount).get key :=
+  weth_fallback_message_silence filled process target uses
+    (by rw [empty]; exact calldataSelector_nil_not_mem) key invalid
+
+/-- **Gap 4 (withdraw), as the split it has to be.**
+
+`WethWithdrawSilence` is false as stated even with the retained execution
+supplied: WETH `withdraw` sends value to its caller, and that callee may call
+WETH again — including a `transferFrom` that debits a vault allowance the
+vault really granted.  What is true, and what a history fold can consume, is
+that the message's whole WETH storage movement at a non-address cell *is* the
+callback's: the prefix writes one address-shaped row and the suffix writes
+nothing. -/
+theorem weth_withdraw_message_split
+    {msg : Msg} {post : Devm} {slot : Xlot}
+    (filled : Xlot.Filled slot)
+    (process : ProcessMessage msg slot (.ok post))
+    (target : msg.currentTarget = wethAccount)
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (data : ∃ tail, msg.data =
+      abiSelectorBytes (selector "withdraw" [.uint256]) ++ tail)
+    (key : B256) (invalid : ¬ ValidAdr key) :
+    ((post.state.getStor wethAccount).get key =
+        (msg.benv.state.getStor wethAccount).get key) ∨
+      (∃ (sevm : Sevm) (callPre callPost : Devm),
+        sevm.currentTarget = wethAccount ∧ sevm.data = msg.data ∧
+          (Devm.getStor callPre wethAccount).get key =
+            (msg.benv.state.getStor wethAccount).get key ∧
+          Ninst.Run sevm callPre Ninst.call callPost ∧
+          (post.state.getStor wethAccount).get key =
+            (Devm.getStor callPost wethAccount).get key) := by
+  obtain ⟨tail, dataEq⟩ := data
+  rcases weth_message_run_or_quiet filled process target uses with
+    silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
+  · exact Or.inl (silent _ _)
+  · have selected : Sevm.selector sevm = selector "withdraw" [.uint256] :=
+      selector_eq_of_data_eq_abiSelectorBytes_append (by decide +kernel)
+        (sevmData.trans dataEq)
+    obtain ⟨callPre, callPost, -, written, -, crossing, after⟩ :=
+      weth_withdraw_preCall_effect run selected
+    rw [current] at written
+    have callerNe : sevm.caller.toB256 ≠ key := by
+      intro equal
+      exact invalid (by rw [← equal]; exact ⟨sevm.caller, rfl⟩)
+    refine Or.inr ⟨sevm, callPre, callPost, current, sevmData, ?_, crossing, ?_⟩
+    · rw [written, Stor.get_set_ne _ callerNe, ← entry]
+    · rw [exit, ← congrFun after wethAccount]
+
 end Blanc.Composition.ProrataWethVault

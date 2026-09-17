@@ -1014,12 +1014,14 @@ theorem no_success_message_preserves_weth_storage
 /-! ## WETH environment rungs
 
 Per-message WETH-environment facts for history projection: invocation
-packaging from projected runs, static-call silence, foreign-approve
-silence, and the named per-selector silence gap interface.  Committing
-non-static vault-cell preservation goes through the source exec-free
-route, which needs `Blanc.ReachableExecFree` — outside the current
-import closure, so it is the precise next unit once the master decides
-the Rely import delta. -/
+packaging from projected runs, static-call silence, and foreign-approve
+silence.
+
+The five named per-selector silence `def`s that used to close this section
+have been deleted: `Blanc.Composition.ProrataWethVaultEnvironment` proves
+their content from the per-selector compiled effects.  Four of them are
+theorems there; the `withdraw` one is a pre-call *split*, because WETH's
+`withdraw` sends value to its caller and is therefore not exec-free. -/
 
 /-- The inherited WETH program has no `PC` instruction, so a raw
 execution of its compiled code is a gas-exact `Prog.RunCompiled`. -/
@@ -1150,110 +1152,5 @@ theorem weth_approve_call_silent
     approval foreign p touched owner
   simp only [Devm.getStorVal] at h
   exact h
-
-/-- Calldata that matches none of the ten dispatched WETH selectors
-routes to the fallback deposit path. -/
-def WethFallbackCalldata (data : Bytes) : Prop :=
-  ∀ sel ∈ [selector "name" [], selector "approve" [.address, .uint256],
-      selector "totalSupply" [], selector "transferFrom" [.address, .address, .uint256],
-      selector "withdraw" [.uint256], selector "decimals" [],
-      selector "balanceOf" [.address], selector "symbol" [],
-      selector "transfer" [.address, .uint256],
-      selector "allowance" [.address, .address]],
-    data.take 4 ≠ abiSelectorBytes sel
-
-/-- **Gap: transfer-message silence.**  A non-static WETH transfer
-touches balance rows only, so every vault-owned touched allowance
-cell is silent.  Stated for history projection; the proof (per-selector
-effect + key-space separation) is the next unit after the exec-free
-import. -/
-def WethTransferSilence (vault : Adr) : Prop :=
-  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
-    {history : List WethAllowanceInvocation},
-    ProcessMessage msg slot (.ok post) →
-    msg.currentTarget = wethAccount →
-    MessageUsesProgram msg Blanc.weth →
-    (∃ tail, msg.data =
-      abiSelectorBytes (selector "transfer" [.address, .uint256]) ++ tail) →
-    msg.isStatic = false →
-    NoVaultAllowanceKeyCollision history vault →
-    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
-      p.1 = vault.toB256 →
-      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
-        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
-
-/-- **Gap: empty-data deposit silence.**  Same shape as transfer, for
-the empty-calldata fallback deposit path. -/
-def WethDepositSilence (vault : Adr) : Prop :=
-  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
-    {history : List WethAllowanceInvocation},
-    ProcessMessage msg slot (.ok post) →
-    msg.currentTarget = wethAccount →
-    MessageUsesProgram msg Blanc.weth →
-    msg.data = [] →
-    msg.isStatic = false →
-    NoVaultAllowanceKeyCollision history vault →
-    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
-      p.1 = vault.toB256 →
-      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
-        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
-
-/-- **Gap: non-matching-data fallback deposit silence.**  Same shape,
-for fallback deposits with non-empty non-matching calldata. -/
-def WethFallbackDepositSilence (vault : Adr) : Prop :=
-  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
-    {history : List WethAllowanceInvocation},
-    ProcessMessage msg slot (.ok post) →
-    msg.currentTarget = wethAccount →
-    MessageUsesProgram msg Blanc.weth →
-    WethFallbackCalldata msg.data →
-    msg.isStatic = false →
-    NoVaultAllowanceKeyCollision history vault →
-    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
-      p.1 = vault.toB256 →
-      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
-        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
-
-/-- **Gap: withdraw-message silence.**  Same shape, for withdraw. -/
-def WethWithdrawSilence (vault : Adr) : Prop :=
-  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
-    {history : List WethAllowanceInvocation},
-    ProcessMessage msg slot (.ok post) →
-    msg.currentTarget = wethAccount →
-    MessageUsesProgram msg Blanc.weth →
-    (∃ tail, msg.data =
-      abiSelectorBytes (selector "withdraw" [.uint256]) ++ tail) →
-    msg.isStatic = false →
-    NoVaultAllowanceKeyCollision history vault →
-    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
-      p.1 = vault.toB256 →
-      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
-        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
-
-/-- **Gap: non-static view-call silence.**  Same shape, for the six
-read-only entries invoked through a non-static `CALL`. -/
-def WethCallViewSilence (vault : Adr) : Prop :=
-  ∀ {msg : Msg} {post : Devm} {slot : Xlot}
-    {history : List WethAllowanceInvocation},
-    ProcessMessage msg slot (.ok post) →
-    msg.currentTarget = wethAccount →
-    MessageUsesProgram msg Blanc.weth →
-    (∃ tail, msg.data = abiSelectorBytes (selector "name" []) ++ tail) ∨
-      (∃ tail, msg.data =
-        abiSelectorBytes (selector "totalSupply" []) ++ tail) ∨
-      (∃ tail, msg.data =
-        abiSelectorBytes (selector "decimals" []) ++ tail) ∨
-      (∃ tail, msg.data =
-        abiSelectorBytes (selector "balanceOf" [.address]) ++ tail) ∨
-      (∃ tail, msg.data = abiSelectorBytes (selector "symbol" []) ++ tail) ∨
-      (∃ tail, msg.data =
-        abiSelectorBytes (selector "allowance" [.address, .address]) ++ tail) →
-    msg.isStatic = false →
-    NoVaultAllowanceKeyCollision history vault →
-    ∀ (p : B256 × B256), p ∈ touchedWethAllowancePairs history →
-      p.1 = vault.toB256 →
-      (post.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) =
-        (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2)
-
 
 end Blanc.Composition.ProrataWethVault
