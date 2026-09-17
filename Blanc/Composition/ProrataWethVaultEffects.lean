@@ -122,7 +122,7 @@ private theorem updateAllowance_output
 /-- A successful exact compiled WETH run with a recognized selector reaches
 that selector's actual nonpayable body.  This is the composition-owned WETH
 specialization of Blanc's neutral sorted-dispatch and wrapper seams. -/
-private theorem runCompiled_enters_wethNonpayable
+theorem runCompiled_enters_wethNonpayable
     {sevm : Sevm} {pre post : Devm} {sig : B256} {body : Func}
     (run : Prog.RunCompiled sevm pre Blanc.weth post)
     (hselector : Sevm.selector sevm = sig)
@@ -932,7 +932,7 @@ theorem foreign_approve_preserves_vault_allowance
   rw [effect, Stor.get_set_ne _ (Ne.symm keys)]
 
 /-- Exact read-only effect of the inherited WETH `balanceOf` body. -/
-private theorem balanceOfBody_effect
+theorem balanceOfBody_effect
     {fs : List Func} {sevm : Sevm} {s r : Devm}
     (run : Func.Run fs sevm s balanceOf r) :
     ReturnsWord
@@ -1181,7 +1181,7 @@ private theorem updateAllowance_foreignStorage
 /-- Exact storage effect of the inherited WETH `transfer` body.  The debit is
 from the actual frame caller, the amount is ABI word one, and the credit is to
 ABI word zero. -/
-private theorem transferBody_exactEffect
+theorem transferBody_exactEffect
     {fs : List Func} {sevm : Sevm} {s r : Devm}
     (run : Func.Run fs sevm s transfer r) :
     Transfer (Stor.rest (Devm.getStor s sevm.currentTarget)) sevm.caller
@@ -1320,7 +1320,7 @@ private theorem transferBody_exactEffect
 /-- Exact balance-row movement of the inherited WETH `transferFrom` body.
 Unlike the older existential projection, the source, destination, and amount
 remain the three actual ABI words throughout the proof. -/
-private theorem transferFromBody_exactEffect
+theorem transferFromBody_exactEffect
     {fs : List Func} {sevm : Sevm} {s r : Devm}
     (run : Func.Run fs sevm s transferFrom r) :
     Transfer (Stor.rest (Devm.getStor s sevm.currentTarget))
