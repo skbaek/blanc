@@ -103,7 +103,14 @@ theorem inboundAfterQuote_effect
       ValidAdr receiver ∧
       receiver ≠ 0 ∧
       shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
-      InboundEffect sevm receiver assets shares quote entry post := by
+      InboundEffect sevm receiver assets shares quote entry post ∧
+      ∃ bodyPre,
+        Func.RunCompiledTo fs sevm bodyPre
+          (Blanc.ProrataWethVault.finishInbound
+            (Blanc.ProrataWethVault.loadWord sharesWord)
+            (Blanc.ProrataWethVault.loadWord assetsSourceWord)
+            (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord))
+          (.ok post) := by
   have scratchEnd :
       Blanc.ProrataWethVault.arithmeticScratchEnd = 896 := by decide +kernel
   obtain ⟨guardPre, callerNonzero, receiverValid, receiverNonzero,
@@ -289,17 +296,18 @@ theorem inboundAfterQuote_effect
     change (Devm.getStor tailPre sevm.currentTarget).get k =
       (Devm.getStor entry sevm.currentTarget).get k
     rw [vaultStorage]
-  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, returned,
-    ?_, ?_, ?_, ?_⟩
-  · rw [congrFun entryToCall wethAccount,
-      tailForeign wethAccount (Ne.symm vaultNe)]
-    exact movement
-  · rw [tailStorage, balanceEq, storValEq receiver, vaultStorage,
-      supplyStorage]
-  · intro account wethNe vaultAccountNe
-    rw [tailForeign account vaultAccountNe, entryToTail account wethNe]
-  · rw [tailLogged, childLogged, ← entryLogs, List.append_assoc]
-    rfl
+  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, ?_, ?_⟩
+  · refine ⟨returned, ?_, ?_, ?_, ?_⟩
+    · rw [congrFun entryToCall wethAccount,
+        tailForeign wethAccount (Ne.symm vaultNe)]
+      exact movement
+    · rw [tailStorage, balanceEq, storValEq receiver, vaultStorage,
+        supplyStorage]
+    · intro account wethNe vaultAccountNe
+      rw [tailForeign account vaultAccountNe, entryToTail account wethNe]
+    · rw [tailLogged, childLogged, ← entryLogs, List.append_assoc]
+      rfl
+  · exact ⟨guardPre, guardRun⟩
 
 /-- Shared inbound prefix: stage the two ABI arguments, price the quote from
 the booked WETH balance *before* the transfer, stage the exact share supply,
@@ -506,8 +514,8 @@ theorem inboundBody_effect
     intro offset w above value
     rw [afterFrame offset above]
     exact value
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, returned,
-      movement, vaultStorage, foreign, logged⟩ :=
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits,
+      ⟨returned, movement, vaultStorage, foreign, logged⟩, -⟩ :=
     inboundAfterQuote_effect afterConfig afterMemImage.1 afterMemImage.2
       (carry (by decide +kernel) receiverAt)
       (carry (by decide +kernel) supplyAt)

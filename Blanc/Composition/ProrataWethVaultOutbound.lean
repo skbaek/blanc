@@ -143,7 +143,14 @@ theorem outboundAfterQuote_effect
       shares.toNat ≤
         (Devm.getStorVal entry sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat ∧
-      OutboundEffect sevm receiver owner assets shares returned entry post := by
+      OutboundEffect sevm receiver owner assets shares returned entry post ∧
+      ∃ bodyPre,
+        Func.RunCompiledTo fs sevm bodyPre
+          (Blanc.ProrataWethVault.finishOutbound
+            (Blanc.ProrataWethVault.loadWord sharesSel)
+            (Blanc.ProrataWethVault.loadWord assetsSel)
+            (Blanc.ProrataWethVault.loadWord returnedSel))
+          (.ok post) := by
   -- Caller, receiver and owner guards.
   obtain ⟨sharesPre, callerNonzero, receiverValid, receiverNonzero,
       ownerValid, ownerNonzero, sharesStack, sharesWf, sharesReads,
@@ -394,75 +401,76 @@ theorem outboundAfterQuote_effect
         (Devm.getStor entry sevm.currentTarget).get owner
     rw [← congrFun guardStorage sevm.currentTarget]
   refine ⟨callerNonzero, ⟨receiverAdr, receiverAdrEq⟩, receiverNonzero,
-    ownerValid, ownerNonzero, balanceEntry ▸ covered, roomFits,
-    returns, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have wethAfter : Devm.getStor post wethAccount =
-        Devm.getStor tailPre wethAccount :=
-      congrFun settleStorage wethAccount
-    have wethBefore : Devm.getStor entry wethAccount =
-        Devm.getStor callPre wethAccount := by
-      rw [preToAuth, ← authForeign wethAccount (Ne.symm config.distinct),
-        ← burnForeign wethAccount (Ne.symm config.distinct),
-        congrFun stagingStorage wethAccount]
-    rw [wethAfter, wethBefore,
-      show receiver.toAdr = receiverAdr by
-        rw [← receiverAdrEq, toAdr_toB256]]
-    exact movement
-  · change (Devm.getStor post sevm.currentTarget).get owner = _
-    rw [vaultAfter, burnSet, Stor.get_set_ne _ (Ne.symm ownerNotSupply),
-      Stor.get_set_self, ← balanceEntry]
-  · change (Devm.getStor post sevm.currentTarget).get
-      Blanc.ProrataWethVault.supplySlot = _
-    rw [vaultAfter, burnSet, Stor.get_set_self]
-  · intro slot slotValid slotNotOwner
-    have slotNotSupply : slot ≠ Blanc.ProrataWethVault.supplySlot := by
-      intro slotEq
-      exact Blanc.ProrataWethVault.supplySlot_not_validAdr (slotEq ▸ slotValid)
-    change (Devm.getStor post sevm.currentTarget).get slot =
-      (Devm.getStor entry sevm.currentTarget).get slot
-    rw [vaultAfter, burnSet, Stor.get_set_ne _ (Ne.symm slotNotSupply),
-      Stor.get_set_ne _ (Ne.symm slotNotOwner)]
-    have burnRow := ledger slot (Or.inl slotValid)
-    change
-      (Devm.getStor burnPre sevm.currentTarget).get slot =
-        (Devm.getStor authPre sevm.currentTarget).get slot at burnRow
-    rw [burnRow, ← congrFun preToAuth sevm.currentTarget]
-  · rcases allowanceSpent with ownerRoute | ⟨notOwner, keyNotAddr,
-      keyNotSupplySlot, covers, route⟩
-    · exact Or.inl ownerRoute
-    · set aKey := Blanc.ProrataWethVault.allowanceKey owner sevm.caller.toB256
-        with aKeyDef
-      have authKey : Devm.getStorVal entry sevm.currentTarget aKey =
-          Devm.getStorVal authPre sevm.currentTarget aKey :=
-        congrArg (fun storage : Stor => storage.get aKey)
-          (congrFun preToAuth sevm.currentTarget)
-      have keyNotOwner : aKey ≠ owner := by
-        intro keyEq
-        exact keyNotAddr (keyEq ▸ ownerValid)
-      have survives : Devm.getStorVal post sevm.currentTarget aKey =
-          Devm.getStorVal burnPre sevm.currentTarget aKey := by
-        have step := congrArg (fun storage : Stor => storage.get aKey)
-          (vaultAfter.trans burnSet)
-        simp only [Stor.get_set_ne _ (Ne.symm keyNotSupplySlot),
-          Stor.get_set_ne _ (Ne.symm keyNotOwner)] at step
-        exact step
-      refine Or.inr ⟨notOwner, keyNotAddr, keyNotSupplySlot, ?_, ?_⟩
-      · rw [authKey]
-        exact covers
-      · rcases route with ⟨isMax, unchanged⟩ | decremented
-        · exact Or.inl ⟨authKey.trans isMax,
-            survives.trans (unchanged.trans authKey.symm)⟩
-        · exact Or.inr (survives.trans (decremented.trans
-            (congrArg (· - shares) authKey.symm)))
-  · intro account wethNe targetNe
-    rw [congrFun settleStorage account, childForeign account wethNe,
-      ← congrFun stagingStorage account, burnForeign account targetNe,
-      authForeign account targetNe, ← congrFun preToAuth account]
-  · rw [settleLogged, childLogged, ← stagingLogs, burnLogged,
-      ← authLogs, ← balanceLogs, ← guardLogs,
-      show receiver.toAdr = receiverAdr by
-        rw [← receiverAdrEq, toAdr_toB256]]
-    simp [List.append_assoc]
+    ownerValid, ownerNonzero, balanceEntry ▸ covered, roomFits, ?_, ?_⟩
+  · refine ⟨returns, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · have wethAfter : Devm.getStor post wethAccount =
+          Devm.getStor tailPre wethAccount :=
+        congrFun settleStorage wethAccount
+      have wethBefore : Devm.getStor entry wethAccount =
+          Devm.getStor callPre wethAccount := by
+        rw [preToAuth, ← authForeign wethAccount (Ne.symm config.distinct),
+          ← burnForeign wethAccount (Ne.symm config.distinct),
+          congrFun stagingStorage wethAccount]
+      rw [wethAfter, wethBefore,
+        show receiver.toAdr = receiverAdr by
+          rw [← receiverAdrEq, toAdr_toB256]]
+      exact movement
+    · change (Devm.getStor post sevm.currentTarget).get owner = _
+      rw [vaultAfter, burnSet, Stor.get_set_ne _ (Ne.symm ownerNotSupply),
+        Stor.get_set_self, ← balanceEntry]
+    · change (Devm.getStor post sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot = _
+      rw [vaultAfter, burnSet, Stor.get_set_self]
+    · intro slot slotValid slotNotOwner
+      have slotNotSupply : slot ≠ Blanc.ProrataWethVault.supplySlot := by
+        intro slotEq
+        exact Blanc.ProrataWethVault.supplySlot_not_validAdr (slotEq ▸ slotValid)
+      change (Devm.getStor post sevm.currentTarget).get slot =
+        (Devm.getStor entry sevm.currentTarget).get slot
+      rw [vaultAfter, burnSet, Stor.get_set_ne _ (Ne.symm slotNotSupply),
+        Stor.get_set_ne _ (Ne.symm slotNotOwner)]
+      have burnRow := ledger slot (Or.inl slotValid)
+      change
+        (Devm.getStor burnPre sevm.currentTarget).get slot =
+          (Devm.getStor authPre sevm.currentTarget).get slot at burnRow
+      rw [burnRow, ← congrFun preToAuth sevm.currentTarget]
+    · rcases allowanceSpent with ownerRoute | ⟨notOwner, keyNotAddr,
+        keyNotSupplySlot, covers, route⟩
+      · exact Or.inl ownerRoute
+      · set aKey := Blanc.ProrataWethVault.allowanceKey owner sevm.caller.toB256
+          with aKeyDef
+        have authKey : Devm.getStorVal entry sevm.currentTarget aKey =
+            Devm.getStorVal authPre sevm.currentTarget aKey :=
+          congrArg (fun storage : Stor => storage.get aKey)
+            (congrFun preToAuth sevm.currentTarget)
+        have keyNotOwner : aKey ≠ owner := by
+          intro keyEq
+          exact keyNotAddr (keyEq ▸ ownerValid)
+        have survives : Devm.getStorVal post sevm.currentTarget aKey =
+            Devm.getStorVal burnPre sevm.currentTarget aKey := by
+          have step := congrArg (fun storage : Stor => storage.get aKey)
+            (vaultAfter.trans burnSet)
+          simp only [Stor.get_set_ne _ (Ne.symm keyNotSupplySlot),
+            Stor.get_set_ne _ (Ne.symm keyNotOwner)] at step
+          exact step
+        refine Or.inr ⟨notOwner, keyNotAddr, keyNotSupplySlot, ?_, ?_⟩
+        · rw [authKey]
+          exact covers
+        · rcases route with ⟨isMax, unchanged⟩ | decremented
+          · exact Or.inl ⟨authKey.trans isMax,
+              survives.trans (unchanged.trans authKey.symm)⟩
+          · exact Or.inr (survives.trans (decremented.trans
+              (congrArg (· - shares) authKey.symm)))
+    · intro account wethNe targetNe
+      rw [congrFun settleStorage account, childForeign account wethNe,
+        ← congrFun stagingStorage account, burnForeign account targetNe,
+        authForeign account targetNe, ← congrFun preToAuth account]
+    · rw [settleLogged, childLogged, ← stagingLogs, burnLogged,
+        ← authLogs, ← balanceLogs, ← guardLogs,
+        show receiver.toAdr = receiverAdr by
+          rw [← receiverAdrEq, toAdr_toB256]]
+      simp [List.append_assoc]
+  · exact ⟨burnPre, burnRun⟩
 
 /-- Shared outbound prefix: stage the three ABI arguments, price the quote from
 the booked WETH balance, stage the exact share supply, and discharge the
@@ -759,7 +767,7 @@ theorem outboundBody_effect
     rw [congrFun entryStorage sevm.currentTarget,
       congrFun quoteStorage sevm.currentTarget]
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
-      ownerNonzero, covered, roomFits, effect⟩ :=
+      ownerNonzero, covered, roomFits, effect, -⟩ :=
     outboundAfterQuote_effect afterConfig afterMemImage.1 afterMemImage.2
       (carry (by decide +kernel) receiverAt)
       (carry (by decide +kernel) ownerAt)
