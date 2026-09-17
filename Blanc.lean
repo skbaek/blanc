@@ -314,6 +314,7 @@ import Blanc.DripRealizedHistory
 import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripMonotone
+import Blanc.DripMonotoneHistory
 import Blanc.DripPreservation
 import Blanc.DripRpow
 import Blanc.DripSound
