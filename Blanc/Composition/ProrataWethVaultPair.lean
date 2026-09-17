@@ -606,4 +606,755 @@ theorem vault_processMessage_preserves_stable
     rw [(ProcessMessage.rollback_of_error process postError).1]
     exact stable
 
+
+/-! ## The five in-flight stages
+
+Between two stable boundaries a vault flow passes through machine states that
+are *not* stable: the WETH row has moved and the share ledger has not, or the
+other way round.  SF §7 freezes five such stages, and this section names them
+and proves the two that exit a flow do so at a `PairBacked` post.
+
+Two shape decisions are worth stating.
+
+* The stage is an **index**, not an existential inside one predicate.  A stage
+  carries the operation words it is about, so `PairInFlight … (.inboundSettled
+  assets shares) cur` pins both the stage and its amounts.  That is what lets
+  the exit theorems below consume a named stage's own fields: `cases` on the
+  hypothesis leaves exactly one arm.  Without the index every exit theorem
+  would have to take its stage's fields as separate premises, and deleting a
+  field from a constructor would then break nothing.
+* The stages are stated **at the split points the flow theorems already
+  expose** — the WETH child's `callPre`/`callPost` and the burn's exit — and
+  nothing walks the vault program again.  `PairInFlight` is about storage,
+  logs and the world, so a state that differs from the flow entry only in
+  memory and stack is the flow entry as far as any stage is concerned; that is
+  `PairInFlight.of_quiet_entry`, and it is how a stage taken at a body entry
+  travels back to the message entry the history carrier holds. -/
+
+/-- Which of SF §7's five frozen stages an in-flight state is at, together with
+the operation words that stage is about.  `reverting` carries none: a rolled
+back child settles no operation. -/
+inductive PairStage where
+  /-- Inbound, quoted, before the WETH child. -/
+  | inboundQuoted (assets shares : B256)
+  /-- Inbound, the WETH child settled, before the share mint. -/
+  | inboundSettled (assets shares : B256)
+  /-- Outbound, the allowance spent and the shares burned, before the child. -/
+  | outboundBurned (owner assets shares : B256)
+  /-- Outbound, the WETH child settled, before the final vault event. -/
+  | outboundSettled (receiver : Adr) (assets shares : B256)
+  /-- A reverting child or outer frame. -/
+  | reverting
+
+/-- **The exact in-flight record of one vault flow at one of the five frozen
+stages**, relative to the flow's entry state.
+
+Every field is about the world — storage, logs, the balance rows — so a stage
+says nothing about memory or the stack and survives any prefix that moves only
+those. -/
+inductive PairInFlight (vault : Adr) (sevm : Sevm) (entry : Devm) :
+    PairStage → Devm → Prop where
+  /-- **Inbound quoted.**  Nothing has moved yet: the quote was priced from the
+  WETH balance booked *before* the transfer, and the price is no better than
+  the backing bound already allows. -/
+  | inboundQuoted {cur : Devm} {assets shares : B256}
+      (stable : supplyN (Devm.getStor entry vault) ≤
+        Blanc.ProrataWethVault.maxSupplyN)
+      (quote : shares.toNat * ((vaultSnapshot vault entry).balance + 1) ≤
+        assets.toNat * ((vaultSnapshot vault entry).supply +
+          Blanc.ProrataWethVault.offsetN))
+      (storage : Devm.getStor cur = Devm.getStor entry)
+      (logs : cur.logs = entry.logs) :
+      PairInFlight vault sevm entry (.inboundQuoted assets shares) cur
+  /-- **Inbound settled.**  The WETH child credited the vault's row and the
+  share ledger has not moved, so the bound is strictly slacker than it needs to
+  be: `strengthened` says the risen row already backs the shares the mint is
+  about to issue, and `capped` that they fit the supply cap.  These two are
+  what the mint consumes; the row rose by exactly the assets the quote was
+  priced against, which is why they are available at all. -/
+  | inboundSettled {cur : Devm} {assets shares : B256}
+      (credited : Transfer (Stor.rest (Devm.getStor entry wethAccount))
+        sevm.caller assets vault (Stor.rest (Devm.getStor cur wethAccount)))
+      (vaultUntouched : Devm.getStor cur vault = Devm.getStor entry vault)
+      (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+        (Devm.getStor cur vault))
+      (strengthened : supplyN (Devm.getStor entry vault) + shares.toNat ≤
+        Blanc.ProrataWethVault.offsetN *
+          (Stor.rest (Devm.getStor cur wethAccount) vault).toNat)
+      (capped : supplyN (Devm.getStor entry vault) + shares.toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN) :
+      PairInFlight vault sevm entry (.inboundSettled assets shares) cur
+  /-- **Outbound burned.**  The owner's row and the supply have fallen by the
+  quoted share amount and no WETH has moved yet, so the bound is slacker than
+  it needs to be in the other direction: `strengthened` says the remaining
+  supply is still backed once the pending payout leaves the row. -/
+  | outboundBurned {cur : Devm} {owner assets shares : B256}
+      (burned : Devm.getStorVal cur vault owner =
+        Devm.getStorVal entry vault owner - shares)
+      (supplyDown : supplyN (Devm.getStor cur vault) + shares.toNat =
+        supplyN (Devm.getStor entry vault))
+      (wethUntouched : Devm.getStor cur wethAccount =
+        Devm.getStor entry wethAccount)
+      (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+        (Devm.getStor cur vault))
+      (capped : supplyN (Devm.getStor cur vault) ≤
+        Blanc.ProrataWethVault.maxSupplyN)
+      (strengthened : supplyN (Devm.getStor cur vault) +
+          Blanc.ProrataWethVault.offsetN * assets.toNat ≤
+        Blanc.ProrataWethVault.offsetN *
+          (Stor.rest (Devm.getStor entry wethAccount) vault).toNat) :
+      PairInFlight vault sevm entry (.outboundBurned owner assets shares) cur
+  /-- **Outbound settled.**  The child paid the receiver out of the vault's
+  row, and the joint invariant already holds again: only the `Withdraw` event
+  and the returned word are still owed, and neither touches storage. -/
+  | outboundSettled {cur : Devm} {receiver : Adr} {assets shares : B256}
+      (debited : Transfer (Stor.rest (Devm.getStor entry wethAccount))
+        vault assets receiver (Stor.rest (Devm.getStor cur wethAccount)))
+      (backedAfter : PairBacked vault (Devm.getStor cur vault)
+        (Devm.getStor cur wethAccount)) :
+      PairInFlight vault sevm entry
+        (.outboundSettled receiver assets shares) cur
+  /-- **Reverting.**  A failed child or a reverting outer frame exposes the
+  entry world again, so the prior stable boundary is the projection. -/
+  | reverting {cur : Devm} (rollback : cur.state = entry.state) :
+      PairInFlight vault sevm entry .reverting cur
+
+/-- The four stages that settle an operation.  `reverting` is deliberately
+excluded below: it is the one stage that reads the whole world rather than the
+two ledgers, and a prefix that leaves storage alone need not leave the world
+alone — the quote snapshot's `STATICCALL` warms an address.  `reverting` is
+produced at its own crossing and consumed by the settlement rollback, never
+transported. -/
+def PairStage.settles : PairStage → Prop
+  | .reverting => False
+  | _ => True
+
+/-- A settling stage reads only the two storage maps and the log frame, so it
+travels across any prefix that leaves those alone.  This is what moves a stage
+taken at a flow's `finishInbound`/`finishOutbound` boundary back to the message
+entry the history carrier holds: the argument staging, the quote snapshot, each
+flow's own arithmetic, and every guard in front of the stage are quiet in
+exactly this sense — and the quote snapshot is quiet in exactly this sense and
+no stronger. -/
+theorem PairInFlight.of_quiet_entry {vault : Adr} {sevm : Sevm}
+    {entry entry' cur : Devm} {stage : PairStage}
+    (settles : stage.settles)
+    (storage : Devm.getStor entry' = Devm.getStor entry)
+    (logs : entry'.logs = entry.logs)
+    (h : PairInFlight vault sevm entry stage cur) :
+    PairInFlight vault sevm entry' stage cur := by
+  have vaultStor : Devm.getStor entry' vault = Devm.getStor entry vault :=
+    congrFun storage vault
+  have wethStor : Devm.getStor entry' wethAccount =
+      Devm.getStor entry wethAccount :=
+    congrFun storage wethAccount
+  have vaultVal : ∀ k, Devm.getStorVal entry' vault k =
+      Devm.getStorVal entry vault k := by
+    intro k
+    show (Devm.getStor entry' vault).get k = (Devm.getStor entry vault).get k
+    rw [vaultStor]
+  have snap : vaultSnapshot vault entry' = vaultSnapshot vault entry := by
+    unfold vaultSnapshot
+    rw [vaultVal, wethStor]
+  cases h with
+  | inboundQuoted stable quote storageEq logsEq =>
+      refine .inboundQuoted ?_ ?_ ?_ ?_
+      · rw [vaultStor]
+        exact stable
+      · rw [snap]
+        exact quote
+      · rw [storageEq, storage]
+      · rw [logsEq, logs]
+  | inboundSettled credited vaultUntouched conserved strengthened capped =>
+      refine .inboundSettled ?_ ?_ conserved ?_ ?_
+      · rw [wethStor]
+        exact credited
+      · rw [vaultStor]
+        exact vaultUntouched
+      · rw [vaultStor]
+        exact strengthened
+      · rw [vaultStor]
+        exact capped
+  | outboundBurned burned supplyDown wethUntouched conserved capped
+      strengthened =>
+      refine .outboundBurned ?_ ?_ ?_ conserved capped ?_
+      · rw [vaultVal]
+        exact burned
+      · rw [vaultStor]
+        exact supplyDown
+      · rw [wethStor]
+        exact wethUntouched
+      · rw [wethStor]
+        exact strengthened
+  | outboundSettled debited backedAfter =>
+      refine .outboundSettled ?_ backedAfter
+      rw [wethStor]
+      exact debited
+  | reverting rollback => exact settles.elim
+
+/-! ### Exiting a stage -/
+
+/-- **The inbound stage exits to a backed post.**
+
+The share mint is the last write of an inbound flow.  Its effect on the two
+coordinates the invariant reads is a credit at the receiver's row and the same
+credit at the supply; the WETH row does not move again.  So the post is backed
+exactly when the settled stage's `strengthened` field holds — the risen WETH
+row already covers the shares about to be issued — and that field is where the
+mint bound (`mint_bound`, `Blanc/Composition/ProrataWethVaultBacking.lean`)
+was cashed in, one stage earlier, against the pre-transfer quote.
+
+`vaultAfter` is written against the flow entry rather than against `cur`
+because that is the shape `InboundEffect` states it in; the settled stage's own
+`vaultUntouched` is what makes the two the same map. -/
+theorem PairInFlight.stable_of_mint {vault : Adr} {sevm : Sevm}
+    {entry cur post : Devm} {receiver assets shares : B256}
+    (stage : PairInFlight vault sevm entry (.inboundSettled assets shares) cur)
+    (receiverValid : ValidAdr receiver)
+    (vaultAfter : Devm.getStor post vault =
+      ((Devm.getStor entry vault).set receiver
+          (Devm.getStorVal entry vault receiver + shares)).set
+        Blanc.ProrataWethVault.supplySlot
+        (Devm.getStorVal entry vault Blanc.ProrataWethVault.supplySlot +
+          shares))
+    (wethAfter : Devm.getStor post wethAccount = Devm.getStor cur wethAccount) :
+    PairBacked vault (Devm.getStor post vault)
+      (Devm.getStor post wethAccount) := by
+  cases stage with
+  | inboundSettled credited vaultUntouched conserved strengthened capped =>
+      obtain ⟨receiverAdr, receiverAdrEq⟩ := receiverValid
+      subst receiverAdrEq
+      have conservedEntry : LedgerConserved Blanc.ProrataWethVault.supplySlot
+          (Devm.getStor entry vault) := by
+        rw [← vaultUntouched]
+        exact conserved
+      have maxLt : Blanc.ProrataWethVault.maxSupplyN < 2 ^ 256 := by
+        unfold Blanc.ProrataWethVault.maxSupplyN maxWordN wordModulusN
+        omega
+      have nof : B256.Nof
+          ((Devm.getStor entry vault).get Blanc.ProrataWethVault.supplySlot)
+          shares := by
+        unfold B256.Nof
+        have expand : supplyN (Devm.getStor entry vault) =
+            ((Devm.getStor entry vault).get
+              Blanc.ProrataWethVault.supplySlot).toNat := rfl
+        omega
+      have supplyAfter : supplyN (Devm.getStor post vault) =
+          supplyN (Devm.getStor entry vault) + shares.toNat := by
+        show ((Devm.getStor post vault).get _).toNat = _
+        rw [vaultAfter, Stor.get_set_self]
+        exact B256.toNat_add_eq_of_nof _ _ nof
+      refine ⟨?_, ?_, ?_⟩
+      · rw [vaultAfter]
+        exact LedgerConserved.mint_set
+          Blanc.ProrataWethVault.supplySlot_not_validAdr conservedEntry nof
+      · rw [supplyAfter]
+        exact capped
+      · rw [supplyAfter, wethAfter]
+        exact strengthened
+
+/-- **The outbound stage exits to a backed post.**
+
+Everything an outbound flow still owes after its WETH child — the `Withdraw`
+entry and the returned word — is invisible to both coordinates, so the settled
+stage's own `backedAfter` is the post's invariant. -/
+theorem PairInFlight.stable_of_outboundSettled {vault : Adr} {sevm : Sevm}
+    {entry cur post : Devm} {receiver : Adr} {assets shares : B256}
+    (stage : PairInFlight vault sevm entry
+      (.outboundSettled receiver assets shares) cur)
+    (vaultAfter : Devm.getStor post vault = Devm.getStor cur vault)
+    (wethAfter : Devm.getStor post wethAccount = Devm.getStor cur wethAccount) :
+    PairBacked vault (Devm.getStor post vault)
+      (Devm.getStor post wethAccount) := by
+  cases stage with
+  | outboundSettled debited backedAfter =>
+      rw [vaultAfter, wethAfter]
+      exact backedAfter
+
+
+/-! ### Reverting
+
+A failed WETH child is frame-relative rollback, not partial settlement: the
+child's world is the call-entry world again.  That is the `reverting` stage,
+and it is the reason a flow that reverts needs no separate invariant argument —
+the prior stable boundary is literally the post. -/
+
+open Jaune.Ninst Ninst
+open scoped LogOutputHinv
+open Source
+
+/-- **A failed exact WETH child is the reverting stage**, at whatever crossing
+it happened.  This is `ExactWethChildOccurrence.rollback_of_post`
+(`Blanc/Composition/ProrataWethVaultBoundary.lean`) in the pair's currency. -/
+theorem PairInFlight.reverting_of_failed_child {vault : Adr} {sevm : Sevm}
+    {pre post : Devm} {instruction : Ninst} {calldata : Bytes} {static : Bool}
+    (occurrence : ExactWethChildOccurrence sevm pre post instruction calldata
+      static)
+    (failureFlag : ∃ tail, post.stack = (0 : B256) :: tail) :
+    PairInFlight vault sevm pre .reverting post :=
+  .reverting (ExactWethChildOccurrence.rollback_of_post occurrence failureFlag)
+
+/-- The inbound instance: a failed staged `transferFrom` settles nothing. -/
+theorem PairInFlight.reverting_of_failed_inbound_child {vault : Adr}
+    {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
+    {assetsWord assets : B256}
+    (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (memory : MemoryImage entry image)
+    (assetsAt : ImageWordAt image assetsWord assets)
+    (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
+    (staging : Line.Run sevm entry (transferFromStaging assetsWord) callPre)
+    (depth : sevm.depth ≠ 0)
+    (dynamic : sevm.isStatic = false)
+    (gasAvailable : CallGasAvailable callPre 100)
+    (crossing : Ninst.RunCompiled sevm callPre call callPost)
+    (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
+    PairInFlight vault sevm callPre .reverting callPost :=
+  .reverting (transferFromStaging_rollback config memory assetsAt
+    assetsAboveCalldata staging depth dynamic gasAvailable crossing
+    failureFlag)
+
+/-- The outbound instance: a failed staged `transfer` pays nothing. -/
+theorem PairInFlight.reverting_of_failed_outbound_child {vault : Adr}
+    {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
+    {receiverWord assetsWord assets : B256} {receiver : Adr}
+    (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (memory : MemoryImage entry image)
+    (receiverAt : ImageWordAt image receiverWord receiver.toB256)
+    (assetsAt : ImageWordAt image assetsWord assets)
+    (receiverAboveSelector : 32 ≤ (receiverWord * 32).toNat)
+    (assetsAboveReceiver : 64 ≤ (assetsWord * 32).toNat)
+    (staging : Line.Run sevm entry
+      (transferStaging receiverWord assetsWord) callPre)
+    (depth : sevm.depth ≠ 0)
+    (dynamic : sevm.isStatic = false)
+    (gasAvailable : CallGasAvailable callPre 68)
+    (crossing : Ninst.RunCompiled sevm callPre call callPost)
+    (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
+    PairInFlight vault sevm callPre .reverting callPost :=
+  .reverting (transferStaging_rollback config memory receiverAt assetsAt
+    receiverAboveSelector assetsAboveReceiver staging depth dynamic
+    gasAvailable crossing failureFlag)
+
+/-! ### The staging lines are quiet
+
+Both calldata staging lines write memory and the stack and nothing else, which
+is what puts the `inboundQuoted` stage exactly at the crossing rather than
+somewhere inside the staging. -/
+
+/-- The delegated-transfer staging moves no storage and logs nothing. -/
+private theorem transferFromStaging_quiet {sevm : Sevm} {entry callPre : Devm}
+    {assetsWord : B256}
+    (staging : Line.Run sevm entry (transferFromStaging assetsWord) callPre) :
+    Devm.getStor entry = Devm.getStor callPre ∧
+      Devm.getCode entry = Devm.getCode callPre ∧
+      entry.logs = callPre.logs := by
+  refine ⟨Line.of_inv Devm.getStor ?_ staging,
+    Line.of_inv Devm.getCode ?_ staging, Line.of_inv Devm.logs ?_ staging⟩
+  · unfold transferFromStaging Blanc.ProrataWethVault.loadWord mstoreAt
+      pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+  · unfold transferFromStaging Blanc.ProrataWethVault.loadWord mstoreAt
+      pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+  · unfold transferFromStaging Blanc.ProrataWethVault.loadWord mstoreAt
+      pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+
+/-- The outbound-transfer staging moves no storage and logs nothing. -/
+private theorem transferStaging_quiet {sevm : Sevm} {entry callPre : Devm}
+    {receiverWord assetsWord : B256}
+    (staging : Line.Run sevm entry
+      (transferStaging receiverWord assetsWord) callPre) :
+    Devm.getStor entry = Devm.getStor callPre ∧
+      Devm.getCode entry = Devm.getCode callPre ∧
+      entry.logs = callPre.logs := by
+  refine ⟨Line.of_inv Devm.getStor ?_ staging,
+    Line.of_inv Devm.getCode ?_ staging, Line.of_inv Devm.logs ?_ staging⟩
+  · unfold transferStaging Blanc.ProrataWethVault.loadWord mstoreAt pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+  · unfold transferStaging Blanc.ProrataWethVault.loadWord mstoreAt pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+  · unfold transferStaging Blanc.ProrataWethVault.loadWord mstoreAt pushList
+    simp only [List.map, List.cons_append, List.nil_append]
+    line_inv
+
+
+/-! ### The inbound stage witnesses
+
+The inbound flow reaches its WETH child through the supply-room guard, and
+`shareRoomGuard_trace` already walks that guard once.  This theorem starts
+where that guard ends, takes the flow's own crossing apart with
+`callWethTransferFrom_trace`, and reads the two stages off
+`callWethTransferFrom_worldEffect` — the world-strength form of
+`callWethTransferFrom_exactEffect`, which is what gives the vault's own ledger
+back across the child.  Nothing walks the vault program again.
+
+The premises are the ones the flow already establishes at this boundary:
+`quote` is the exact pre-transfer inequality `deposit`/`mint` prove of their
+own quotes, and `backed` is the entry invariant.  The single arithmetic step
+is `mint_bound`, cashed in here rather than one rung later, which is what makes
+the settled stage's `strengthened` field available to `stable_of_mint`. -/
+theorem inbound_stage_witnesses
+    {fs : List Func} {sevm : Sevm} {entry post : Devm} {image : Bytes}
+    {sharesWord assetsSourceWord shares assets supply : B256}
+    {tailBody : Func} {frame : Stack}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (memoryReads : Mem.Reads entry.memory image)
+    (sharesAt : Bytes.toB256
+      (image.sliceD (sharesWord * 32).toNat 32 0) = shares)
+    (assetsAt : Bytes.toB256
+      (image.sliceD (assetsSourceWord * 32).toNat 32 0) = assets)
+    (supplyAt : Bytes.toB256
+      (image.sliceD
+        (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) = supply)
+    (assetsAboveCalldata : 96 ≤ (assetsSourceWord * 32).toNat)
+    (supplyStorage : supply = Devm.getStorVal entry sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (stack : frame <<+ entry.stack)
+    (dynamic : sevm.isStatic = false)
+    (callerNotVault : sevm.caller ≠ sevm.currentTarget)
+    (wethSumNof : SumNof (Stor.rest (Devm.getStor entry wethAccount)))
+    (quote : shares.toNat *
+        ((Stor.rest (Devm.getStor entry wethAccount)
+          sevm.currentTarget).toNat + 1) ≤
+      assets.toNat * (supply.toNat + Blanc.ProrataWethVault.offsetN))
+    (backed : PairBacked sevm.currentTarget
+      (Devm.getStor entry sevm.currentTarget)
+      (Devm.getStor entry wethAccount))
+    (run : Func.RunCompiledTo fs sevm entry
+      (Blanc.ProrataWethVault.loadWord sharesWord +++
+        Blanc.ProrataWethVault.shareRoom +++ lt :::
+        (Func.revert <?>
+          Blanc.ProrataWethVault.callWethTransferFrom
+            (Blanc.ProrataWethVault.loadWord assetsSourceWord) tailBody))
+      (.ok post)) :
+    ∃ quoted settled : Devm,
+      PairInFlight sevm.currentTarget sevm entry
+        (.inboundQuoted assets shares) quoted ∧
+      Devm.getStor quoted = Devm.getStor entry ∧
+      PairInFlight sevm.currentTarget sevm entry
+        (.inboundSettled assets shares) settled ∧
+      Devm.getStor settled sevm.currentTarget =
+        Devm.getStor entry sevm.currentTarget ∧
+      Transfer (Stor.rest (Devm.getStor entry wethAccount)) sevm.caller assets
+        sevm.currentTarget (Stor.rest (Devm.getStor settled wethAccount)) ∧
+      Func.RunCompiledTo fs sevm settled tailBody (.ok post) := by
+  obtain ⟨childEntry, roomFits, childStack, childWf, childReads, childState,
+      childLogs, childRun⟩ :=
+    Blanc.ProrataWethVault.shareRoomGuard_trace (R := Func.RunOk) memoryWf
+      memoryReads sharesAt supplyAt stable stack run
+  obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
+    callWethTransferFrom_trace childRun
+  obtain ⟨stagingStorage, stagingCode, stagingLogs⟩ :=
+    transferFromStaging_quiet staging
+  have guardStorage : Devm.getStor entry = Devm.getStor childEntry :=
+    funext (getStor_eq_of_state_eq childState)
+  have guardCode : Devm.getCode entry = Devm.getCode childEntry :=
+    funext (getCode_eq_of_state_eq childState)
+  have entryToCall : Devm.getStor entry = Devm.getStor callPre :=
+    guardStorage.trans stagingStorage
+  have callConfig :
+      DirectWethConfiguration sevm.currentTarget sevm callPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← congrFun (guardCode.trans stagingCode) wethAccount]
+    exact config.code
+  obtain ⟨settled, movement, childForeign, -, -, -, -, tailRun⟩ :=
+    callWethTransferFrom_worldEffect callConfig ⟨childWf, childReads⟩
+      (sliceBytes_of_toB256 assetsAt) assetsAboveCalldata staging dynamic
+      crossing suffix
+  -- Every world coordinate the stages read, relative to the flow entry.
+  have vaultUntouched : Devm.getStor settled sevm.currentTarget =
+      Devm.getStor entry sevm.currentTarget := by
+    rw [childForeign sevm.currentTarget config.distinct,
+      ← congrFun entryToCall sevm.currentTarget]
+  have credited : Transfer (Stor.rest (Devm.getStor entry wethAccount))
+      sevm.caller assets sevm.currentTarget
+      (Stor.rest (Devm.getStor settled wethAccount)) := by
+    rw [congrFun entryToCall wethAccount]
+    exact movement
+  have supplyNat : supplyN (Devm.getStor entry sevm.currentTarget) =
+      supply.toNat := congrArg B256.toNat supplyStorage.symm
+  obtain ⟨conserved, -, bound⟩ := backed
+  -- The credited row cannot wrap, because the asset's own sum does not.
+  have covered : assets ≤ Stor.rest (Devm.getStor entry wethAccount)
+      sevm.caller := credited.1
+  have pairBound :
+      (Stor.rest (Devm.getStor entry wethAccount) sevm.caller).toNat +
+        (Stor.rest (Devm.getStor entry wethAccount)
+          sevm.currentTarget).toNat ≤
+        sum (Stor.rest (Devm.getStor entry wethAccount)) :=
+    add_le_sum_of_ne _ callerNotVault
+  have rowNof : B256.Nof (Stor.rest (Devm.getStor entry wethAccount)
+      sevm.currentTarget) assets := by
+    unfold B256.Nof
+    have coveredNat := B256.toNat_le_toNat covered
+    have sumLt : sum (Stor.rest (Devm.getStor entry wethAccount)) < 2 ^ 256 :=
+      wethSumNof
+    omega
+  have rowAfter : (Stor.rest (Devm.getStor settled wethAccount)
+      sevm.currentTarget).toNat =
+      (Stor.rest (Devm.getStor entry wethAccount)
+        sevm.currentTarget).toNat + assets.toNat := by
+    rw [credited_of_transfer credited callerNotVault]
+    exact B256.toNat_add_eq_of_nof _ _ rowNof
+  -- The mint bound: the quote cannot be better than the invariant allows.
+  have mintable : shares.toNat ≤
+      Blanc.ProrataWethVault.offsetN * assets.toNat := by
+    refine mint_bound (supply := supply.toNat) ?_ quote
+    rw [← supplyNat]
+    exact bound
+  have roomNat : Blanc.ProrataWethVault.shareRoomN supply.toNat =
+      Blanc.ProrataWethVault.maxSupplyN - supply.toNat := rfl
+  refine ⟨callPre, settled, ?_, entryToCall.symm, ?_, vaultUntouched,
+    credited, tailRun⟩
+  · refine .inboundQuoted ?_ ?_ entryToCall.symm
+      (childLogs.trans stagingLogs).symm
+    · rw [supplyNat]
+      exact stable
+    · show shares.toNat * ((Stor.rest (Devm.getStor entry wethAccount)
+        sevm.currentTarget).toNat + 1) ≤
+        assets.toNat * ((Devm.getStorVal entry sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot).toNat +
+          Blanc.ProrataWethVault.offsetN)
+      rw [← supplyStorage]
+      exact quote
+  · refine .inboundSettled credited vaultUntouched ?_ ?_ ?_
+    · rw [vaultUntouched]
+      exact conserved
+    · rw [rowAfter, supplyNat]
+      have expand : Blanc.ProrataWethVault.offsetN *
+          ((Stor.rest (Devm.getStor entry wethAccount)
+            sevm.currentTarget).toNat + assets.toNat) =
+          Blanc.ProrataWethVault.offsetN *
+            (Stor.rest (Devm.getStor entry wethAccount)
+              sevm.currentTarget).toNat +
+            Blanc.ProrataWethVault.offsetN * assets.toNat := by ring
+      rw [supplyNat] at bound
+      omega
+    · rw [roomNat] at roomFits
+      rw [supplyNat]
+      omega
+
+
+/-! ### The outbound stage witnesses
+
+The mirror of the inbound witnesses, one split point later in each direction:
+the outbound flow burns before it pays, so its first stage is the burn's own
+exit — `outboundBurn_trace`, already walked once by the flow — and its second
+is the same crossing the inbound flow uses, with the roles reversed.
+
+`burn_bound` is cashed in here, against the pre-burn quote, and it is what puts
+`strengthened` on the burned stage: the supply that survives the burn is still
+backed once the pending payout has left the row.  By the time the child
+returns, the joint invariant already holds again, which is why the settled
+stage carries it outright.
+
+`receiverNotVault` is a genuine premise, not an oversight: the transfer
+projections speak only about distinct accounts, and a vault that names itself
+as the receiver nets to zero in WETH's ledger.  That degenerate flow is already
+closed one rung up, by `outboundEffect_preserves_backed_self`, and it has no
+in-flight content — the row it would move is its own. -/
+theorem outbound_stage_witnesses
+    {fs : List Func} {sevm : Sevm} {entry post : Devm} {image : Bytes}
+    {sharesSel assetsSel receiverWord : B256}
+    {owner balance supply shares assets : B256} {receiver : Adr}
+    {tailBody : Func} {frame : Stack}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (memoryReads : Mem.Reads entry.memory image)
+    (sharesAt : Bytes.toB256
+      (image.sliceD (sharesSel * 32).toNat 32 0) = shares)
+    (ownerAt : Bytes.toB256
+      (image.sliceD (Blanc.ProrataWethVault.ownerWord * 32).toNat 32 0) = owner)
+    (balanceAt : Bytes.toB256
+      (image.sliceD
+        (Blanc.ProrataWethVault.balanceWord * 32).toNat 32 0) = balance)
+    (supplyAt : Bytes.toB256
+      (image.sliceD
+        (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) = supply)
+    (receiverAt : Bytes.toB256
+      (image.sliceD (receiverWord * 32).toNat 32 0) = receiver.toB256)
+    (assetsAt : Bytes.toB256
+      (image.sliceD (assetsSel * 32).toNat 32 0) = assets)
+    (receiverAboveSelector : 32 ≤ (receiverWord * 32).toNat)
+    (assetsAboveReceiver : 64 ≤ (assetsSel * 32).toNat)
+    (ownerValid : ValidAdr owner)
+    (balanceEq : balance = Devm.getStorVal entry sevm.currentTarget owner)
+    (supplyEq : supply = Devm.getStorVal entry sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot)
+    (covered : shares.toNat ≤ balance.toNat)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (stack : frame <<+ entry.stack)
+    (dynamic : sevm.isStatic = false)
+    (receiverNotVault : sevm.currentTarget ≠ receiver)
+    (quote : assets.toNat * (supply.toNat + Blanc.ProrataWethVault.offsetN) ≤
+      shares.toNat *
+        ((Stor.rest (Devm.getStor entry wethAccount)
+          sevm.currentTarget).toNat + 1))
+    (backed : PairBacked sevm.currentTarget
+      (Devm.getStor entry sevm.currentTarget)
+      (Devm.getStor entry wethAccount))
+    (run : Func.RunCompiledTo fs sevm entry
+      (Blanc.ProrataWethVault.loadWord sharesSel +++
+        Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.balanceWord +++
+        sub ::: Blanc.ProrataWethVault.loadWord
+          Blanc.ProrataWethVault.ownerWord +++ sstore :::
+        Blanc.ProrataWethVault.loadWord sharesSel +++
+        Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.supplyWord +++
+        lt :::
+        (Func.revert <?>
+          (Blanc.ProrataWethVault.loadWord sharesSel +++
+            Blanc.ProrataWethVault.loadWord
+              Blanc.ProrataWethVault.supplyWord +++ sub :::
+            Blanc.ProrataWethVault.pushSupplySlot +++ sstore :::
+            Blanc.ProrataWethVault.logBurnTransfer
+              (Blanc.ProrataWethVault.loadWord sharesSel) +++
+            Blanc.ProrataWethVault.callWethTransfer
+              (Blanc.ProrataWethVault.loadWord receiverWord)
+              (Blanc.ProrataWethVault.loadWord assetsSel) tailBody)))
+      (.ok post)) :
+    ∃ burnedState settled : Devm,
+      PairInFlight sevm.currentTarget sevm entry
+        (.outboundBurned owner assets shares) burnedState ∧
+      Devm.getStor burnedState wethAccount =
+        Devm.getStor entry wethAccount ∧
+      PairInFlight sevm.currentTarget sevm entry
+        (.outboundSettled receiver assets shares) settled ∧
+      Devm.getStor settled sevm.currentTarget =
+        Devm.getStor burnedState sevm.currentTarget ∧
+      Transfer (Stor.rest (Devm.getStor entry wethAccount))
+        sevm.currentTarget assets receiver
+        (Stor.rest (Devm.getStor settled wethAccount)) ∧
+      Func.RunCompiledTo fs sevm settled tailBody (.ok post) := by
+  obtain ⟨ownerAdr, ownerAdrEq⟩ := ownerValid
+  obtain ⟨conserved, -, bound⟩ := backed
+  obtain ⟨burnedState, burnable, burnSet, burnForeign, -, burnCode, -, burnWf,
+      burnReads, childRun⟩ :=
+    Blanc.ProrataWethVault.outboundBurn_trace (R := Func.RunOk) memoryWf
+      memoryReads sharesAt ownerAt balanceAt supplyAt stack run
+  obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
+    callWethTransfer_trace childRun
+  obtain ⟨stagingStorage, stagingCode, -⟩ := transferStaging_quiet staging
+  have callConfig :
+      DirectWethConfiguration sevm.currentTarget sevm callPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← congrFun (burnCode.trans stagingCode) wethAccount]
+    exact config.code
+  have receiverAtChild : ImageWordAt (Bytes.writeAt image 0 shares.toBytes)
+      receiverWord receiver.toB256 := by
+    unfold ImageWordAt
+    rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (Or.inr (by omega))]
+    exact sliceBytes_of_toB256 receiverAt
+  have assetsAtChild : ImageWordAt (Bytes.writeAt image 0 shares.toBytes)
+      assetsSel assets := by
+    unfold ImageWordAt
+    rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (Or.inr (by omega))]
+    exact sliceBytes_of_toB256 assetsAt
+  obtain ⟨settled, movement, childForeign, -, -, -, -, tailRun⟩ :=
+    callWethTransfer_worldEffect callConfig ⟨burnWf, burnReads⟩ receiverAtChild
+      assetsAtChild receiverAboveSelector assetsAboveReceiver staging dynamic
+      crossing suffix
+  -- The burned stage's own coordinates.
+  have vaultNe : sevm.currentTarget ≠ wethAccount := Ne.symm config.distinct
+  have wethUntouched : Devm.getStor burnedState wethAccount =
+      Devm.getStor entry wethAccount := burnForeign wethAccount vaultNe
+  have ownerNotSupply : owner ≠ Blanc.ProrataWethVault.supplySlot := by
+    intro slotEq
+    exact Blanc.ProrataWethVault.supplySlot_not_validAdr
+      (slotEq ▸ ⟨ownerAdr, ownerAdrEq⟩)
+  have supplyNat : supplyN (Devm.getStor entry sevm.currentTarget) =
+      supply.toNat := congrArg B256.toNat supplyEq.symm
+  have coveredB256 : shares ≤ balance := B256.le_of_toNat_le_toNat covered
+  have burnableB256 : shares ≤ supply := B256.le_of_toNat_le_toNat burnable
+  have burnedRow : Devm.getStorVal burnedState sevm.currentTarget owner =
+      Devm.getStorVal entry sevm.currentTarget owner - shares := by
+    show (Devm.getStor burnedState sevm.currentTarget).get owner = _
+    rw [burnSet, Stor.get_set_ne _ (Ne.symm ownerNotSupply),
+      Stor.get_set_self, balanceEq]
+  have supplyBurned : supplyN (Devm.getStor burnedState sevm.currentTarget) +
+      shares.toNat = supplyN (Devm.getStor entry sevm.currentTarget) := by
+    have value : supplyN (Devm.getStor burnedState sevm.currentTarget) =
+        (supply - shares).toNat := by
+      show ((Devm.getStor burnedState sevm.currentTarget).get _).toNat = _
+      rw [burnSet, Stor.get_set_self]
+    rw [value, B256.toNat_sub_eq_of_le _ _ burnableB256, supplyNat]
+    omega
+  have conservedBurned : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor burnedState sevm.currentTarget) := by
+    rw [burnSet, balanceEq, supplyEq, ← ownerAdrEq]
+    exact LedgerConserved.burn_set
+      Blanc.ProrataWethVault.supplySlot_not_validAdr conserved
+      (by
+        show shares ≤ (Devm.getStor entry sevm.currentTarget).get
+          ownerAdr.toB256
+        rw [ownerAdrEq]
+        show shares ≤ Devm.getStorVal entry sevm.currentTarget owner
+        rw [← balanceEq]
+        exact coveredB256)
+  -- `burn_bound`: the remaining supply is still backed once the payout leaves.
+  have payable : supply.toNat + Blanc.ProrataWethVault.offsetN * assets.toNat ≤
+      Blanc.ProrataWethVault.offsetN *
+        (Stor.rest (Devm.getStor entry wethAccount)
+          sevm.currentTarget).toNat + shares.toNat := by
+    refine burn_bound (supply := supply.toNat) ?_ burnable quote
+    rw [← supplyNat]
+    exact bound
+  have strengthened :
+      supplyN (Devm.getStor burnedState sevm.currentTarget) +
+          Blanc.ProrataWethVault.offsetN * assets.toNat ≤
+        Blanc.ProrataWethVault.offsetN *
+          (Stor.rest (Devm.getStor entry wethAccount)
+            sevm.currentTarget).toNat := by
+    rw [supplyNat] at supplyBurned
+    omega
+  -- The settled stage: the child debited the vault's row and nothing else.
+  have callStorage : Devm.getStor burnedState = Devm.getStor callPre :=
+    stagingStorage
+  have debited : Transfer (Stor.rest (Devm.getStor entry wethAccount))
+      sevm.currentTarget assets receiver
+      (Stor.rest (Devm.getStor settled wethAccount)) := by
+    rw [← wethUntouched, congrFun callStorage wethAccount]
+    exact movement
+  have vaultAtSettled : Devm.getStor settled sevm.currentTarget =
+      Devm.getStor burnedState sevm.currentTarget := by
+    rw [childForeign sevm.currentTarget config.distinct,
+      ← congrFun callStorage sevm.currentTarget]
+  have rowAfter : (Stor.rest (Devm.getStor settled wethAccount)
+      sevm.currentTarget).toNat =
+      (Stor.rest (Devm.getStor entry wethAccount)
+        sevm.currentTarget).toNat - assets.toNat := by
+    rw [debitedSub_of_transfer debited receiverNotVault]
+    exact B256.toNat_sub_eq_of_le _ _ debited.1
+  refine ⟨burnedState, settled, ?_, wethUntouched, ?_, vaultAtSettled, debited,
+    tailRun⟩
+  · exact .outboundBurned burnedRow supplyBurned wethUntouched conservedBurned
+      (by rw [supplyNat] at supplyBurned; omega) strengthened
+  · refine .outboundSettled debited ⟨?_, ?_, ?_⟩
+    · rw [vaultAtSettled]
+      exact conservedBurned
+    · rw [vaultAtSettled, supplyNat] at *
+      omega
+    · rw [vaultAtSettled, rowAfter]
+      have assetsLe : assets.toNat ≤
+          (Stor.rest (Devm.getStor entry wethAccount)
+            sevm.currentTarget).toNat := B256.toNat_le_toNat debited.1
+      have expand : Blanc.ProrataWethVault.offsetN *
+            ((Stor.rest (Devm.getStor entry wethAccount)
+              sevm.currentTarget).toNat - assets.toNat) +
+          Blanc.ProrataWethVault.offsetN * assets.toNat =
+          Blanc.ProrataWethVault.offsetN *
+            (Stor.rest (Devm.getStor entry wethAccount)
+              sevm.currentTarget).toNat := by
+        rw [← Nat.mul_add]
+        congr 1
+        omega
+      omega
+
 end Blanc.Composition.ProrataWethVault
