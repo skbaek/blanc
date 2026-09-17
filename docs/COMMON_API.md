@@ -84,9 +84,12 @@ registry has identified the likely vocabulary.
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
   exact selector/list membership and return the selected body with the
   selector removed while preserving world state and memory; neither asserts
-  that an execution exists.  `reach_of_dispatch_logs` and
-  `reach_of_dispatchWith_logs` are the same factorizations with the
-  dispatcher's log and output silence carried to the selected body.
+  that an execution exists.  `reach_of_dispatchWith_logs` is the same
+  factorization with the dispatcher's log and output silence carried to the
+  selected body.  `reach_of_dispatch_logs` in
+  [`Blanc/ReachDispatchPrefix.lean`](../Blanc/ReachDispatchPrefix.lean) is the
+  inline-revert form with log/output silence plus the loose gas-free walk
+  prefix reaching the selected body's entry state.
 - Rule a selector *out* at source level with `not_run_dispatch_of_miss` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean): a selector with no
   leaf in the tree has no successful inline-revert dispatcher run at all, so a

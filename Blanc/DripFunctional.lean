@@ -12,6 +12,7 @@
 import Blanc.DripEndpoints
 import Blanc.DripIngress
 import Blanc.RunPrefix
+import Blanc.ReachDispatchPrefix
 import Blanc.Ladder
 import Blanc.MessageExecution
 
@@ -273,8 +274,8 @@ theorem main_body {fs : List Func} {sevm : Sevm} {pre post : Devm}
   rcases dispatch_entry_of_run_main run hnonempty with
     ⟨s2, hst, hmm, hlg, hou, hpfx, hdispatch⟩
   rw [hsel] at hpfx
-  rcases reach_of_dispatch_logs funcs_sorted hmem hpfx hdispatch with
-    ⟨entry, -, hst', hmm', hlg', hou', hbody⟩
+  rcases reach_of_dispatch_logs (path := ⟨0, []⟩) funcs_sorted hmem hpfx hdispatch with
+    ⟨entry, _, -, hst', hmm', hlg', hou', _, hbody⟩
   exact ⟨entry, hst.trans hst', hmm.trans hmm', hlg.trans hlg',
     hou.trans hou', hbody⟩
 
