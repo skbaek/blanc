@@ -1290,6 +1290,15 @@ Blanc.Prorata.prorata_realized_dust_trace_exact|$STANDARD
 Blanc.Prorata.attacker_open_context|$STANDARD
 Blanc.Prorata.attacker_no_profit|$STANDARD
 Blanc.Prorata.victim_loss_bound|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq|
+Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome|$STANDARD
+Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState|$STANDARD
+Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.branchFlagToward|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero|$STANDARD
 Blanc.Func.localExecFree_iff|propext, Quot.sound

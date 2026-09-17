@@ -7,6 +7,7 @@ import Blanc.Weth10Code
 import Blanc.Compiled
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionNoninterference
 import Blanc.SourceAttainment
 import Blanc.CycleWriteFree
@@ -1043,6 +1044,15 @@ import Blanc.DripAccounting
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome
+#print axioms Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState
+#print axioms Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body
+#print axioms Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff

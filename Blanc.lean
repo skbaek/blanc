@@ -32,6 +32,7 @@ import Blanc.ExecutionBodyAdmission
 import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionAccountingReplay
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal

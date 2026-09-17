@@ -1498,6 +1498,47 @@ precompile facts, constrain an execution's result, or filter by settlement.
 A consumer must derive every independent admission from its actual trace and
 use the retained/committed APIs when rollback matters.
 
+### T2b. I need a contract's own ledger replay across retained settlement
+
+A contract that reads one account and reports an *ordered* replay of the moves
+it saw meets four obstacles that are about EVM settlement, not about its
+ledger.  Use
+[`Blanc/ExecutionAccountingReplay.lean`](../Blanc/ExecutionAccountingReplay.lean)
+rather than restating them:
+
+- `ExecutionAccountingReplay.ReplayCarrier ca` is the interface.  Supply your
+  own boundary type `Snap`, step type `Step`, credit provenance `Tag`, replay
+  relation `Replay`, the boundary `ofState` of an ordinary world state, the
+  boundary `frameEntry` at an entered instruction frame — which may sit
+  *before* a message's value credit and so need not be any world state's
+  boundary — and the five laws `nil`, `silent`, `credit` and
+  `entry_eq_ofState`.
+- `ReplayCarrier.processMessage_of_body` and
+  `ReplayCarrier.processCreateMessage_of_body` take the *committed body's*
+  replay to the whole retained CALL or CREATE, splitting on settlement: a
+  noncommitting child rolls the world back and contributes nothing, and
+  fresh-account preparation and code deposit are projection-silent.
+- `ReplayCarrier.xinstForeignSome` does the same for one filled executable slot
+  in a foreign frame, so CALL and CREATE share a single child replay and their
+  instruction prefixes and resumptions stay silent.
+- `ReplayCarrier.ofStorageEqBalanceMono` is the endpoint classifier: a
+  transition that fixes the account's storage and cannot lower its balance is
+  one positive credit or no step at all.  A foreign-opcode proof should expose
+  those two facts rather than restate the four-way split.
+- `ReplayCarrier.nilOfEq` and `ReplayCarrier.silentReplay` are the small
+  derived forms the seams themselves use.
+- `ExecutionAccountingReplay.balanceCarrier` is a second, deliberately
+  un-ledger-shaped instantiation whose boundary is a bare `Nat`; it reads no
+  storage and records no provenance.  `balanceEntry_eq_ofState`,
+  `ProcessMessage.targetBalanceCredits_of_body` and
+  `targetBalanceCredits_of_balance_mono` are its restated seams, and they are
+  what keeps the interface from quietly acquiring a ledger-shaped premise.
+
+`Blanc/ProrataRealizedAccounting.lean`'s `ProrataAccountingReplay.carrier` is
+the worked ledger-shaped example.  This module classifies no transition as a
+deposit, withdrawal or attack step, and produces no step of its own beyond what
+`credit` hands it; keep that interpretation in the contract-owned layer.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use

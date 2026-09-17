@@ -9,30 +9,6 @@ open Jaune
 
 namespace Prorata
 
-namespace RealizedSnapshot
-
-/-- The realized boundary at an instruction-frame entry.  A frame executing
-PRORATA begins immediately before its value credit; a foreign frame begins at
-the ordinary world-state projection. -/
-def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
-    RealizedSnapshot :=
-  if sevm.currentTarget = ca then beforeCredit ca sevm.value state
-  else ofState ca state
-
-@[simp] theorem execEntry_of_target
-    {ca : Adr} {sevm : Sevm} {state : State}
-    (target : sevm.currentTarget = ca) :
-    execEntry ca sevm state = beforeCredit ca sevm.value state := by
-  simp [execEntry, target]
-
-@[simp] theorem execEntry_of_target_ne
-    {ca : Adr} {sevm : Sevm} {state : State}
-    (target : sevm.currentTarget ≠ ca) :
-    execEntry ca sevm state = ofState ca state := by
-  simp [execEntry, target]
-
-end RealizedSnapshot
-
 /-- The exact message-level facts needed to interpret a retained raw execution
 as PRORATA accounting.  `codeOrForeign` excludes synthetic CREATE roots that
 run arbitrary code at the installed address; `caller_ne` excludes a direct
@@ -63,49 +39,9 @@ theorem ProcessMessage.accountingReplay_of_body
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  by_cases settles :
-      Frame.settlementCommits (Frame.ofCall msg) out = true
-  · have committed := Frame.raw_commits_of_settlementCommits settles
-    have enter : (Frame.ofCall msg).enter = .run ⟨pc, sevm, pre⟩ :=
-      (RunFrame.some_inv process).1
-    rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
-    simp only [Frame.ofCall] at transfer evmEq
-    have sevmEq : sevm = initSevm (msg.withBenv entry) :=
-      congrArg (fun evm : Evm => evm.sta) evmEq
-    have preState : pre.state = entry.state :=
-      congrArg (fun evm : Evm => evm.dyna.state) evmEq
-    have entryBoundary :
-        RealizedSnapshot.execEntry ca sevm pre.state =
-          RealizedSnapshot.messageEntry ca msg entry.state := by
-      rw [sevmEq, preState]
-      rfl
-    have prefixEq :
-        RealizedSnapshot.execEntry ca sevm pre.state =
-          RealizedSnapshot.ofState ca msg.benv.state :=
-      entryBoundary.trans
-        (RealizedSnapshot.messageEntry_eq_ofState caller_ne value_zero
-          transfer sum_nof)
-    have postState : post.state =
-        (Execution.committedPost out committed).state :=
-      _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process committed
-    rcases body committed with ⟨steps, replay⟩
-    refine ⟨steps, ?_⟩
-    rw [← prefixEq, postState]
-    exact replay
-  · have settledEq := (RunFrame.some_inv process).2
-    have postError : post.error.isSome = true := by
-      have notNone : post.error.isNone ≠ true := by
-        intro clean
-        apply settles
-        unfold Frame.settlementCommits
-        rw [← settledEq]
-        exact clean
-      cases errorEq : post.error <;> simp_all
-    have rollback :=
-      (_root_.Blanc.ProcessMessage.rollback_of_error process postError).1
-    refine ⟨[], ProrataAccountingReplay.nil_of_eq ?_⟩
-    exact congrArg (RealizedSnapshot.ofState ca) rollback
+        (RealizedSnapshot.ofState ca post.state) :=
+  (ProrataAccountingReplay.carrier ca).processMessage_of_body process
+    caller_ne value_zero sum_nof body
 
 /-- Settlement-aware accounting replay for one retained CREATE constructor.
 Fresh-account preparation is silent in the PRORATA projection; clean code
@@ -129,65 +65,9 @@ theorem ProcessCreateMessage.accountingReplay_of_body
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  by_cases settles :
-      Frame.settlementCommits (Frame.ofCreate msg) out = true
-  · have clean : post.error.isSome = false := by
-      have settledEq := (RunFrame.some_inv process).2
-      unfold Frame.settlementCommits at settles
-      rw [← settledEq] at settles
-      cases errorEq : post.error <;> simp_all
-    rcases _root_.Blanc.ProcessCreateMessage.ok_getStor_eq_inner_of_clean
-        process clean with ⟨inner, innerProcess, postStor, innerClean⟩
-    rcases _root_.Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error
-        process clean with ⟨balanceInner, balanceProcess, postBalance⟩
-    have innerEq : inner = balanceInner := by
-      have left := (RunFrame.some_inv innerProcess).2
-      have right := (RunFrame.some_inv balanceProcess).2
-      exact Except.ok.inj (left.trans right.symm)
-    subst balanceInner
-    have preparedStor :=
-      _root_.Blanc.processCreateMessage_msg_getStor_eq_of_empty fresh
-    have preparedBalance :=
-      _root_.Blanc.processCreateMessage_msg_bal_eq msg
-    have preparedSnapshot :
-        RealizedSnapshot.ofState ca
-            (processCreateMessage.msg msg).benv.state =
-          RealizedSnapshot.ofState ca msg.benv.state := by
-      unfold RealizedSnapshot.ofState
-      exact congrArg₂ RealizedSnapshot.mk
-        (congrFun preparedStor ca)
-        (congrArg B256.toNat (congrFun preparedBalance ca))
-    have postSnapshot :
-        RealizedSnapshot.ofState ca post.state =
-          RealizedSnapshot.ofState ca inner.state := by
-      unfold RealizedSnapshot.ofState
-      exact congrArg₂ RealizedSnapshot.mk
-        (congrFun postStor ca)
-        (congrArg B256.toNat (congrFun postBalance ca))
-    have innerSum :
-        sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
-      rw [preparedBalance]
-      exact sum_nof
-    have innerReplay := ProcessMessage.accountingReplay_of_body
-      (ca := ca) innerProcess caller_ne value_zero innerSum body
-    rcases innerReplay with ⟨steps, replay⟩
-    refine ⟨steps, ?_⟩
-    rw [← preparedSnapshot, postSnapshot]
-    exact replay
-  · have settledEq := (RunFrame.some_inv process).2
-    have postError : post.error.isSome = true := by
-      have notClean : post.error.isSome ≠ false := by
-        intro clean
-        apply settles
-        unfold Frame.settlementCommits
-        rw [← settledEq]
-        cases errorEq : post.error <;> simp_all
-      cases errorEq : post.error <;> simp_all
-    have rollback :=
-      _root_.Blanc.ProcessCreateMessage.rollback_of_error process postError
-    refine ⟨[], ProrataAccountingReplay.nil_of_eq ?_⟩
-    exact congrArg (RealizedSnapshot.ofState ca) rollback
+        (RealizedSnapshot.ofState ca post.state) :=
+  (ProrataAccountingReplay.carrier ca).processCreateMessage_of_body process
+    caller_ne value_zero fresh sum_nof body
 
 /-- Recursive accounting transport for one actual filled executable slot in a
 foreign frame.  CALL and CREATE share the same settlement-aware child replay;
@@ -209,100 +89,9 @@ theorem Xinst.foreignSomeAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  rcases Xinst.step_shape sevm pre x with
-    ⟨execution, shape, hprefix⟩ |
-    ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
-    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
-      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, callShape, _,
-      shape⟩ <;> rw [shape] at spawn
-  · cases spawn
-  · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, rfl⟩
-    let createPre :=
-      addAccessedAddress
-        (((d.withGasLeft
-            (d.gasLeft - except64th d.gasLeft)).withReturnData
-          []).incrNonce sevm.currentTarget) newAddress
-    let msg := createMsg sevm createPre (except64th d.gasLeft)
-      endowment newAddress ((d.memory.read mi ms).1)
-    have process : ProcessCreateMessage msg (.some ⟨cevm, raw⟩)
-        (.ok settled) := by
-      simpa only [ProcessCreateMessage, msg, createPre] using frameRun
-    have dSum : sum d.state.bal < 2 ^ 256 := by
-      rw [← hprefix.state]
-      exact sum_nof
-    have preparedStor : createPre.state.getStor = d.state.getStor := by
-      simpa only [createPre] using
-        genericCreate_prepared_getStor sevm d newAddress
-    have preparedBalance : createPre.state.bal = d.state.bal := by
-      simpa only [createPre] using genericCreate_prepared_bal sevm d newAddress
-    have preparedSnapshot :
-        RealizedSnapshot.ofState ca createPre.state =
-          RealizedSnapshot.ofState ca d.state := by
-      unfold RealizedSnapshot.ofState
-      exact congrArg₂ RealizedSnapshot.mk
-        (congrFun preparedStor ca)
-        (congrArg B256.toNat (congrFun preparedBalance ca))
-    have targetEmpty : Devm.getStor d newAddress = .empty :=
-      genericCreate_step_spawn_getStor_empty spawn
-    have fresh : msg.benv.state.getStor msg.currentTarget = .empty := by
-      change createPre.state.getStor newAddress = .empty
-      rw [preparedStor]
-      exact targetEmpty
-    have callerNe : msg.shouldTransferValue = true → msg.caller ≠ ca := by
-      simpa [msg, createMsg] using target_ne
-    have valueZero : msg.shouldTransferValue = false →
-        msg.currentTarget = ca → msg.value = 0 := by
-      simp [msg, createMsg]
-    have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
-      change sum createPre.state.bal < 2 ^ 256
-      rw [preparedBalance]
-      exact dSum
-    rcases ProcessCreateMessage.accountingReplay_of_body process callerNe
-        valueZero fresh msgSum body with ⟨steps, replay⟩
-    have postState : post.state = settled.state :=
-      Resume.create_state resumeRun
-    refine ⟨steps, ?_⟩
-    rw [hprefix.state, ← preparedSnapshot, postState]
-    exact replay
-  · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
-    let msg := callMsg sevm (d.withReturnData []) gas value caller target
-      codeAddress stv isStatic ((d.memory.read ii isz).1) code
-      disablePrecompiles
-    have process : ProcessMessage msg (.some ⟨cevm, raw⟩) (.ok settled) := by
-      simpa only [ProcessMessage, msg] using frameRun
-    have dSum : sum d.state.bal < 2 ^ 256 := by
-      rw [← hprefix.state]
-      exact sum_nof
-    have callerNe : stv = true → caller ≠ ca := by
-      intro transfer
-      rcases callShape with ⟨_, caller_eq⟩ | ⟨noTransfer, _⟩
-      · rw [caller_eq]
-        exact target_ne
-      · rw [transfer] at noTransfer
-        contradiction
-    have valueZero : stv = false → target = ca → value = 0 := by
-      intro noTransfer target_eq
-      rcases callShape with ⟨transfer, _⟩ | ⟨_, targetParent⟩
-      · rw [noTransfer] at transfer
-        contradiction
-      · exact False.elim (target_ne (targetParent.symm.trans target_eq))
-    have msgCallerNe :
-        msg.shouldTransferValue = true → msg.caller ≠ ca := by
-      simpa [msg, callMsg] using callerNe
-    have msgValueZero : msg.shouldTransferValue = false →
-        msg.currentTarget = ca → msg.value = 0 := by
-      simpa [msg, callMsg] using valueZero
-    have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
-      change sum d.state.bal < 2 ^ 256
-      exact dSum
-    rcases ProcessMessage.accountingReplay_of_body process msgCallerNe
-        msgValueZero msgSum body with ⟨steps, replay⟩
-    have postState : post.state = settled.state :=
-      Resume.call_state resumeRun
-    refine ⟨steps, ?_⟩
-    rw [hprefix.state, postState]
-    exact replay
+        (RealizedSnapshot.ofState ca post.state) :=
+  (ProrataAccountingReplay.carrier ca).xinstForeignSome spawn frameRun
+    resumeRun target_ne sum_nof body
 
 /-- Proof-indexed committed accounting replay for one interpreter suffix.
 `nextChild` is the ordinal of the next frame spawned by the current execution;

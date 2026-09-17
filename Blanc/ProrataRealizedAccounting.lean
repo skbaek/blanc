@@ -5,6 +5,7 @@ import Blanc.ProrataCompiledEffects
 import Blanc.ProrataAccounting
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionAccountingReplay
 
 namespace Blanc
 
@@ -135,6 +136,26 @@ theorem messageEntry_eq_ofState
         · exact fields.1 ca
         · exact congrArg B256.toNat
             (of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq)
+
+/-- The realized boundary at an instruction-frame entry.  A frame executing
+PRORATA begins immediately before its value credit; a foreign frame begins at
+the ordinary world-state projection. -/
+def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
+    RealizedSnapshot :=
+  if sevm.currentTarget = ca then beforeCredit ca sevm.value state
+  else ofState ca state
+
+@[simp] theorem execEntry_of_target
+    {ca : Adr} {sevm : Sevm} {state : State}
+    (target : sevm.currentTarget = ca) :
+    execEntry ca sevm state = beforeCredit ca sevm.value state := by
+  simp [execEntry, target]
+
+@[simp] theorem execEntry_of_target_ne
+    {ca : Adr} {sevm : Sevm} {state : State}
+    (target : sevm.currentTarget ≠ ca) :
+    execEntry ca sevm state = ofState ca state := by
+  simp [execEntry, target]
 
 end RealizedSnapshot
 
@@ -1081,6 +1102,32 @@ theorem of_addBal
         (congrArg B256.toNat balance_eq)
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
+/-- PRORATA's realized accounting presented as a `ReplayCarrier`, so the
+contract-neutral settlement seams in `Blanc/ExecutionAccountingReplay.lean` are
+consumed here rather than restated.  Every field is one of PRORATA's own
+projections or laws; `Tag` is where its step provenance rides, because the
+generic seams never name an actor. -/
+def carrier (ca : Adr) : ExecutionAccountingReplay.ReplayCarrier ca where
+  Snap := RealizedSnapshot
+  Step := ProrataAccountingStep offset.toNat
+  Tag := ProrataAccountingProvenance
+  Replay := ProrataAccountingReplay offset.toNat
+  ofState := RealizedSnapshot.ofState ca
+  frameEntry := RealizedSnapshot.execEntry ca
+  nil := ProrataAccountingReplay.nil
+  silent := by
+    intro _ _ storage_eq balance_eq
+    unfold RealizedSnapshot.ofState
+    exact congrArg₂ RealizedSnapshot.mk storage_eq balance_eq
+  credit := by
+    intro provenance _ _ _ storage_eq balance_eq positive
+    exact ⟨_, singleton provenance
+      (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
+  entry_eq_ofState := by
+    intro _ _ caller_ne value_zero transfer sum_nof
+    exact RealizedSnapshot.messageEntry_eq_ofState caller_ne value_zero
+      transfer sum_nof
+
 /-- Any projected transition that fixes PRORATA storage and cannot lower its
 balance is either one positive external credit or no accounting step at all.
 This endpoint lemma lets foreign opcode proofs expose only their two relevant
@@ -1093,24 +1140,8 @@ theorem of_storage_eq_balance_mono
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre) steps
-        (RealizedSnapshot.ofState ca post) := by
-  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
-  have balance_eq :
-      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
-    dsimp only [amount]
-    omega
-  by_cases positive : 0 < amount
-  · exact ⟨_, singleton provenance
-      (accountingEffect_externalCredit storage_eq balance_eq positive)⟩
-  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
-    have snapshot_eq :
-        RealizedSnapshot.ofState ca post =
-          RealizedSnapshot.ofState ca pre := by
-      unfold RealizedSnapshot.ofState
-      exact congrArg₂ RealizedSnapshot.mk
-        storage_eq
-        (by rw [balance_eq, zero, Nat.add_zero])
-    exact ⟨[], nil_of_eq snapshot_eq⟩
+        (RealizedSnapshot.ofState ca post) :=
+  (carrier ca).ofStorageEqBalanceMono provenance storage_eq balance_mono
 
 /-- Every replay yields the frozen connected-path carrier used by the exact
 dust theorem; no boundary connectivity is reconstructed axiomatically. -/
