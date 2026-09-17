@@ -4,6 +4,9 @@
 -- the deployed runtime literal, plus guard-free Nat images.
 
 import Blanc.DripEndpoints
+import Blanc.DripPreservation
+import Blanc.DripFunctional
+import Blanc.DripAccounting
 
 namespace Blanc
 
@@ -153,6 +156,144 @@ theorem drip_compiled_freshNat {e : Sevm} {entry s r : Devm} {image : Bytes}
   have hbridge := B256.toNat_rpow hscale _ hguards
   rw [B256.mul_comm, B256.toNat_div hscale,
     B256.toNat_mul_eq_of_nofm hnofm, hbridge]
+
+/-! ## G5: compiled freshness and same-block agreement -/
+
+/-- A successful compiled `join` uses the fresh index for its conversion and
+writes the fresh index, clock, caller row, and total in the endpoint's order. -/
+theorem drip_compiled_join {e : Sevm} {entry s r : Devm} {image : Bytes}
+    {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run (runtime.main :: runtime.aux) e s Drip.join r) :
+    ∃ postChi units,
+      Devm.getStor r e.currentTarget =
+        ((((Devm.getStor entry e.currentTarget).set chiSlot postChi).set
+        rhoSlot e.benvStat.time).set e.caller.toB256
+          (Devm.getStorVal entry e.currentTarget e.caller.toB256 + units)).set
+          totalUnitsSlot
+          (units + Devm.getStorVal entry e.currentTarget totalUnitsSlot) ∧
+      postChi.toNat =
+        (Devm.getStorVal entry e.currentTarget chiSlot).toNat *
+          Jaune.rpow scale.toNat half.toNat rate.toNat
+            (e.benvStat.time -
+              Devm.getStorVal entry e.currentTarget rhoSlot).toNat /
+          scale.toNat ∧
+      units.toNat = joinUnitsOf scale.toNat e.value.toNat postChi.toNat ∧
+      ReturnsWord units r := by
+  obtain ⟨hasset, hrow, htotal, hlower, hupper, hclock, helapsed,
+    hguards, hnofm, hcap, freshChi, units, hfresh, hunits, hrowPost,
+    htotalPost, hstor, hret⟩ :=
+    of_run_join_full auxLookup_runtime frame hp run
+  have hscale : scale ≠ 0 := by decide +kernel
+  have hscaleValueNof : B256.Nofm scale e.value :=
+    join_scale_value_nofm hasset
+  have hfreshLower : scale.toNat ≤ freshChi.toNat := by
+    rw [hfresh, freshChi_toNat _ _ hguards hnofm]
+    exact (B256.toNat_le_toNat (le_of_not_gt hlower)).trans
+      (freshNat_mono _ _)
+  have hfreshNe : freshChi ≠ 0 := by
+    intro hz
+    have hpos : 0 < scale.toNat := by
+      rw [scale_literal]
+      decide +kernel
+    apply (Nat.ne_of_gt hpos)
+    apply Nat.eq_zero_of_le_zero
+    rw [hz, B256.toNat_zero] at hfreshLower
+    exact hfreshLower
+  have _hunitLeValue : units.toNat ≤ e.value.toNat :=
+    join_units_le_value hunits hfreshLower hscaleValueNof
+  have hfreshNat0 : freshChi.toNat = freshNat
+      (Devm.getStorVal entry e.currentTarget chiSlot).toNat
+      (e.benvStat.time -
+        Devm.getStorVal entry e.currentTarget rhoSlot).toNat := by
+    rw [hfresh]
+    exact freshChi_toNat _ _ hguards hnofm
+  refine ⟨freshChi, units, hstor, ?_, ?_, hret⟩
+  · have hfreshNat := freshChi_toNat
+        (Devm.getStorVal entry e.currentTarget chiSlot)
+        (e.benvStat.time -
+          Devm.getStorVal entry e.currentTarget rhoSlot).toNat
+        hguards hnofm
+    calc
+      freshChi.toNat =
+          ((B256.rpow scale half rate
+            (e.benvStat.time -
+              Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+            Devm.getStorVal entry e.currentTarget chiSlot) / scale).toNat :=
+        congrArg B256.toNat hfresh
+      _ = freshNat
+          (Devm.getStorVal entry e.currentTarget chiSlot).toNat
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat := hfreshNat
+      _ = _ := by rfl
+  · rw [hunits, B256.toNat_div hfreshNe,
+      B256.toNat_mul_eq_of_nofm hscaleValueNof,
+      hfreshNat0]
+    simp only [joinUnitsOf, Nat.mul_comm]
+
+/-- A successful compiled `exit` settles its fresh index and debit before the
+value-transfer call, and the payout is the exact fresh-index floor.  The
+`ExitPaysExactlyFull` carrier retains the call-boundary witnesses. -/
+theorem drip_compiled_exit {e : Sevm} {entry s r : Devm} {image : Bytes}
+    {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run (runtime.main :: runtime.aux) e s Drip.exit r) :
+    ∃ (postChi payout : B256),
+      postChi.toNat =
+        (Devm.getStorVal entry e.currentTarget chiSlot).toNat *
+          Jaune.rpow scale.toNat half.toNat rate.toNat
+            (e.benvStat.time -
+              Devm.getStorVal entry e.currentTarget rhoSlot).toNat /
+          scale.toNat ∧
+      payout.toNat =
+        exitPayoutOf scale.toNat (Sevm.dataWord e (32 * 0 + 4)).toNat
+          postChi.toNat ∧
+      ExitPaysExactlyFull e entry r := by
+  have hfull : ExitPaysExactlyFull e entry r :=
+    exit_pays_exactly_full auxLookup_runtime frame hp run
+  have hfullKeep := hfull
+  unfold ExitPaysExactlyFull at hfull
+  dsimp only at hfull
+  rcases hfull with
+    ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
+      helapsed, hguards, hnofm, hcapChi, callPre, callPost, guardPost,
+      returnPre, hstor, hcode, haccepted, hpost, hbal, hret⟩
+  let postChi :=
+    (B256.rpow scale half rate
+      (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
+      Devm.getStorVal entry e.currentTarget chiSlot) / scale
+  let payout := postChi * Sevm.dataWord e (32 * 0 + 4) / scale
+  have hscale : scale ≠ 0 := by decide +kernel
+  have hpostNat : postChi.toNat =
+      (Devm.getStorVal entry e.currentTarget chiSlot).toNat *
+        Jaune.rpow scale.toNat half.toNat rate.toNat
+          (e.benvStat.time -
+            Devm.getStorVal entry e.currentTarget rhoSlot).toNat /
+        scale.toNat := by
+    unfold postChi
+    rw [B256.mul_comm, B256.toNat_div hscale,
+      B256.toNat_mul_eq_of_nofm hnofm]
+    exact congrArg (fun x =>
+      (Devm.getStorVal entry e.currentTarget chiSlot).toNat * x /
+        scale.toNat) (B256.toNat_rpow hscale _ hguards)
+  have hpayoutNat : payout.toNat =
+      exitPayoutOf scale.toNat (Sevm.dataWord e (32 * 0 + 4)).toNat
+        postChi.toNat := by
+    unfold payout exitPayoutOf
+    have hnofPayout : B256.Nofm postChi
+        (Sevm.dataWord e (32 * 0 + 4)) := by
+      unfold B256.Nofm
+      exact lt_of_le_of_lt
+        (Nat.mul_le_mul
+          (B256.toNat_le_toNat (le_of_not_gt hcapChi))
+          (B256.toNat_le_toNat (le_of_not_gt hargCap))) (by
+            rw [maxChi_literal, maxUnits_literal]
+            decide +kernel)
+    rw [B256.toNat_div hscale,
+      B256.toNat_mul_eq_of_nofm hnofPayout]
+    simp only [Nat.mul_comm]
+  refine ⟨postChi, payout, hpostNat, hpayoutNat, ?_⟩
+  exact hfullKeep
 
 /-- End-to-end compiled `drip`: the stored and returned fresh index read as the
 exact Nat quotient. -/
