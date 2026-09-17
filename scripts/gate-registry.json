@@ -809,9 +809,24 @@
       ],
       "id": "prorata-weth-vault-differential",
       "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
         "files": [
           "scripts/check-prorata-weth-vault-differential.sh",
           "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_differential_matrix.py",
+          "scripts/prorata-weth-vault-differential-manifest.json",
+          "scripts/evm_return_capture.py",
           "scripts/prorata_weth_vault_oracle.py",
           "scripts/evm_tx.py",
           "scripts/keccak.py",
@@ -822,14 +837,26 @@
           ".lake/packages/jaune/scripts/sources.json",
           "scripts/prorata-weth-vault-reference.json",
           "scripts/prorata-weth-vault-reference-measurements.json",
-          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+          "@eels/.venv/pyvenv.cfg",
+          "@eels/.venv/bin/python",
+          "scripts/eels_differential_common.py"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/.venv/lib"
+          }
         ],
         "tools": [
-          "python3"
+          "git"
         ]
       },
       "kind": "cacheable",
-      "note": "Executes the committed vault literal and the locked reference creation input on the built Jaune runner; the runner binary, the frozen literals, the lock and the committed measurements are exact file inputs.",
+      "note": "Executes both compiled sides through Jaune against the independent oracle over the registered finite matrix; pinned EELS is a separate replay, never an observation of Jaune. The matrix producer, manifest and neutral returndata recorder are exact inputs alongside the runner, frozen literals, lock and committed measurements. Converter overflow requires source-derived exact Blanc-empty/reference-Panic(0x11) returndata on both engines. The executed-ID ledger credits only completed declared case/channel/side checks; it does not credit remaining SF rows. Foreign-child rows are canonical-return probes outside exact-pair admission; they retain Jaune rollback evidence and EELS outcome replay only.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -874,9 +901,24 @@
       ],
       "id": "prorata-weth-vault-differential-self-test",
       "inputs": {
+        "env": [
+          "EELS_ROOT",
+          "HOME"
+        ],
+        "external": [
+          {
+            "id": "eels",
+            "path": "~/execution-specs",
+            "path_env": "EELS_ROOT",
+            "pin": "4198b9c5996713b268aed602739d5aa40e277694"
+          }
+        ],
         "files": [
           "scripts/check-prorata-weth-vault-differential.sh",
           "scripts/check-prorata-weth-vault-differential.py",
+          "scripts/prorata_weth_vault_differential_matrix.py",
+          "scripts/prorata-weth-vault-differential-manifest.json",
+          "scripts/evm_return_capture.py",
           "scripts/prorata_weth_vault_oracle.py",
           "scripts/evm_tx.py",
           "scripts/keccak.py",
@@ -887,14 +929,26 @@
           ".lake/packages/jaune/scripts/sources.json",
           "scripts/prorata-weth-vault-reference.json",
           "scripts/prorata-weth-vault-reference-measurements.json",
-          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
+          "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+          "@eels/.venv/pyvenv.cfg",
+          "@eels/.venv/bin/python",
+          "scripts/eels_differential_common.py"
+        ],
+        "populations": [
+          {
+            "exclude": [
+              "*/__pycache__/*"
+            ],
+            "pattern": "python*/site-packages/**/*",
+            "root": "@eels/.venv/lib"
+          }
         ],
         "tools": [
-          "python3"
+          "git"
         ]
       },
       "kind": "cacheable",
-      "note": "Harness self-test of the differential: oracle perturbations, a valid-call-as-revert probe, and corruptions of the committed measurements and the locked reference identity must all fail.",
+      "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic. Jaune and EELS arithmetic-capacity invocations are each removed while the declaration remains, and the matching executed-ID coverage audit must fail. Receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
       "verdict": {
         "expect_exit": 0,
         "summary_patterns": [
@@ -3303,6 +3357,35 @@
         "expect_exit": 0,
         "summary_patterns": [
           "^OK — checked Lido CircuitBreaker × TWG BPO2 replay: 2 composed duration arms \\+ 2 family pause/query arms, 2 execution mutants rejected, zero semantic mismatches$"
+        ]
+      }
+    },
+    {
+      "command": [
+        "scripts/check.sh",
+        "--suggestions-only"
+      ],
+      "id": "recipe-dispatch-controls",
+      "inputs": {
+        "files": [
+          "scripts/check.sh",
+          "scripts/gate-semaphore.sh"
+        ],
+        "lean_entries": [
+          "scripts/ProofRecipeSuggestions.lean"
+        ],
+        "tools": [
+          "lean",
+          "bash"
+        ]
+      },
+      "kind": "cacheable",
+      "note": "The isolated recipe-dispatch controls. Its verdict is determined by the elaborated suggestions file and by scripts/check.sh's own bytes, which carry this mode's population floors and its verdict format string. The dispatch the controls exercise — Blanc/ProofRecipeTactic.lean, Blanc/Tactics.lean and the generated Blanc/ProofRecipesGenerated.lean — is reached through the Lean entry's import closure rather than declared again here, so deleting the leaf delegation inside proofRecipeMatches both invalidates this row and fails it. It is registered separately from axiom-audit on purpose: that row couples these controls to the whole AxiomCheck.lean artifact set, so one unrelated missing object leaves them with no green baseline and no way to show that a mutation bites.",
+      "order": 73,
+      "verdict": {
+        "expect_exit": 0,
+        "summary_patterns": [
+          "^OK — recipe dispatch controls: "
         ]
       }
     }

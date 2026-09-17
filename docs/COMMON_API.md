@@ -916,6 +916,16 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
   growth of an address-prefix sum by the value credited including the wrapping
   case, and `transfer_does_not_increase_sum` is the paired-movement form.
   These are upper bounds; they do not establish that no wrap occurred.
+- For an exact observation of a finite coalition, import
+  [`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean) and use
+  `ledgerSumOn`. `ledgerSumOn_congr` transports pointwise agreement;
+  `ledgerSumOn_increase` needs the credited row's `B256.Nof`,
+  `ledgerSumOn_decrease` needs debit cover, and `ledgerSumOn_transfer` needs
+  pre-state `SumNof`. The transfer law already covers a self transfer and all
+  coalition-membership overlaps. These are local equations only: they neither
+  supply those guard facts nor establish an execution path or history. The
+  `finite-coalition-ledger` recipe reaches this branch from a target containing
+  `ledgerSumOn`.
 
 ### S6. I need a basic EVM-word identity
 
@@ -1215,6 +1225,13 @@ first stated for PRORATA's ETH-denominated shares.
   query. Its unconditional `maxWithdraw` theorem states the real word
   saturation; `maxWithdraw_compiled_effect_exact` removes it only from the
   ledger fact `balance ≤ supply`.
+- `Blanc.Composition.ProrataWethVaultAccounting` is the local accounting
+  adapter for the exact four ERC-4626 quote directions. It records the local
+  price recurrences, exposes the compiled inverse-quote mint and withdraw
+  effects, and keeps a self-receiver outbound asset term distinct from an
+  ordinary WETH debit. It does not yet supply compiled inbound or
+  self-receiver snapshot projection, the configured history/provenance
+  transport, or a coalition accounting theorem.
 - For creation-code guards, `of_run_codesize` exposes the complete code-image
   length pushed by `CODESIZE`.
 - For creation-code copies, `of_run_codecopy_mem` and

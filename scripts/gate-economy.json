@@ -25,7 +25,8 @@
     "prorata-weth-vault-oracle-self-test",
     "prorata-weth-vault-differential-self-test",
     "prorata-weth-vault-reference-self-test",
-    "lido-twg-pinned-target-current-mainnet"
+    "lido-twg-pinned-target-current-mainnet",
+    "recipe-dispatch-controls"
   ],
   "rows": [
     {
@@ -860,6 +861,17 @@
       ],
       "historical_catches": [],
       "material_identity": "already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs"
+    },
+    {
+      "id": "recipe-dispatch-controls",
+      "work": [
+        "harness-self-test"
+      ],
+      "resource_class": "elaboration",
+      "prerequisites": [],
+      "historical_catches": [
+        "a suggestion harness that re-implemented the production dispatch, so deleting the leaf delegation inside proofRecipeMatches left every assertion green"
+      ]
     }
   ]
 }

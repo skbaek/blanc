@@ -1,6 +1,7 @@
 -- LedgerConservation.lean : ledger conservation at an arbitrary supply slot.
 
 import Blanc.BalanceAlgebra
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Conservation of a token ledger at an arbitrary supply slot
@@ -25,6 +26,111 @@ open Jaune
 every address-shaped balance. -/
 def LedgerConserved (slot : B256) (s : Stor) : Prop :=
   (s.get slot).toNat = balSum s
+
+/-- The exact sum of balances held by a finite address coalition.  Unlike
+`balSum`, this observation deliberately retains which members are selected. -/
+def ledgerSumOn (coalition : Finset Adr) (balances : Adr → B256) : Nat :=
+  coalition.sum fun account => (balances account).toNat
+
+/-- Pointwise agreement on a coalition transports its exact balance sum. -/
+theorem ledgerSumOn_congr {coalition : Finset Adr} {before after : Adr → B256}
+    (same : ∀ account, account ∈ coalition → before account = after account) :
+    ledgerSumOn coalition before = ledgerSumOn coalition after := by
+  unfold ledgerSumOn
+  apply Finset.sum_congr rfl
+  intro account member
+  rw [same account member]
+
+/-- A non-wrapping credit changes exactly the selected receiver row. -/
+theorem ledgerSumOn_increase {coalition : Finset Adr} {receiver : Adr}
+    {amount : B256} {before after : Adr → B256}
+    (increase : Increase receiver amount before after)
+    (nof : B256.Nof (before receiver) amount) :
+    ledgerSumOn coalition after = ledgerSumOn coalition before +
+      if receiver ∈ coalition then amount.toNat else 0 := by
+  by_cases member : receiver ∈ coalition
+  · unfold ledgerSumOn
+    rw [← Finset.sum_erase_add coalition (fun account => (after account).toNat) member,
+      ← Finset.sum_erase_add coalition (fun account => (before account).toNat) member,
+      if_pos member, ← (increase receiver).1 rfl,
+      B256.toNat_add_eq_of_nof _ _ nof]
+    have erased :
+        (coalition.erase receiver).sum (fun account => (after account).toNat) =
+          (coalition.erase receiver).sum (fun account => (before account).toNat) := by
+      apply Finset.sum_congr rfl
+      intro account accountMember
+      have notSame : receiver ≠ account := by
+        intro same
+        exact (Finset.mem_erase.mp accountMember).1 same.symm
+      exact congrArg B256.toNat ((increase account).2 notSame).symm
+    omega
+  · have same : ∀ account, account ∈ coalition → before account = after account := by
+      intro account accountMember
+      apply (increase account).2
+      intro same
+      subst same
+      exact member accountMember
+    simpa [member] using (ledgerSumOn_congr same).symm
+
+/-- A covered debit changes exactly the selected owner row. -/
+theorem ledgerSumOn_decrease {coalition : Finset Adr} {owner : Adr}
+    {amount : B256} {before after : Adr → B256}
+    (decrease : Decrease owner amount before after)
+    (covered : amount ≤ before owner) :
+    ledgerSumOn coalition after + (if owner ∈ coalition then amount.toNat else 0) =
+      ledgerSumOn coalition before := by
+  by_cases member : owner ∈ coalition
+  · unfold ledgerSumOn
+    rw [← Finset.sum_erase_add coalition (fun account => (after account).toNat) member,
+      ← Finset.sum_erase_add coalition (fun account => (before account).toNat) member,
+      if_pos member, ← (decrease owner).1 rfl,
+      B256.toNat_sub_eq_of_le _ _ covered]
+    have erased :
+        (coalition.erase owner).sum (fun account => (after account).toNat) =
+          (coalition.erase owner).sum (fun account => (before account).toNat) := by
+      apply Finset.sum_congr rfl
+      intro account accountMember
+      have notSame : owner ≠ account := by
+        intro same
+        exact (Finset.mem_erase.mp accountMember).1 same.symm
+      exact congrArg B256.toNat ((decrease account).2 notSame).symm
+    rw [erased, Nat.add_assoc, Nat.sub_add_cancel (B256.toNat_le_toNat covered)]
+  · have same : ∀ account, account ∈ coalition → before account = after account := by
+      intro account accountMember
+      apply (decrease account).2
+      intro same
+      subst same
+      exact member accountMember
+    simpa [member] using (ledgerSumOn_congr same).symm
+
+/-- A covered transfer gives the exact coalition movement equation.  The
+pre-state `SumNof` witness is needed to rule out the receiver-side wrap which
+the abstract `Transfer` relation alone permits. -/
+theorem ledgerSumOn_transfer {coalition : Finset Adr} {owner receiver : Adr}
+    {amount : B256} {before after : Adr → B256}
+    (sumNof : SumNof before)
+    (movement : Transfer before owner amount receiver after) :
+    ledgerSumOn coalition after + (if owner ∈ coalition then amount.toNat else 0) =
+      ledgerSumOn coalition before + (if receiver ∈ coalition then amount.toNat else 0) := by
+  rcases movement with ⟨covered, middle, decrease, increase⟩
+  have receiverNof : B256.Nof (middle receiver) amount := by
+    unfold B256.Nof
+    by_cases self : receiver = owner
+    · subst receiver
+      rw [← (decrease owner).1 rfl,
+        B256.toNat_sub_eq_of_le _ _ covered,
+        Nat.sub_add_cancel (B256.toNat_le_toNat covered)]
+      exact B256.toNat_lt _
+    · rw [← (decrease receiver).2 (Ne.symm self)]
+      apply lt_of_le_of_lt _ sumNof
+      calc
+        (before receiver).toNat + amount.toNat ≤
+            (before receiver).toNat + (before owner).toNat :=
+          Nat.add_le_add_left (B256.toNat_le_toNat covered) _
+        _ ≤ sum before := add_le_sum_of_ne before self
+  have ownerMovement := ledgerSumOn_decrease (coalition := coalition) decrease covered
+  have receiverMovement := ledgerSumOn_increase (coalition := coalition) increase receiverNof
+  omega
 
 
 variable {slot : B256}

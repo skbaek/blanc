@@ -14,12 +14,14 @@
 # after a reviewed change to the frozen closure; the ordinary gate never writes.
 #
 # Needs no Lean toolchain, no build, no network and no compiler. `--recompile`
-# additionally runs the solc 0.8.36 binary named by $SOLC (refused unless its
-# SHA-256 is the recorded native identity) and requires it to reproduce the
-# frozen artifacts. `--self-test` corrupts the inputs one at a time in a
-# temporary copy and requires the gate to notice every time.
+# additionally runs the native solc 0.8.36 binary named by $SOLC (refused unless
+# its SHA-256 is the recorded native identity). `--recompile-wasm` runs the
+# SF-selected emscripten-wasm32 artifact named by $SOLJSON and refuses every
+# other compiler byte sequence. Both routes require the frozen artifacts.
+# `--self-test` corrupts the inputs one at a time in a temporary copy and
+# requires the gate to notice every time.
 #
-# Usage: scripts/check-prorata-weth-vault-reference.sh [--recompile] [--self-test]
+# Usage: scripts/check-prorata-weth-vault-reference.sh [--recompile] [--recompile-wasm] [--self-test]
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
 # unambiguous verdict line.

@@ -29,12 +29,6 @@ a hand-picked pair.
 Each class the vault can produce is exhibited below as the accounting step it
 induces, so a sequence of vault operations builds a path and the history-level
 results apply to it.
-
-What is still missing is the *coalition* accounting: pricing every share and
-asset movement into or out of an attacker coalition, so that an unaccounted
-gift cannot be counted as attack profit. Until that lands, the bounds here are
-about a single victim's round trip across a history, not about a coalition's
-net position.
 -/
 
 namespace Blanc

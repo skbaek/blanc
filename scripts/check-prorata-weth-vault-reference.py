@@ -19,7 +19,9 @@ Nothing here is reflected into a theorem.
 
 `--recompile` additionally runs the compiler named by `$SOLC`, refuses one whose
 SHA-256 is not the lock's recorded native identity, and requires its output to
-reproduce the frozen artifacts.  The ordinary gate does not need a compiler.
+reproduce the frozen artifacts.  `--recompile-wasm` does the corresponding
+check with the SF-selected `emscripten-wasm32` artifact named by `$SOLJSON`.
+The ordinary gate does not need a compiler.
 
 `--self-test` copies the repository slice into a temporary tree, corrupts one
 input at a time (a vendored source byte, the lock's runtime identity, the
@@ -350,6 +352,78 @@ def recompile(root: Path) -> str:
     return "ran"
 
 
+def wasm_compiler_runner() -> tuple[str, str] | None:
+    """Choose a JavaScript runner for the selected soljson artifact."""
+    configured_jsc = os.environ.get("JSC")
+    configured_node = os.environ.get("NODE")
+    if configured_jsc and Path(configured_jsc).is_file() and os.access(configured_jsc, os.X_OK):
+        return "jsc", configured_jsc
+    if configured_node and Path(configured_node).is_file() and os.access(configured_node, os.X_OK):
+        return "node", configured_node
+    default_jsc = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc"
+    if Path(default_jsc).is_file() and os.access(default_jsc, os.X_OK):
+        return "jsc", default_jsc
+    node = shutil.which("node")
+    if node:
+        return "node", node
+    fail("--recompile-wasm needs JavaScriptCore (set JSC) or Node.js (set NODE)")
+    return None
+
+
+def recompile_wasm(root: Path) -> str:
+    """Run only the SF-selected wasm compiler and check its frozen output."""
+    soljson = os.environ.get("SOLJSON")
+    if not soljson:
+        fail("--recompile-wasm needs $SOLJSON naming the selected soljson artifact")
+        return "not run"
+    artifact = Path(soljson)
+    if not artifact.is_file():
+        fail(f"$SOLJSON {soljson} is not a file")
+        return "not run"
+    selected = FROZEN_COMPILER["selectedArtifact"]["sha256"]
+    identity = sha256(artifact.read_bytes())
+    if identity != selected:
+        fail(f"$SOLJSON SHA-256 {identity} is not the SF-selected wasm artifact {selected}")
+        return "not run"
+    runner = wasm_compiler_runner()
+    if runner is None:
+        return "not run"
+    kind, executable = runner
+    input_path = root / INPUTS_RELATIVE / "standard-json-input.json"
+    with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-soljson-") as temporary:
+        driver = Path(temporary) / ("compile.js" if kind == "jsc" else "compile.cjs")
+        if kind == "jsc":
+            driver.write_text(
+                "globalThis.console={log:print,warn:print,error:print,info:print,debug:print};"
+                "globalThis.Module={print:function(){},printErr:function(){}};"
+                "var argv=arguments;load(argv[0]);"
+                "if(typeof drainMicrotasks==='function')drainMicrotasks();"
+                "var c=Module.cwrap('solidity_compile','string',['string','number','number']);"
+                "print(c(read(argv[1]),0,0));"
+            )
+            command = [executable, str(driver), "--", str(artifact), str(input_path)]
+        else:
+            driver.write_text(
+                "const fs=require('fs');const Module=require(process.argv[2]);"
+                "const c=Module.cwrap('solidity_compile','string',['string','number','number']);"
+                "process.stdout.write(c(fs.readFileSync(process.argv[3],'utf8'),0,0)+'\\n');"
+            )
+            command = [executable, str(driver), str(artifact), str(input_path)]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        fail(f"selected wasm solc exited {result.returncode}: {result.stderr[:300]}")
+        return "failed"
+    try:
+        output = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        fail(f"selected wasm solc output is not JSON: {error}")
+        return "failed"
+    facts = artifact_facts(output)
+    if facts is not None:
+        check_facts(facts, "selected wasm recompilation")
+    return "ran"
+
+
 def compose_lock(root: Path, facts: dict, surface: dict) -> dict:
     inputs = root / INPUTS_RELATIVE
     closure = {}
@@ -373,7 +447,7 @@ def compose_lock(root: Path, facts: dict, surface: dict) -> dict:
     }
 
 
-def run_gate(root: Path, do_recompile: bool, write_lock: bool) -> int:
+def run_gate(root: Path, do_recompile: bool, do_recompile_wasm: bool, write_lock: bool) -> int:
     lock = None if write_lock else load_json(root / LOCK_RELATIVE)
     if lock is None and not write_lock:
         return report()
@@ -390,17 +464,18 @@ def run_gate(root: Path, do_recompile: bool, write_lock: bool) -> int:
     else:
         provisional = {"standardJsonInput": {"sha256": sha256((root / INPUTS_RELATIVE / "standard-json-input.json").read_bytes())}}
         check_input(root, provisional)
-    leg = recompile(root) if do_recompile else "not requested"
+    native_leg = recompile(root) if do_recompile else "not requested"
+    wasm_leg = recompile_wasm(root) if do_recompile_wasm else "not requested"
     if write_lock:
         if FAILURES or facts is None:
             return report()
         composed = compose_lock(root, facts, surface)
         (root / LOCK_RELATIVE).write_text(json.dumps(composed, indent=2, sort_keys=True) + "\n")
         lock = composed
-    return report(lock, leg)
+    return report(lock, native_leg, wasm_leg)
 
 
-def report(lock: dict | None = None, leg: str = "") -> int:
+def report(lock: dict | None = None, native_leg: str = "", wasm_leg: str = "") -> int:
     if FAILURES:
         for message in FAILURES:
             print(f"REGRESSION — PRORATA WETH vault reference: {message}")
@@ -410,7 +485,8 @@ def report(lock: dict | None = None, leg: str = "") -> int:
     print(f"OK — PRORATA WETH vault reference: {len(lock['closure'])} sources + LICENSE at "
           f"{lock['reference']['commit'][:8]} match the frozen closure; solc {COMPILER_VERSION} "
           f"output identity {art['creationTemplate']['bytes']}/{art['runtimeTemplate']['bytes']} bytes; "
-          f"25 selectors equal the vault's; recompile leg: {leg}")
+          f"25 selectors equal the vault's; native recompile leg: {native_leg}; "
+          f"selected-wasm recompile leg: {wasm_leg}")
     return 0
 
 
@@ -501,7 +577,8 @@ def main(argv: list[str]) -> int:
         del args[index:index + 2]
     if "--self-test" in args:
         return self_test()
-    return run_gate(root, "--recompile" in args, "--write-lock" in args)
+    return run_gate(root, "--recompile" in args, "--recompile-wasm" in args,
+                    "--write-lock" in args)
 
 
 if __name__ == "__main__":

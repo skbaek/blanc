@@ -294,11 +294,24 @@
 # A row is pinned to the set its proof honestly achieves; the pin moves only
 # when the proof does, and never in order to make a red gate green.
 #
-# Usage: scripts/check.sh [--no-build]
+# Usage: scripts/check.sh [--no-build | --suggestions-only]
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
 # verdict line per audited theorem (listing the axioms found) plus a single
 # unambiguous summary line.
+#
+# --suggestions-only: ISOLATED recipe-dispatch controls, and nothing else.
+#
+# The default audit and `--no-build` elaborate `scripts/ProofRecipeSuggestions.lean`
+# and then `scripts/AxiomCheck.lean` in one gate, so the recipe-dispatch controls
+# can only be green when the WHOLE audited artifact set is present. An unrelated
+# missing object — `Conserved.olean`, `RootedExecution` — therefore denies the
+# dispatch controls a baseline, and a control campaign that cannot establish a
+# green baseline cannot show that anything bites. This mode elaborates the exact
+# committed suggestions file through the repository's ordinary `lake env lean`
+# path, builds nothing, audits no axioms, and carries its own verdict line so it
+# can never be mistaken for the axiom audit. The default and `--no-build` modes
+# are unchanged, and this mode is not a substitute for either.
 
 set -u
 
@@ -308,13 +321,46 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 trap gate_semaphore_release EXIT
 
 BUILD=1
+SUGGESTIONS_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-build) BUILD=0 ;;
-    *) echo "usage: scripts/check.sh [--no-build]" >&2; exit 2 ;;
+    --suggestions-only) SUGGESTIONS_ONLY=1; BUILD=0 ;;
+    *) echo "usage: scripts/check.sh [--no-build | --suggestions-only]" >&2; exit 2 ;;
   esac
   shift
 done
+
+if [ "$SUGGESTIONS_ONLY" -eq 1 ]; then
+  # Counts are part of the criterion. Read them out of the exact committed file
+  # this mode is about to elaborate, and refuse a harness that has been emptied
+  # in either direction: a green run over no assertion is the vacuity this whole
+  # control exists to prevent.
+  SUGGEST_FILE="$SCRIPT_DIR/ProofRecipeSuggestions.lean"
+  NPOS="$(grep -c 'expect_recipe_trigger "' "$SUGGEST_FILE" || true)"
+  NNEG="$(grep -c 'expect_no_recipe_trigger "' "$SUGGEST_FILE" || true)"
+  NOFFERED="$(grep -c 'expect_recipe_offered "\|expect_no_recipe_offered "' "$SUGGEST_FILE" || true)"
+  NPRODUCTION="$(grep -c 'proofRecipeMatches' "$SUGGEST_FILE" || true)"
+  if [ "$NPOS" -eq 0 ] || [ "$NNEG" -eq 0 ] || [ "$NOFFERED" -eq 0 ]; then
+    echo "REGRESSION — recipe dispatch controls: the harness states $NPOS positive, $NNEG negative and $NOFFERED whole-recipe assertions; each population must be nonempty"
+    exit 1
+  fi
+  if [ "$NPRODUCTION" -eq 0 ]; then
+    echo "REGRESSION — recipe dispatch controls: the harness never names proofRecipeMatches, so it no longer decides anything through the production dispatch"
+    exit 1
+  fi
+  gate_semaphore_acquire "the committed recipe-dispatch controls in isolation" || exit 2
+  if ! SUGGEST_OUT="$(cd "$ROOT" && lake env lean scripts/ProofRecipeSuggestions.lean 2>&1)"; then
+    printf '%s\n' "$SUGGEST_OUT"
+    echo "REGRESSION — recipe dispatch controls: ProofRecipeSuggestions.lean failed to elaborate"
+    exit 1
+  fi
+  # The controls log one advisory block per case on success; the verdict, not
+  # the advice, is this mode's output. A failure prints the whole transcript
+  # above, which is where the diagnostic lives.
+  echo "OK — recipe dispatch controls: $NPOS positive, $NNEG negative and $NOFFERED whole-recipe assertions decided through Blanc.proofRecipeMatches"
+  exit 0
+fi
 
 gate_semaphore_acquire "the audited build, proof-recipe controls and axiom elaboration" 8 || exit 2
 

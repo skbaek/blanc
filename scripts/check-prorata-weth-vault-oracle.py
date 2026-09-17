@@ -12,6 +12,12 @@ It is evidence, not a theorem: nothing checked here is reflected into Lean.
 from __future__ import annotations
 
 import random
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+from copy import deepcopy
 import sys
 from pathlib import Path
 
@@ -146,6 +152,11 @@ def check_rounding_favours_the_vault() -> None:
 
 def check_conservation_over_transcripts() -> None:
     """Balances sum to supply after every step of a randomized transcript."""
+    direct = funded(2)
+    direct.mint(2, 7, 2)
+    if direct.supply != 7 or direct.balance_of(2) != 7:
+        fail("mint did not raise supply with the credited shares")
+        return
     rng = random.Random(1000)
     for trial in range(200):
         v = funded(2, 3, 4)
@@ -183,6 +194,65 @@ def check_donation_mints_nothing() -> None:
     v.donate(3, 10 ** 9)
     if v.supply != before_supply or v.balance_of(3) != before_balance:
         fail("donation moved the share ledger")
+
+
+def atomic(model: V.Vault, method: str, *args) -> tuple[bool, V.Vault]:
+    """Use EVM-style commit-on-success semantics for an oracle scenario."""
+    trial = deepcopy(model)
+    try:
+        getattr(trial, method)(*args)
+    except V.Revert:
+        return False, model
+    return True, trial
+
+
+def check_share_allowance_distinctions() -> None:
+    """D4: transferFrom spends self allowance; own exits bypass it.
+
+    This is deliberately a finite/max/rollback battery rather than a unit
+    assertion on the helper. The successful rows prove the two separate
+    policies and the failed row proves the caller's partially attempted
+    allowance/debit cannot leak through an atomic transaction boundary.
+    """
+    owner, delegate, receiver = 2, 3, 4
+    v = funded(owner)
+    v.deposit(owner, 10, owner)
+    minted = v.balance_of(owner)
+
+    v.approve(owner, owner, 500)
+    ok, v = atomic(v, "transfer_from", owner, owner, receiver, 100)
+    if not ok or v.allowance(owner, owner) != 400:
+        fail("caller=owner transferFrom did not spend its finite allowance")
+        return
+
+    v.approve(owner, delegate, 100)
+    ok, v = atomic(v, "transfer_from", delegate, owner, receiver, 100)
+    if not ok or v.allowance(owner, delegate) != 0:
+        fail("finite delegated transferFrom did not consume its allowance")
+        return
+    before = deepcopy(v)
+    ok, after = atomic(v, "transfer_from", delegate, owner, receiver, 1)
+    if ok or after != before:
+        fail("exhausted delegated transferFrom did not roll back whole")
+        return
+
+    v.approve(owner, delegate, V.U)
+    ok, v = atomic(v, "transfer_from", delegate, owner, receiver, 100)
+    if not ok or v.allowance(owner, delegate) != V.U:
+        fail("max delegated transferFrom did not retain infinite allowance")
+        return
+
+    # The owner retains the finite 400 self allowance after the self-spend;
+    # own withdraw/redeem must leave it unchanged. This is the contrast.
+    shares = V.preview_withdraw(1, v.total_assets(), v.supply)
+    ok, v = atomic(v, "withdraw", owner, 1, owner, owner)
+    if not ok or v.allowance(owner, owner) != 400:
+        fail("caller=owner withdraw incorrectly spent or required self allowance")
+        return
+    remaining = min(100, v.balance_of(owner))
+    ok, v = atomic(v, "redeem", owner, remaining, owner, owner)
+    if not ok or v.allowance(owner, owner) != 400 or v.supply >= minted:
+        fail("caller=owner redeem incorrectly spent or required self allowance")
 
 
 def check_offset_bounds_the_first_depositor_attack() -> None:
@@ -334,6 +404,7 @@ CHECKS = [
     check_rounding_favours_the_vault,
     check_conservation_over_transcripts,
     check_donation_mints_nothing,
+    check_share_allowance_distinctions,
     check_offset_bounds_the_first_depositor_attack,
     check_committed_vectors,
     check_attack_matches_the_eth_era_transcript,
@@ -344,35 +415,34 @@ CHECKS = [
 # --- self-test: the batteries must be able to fail ---
 
 def self_test() -> int:
-    """Perturb the oracle and require the batteries to notice.
+    """Perturb a disposable oracle copy and require the batteries to notice.
 
     Each perturbation targets a specific battery, so a battery that has quietly
     stopped exercising anything is caught here rather than passing forever.
+    The checked-in oracle is never written: mutation evidence must not race a
+    normal gate or leave a half-restored source file behind.
     """
-    import os
-    import shutil
-    import subprocess
-
-    model = Path(__file__).resolve().parent / "prorata_weth_vault_oracle.py"
-    original = model.read_text()
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    original = (here / "prorata_weth_vault_oracle.py").read_text()
     probes = [
-        ("maxDeposit loses its tightness",
+        ("maxDeposit loses its tightness", "maxDeposit not maximal",
          "    return min(U, ceil_div((share_room(supply) + 1) * numerator(assets),\n"
          "                           denominator(supply)) - 1)",
          "    return min(U, ceil_div((share_room(supply) + 1) * numerator(assets),\n"
          "                           denominator(supply)) - 2)"),
-        ("maxMint ignores the supply room",
+        ("maxMint ignores the supply room", "maxMint exceeds share room",
          "    return min(share_room(supply),\n"
          "               floor_div(U * denominator(supply), numerator(assets)))",
          "    return floor_div(U * denominator(supply), numerator(assets))"),
-        ("the zero receiver is advertised capacity",
+        ("the zero receiver is advertised capacity", "zero receiver reports capacity",
          "def max_mint(receiver: int, assets: int, supply: int) -> int:",
          "def max_mint(receiver: int, assets: int, supply: int) -> int:\n"
          "    receiver = receiver or 1"),
-        ("a mint forgets to raise the supply",
+        ("a mint forgets to raise the supply", "mint did not raise supply",
          "        self._credit(receiver, shares)\n        self.supply += shares",
          "        self._credit(receiver, shares)"),
-        ("a donation mints shares",
+        ("a donation mints shares", "after donate",
          "    def donate(self, giver: int, amount: int) -> None:\n"
          '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
          "        self._weth_move(giver, self.vault_address, amount)",
@@ -380,40 +450,81 @@ def self_test() -> int:
          '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
          "        self._weth_move(giver, self.vault_address, amount)\n"
          "        self._credit(giver, 1)"),
-        ("a conversion rounds the wrong way",
+        ("a conversion rounds the wrong way", "convertToShares rounded up",
          "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
          '    """`a * D / X`, rounded down."""\n'
          "    return representable(floor_div(a * denominator(supply), numerator(assets)))",
          "def convert_to_shares(a: int, assets: int, supply: int) -> int:\n"
          '    """`a * D / X`, rounded down."""\n'
          "    return representable(ceil_div(a * denominator(supply), numerator(assets)))"),
+        ("transferFrom skips self allowance", "caller=owner transferFrom did not spend",
+         "    def _spend_share_allowance(self, owner: int, spender: int, amount: int) -> None:\n"
+         "        current = self.allowance(owner, spender)",
+         "    def _spend_share_allowance(self, owner: int, spender: int, amount: int) -> None:\n"
+         "        if owner == spender:\n"
+         "            return\n"
+         "        current = self.allowance(owner, spender)"),
+        ("owner withdraw spends self allowance", "caller=owner withdraw incorrectly",
+         "        if caller != owner:\n"
+         "            self._spend_share_allowance(owner, caller, shares)\n"
+         "        self._burn(owner, shares)",
+         "        self._spend_share_allowance(owner, caller, shares)\n"
+         "        self._burn(owner, shares)"),
     ]
     missed = []
-    try:
-        for label, old, new in probes:
+    caught_controls: list[str] = []
+    control_records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-oracle-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-oracle.py"
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_check() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
+                                  capture_output=True, text=True, env=env)
+
+        for label, needle, old, new in probes:
             if original.count(old) != 1:
                 missed.append(f"{label}: the perturbation no longer applies "
                               f"cleanly; this self-test has rotted and must be "
                               f"repaired, not skipped")
                 continue
             model.write_text(original.replace(old, new, 1))
-            # Python's bytecode cache keys on mtime at one-second granularity,
-            # so a second write inside the same second can leave a stale .pyc
-            # looking fresh and the child would import the *unperturbed* model
-            # and pass. Drop the cache and forbid writing a new one.
-            shutil.rmtree(model.parent / "__pycache__", ignore_errors=True)
-            result = subprocess.run([sys.executable, "-B", __file__],
-                                    capture_output=True, text=True,
-                                    env={**os.environ,
-                                         "PYTHONDONTWRITEBYTECODE": "1"})
+            result = run_check()
+            output = result.stdout + result.stderr
             if result.returncode == 0:
                 missed.append(f"{label}: perturbed, and the batteries still passed")
-    finally:
-        model.write_text(original)
+            elif "REGRESSION — vault oracle:" not in output or needle not in output:
+                missed.append(f"{label}: did not reach its intended battery ({needle!r})")
+            model.write_text(original)
+            restored = run_check()
+            if restored.returncode != 0:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            elif result.returncode != 0 and "REGRESSION — vault oracle:" in output and needle in output:
+                diagnostic = next(line for line in output.splitlines() if needle in line)
+                caught_controls.append(f"{label}: {diagnostic}; removal restored green")
+                control_records.append({
+                    "label": label,
+                    "expectedDiagnostic": needle,
+                    "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                               "cwd": str(sandbox), "returncode": result.returncode,
+                               "stdout": result.stdout, "stderr": result.stderr},
+                    "restored": {"argv": [sys.executable, "-B", str(checker)],
+                                 "cwd": str(sandbox), "returncode": restored.returncode,
+                                 "stdout": restored.stdout, "stderr": restored.stderr},
+                })
     if missed:
         for message in missed:
             print(f"REGRESSION — vault oracle self-test: {message}")
         return 1
+    for control in caught_controls:
+        print(f"OK — vault oracle self-test control: {control}")
+    print("SELFTEST-CONTROLS-JSON " + json.dumps(control_records, sort_keys=True))
     print(f"OK — vault oracle self-test: {len(probes)} perturbations of the "
           f"model are all caught")
     return 0
@@ -422,6 +533,8 @@ def self_test() -> int:
 def main() -> int:
     for check in CHECKS:
         check()
+        if FAILURES:
+            break
     if FAILURES:
         for message in FAILURES:
             print(f"REGRESSION — vault oracle: {message}")
