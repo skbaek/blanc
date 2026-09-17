@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 export EELS_ROOT
-PY="${EELS_ROOT}/.venv/bin/python"
+PY="${EELS_ROOT}/venv/bin/python"
 if [ ! -x "$PY" ]; then
   echo "REGRESSION — vault differential: frozen EELS python missing at $PY" >&2
   exit 2
