@@ -1,10 +1,30 @@
 {
+  "disposition": {
+    "note": "Every declared case is executed by the runner, superseded by named executed successors, or listed as unimplemented with a reason. The runner fails closed if that partition is not exact. Neither record below is coverage.",
+    "superseded": {
+      "allowance-underflow-rollback": [
+        "supported-root-allowance-underflow-rollback"
+      ],
+      "approve-and-transfer": [
+        "supported-root-approve-initial-finite",
+        "supported-root-approve-overwrite",
+        "supported-root-transfer-from-finite"
+      ],
+      "transfer-from-finite": [
+        "supported-root-transfer-from-finite"
+      ],
+      "transfer-from-infinite": [
+        "supported-root-transfer-from-infinite"
+      ]
+    },
+    "unimplemented": {}
+  },
   "kind": "coverage-declaration",
   "producer": {
     "path": "scripts/prorata_weth_vault_differential_matrix.py",
-    "schema": 1
+    "schema": 2
   },
-  "producerSha256": "5cddc72b735b4559dd6a20550ccd939d121a849c508945b612cbad5692aff29d",
+  "producerSha256": "7c4abaf9d0b046826a5b4a9dc317a90b473260ad55d58d223c0e5fda983db755",
   "purpose": "Required PRORATA ERC-4626 differential cases and execution channels. This is not a golden, allowlist, deviation record, or expected-output oracle.",
   "required": {
     "cases": [
@@ -21,10 +41,26 @@
       "supported-root-deposit-nonzero",
       "supported-root-mint-zero",
       "supported-root-mint-nonzero",
+      "supported-root-deposit-caller-receiver",
+      "supported-root-deposit-caller-distinct-receiver",
+      "supported-root-mint-caller-receiver",
+      "supported-root-mint-caller-distinct-receiver",
       "supported-root-withdraw-zero",
       "supported-root-withdraw-nonzero",
       "supported-root-redeem-zero",
       "supported-root-redeem-nonzero",
+      "supported-root-withdraw-vault-self-receiver",
+      "supported-root-redeem-vault-self-receiver",
+      "supported-root-withdraw-all-equal",
+      "supported-root-withdraw-caller-owner-distinct-receiver",
+      "supported-root-withdraw-caller-receiver-distinct-owner",
+      "supported-root-withdraw-owner-receiver-distinct-caller",
+      "supported-root-withdraw-all-distinct",
+      "supported-root-redeem-all-equal",
+      "supported-root-redeem-caller-owner-distinct-receiver",
+      "supported-root-redeem-caller-receiver-distinct-owner",
+      "supported-root-redeem-owner-receiver-distinct-caller",
+      "supported-root-redeem-all-distinct",
       "supported-root-approve-initial-finite",
       "supported-root-approve-overwrite",
       "supported-root-approve-zero",
@@ -40,6 +76,54 @@
       "supported-root-deposit-zero-receiver-rollback",
       "supported-root-transfer-zero-receiver-rollback",
       "foreign-child-canonical-return-and-rollback",
+      "foreign-child-deposit-true",
+      "foreign-child-deposit-false",
+      "foreign-child-deposit-short-1",
+      "foreign-child-deposit-short-31",
+      "foreign-child-deposit-long-64-leading-one",
+      "foreign-child-deposit-boolean-2",
+      "foreign-child-deposit-revert",
+      "foreign-child-mint-true",
+      "foreign-child-mint-false",
+      "foreign-child-mint-short-1",
+      "foreign-child-mint-short-31",
+      "foreign-child-mint-long-64-leading-one",
+      "foreign-child-mint-boolean-2",
+      "foreign-child-mint-revert",
+      "foreign-child-withdraw-true",
+      "foreign-child-withdraw-false",
+      "foreign-child-withdraw-short-1",
+      "foreign-child-withdraw-short-31",
+      "foreign-child-withdraw-long-64-leading-one",
+      "foreign-child-withdraw-boolean-2",
+      "foreign-child-withdraw-revert",
+      "foreign-child-redeem-true",
+      "foreign-child-redeem-false",
+      "foreign-child-redeem-short-1",
+      "foreign-child-redeem-short-31",
+      "foreign-child-redeem-long-64-leading-one",
+      "foreign-child-redeem-boolean-2",
+      "foreign-child-redeem-revert",
+      "callback-and-child-failure-rollback",
+      "attack-economics-offset-comparator",
+      "attack-transcript-frozen",
+      "economics-cumulative-residue",
+      "economics-coalition-partition",
+      "event-order-mint",
+      "event-order-withdraw",
+      "event-order-redeem",
+      "quote-timing-pre-transfer",
+      "capacity-a-u-zero-flows",
+      "capacity-a-u-nonzero-redeem",
+      "capacity-a-u-nonzero-deposit",
+      "capacity-a-u-nonzero-mint",
+      "capacity-a-u-nonzero-withdraw",
+      "capacity-receiver-wrap-withdraw",
+      "capacity-receiver-wrap-redeem",
+      "capacity-supply-ceiling-flows",
+      "composition-exact-child-provenance",
+      "composition-collision-premise-pairs",
+      "donation-classification",
       "mint-inexact",
       "redeem-inexact",
       "withdraw-inexact",
@@ -55,7 +139,20 @@
       "event-order-deposit",
       "event-order-share-transfer",
       "return-capture-controls",
-      "callback-and-attack-rollbacks",
+      "causal-return-deposit-caller-receiver",
+      "causal-return-deposit-caller-distinct-receiver",
+      "causal-return-mint-caller-receiver",
+      "causal-return-mint-caller-distinct-receiver",
+      "causal-return-withdraw-all-equal",
+      "causal-return-withdraw-caller-owner-distinct-receiver",
+      "causal-return-withdraw-caller-receiver-distinct-owner",
+      "causal-return-withdraw-owner-receiver-distinct-caller",
+      "causal-return-withdraw-all-distinct",
+      "causal-return-redeem-all-equal",
+      "causal-return-redeem-caller-owner-distinct-receiver",
+      "causal-return-redeem-caller-receiver-distinct-owner",
+      "causal-return-redeem-owner-receiver-distinct-caller",
+      "causal-return-redeem-all-distinct",
       "capacity-supply-upper-bound",
       "capacity-one-share-room",
       "converter-representable-and-unrepresentable",
@@ -94,13 +191,14 @@
       "previewDeposit(uint256)"
     ]
   },
-  "schema": 1,
+  "schema": 2,
   "sourceIdentity": {
     "algorithm": "sha256",
     "files": {
-      "scripts/check-prorata-weth-vault-differential.py": "6763072f3a0b4662a8cfd33c2b8ed45f2e6d2fda170baba12ab69d410a14490e",
-      "scripts/evm_return_capture.py": "ea017ad5b642916a801eb430141a04495942ac48703317c9437aebfa67a2591f",
-      "scripts/prorata_weth_vault_oracle.py": "06ac0a6cafdf50377cdcfd9157d4d144560c5041d2981f2b94841c094115fb17"
+      "scripts/check-prorata-weth-vault-differential.py": "06603b2f5d7423e4e5905e278945e3b81a9a8758867df981937cbde8edb1eb52",
+      "scripts/evm_return_capture.py": "1b02fa9c00abe0761cad3c54e69282828a20d2ee5a96d929274b9b095e3d1adf",
+      "scripts/gen-prorata-weth-wrap-proof.py": "954a826c222b670dad9f44f8ec7dc11edd1193626e79b5539d833bef41e43b3b",
+      "scripts/prorata_weth_vault_oracle.py": "45115f726a344ce3f5fa8bf94483b788121508aa05fb8a88b1e5485f0f6cdeab"
     }
   }
 }
