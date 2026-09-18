@@ -95,23 +95,6 @@ private theorem linked_self {vault : Adr} {pre post : Devm}
   cases same
   refine ⟨by rw [preEq], by rw [postEq], fun equal => absurd equal callerNe⟩
 
-/-- A record that owns nothing has nothing to link. -/
-private theorem linked_none' {vault : Adr} {pre post : Devm} :
-    ∀ call, (none : Option WethAllowanceInvocation) = some call →
-      call.pre.state.getStor wethAccount = pre.state.getStor wethAccount ∧
-      call.post.state.getStor wethAccount = post.state.getStor wethAccount ∧
-      (call.sevm.caller = vault → VaultStagedCalldata call) := by
-  intro _ impossible
-  cases impossible
-
-/-- A record that owns an invocation owes no silence. -/
-private theorem quiet_some' {pre post : Devm} {call : WethAllowanceInvocation} :
-    (some call : Option WethAllowanceInvocation) = none → ∀ key, ¬ ValidAdr key →
-      (post.state.getStor wethAccount).get key =
-        (pre.state.getStor wethAccount).get key := by
-  intro impossible
-  cases impossible
-
 /-- The donation record: an accepted `credit` operation to the vault from a
 source that is not the vault, over a WETH frame that kept the vault's storage. -/
 private def creditRecord {vault : Adr} {sevm : Sevm} {pre post : Devm}
@@ -197,7 +180,7 @@ private def debitRecord {vault : Adr} {pre post : Devm}
   step := .authorizedDebit call foreign owner pair moved vaultKept
   own := some call
   linked := linked
-  quiet := quiet_some'
+  quiet := (fun impossible => nomatch impossible)
   debitOwn := by
     intro c _ _ _ _ _ same
     cases same
@@ -269,7 +252,8 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
       ⟨sevm, pre, post, true, target, memoryWf, run, by simpa using isApprove⟩
     exact wethRecord_segment
       (silentRecord vaultKept rowKept (some call)
-        (linked_self (call := call) rfl rfl callerNe) quiet_some' provenance actor)
+        (linked_self (call := call) rfl rfl callerNe) (fun impossible => nomatch impossible)
+          provenance actor)
       rfl rfl rfl
   by_cases isTransferFrom : Sevm.selector sevm =
       selector "transferFrom" [.address, .address, .uint256]
@@ -297,10 +281,10 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
         exact wethRecord_segment
           (creditRecord target _ _ debited
             (credit_rowNof inv.weth target rfl effect debited) effect vaultKept
-            (some call) linked quiet_some' provenance actor) rfl rfl rfl
+            (some call) linked (fun impossible => nomatch impossible) provenance actor) rfl rfl rfl
       · exact wethRecord_segment
           (silentRecord vaultKept (transfer_row_kept move debited credited)
-            (some call) linked quiet_some' provenance actor) rfl rfl rfl
+            (some call) linked (fun impossible => nomatch impossible) provenance actor) rfl rfl rfl
   by_cases isTransfer : Sevm.selector sevm = selector "transfer" [.address, .uint256]
   · obtain ⟨move, off, foreignAll⟩ := weth_transfer_compiled_effect run isTransfer
     rw [target] at move off
@@ -317,10 +301,10 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
       exact wethRecord_segment
         (creditRecord target _ _ callerNe
           (credit_rowNof inv.weth target rfl effect callerNe) effect vaultKept
-          none linked_none' quiet provenance actor) rfl rfl rfl
+          none (fun _ impossible => nomatch impossible) quiet provenance actor) rfl rfl rfl
     · exact wethRecord_segment
         (silentRecord vaultKept (transfer_row_kept move callerNe credited)
-          none linked_none' quiet provenance actor) rfl rfl rfl
+          none (fun _ impossible => nomatch impossible) quiet provenance actor) rfl rfl rfl
   by_cases isView : Sevm.selector sevm ∈ wethViewSelectors
   · have kept := weth_view_compiled_effect run isView
     exact ⟨[], PairReplay.nil_of_eq
@@ -359,7 +343,8 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
       (Devm.getStor pre wethAccount).get key
     rw [written, Stor.get_set_ne _ keyNe, ← congrFun entryStorage wethAccount]
   exact wethRecord_segment
-    (silentRecord vaultKept rowKept none linked_none' quiet provenance actor)
+    (silentRecord vaultKept rowKept none (fun _ impossible => nomatch impossible)
+      quiet provenance actor)
     rfl rfl rfl
 
 end Blanc.Composition.ProrataWethVault
