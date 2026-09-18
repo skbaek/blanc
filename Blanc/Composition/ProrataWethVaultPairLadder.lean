@@ -409,4 +409,366 @@ theorem Exec.pairReplay_of_messageRoot {vault : Adr} {msg : Msg} {entry : Benv}
 -- PX:560–621 (`prorataAccountingReplay_of_messageRoot`) with two programs; the configuration clause is
 -- Pair.lean:504–507; `wethFresh` is `Frame.enter_run_fresh`'s `⟨rfl, rfl⟩` (ExecutionFrameEntry:25).
 
+/-! ## 6. Rungs R1–R3: message, CREATE, message-call wrapper -/
+
+/-- **R1.**  One retained CALL message. -/
+theorem retainedProcessMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessMessageTrace msg (.ok post))
+    (ready : PairMessageReady vault msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      have storage := _root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq process
+      exact PairReplayBetween.nil_of_eq
+        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+  | @some pc sevm pre out run =>
+      apply (pairCarrier vault blockIndex transactionIndex []).processMessage_of_body process
+        ready.weth.ne ready.weth.val0 ready.weth.state.side
+      intro committed
+      have enter := (RunFrame.some_inv process).1
+      rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+      exact Exec.pairReplay_of_messageRoot run transfer evmEq committed ready
+        blockIndex transactionIndex
+-- PX:623–658 / G:150–176; the no-slot arm is whole-world storage silence (no credit law).
+
+/-- **R1c.**  One retained CREATE constructor at an address that is neither pair account. -/
+theorem retainedProcessCreateMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessCreateMessageTrace msg (.ok post))
+    (ready : PairMsgInv vault msg)
+    (targetNone : msg.target.isNone = true)
+    (vaultNe : msg.currentTarget ≠ vault) (wethNe : msg.currentTarget ≠ wethAccount)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      have storage :=
+        _root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
+          process fresh
+      exact PairReplayBetween.nil_of_eq
+        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+  | @some pc sevm pre out run =>
+      apply (pairCarrier vault blockIndex transactionIndex []).processCreateMessage_of_body
+        process ready.weth.ne ready.weth.val0 fresh ready.weth.state.side
+      intro committed
+      have preparedNe : ∀ {a : Adr}, msg.currentTarget ≠ a →
+          (processCreateMessage.msg msg).currentTarget ≠ a := by
+        intro a ne hit
+        exact ne (by simpa [processCreateMessage.msg, Msg.withBenv] using hit)
+      have preparedReady : PairMessageReady vault (processCreateMessage.msg msg) :=
+        { vault := ready.vault.processCreateMessage_msg targetNone vaultNe
+          weth := ready.weth.processCreateMessage_msg targetNone wethNe
+          distinct := ready.distinct
+          wethNonprecompile := by
+            simpa [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
+              Benv.setStor, Benv.incrNonce] using ready.wethNonprecompile
+          callerNotVault := by
+            simpa [processCreateMessage.msg, Msg.withBenv] using ready.callerNotVault
+          callerNotWeth := by
+            simpa [processCreateMessage.msg, Msg.withBenv] using ready.callerNotWeth
+          codeOrForeign := Or.inr ⟨preparedNe vaultNe, preparedNe wethNe⟩ }
+      have enter := (RunFrame.some_inv process).1
+      rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+      exact Exec.pairReplay_of_messageRoot run transfer evmEq committed preparedReady
+        blockIndex transactionIndex
+-- PX:660–714 / G:179–221; `processCreateMessage_msg` for both specs is exactly what keeps the vault's and
+-- WETH's storage out of the prepared message's `setStor currentTarget .empty`.
+
+/-- **R2.**  The settled message-call wrapper: create collision, CREATE run, EIP-7702-normalised call. -/
+theorem retainedMessageCallPairReplay {vault : Adr} {msg : Msg} {state : State}
+    {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (ready : PairMsgInv vault msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault state) := by
+  cases trace with
+  | createCollision targetNone collision result =>
+      have stateEq :=
+        processMessageCall_createCollision_state_eq targetNone collision result
+      exact PairReplayBetween.nil_of_eq (by rw [stateEq])
+  | createRun targetNone collision evm core inner result =>
+      -- the CREATE-collision arm: a CREATE that did not collide is at neither pair account
+      have vaultNe : msg.currentTarget ≠ vault := fun hit =>
+        Bool.noConfusion ((ready.createCollision (.inl hit)).symm.trans collision)
+      have wethNe : msg.currentTarget ≠ wethAccount := fun hit =>
+        Bool.noConfusion ((ready.createCollision (.inr hit)).symm.trans collision)
+      have fresh := messageCreateCollision_false_getStor_eq_empty collision
+      rw [processMessageCall_createRun_state_eq targetNone collision core result]
+      exact retainedProcessCreateMessagePairReplay inner ready targetNone vaultNe wethNe
+        fresh blockIndex transactionIndex
+  | callRun targetSome delegated refund delegation execMsg execMsgEq evm core inner result =>
+      subst execMsgEq
+      have stateEq :=
+        processMessageCall_callRun_state_eq targetSome delegation rfl core result
+      have execReady : PairMessageReady vault (messageCallExecutionMessage delegated) :=
+        { vault := (ready.vault.of_messageCallDelegation delegation).messageCallExecutionMessage
+          weth := (ready.weth.of_messageCallDelegation delegation).messageCallExecutionMessage
+          distinct := ready.distinct
+          wethNonprecompile := by
+            rw [messageCallExecutionMessage_benv_stat, messageCallDelegation_benv_stat delegation]
+            exact ready.wethNonprecompile
+          callerNotVault := by
+            rw [messageCallExecutionMessage_caller_eq, messageCallDelegation_caller_eq delegation]
+            exact ready.callerNotVault
+          callerNotWeth := by
+            rw [messageCallExecutionMessage_caller_eq, messageCallDelegation_caller_eq delegation]
+            exact ready.callerNotWeth
+          codeOrForeign := Or.inl (by
+            rw [messageCallExecutionMessage_target_eq, messageCallDelegation_target_eq delegation]
+            exact targetSome) }
+      have storEq : (messageCallExecutionMessage delegated).benv.state.getStor =
+          msg.benv.state.getStor := by
+        rw [messageCallExecutionMessage_getStor_eq, messageCallDelegation_getStor_eq delegation]
+      rw [stateEq, ← PairBoundary.ofState_eq (congrFun storEq vault)
+        (congrFun storEq wethAccount)]
+      exact retainedProcessMessagePairReplay inner execReady blockIndex transactionIndex
+-- PX:717–779 / G:225–295; the createRun arm replaces `codeOrForeign` by the collision derivation (§5).
+
+/-! ## 7. Rung R3: one transaction -/
+
+/-- **R3.**  One whole retained transaction.  It moves the pair's boundary only through its message: the
+nonce bump, fee debit, refund and coinbase credit move balances, and the deletion fold names neither pair
+account. -/
+theorem retainedTransactionPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (inv : PairBenvInv vault benv)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  rcases trace.exists_stateChronology with ⟨chronology⟩
+  -- (1) nonce bump and up-front debit: storage-silent everywhere
+  have debitBoundary : PairBoundary.ofState vault trace.msg.benv.state =
+      PairBoundary.ofState vault benv.state := by
+    rw [prepareMessage_benv trace.prepared]
+    show PairBoundary.ofState vault trace.debitState = _
+    exact PairBoundary.ofState_eq trace.debitState_getStor_eq trace.debitState_getStor_eq
+  -- (2) the envelope and the prepared message, by R2
+  have envelope := pair_root_caller_ne_vault (.transaction trace inv)
+  have ready : PairMsgInv vault trace.msg :=
+    { vault := trace.msgInv inv.world.vault inv.vaultNotCreated
+      weth := trace.msgInv inv.world.weth inv.wethNotCreated
+      distinct := inv.world.distinct
+      wethNonprecompile := by
+        rw [prepareMessage_benv trace.prepared]
+        exact inv.wethNonprecompile
+      callerNotVault := envelope.1
+      callerNotWeth := envelope.2 }
+  have messageReplay :=
+    retainedMessageCallPairReplay trace.message ready blockIndex transactionIndex
+  rw [debitBoundary] at messageReplay
+  -- (3), (4) the two gas credits move balances only
+  have settled : PairBoundary.ofState vault (trace.coinbaseState chronology.refundCounter) =
+      PairBoundary.ofState vault trace.messageState :=
+    PairBoundary.ofState_eq
+      ((getStor_addBal _ vault _ _).trans (getStor_addBal _ vault _ _))
+      ((getStor_addBal _ wethAccount _ _).trans (getStor_addBal _ wethAccount _ _))
+  -- (5) the deletion fold names neither pair account
+  have vaultKept := foldl_destroyAccount_get_eq
+    (state := trace.coinbaseState chronology.refundCounter)
+    (trace.accountsToDelete_ne (pairVaultCodeSpec_preserves vault)
+      inv.world.vaultCode inv.vaultNotCreated)
+  have wethKept := foldl_destroyAccount_get_eq
+    (state := trace.coinbaseState chronology.refundCounter)
+    (trace.accountsToDelete_ne (wethSpec_preserves wethAccount)
+      inv.world.weth inv.wethNotCreated)
+  have finalBoundary : PairBoundary.ofState vault state =
+      PairBoundary.ofState vault trace.messageState := by
+    have finalState : PairBoundary.ofState vault state =
+        PairBoundary.ofState vault
+          (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
+            (trace.coinbaseState chronology.refundCounter)) :=
+      congrArg (PairBoundary.ofState vault) chronology.finalState_eq
+    exact (finalState.trans
+      (PairBoundary.ofState_eq (congrArg Acct.stor vaultKept)
+        (congrArg Acct.stor wethKept))).trans settled
+  rw [finalBoundary]
+  exact messageReplay
+-- PT:76–146 / G:333–393.  No `settlement_sum_bounds`, no `ofAddBal`: the boundary has no balance.  No
+-- G3' split: R2 owns the create-at-account case.
+
+/-! ## 8. Rungs R4–R7: transaction list, system message, requests, withdrawals, body -/
+
+/-- **R4.**  A retained transaction list; each record keeps its own transaction position. -/
+theorem retainedTransactionListPairReplay {vault : Adr} {txs : List (Nat × Tx)}
+    {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayWith vault (PairInBlock blockIndex)
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault finalBenv.state) := by
+  induction trace with
+  | nil => exact PairReplayWith.nil_of_eq rfl
+  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
+      have headReplay := retainedTransactionPairReplay head inv blockIndex (some index)
+      exact headReplay.inBlock.append (ih (inv.afterTransaction head headReplay.toWith))
+-- PB:21–45 / G:396–422.
+
+/-- **R5.**  One retained system message.  No `target ≠ systemAddress` side condition: the envelope is
+the two pair accounts' own separation from `systemAddress`. -/
+theorem retainedSystemMessagePairReplay {vault : Adr} {benv : Benv} {target : Adr}
+    {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayBetween vault blockIndex none []
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  have envelope := pair_root_caller_ne_vault (.system target data inv)
+  have ready : PairMsgInv vault (systemTransactionMessage benv target data) :=
+    { vault := systemTransactionMessage_msgInv inv.world.vault inv.vaultNotCreated
+      weth := systemTransactionMessage_msgInv inv.world.weth inv.wethNotCreated
+      distinct := inv.world.distinct
+      wethNonprecompile := inv.wethNonprecompile
+      callerNotVault := envelope.1
+      callerNotWeth := envelope.2 }
+  have replay := retainedMessageCallPairReplay trace.message ready blockIndex none
+  rwa [systemTransactionMessage_benv_state] at replay
+-- PB:58–84 / G:425–451, minus `systemNe`.
+
+/-- **R6.**  The two checked request calls. -/
+theorem retainedRequestsPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutput}
+    {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayBetween vault blockIndex none []
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  have withdrawalReplay := retainedSystemMessagePairReplay trace.withdrawal inv blockIndex
+  have withdrawalInv := inv.afterSystem trace.withdrawal withdrawalReplay.toWith
+  have consolidationReplay :=
+    retainedSystemMessagePairReplay trace.consolidation withdrawalInv blockIndex
+  rw [RequestsTrace.state_eq_consolidationState trace]
+  exact withdrawalReplay.append consolidationReplay
+-- PB:89–112 / G:454–480.
+
+/-- **R6w.**  The direct consensus withdrawals: balance credits only, so no record and no bound. -/
+theorem retainedDirectWithdrawalPairReplay (vault : Adr) (pre : State)
+    (wds : List Withdrawal) (blockIndex : Nat) :
+    PairReplayBetween vault blockIndex none []
+      (PairBoundary.ofState vault pre)
+      (PairBoundary.ofState vault (processWithdrawalsState pre wds)) :=
+  PairReplayBetween.nil_of_eq (PairBoundary.ofState_eq
+    (processWithdrawalsState_getStor_eq vault pre wds)
+    (processWithdrawalsState_getStor_eq wethAccount pre wds))
+-- replaces PB:123–146 / G:483–501 (per-credit `ofAddBal` induction) by one storage equation.
+
+/-- **R7.**  A whole successful block body, in `applyBody` order. -/
+theorem retainedBodyPairReplay {vault : Adr} {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (inv : PairBenvInv vault benv)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (blockIndex : Nat) :
+    PairReplayWith vault (PairInBlock blockIndex)
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  -- (1) beacon roots
+  have beaconReplay := retainedSystemMessagePairReplay trace.beacon inv blockIndex
+  have beaconInv := inv.afterSystem trace.beacon beaconReplay.toWith
+  -- (2) history storage
+  have historyReplay := retainedSystemMessagePairReplay trace.history beaconInv blockIndex
+  have historyInv := beaconInv.afterSystem trace.history historyReplay.toWith
+  -- (3) the transaction list, by R4
+  have txReplay := retainedTransactionListPairReplay trace.transactions historyInv blockIndex
+  have txInv := historyInv.afterTransactions trace.transactions txReplay
+  -- (4) direct withdrawals, by R6w; the bound only carries WETH's invariant across them
+  have wdReplay :=
+    retainedDirectWithdrawalPairReplay vault trace.transactionBenv.state wds blockIndex
+  have wdInv := txInv.afterWithdrawals (trace.transactionBound bound)
+  -- (5) request calls, by R6
+  have requestReplay := retainedRequestsPairReplay trace.requests wdInv blockIndex
+  exact beaconReplay.inBlock.append (historyReplay.inBlock.append
+    (txReplay.append (wdReplay.inBlock.append requestReplay.inBlock)))
+-- PB:163–222 / G:504–572; `transactionBound` is §4 (G+4), the inline `txBound` of PB:190–198 / G:548–556.
+
+/-! ## 9. Rungs R8–R9, the root, and the stable boundary of a history -/
+
+/-- **R8.**  A whole configured block.  The rules fact is the schedule's, at the block's own rules. -/
+theorem retainedConfiguredBlockPairReplay {vault : Adr} {cfg : ChainConfig}
+    {pre post : BlockChain}
+    (trace : ConfiguredBlockTrace cfg pre post)
+    (inv : PairWorldInv vault pre.state)
+    (wethNonprecompile : trace.rules.isPrecomp wethAccount = false)
+    (blockIndex : Nat) :
+    PairReplayWith vault (PairInBlock blockIndex)
+      (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) := by
+  have benvInv : PairBenvInv vault (initBenv trace.rules pre trace.block.header) :=
+    ⟨trace.openingState ▸ inv, trace.not_mem_openingCreatedAccounts vault,
+      trace.not_mem_openingCreatedAccounts wethAccount, wethNonprecompile⟩
+  have replay := retainedBodyPairReplay trace.bodyTrace benvInv trace.openingBound blockIndex
+  rw [trace.postState]
+  rwa [trace.openingState] at replay
+-- PH:30–46 / G:576–589.
+
+/-- **R9.**  A whole configured history.  The pair invariant is carried block to block by the generic
+transports and the replay itself; each block's records carry that block's header number. -/
+theorem retainedConfiguredHistoryPairReplay {vault : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (inv : PairWorldInv vault checkpoint.state)
+    (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
+      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false) :
+    PairReplayWith vault (fun _ => True)
+      (PairBoundary.ofState vault checkpoint.state)
+      (PairBoundary.ofState vault future.state) := by
+  induction history with
+  | refl hcfg hctx hid => exact PairReplayWith.nil_of_eq rfl
+  | step prior block ih =>
+      have current := inv.afterHistory prior ih
+      exact ih.append ((retainedConfiguredBlockPairReplay block current
+        (schedule block.rulesAt) block.block.header.number).mono fun _ _ => trivial)
+-- PH:63–80 / G:593–606.
+
+/-- The post-installation root carries the pair invariant. -/
+theorem PairWorldInv.of_root {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault) : PairWorldInv vault deployed.state := by
+  refine ⟨⟨root.vaultInstalled, trivial, ?_⟩, ⟨?_, root.sumNof, ?_⟩, root.distinct,
+    root.vaultNotSystem, root.wethNotSystem⟩
+  · exact LedgerConserved.of_get_eq_zero (fun key => by rw [root.vaultEmpty]; rfl)
+  · rw [root.wethInstalled, wethSpec_prog_eq, Blanc.wethCode_compile]
+  · show balSum (deployed.state.getStor wethAccount) + (0 : B256).toNat ≤
+      (deployed.state.bal wethAccount).toNat
+    have rest : Stor.rest (deployed.state.getStor wethAccount) = fun _ => (0 : B256) := by
+      rw [root.wethEmpty]
+      funext key
+      rfl
+    rw [balSum, sum, rest, sumBelow_zero]
+    exact Nat.zero_le _
+-- Pair.lean:145–162 without the rules; the solvency lines follow LedgerConservation.lean:213 (§9 D-d).
+
+/-- The pair history from its root: the whole configured continuation replays. -/
+theorem pair_history_replay {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future) :
+    PairReplayWith vault (fun _ => True)
+      (PairBoundary.ofState vault deployed.state) (PairBoundary.ofState vault future.state) :=
+  retainedConfiguredHistoryPairReplay history (PairWorldInv.of_root root)
+    (fun rulesAt => (root.notPrecompile rulesAt).2)
+
+/-- Every configured continuation of the root carries the pair invariant, unconditionally. -/
+theorem PairWorldInv.of_history {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future) :
+    PairWorldInv vault future.state :=
+  (PairWorldInv.of_root root).afterHistory history (pair_history_replay root history)
+
+/-- **`PairStable` of a history.**  Everything but the two backing numbers is unconditional; those two are
+the premises, because only D9 carries `supply ≤ offset · row` (design §3.3.6), and the supply cap's
+preservation needs supply-slot facts the share operations do not yet export (§7). -/
+theorem PairStable.of_history {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules)
+    (capped : supplyN (future.state.getStor vault) ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (backing : supplyN (future.state.getStor vault) ≤
+      Blanc.ProrataWethVault.offsetN *
+        (Stor.rest (future.state.getStor wethAccount) vault).toNat) :
+    PairStable vault rules future.state := by
+  have world := PairWorldInv.of_history root history
+  obtain ⟨vaultPrecomp, wethPrecomp⟩ := root.notPrecompile rulesAt
+  exact ⟨world.vault.code, Option.some.inj (world.weth.code.trans Blanc.wethCode_compile),
+    world.distinct, root.vaultNonzero, vaultPrecomp, wethPrecomp,
+    ⟨world.conserved, capped, backing⟩, world.weth.side, world.weth.inv⟩
+
 end Blanc.Composition.ProrataWethVault
