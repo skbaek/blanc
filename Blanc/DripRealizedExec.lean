@@ -1,0 +1,686 @@
+-- DripRealizedExec.lean : recursive execution replay for DRIP's realized
+-- accounting (design unit U5: exec-core recursion and the exit handoff).
+--
+-- Every successful frame of an arbitrary retained execution is replayed as a
+-- `RealizedChain`.  A frame executing DRIP itself contributes one head step
+-- whose kind is *computed* from the frame's own fields (`opTag`), followed by
+-- whatever its accepted exit callback recursively contributes; every foreign
+-- frame contributes positive external credits or nothing.  The settlement
+-- seams are the contract-neutral ones of `Blanc/ExecutionAccountingReplay.lean`
+-- consumed at DRIP's own carrier.
+
+import Blanc.DripRealizedHistory
+import Blanc.ExecutionAccountingReplay
+
+namespace Blanc
+
+open Jaune
+open Jaune.Ninst Ninst
+
+namespace Drip
+
+/-! ## The frame-entry side spec
+
+`dripSpec` is storage-only: its `Side` is `True` and its `Inv` ignores value and
+balance.  The replay needs two balance facts at every frame — the world's
+total is below the word bound, and a DRIP frame's in-flight value is already
+inside the target balance — and both are ladder-shaped, so they ride the
+generic frame ladder as a second `ContractSpec` instead of being re-threaded
+by hand. -/
+
+/-- The balance-only companion of `dripSpec`: the in-flight value is already
+credited, and the world total cannot wrap. -/
+def dripEntrySpec : ContractSpec where
+  prog := runtime
+  Inv := fun _ value balance => value.toNat ≤ balance.toNat
+  Side := SumNof
+  inv_forget := by
+    intro _ _ _ _
+    rw [B256.toNat_zero]
+    exact Nat.zero_le _
+  inv_mono := fun h hle => Nat.le_trans h hle
+  inv_recv := by
+    intro _ _ _ _ _ h
+    omega
+  side_le := by
+    intro f g h hle
+    unfold SumNof at h ⊢
+    omega
+  side_transfer := by
+    intro st st' caller callee wad h_sub h_side
+    have h_nof : sum st.bal < 2 ^ 256 := h_side
+    rcases of_state_transfer (callee := callee) h_sub h_nof with
+      ⟨-, -, h_sum, -, -, -⟩
+    show sum _ < 2 ^ 256
+    rw [h_sum]
+    exact h_nof
+  side_addBal := by
+    intro w a val h_bound _
+    show sum _ < 2 ^ 256
+    rw [sum_addBal_eq w a val h_bound]
+    omega
+  inv_transfer := by
+    intro st st' caller callee ca wad value h_sub h_ne h_side h_inv
+    have h_nof : sum st.bal < 2 ^ 256 := h_side
+    rcases of_state_transfer (callee := callee) h_sub h_nof with
+      ⟨-, -, -, h_t_le, -, -⟩
+    have h_mid : st'.bal ca = st.bal ca := by
+      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
+      rw [h_st']
+      show ((st.setBal caller _).get ca).bal = (st.get ca).bal
+      rw [State.setBal_get_ne h_ne]
+    have h_ge :
+        (st.bal ca).toNat ≤ ((st'.addBal callee wad).bal ca).toNat := by
+      by_cases h_eq : callee = ca
+      · have h_add : (st'.addBal callee wad).bal ca = st.bal ca + wad := by
+          rw [h_eq]
+          show ((st'.setBal ca (st'.bal ca + wad)).get ca).bal = _
+          rw [State.setBal_get_self]
+          show st'.bal ca + wad = _
+          rw [h_mid]
+        rw [h_add]
+        have h_le_wad : wad.toNat ≤ (st.bal caller).toNat :=
+          B256.toNat_le_toNat h_t_le
+        have h_two :
+            (st.bal ca).toNat + (st.bal caller).toNat ≤ sum st.bal :=
+          add_le_sum_of_ne st.bal (fun hc => h_ne hc.symm)
+        have h_nof' : B256.Nof (st.bal ca) wad := by
+          unfold B256.Nof
+          omega
+        rw [B256.toNat_add_eq_of_nof _ _ h_nof']
+        omega
+      · have h_other : (st'.addBal callee wad).bal ca = st.bal ca := by
+          show ((st'.setBal callee _).get ca).bal = _
+          rw [State.setBal_get_ne h_eq]
+          exact h_mid
+        rw [h_other]
+    exact Nat.le_trans h_inv h_ge
+  inv_recv_transfer := by
+    intro st st' caller ca wad h_sub h_ne h_side _
+    have h_nof : sum st.bal < 2 ^ 256 := h_side
+    have h_bal : ((st'.addBal ca wad).bal ca).toNat =
+        (st.bal ca).toNat + wad.toNat :=
+      of_transfer_bal_target h_sub h_ne h_nof
+    show wad.toNat ≤ _
+    omega
+  inv_addBal := by
+    intro w ca a val value h_bound _ h_inv
+    have h_nof_a : B256.Nof (w.bal a) val := by
+      unfold B256.Nof
+      have := @le_sum w.bal a
+      omega
+    have h_ge : (w.bal ca).toNat ≤ ((w.addBal a val).bal ca).toNat := by
+      by_cases h_eq : a = ca
+      · subst h_eq
+        show (w.bal a).toNat ≤
+          ((w.setBal a (w.bal a + val)).get a).bal.toNat
+        rw [State.setBal_get_self]
+        change (w.bal a).toNat ≤ (w.bal a + val).toNat
+        rw [B256.toNat_add_eq_of_nof _ _ h_nof_a]
+        omega
+      · show (w.bal ca).toNat ≤ ((w.setBal a _).get ca).bal.toNat
+        rw [State.setBal_get_ne h_eq]
+        exact Nat.le_refl _
+    exact Nat.le_trans h_inv h_ge
+
+/-- Every successful execution preserves the side spec: the world total never
+rises, and the exit form of the invariant is vacuous. -/
+theorem dripEntrySpec_preservesNoMem (ca : Adr) :
+    dripEntrySpec.PreservesNoMem ca := by
+  intro sevm pre post run _ precondition
+  have effect := Exec.balance_effect run
+  refine ⟨?_, ?_⟩
+  · have side : sum pre.state.bal < 2 ^ 256 := precondition.side
+    have noninc : sum post.state.bal ≤ sum pre.state.bal := effect
+    show sum post.state.bal < 2 ^ 256
+    omega
+  · show (0 : B256).toNat ≤ _
+    rw [B256.toNat_zero]
+    exact Nat.zero_le _
+
+/-! ## Entry boundary and the DRIP carrier -/
+
+/-- Entry snapshot of a frame.  A frame executing `ca` is viewed immediately
+*before* its message value was credited; every foreign frame at the ordinary
+projection.  The balance offset is the shared `balanceEntry`, so the carrier's
+entry law is the contract-neutral one. -/
+noncomputable def execEntrySnapshot (coalition : Finset Adr) (ca : Adr)
+    (sevm : Sevm) (state : State) : Snapshot :=
+  { snapshot coalition ca state with
+    balance := ExecutionAccountingReplay.balanceEntry ca sevm state }
+
+theorem execEntrySnapshot_of_target_ne {coalition : Finset Adr} {ca : Adr}
+    {sevm : Sevm} {state : State} (target_ne : sevm.currentTarget ≠ ca) :
+    execEntrySnapshot coalition ca sevm state = snapshot coalition ca state := by
+  unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry
+  rw [if_neg target_ne]
+  rfl
+
+/-- The world a DRIP frame's value credit was applied to, reconstructed by
+subtraction.  It is never claimed to be a retained world state; it exists so
+the state-indexed write lemmas can be reused at the pre-credit boundary. -/
+def precreditState (ca : Adr) (value : B256) (state : State) : State :=
+  state.setBal ca (state.bal ca - value)
+
+theorem precreditState_getStor (ca : Adr) (value : B256) (state : State) :
+    (precreditState ca value state).getStor ca = state.getStor ca := by
+  show ((state.setBal ca _).get ca).stor = (state.get ca).stor
+  rw [State.setBal_get_stor]
+
+theorem precreditState_bal {ca : Adr} {value : B256} {state : State}
+    (credited : value.toNat ≤ (state.bal ca).toNat) :
+    ((precreditState ca value state).bal ca).toNat =
+      (state.bal ca).toNat - value.toNat := by
+  show ((state.setBal ca (state.bal ca - value)).get ca).bal.toNat = _
+  rw [State.setBal_get_self]
+  exact B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat credited)
+
+theorem execEntrySnapshot_of_target {coalition : Finset Adr} {ca : Adr}
+    {sevm : Sevm} {state : State} (target : sevm.currentTarget = ca)
+    (credited : sevm.value.toNat ≤ (state.bal ca).toNat) :
+    execEntrySnapshot coalition ca sevm state =
+      snapshot coalition ca (precreditState ca sevm.value state) := by
+  unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry snapshot
+    coalitionUnits
+  rw [if_pos target, precreditState_getStor, precreditState_bal credited]
+
+/-- One positive outside credit as a realized step. -/
+theorem externalCredit_chain {coalition : Finset Adr} {ca : Adr}
+    {pre post : State} {amount : Nat}
+    (storage_eq : post.getStor ca = pre.getStor ca)
+    (balance_eq : (post.bal ca).toNat = (pre.bal ca).toNat + amount)
+    (positive : 0 < amount) :
+    ∃ op : RealizedStep, op.kind = .externalCredit amount ∧
+      op.pre = snapshot coalition ca pre ∧
+      op.post = snapshot coalition ca post := by
+  refine ⟨⟨snapshot coalition ca pre, .externalCredit amount,
+    snapshot coalition ca post, ?_⟩, rfl, rfl, rfl⟩
+  have postEq : snapshot coalition ca post =
+      ⟨chiN (pre.getStor ca), rhoN (pre.getStor ca),
+        coalitionUnits coalition ca pre, totalN (pre.getStor ca),
+        (pre.bal ca).toNat + amount⟩ := by
+    unfold snapshot coalitionUnits
+    rw [storage_eq, balance_eq]
+  rw [postEq]
+  exact .externalCredit _ _ _ _ _ _ positive
+
+/-- DRIP's realized accounting presented as a `ReplayCarrier`: the first
+ledger-shaped consumer of the contract-neutral settlement seams outside the
+family that motivated them. -/
+noncomputable def carrier (coalition : Finset Adr) (ca : Adr) :
+    ExecutionAccountingReplay.ReplayCarrier ca where
+  Snap := Snapshot
+  Step := RealizedStep
+  Tag := Unit
+  Replay := RealizedChain
+  ofState := snapshot coalition ca
+  frameEntry := execEntrySnapshot coalition ca
+  nil := Chain.nil
+  silent := by
+    intro _ _ storage_eq balance_eq
+    exact snapshot_eq_of_getStor_bal storage_eq (B256.toNat_inj _ _ balance_eq)
+  credit := by
+    intro _ pre post amount storage_eq balance_eq positive
+    rcases externalCredit_chain (coalition := coalition) storage_eq balance_eq
+        positive with ⟨op, _, preEq, postEq⟩
+    refine ⟨[op], Chain.cons preEq ?_⟩
+    rw [postEq]
+    exact Chain.nil _
+  entry_eq_ofState := by
+    intro msg entry caller_ne value_zero transfer sum_nof
+    have balance := ExecutionAccountingReplay.balanceEntry_eq_ofState
+      caller_ne value_zero transfer sum_nof
+    have storage : entry.state.getStor ca = msg.benv.state.getStor ca :=
+      congrFun (benvAfterTransfer_getStor_eq transfer) ca
+    unfold execEntrySnapshot
+    rw [balance]
+    unfold snapshot coalitionUnits
+    rw [storage]
+
+/-- Chains compose. -/
+theorem Chain.append {scale : Nat} {fresh : Nat → Nat → Nat}
+    {s m t : Snapshot} {left right : List (Step scale fresh)}
+    (first : Chain scale fresh s left m) (second : Chain scale fresh m right t) :
+    Chain scale fresh s (left ++ right) t := by
+  induction first with
+  | nil _ => exact second
+  | cons entry _ ih => exact Chain.cons entry (ih second)
+
+/-! ## The exit boundary: balance up to the outbound CALL
+
+`ExitPaysExactlyFull` fixes the target storage and code at the call boundary
+but is silent about the balance there.  The exit prefix is a gas-free walk,
+and no gas-free instruction moves ETH, so the prefix form of the settlement
+theorem recovers it. -/
+
+/-- A gas-free walk prefix never moves ETH. -/
+theorem runPrefix_getBal_eq {fs : List Func} {e : Sevm}
+    {path target : Prog.SourcePath} {s t : Devm} {body rest : Func}
+    (walk : Func.RunPrefix fs e path s body target t rest) :
+    Devm.getBal t = Devm.getBal s := by
+  induction walk with
+  | refl => rfl
+  | @next k steps s i s' f target t rest free step _ ih =>
+      have stepEq : Devm.getBal s = Devm.getBal s' := by
+        cases i with
+        | reg r => exact (inferInstance : Ninst.Hinv Devm.getBal (.reg r)).inv step
+        | push xs p =>
+            exact (inferInstance : Ninst.Hinv Devm.getBal (.push xs p)).inv step
+        | exec x => simp [Ninst.gasFree] at free
+      exact ih.trans stepEq.symm
+  | zero pop _ ih =>
+      exact ih.trans (funext fun a => getBal_eq_of_state_eq pop.state.symm a)
+  | succ _ pop burn _ ih =>
+      exact ih.trans (funext fun a =>
+        getBal_eq_of_state_eq (pop.state.trans burn.state).symm a)
+  | call _ burn _ ih =>
+      exact ih.trans (funext fun a => getBal_eq_of_state_eq burn.state.symm a)
+
+/-- The accepted `exit` boundary *with its balance*: the same call-boundary
+witnesses as `ExitPaysExactlyFull`, re-derived from the prefix form of the
+settlement theorem so that the walk from the body entry to the CALL is
+available as a gas-free prefix. -/
+theorem exit_run_boundary {fs : List Func} (hlookup : AuxLookup fs)
+    {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs sevm s Drip.exit post) :
+    ∃ callPre callPost guardPost returnPre,
+      Devm.getStor callPre sevm.currentTarget =
+        ((((Devm.getStor entry sevm.currentTarget).set chiSlot
+            ((B256.rpow scale half rate
+                (sevm.benvStat.time -
+                  Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+              Devm.getStorVal entry sevm.currentTarget chiSlot) / scale)).set
+            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+            (Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256 -
+              Sevm.dataWord sevm (32 * 0 + 4))).set totalUnitsSlot
+          (Devm.getStorVal entry sevm.currentTarget totalUnitsSlot -
+            Sevm.dataWord sevm (32 * 0 + 4)) ∧
+      Devm.getCode callPre = Devm.getCode entry ∧
+      Devm.getBal callPre = Devm.getBal s ∧
+      AcceptedPayout sevm
+        (((B256.rpow scale half rate
+            (sevm.benvStat.time -
+              Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+          Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
+          Sevm.dataWord sevm (32 * 0 + 4)) / scale)
+        callPre callPost guardPost returnPre ∧
+      Devm.getStor post = Devm.getStor callPost ∧
+      Devm.getBal post = Devm.getBal callPost := by
+  rcases of_run_exit_settles_full_prefix hlookup (path := ⟨0, []⟩) frame hp run with
+    ⟨-, -, -, -, -, -, -, -, -, -, -, -, callStart, freshChi, settledImage,
+      target, hfresh, hcodeStart, hpStart, -, -, hstorStart, walk, suffix⟩
+  subst freshChi
+  have hbalStart : Devm.getBal callStart = Devm.getBal s :=
+    runPrefix_getBal_eq walk
+  let payout :=
+    ((B256.rpow scale half rate
+      (sevm.benvStat.time - Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
+      Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
+      Sevm.dataWord sevm (32 * 0 + 4)) / scale
+  change sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout :: tail <<+
+    callStart.stack at hpStart
+  rcases of_run_prepend [gas] _ suffix with ⟨callPre, hgasLine, suffix⟩
+  have hstateGas : callStart.state = callPre.state :=
+    Line.of_inv Devm.state (by line_inv) hgasLine
+  rcases of_run_gas (of_run_singleton hgasLine) with ⟨gasWord, hgas⟩
+  have hstack : gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 ::
+      (payout :: tail) <<+ callPre.stack := by
+    simpa only [List.cons_append, List.nil_append] using
+      prefix_of_push hgas hpStart
+  rcases of_run_prepend [call] _ suffix with ⟨callPost, hcallLine, hbranch⟩
+  have hcall : Ninst.Run sevm callPre call callPost := of_run_singleton hcallLine
+  have hstorTail : Devm.getStor callPost = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hbranch
+  have hbalTail : Devm.getBal callPost = Devm.getBal post :=
+    Func.of_inv Devm.getBal Devm.getBal (by func_inv) hbranch
+  rcases of_run_branch hbranch with
+    ⟨_, hzero, hrev⟩ |
+      ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
+  · exact (not_run_revert hrev).elim
+  rcases of_run_call_val_with_depth_frame hstack hcall with
+      hfailed | hentered
+  · exact (hw (popBurn_pref hpop hfailed.1).1).elim
+  rcases hentered with
+    ⟨parent, child, xl, delegated, nextAddress, code, avail, pc, hstep,
+      hdepth, hstackEq, hparentState, hparentMemory, hparentLogs,
+      hparentOutput, hdelegated, hfilled, hmessage, hclean, hresume,
+      hpostState, hpostReturnData, hpostMemory, hpostStack⟩
+  have hpostPrefix : (1 : B256) :: payout :: tail <<+ callPost.stack := by
+    rw [hpostStack]
+    apply pref_cons
+    rw [hstackEq] at hstack
+    exact cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+      (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
+        (cons_pref_cons_inv hstack))))))
+  have hpop1 : Devm.PopBurn [1] callPost guardPost := by
+    have hwone : w = 1 := (popBurn_pref hpop hpostPrefix).1
+    subst w
+    exact hpop
+  refine ⟨callPre, callPost, guardPost, returnPre, ?_, ?_, ?_, ?_,
+    hstorTail.symm, hbalTail.symm⟩
+  · exact (getStor_eq_of_state_eq hstateGas.symm sevm.currentTarget).trans
+      hstorStart
+  · calc
+      Devm.getCode callPre = Devm.getCode callStart := by
+        funext a
+        exact getCode_eq_of_state_eq hstateGas.symm a
+      _ = Devm.getCode entry := hcodeStart
+  · calc
+      Devm.getBal callPre = Devm.getBal callStart := by
+        funext a
+        exact getBal_eq_of_state_eq hstateGas.symm a
+      _ = Devm.getBal s := hbalStart
+  · unfold AcceptedPayout
+    exact ⟨gasWord, payout :: tail, parent, child, xl, delegated, nextAddress, code,
+      avail, pc, hstack, hcall, hpop1, hburn, hstep, hdepth, hstackEq,
+      hparentState, hparentMemory, hparentLogs, hparentOutput, hdelegated,
+      hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
+      hpostMemory, hpostStack⟩
+
+/-! ## Exit write lemmas -/
+
+/-- The actual exit's four writes change only the caller's holder row.  The
+row subtraction is exact because the runtime's ownership guard bounds it. -/
+theorem coalitionUnits_exit_write (coalition : Finset Adr) (ca caller : Adr)
+    {before after : State} {fresh now units : B256}
+    (storage : after.getStor ca =
+      ((((before.getStor ca).set chiSlot fresh).set rhoSlot now).set
+        (pieSlot caller) ((before.getStor ca).get (pieSlot caller) - units)).set
+          totalUnitsSlot ((before.getStor ca).get totalUnitsSlot - units))
+    (rowLe : units ≤ (before.getStor ca).get (pieSlot caller)) :
+    coalitionUnits coalition ca after +
+        (if caller ∈ coalition then units.toNat else 0) =
+      coalitionUnits coalition ca before := by
+  classical
+  have row : ∀ holder, pieN (after.getStor ca) holder +
+        (if holder = caller then units.toNat else 0) =
+      pieN (before.getStor ca) holder := by
+    intro holder
+    by_cases same : holder = caller
+    · subst holder
+      unfold pieN
+      rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot caller).symm _,
+        Stor.get_set_self, B256.toNat_sub_eq_of_le _ _ rowLe, if_pos rfl]
+      have := B256.toNat_le_toNat rowLe
+      omega
+    · simp only [if_neg same, Nat.add_zero]
+      unfold pieN
+      rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot holder).symm _,
+        Stor.get_set_ne _ (fun eq => same (pieSlot_injective eq).symm) _,
+        Stor.get_set_ne _ (pieSlot_ne_rhoSlot holder).symm _,
+        Stor.get_set_ne _ (pieSlot_ne_chiSlot holder).symm _]
+  unfold coalitionUnits
+  simp_rw [← row]
+  rw [Finset.sum_map_toList, Finset.sum_map_toList, Finset.sum_add_distrib,
+    Finset.sum_ite_eq']
+
+/-- Project the exact four-store exit image and the payout debit observed at
+the child entry into the finite-coalition accounting relation.  `before` is the
+frame's entry world and `after` the accepted callback's entry world. -/
+theorem exit_write_realized_effect (coalition : Finset Adr) (ca caller : Adr)
+    {before after : State} {fresh now units payout : B256} {elapsed : Nat}
+    (storage : after.getStor ca =
+      ((((before.getStor ca).set chiSlot fresh).set rhoSlot now).set
+        (pieSlot caller) ((before.getStor ca).get (pieSlot caller) - units)).set
+          totalUnitsSlot ((before.getStor ca).get totalUnitsSlot - units))
+    (freshEq : fresh.toNat = freshNat (chiN (before.getStor ca)) elapsed)
+    (timeEq : now.toNat = rhoN (before.getStor ca) + elapsed)
+    (quote : payout.toNat = exitPayoutOf scale.toNat units.toNat
+      (freshNat (chiN (before.getStor ca)) elapsed))
+    (rowLe : units ≤ (before.getStor ca).get (pieSlot caller))
+    (totalLe : units ≤ (before.getStor ca).get totalUnitsSlot)
+    (funded : payout ≤ before.bal ca)
+    (balance : after.bal ca = before.bal ca - payout) :
+    Effect scale.toNat freshNat (snapshot coalition ca before)
+      (.exit (decide (caller ∈ coalition)) caller units.toNat payout.toNat elapsed)
+      (snapshot coalition ca after) := by
+  classical
+  have chi : chiN (after.getStor ca) =
+      freshNat (chiN (before.getStor ca)) elapsed := by
+    unfold chiN
+    rw [storage, Stor.get_set_ne _ scalarSlots_distinct.2.1.symm _,
+      Stor.get_set_ne _ (pieSlot_ne_chiSlot caller) _,
+      Stor.get_set_ne _ scalarSlots_distinct.1.symm _, Stor.get_set_self]
+    exact freshEq
+  have rho : rhoN (after.getStor ca) =
+      rhoN (before.getStor ca) + elapsed := by
+    unfold rhoN
+    rw [storage, Stor.get_set_ne _ scalarSlots_distinct.2.2.symm _,
+      Stor.get_set_ne _ (pieSlot_ne_rhoSlot caller) _, Stor.get_set_self]
+    exact timeEq
+  have total : totalN (after.getStor ca) =
+      totalN (before.getStor ca) - units.toNat := by
+    unfold totalN
+    rw [storage, Stor.get_set_self, B256.toNat_sub_eq_of_le _ _ totalLe]
+  have bal : (after.bal ca).toNat = (before.bal ca).toNat - payout.toNat := by
+    rw [balance, B256.toNat_sub_eq_of_le _ _ funded]
+  have counted := coalitionUnits_exit_write coalition ca caller storage rowLe
+  have totalLeNat : units.toNat ≤ totalN (before.getStor ca) :=
+    B256.toNat_le_toNat totalLe
+  have fundedNat : payout.toNat ≤ (before.bal ca).toNat :=
+    B256.toNat_le_toNat funded
+  change Effect scale.toNat freshNat
+    ⟨chiN (before.getStor ca), rhoN (before.getStor ca),
+      coalitionUnits coalition ca before, totalN (before.getStor ca),
+      (before.bal ca).toNat⟩
+    (.exit (decide (caller ∈ coalition)) caller units.toNat payout.toNat elapsed)
+    ⟨chiN (after.getStor ca), rhoN (after.getStor ca),
+      coalitionUnits coalition ca after, totalN (after.getStor ca),
+      (after.bal ca).toNat⟩
+  rw [chi, rho, total, bal]
+  by_cases member : caller ∈ coalition
+  · simp only [member, if_true] at counted
+    have owned : units.toNat ≤ coalitionUnits coalition ca before := by omega
+    have afterEq : coalitionUnits coalition ca after =
+        coalitionUnits coalition ca before - units.toNat := by omega
+    rw [afterEq]
+    simp only [member, decide_true]
+    exact .exitCounted _ _ _ _ _ _ _ _ _ owned totalLeNat fundedNat quote
+  · simp only [member, if_false, Nat.add_zero] at counted
+    rw [counted]
+    simp only [member, decide_false]
+    exact .exitOutside _ _ _ _ _ _ _ _ _ totalLeNat fundedNat quote
+
+/-! ## The exit handoff
+
+One successful deployed `exit` is split at the accepted callback's entry: the
+head step runs from the frame's entry world to the child's post-transfer
+entry world and is the whole DRIP-side effect (the four ledger writes and the
+payout debit); everything after it is the callback's own retained execution,
+whose end state is the frame's end state.  The child is handed over with the
+exact data the deeper-frame induction hypothesis consumes. -/
+
+/-- The retained accepted callback of one successful `exit` frame. -/
+structure ExitHandoff (coalition : Finset Adr) (sevm : Sevm) (pre post : Devm) where
+  childMsg : Msg
+  entry : Benv
+  child : Devm
+  xl : Xlot
+  filled : Xlot.Filled xl
+  process : ProcessMessage childMsg xl (.ok child)
+  childClean : child.error.isSome = false
+  entryTransfer : childMsg.benvAfterTransfer = .ok entry
+  targetNe : childMsg.currentTarget ≠ sevm.currentTarget
+  depth : (initSevm (childMsg.withBenv entry)).depth < sevm.depth
+  childPre : dripEntrySpec.Pre sevm.currentTarget
+    (initSevm (childMsg.withBenv entry)) (initDevm (childMsg.withBenv entry))
+  effect : Effect scale.toNat freshNat
+    (snapshot coalition sevm.currentTarget pre.state)
+    (.exit (decide (sevm.caller ∈ coalition)) sevm.caller
+      (Sevm.dataWord sevm (32 * 0 + 4)).toNat
+      (exitPayoutOf scale.toNat (Sevm.dataWord sevm (32 * 0 + 4)).toNat
+        (freshNat (chiN (Devm.getStor pre sevm.currentTarget))
+          (sevm.benvStat.time -
+            Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat))
+      (sevm.benvStat.time -
+        Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+    (snapshot coalition sevm.currentTarget entry.state)
+  postSnapshot : snapshot coalition sevm.currentTarget post.state =
+    snapshot coalition sevm.currentTarget child.state
+
+theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
+    {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
+    (caller_ne : sevm.caller ≠ sevm.currentTarget) :
+    Nonempty (ExitHandoff coalition sevm pre post) := by
+  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  unfold ExitPaysExactlyFull at full
+  dsimp only at full
+  rcases full with
+    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi, -⟩
+  rcases exec_enters_exit exc hcode hsel hnonempty with
+    ⟨-, -, entry0, hst, hmm, -, -, hbody⟩
+  have hentryMemory : entry0.memory = Mem.empty := hmm.symm.trans hcanon
+  have hframe : Frame [] entry0 entry0 :=
+    ⟨by rw [hentryMemory]; exact Mem.wf_empty,
+      by rw [hentryMemory]; exact Mem.reads_empty, rfl, rfl⟩
+  have boundary := exit_run_boundary auxLookup_runtime hframe nil_pref hbody
+  have hgv : ∀ k, Devm.getStorVal entry0 sevm.currentTarget k =
+      Devm.getStorVal pre sevm.currentTarget k :=
+    fun k => Devm.getStorVal_of_state hst.symm _ k
+  have hg : Devm.getStor entry0 sevm.currentTarget =
+      Devm.getStor pre sevm.currentTarget :=
+    getStor_eq_of_state_eq hst.symm sevm.currentTarget
+  have hc : Devm.getCode entry0 = Devm.getCode pre :=
+    congrArg State.getCode hst.symm
+  have hb : Devm.getBal entry0 = Devm.getBal pre := by
+    funext a
+    exact getBal_eq_of_state_eq hst.symm a
+  simp only [hgv, hg, hc, hb] at boundary
+  rcases boundary with
+    ⟨callPre, callPost, guardPost, returnPre, storage, codePre, balPre, accepted,
+      postStor, postBal⟩
+  rcases accepted with
+    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
+      -, -, -, -, -, hdepth, -, parentState, -, -, -, -, filled, process, clean,
+      -, callPostState, -, -, -⟩
+  set elapsed := (sevm.benvStat.time -
+    Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat with elapsedDef
+  set freshChi := (B256.rpow scale half rate elapsed *
+    Devm.getStorVal pre sevm.currentTarget chiSlot) / scale with freshDef
+  set units := Sevm.dataWord sevm (32 * 0 + 4) with unitsDef
+  set payout := freshChi * units / scale with payoutDef
+  set childMsg := callMsg sevm parent
+    (min gasWord.toNat (except64th avail) +
+      (if payout.toNat = 0 then 0 else gCallStipend))
+    payout sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+    ((callPre.memory.read 0 0).1) childCode delegated with childMsgDef
+  have recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget := by
+    rw [toAdr_toB256]
+    exact caller_ne
+  rcases RunFrame.decompose process with
+    ⟨error, _, _, failed⟩ | ⟨entry, result, transfer, _, _⟩
+  · simp [Frame.ofCall, Frame.settleMsg, processMessage.settle] at failed
+  have transfer' : childMsg.benvAfterTransfer = .ok entry := transfer
+  rcases of_benvAfterTransfer (msg := childMsg) rfl transfer' with
+    ⟨debit, sub, entryEq⟩
+  have sub' : callPre.state.subBal sevm.currentTarget payout = some debit := by
+    change parent.state.subBal _ _ = some debit at sub
+    rwa [parentState] at sub
+  have entryState : entry.state =
+      debit.addBal sevm.caller.toB256.toAdr payout := by
+    rw [entryEq]
+    rfl
+  have fields := of_state_transfer_fields
+    (callee := sevm.caller.toB256.toAdr) sub'
+  have entryStor : entry.state.getStor sevm.currentTarget =
+      callPre.state.getStor sevm.currentTarget := by
+    rw [entryState]
+    exact fields.1 sevm.currentTarget
+  have entryBalance : entry.state.bal sevm.currentTarget =
+      pre.state.bal sevm.currentTarget - payout := by
+    rw [entryState, fields.2.2.2.2 recipient_ne]
+    exact congrArg (· - payout) (congrFun balPre sevm.currentTarget)
+  have funded : payout ≤ pre.state.bal sevm.currentTarget := by
+    have := fields.2.2.1
+    rwa [show callPre.state.bal sevm.currentTarget =
+      pre.state.bal sevm.currentTarget from congrFun balPre sevm.currentTarget]
+      at this
+  have htimele := le_of_not_gt hclock
+  have timeEq : sevm.benvStat.time.toNat =
+      rhoN (pre.state.getStor sevm.currentTarget) + elapsed := by
+    have htimeleNat := B256.toNat_le_toNat htimele
+    have := B256.toNat_sub_eq_of_le _ _ htimele
+    unfold rhoN
+    change sevm.benvStat.time.toNat =
+      (Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat + elapsed
+    omega
+  have freshEq : freshChi.toNat =
+      freshNat (chiN (pre.state.getStor sevm.currentTarget)) elapsed :=
+    freshChi_toNat _ _ hguards hnofm
+  have hscale : scale ≠ 0 := by decide +kernel
+  have quote : payout.toNat = exitPayoutOf scale.toNat units.toNat
+      (freshNat (chiN (pre.state.getStor sevm.currentTarget)) elapsed) := by
+    have hnofPayout : B256.Nofm freshChi units := by
+      unfold B256.Nofm
+      exact lt_of_le_of_lt
+        (Nat.mul_le_mul
+          (B256.toNat_le_toNat (le_of_not_gt hcapChi))
+          (B256.toNat_le_toNat (le_of_not_gt hargCap))) (by
+            rw [maxChi_literal, maxUnits_literal]
+            decide +kernel)
+    rw [payoutDef, B256.toNat_div hscale,
+      B256.toNat_mul_eq_of_nofm hnofPayout, freshEq]
+    simp only [exitPayoutOf, Nat.mul_comm]
+  have storage' : entry.state.getStor sevm.currentTarget =
+      ((((pre.state.getStor sevm.currentTarget).set chiSlot freshChi).set rhoSlot
+        sevm.benvStat.time).set (pieSlot sevm.caller)
+          ((pre.state.getStor sevm.currentTarget).get (pieSlot sevm.caller) -
+            units)).set totalUnitsSlot
+              ((pre.state.getStor sevm.currentTarget).get totalUnitsSlot - units) := by
+    rw [entryStor]
+    exact storage
+  have effect := exit_write_realized_effect coalition sevm.currentTarget
+    sevm.caller storage' freshEq timeEq quote (le_of_not_gt hown)
+    (le_of_not_gt hfund) funded entryBalance
+  rw [quote] at effect
+  have childPre : dripEntrySpec.Pre sevm.currentTarget
+      (initSevm (childMsg.withBenv entry)) (initDevm (childMsg.withBenv entry)) := by
+    apply ContractSpec.Pre.child_of_outbound_transfer
+      (st := callPre.state) (st_mid := debit)
+      (target := sevm.caller.toB256.toAdr) (value := payout)
+    · show some (Devm.getCode callPre sevm.currentTarget).toList = _
+      rw [codePre]
+      exact precondition.code
+    · show SumNof (Devm.getBal callPre)
+      rw [balPre]
+      exact precondition.side
+    · show (0 : B256).toNat ≤ _
+      rw [B256.toNat_zero]
+      exact Nat.zero_le _
+    · exact sub'
+    · exact entryState
+    · rfl
+    · rfl
+  have postSnapshot : snapshot coalition sevm.currentTarget post.state =
+      snapshot coalition sevm.currentTarget child.state := by
+    rw [← callPostState]
+    exact snapshot_eq_of_getStor_bal
+      (congrFun postStor sevm.currentTarget)
+      (congrFun postBal sevm.currentTarget)
+  exact ⟨{
+    childMsg := childMsg
+    entry := entry
+    child := child
+    xl := xl
+    filled := filled
+    process := process
+    childClean := clean
+    entryTransfer := transfer'
+    targetNe := recipient_ne
+    depth := by
+      change sevm.depth - 1 < sevm.depth
+      omega
+    childPre := childPre
+    effect := effect
+    postSnapshot := postSnapshot }⟩
+
+end Drip
+
+end Blanc
