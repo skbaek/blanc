@@ -107,7 +107,7 @@ structure PairStable (vault : Adr) (rules : ForkRules) (w : Jaune.State) :
   wethSolvent : State.Solvent w wethAccount
 
 /-- An empty storage map books nothing at its address-shaped keys. -/
-private theorem balSum_empty : balSum Stor.empty = 0 := by
+theorem balSum_empty : balSum Stor.empty = 0 := by
   have step : ∀ n, sumBelow (Stor.rest Stor.empty) n = 0 := by
     intro n
     induction n with
