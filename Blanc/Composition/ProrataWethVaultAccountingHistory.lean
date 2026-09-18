@@ -1255,4 +1255,161 @@ private theorem exists_pairAttackPath_of_replay {vault victim : Adr}
 -- and genesis price are replaced by U5's `PairStep.conserved` (U5:88) and `PairAttackPath.priceLe_genesis` (§5.6).
 
 
+/-! ### 5.10 The replay split: price order between two records (U7 D-6) -/
+
+/-- Every record of a zero-debit replay starts at or above the replay's first price. -/
+theorem PairReplay.priceLe_of_mem {vault : Adr} {first last : PairBoundary}
+    {steps : List (PairStepRecord vault)} (replay : PairReplay vault first steps last) :
+    (∀ r ∈ steps, r.step.debitAmount = 0) → ∀ {r : PairStepRecord vault}, r ∈ steps →
+      Blanc.Prorata.PriceLe offsetN (first.snapshot vault) r.pre := by
+  induction replay with
+  | nil boundary => intro _ r mem; cases mem
+  | @cons pre mid last hd tl preEq postEq tail ih =>
+      intro zero r mem
+      subst preEq
+      subst postEq
+      have hstep : Blanc.Prorata.PriceLe offsetN hd.pre hd.post :=
+        hd.step.priceLe_of_debitAmount_eq_zero (zero hd (by simp))
+      rcases List.mem_cons.mp mem with rfl | hmem
+      · exact Blanc.Prorata.PriceLe.refl offsetN _
+      · exact Blanc.Prorata.PriceLe.trans offsetN_ne_zero hstep
+          (ih (fun r member => zero r (by simp [member])) hmem)
+-- T:48–63 over `PairReplay`; the step price is U6 §5 (`PairStep.priceLe_of_debitAmount_eq_zero`).
+
+/-- **The replay split.**  Between the two members of a two-element filtered subsequence of a zero-debit replay the
+price never falls: the earlier record's post-boundary is a boundary of the replay, so no list surgery is needed. -/
+theorem PairReplay.priceLe_of_filter_pair {vault : Adr} {first last : PairBoundary}
+    {steps : List (PairStepRecord vault)} (replay : PairReplay vault first steps last) :
+    (∀ r ∈ steps, r.step.debitAmount = 0) → ∀ {p : PairStepRecord vault → Bool}
+      {d w : PairStepRecord vault}, steps.filter p = [d, w] →
+        Blanc.Prorata.PriceLe offsetN d.post w.pre := by
+  induction replay with
+  | nil boundary => intro _ _ _ _ h; simp at h
+  | @cons pre mid last hd tl preEq postEq tail ih =>
+      intro zero p d w h
+      by_cases hp : p hd = true
+      · rw [List.filter_cons_of_pos hp] at h
+        simp only [List.cons.injEq] at h
+        obtain ⟨rfl, htl⟩ := h
+        have hw : w ∈ tl :=
+          List.mem_of_mem_filter (p := p) (by rw [htl]; exact List.mem_singleton_self w)
+        subst postEq
+        exact tail.priceLe_of_mem (fun r member => zero r (by simp [member])) hw
+      · rw [List.filter_cons_of_neg (by simpa using hp)] at h
+        exact ih (fun r member => zero r (by simp [member])) h
+-- T:68–86 verbatim over `PairReplay`.
+
+/-! ### 5.9 The trace, the adapter headline, and P4 -/
+
+/-- **The pair's open attack trace** (SF §9, T:368 shape).  The realized pair history from the pair root, the D9
+premise that the SF names as the only limit, the designated victim outside a finite coalition, and the victim
+schedule.  No callee-honesty, cooperation or no-donation premise. -/
+structure PairOpenAttackTrace {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault) (coalition : Finset Adr) (victim : Adr)
+    (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    (steps : List (PairStepRecord vault)) (future : BlockChain) : Prop where
+  realizes : PairTraceRealizes root steps future
+  collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault
+  victim_not_mem : victim ∉ coalition
+  coalition_covers : ∀ r ∈ steps, ∀ x : Adr,
+    r.provenance.actor = some x → x ≠ victim → x ∈ coalition
+  schedule : VictimSchedule victim steps
+
+/-- The closed trace: every non-victim flow is the coalition's (T:383). -/
+abbrev PairAttackTrace {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault) (coalition : Finset Adr) (victim : Adr)
+    (steps : List (PairStepRecord vault)) (future : BlockChain) : Prop :=
+  PairOpenAttackTrace root coalition victim coalitionCharge steps future
+
+/-- **The adapter** (design `exists_pairAttackPath`): every pair attack trace is a pair actor path from genesis whose
+coalition accounting, both priced share crossings included, is exactly the trace's own. -/
+theorem exists_pairAttackPath {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairOpenAttackTrace root coalition victim charge steps future) :
+    ∃ final : PairAttackState offsetN,
+      PairAttackPath offsetN final ∧
+        final.inA = inA victim charge steps ∧
+        final.outA = outA victim charge steps ∧
+        final.outsideSubsidy = outsideSubsidy victim charge steps ∧
+        final.sharesIn = sharesIn victim steps ∧
+        final.sharesOut = sharesOut victim steps := by
+  have hsnapshot : (PairBoundary.ofState vault deployed.state).snapshot vault = ⟨0, 0⟩ := by
+    rw [PairBoundary.snapshot_ofState, root.genesisSnapshot]
+  have hrow : (0 : Nat) =
+      (Stor.rest (PairBoundary.ofState vault deployed.state).vault victim).toNat := by
+    show (0 : Nat) = (Stor.rest (deployed.state.getStor vault) victim).toNat
+    rw [root.vaultEmpty, show Stor.rest Stor.empty victim = (0 : B256) from rfl, B256.toNat_zero]
+  have hconserved : LedgerConserved supplySlot (PairBoundary.ofState vault deployed.state).vault := by
+    show LedgerConserved supplySlot (deployed.state.getStor vault)
+    rw [root.vaultEmpty]
+    exact LedgerConserved.of_empty
+  obtain ⟨final, hfinal, h1, h2, h3, h4, h5⟩ :=
+    exists_pairAttackPath_of_replay charge trace.realizes.toReplay
+      (trace.realizes.debitAmount_eq_zero trace.collision)
+      (PairAttackState.genesis offsetN) .genesis hsnapshot.symm hrow hconserved trace.schedule
+  exact ⟨final, hfinal,
+    by simpa [PairAttackState.genesis, Blanc.Prorata.ProrataAttackState.genesis] using h1,
+    by simpa [PairAttackState.genesis, Blanc.Prorata.ProrataAttackState.genesis] using h2,
+    by simpa [PairAttackState.genesis, Blanc.Prorata.ProrataAttackState.genesis] using h3,
+    by simpa [PairAttackState.genesis] using h4,
+    by simpa [PairAttackState.genesis] using h5⟩
+-- T:657–687 (`exists_attackPath`): same three genesis facts, read off `PairRoot.vaultEmpty` and U6's
+-- `genesisSnapshot`; the D9 zero-debit list is U6's `debitAmount_eq_zero`.
+
+/-- **`pair_attacker_open_context`** (SF §9, P4).  The coalition's settled take plus the floor value of the shares it
+sent the victim is bounded by its own settled input, the outside subsidy it was handed, and the ceiling value of the
+shares it took from the victim.  `2 ≤ O` is discharged by the vault's offset. -/
+theorem pair_attacker_open_context {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairOpenAttackTrace root coalition victim charge steps future) :
+    outA victim charge steps + sharesOut victim steps ≤
+      inA victim charge steps + outsideSubsidy victim charge steps + sharesIn victim steps := by
+  obtain ⟨final, path, h1, h2, h3, h4, h5⟩ := exists_pairAttackPath trace
+  have h := path.attacker_open_context_of_pairAttackPath two_le_offsetN
+  omega
+
+/-- **`pair_attacker_no_profit`** (SF §9, P4).  No closed pair attack trace in which the victim gives the coalition
+no shares is profitable.  The share gift is named, not assumed absent. -/
+theorem pair_attacker_no_profit {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairAttackTrace root coalition victim steps future)
+    (noShareGifts : sharesIn victim steps = 0) :
+    outA victim coalitionCharge steps + sharesOut victim steps ≤ inA victim coalitionCharge steps := by
+  have h := pair_attacker_open_context trace
+  rw [outsideSubsidy_coalitionCharge, noShareGifts] at h
+  omega
+
+/-- **`pair_victim_loss_bound`** (SF §9, P4).  If the victim's deposit saw pre-credit `(Sdep, Bdep)`, paid `v` and
+minted `m`, and its later exit burns that `m` and pays `p`, the shortfall is at most one virtual-asset quantum above
+the genesis-anchored price ratio, whatever non-victims did to the victim in between. -/
+theorem pair_victim_loss_bound {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairOpenAttackTrace root coalition victim charge steps future)
+    {deposit exit : PairStepRecord vault} {v m p : Nat}
+    (hmoves : victimMoves victim steps = [deposit, exit])
+    (hdeposit : deposit.flow = .inbound victim victim v m true)
+    (hexit : exit.flow = .outbound victim victim m p true false) :
+    v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 := by
+  have replay := trace.realizes.toReplay
+  have zero := trace.realizes.debitAmount_eq_zero trace.collision
+  have hd := deposit.accounts (zero deposit (mem_of_mem_victimMoves (by rw [hmoves]; simp)))
+  rw [hdeposit] at hd
+  obtain ⟨hpost, -, hquote⟩ := hd
+  have hw := exit.accounts (zero exit (mem_of_mem_victimMoves (by rw [hmoves]; simp)))
+  rw [hexit] at hw
+  obtain ⟨-, -, hpaid, -⟩ := hw
+  have hprice : Blanc.Prorata.PriceLe offsetN deposit.post exit.pre :=
+    replay.priceLe_of_filter_pair zero hmoves
+  rw [hpost] at hprice
+  exact Blanc.Prorata.victim_loss_le_div_add_one offsetN_ne_zero (hquote rfl) hprice (hpaid rfl)
+-- T:736–757 (`victim_loss_bound`) line for line: `deposit_inv`/`withdraw_inv` → `accounts` at the two flows.
+
+
 end Blanc.Composition.ProrataWethVault
