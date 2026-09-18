@@ -1,6 +1,8 @@
 import Blanc.DripRealizedHistory
 import Blanc.PrefixTransport
 import Blanc.ExecutionPathLocator
+import Blanc.ExecutionNoninterference
+import Blanc.CallSpawnExact
 
 /-!
 DRIP exit payout identity at the actual compiled `CALL` node.
@@ -278,6 +280,148 @@ theorem BodyExecutionOccurrence.exit_callNode_identity
           returnPre :=
   exit_callNode_identity_of_exec occurrence.execution.run codeEq selector
     nonempty canonicalEntry
+
+/-- A clean call-frame settlement does not read the message: an `.ok` result
+without an error flag is the handled raw machine itself. -/
+private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
+    (left right : Msg)
+    (settled : (Frame.ofCall left).settle raw = .ok child)
+    (clean : child.error.isSome = false) :
+    (Frame.ofCall right).settle raw = .ok child := by
+  simp only [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
+    Bool.false_eq_true, if_false] at settled ⊢
+  cases handled : executeCode.handleError raw with
+  | error e =>
+      rw [handled] at settled
+      cases settled
+  | ok evm =>
+      rw [handled] at settled
+      by_cases flagged : evm.error.isSome = true
+      · simp only [bind, Except.bind, flagged, if_true, Except.ok.injEq] at settled
+        subst settled
+        exfalso
+        simp [Devm.rollback, Devm.setWorld, Devm.error] at clean
+        simp [Devm.error, clean] at flagged
+      · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
+        exact settled
+
+/-- **Exit payout child, located.** The exit `CALL` node of
+`exit_callNode_identity`, with every conjunct kept, whose filled child slot is
+the entered child of a settlement-retained frame of the same body execution,
+at the root's immediate call-tree path `[i]`. The root commitment
+`postClean` is a premise: no repository lemma transports the `error` field
+across an arbitrary `Exec`, and deriving it here would re-walk the exit. -/
+theorem BodyExecutionOccurrence.exit_callChild_frameOccurrence
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    (occurrence : BodyExecutionOccurrence body)
+    (codeEq : occurrence.execution.sevm.code.toList = code)
+    (selector : Sevm.selector occurrence.execution.sevm = exitSelector)
+    (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
+    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty)
+    (postClean : occurrence.execution.postState.error = none) :
+    let sevm := occurrence.execution.sevm
+    let initial := occurrence.execution.entryState
+    let units := Sevm.dataWord sevm (32 * 0 + 4)
+    let freshChi := (B256.rpow scale half rate
+      (sevm.benvStat.time - Devm.getStorVal initial sevm.currentTarget rhoSlot).toNat *
+      Devm.getStorVal initial sevm.currentTarget chiSlot) / scale
+    let payout := (freshChi * units) / scale
+    ∃ (node : Exec.NinstOccurrence
+        ⟨0, sevm, initial, .ok occurrence.execution.postState,
+          occurrence.execution.run⟩)
+      (gasWord : B256),
+      node.instruction = call ∧
+      node.node.pc = exitCallSitePc ∧
+      Exec.Deriv.ParentPrefix
+        ⟨0, sevm, initial, .ok occurrence.execution.postState,
+          occurrence.execution.run⟩ node.node ∧
+      Devm.getStor node.node.devm sevm.currentTarget =
+        ((((Devm.getStor initial sevm.currentTarget).set chiSlot freshChi).set
+            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+            (Devm.getStorVal initial sevm.currentTarget sevm.caller.toB256 - units)).set
+          totalUnitsSlot
+            (Devm.getStorVal initial sevm.currentTarget totalUnitsSlot - units) ∧
+      Devm.getCode node.node.devm = Devm.getCode initial ∧
+      (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
+        [] <<+ node.node.devm.stack) ∧
+      Mem.Wf node.node.devm.memory ∧
+      (∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
+        AcceptedPayout sevm payout node.node.devm callPost guardPost
+          returnPre) ∧
+      ∀ (childEvm : Evm) (raw : Execution),
+        node.slot = .some ⟨childEvm, raw⟩ →
+        ∃ (frameOccurrence : BodyFrameOccurrence body) (i : Nat),
+          frameOccurrence.bodyExecution = occurrence ∧
+          frameOccurrence.frame.path = [i] ∧
+          node.slot = .some
+            ⟨⟨frameOccurrence.frame.frame.pc, frameOccurrence.frame.frame.sevm,
+                frameOccurrence.frame.frame.pre⟩,
+              frameOccurrence.frame.frame.out⟩ := by
+  dsimp only
+  rcases occurrence.exit_callNode_identity codeEq selector nonempty
+      canonicalEntry with
+    ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEqNode, stackPref,
+      memWf, callPost, guardPost, returnPre, stepEq, accepted⟩
+  refine ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEqNode,
+    stackPref, memWf, ⟨callPost, guardPost, returnPre, stepEq, accepted⟩, ?_⟩
+  intro childEvm raw slotEq
+  have sevmEq : node.node.sevm = occurrence.execution.sevm := sameFrame.sevm_eq
+  rcases accepted with
+    ⟨acceptedGas, acceptedRest, parent, child, xl, delegated, nextAddress,
+      childCode, avail, acceptedPc, acceptedPref, acceptedRun, acceptedPop,
+      acceptedBurn, acceptedStep, acceptedDepth, acceptedStack,
+      acceptedParentState, acceptedParentMemory, acceptedParentLogs,
+      acceptedParentOutput, acceptedDelegation, acceptedFilled,
+      acceptedProcess, acceptedClean, acceptedResume, acceptedPostState,
+      acceptedPostReturnData, acceptedPostMemory, acceptedPostStack⟩
+  have acceptedStep' := Ninst.stepRun_pc_irrel (n := call) rfl
+    (pc' := node.node.pc) acceptedStep
+  have nodeRun := node.stepRun
+  rw [isCall, sevmEq] at nodeRun
+  obtain ⟨xlEq, -⟩ := Step.Run.unique_of_filled acceptedFilled node.filled
+    acceptedStep' nodeRun
+  rw [xlEq, slotEq] at acceptedProcess
+  have evmStep := Evm.step_next (devm := node.node.devm) node.decoded
+  rw [isCall, sevmEq] at evmStep
+  unfold Ninst.StepRun at nodeRun
+  rcases stepEq' : Ninst.step
+      ⟨node.node.pc, occurrence.execution.sevm, node.node.devm⟩ call with
+    out | ⟨nextPc, next⟩ | ⟨f, rsm, nextPc⟩ <;> rw [stepEq'] at nodeRun
+  · rw [slotEq] at nodeRun
+    cases nodeRun.1
+  · rw [slotEq] at nodeRun
+    cases nodeRun.1
+  rcases Ninst.step_call_spawn_exact stepEq' acceptedStack with
+    ⟨spawnParent, spawnDelegated, spawnAddress, spawnCode, spawnAvail,
+      spawnDepth, spawnStack, spawnState, spawnMemory, spawnDelegation,
+      frameEq, resumeEq⟩
+  rcases nodeRun with ⟨r, frameRun, resultEq⟩
+  rw [slotEq] at frameRun
+  obtain ⟨msg, frameMsg⟩ : ∃ msg, f = Frame.ofCall msg := ⟨_, frameEq⟩
+  subst frameMsg
+  obtain ⟨entered, settledEq⟩ := RunFrame.some_inv frameRun
+  obtain ⟨-, acceptedSettled⟩ := RunFrame.some_inv acceptedProcess
+  have settled := ofCall_settle_clean _ msg acceptedSettled.symm acceptedClean
+  rw [settled] at settledEq
+  subst settledEq
+  have process : ProcessMessage msg (.some ⟨childEvm, raw⟩) (.ok child) := by
+    have run := RunFrame.of_run (raw := raw) entered
+    rw [settled] at run
+    exact run
+  have spawn : Evm.step
+      ⟨node.node.pc, node.node.sevm, node.node.devm⟩ =
+        .spawn (Frame.ofCall msg) rsm nextPc := by
+    rw [sevmEq, evmStep, stepEq']
+  have resumed : rsm.run (.ok child) = .ok callPost := by
+    rw [← resultEq, stepEq]
+  rcases Exec.NinstOccurrence.exists_root_call_child occurrence.execution.run
+      (by simp [Execution.commits, postClean]) node sameFrame slotEq spawn
+      process acceptedClean resumed with
+    ⟨located, member, entering, -, -, pathEq, locatedSlot⟩
+  exact ⟨⟨occurrence, located, member⟩, entering.childIndex, rfl, pathEq,
+    locatedSlot⟩
 
 end Drip
 
