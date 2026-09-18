@@ -1011,6 +1011,20 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   facts underneath: the static flag reaches every entered child frame and no
   `SSTORE` completes in one.  It says nothing about transient storage, logs,
   balances or gas.
+- Representation-exact storage silence of static execution:
+  [`Blanc/StaticCallStorage.lean`](../Blanc/StaticCallStorage.lean).  Use it
+  when the boundary is the `Stor` tree itself (a replay carrier that meets at
+  *equal* storages) rather than the extensional `Devm.storageView`.
+  `Exec.getStor_committedPost_eq_of_static` says a committing execution of a
+  static frame ends with exactly its entry storage map at every account,
+  children included; `Ninst.staticcall_inv_getStor_exact` lifts that to every
+  successful `STATICCALL`, entering arbitrary code or not; and the instance
+  `staticcall_getStor_hinv : Ninst.Hinv Devm.getStor Ninst.staticcall` is what
+  `Func.SilentIn Devm.getStor` certificates consume.  Worked use:
+  `Blanc/Composition/ProrataWethVaultPairVaultSegment.lean` discharges the
+  vault's live-quoting read-only paths through it.  Import
+  `Blanc.StaticCallStorage` (it imports only `Blanc.StaticStorage`).  Like its
+  parent it says nothing about transient storage, logs, balances or gas.
 - Transient-state invariance and settlement:
   [`Blanc/TransientInvariance.lean`](../Blanc/TransientInvariance.lean) and
   [`Blanc/TransientSettlement.lean`](../Blanc/TransientSettlement.lean).
@@ -1863,7 +1877,14 @@ rather than climbing it again:
 - Small additions it needed: `ReplayCarrier.ofAddBal` (a direct balance credit
   is one positive credit at `ca` or no step) and the word-bound transports
   `ExecutionTrace.TransactionTrace.msg_sum_nof` and
-  `ExecutionTrace.processWithdrawalsState_sum_nof`.
+  `ExecutionTrace.processWithdrawalsState_sum_nof`.  Four more wrapper facts
+  live beside them for ladders that do not fit this one:
+  `ExecutionTrace.TransactionTrace.msg_caller` (the prepared message's caller
+  is the checked sender), `ExecutionTrace.ApplyTransactionsTrace.stat_eq` (a
+  transaction list changes the block environment only through state),
+  `ExecutionTrace.processWithdrawalsState_getStor_eq` (direct withdrawals move
+  balances only) and `ExecutionTrace.AppliedBodyTrace.transactionBound` (the
+  withdrawal word bound survives the body prefix).
 
 Minimal example: `Blanc/DripRealizedLadder.lean` builds
 `ladder coalition ca : AccountingLadder dripSpec ca` (a `Unit` tag) and
@@ -1877,8 +1898,9 @@ step and adds no step beyond `root`, `credit` and `ofAddBal`.  It is
 account-local: a boundary over several accounts (a `SettlementCarrier`), a
 replay indexed by position, or an invariant that is not `S.StateInv` (for
 example one threaded by fork rules) does not fit it; such a consumer reuses the
-T2b seams and the two word-bound transports and keeps its own ladder, as
-`Blanc/Composition/ProrataWethVaultHistory.lean` does.  It is a proof-cost
+T2b seams and these wrapper facts and keeps its own ladder, as
+`Blanc/Composition/ProrataWethVaultPairLadder.lean` does for the vault/WETH
+pair.  It is a proof-cost
 facility only: no rung changes an execution or a gas charge.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract

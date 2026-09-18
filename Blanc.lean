@@ -38,6 +38,7 @@ import Blanc.ExecutionOccurrence
 import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionAccountingLadder
 import Blanc.CallSpawnExact
+import Blanc.StaticCallStorage
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal
@@ -336,6 +337,11 @@ import Blanc.Composition.ProrataWethVaultPair
 import Blanc.Composition.ProrataWethVaultRely
 import Blanc.Composition.ProrataWethVaultEnvironment
 import Blanc.Composition.ProrataWethVaultHistory
+import Blanc.Composition.ProrataWethVaultPairWethSegment
+import Blanc.Composition.ProrataWethVaultPairVaultSegment
+import Blanc.Composition.ProrataWethVaultWithdrawPayout
+import Blanc.Composition.ProrataWethVaultPairReplay
+import Blanc.Composition.ProrataWethVaultPairLadder
 
 import Blanc.Drip
 import Blanc.DripAccounting

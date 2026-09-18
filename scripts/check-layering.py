@@ -148,7 +148,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
            "ExecutionAccountingReplay",
-           "ExecutionAccountingLadder", "CallSpawnExact",
+           "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram"]
 
@@ -401,6 +401,11 @@ COMPOSITION = [
     "Composition.ProrataWethVaultRely",
     "Composition.ProrataWethVaultEnvironment",
     "Composition.ProrataWethVaultHistory",
+    "Composition.ProrataWethVaultPairWethSegment",
+    "Composition.ProrataWethVaultPairVaultSegment",
+    "Composition.ProrataWethVaultWithdrawPayout",
+    "Composition.ProrataWethVaultPairReplay",
+    "Composition.ProrataWethVaultPairLadder",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
