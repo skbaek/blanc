@@ -393,6 +393,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultOutbound",
     "Composition.ProrataWethVaultBacking",
     "Composition.ProrataWethVaultAccounting",
+    "Composition.ProrataWethVaultCoalition",
     "Composition.ProrataWethVaultMessage",
     "Composition.ProrataWethVaultPair",
     "Composition.ProrataWethVaultRely",

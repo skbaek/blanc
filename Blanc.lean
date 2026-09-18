@@ -328,6 +328,7 @@ import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.Composition.ProrataWethVaultAccounting
+import Blanc.Composition.ProrataWethVaultCoalition
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultPair
 import Blanc.Composition.ProrataWethVaultRely
