@@ -356,6 +356,12 @@ spawn/resume equations at the consumer:
   body-frame occurrence by case-splitting `Ninst.step` on the accepted node and
   feeding the `.spawn` arm here.  Import `Blanc.CallSpawnExact` (it imports
   only `Blanc.Ladder`).
+- `AcceptedCallerPayout` in the same module: the entered, clean, success-consumed value
+  `CALL` to `sevm.caller` (gas word, 7-operand stack, `PopBurn [1]` guard, exact
+  `ProcessMessage (callMsg …)` child, `Resume.call` and post projections) — the shape
+  `of_run_call_val_with_depth_frame`'s entered arm yields for a payout.  Contracts keep a
+  local `AcceptedPayout` wrapper only to retain pinned statement constants and dot-notation
+  namespaces (`Prorata.AcceptedPayout.exists_trace`).
 - `of_run_staticcall_val_with_depth_cause`: the 6-operand
   (`g :: t :: ii :: is :: oi :: os :: xs`) STATICCALL analogue over
   `Ninst.staticcall`, whose failed arm additionally carries a

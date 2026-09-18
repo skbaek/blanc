@@ -231,4 +231,47 @@ theorem Ninst.step_call_spawn_exact
         exact hf.symm
       · exact hr.symm
 
+open Jaune.Ninst Ninst in
+/-- An entered, successful value `CALL` to the frame's caller whose success word has been
+consumed before the caller's return suffix.  The carrier retains the exact EIP-150 child
+message, delegation choice, empty calldata/output windows, clean child settlement and caller
+resumption, without imposing a callback-final storage delta.  DRIP's and PRORATA's
+`AcceptedPayout` both unfold to it. -/
+def AcceptedCallerPayout (sevm : Sevm) (p : B256)
+    (callPre callPost guardPost returnPre : Devm) : Prop :=
+  ∃ (gasWord : B256) (xs : Stack) (parent child : Devm) (xl : Xlot)
+    (delegated : Bool) (nextAddress : Adr) (code : ByteArray) (avail pc : Nat),
+    (gasWord :: sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 :: xs) <<+
+      callPre.stack ∧
+    Ninst.Run sevm callPre call callPost ∧
+    Devm.PopBurn [1] callPost guardPost ∧
+    Devm.Burn guardPost returnPre ∧
+    Ninst.StepRun pc sevm callPre call xl (.ok callPost) ∧
+    0 < sevm.depth ∧
+    callPre.stack = gasWord :: sevm.caller.toB256 :: p :: 0 :: 0 :: 0 :: 0 ::
+      parent.stack ∧
+    parent.state = callPre.state ∧
+    parent.memory = callPre.memory.extends [(0, 0), (0, 0)] ∧
+    parent.logs = callPre.logs ∧
+    parent.output = callPre.output ∧
+    ((getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = none ∧
+        nextAddress = sevm.caller.toB256.toAdr ∧
+        code = callPre.getCode sevm.caller.toB256.toAdr ∧ delegated = false) ∨
+      (∃ d, getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = some d ∧
+        nextAddress = d ∧ code = callPre.getCode d ∧ delegated = true)) ∧
+    Xlot.Filled xl ∧
+    ProcessMessage
+      (callMsg sevm parent
+        (min gasWord.toNat (except64th avail) +
+          (if p.toNat = 0 then 0 else gCallStipend))
+        p sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+        ((callPre.memory.read 0 0).1) code delegated)
+      xl (.ok child) ∧
+    child.error.isSome = false ∧
+    (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+    callPost.state = child.state ∧
+    callPost.returnData = child.output ∧
+    callPost.memory = parent.memory.write 0 (child.output.take 0) ∧
+    callPost.stack = (1 : B256) :: parent.stack
+
 end Blanc
