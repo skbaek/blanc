@@ -158,4 +158,54 @@ theorem pair_history_victim_loss_bound {cfg : ChainConfig} {deployed future : Bl
   exact ⟨steps, realizes, faithful, fun victim deposit exit v m p hmoves hdeposit hexit =>
     pair_victim_loss_bound realizes (faithful.collision collision) hmoves hdeposit hexit⟩
 
+/-! ## Control C1: the carrier admits ghost records; faithfulness rejects them -/
+
+/-- A zero-length silent record at `w` owning a hypothetical allowance invocation. -/
+def ghostRecord {vault : Adr} (w : State) (caller : Adr) (call : WethAllowanceInvocation)
+    (callerNe : call.sevm.caller ≠ vault)
+    (atPre : call.pre.state.getStor wethAccount = w.getStor wethAccount)
+    (atPost : call.post.state.getStor wethAccount = w.getStor wethAccount)
+    (provenance : Blanc.Prorata.ProrataAccountingProvenance)
+    (actor : provenance.actor = some caller) : PairStepRecord vault where
+  before := w
+  after := w
+  step := .silent caller rfl rfl
+  own := some call
+  linked := fun c same => by
+    cases same
+    exact ⟨atPre, atPost, fun equal => absurd equal callerNe⟩
+  quiet := fun impossible => nomatch impossible
+  debitOwn := fun _ _ _ _ _ _ impossible => by cases impossible
+  provenance := provenance
+  actor := actor
+
+/-- The carrier accepts a ghost at the opening of any realized block. -/
+theorem pairTraceRealizes_admits_ghost {cfg : ChainConfig} {deployed current future : BlockChain}
+    {vault : Adr} {root : PairRoot cfg deployed vault}
+    {priorSteps blockSteps : List (PairStepRecord vault)}
+    (prior : PairTraceRealizes root priorSteps current)
+    (block : ConfiguredBlockTrace cfg current future)
+    (replay : PairReplay vault (PairBoundary.ofState vault current.state) blockSteps
+      (PairBoundary.ofState vault future.state))
+    (tagged : ∀ r ∈ blockSteps, PairInBlock block.block.header.number r)
+    (ghost : PairStepRecord vault) (before : ghost.before = current.state)
+    (after : ghost.after = current.state)
+    (ghostTag : PairInBlock block.block.header.number ghost) :
+    PairTraceRealizes root (priorSteps ++ (ghost :: blockSteps)) future :=
+  .step prior block (.cons ghost (by rw [before]) (by rw [after]) replay)
+    (fun r member => by
+      rcases List.mem_cons.mp member with rfl | inBlock
+      · exact ghostTag
+      · exact tagged r inBlock)
+
+/-- The faithfulness predicate rejects any list owning an unexecuted visit. -/
+theorem not_pairLedgerFaithful_of_ghost {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} {history : ConfiguredHistoryTrace cfg deployed future}
+    {steps : List (PairStepRecord vault)} {ghost : PairStepRecord vault}
+    {call : WethAllowanceInvocation}
+    (member : ghost ∈ steps) (owns : ghost.own = some call)
+    (unexecuted : call.visit ∉ history.pairVisits vault) :
+    ¬ PairLedgerFaithful vault history steps :=
+  fun faithful => unexecuted (faithful call (List.mem_filterMap.mpr ⟨ghost, member, owns⟩))
+
 end Blanc.Composition.ProrataWethVault
