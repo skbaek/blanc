@@ -2,6 +2,7 @@
 -- cumulative-dust identity (vault P3) over every realized pair history.
 
 import Blanc.Composition.ProrataWethVaultPairHistory
+import Blanc.Composition.ProrataWethVaultCoalition
 
 /-!
 # P3 over real pair histories
@@ -387,5 +388,640 @@ theorem pair_realized_dust_trace_exact {cfg : ChainConfig} {deployed future : Bl
   rw [hX, Nat.one_mul] at hexact
   exact hexact
 -- PH:216–257 (`prorata_realized_dust_trace_exact`), arm for arm.
+
+/-! ## 5. The realized coalition overlay (vault U9)
+
+PRORATA keys its realized coalition accounting on a step's actor, because a PRORATA caller is the share holder.  A
+pair record's actor is only the emitting frame's caller, while the vault separates caller, owner and receiver and a
+WETH credit is paid by its source.  This section reads each accepted operation once into its role-resolved
+`PairFlow`, keys every realized sum and the victim schedule on it, and folds one `PairAttackStep` per record onto
+U8's `PairAttackPath`.  The victim is the protected party: one exact deposit to itself, optionally one exact full
+redeem to itself, no other cash of its own, and no share gift that takes its row below the open deposit's shares. -/
+
+open Blanc.ProrataWethVault (offsetN offsetN_ne_zero two_le_offsetN supplySlot)
+
+/-! ### 5.1 Role-resolved flows -/
+
+/-- The economic content of one record, with every role an address and every amount a `Nat`. -/
+inductive PairFlow where
+  /-- `deposit` (`exact`) or `mint`: `payer` pays `assets` and `receiver` is minted `shares`. -/
+  | inbound (payer receiver : Adr) (assets shares : Nat) (exact : Bool)
+  /-- `redeem` (`exact`) or `withdraw`: `owner` burns `shares` and `receiver` is paid `assets`, or the vault keeps
+  them (`retained`, receiver = vault). -/
+  | outbound (owner receiver : Adr) (shares assets : Nat) (exact retained : Bool)
+  /-- An outside WETH credit to the vault, paid by `source`. -/
+  | credit (source : Adr) (amount : Nat)
+  /-- `transfer` / `transferFrom`: `amount` shares from `source` to `receiver`. -/
+  | shareMove (source receiver : Adr) (amount : Nat)
+  /-- `approve`, a silent WETH frame, or a zero-amount authorized debit. -/
+  | silent
+
+/-- The flow of an accepted operation. -/
+def FourQuote.FourQuoteOperation.flow {vault : Adr} {sevm : Sevm} {pre post : Devm} :
+    FourQuote.FourQuoteOperation vault sevm pre post → PairFlow
+  | .deposit words _ _ _ _ _ _ =>
+      .inbound sevm.caller words.receiver.toAdr words.assets.toNat words.shares.toNat true
+  | .mint words _ _ _ _ _ _ =>
+      .inbound sevm.caller words.receiver.toAdr words.assets.toNat words.shares.toNat false
+  | .withdrawNormal words _ _ _ _ _ =>
+      .outbound words.owner.toAdr words.receiver.toAdr words.shares.toNat words.assets.toNat false false
+  | .redeemNormal words _ _ _ _ _ =>
+      .outbound words.owner.toAdr words.receiver.toAdr words.shares.toNat words.assets.toNat true false
+  | .withdrawSelf words _ _ _ _ _ =>
+      .outbound words.owner.toAdr words.receiver.toAdr words.shares.toNat words.assets.toNat false true
+  | .redeemSelf words _ _ _ _ _ =>
+      .outbound words.owner.toAdr words.receiver.toAdr words.shares.toNat words.assets.toNat true true
+  | .credit words _ _ _ _ _ => .credit words.source words.amount.toNat
+  | .transfer words _ _ _ _ _ _ _ _ => .shareMove words.owner words.receiver.toAdr words.amount.toNat
+  | .transferFrom words _ _ _ _ _ _ _ _ _ =>
+      .shareMove words.owner.toAdr words.receiver.toAdr words.amount.toNat
+  | .approve _ _ _ _ _ _ _ _ _ => .silent
+-- binder counts: A:1068–1107 (`FourQuoteShareRowsMove`), arm for arm; roles: A:741–779 and the A:782 guards
+-- (`depositorNotVault` is the caller, `transfer.owner = sevm.caller`).
+
+def PairStep.flow {vault : Adr} {before after : State} : PairStep vault before after → PairFlow
+  | .operation t _ => t.operation.flow
+  | _ => .silent
+
+namespace PairStepRecord
+
+variable {vault : Adr}
+
+def flow (r : PairStepRecord vault) : PairFlow := r.step.flow
+/-- The accounting snapshot a record starts from (PRORATA's `step.pre`). -/
+def pre (r : PairStepRecord vault) : FourQuote.Snapshot := FourQuote.stateSnapshot vault r.before
+def post (r : PairStepRecord vault) : FourQuote.Snapshot := FourQuote.stateSnapshot vault r.after
+def victimRowBefore (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  (Stor.rest (r.before.getStor vault) victim).toNat
+def victimRowAfter (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  (Stor.rest (r.after.getStor vault) victim).toNat
+
+end PairStepRecord
+
+/-- What a flow does to the accounting snapshot, with its quote read as a model quote. -/
+def PairFlow.Accounts : PairFlow → FourQuote.Snapshot → FourQuote.Snapshot → Prop
+  | .inbound _ _ assets shares exact, pre, post =>
+      post = ⟨pre.supply + shares, pre.balance + assets⟩ ∧
+        shares ≤ Blanc.Prorata.mintN offsetN assets pre.supply pre.balance ∧
+        (exact = true → shares = Blanc.Prorata.mintN offsetN assets pre.supply pre.balance)
+  | .outbound _ _ shares assets exact retained, pre, post =>
+      shares ≤ pre.supply ∧ assets ≤ Blanc.Prorata.payN offsetN shares pre.supply pre.balance ∧
+        (exact = true → assets = Blanc.Prorata.payN offsetN shares pre.supply pre.balance) ∧
+        post = ⟨pre.supply - shares, if retained = true then pre.balance else pre.balance - assets⟩
+  | .credit _ amount, pre, post => post = ⟨pre.supply, pre.balance + amount⟩
+  | .shareMove _ _ _, pre, post => post = pre
+  | .silent, pre, post => post = pre
+
+/-- What a flow does to the victim's share row. -/
+def PairFlow.VictimRow : PairFlow → Adr → Nat → Nat → Prop
+  | .inbound _ receiver _ shares _, victim, row, row' =>
+      row' = row + if receiver = victim then shares else 0
+  | .outbound owner _ shares _ _ _, victim, row, row' =>
+      row' + (if owner = victim then shares else 0) = row
+  | .credit _ _, _, row, row' => row' = row
+  | .shareMove source receiver amount, victim, row, row' =>
+      row' + (if source = victim then amount else 0) = row + if receiver = victim then amount else 0
+  | .silent, _, row, row' => row' = row
+
+/-- The party whose share row a flow debits, and by how much. -/
+def PairFlow.debited? : PairFlow → Option (Adr × Nat)
+  | .outbound owner _ shares _ _ _ => some (owner, shares)
+  | .shareMove source _ amount => some (source, amount)
+  | _ => none
+
+/-- The victim's own economic moves: cash it pays in or takes out to itself.  Share gifts it makes are not moves;
+the lock bounds them. -/
+def PairFlow.victimOwn (victim : Adr) : PairFlow → Bool
+  | .inbound payer _ _ _ _ => decide (payer = victim)
+  | .outbound owner receiver _ _ _ retained =>
+      decide (owner = victim ∧ receiver = victim ∧ retained = false)
+  | .credit source _ => decide (source = victim)
+  | _ => false
+
+/-! ### 5.2 The ten tags, once -/
+
+/-- **Every accepted operation accounts exactly as its flow says.** -/
+theorem FourQuote.FourQuoteOperation.flow_accounts {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (operation : FourQuote.FourQuoteOperation vault sevm pre post) :
+    operation.flow.Accounts (vaultSnapshot vault pre) (vaultSnapshot vault post) := by
+  cases operation with
+  | deposit words target depositorNotVault supplyNof rowNof quote effect =>
+      subst vault
+      have hpost := FourQuote.inboundEffect_normal_snapshot depositorNotVault supplyNof rowNof effect
+      simp only [snapshotAt_eq] at hpost quote
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts]
+      exact ⟨by simpa only [FourQuote.normalInbound] using hpost,
+        Nat.le_of_eq (quote.trans (mintN_offsetN_eq _ _ _).symm),
+        fun _ => quote.trans (mintN_offsetN_eq _ _ _).symm⟩
+  | mint words target depositorNotVault supplyNof rowNof quote effect =>
+      subst vault
+      have hpost := FourQuote.inboundEffect_normal_snapshot depositorNotVault supplyNof rowNof effect
+      simp only [snapshotAt_eq] at hpost quote
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts]
+      refine ⟨by simpa only [FourQuote.normalInbound] using hpost, ?_,
+        fun h => (Bool.false_ne_true h).elim⟩
+      rw [quote]
+      exact minted_le_mintN_of_previewMintN _ _ _
+  | withdrawNormal words target receiverNotVault burnable quote effect =>
+      subst vault
+      have hcovered := FourQuote.outboundEffect_covered effect
+      have hpost := FourQuote.outboundEffect_normal_snapshot receiverNotVault burnable hcovered effect
+      simp only [snapshotAt_eq] at hpost quote burnable
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts, Bool.false_eq_true, ↓reduceIte]
+      refine ⟨burnable, ?_, fun h => h.elim,
+        by simpa only [FourQuote.normalOutbound] using hpost⟩
+      rw [quote]
+      exact paid_le_payN_of_previewWithdrawN _ _ _
+  | redeemNormal words target receiverNotVault burnable quote effect =>
+      subst vault
+      have hcovered := FourQuote.outboundEffect_covered effect
+      have hpost := FourQuote.outboundEffect_normal_snapshot receiverNotVault burnable hcovered effect
+      simp only [snapshotAt_eq] at hpost quote burnable
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts, Bool.false_eq_true, ↓reduceIte]
+      exact ⟨burnable, Nat.le_of_eq (quote.trans (payN_offsetN_eq _ _ _).symm),
+        fun _ => quote.trans (payN_offsetN_eq _ _ _).symm,
+        by simpa only [FourQuote.normalOutbound] using hpost⟩
+  | withdrawSelf words target receiverIsVault burnable quote effect =>
+      subst vault
+      have hpost := FourQuote.outboundEffect_retained_snapshot receiverIsVault burnable effect
+      simp only [snapshotAt_eq] at hpost quote burnable
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts, ↓reduceIte]
+      refine ⟨burnable, ?_, fun h => (Bool.false_ne_true h).elim,
+        by simpa only [FourQuote.retainedOutbound] using hpost⟩
+      rw [quote]
+      exact paid_le_payN_of_previewWithdrawN _ _ _
+  | redeemSelf words target receiverIsVault burnable quote effect =>
+      subst vault
+      have hpost := FourQuote.outboundEffect_retained_snapshot receiverIsVault burnable effect
+      simp only [snapshotAt_eq] at hpost quote burnable
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts, ↓reduceIte]
+      exact ⟨burnable, Nat.le_of_eq (quote.trans (payN_offsetN_eq _ _ _).symm),
+        fun _ => quote.trans (payN_offsetN_eq _ _ _).symm,
+        by simpa only [FourQuote.retainedOutbound] using hpost⟩
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect =>
+      have hpost := FourQuote.externalCredit_snapshot sourceNotVault supplyKept rowNof effect
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.Accounts]
+      simpa only [FourQuote.normalInbound, Nat.add_zero] using hpost
+  | transfer words target owner receiver amount config memoryWf run selectorEq =>
+      have hkeep := Blanc.Prorata.ProrataAccountingEffect.silent_inv
+        (transferEffect_accountingStep config memoryWf run selectorEq)
+      simp only [snapshotAt_eq, target] at hkeep
+      exact hkeep
+  | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
+      have hkeep := Blanc.Prorata.ProrataAccountingEffect.silent_inv
+        (transferFromEffect_accountingStep config memoryWf run selectorEq)
+      simp only [snapshotAt_eq, target] at hkeep
+      exact hkeep
+  | approve words target owner spender amount config memoryWf run selectorEq =>
+      have hkeep := Blanc.Prorata.ProrataAccountingEffect.silent_inv
+        (approveEffect_accountingStep config memoryWf run selectorEq)
+      simp only [snapshotAt_eq, target] at hkeep
+      exact hkeep
+-- arm layout: A:2134–2172 (`FourQuoteOperation.step_exact`); snapshot bridges A:238/306/347/379/663; share-writer
+-- arms: A:2070–2080 (`silent_step_exact`: `silent_inv`, `snapshotAt_eq`, `target`); quote bridges C:240–258.
+
+/-- **The victim's share row moves exactly as the flow says**: G7's coalition equation at `{victim}`. -/
+theorem FourQuote.FourQuoteShareEvidence.victimRow {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    {operation : FourQuote.FourQuoteOperation vault sevm pre post}
+    (evidence : FourQuote.FourQuoteShareEvidence operation)
+    (conserved : LedgerConserved supplySlot (Devm.getStor pre vault)) (victim : Adr) :
+    operation.flow.VictimRow victim (Stor.rest (Devm.getStor pre vault) victim).toNat
+      (Stor.rest (Devm.getStor post vault) victim).toNat := by
+  have hcoal : FourQuote.FourQuoteShareCoalition {victim} operation := by
+    by_cases vaultTarget : sevm.currentTarget = vault
+    · exact evidence.coalition (by rw [vaultTarget]; exact conserved)
+    · cases evidence with
+      | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
+          dsimp only [FourQuote.FourQuoteShareCoalition]
+          rw [vaultKept]
+      | deposit words target => exact absurd target vaultTarget
+      | mint words target => exact absurd target vaultTarget
+      | withdrawNormal words target => exact absurd target vaultTarget
+      | redeemNormal words target => exact absurd target vaultTarget
+      | withdrawSelf words target => exact absurd target vaultTarget
+      | redeemSelf words target => exact absurd target vaultTarget
+      | transfer words target => exact absurd target vaultTarget
+      | transferFrom words target => exact absurd target vaultTarget
+      | approve words target => exact absurd target vaultTarget
+  cases evidence with
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton] at hcoal
+      exact hcoal
+  | deposit words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | mint words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | withdrawNormal words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | redeemNormal words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | withdrawSelf words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | redeemSelf words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | transfer words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | transferFrom words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+  | approve words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
+        Finset.mem_singleton] at hcoal
+      exact hcoal
+-- A:1393–1446 (`FourQuoteShareEvidence.coalition`) at the singleton coalition; the target split is
+-- A:1309–1350's `rw [← target] at conserved` made total, since the credit arm's target is WETH.
+
+/-- **The debited party's row covers the debit.** -/
+theorem FourQuote.FourQuoteShareEvidence.debited_le_row {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    {operation : FourQuote.FourQuoteOperation vault sevm pre post}
+    (evidence : FourQuote.FourQuoteShareEvidence operation) {party : Adr} {amount : Nat}
+    (debited : operation.flow.debited? = some (party, amount)) :
+    amount ≤ (Stor.rest (Devm.getStor pre vault) party).toNat := by
+  have rows := evidence.actual_share_rows_move
+  cases evidence with
+  | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg
+      receiverValid ownerValid covered =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      change words.shares.toNat ≤
+        ((Devm.getStor pre sevm.currentTarget).get words.owner.toAdr.toB256).toNat
+      rw [toB256_toAdr ownerValid]
+      exact covered
+  | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg
+      receiverValid ownerValid covered =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      change words.shares.toNat ≤
+        ((Devm.getStor pre sevm.currentTarget).get words.owner.toAdr.toB256).toNat
+      rw [toB256_toAdr ownerValid]
+      exact covered
+  | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg
+      receiverValid ownerValid covered =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      change words.shares.toNat ≤
+        ((Devm.getStor pre sevm.currentTarget).get words.owner.toAdr.toB256).toNat
+      rw [toB256_toAdr ownerValid]
+      exact covered
+  | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg
+      receiverValid ownerValid covered =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      change words.shares.toNat ≤
+        ((Devm.getStor pre sevm.currentTarget).get words.owner.toAdr.toB256).toNat
+      rw [toB256_toAdr ownerValid]
+      exact covered
+  | transfer words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      simp only [FourQuote.FourQuoteShareRowsMove] at rows
+      exact B256.toNat_le_toNat rows.1
+  | transferFrom words target =>
+      subst vault
+      simp only [FourQuote.FourQuoteOperation.flow, PairFlow.debited?, Option.some.injEq,
+        Prod.mk.injEq] at debited
+      obtain ⟨rfl, rfl⟩ := debited
+      simp only [FourQuote.FourQuoteShareRowsMove] at rows
+      exact B256.toNat_le_toNat rows.1
+  | deposit => simp [FourQuote.FourQuoteOperation.flow, PairFlow.debited?] at debited
+  | mint => simp [FourQuote.FourQuoteOperation.flow, PairFlow.debited?] at debited
+  | credit => simp [FourQuote.FourQuoteOperation.flow, PairFlow.debited?] at debited
+  | approve => simp [FourQuote.FourQuoteOperation.flow, PairFlow.debited?] at debited
+-- outbound arms: A:1170–1180 (private `share_covered_of_nat`, four lines transcribed); share-writer arms: the
+-- `Transfer` relation's first conjunct (Ladder:46) through A:1352 (`actual_share_rows_move`).
+
+/-! ### 5.3 Steps and records -/
+
+theorem PairStep.accounts {vault : Adr} {before after : State} (step : PairStep vault before after)
+    (zero : step.debitAmount = 0) :
+    step.flow.Accounts (FourQuote.stateSnapshot vault before) (FourQuote.stateSnapshot vault after) := by
+  match step, zero with
+  | .operation t _, _ =>
+      simpa only [PairStep.flow, FourQuote.vaultSnapshot_state, t.preState, t.postState] using
+        t.operation.flow_accounts
+  | .authorizedDebit call foreign owner pair moved vaultKept, zero =>
+      show FourQuote.stateSnapshot vault after = FourQuote.stateSnapshot vault before
+      exact PairStep.snapshot_eq_of_fourQuoteStep?_eq_none
+        (step := .authorizedDebit call foreign owner pair moved vaultKept) rfl zero
+  | .silent caller vaultKept rowKept, _ =>
+      show FourQuote.stateSnapshot vault after = FourQuote.stateSnapshot vault before
+      exact PairStep.snapshot_eq_of_fourQuoteStep?_eq_none
+        (step := .silent caller vaultKept rowKept) rfl rfl
+-- U6 §5 (`PairStep.priceLe_of_debitAmount_eq_zero`): same `match step, zero` and operation `simpa only`;
+-- dropped arms: U7 §2 (`snapshot_eq_of_fourQuoteStep?_eq_none`).
+
+theorem PairStep.victimRow {vault : Adr} {before after : State} (step : PairStep vault before after)
+    (conserved : LedgerConserved supplySlot (before.getStor vault)) (victim : Adr) :
+    step.flow.VictimRow victim (Stor.rest (before.getStor vault) victim).toNat
+      (Stor.rest (after.getStor vault) victim).toNat := by
+  match step with
+  | .operation t evidence =>
+      have entry : Devm.getStor t.entry vault = before.getStor vault :=
+        congrArg (fun w : State => w.getStor vault) t.preState
+      have exit : Devm.getStor t.exit vault = after.getStor vault :=
+        congrArg (fun w : State => w.getStor vault) t.postState
+      rw [← entry] at conserved
+      rw [← entry, ← exit]
+      exact evidence.victimRow conserved victim
+  | .authorizedDebit _ _ _ _ _ vaultKept =>
+      show (Stor.rest (after.getStor vault) victim).toNat = (Stor.rest (before.getStor vault) victim).toNat
+      rw [vaultKept]
+  | .silent _ vaultKept _ =>
+      show (Stor.rest (after.getStor vault) victim).toNat = (Stor.rest (before.getStor vault) victim).toNat
+      rw [vaultKept]
+-- U5:88–111 (`PairStep.conserved`), same three arms and the same `entry`/`exit` equations.
+
+theorem PairStep.debited_le_row {vault : Adr} {before after : State} (step : PairStep vault before after)
+    {party : Adr} {amount : Nat} (debited : step.flow.debited? = some (party, amount)) :
+    amount ≤ (Stor.rest (before.getStor vault) party).toNat := by
+  match step, debited with
+  | .operation t evidence, debited =>
+      have entry : Devm.getStor t.entry vault = before.getStor vault :=
+        congrArg (fun w : State => w.getStor vault) t.preState
+      rw [← entry]
+      exact evidence.debited_le_row debited
+  | .authorizedDebit .., debited => simp [PairStep.flow, PairFlow.debited?] at debited
+  | .silent .., debited => simp [PairStep.flow, PairFlow.debited?] at debited
+
+namespace PairStepRecord
+
+variable {vault : Adr}
+
+theorem accounts (r : PairStepRecord vault) (zero : r.step.debitAmount = 0) :
+    r.flow.Accounts r.pre r.post :=
+  r.step.accounts zero
+
+theorem victimRow (r : PairStepRecord vault)
+    (conserved : LedgerConserved supplySlot (r.before.getStor vault)) (victim : Adr) :
+    r.flow.VictimRow victim (r.victimRowBefore victim) (r.victimRowAfter victim) :=
+  r.step.victimRow conserved victim
+
+/-- A debit of a party other than the victim fits beside the victim's row under supply. -/
+theorem debited_add_victimRow_le (r : PairStepRecord vault) {victim party : Adr} {amount : Nat}
+    (conserved : LedgerConserved supplySlot (r.before.getStor vault))
+    (debited : r.flow.debited? = some (party, amount)) (ne : party ≠ victim) :
+    amount + r.victimRowBefore victim ≤ r.pre.supply := by
+  have hle := r.step.debited_le_row debited
+  have hsum := add_le_sum_of_ne (Stor.rest (r.before.getStor vault)) ne
+  have hcons : ((r.before.getStor vault).get supplySlot).toNat = balSum (r.before.getStor vault) :=
+    conserved
+  unfold balSum at hcons
+  show amount + (Stor.rest (r.before.getStor vault) victim).toNat ≤
+    ((r.before.getStor vault).get supplySlot).toNat
+  omega
+-- T:557–564 (`add_le_sum_of_ne` against the ledger identity); `LedgerConserved` LC:27, `balSum` CommonCore:499.
+
+end PairStepRecord
+
+/-! ### 5.4 Realized coalition accounting -/
+
+/-- Cash one record pays into the vault on the non-victim side (T:285). -/
+def stepCredit {vault : Adr} (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  match r.flow with
+  | .inbound payer _ assets _ _ => if payer = victim then 0 else assets
+  | .credit _ amount => amount
+  | _ => 0
+
+/-- Cash one record pays out of the vault to the non-victim side, or on the non-victim side's burn (T:295). -/
+def stepPayout {vault : Adr} (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  match r.flow with
+  | .outbound owner receiver _ assets _ retained =>
+      if retained = true then 0 else if owner = victim ∧ receiver = victim then 0 else assets
+  | _ => 0
+
+/-- D1(a) ceiling price, at the record's own pre-snapshot, of shares the non-victim side takes from the victim. -/
+def stepSharesIn {vault : Adr} (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  match r.flow with
+  | .outbound owner receiver shares _ _ retained =>
+      if owner = victim ∧ (retained = true ∨ receiver ≠ victim) then
+        ceilClaimN offsetN shares r.pre.supply r.pre.balance
+      else 0
+  | .shareMove source receiver amount =>
+      if source = victim ∧ receiver ≠ victim then ceilClaimN offsetN amount r.pre.supply r.pre.balance
+      else 0
+  | _ => 0
+
+/-- D1(a) floor price, at the record's own pre-snapshot, of shares the non-victim side sends the victim. -/
+def stepSharesOut {vault : Adr} (victim : Adr) (r : PairStepRecord vault) : Nat :=
+  match r.flow with
+  | .inbound payer receiver _ shares _ =>
+      if payer ≠ victim ∧ receiver = victim then
+        Blanc.Prorata.claimN offsetN shares r.pre.supply r.pre.balance
+      else 0
+  | .shareMove source receiver amount =>
+      if source ≠ victim ∧ receiver = victim then
+        Blanc.Prorata.claimN offsetN amount r.pre.supply r.pre.balance
+      else 0
+  | _ => 0
+
+def inA {vault : Adr} (victim : Adr) (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    (steps : List (PairStepRecord vault)) : Nat :=
+  (steps.map fun r => (charge r).coalitionAmount (stepCredit victim r)).sum
+
+def outA {vault : Adr} (victim : Adr) (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    (steps : List (PairStepRecord vault)) : Nat :=
+  (steps.map fun r => (charge r).coalitionAmount (stepPayout victim r)).sum
+
+def outsideSubsidy {vault : Adr} (victim : Adr)
+    (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    (steps : List (PairStepRecord vault)) : Nat :=
+  (steps.map fun r => (charge r).outsideAmount (stepCredit victim r)).sum
+
+def sharesIn {vault : Adr} (victim : Adr) (steps : List (PairStepRecord vault)) : Nat :=
+  (steps.map (stepSharesIn victim)).sum
+
+def sharesOut {vault : Adr} (victim : Adr) (steps : List (PairStepRecord vault)) : Nat :=
+  (steps.map (stepSharesOut victim)).sum
+
+def coalitionCharge {vault : Adr} : PairStepRecord vault → Blanc.Prorata.AttackAttribution :=
+  fun _ => .coalition
+
+theorem outsideSubsidy_coalitionCharge {vault : Adr} (victim : Adr)
+    (steps : List (PairStepRecord vault)) : outsideSubsidy victim coalitionCharge steps = 0 := by
+  induction steps with
+  | nil => rfl
+  | cons s ss ih => simp [outsideSubsidy, coalitionCharge, Blanc.Prorata.AttackAttribution.outsideAmount]
+-- T:306–335 verbatim over `PairStepRecord`; the two `_coalitionCharge` `rfl` lemmas (T:339/345) transcribe too.
+
+/-! ### 5.5 The victim schedule -/
+
+def victimMove {vault : Adr} (victim : Adr) (r : PairStepRecord vault) : Bool := r.flow.victimOwn victim
+
+def victimMoves {vault : Adr} (victim : Adr) (steps : List (PairStepRecord vault)) :
+    List (PairStepRecord vault) :=
+  steps.filter (victimMove victim)
+
+theorem mem_of_mem_victimMoves {vault victim : Adr} {r : PairStepRecord vault}
+    {steps : List (PairStepRecord vault)} (mem : r ∈ victimMoves victim steps) : r ∈ steps :=
+  List.mem_of_mem_filter mem
+
+/-- The schedule once the deposit minting `locked` is open: the next victim move, if any, is the exact full redeem
+of `locked` to itself, after which nothing; until then no record takes the victim's row below `locked`. -/
+def VictimOpenAdmits {vault : Adr} (victim : Adr) (locked : Nat) :
+    List (PairStepRecord vault) → Prop
+  | [] => True
+  | r :: rest =>
+      if victimMove victim r then
+        (∃ paid, r.flow = .outbound victim victim locked paid true false) ∧ victimMoves victim rest = []
+      else locked ≤ r.victimRowAfter victim ∧ VictimOpenAdmits victim locked rest
+
+/-- **The SF-frozen victim schedule of the pair** (PRORATA's T:141 plus the lock): exactly one exact deposit the victim
+pays for itself, then at most one exact full redeem of what it minted, to itself; no other victim cash; and while the
+deposit is open, the victim's share row never falls below that deposit's shares.  What non-victims do to the
+victim is unrestricted. -/
+def VictimSchedule {vault : Adr} (victim : Adr) : List (PairStepRecord vault) → Prop
+  | [] => False
+  | r :: rest =>
+      if victimMove victim r then
+        ∃ amount minted, r.flow = .inbound victim victim amount minted true ∧
+          VictimOpenAdmits victim minted rest
+      else VictimSchedule victim rest
+
+/-- What a reached phase still admits (T:153). -/
+def victimAdmits {vault : Adr} {o : Nat} (victim : Adr) :
+    Blanc.Prorata.VictimPhase o → List (PairStepRecord vault) → Prop
+  | .before, steps => VictimSchedule victim steps
+  | .open deposit, steps => VictimOpenAdmits victim deposit.minted steps
+  | .exited _ _, steps => victimMoves victim steps = []
+
+/-- One record under the schedule: not a victim move (and then the lock holds after it while a deposit is open), the
+victim's deposit, or the victim's exit (T:176/216/254 in one lemma). -/
+theorem victimAdmits_cons {vault victim : Adr} {o : Nat} {phase : Blanc.Prorata.VictimPhase o}
+    {r : PairStepRecord vault} {rest : List (PairStepRecord vault)}
+    (h : victimAdmits victim phase (r :: rest)) :
+    (victimMove victim r = false ∧ victimAdmits victim phase rest ∧
+        ∀ deposit, phase = .open deposit → deposit.minted ≤ r.victimRowAfter victim) ∨
+      (phase = .before ∧ ∃ amount minted,
+        r.flow = .inbound victim victim amount minted true ∧ VictimOpenAdmits victim minted rest) ∨
+      (∃ deposit paid, phase = .open deposit ∧
+        r.flow = .outbound victim victim deposit.minted paid true false ∧
+          victimMoves victim rest = []) := by
+  cases phase with
+  | before =>
+      cases hm : victimMove victim r
+      · simp only [victimAdmits, VictimSchedule, hm, Bool.false_eq_true, ↓reduceIte] at h
+        exact .inl ⟨rfl, h, fun _ hp => by cases hp⟩
+      · simp only [victimAdmits, VictimSchedule, hm, ↓reduceIte] at h
+        exact .inr (.inl ⟨rfl, h⟩)
+  | «open» deposit =>
+      cases hm : victimMove victim r
+      · simp only [victimAdmits, VictimOpenAdmits, hm, Bool.false_eq_true, ↓reduceIte] at h
+        exact .inl ⟨rfl, h.2, fun _ hp => by cases hp; exact h.1⟩
+      · simp only [victimAdmits, VictimOpenAdmits, hm, ↓reduceIte] at h
+        obtain ⟨⟨paid, hflow⟩, hnone⟩ := h
+        exact .inr (.inr ⟨deposit, paid, rfl, hflow, hnone⟩)
+  | exited deposit exit =>
+      cases hm : victimMove victim r
+      · simp only [victimAdmits, victimMoves, List.filter_cons, hm, Bool.false_eq_true,
+          ↓reduceIte] at h
+        exact .inl ⟨rfl, h, fun _ hp => by cases hp⟩
+      · simp [victimAdmits, victimMoves, List.filter_cons, hm] at h
+
+/-- **Parity with PRORATA's schedule.**  The pair schedule has PRORATA's move-list shape (T:141). -/
+theorem VictimOpenAdmits.moves {vault victim : Adr} {locked : Nat} :
+    ∀ {steps : List (PairStepRecord vault)}, VictimOpenAdmits victim locked steps →
+      victimMoves victim steps = [] ∨
+        ∃ exit paid, exit.flow = .outbound victim victim locked paid true false ∧
+          victimMoves victim steps = [exit]
+  | [], _ => .inl rfl
+  | r :: rest, h => by
+      cases hm : victimMove victim r
+      · simp only [VictimOpenAdmits, hm, Bool.false_eq_true, ↓reduceIte] at h
+        simpa only [victimMoves, List.filter_cons, hm, Bool.false_eq_true, ↓reduceIte] using
+          VictimOpenAdmits.moves h.2
+      · simp only [VictimOpenAdmits, hm, ↓reduceIte] at h
+        obtain ⟨⟨paid, hflow⟩, hnone⟩ := h
+        refine .inr ⟨r, paid, hflow, ?_⟩
+        simp only [victimMoves] at hnone
+        simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hnone]
+
+theorem VictimSchedule.moves {vault victim : Adr} :
+    ∀ {steps : List (PairStepRecord vault)}, VictimSchedule victim steps →
+      ∃ (deposit : PairStepRecord vault) (amount minted : Nat),
+        deposit.flow = .inbound victim victim amount minted true ∧
+          (victimMoves victim steps = [deposit] ∨
+            ∃ (exit : PairStepRecord vault) (paid : Nat),
+              exit.flow = .outbound victim victim minted paid true false ∧
+                victimMoves victim steps = [deposit, exit])
+  | [], h => h.elim
+  | r :: rest, h => by
+      cases hm : victimMove victim r
+      · simp only [VictimSchedule, hm, Bool.false_eq_true, ↓reduceIte] at h
+        simpa only [victimMoves, List.filter_cons, hm, Bool.false_eq_true, ↓reduceIte] using
+          VictimSchedule.moves h
+      · simp only [VictimSchedule, hm, ↓reduceIte] at h
+        obtain ⟨amount, minted, hflow, hopen⟩ := h
+        refine ⟨r, amount, minted, hflow, ?_⟩
+        rcases VictimOpenAdmits.moves hopen with hnone | ⟨exit, paid, hexit, hone⟩
+        · left
+          simp only [victimMoves] at hnone
+          simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hnone]
+        · right
+          refine ⟨exit, paid, hexit, ?_⟩
+          simp only [victimMoves] at hone
+          simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hone]
+
+/-! ### 5.6 Two model facts the adapter needs -/
+
+/-- The genesis price anchor holds along every pair path. -/
+theorem PairAttackPath.priceLe_genesis {o : Nat} (ho : 2 ≤ o) {state : PairAttackState o}
+    (path : PairAttackPath o state) : Blanc.Prorata.PriceLe o ⟨0, 0⟩ state.accounting := by
+  induction path with
+  | genesis => exact Blanc.Prorata.PriceLe.refl o _
+  | snoc step path ih =>
+      have hinv := path.invariant ho
+      exact Blanc.Prorata.PriceLe.trans (by omega) ih
+        (step.effect.priceLe (by omega) hinv.1 hinv.2.2.1)
+-- C:914–918 (`invariant`'s induction) with C:546 (`PairAttackEffect.priceLe`); T:639–642's `PriceLe.trans` step.
+
+/-- A victim-row debit that respects the lock is a gift. -/
+theorem PairAttackState.le_giftShares_of_lock {o : Nat} {state : PairAttackState o} {shares row : Nat}
+    (hrow : row + shares = state.victimShares)
+    (hlock : ∀ deposit, state.phase = .open deposit → deposit.minted ≤ row) :
+    shares ≤ state.giftShares := by
+  unfold PairAttackState.giftShares PairAttackState.lockedShares
+  cases hp : state.phase with
+  | before => dsimp only; omega
+  | «open» deposit =>
+      have := hlock deposit hp
+      dsimp only
+      omega
+  | exited deposit exit => dsimp only; omega
+-- C:472–481 (`lockedShares_le`'s phase split).
+
 
 end Blanc.Composition.ProrataWethVault
