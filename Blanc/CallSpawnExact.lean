@@ -230,3 +230,5 @@ theorem Ninst.step_call_spawn_exact
       · rw [h_cd] at hf
         exact hf.symm
       · exact hr.symm
+
+end Blanc
