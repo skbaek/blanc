@@ -1760,13 +1760,22 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
         if len(matches) != 1:
             problems.append(f"{len(matches)} lines match /{pattern}/, expected exactly 1")
         summary.extend(matches)
-    return {
+    verdict = {
         "exit": result.returncode,
         "summary": summary,
         "problems": problems,
         "output_digest": sha256_bytes(output.encode("utf-8", "replace")),
         "passed": not problems,
     }
+    if problems:
+        # Failed output is diagnostic evidence only: failed rows are never
+        # cached, and retaining a bounded tail keeps the checkpoint useful
+        # without allowing a noisy gate to make the report unbounded.
+        verdict["output_tail"] = {
+            name: "".join(value.splitlines(keepends=True)[-200:])[-64 * 1024:]
+            for name, value in (("stdout", result.stdout), ("stderr", result.stderr))
+        }
+    return verdict
 
 
 def execute(root: Path, gate: dict[str, Any], echo: bool) -> tuple[dict[str, Any], float]:
@@ -2100,6 +2109,21 @@ def write_report(
             f"| {row['order']} | `{command_text(row['gate'])}` | {disposition} | "
             f"{escaped} | {source} |"
         )
+        output_tail = verdict.get("output_tail")
+        if not verdict.get("passed", True) and isinstance(output_tail, dict):
+            lines += [
+                "",
+                f"  Failure output for `{command_text(row['gate'])}` "
+                "(last 200 lines, each stream capped at 64 KiB):",
+                "",
+            ]
+            for stream in ("stdout", "stderr"):
+                lines.append(f"  {stream} tail:")
+                text = output_tail.get(stream, "")
+                if text:
+                    lines.extend(f"    {line}" for line in text.splitlines())
+                else:
+                    lines.append("    (empty)")
         manifest_rows.append(
             {
                 "order": row["order"],
@@ -2238,6 +2262,44 @@ def audit(root: Path, quiet: bool = False) -> int:
             problems.append(f"registry entry is not in the catalogue: {' '.join(command)}")
     for command in sorted(set(ci) - set(registered)):
         problems.append(f"CI runs an unregistered command: {' '.join(command)}")
+
+    # A plan already uses these shared resolvers to fingerprint named-root
+    # files and population roots.  Audit only adds the registry-level finding
+    # that a present, pinned external checkout must not silently tolerate a
+    # declaration whose named path is absent.  An absent, dirty, or unpinned
+    # checkout remains a host-capability condition and is deliberately left to
+    # the plan's existing unresolvable-input behaviour.
+    for gate in registry["gates"]:
+        inputs = gate.get("inputs", {})
+        external = inputs.get("external", [])
+        for spec in external:
+            identifier = spec.get("id") if isinstance(spec, dict) else None
+            if not isinstance(identifier, str):
+                continue
+            declared: list[tuple[str, str]] = []
+            for given in inputs.get("files", []):
+                if isinstance(given, str) and given.startswith(f"@{identifier}/"):
+                    declared.append(("file", given))
+            for population in inputs.get("populations", []):
+                if not isinstance(population, dict):
+                    continue
+                given = population.get("root")
+                if isinstance(given, str) and given.startswith(f"@{identifier}/"):
+                    declared.append(("population root", given))
+            if not declared:
+                continue
+            try:
+                component_external(root, [spec])
+            except Unresolvable:
+                continue
+            for kind, given in declared:
+                path = resolve_path(root, given)
+                present = path.is_file() if kind == "file" else path.is_dir()
+                if not present:
+                    problems.append(
+                        f"{command_text(gate)} declares an unresolvable named-root "
+                        f"{kind} {given} ({path})"
+                    )
 
     inventory = root / INVENTORY_RELATIVE
     current = inventory.read_text(encoding="utf-8") if inventory.is_file() else None
