@@ -112,17 +112,18 @@ theorem Exec.Deriv.ParentStep.exists_of_jinstAt_ok
 
 /-! ## Forward cursor duals -/
 
-/-- Forward dual of `mainToward`: a successful exact compiled root crosses the
-compiler's leading `JUMPDEST` into the main body. -/
+/-- Forward dual of `mainToward`: a successful compiled root at the entry
+counter crosses the compiler's leading `JUMPDEST` into the main body. Only the
+entry counter and the compiled bytes are consumed, so no storage-target or
+code-address identity is demanded. -/
 theorem Exec.Deriv.SourceCursor.mainForward
-    {root : Exec.Deriv} {program : Prog}
-    {storageTarget codeAddress : Adr} {post : Devm}
-    (invocation : root.exactInvocation program storageTarget codeAddress)
+    {root : Exec.Deriv} {program : Prog} {post : Devm}
+    (hpc : root.pc = 0)
+    (hcode : some root.sevm.code.toList = program.compile)
     (ok : root.exn = .ok post) :
     ∃ cursor : Exec.Deriv.SourceCursor root program ⟨0, []⟩ program.main,
       Exec.Deriv.ParentPrefix root cursor.node ∧
       Devm.Burn root.devm cursor.pre := by
-  rcases invocation with ⟨hpc, -, -, hcode⟩
   have hget :
       (table 0 (program.main :: program.aux))[0]? =
         some (0, program.main) := rfl
@@ -145,6 +146,20 @@ theorem Exec.Deriv.SourceCursor.mainForward
       refine ⟨0, by simp, ?_⟩
       simpa only [hget] using member⟩, parentPrefix, burn⟩
 
+/-- The source instruction under a `.next` cursor decodes at the cursor's
+counter in the executing code. -/
+theorem Exec.Deriv.SourceCursor.ninstAt
+    {root : Exec.Deriv} {program : Prog} {path : Prog.SourcePath}
+    {instruction : Ninst} {tail : Func}
+    (cursor : Exec.Deriv.SourceCursor root program path
+      (.next instruction tail)) :
+    Ninst.At root.sevm.code cursor.pc instruction :=
+  Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
+    (functionIndex := path.functionIndex) (steps := path.steps)
+    (site := { path := path, pc := cursor.pc, instruction := instruction })
+    (by rcases path with ⟨functionIndex, steps⟩
+        simp [Func.sourceSites])
+
 /-- Forward dual of `nextOfParentStep`: a successful frame crosses the current
 source instruction, and the crossing is the exact `Ninst.Run`. -/
 theorem Exec.Deriv.SourceCursor.nextForward
@@ -157,14 +172,8 @@ theorem Exec.Deriv.SourceCursor.nextForward
         ⟨path.functionIndex, path.steps ++ [.rest]⟩ tail,
       Exec.Deriv.ParentStep tailCursor.node cursor.node ∧
       Ninst.Run root.sevm cursor.pre instruction tailCursor.pre := by
-  have sourceAt : Ninst.At root.sevm.code cursor.pc instruction :=
-    Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
-      (functionIndex := path.functionIndex) (steps := path.steps)
-      (site := { path := path, pc := cursor.pc, instruction := instruction })
-      (by rcases path with ⟨functionIndex, steps⟩
-          simp [Func.sourceSites])
   rcases Exec.Deriv.ParentStep.exists_of_ninstAt_ok
-      (start := cursor.node) ok sourceAt with ⟨nextNode, edge⟩
+      (start := cursor.node) ok cursor.ninstAt with ⟨nextNode, edge⟩
   rcases cursor.nextOfParentStep edge with ⟨tailCursor, nodeEq⟩
   rw [← nodeEq] at edge
   exact ⟨tailCursor, edge, cursor.ninstRun_of_nextEdge edge⟩
