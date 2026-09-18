@@ -3227,6 +3227,41 @@ def control_report_and_manifest_are_self_contained() -> None:
                 "and must name when that evidence was produced")
 
 
+def control_failed_row_report_keeps_output() -> None:
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        passing = s.passing_gate("pass.sh", "pass.txt")
+        failing = s.gate(
+            "fail.sh",
+            "#!/bin/sh\n"
+            "echo known stdout\n"
+            "echo known stderr >&2\n"
+            "exit 1\n",
+        )
+        s.registry([
+            simple_gate("pass", [passing], {"files": ["scripts/x.txt"]},
+                        "^OK — pass.sh: ", order=1),
+            simple_gate("fail", [failing], {"files": ["scripts/x.txt"]},
+                        "^OK — fail.sh: ", order=2),
+        ])
+        require(s.run() != 0, "the failing fixture row must redden the run")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        passing_rows = [line for line in report.splitlines() if line.startswith("| 1 |")]
+        require(
+            passing_rows == [
+                "| 1 | `scripts/pass.sh` | executed now | OK — pass.sh: 1/1 fine | "
+                "executed now |"
+            ],
+            f"the passing row's report entry changed: {passing_rows}",
+        )
+        require("Failure output for `scripts/fail.sh`" in report,
+                "the failed row must label its retained output")
+        require("stdout tail:" in report and "known stdout" in report,
+                "the failed row must retain stdout")
+        require("stderr tail:" in report and "known stderr" in report,
+                "the failed row must retain stderr")
+
+
 # --- controls: the population audit ------------------------------------------
 
 
@@ -3311,6 +3346,40 @@ def control_audit_needs_a_catalogue_block() -> None:
         except gc.GateCacheError:
             return
         raise ControlFailure("a catalogue with no ordered block must be a fault")
+
+
+def control_audit_resolves_present_named_root_inputs() -> None:
+    with scratch() as s, scratch() as external:
+        (external.root / "venv/bin").mkdir(parents=True)
+        (external.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
+        external.git_init()
+        pin = external.git("rev-parse", "HEAD")
+        expected_pin = gc.LEGACY_EELS_PIN
+        gc.LEGACY_EELS_PIN = pin
+        try:
+            with environment({"EELS_ROOT": str(external.root)}):
+                command = ["scripts/check-a.sh"]
+                for declared in ("@eels/.venv/bin/python", "@eels/venv/bin/python"):
+                    gate = audit_gate("a", command, 1)
+                    gate["inputs"] = {
+                        "external": [{
+                            "id": "eels",
+                            "path": "~/execution-specs",
+                            "path_env": "EELS_ROOT",
+                            "pin": pin,
+                        }],
+                        "env": ["EELS_ROOT"],
+                        "files": [declared],
+                    }
+                    code = audit_scratch(s, command, [gate], [])
+                    if declared.startswith("@eels/.venv/"):
+                        require(code != 0, "a missing named-root file must fail audit")
+                        require("scripts/check-a.sh" in s.output and declared in s.output,
+                                f"audit did not name the row and path:\n{s.output}")
+                    else:
+                        require(code == 0, f"a resolvable named-root file must pass audit:\n{s.output}")
+        finally:
+            gc.LEGACY_EELS_PIN = expected_pin
 
 
 # --- controls: findings from adversarial review ------------------------------
@@ -3995,10 +4064,12 @@ CONTROLS = (
     control_fresh_mode_adds_work_and_refreshes,
     control_always_fresh_rows_never_reuse,
     control_report_and_manifest_are_self_contained,
+    control_failed_row_report_keeps_output,
     control_audit_accepts_a_reconciled_registry,
     control_audit_fails_on_catalogue_drift,
     control_audit_fails_on_a_stale_generated_inventory,
     control_audit_needs_a_catalogue_block,
+    control_audit_resolves_present_named_root_inputs,
     control_every_import_spelling_is_parsed_or_refused,
     control_run_refuses_a_registry_that_lost_a_gate,
     control_named_root_follows_its_override,
