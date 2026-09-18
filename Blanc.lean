@@ -332,6 +332,7 @@ import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultPair
 import Blanc.Composition.ProrataWethVaultRely
 import Blanc.Composition.ProrataWethVaultEnvironment
+import Blanc.Composition.ProrataWethVaultHistory
 
 import Blanc.Drip
 import Blanc.DripAccounting
