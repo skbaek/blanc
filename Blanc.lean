@@ -342,6 +342,10 @@ import Blanc.Composition.ProrataWethVaultPairVaultSegment
 import Blanc.Composition.ProrataWethVaultWithdrawPayout
 import Blanc.Composition.ProrataWethVaultPairReplay
 import Blanc.Composition.ProrataWethVaultPairLadder
+import Blanc.Composition.ProrataWethVaultPairHistory
+import Blanc.Composition.ProrataWethVaultAccountingHistory
+import Blanc.Composition.ProrataWethVaultCoalitionHistory
+import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
 
 import Blanc.Drip
 import Blanc.DripAccounting
