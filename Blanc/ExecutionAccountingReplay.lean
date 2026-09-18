@@ -11,10 +11,14 @@
 -- credit or nothing at all.
 --
 -- Those are laws of settlement, not of any ledger, so they are owned here once,
--- over a `ReplayCarrier`: an abstract snapshot type, an abstract step type, an
--- abstract replay relation, and exactly the five laws the seams below consume.
--- A contract supplies the carrier and gets the seams back at its own
--- vocabulary; nothing here names a contract, and nothing here needs to.
+-- over a `SettlementCarrier`: an abstract snapshot type, an abstract step type,
+-- an abstract replay relation, and exactly the three laws the seams below
+-- consume.  Its silence law is stated over the whole world, because that is all
+-- a settlement seam ever knows, so a boundary may read any number of accounts.
+-- `ReplayCarrier` extends it with the two account-local laws behind the
+-- storage-fixed balance-monotone classifier.  A contract supplies the carrier
+-- and gets the seams back at its own vocabulary; nothing here names a contract,
+-- and nothing here needs to.
 
 import Blanc.ExecutionOccurrence
 
@@ -24,7 +28,8 @@ open Jaune
 
 namespace ExecutionAccountingReplay
 
-/-- The account-local replay interpretation the seams below are generic over.
+/-- The settlement-facing part of a replay interpretation: everything the three
+seams below consume, and nothing else.
 
 `Snap` is whatever boundary the contract prices with, `Step` whatever it
 records, and `Replay` its own connected-path relation; the seams never inspect
@@ -33,26 +38,27 @@ any of the three.  `ofState` is the boundary of an ordinary world state and
 a message's value credit and therefore need not be any world state's boundary —
 that is the whole reason the two are separate functions.
 
-The five laws are exactly what the seams use, no more:
+The three laws are exactly what the seams use, no more:
 
 * `nil` — a boundary replays to itself with no step;
-* `silent` — a transition that fixes this account's storage and balance moves no
-  boundary, which is how CREATE preparation and foreign instruction prefixes
-  leave no trace;
-* `credit` — a storage-fixed strictly increasing balance is some replay, which
-  is the only place a step is ever produced;
+* `worldSilent` — a transition that fixes **every** account's storage and
+  balance moves no boundary.  This is all the seams ever know at their three
+  silent sites (CREATE fresh-account preparation, clean code deposit, and the
+  prepared CREATE world): each holds the two whole-world function equalities
+  and nothing account-local.  Stating the law at that strength is what lets a
+  boundary read more than one account — a pair boundary over two storages is
+  an instance, where a law keyed to `ca` alone would be false for it;
 * `entry_eq_ofState` — a successful message transfer connects the entered
   frame's boundary to the ordinary boundary of the pre-transfer world.
 
-`Tag` is whatever provenance a credit step must record.  A carrier that records
-none sets it to `Unit`. -/
-structure ReplayCarrier (ca : Adr) where
+`ca` is the account the seams call *foreign* frames foreign to: it appears only
+in the two value-transfer side conditions of `entry_eq_ofState`.  A carrier
+whose boundary ignores balances discharges that law without reading them. -/
+structure SettlementCarrier (ca : Adr) where
   /-- The contract's own boundary type. -/
   Snap : Type
   /-- The contract's own accounting step type. -/
   Step : Type
-  /-- Provenance a produced credit step must carry. -/
-  Tag : Type
   /-- The contract's own connected replay relation. -/
   Replay : Snap → List Step → Snap → Prop
   /-- The boundary of an ordinary world state. -/
@@ -61,6 +67,38 @@ structure ReplayCarrier (ca : Adr) where
   frameEntry : Sevm → State → Snap
   /-- A boundary replays to itself with no step. -/
   nil : ∀ boundary : Snap, Replay boundary [] boundary
+  /-- A transition that moves no account's storage or balance moves no
+  boundary. -/
+  worldSilent : ∀ {pre post : State},
+    post.getStor = pre.getStor →
+    post.bal = pre.bal →
+    ofState post = ofState pre
+  /-- A successful message transfer connects the entered frame's boundary to
+  the ordinary boundary of the world the message opened on. -/
+  entry_eq_ofState : ∀ {msg : Msg} {entry : Benv},
+    (msg.shouldTransferValue = true → msg.caller ≠ ca) →
+    (msg.shouldTransferValue = false → msg.currentTarget = ca → msg.value = 0) →
+    msg.benvAfterTransfer = .ok entry →
+    sum msg.benv.state.bal < 2 ^ 256 →
+    frameEntry (initSevm (msg.withBenv entry)) entry.state =
+      ofState msg.benv.state
+
+/-- The account-local replay interpretation: a `SettlementCarrier` whose
+boundary reads the single account `ca`, together with the one law that
+produces a step.
+
+* `silent` — a transition that fixes this account's storage and balance moves
+  no boundary, which is how a foreign instruction prefix leaves no trace.  It
+  implies the parent's `worldSilent`, which is therefore defaulted and never
+  supplied by an instance;
+* `credit` — a storage-fixed strictly increasing balance is some replay, which
+  is the only place a step is ever produced.
+
+`Tag` is whatever provenance a credit step must record.  A carrier that records
+none sets it to `Unit`. -/
+structure ReplayCarrier (ca : Adr) extends SettlementCarrier ca where
+  /-- Provenance a produced credit step must carry. -/
+  Tag : Type
   /-- A transition invisible to this account moves no boundary. -/
   silent : ∀ {pre post : State},
     post.getStor ca = pre.getStor ca →
@@ -72,56 +110,24 @@ structure ReplayCarrier (ca : Adr) where
     (post.bal ca).toNat = (pre.bal ca).toNat + amount →
     0 < amount →
     ∃ steps, Replay (ofState pre) steps (ofState post)
-  /-- A successful message transfer connects the entered frame's boundary to
-  the ordinary boundary of the world the message opened on. -/
-  entry_eq_ofState : ∀ {msg : Msg} {entry : Benv},
-    (msg.shouldTransferValue = true → msg.caller ≠ ca) →
-    (msg.shouldTransferValue = false → msg.currentTarget = ca → msg.value = 0) →
-    msg.benvAfterTransfer = .ok entry →
-    sum msg.benv.state.bal < 2 ^ 256 →
-    frameEntry (initSevm (msg.withBenv entry)) entry.state =
-      ofState msg.benv.state
+  worldSilent := fun storage_eq balance_eq =>
+    silent (congrFun storage_eq ca)
+      (congrArg B256.toNat (congrFun balance_eq ca))
 
-namespace ReplayCarrier
+namespace SettlementCarrier
 
 variable {ca : Adr}
 
 /-- Equal boundaries contribute no step. -/
-theorem nilOfEq (C : ReplayCarrier ca) {pre post : C.Snap} (eq : post = pre) :
+theorem nilOfEq (C : SettlementCarrier ca) {pre post : C.Snap} (eq : post = pre) :
     C.Replay pre [] post := by
   rw [eq]
   exact C.nil pre
 
-/-- A transition invisible to this account contributes no step. -/
-theorem silentReplay (C : ReplayCarrier ca) {pre post : State}
-    (storage_eq : post.getStor ca = pre.getStor ca)
-    (balance_eq : (post.bal ca).toNat = (pre.bal ca).toNat) :
-    C.Replay (C.ofState pre) [] (C.ofState post) :=
-  C.nilOfEq (C.silent storage_eq balance_eq)
-
-/-- Any projected transition that fixes this account's storage and cannot lower
-its balance is either one positive credit or no step at all.  This endpoint
-lemma lets a foreign-opcode proof expose only its two relevant facts instead of
-restating the four-way classifier. -/
-theorem ofStorageEqBalanceMono (C : ReplayCarrier ca) (tag : C.Tag)
-    {pre post : State}
-    (storage_eq : post.getStor ca = pre.getStor ca)
-    (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
-    ∃ steps, C.Replay (C.ofState pre) steps (C.ofState post) := by
-  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
-  have balance_eq :
-      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
-    dsimp only [amount]
-    omega
-  by_cases positive : 0 < amount
-  · exact C.credit tag storage_eq balance_eq positive
-  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
-    exact ⟨[], C.silentReplay storage_eq (by omega)⟩
-
 /-- Settlement-aware accounting replay for one retained CALL message.  A
 committing child contributes its recursively proved body; a noncommitting child
 rolls back to the message's pre-transfer world and contributes nothing. -/
-theorem processMessage_of_body (C : ReplayCarrier ca)
+theorem processMessage_of_body (C : SettlementCarrier ca)
     {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (process : ProcessMessage msg
@@ -174,7 +180,7 @@ theorem processMessage_of_body (C : ReplayCarrier ca)
 Fresh-account preparation is silent in any account-local projection; clean code
 deposit preserves the constructor endpoint, while every failed settlement rolls
 back to the outer CREATE-message world. -/
-theorem processCreateMessage_of_body (C : ReplayCarrier ca)
+theorem processCreateMessage_of_body (C : SettlementCarrier ca)
     {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (process : ProcessCreateMessage msg
@@ -212,12 +218,10 @@ theorem processCreateMessage_of_body (C : ReplayCarrier ca)
     have preparedSnapshot :
         C.ofState (processCreateMessage.msg msg).benv.state =
           C.ofState msg.benv.state :=
-      C.silent (congrFun preparedStor ca)
-        (congrArg B256.toNat (congrFun preparedBalance ca))
+      C.worldSilent preparedStor preparedBalance
     have postSnapshot :
         C.ofState post.state = C.ofState inner.state :=
-      C.silent (congrFun postStor ca)
-        (congrArg B256.toNat (congrFun postBalance ca))
+      C.worldSilent postStor postBalance
     have innerSum :
         sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
       rw [preparedBalance]
@@ -244,7 +248,7 @@ theorem processCreateMessage_of_body (C : ReplayCarrier ca)
 /-- Recursive accounting transport for one actual filled executable slot in a
 foreign frame.  CALL and CREATE share the same settlement-aware child replay;
 their distinct instruction prefixes and resumptions are projection-silent. -/
-theorem xinstForeignSome (C : ReplayCarrier ca)
+theorem xinstForeignSome (C : SettlementCarrier ca)
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
     {frame : Frame} {resume : Resume}
     {cevm : Evm} {raw : Execution} {settled : Devm}
@@ -286,8 +290,7 @@ theorem xinstForeignSome (C : ReplayCarrier ca)
       simpa only [createPre] using genericCreate_prepared_bal sevm d newAddress
     have preparedSnapshot :
         C.ofState createPre.state = C.ofState d.state :=
-      C.silent (congrFun preparedStor ca)
-        (congrArg B256.toNat (congrFun preparedBalance ca))
+      C.worldSilent preparedStor preparedBalance
     have targetEmpty : Devm.getStor d newAddress = .empty :=
       genericCreate_step_spawn_getStor_empty spawn
     have fresh : msg.benv.state.getStor msg.currentTarget = .empty := by
@@ -348,6 +351,103 @@ theorem xinstForeignSome (C : ReplayCarrier ca)
     refine ⟨steps, ?_⟩
     rw [hprefix.state, postState]
     exact replay
+
+end SettlementCarrier
+
+namespace ReplayCarrier
+
+variable {ca : Adr}
+
+/-! The seams restated at an account-local carrier.  They are the parent
+`SettlementCarrier` seams verbatim; they keep their names here because
+consumers and the axiom audit cite them at `ReplayCarrier`. -/
+
+/-- Equal boundaries contribute no step. -/
+theorem nilOfEq (C : ReplayCarrier ca) {pre post : C.Snap} (eq : post = pre) :
+    C.Replay pre [] post :=
+  C.toSettlementCarrier.nilOfEq eq
+
+/-- `SettlementCarrier.processMessage_of_body` at an account-local carrier. -/
+theorem processMessage_of_body (C : ReplayCarrier ca)
+    {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (value_zero : msg.shouldTransferValue = false →
+      msg.currentTarget = ca → msg.value = 0)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits out = true, ∃ steps,
+      C.Replay (C.frameEntry sevm pre.state) steps
+        (C.ofState (Execution.committedPost out committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) :=
+  C.toSettlementCarrier.processMessage_of_body process caller_ne value_zero
+    sum_nof body
+
+/-- `SettlementCarrier.processCreateMessage_of_body` at an account-local
+carrier. -/
+theorem processCreateMessage_of_body (C : ReplayCarrier ca)
+    {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (process : ProcessCreateMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (value_zero : msg.shouldTransferValue = false →
+      msg.currentTarget = ca → msg.value = 0)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits out = true, ∃ steps,
+      C.Replay (C.frameEntry sevm pre.state) steps
+        (C.ofState (Execution.committedPost out committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) :=
+  C.toSettlementCarrier.processCreateMessage_of_body process caller_ne
+    value_zero fresh sum_nof body
+
+/-- `SettlementCarrier.xinstForeignSome` at an account-local carrier. -/
+theorem xinstForeignSome (C : ReplayCarrier ca)
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    {cevm : Evm} {raw : Execution} {settled : Devm}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
+    (resumeRun : resume.run (.ok settled) = .ok post)
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits raw = true, ∃ steps,
+      C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
+        (C.ofState (Execution.committedPost raw committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState pre.state) steps (C.ofState post.state) :=
+  C.toSettlementCarrier.xinstForeignSome spawn frameRun resumeRun target_ne
+    sum_nof body
+
+/-- A transition invisible to this account contributes no step. -/
+theorem silentReplay (C : ReplayCarrier ca) {pre post : State}
+    (storage_eq : post.getStor ca = pre.getStor ca)
+    (balance_eq : (post.bal ca).toNat = (pre.bal ca).toNat) :
+    C.Replay (C.ofState pre) [] (C.ofState post) :=
+  C.nilOfEq (C.silent storage_eq balance_eq)
+
+/-- Any projected transition that fixes this account's storage and cannot lower
+its balance is either one positive credit or no step at all.  This endpoint
+lemma lets a foreign-opcode proof expose only its two relevant facts instead of
+restating the four-way classifier. -/
+theorem ofStorageEqBalanceMono (C : ReplayCarrier ca) (tag : C.Tag)
+    {pre post : State}
+    (storage_eq : post.getStor ca = pre.getStor ca)
+    (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
+    ∃ steps, C.Replay (C.ofState pre) steps (C.ofState post) := by
+  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
+  have balance_eq :
+      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
+    dsimp only [amount]
+    omega
+  by_cases positive : 0 < amount
+  · exact C.credit tag storage_eq balance_eq positive
+  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
+    exact ⟨[], C.silentReplay storage_eq (by omega)⟩
 
 end ReplayCarrier
 
