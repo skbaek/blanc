@@ -148,6 +148,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
            "ExecutionAccountingReplay",
+           "ExecutionAccountingLadder", "CallSpawnExact",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram"]
 
@@ -211,7 +212,8 @@ CONTRACTS = {
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate",
              "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
-             "DripRealizedExec", "DripExitPreCallbackLocator"],
+             "DripRealizedExec", "DripExitPreCallbackLocator",
+             "DripRealizedLadder", "DripTraceRealizes", "DripConcreteRealized"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

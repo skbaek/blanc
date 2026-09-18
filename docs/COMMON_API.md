@@ -317,6 +317,20 @@ spawn/resume equations at the consumer:
   memory/stack projections). The compat projections `of_run_call_val_with_depth`
   and `of_run_call_val` drop the step/logs/output and then the depth fact for
   consumers that do not need them.
+- `Ninst.step_call_spawn_exact` in
+  [`Blanc/CallSpawnExact.lean`](../Blanc/CallSpawnExact.lean): the same exact
+  CALL frame one level lower, when the proof holds only the step equation
+  `Ninst.step ⟨pc, sevm, s⟩ Ninst.call = .spawn f rsm pc'` and the 7-operand
+  stack (`g :: c :: v :: ii :: is :: oi :: os :: rest`), not an `Ninst.Run`.
+  It returns the parent `Devm` (stack, state and memory extension over the
+  input and output windows), `0 < depth`, both delegation-resolution arms,
+  `f = Frame.ofCall (callMsg …)` with the EIP-150/stipend gas term, and
+  `rsm = .call parent oi.toNat os.toNat`.  It says nothing about the child's
+  outcome or the resumed parent; take those from the retained slot.  Worked
+  use: `Blanc/DripExitPreCallbackLocator.lean` lifts DRIP's payout CALL to a
+  body-frame occurrence by case-splitting `Ninst.step` on the accepted node and
+  feeding the `.spawn` arm here.  Import `Blanc.CallSpawnExact` (it imports
+  only `Blanc.Ladder`).
 - `of_run_staticcall_val_with_depth_cause`: the 6-operand
   (`g :: t :: ii :: is :: oi :: os :: xs`) STATICCALL analogue over
   `Ninst.staticcall`, whose failed arm additionally carries a
@@ -1816,6 +1830,56 @@ rather than restating them:
 the worked ledger-shaped example.  This module classifies no transition as a
 deposit, withdrawal or attack step, and produces no step of its own beyond what
 `credit` hands it; keep that interpretation in the contract-owned layer.
+
+### T2c. I need that ledger replay on every wrapper up to a whole configured history
+
+Once a contract has a `ReplayCarrier` (T2b) and the replay of one committed
+message root, the rest of the wrapper ladder is not about its ledger.  Use
+[`Blanc/ExecutionAccountingLadder.lean`](../Blanc/ExecutionAccountingLadder.lean)
+rather than climbing it again:
+
+- `ExecutionAccountingReplay.AccountingLadder S ca` is the whole contract
+  obligation, five fields: `carrier` (a `ReplayCarrier ca`), `append` (replays
+  compose at a shared boundary), `tag` (the provenance a ladder-produced credit
+  step carries, from block and transaction position), `root` (a committed
+  retained execution at `initEvm` of a run-ready, non-self-call message below
+  the word bound replays from `frameEntry` to its committed post-state — the
+  shape of a contract's `lift_core` instance), and `preserves`
+  (`S.Preserves ca`).
+- Its rungs, each `∃ steps, L.carrier.Replay (ofState pre) steps (ofState
+  post)` over the matching retained trace: `processMessage`,
+  `processCreateMessage`, `messageCall`, `transactionMessage`, `transaction`,
+  `transactionList`, `systemMessage`, `requests`, `directWithdrawal`, `body`,
+  `configuredBlock`, `configuredHistory`.  The world word bound
+  (`sum … bal < 2 ^ 256`) is an explicit premise up to `requests` and is derived
+  inside the ladder above it; it stays explicit below because a general
+  `ContractSpec.Side` need not be `SumNof`.
+- `AccountingLadder.TraceRealizes L cfg root steps future` is the
+  block-structured history carrier: one retained `ConfiguredBlockTrace` per
+  imported block, each with its own replay segment.  `.toReplay` concatenates
+  it, `.toReachUsing` projects configured reachability (given the root's
+  reflexive reach), and `of_configuredHistoryTrace` / `exists_of_reachUsing`
+  realize every retained history or reach from an `S.StateInv` root.
+- Small additions it needed: `ReplayCarrier.ofAddBal` (a direct balance credit
+  is one positive credit at `ca` or no step) and the word-bound transports
+  `ExecutionTrace.TransactionTrace.msg_sum_nof` and
+  `ExecutionTrace.processWithdrawalsState_sum_nof`.
+
+Minimal example: `Blanc/DripRealizedLadder.lean` builds
+`ladder coalition ca : AccountingLadder dripSpec ca` (a `Unit` tag) and
+restates the rungs as `retained…Replay` corollaries; `Blanc/DripTraceRealizes.lean` names its
+`TraceRealizes` as DRIP's history carrier.  `Blanc/ProrataAccountingExec.lean`
+is the ledger-shaped instance, whose `tag` records block and transaction
+position.  Import `Blanc.ExecutionAccountingLadder`.
+
+Boundary: the ladder classifies nothing as a deposit, withdrawal or attack
+step and adds no step beyond `root`, `credit` and `ofAddBal`.  It is
+account-local: a boundary over several accounts (a `SettlementCarrier`), a
+replay indexed by position, or an invariant that is not `S.StateInv` (for
+example one threaded by fork rules) does not fit it; such a consumer reuses the
+T2b seams and the two word-bound transports and keeps its own ladder, as
+`Blanc/Composition/ProrataWethVaultHistory.lean` does.  It is a proof-cost
+facility only: no rung changes an execution or a gas charge.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
