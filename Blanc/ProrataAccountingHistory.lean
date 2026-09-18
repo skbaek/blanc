@@ -35,15 +35,8 @@ theorem retainedConfiguredBlockAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  obtain ⟨steps, replay⟩ :=
-    retainedBodyAccountingReplay (ca := ca) trace.bodyTrace
-      (trace.openingState ▸ inv)
-      (trace.not_mem_openingCreatedAccounts ca)
-      trace.openingBound blockIndex
-  refine ⟨steps, ?_⟩
-  rw [trace.postState]
-  rwa [trace.openingState] at replay
+        (RealizedSnapshot.ofState ca post.state) :=
+  (accountingLadder ca).configuredBlock trace inv blockIndex
 
 /-- Rung R9: a whole retained configured history realizes one PRORATA
 accounting replay, from the world at the checkpoint to the world at any
@@ -67,16 +60,8 @@ theorem retainedConfiguredHistoryAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca checkpoint.state) steps
-        (RealizedSnapshot.ofState ca future.state) := by
-  induction history with
-  | refl hcfg hctx hid => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
-  | step prior block ih =>
-      obtain ⟨priorSteps, priorReplay⟩ := ih
-      obtain ⟨blockSteps, blockReplay⟩ :=
-        retainedConfiguredBlockAccountingReplay block
-          (prior.stateInv (prorataSpec_preserves ca) inv)
-          block.block.header.number
-      exact ⟨priorSteps ++ blockSteps, priorReplay.append blockReplay⟩
+        (RealizedSnapshot.ofState ca future.state) :=
+  (accountingLadder ca).configuredHistory history inv
 
 /-! ## Rung R10: the realized-trace interface
 

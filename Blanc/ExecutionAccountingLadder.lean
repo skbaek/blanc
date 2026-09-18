@@ -126,7 +126,7 @@ structure AccountingLadder (S : ContractSpec) (ca : Adr) where
     carrier.Replay pre left mid → carrier.Replay mid right post →
       carrier.Replay pre (left ++ right) post
   tag : Nat → Option Nat → carrier.Tag
-  root : ∀ (blockIndex : Nat) (transactionIndex : Option Nat)
+  root : ∀ (_blockIndex : Nat) (_transactionIndex : Option Nat)
     {msg : Msg} {entry : Benv} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution},
     Exec pc sevm pre out →
