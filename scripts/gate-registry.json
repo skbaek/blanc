@@ -838,8 +838,8 @@
      "scripts/prorata-weth-vault-reference.json",
      "scripts/prorata-weth-vault-reference-measurements.json",
      "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
-     "@eels/.venv/pyvenv.cfg",
-     "@eels/.venv/bin/python",
+     "@eels/venv/pyvenv.cfg",
+     "@eels/venv/bin/python",
      "scripts/eels_differential_common.py"
     ],
     "populations": [
@@ -848,7 +848,7 @@
        "*/__pycache__/*"
       ],
       "pattern": "python*/site-packages/**/*",
-      "root": "@eels/.venv/lib"
+      "root": "@eels/venv/lib"
      }
     ],
     "tools": [
@@ -930,8 +930,8 @@
      "scripts/prorata-weth-vault-reference.json",
      "scripts/prorata-weth-vault-reference-measurements.json",
      "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
-     "@eels/.venv/pyvenv.cfg",
-     "@eels/.venv/bin/python",
+     "@eels/venv/pyvenv.cfg",
+     "@eels/venv/bin/python",
      "scripts/eels_differential_common.py"
     ],
     "populations": [
@@ -940,7 +940,7 @@
        "*/__pycache__/*"
       ],
       "pattern": "python*/site-packages/**/*",
-      "root": "@eels/.venv/lib"
+      "root": "@eels/venv/lib"
      }
     ],
     "tools": [
