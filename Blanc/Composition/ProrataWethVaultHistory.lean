@@ -13,7 +13,9 @@ open Jaune
 /-- The pair's replay boundary: the two storages the pair reads.  Balances are not in it; WETH
 solvency rides in the frame invariant, not in the replay. -/
 structure PairBoundary where
+  /-- The vault's storage. -/
   vault : Stor
+  /-- WETH's storage, at `wethAccount`. -/
   weth : Stor
 
 /-- The pair boundary of an ordinary world state. -/
@@ -23,8 +25,10 @@ def PairBoundary.ofState (vault : Adr) (w : State) : PairBoundary :=
 /-- One classified pair step.  Emitted only by a frame at the vault or at WETH; a foreign
 instruction segment moves no boundary and emits nothing.  `silent` is a WETH-frame class. -/
 inductive PairStep (vault : Adr) : State → State → Type
+  /-- A vault-frame share operation: a four-quote transition with its share evidence. -/
   | operation {before after : State} (t : FourQuote.FourQuoteTransition vault before after)
       (evidence : FourQuote.FourQuoteShareEvidence t.operation) : PairStep vault before after
+  /-- A WETH spend of the vault's allowance by a caller other than the vault: the vault's WETH row moves by `Transfer` and vault storage is unchanged. -/
   | authorizedDebit {before after : State} (call : WethAllowanceInvocation)
       (foreign : call.sevm.caller ≠ vault)
       (owner : Sevm.argWord call.sevm 0 = vault.toB256)
@@ -33,6 +37,7 @@ inductive PairStep (vault : Adr) : State → State → Type
         (Sevm.argWord call.sevm 2) (Sevm.argWord call.sevm 1).toAdr
         (Stor.rest (after.getStor wethAccount)))
       (vaultKept : after.getStor vault = before.getStor vault) : PairStep vault before after
+  /-- A WETH-frame step by `caller` that leaves vault storage and the vault's WETH row unchanged. -/
   | silent {before after : State} (caller : Adr)
       (vaultKept : after.getStor vault = before.getStor vault)
       (rowKept : Stor.rest (after.getStor wethAccount) vault =
@@ -48,18 +53,27 @@ def PairStep.caller {vault : Adr} {before after : State} : PairStep vault before
 (`own`), that invocation's storage links, the non-address silence of a step that is none, and
 its provenance, whose actor is the emitting frame's caller. -/
 structure PairStepRecord (vault : Adr) where
+  /-- The state where the step starts. -/
   before : State
+  /-- The state where the step ends. -/
   after : State
+  /-- The classified step between `before` and `after`. -/
   step : PairStep vault before after
+  /-- The WETH allowance invocation the step is or contains, if any. -/
   own : Option WethAllowanceInvocation
+  /-- An owned invocation's WETH storage matches the record's endpoints, and a vault-called one carries vault-staged calldata. -/
   linked : ∀ call, own = some call →
     call.pre.state.getStor wethAccount = before.getStor wethAccount ∧
     call.post.state.getStor wethAccount = after.getStor wethAccount ∧
     (call.sevm.caller = vault → VaultStagedCalldata call)
+  /-- A step owning no invocation leaves every non-address WETH storage key unchanged. -/
   quiet : own = none → ∀ key, ¬ ValidAdr key →
     (after.getStor wethAccount).get key = (before.getStor wethAccount).get key
+  /-- An `authorizedDebit` step owns its own invocation. -/
   debitOwn : ∀ call f o p m k, step = .authorizedDebit call f o p m k → own = some call
+  /-- The step's accounting provenance. -/
   provenance : Blanc.Prorata.ProrataAccountingProvenance
+  /-- The provenance actor is the emitting frame's caller. -/
   actor : provenance.actor = some step.caller
 
 /-- The allowance ledger of a history: the invocations its records own, in order. -/
@@ -68,7 +82,9 @@ def PairStepRecord.ledger (steps : List (PairStepRecord vault)) : List WethAllow
 
 /-- A connected pair history: consecutive records meet at equal pair boundaries. -/
 inductive PairReplay (vault : Adr) : PairBoundary → List (PairStepRecord vault) → PairBoundary → Prop
+  /-- The empty history replays a boundary to itself. -/
   | nil (b : PairBoundary) : PairReplay vault b [] b
+  /-- Prepend a record whose endpoint boundaries are `pre` and `mid` to a history from `mid` to `post`. -/
   | cons {pre mid post : PairBoundary} (record : PairStepRecord vault) {steps}
       (preEq : PairBoundary.ofState vault record.before = pre)
       (postEq : PairBoundary.ofState vault record.after = mid)
