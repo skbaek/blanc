@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import json
 import pathlib
 import re
@@ -99,6 +100,19 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
     return len(node)
 
 
+def count_script_population(root: pathlib.Path, rel: str, function: str) -> int:
+    """Length of a static population returned by a committed checker."""
+    path = root / rel
+    name = "_doc_counts_" + re.sub(r"\W+", "_", rel)
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {rel}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return len(getattr(module, function)(root))
+
+
 # --------------------------------------------------------------------------
 # CLAIMS -- published numbers, their producers, and every surface stating them
 # --------------------------------------------------------------------------
@@ -113,6 +127,10 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
 #                Anti-vacuity per surface: the registered patterns are what the
 #                gate knows about, the census is what the surface actually
 #                contains, and the two must agree in number.
+#   census_patterns -- optional per-surface patterns for stale quotations whose
+#                      published value differs from the produced value; these
+#                      count the quotation while the consumer still checks its
+#                      captured value against the producer.
 #
 # Anti-vacuity is per PATTERN, not per file: README.md's three audited-theorem
 # patterns yield four captured groups, so a file-level floor of three still
@@ -124,6 +142,19 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
 # reproduce `scripts/check-claims.sh`'s verdict line. TRANSCRIPTS below pins the
 # whole line against the gate's own format string; this pattern pins the number.
 CLAIM_TRANSCRIPT = re.compile(r"OK — claim statements: (\d{2,5}) definitions/statements and exact")
+
+LAYERING_MODULE_CELL = re.compile(
+    r"\| `scripts/check-layering\.sh` \| [^\n]* \| "
+    r"\d{1,5} contracts,\s*(\d{1,5}) modules,"
+)
+MODULE_SIZE_MODULE_CELL = re.compile(
+    r"\| `scripts/check-proof-module-size\.sh` \| [^\n]* \| "
+    r"(\d{1,5}) modules;"
+)
+TRUST_CLOSURE_MODULE_CELL = re.compile(
+    r"\| `scripts/check-trust-surface\.sh` \| [^\n]* \| "
+    r"(\d{1,5}) closure modules;"
+)
 
 CLAIMS = [
     {
@@ -375,6 +406,75 @@ CLAIMS = [
         },
         "foreign": [],
     },
+    {
+        "name": "layering module count",
+        "producer": (
+            "scripts/check-layering.py: modules_on_disk",
+            # The layering gate's recursive source census is the population
+            # behind `len(found)` in its terminal OK line.
+            lambda root: count_script_population(
+                root, "scripts/check-layering.py", "modules_on_disk"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    LAYERING_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        # The cell is stale, so its one quotation is not a standalone
+        # occurrence of the produced value. Count the registered quotation
+        # separately; the consumer above still checks its captured value.
+        "census_patterns": {"scripts/GATES.md": LAYERING_MODULE_CELL},
+        "foreign": [],
+    },
+    {
+        "name": "proof module-size module count",
+        "producer": (
+            "scripts/check-proof-module-size.py: production_modules",
+            # `ordinary` prints `len(modules)`, where `modules` is exactly the
+            # path-policy-checked production population returned here.
+            lambda root: count_script_population(
+                root, "scripts/check-proof-module-size.py", "production_modules"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    MODULE_SIZE_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        "census_patterns": {"scripts/GATES.md": MODULE_SIZE_MODULE_CELL},
+        "foreign": [],
+    },
+    {
+        "name": "trust-surface closure module count",
+        "producer": (
+            "scripts/check-trust-surface.py: closure_files",
+            # The trust gate's transitive import closure is the population
+            # behind `len(files)` in its terminal OK line.
+            lambda root: count_script_population(
+                root, "scripts/check-trust-surface.py", "closure_files"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    TRUST_CLOSURE_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        "census_patterns": {"scripts/GATES.md": TRUST_CLOSURE_MODULE_CELL},
+        "foreign": [],
+    },
 ]
 
 
@@ -535,11 +635,15 @@ UNCHECKED_PUBLISHED_NUMBERS = [
         "lines)",
         "surfaces": "docs/index.html, docs/contracts/*.html",
         "producer": "the gates themselves, at run time",
-        "blocker": "Those verdict lines interpolate values computed during the run, "
-        "not a format string plus a claim this gate produces, so no static "
-        "derivation of the published line exists. It becomes checkable if a gate "
-        "commits its verdict line as an artifact, the way the WETH10 manifest "
-        "commits its row inventory.",
+        "blocker": "scripts/check-layering.py is static and deterministic over committed "
+        "files, but this gate has not registered every interpolated field of the "
+        "two published layering transcript copies; the module-count field is "
+        "registered above, while the remaining layering fields and exact transcript "
+        "enumeration remain unchecked. The other verdict lines interpolate values "
+        "computed during their runs and are likewise not fully enumerated here. "
+        "They become checkable when this gate registers each static derivation and "
+        "exact surface, or a gate commits its verdict line as an artifact, the way "
+        "the WETH10 manifest commits its row inventory.",
     },
 ]
 
@@ -651,11 +755,17 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
             path = root / rel
             if not path.is_file():
                 continue
-            found = len(pat.findall(path.read_text(encoding="utf-8")))
+            census_pattern = claim.get("census_patterns", {}).get(rel, pat)
+            found = len(census_pattern.findall(path.read_text(encoding="utf-8")))
             if found != want:
+                subject = (
+                    "registered quotation(s)"
+                    if rel in claim.get("census_patterns", {})
+                    else f"occurrence(s) of {expected}"
+                )
                 failures.append(
-                    f"{rel}: census for {name} expects {want} occurrence(s) of "
-                    f"{expected}, found {found}. Either a statement of this claim "
+                    f"{rel}: census for {name} expects {want} {subject}, found "
+                    f"{found}. Either a statement of this claim "
                     "drifted to another value on this surface, or a new statement "
                     "was added without registering it in CLAIMS."
                 )
