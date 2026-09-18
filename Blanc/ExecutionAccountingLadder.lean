@@ -608,6 +608,91 @@ theorem configuredHistory (L : AccountingLadder S ca)
 
 end AccountingLadder
 
+/-! ## 2.5 The block-structured history carrier
+
+`L.TraceRealizes cfg root steps future` supplements configured reachability from
+`root` with the replay steps the chain actually produced: in chain order, one
+retained `ConfiguredBlockTrace` per imported block together with that block's
+own replay segment, the whole step list being their concatenation.  The
+carrier names no contract; the two contract facts it needs -- the root's
+reflexive configured reach and the contract invariant at the root -- enter as
+arguments of the lemmas that use them. -/
+
+namespace AccountingLadder
+
+variable {S : ContractSpec} {ca : Adr}
+
+inductive TraceRealizes (L : AccountingLadder S ca) (cfg : ChainConfig)
+    (root : BlockChain) : List L.carrier.Step → BlockChain → Prop where
+  | refl : TraceRealizes L cfg root [] root
+  | step {current future : BlockChain}
+      {priorSteps blockSteps : List L.carrier.Step}
+      (prior : TraceRealizes L cfg root priorSteps current)
+      (block : _root_.Blanc.ExecutionTrace.ConfiguredBlockTrace cfg current future)
+      (replay : L.carrier.Replay (L.carrier.ofState current.state) blockSteps
+        (L.carrier.ofState future.state)) :
+      TraceRealizes L cfg root (priorSteps ++ blockSteps) future
+-- mirrors ProrataAccountingHistory.lean:96–107.
+
+namespace TraceRealizes
+
+/-- Every realized trace projects to the configured chain reach it replays. -/
+theorem toReachUsing {L : AccountingLadder S ca} {cfg : ChainConfig}
+    {root future : BlockChain} {steps : List L.carrier.Step}
+    (rootReach : BlockChain.ReachUsing cfg root root)
+    (realizes : L.TraceRealizes cfg root steps future) :
+    BlockChain.ReachUsing cfg root future := by
+  induction realizes with
+  | refl => exact rootReach
+  | step prior block replay ih => exact .step ih block.bound block.transition
+-- mirrors ProrataAccountingHistory.lean:116–123; `root.reflReach` → `rootReach`.
+
+/-- The realized steps are one connected replay from the root to the
+continuation, the per-block segments concatenated in chain order. -/
+theorem toReplay {L : AccountingLadder S ca} {cfg : ChainConfig}
+    {root future : BlockChain} {steps : List L.carrier.Step}
+    (realizes : L.TraceRealizes cfg root steps future) :
+    L.carrier.Replay (L.carrier.ofState root.state) steps
+      (L.carrier.ofState future.state) := by
+  induction realizes with
+  | refl => exact L.carrier.nil _
+  | step prior block replay ih => exact L.append ih replay
+-- mirrors ProrataAccountingHistory.lean:128–137.
+
+/-- Every retained configured history from an invariant-satisfying root is
+realized; each block is tagged with its own header number. -/
+theorem of_configuredHistoryTrace (L : AccountingLadder S ca)
+    {cfg : ChainConfig} {root future : BlockChain}
+    (inv : S.StateInv ca root.state)
+    (history : _root_.Blanc.ExecutionTrace.ConfiguredHistoryTrace cfg root future) :
+    ∃ steps, L.TraceRealizes cfg root steps future := by
+  induction history with
+  | refl hcfg hctx hid => exact ⟨[], .refl⟩
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorRealizes⟩ := ih
+      obtain ⟨blockSteps, blockReplay⟩ :=
+        L.configuredBlock block (prior.stateInv L.preserves inv)
+          block.block.header.number
+      exact ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay⟩
+-- mirrors ProrataAccountingHistory.lean:146–159; `root.reachable_stateInv
+-- prior.toReachUsing` → `prior.stateInv L.preserves inv` (as G11, :604).
+
+/-- Configured reachability from an invariant-satisfying root is never more
+permissive than the carrier. -/
+theorem exists_of_reachUsing (L : AccountingLadder S ca)
+    {cfg : ChainConfig} {root future : BlockChain}
+    (inv : S.StateInv ca root.state)
+    (reach : BlockChain.ReachUsing cfg root future) :
+    ∃ steps, L.TraceRealizes cfg root steps future := by
+  rcases _root_.Blanc.ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing
+    reach with ⟨history⟩
+  exact of_configuredHistoryTrace L inv history
+-- mirrors ProrataAccountingHistory.lean:167–173.
+
+end TraceRealizes
+
+end AccountingLadder
+
 end ExecutionAccountingReplay
 
 end Blanc
