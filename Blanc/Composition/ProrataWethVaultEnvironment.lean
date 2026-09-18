@@ -603,6 +603,153 @@ private theorem withdrawLoadCheck_exact {sevm : Sevm} {s s' : Devm}
   · rw [← balanceEq, B256.ltCheck,
       Ne.ite_eq_right_iff B256.zero_ne_one.symm, B256.not_lt]
 
+/-- `sendToCaller` up to its `CALL`: the seven payout operands are on the
+stack, and the four pushes, the swap and the two address words moved no
+storage, balance or code. -/
+private theorem sendToCaller_callPre {sevm : Sevm} {s sf : Devm} {wad : B256}
+    (hp : [wad] <<+ s.stack) :
+    Line.Run sevm s Blanc.sendToCaller sf →
+    ∃ c : Devm,
+      [0, sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ c.stack ∧
+        Devm.getStor s = Devm.getStor c ∧ s.getBal = c.getBal ∧
+        s.getCode = c.getCode ∧ Ninst.Run sevm c Ninst.call sf := by
+  line_execute 7
+  have stack : [0, sevm.caller.toB256, wad, 0, 0, 0, 0] <<+ s₁.stack := by
+    generalize_line_prefix
+  intro callRun
+  exact ⟨s₁, stack, Line.of_inv Devm.getStor (by line_inv) h₁,
+    Line.of_inv Devm.getBal (by line_inv) h₁,
+    Line.of_inv Devm.getCode (by line_inv) h₁, of_run_singleton callRun⟩
+
+/-- **WETH `withdraw` pre-call split, retained at the `CALL`.**  The caller's
+row is debited before the value-bearing `CALL` to the caller, nothing else in
+WETH's storage moves before it, and the suffix after it writes no storage at
+all.  Beyond the storage split, it keeps what a consumer needs to open the
+`CALL` itself: the seven payout operands on the stack, balance and code
+unchanged since entry, the debited row's solvency against the balance less the
+payout under WETH's precondition, and the nonzero success word the tail
+consumed.  Mirrors PRORATA's `WithdrawPreCallEffect`; the crossing is returned
+rather than assumed away. -/
+theorem weth_withdraw_preCall_split {sevm : Sevm} {pre post : Devm}
+    (run : Prog.RunCompiled sevm pre Blanc.weth post)
+    (selected : Sevm.selector sevm = selector "withdraw" [.uint256]) :
+    ∃ callPre callPost : Devm,
+      Sevm.argWord sevm 0 ≤
+          Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∧
+        Devm.getStor callPre sevm.currentTarget =
+          (Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 -
+              Sevm.argWord sevm 0) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor callPre account = Devm.getStor pre account) ∧
+        Ninst.Run sevm callPre Ninst.call callPost ∧
+        Devm.getStor post = Devm.getStor callPost ∧
+        [0, sevm.caller.toB256, Sevm.argWord sevm 0, 0, 0, 0, 0] <<+
+          callPre.stack ∧
+        Devm.getBal callPre = Devm.getBal pre ∧
+        Devm.getCode callPre = Devm.getCode pre ∧
+        (wethSpec.Pre sevm.currentTarget sevm pre →
+          Stor.Solvent (Devm.getStor callPre sevm.currentTarget) 0
+            (Devm.getBal callPre sevm.currentTarget - Sevm.argWord sevm 0)) ∧
+        ∃ (success : B256) (guardPost : Devm),
+          success ≠ 0 ∧ Devm.PopBurn [success] callPost guardPost := by
+  obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
+    runCompiled_enters_wethNonpayable (body := Blanc.withdraw) run selected
+      (by simp [Blanc.wethFuncs])
+  have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
+    funext (getStor_eq_of_state_eq entryState)
+  simp only [Blanc.withdraw] at bodyRun
+  rcases of_run_prepend Blanc.withdrawLoadCheck _ bodyRun with
+    ⟨g1, guard, bodyRun⟩
+  obtain ⟨guardStorage, less, hp1, lessIff⟩ := withdrawLoadCheck_exact guard
+  rcases of_run_branch_revert bodyRun with ⟨g2, pop2, bodyRun⟩
+  obtain ⟨lessZero, hp2⟩ := popBurn_pref pop2 hp1
+  have covered : Sevm.argWord sevm 0 ≤
+      Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 :=
+    lessIff.mp lessZero.symm
+  have popStorage : Devm.getStor g1 = Devm.getStor g2 :=
+    funext (fun a => (Devm.PopBurn.getStor pop2 a).symm)
+  have guardBal : pre.getBal = g2.getBal :=
+    (funext (getBal_eq_of_state_eq entryState)).trans
+      ((Line.of_inv Devm.getBal (by line_inv) guard).trans
+        (funext (getBal_eq_of_state_eq pop2.state)))
+  have guardCode : pre.getCode = g2.getCode :=
+    (funext (getCode_eq_of_state_eq entryState)).trans
+      ((Line.of_inv Devm.getCode (by line_inv) guard).trans
+        (funext (getCode_eq_of_state_eq pop2.state)))
+  rcases of_run_next bodyRun with ⟨g3, subRun, bodyRun⟩
+  have hp3 : (Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 -
+      Sevm.argWord sevm 0) :: Sevm.argWord sevm 0 :: [] <<+ g3.stack :=
+    prefix_of_sub subRun hp2
+  rcases of_run_next bodyRun with ⟨g4, callerRun, bodyRun⟩
+  have hp4 : [sevm.caller.toB256,
+      Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 -
+        Sevm.argWord sevm 0, Sevm.argWord sevm 0] <<+ g4.stack :=
+    prefix_of_push (of_run_caller callerRun) hp3
+  rcases of_run_next bodyRun with ⟨g5, storeRun, bodyRun⟩
+  have stored := sstore_getStor_set storeRun hp4
+  have debitRun : Line.Run sevm g2 [Blanc.Ninst.sub, Blanc.Ninst.caller,
+      Blanc.Ninst.sstore] g5 :=
+    Line.Run.cons subRun (Line.Run.cons callerRun
+      (Line.Run.cons storeRun Line.Run.nil))
+  have midStorage : Devm.getStor g2 = Devm.getStor g4 :=
+    Line.of_inv Devm.getStor (by line_inv)
+      (Line.Run.cons subRun (Line.Run.cons callerRun Line.Run.nil))
+  rcases of_run_prepend Blanc.sendToCaller _ bodyRun with ⟨g6, sendRun, bodyRun⟩
+  obtain ⟨c4, callStack, crossingStorage, crossingBal, crossingCode, callRun⟩ :=
+    sendToCaller_callPre (prefix_of_sstore storeRun hp4) sendRun
+  have debitBal : g2.getBal = g5.getBal :=
+    Line.of_inv Devm.getBal (by line_inv) debitRun
+  have debitCode : g2.getCode = g5.getCode :=
+    Line.of_inv Devm.getCode (by line_inv) debitRun
+  obtain ⟨success, guardPost, nonzero, successPop, tailStorage⟩ :
+      ∃ (success : B256) (guardPost : Devm), success ≠ 0 ∧
+        Devm.PopBurn [success] g6 guardPost ∧
+        Devm.getStor g6 = Devm.getStor post := by
+    rcases of_run_branch bodyRun with
+      ⟨t1, -, revertRun⟩ | ⟨w, t1, t2, nonzero, pop, burn, logRun⟩
+    · exact absurd revertRun not_run_revert
+    · refine ⟨w, t1, nonzero, pop, Eq.trans ?_ (Func.of_inv Devm.getStor Devm.getStor
+        (by unfold Blanc.logWithdraw; func_inv) logRun)⟩
+      exact (funext (fun a => (Devm.PopBurn.getStor pop a).symm)).trans
+        (funext (fun a => (Devm.Burn.getStor burn a).symm))
+  have solvent : wethSpec.Pre sevm.currentTarget sevm pre →
+      Stor.Solvent (Devm.getStor c4 sevm.currentTarget) 0
+        (Devm.getBal c4 sevm.currentTarget - Sevm.argWord sevm 0) := by
+    intro precondition
+    have atGuard : Precond sevm.currentTarget sevm g2 :=
+      precond_of_precond (wethSpec_pre_iff.mp precondition) guardBal
+        (entryStorage.trans (guardStorage.trans popStorage)) guardCode
+    have rowAtGuard : Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 =
+        Devm.getStorVal g2 sevm.currentTarget sevm.caller.toB256 := by
+      show (Devm.getStor g1 _).get _ = (Devm.getStor g2 _).get _
+      rw [popStorage]
+    obtain ⟨-, debited⟩ :=
+      solvent_of_withdraw_update_bal atGuard hp2 rowAtGuard covered debitRun
+    rw [← congrFun crossingStorage sevm.currentTarget,
+      ← congrFun crossingBal sevm.currentTarget]
+    exact debited
+  have rowValue : Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 =
+      Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 := by
+    show (Devm.getStor g1 _).get _ = (Devm.getStor pre _).get _
+    rw [entryStorage, guardStorage]
+  rw [rowValue] at covered stored
+  refine ⟨c4, g6, covered, ?_, ?_, callRun, tailStorage.symm, callStack,
+    (guardBal.trans (debitBal.trans crossingBal)).symm,
+    (guardCode.trans (debitCode.trans crossingCode)).symm, solvent,
+    success, guardPost, nonzero, successPop⟩
+  · rw [← congrFun crossingStorage sevm.currentTarget, stored,
+      ← congrFun midStorage sevm.currentTarget,
+      ← congrFun popStorage sevm.currentTarget,
+      ← congrFun guardStorage sevm.currentTarget,
+      ← congrFun entryStorage sevm.currentTarget]
+  · intro account different
+    obtain ⟨pc, registerRun⟩ := of_run_reg storeRun
+    rw [← congrFun crossingStorage account,
+      sstore_preserves_getStor_ne registerRun different,
+      ← congrFun midStorage account, ← congrFun popStorage account,
+      ← congrFun guardStorage account, ← congrFun entryStorage account]
+
 /-- **WETH `withdraw` pre-call split.**  The caller's row is debited before the
 value-bearing `CALL` to the caller, nothing else in WETH's storage moves before
 it, and the suffix after it writes no storage at all.  Mirrors PRORATA's
@@ -621,74 +768,9 @@ theorem weth_withdraw_preCall_effect {sevm : Sevm} {pre post : Devm}
           Devm.getStor callPre account = Devm.getStor pre account) ∧
         Ninst.Run sevm callPre Ninst.call callPost ∧
         Devm.getStor post = Devm.getStor callPost := by
-  obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
-    runCompiled_enters_wethNonpayable (body := Blanc.withdraw) run selected
-      (by simp [Blanc.wethFuncs])
-  have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
-    funext (getStor_eq_of_state_eq entryState)
-  simp only [Blanc.withdraw] at bodyRun
-  rcases of_run_prepend Blanc.withdrawLoadCheck _ bodyRun with
-    ⟨g1, guard, bodyRun⟩
-  obtain ⟨guardStorage, less, hp1, lessIff⟩ := withdrawLoadCheck_exact guard
-  rcases of_run_branch_revert bodyRun with ⟨g2, pop2, bodyRun⟩
-  obtain ⟨lessZero, hp2⟩ := popBurn_pref pop2 hp1
-  have covered : Sevm.argWord sevm 0 ≤
-      Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 :=
-    lessIff.mp lessZero.symm
-  have popStorage : Devm.getStor g1 = Devm.getStor g2 :=
-    funext (fun a => (Devm.PopBurn.getStor pop2 a).symm)
-  rcases of_run_next bodyRun with ⟨g3, subRun, bodyRun⟩
-  have hp3 : (Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 -
-      Sevm.argWord sevm 0) :: Sevm.argWord sevm 0 :: [] <<+ g3.stack :=
-    prefix_of_sub subRun hp2
-  rcases of_run_next bodyRun with ⟨g4, callerRun, bodyRun⟩
-  have hp4 : [sevm.caller.toB256,
-      Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 -
-        Sevm.argWord sevm 0, Sevm.argWord sevm 0] <<+ g4.stack :=
-    prefix_of_push (of_run_caller callerRun) hp3
-  rcases of_run_next bodyRun with ⟨g5, storeRun, bodyRun⟩
-  have stored := sstore_getStor_set storeRun hp4
-  have midStorage : Devm.getStor g2 = Devm.getStor g4 :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (Line.Run.cons subRun (Line.Run.cons callerRun Line.Run.nil))
-  rcases of_run_prepend Blanc.sendToCaller _ bodyRun with ⟨g6, sendRun, bodyRun⟩
-  simp only [Blanc.sendToCaller] at sendRun
-  rcases of_run_append (pushList [0, 0, 0, 0]) sendRun with ⟨c1, pushes, sendRun⟩
-  rcases Line.of_run_cons sendRun with ⟨c2, swapRun, sendRun⟩
-  rcases Line.of_run_cons sendRun with ⟨c3, caller2Run, sendRun⟩
-  rcases Line.of_run_cons sendRun with ⟨c4, push0Run, sendRun⟩
-  rcases Line.of_run_cons sendRun with ⟨c5, callRun, nil⟩
-  cases nil
-  have crossingStorage : Devm.getStor g5 = Devm.getStor c4 :=
-    (Line.of_inv Devm.getStor (by line_inv) pushes).trans
-      (Line.of_inv Devm.getStor (by line_inv)
-        (Line.Run.cons swapRun (Line.Run.cons caller2Run
-          (Line.Run.cons push0Run Line.Run.nil))))
-  have tailStorage : Devm.getStor g6 = Devm.getStor post := by
-    rcases of_run_branch bodyRun with
-      ⟨t1, -, revertRun⟩ | ⟨w, t1, t2, -, pop, burn, logRun⟩
-    · exact absurd revertRun not_run_revert
-    · refine Eq.trans ?_ (Func.of_inv Devm.getStor Devm.getStor
-        (by unfold Blanc.logWithdraw; func_inv) logRun)
-      exact (funext (fun a => (Devm.PopBurn.getStor pop a).symm)).trans
-        (funext (fun a => (Devm.Burn.getStor burn a).symm))
-  have rowValue : Devm.getStorVal g1 sevm.currentTarget sevm.caller.toB256 =
-      Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 := by
-    show (Devm.getStor g1 _).get _ = (Devm.getStor pre _).get _
-    rw [entryStorage, guardStorage]
-  rw [rowValue] at covered stored
-  refine ⟨c4, g6, covered, ?_, ?_, callRun, tailStorage.symm⟩
-  · rw [← congrFun crossingStorage sevm.currentTarget, stored,
-      ← congrFun midStorage sevm.currentTarget,
-      ← congrFun popStorage sevm.currentTarget,
-      ← congrFun guardStorage sevm.currentTarget,
-      ← congrFun entryStorage sevm.currentTarget]
-  · intro account different
-    obtain ⟨pc, registerRun⟩ := of_run_reg storeRun
-    rw [← congrFun crossingStorage account,
-      sstore_preserves_getStor_ne registerRun different,
-      ← congrFun midStorage account, ← congrFun popStorage account,
-      ← congrFun guardStorage account, ← congrFun entryStorage account]
+  obtain ⟨callPre, callPost, covered, written, foreignKept, callRun, after, -⟩ :=
+    weth_withdraw_preCall_split run selected
+  exact ⟨callPre, callPost, covered, written, foreignKept, callRun, after⟩
 
 /-! ## The unconditional vault-row classification -/
 
