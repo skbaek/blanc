@@ -1,6 +1,7 @@
 import Blanc.ExecDeterminism
 import Blanc.ExecutionFrames
 import Blanc.ExecutionHistory
+import Blanc.ExecutionOccurrence
 
 /-!
 # Raw frame roots of retained execution traces
@@ -69,6 +70,32 @@ def ConfiguredHistoryTrace.rawFrames :
   | .step prior block => prior.rawFrames ++ block.rawFrames
 
 end ExecutionTrace
+
+/-- A parent-step descendant remains a raw-frame descendant of its parent. -/
+theorem Exec.mem_rawFrameDescendants_of_parentStep
+    {root next : Exec.Deriv} {d : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root)
+    (member : d ∈ Exec.rawFrameDescendants next.exc) :
+    d ∈ Exec.rawFrameDescendants root.exc := by
+  cases edge with
+  | cont hstep nextRun =>
+      simpa only [Exec.rawFrameDescendants] using member
+  | doneOk hstep henter hresume nextRun =>
+      simpa only [Exec.rawFrameDescendants] using member
+  | runOk hstep henter child hresume nextRun =>
+      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+      exact Or.inr (Or.inr member)
+
+/-- A parent-prefix descendant remains a raw-frame descendant of its root. -/
+theorem Exec.mem_rawFrameDescendants_of_parentPrefix
+    {root node : Exec.Deriv} {d : Exec.Deriv}
+    (hprefix : Exec.Deriv.ParentPrefix root node)
+    (member : d ∈ Exec.rawFrameDescendants node.exc) :
+    d ∈ Exec.rawFrameDescendants root.exc := by
+  induction hprefix with
+  | refl => exact member
+  | step head rest ih =>
+      exact Exec.mem_rawFrameDescendants_of_parentStep head (ih member)
 
 private theorem Exec.rawFrameDescendants_trans
     {run : Exec pc sevm pre out} {d e : Exec.Deriv}

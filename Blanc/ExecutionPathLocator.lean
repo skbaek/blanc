@@ -29,7 +29,7 @@ private theorem Exec.Deriv.ParentPrefix.descendants {root node : Exec.Deriv} (hp
       simp only [Exec.descendantFramePaths, List.mem_append]
       exact Or.inr hm
 
-private theorem Exec.exists_next_of_run_spawn
+theorem Exec.exists_next_of_run_spawn
     {pc nextPc : Nat} {sevm : Sevm} {pre post : Devm}
     {out raw : Execution} {frame : Jaune.Frame} {resume : Resume}
     {childEvm : Evm}

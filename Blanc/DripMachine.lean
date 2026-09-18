@@ -13,6 +13,7 @@
 -- second compiled walk of the same body.
 
 import Blanc.Drip
+import Blanc.FuncMainPrefix
 import Blanc.Ladder
 import Blanc.MachineDataFacts
 import Blanc.RunPrefix
@@ -128,20 +129,6 @@ theorem Frame.mstoreAt {image : Bytes} {base s t : Devm} {e : Sevm}
     ⟨hwf, hreads, frame.state.trans hstate,
       frame.logs.trans (Line.of_inv Devm.logs (by line_inv) run)⟩⟩
 
-/-- `run_prepend_elim` twin exposing the crossed line prefix. The start path
-is arbitrary and the mid path is hidden, so callers compose with
-`Func.RunPrefix.trans` without any path arithmetic. -/
-theorem run_prefix_prepend {fs : List Func} {e : Sevm} {s r : Devm}
-    {l : Line} {p : Func} {path : Prog.SourcePath}
-    (hfree : Line.gasFree l = true) (h : Func.Run fs e s (l +++ p) r) :
-    ∃ s' mid, Line.Run e s l s' ∧ Func.Run fs e s' p r ∧
-      Func.RunPrefix fs e path s (l +++ p) mid s' p := by
-  cases path with
-  | mk k steps =>
-      obtain ⟨s', hline, hrun, hpre⟩ :=
-        Func.RunPrefix.of_run_prepend (k := k) (steps := steps) hfree h
-      exact ⟨s', _, hline, hrun, hpre⟩
-
 /-- Every `loadWord` line is gas-free: `push` plus `mload`. -/
 theorem gasFree_loadWord (w : B256) : Line.gasFree (loadWord w) = true := by
   simp only [loadWord, Line.gasFree, Ninst.pushB256, Ninst.gasFree,
@@ -151,22 +138,6 @@ theorem gasFree_loadWord (w : B256) : Line.gasFree (loadWord w) = true := by
 theorem gasFree_mstoreAt (w : B256) : Line.gasFree (mstoreAt w) = true := by
   simp only [mstoreAt, Line.gasFree, Ninst.pushB256, Ninst.gasFree,
     Rinst.gasFree, Bool.true_and]
-
-/-- `of_run_branch` twin exposing the taken arm's one-step branch prefix. -/
-theorem run_prefix_branch {fs : List Func} {e : Sevm} {s r : Devm}
-    {f g : Func} {path : Prog.SourcePath}
-    (h : Func.Run fs e s (.branch f g) r) :
-    (∃ s' mid, Devm.PopBurn [0] s s' ∧ Func.Run fs e s' f r ∧
-      Func.RunPrefix fs e path s (.branch f g) mid s' f)
-    ∨ (∃ w s' s'' mid, w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧ Devm.Burn s' s'' ∧
-      Func.Run fs e s'' g r ∧
-      Func.RunPrefix fs e path s (.branch f g) mid s'' g) := by
-  cases path with
-  | mk k steps =>
-      rcases Func.RunPrefix.of_run_branch (k := k) (steps := steps) h with
-        ⟨s', hpop, hrun, hpre⟩ | ⟨w, s', s'', hne, hpop, hburn, hrun, hpre⟩
-      · exact Or.inl ⟨s', _, hpop, hrun, hpre⟩
-      · exact Or.inr ⟨w, s', s'', _, hne, hpop, hburn, hrun, hpre⟩
 
 /-! ## The guard shape
 
