@@ -649,8 +649,7 @@ theorem FourQuote.FourQuoteShareEvidence.victimRow {vault : Adr} {sevm : Sevm} {
       exact hcoal
   | approve words target =>
       subst vault
-      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton,
-        Finset.mem_singleton] at hcoal
+      simp only [FourQuote.FourQuoteShareCoalition, ledgerSumOn, Finset.sum_singleton] at hcoal
       exact hcoal
 -- A:1393–1446 (`FourQuoteShareEvidence.coalition`) at the singleton coalition; the target split is
 -- A:1309–1350's `rw [← target] at conserved` made total, since the credit arm's target is WETH.
@@ -949,7 +948,7 @@ theorem victimAdmits_cons {vault victim : Adr} {o : Nat} {phase : Blanc.Prorata.
       · simp only [victimAdmits, victimMoves, List.filter_cons, hm, Bool.false_eq_true,
           ↓reduceIte] at h
         exact .inl ⟨rfl, h, fun _ hp => by cases hp⟩
-      · simp [victimAdmits, victimMoves, List.filter_cons, hm] at h
+      · simp [victimAdmits, victimMoves, hm] at h
 
 /-- **Parity with PRORATA's schedule.**  The pair schedule has PRORATA's move-list shape (T:141). -/
 theorem VictimOpenAdmits.moves {vault victim : Adr} {locked : Nat} :
@@ -1022,6 +1021,238 @@ theorem PairAttackState.le_giftShares_of_lock {o : Nat} {state : PairAttackState
       omega
   | exited deposit exit => dsimp only; omega
 -- C:472–481 (`lockedShares_le`'s phase split).
+
+
+/-! ### 5.7 One realized record is one classified pair step -/
+
+/-- **The adapter step.**  Every record is one `PairAttackEffect`, read off its flow, the schedule, the ledger
+identity and the path's own invariant; no premise is added. -/
+private theorem pairAttackStep_of_record {vault victim : Adr}
+    (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    {r : PairStepRecord vault} {rest : List (PairStepRecord vault)}
+    {state : PairAttackState offsetN}
+    (zero : r.step.debitAmount = 0)
+    (conserved : LedgerConserved supplySlot (r.before.getStor vault))
+    (hacc : state.accounting = r.pre)
+    (hvictim : state.victimShares = r.victimRowBefore victim)
+    (hinv : state.Invariant)
+    (hprice : Blanc.Prorata.PriceLe offsetN ⟨0, 0⟩ state.accounting)
+    (hadmits : victimAdmits victim state.phase (r :: rest)) :
+    ∃ (kind : PairAttackKind) (next : PairAttackState offsetN),
+      PairAttackEffect offsetN state kind next ∧
+        next.accounting = r.post ∧
+        next.victimShares = r.victimRowAfter victim ∧
+        victimAdmits victim next.phase rest ∧
+        next.inA = state.inA + (charge r).coalitionAmount (stepCredit victim r) ∧
+        next.outA = state.outA + (charge r).coalitionAmount (stepPayout victim r) ∧
+        next.outsideSubsidy = state.outsideSubsidy + (charge r).outsideAmount (stepCredit victim r) ∧
+        next.sharesIn = state.sharesIn + stepSharesIn victim r ∧
+        next.sharesOut = state.sharesOut + stepSharesOut victim r := by
+  have accounts := r.accounts zero
+  have rows := r.victimRow conserved victim
+  have hpart : state.nonVictimShares + r.victimRowBefore victim = r.pre.supply := by
+    have h := hinv.1
+    unfold Blanc.Prorata.ProrataAttackState.SharesPartition at h
+    rw [hacc, hvictim] at h
+    exact h
+  rcases victimAdmits_cons hadmits with
+    ⟨hmove, hrest, hlock⟩ | ⟨hphase, amount, minted, hflow, hopen⟩ |
+      ⟨deposit, paid, hphase, hflow, hnone⟩
+  · -- Not a victim move: the phase is kept and the lock holds after the record.
+    cases hf : r.flow with
+    | inbound payer receiver assets shares exact =>
+        have hpayer : payer ≠ victim := by
+          intro h
+          simp [victimMove, hf, PairFlow.victimOwn, h] at hmove
+        rw [hf] at accounts rows
+        simp [PairFlow.VictimRow] at rows
+        obtain ⟨hpost, hminted, -⟩ := accounts
+        by_cases hrecv : receiver = victim
+        · rw [if_pos hrecv] at rows
+          refine ⟨_, _, PairAttackEffect.depositToVictim state (charge r) assets shares
+            (by rw [hacc]; exact hminted), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          · simp only [PairAttackState.inboundCross, hacc, hpost]
+          · simp only [PairAttackState.inboundCross, hvictim, rows]
+          all_goals simp [PairAttackState.inboundCross, PairAttackState.outflowPrice, stepCredit,
+            stepPayout, stepSharesIn, stepSharesOut, hf, hpayer, hrecv, hacc]
+        · rw [if_neg hrecv] at rows
+          refine ⟨_, _, PairAttackEffect.nonVictimDeposit state (charge r) assets shares
+            (by rw [hacc]; exact hminted), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          · simp only [PairAttackState.inbound, hacc, hpost]
+          · simp only [PairAttackState.inbound, hvictim, rows, Nat.add_zero]
+          all_goals simp [PairAttackState.inbound, stepCredit, stepPayout, stepSharesIn,
+            stepSharesOut, hf, hpayer, hrecv]
+    | outbound owner receiver shares assets exact retained =>
+        rw [hf] at accounts rows
+        simp [PairFlow.VictimRow] at rows
+        obtain ⟨-, hpaid, -, hpost⟩ := accounts
+        have hgift : owner = victim → shares ≤ state.giftShares := fun howner =>
+          state.le_giftShares_of_lock (row := r.victimRowAfter victim)
+            (by rw [if_pos howner] at rows; rw [hvictim]; exact rows) hlock
+        have hnon : owner ≠ victim → shares ≤ state.nonVictimShares := fun howner => by
+          have := r.debited_add_victimRow_le conserved (party := owner) (amount := shares)
+            (by rw [hf]; rfl) howner
+          omega
+        cases retained with
+        | true =>
+            by_cases howner : owner = victim
+            · rw [if_pos howner] at rows
+              refine ⟨_, _, PairAttackEffect.delegatedWithdraw state (charge r) shares 0
+                (hgift howner) (Nat.zero_le _), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+              · simp [PairAttackState.outboundDelegated, hacc, hpost]
+              · simp only [PairAttackState.outboundDelegated, hvictim]; omega
+              all_goals simp [PairAttackState.outboundDelegated, PairAttackState.inflowPrice,
+                stepCredit, stepPayout, stepSharesIn, stepSharesOut, hf, howner, hacc]
+            · rw [if_neg howner] at rows
+              refine ⟨_, _, PairAttackEffect.nonVictimWithdraw state (charge r) shares 0
+                (hnon howner) (Nat.zero_le _), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+              · simp [PairAttackState.outbound, hacc, hpost]
+              · simp only [PairAttackState.outbound, hvictim]; omega
+              all_goals simp [PairAttackState.outbound, stepCredit, stepPayout, stepSharesIn,
+                stepSharesOut, hf, howner]
+        | false =>
+            by_cases howner : owner = victim
+            · have hrecv : receiver ≠ victim := by
+                intro h
+                simp [victimMove, hf, PairFlow.victimOwn, howner, h] at hmove
+              rw [if_pos howner] at rows
+              refine ⟨_, _, PairAttackEffect.delegatedWithdraw state (charge r) shares assets
+                (hgift howner) (by rw [hacc]; exact hpaid), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+              · simp [PairAttackState.outboundDelegated, hacc, hpost]
+              · simp only [PairAttackState.outboundDelegated, hvictim]; omega
+              all_goals simp [PairAttackState.outboundDelegated, PairAttackState.inflowPrice,
+                stepCredit, stepPayout, stepSharesIn, stepSharesOut, hf, howner, hrecv, hacc]
+            · rw [if_neg howner] at rows
+              refine ⟨_, _, PairAttackEffect.nonVictimWithdraw state (charge r) shares assets
+                (hnon howner) (by rw [hacc]; exact hpaid), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+              · simp [PairAttackState.outbound, hacc, hpost]
+              · simp only [PairAttackState.outbound, hvictim]; omega
+              all_goals simp [PairAttackState.outbound, stepCredit, stepPayout, stepSharesIn,
+                stepSharesOut, hf, howner]
+    | credit source amount =>
+        rw [hf] at accounts rows
+        simp [PairFlow.VictimRow] at rows
+        refine ⟨_, _, PairAttackEffect.externalCredit state (charge r) amount,
+          ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+        · simpa only [PairAttackState.credited, hacc] using accounts.symm
+        · simp only [PairAttackState.credited, hvictim, rows]
+        all_goals simp [PairAttackState.credited, stepCredit, stepPayout, stepSharesIn,
+          stepSharesOut, hf]
+    | shareMove source receiver amount =>
+        rw [hf] at accounts rows
+        simp [PairFlow.VictimRow] at rows
+        by_cases hs : source = victim <;> by_cases hr : receiver = victim
+        · -- victim to itself
+          rw [if_pos hs, if_pos hr] at rows
+          refine ⟨_, _, PairAttackEffect.shareMoveWithin state false amount,
+            by rw [hacc, accounts], by rw [hvictim]; omega, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          all_goals simp [stepCredit, stepPayout, stepSharesIn, stepSharesOut, hf, hs, hr]
+        · -- victim gift: priced in at the ceiling
+          rw [if_pos hs, if_neg hr] at rows
+          refine ⟨_, _, PairAttackEffect.shareMoveFromVictim state amount
+            (state.le_giftShares_of_lock (by rw [hvictim]; exact rows) hlock),
+            ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          · simpa only [PairAttackState.sharesFromVictim, hacc] using accounts.symm
+          · simp only [PairAttackState.sharesFromVictim, hvictim]; omega
+          all_goals simp [PairAttackState.sharesFromVictim, PairAttackState.inflowPrice, stepCredit,
+            stepPayout, stepSharesIn, stepSharesOut, hf, hs, hr, hacc]
+        · -- non-victim gift to the victim: priced out at the floor
+          rw [if_neg hs, if_pos hr] at rows
+          refine ⟨_, _, PairAttackEffect.shareMoveToVictim state amount (by
+              have := r.debited_add_victimRow_le conserved (party := source) (amount := amount)
+                (by rw [hf]; rfl) hs
+              omega),
+            ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          · simpa only [PairAttackState.sharesToVictim, hacc] using accounts.symm
+          · simp only [PairAttackState.sharesToVictim, hvictim]; omega
+          all_goals simp [PairAttackState.sharesToVictim, PairAttackState.outflowPrice, stepCredit,
+            stepPayout, stepSharesIn, stepSharesOut, hf, hs, hr, hacc]
+        · -- within the non-victim side
+          rw [if_neg hs, if_neg hr] at rows
+          refine ⟨_, _, PairAttackEffect.shareMoveWithin state true amount,
+            by rw [hacc, accounts], by rw [hvictim]; omega, hrest, ?_, ?_, ?_, ?_, ?_⟩
+          all_goals simp [stepCredit, stepPayout, stepSharesIn, stepSharesOut, hf, hs, hr]
+    | silent =>
+        rw [hf] at accounts rows
+        simp [PairFlow.VictimRow] at rows
+        refine ⟨_, _, PairAttackEffect.silent state, by rw [hacc, accounts], by rw [hvictim, rows],
+          hrest, ?_, ?_, ?_, ?_, ?_⟩
+        all_goals simp [stepCredit, stepPayout, stepSharesIn, stepSharesOut, hf]
+  · -- The victim's deposit.
+    rw [hflow] at accounts rows
+    simp [PairFlow.VictimRow] at rows
+    obtain ⟨hpost, -, hexact⟩ := accounts
+    let deposit : Blanc.Prorata.VictimDeposit offsetN :=
+      { pre := state.accounting, amount := amount, minted := minted
+        minted_eq := by rw [hacc]; exact hexact rfl
+        backed := Blanc.Prorata.backed_of_priceLe_genesis hprice }
+    refine ⟨_, _, PairAttackEffect.victimDeposit state deposit hphase rfl,
+      ?_, ?_, hopen, ?_, ?_, ?_, ?_, ?_⟩
+    · simp only [PairAttackState.victimDeposited, Blanc.Prorata.VictimDeposit.post, deposit, hacc, hpost]
+    · simp only [PairAttackState.victimDeposited, deposit, hvictim, rows]
+    all_goals simp [PairAttackState.victimDeposited, stepCredit, stepPayout, stepSharesIn,
+      stepSharesOut, hflow]
+  · -- The victim's exit.
+    rw [hflow] at accounts rows
+    simp [PairFlow.VictimRow] at rows
+    obtain ⟨-, -, hexact, hpost⟩ := accounts
+    let exit : Blanc.Prorata.VictimExit offsetN deposit :=
+      { pre := state.accounting, payout := paid, payout_eq := by rw [hacc]; exact hexact rfl }
+    refine ⟨_, _, PairAttackEffect.victimExit state deposit exit hphase rfl,
+      ?_, ?_, hnone, ?_, ?_, ?_, ?_, ?_⟩
+    · simp [PairAttackState.victimExited, exit, hacc, hpost]
+    · simp only [PairAttackState.victimExited, hvictim]; omega
+    all_goals simp [PairAttackState.victimExited, stepCredit, stepPayout, stepSharesIn,
+      stepSharesOut, hflow]
+-- T:440–598 (`attackStep_of_realized`): the same ∃-kind/post shape, the same `refine ⟨_, _, ctor, …⟩` per class and
+-- `simp [stepCredit, …]` increment arms.  PRORATA's actor split (T:467) becomes the schedule's three-way split, and
+-- its `LedgerMove` rows become the flow's `VictimRow`; the gift and share-sufficiency side conditions are U8 §4's.
+
+/-! ### 5.8 The fold and the genesis adapter -/
+
+private theorem exists_pairAttackPath_of_replay {vault victim : Adr}
+    (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution)
+    {first last : PairBoundary} {steps : List (PairStepRecord vault)}
+    (replay : PairReplay vault first steps last) :
+    (∀ r ∈ steps, r.step.debitAmount = 0) →
+    ∀ state : PairAttackState offsetN,
+      PairAttackPath offsetN state →
+      state.accounting = first.snapshot vault →
+      state.victimShares = (Stor.rest first.vault victim).toNat →
+      LedgerConserved supplySlot first.vault →
+      victimAdmits victim state.phase steps →
+      ∃ final : PairAttackState offsetN,
+        PairAttackPath offsetN final ∧
+          final.inA = state.inA + inA victim charge steps ∧
+          final.outA = state.outA + outA victim charge steps ∧
+          final.outsideSubsidy = state.outsideSubsidy + outsideSubsidy victim charge steps ∧
+          final.sharesIn = state.sharesIn + sharesIn victim steps ∧
+          final.sharesOut = state.sharesOut + sharesOut victim steps := by
+  induction replay with
+  | nil boundary =>
+      intro _ state path _ _ _ _
+      exact ⟨state, path, by simp [inA], by simp [outA], by simp [outsideSubsidy],
+        by simp [sharesIn], by simp [sharesOut]⟩
+  | @cons pre mid last record tl preEq postEq tail ih =>
+      intro zero state path hacc hvictim hconserved hadmits
+      subst preEq
+      subst postEq
+      obtain ⟨kind, next, effect, hacc', hvictim', hadmits', hin, hout, hsub, hsin, hsout⟩ :=
+        pairAttackStep_of_record charge (zero record (by simp)) hconserved hacc hvictim
+          (path.invariant two_le_offsetN) (path.priceLe_genesis two_le_offsetN) hadmits
+      have path' : PairAttackPath offsetN next :=
+        .snoc ⟨state, next, kind, record.provenance, effect⟩ path
+      obtain ⟨final, hfinal, h1, h2, h3, h4, h5⟩ :=
+        ih (fun r member => zero r (by simp [member])) next path' hacc' hvictim'
+          (record.step.conserved hconserved) hadmits'
+      refine ⟨final, hfinal, ?_, ?_, ?_, ?_, ?_⟩
+      · rw [h1, hin]; simp [inA]; omega
+      · rw [h2, hout]; simp [outA]; omega
+      · rw [h3, hsub]; simp [outsideSubsidy]; omega
+      · rw [h4, hsin]; simp [sharesIn]; omega
+      · rw [h5, hsout]; simp [sharesOut]; omega
+-- T:606–648 (`exists_attackPath_of_replay`): same ∀-state motive and increment arms.  PRORATA's ledger identity
+-- and genesis price are replaced by U5's `PairStep.conserved` (U5:88) and `PairAttackPath.priceLe_genesis` (§5.6).
 
 
 end Blanc.Composition.ProrataWethVault
