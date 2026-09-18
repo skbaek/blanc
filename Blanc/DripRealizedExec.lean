@@ -16,6 +16,7 @@ namespace Blanc
 
 open Jaune
 open Jaune.Ninst Ninst
+open scoped LogOutputHinv
 
 namespace Drip
 
@@ -680,6 +681,327 @@ theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
     childPre := childPre
     effect := effect
     postSnapshot := postSnapshot }⟩
+
+/-! ## The exclusive head tag
+
+A zero-elapsed `drip` and a silent interval share both snapshots, so the kind
+of a DRIP frame's head step cannot be read off its endpoints.  It is computed
+from the frame's own fields instead. -/
+
+/-- The exclusive tag of a target frame, computed from the frame's calldata,
+caller, value and the elapsed time against its entry storage. -/
+noncomputable def opTag (coalition : Finset Adr) (sevm : Sevm) (pre : Devm) : Kind :=
+  let elapsed :=
+    (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat
+  let freshChi := freshNat (chiN (Devm.getStor pre sevm.currentTarget)) elapsed
+  if sevm.data.length.toB256 = 0 then
+    (if sevm.value = 0 then .silent else .externalCredit sevm.value.toNat)
+  else if Sevm.selector sevm = dripSelector then .drip elapsed
+  else if Sevm.selector sevm = joinSelector then
+    .join (decide (sevm.caller ∈ coalition)) sevm.caller sevm.value.toNat
+      (joinUnitsOf scale.toNat sevm.value.toNat freshChi) elapsed
+  else if Sevm.selector sevm = exitSelector then
+    .exit (decide (sevm.caller ∈ coalition)) sevm.caller
+      (Sevm.dataWord sevm (32 * 0 + 4)).toNat
+      (exitPayoutOf scale.toNat (Sevm.dataWord sevm (32 * 0 + 4)).toNat freshChi)
+      elapsed
+  else .silent
+
+/-- The replay of one successful DRIP frame: one head step carrying the
+computed tag from the pre-credit entry boundary, then the nested steps of its
+accepted callback (empty for every selector but `exit`). -/
+def TargetReplay (coalition : Finset Adr) (ca : Adr) (sevm : Sevm)
+    (pre post : Devm) : Prop :=
+  ∃ (op : RealizedStep) (nested : List RealizedStep),
+    op.pre = execEntrySnapshot coalition ca sevm pre.state ∧
+    op.kind = opTag coalition sevm pre ∧
+    RealizedChain op.post nested (snapshot coalition ca post.state)
+
+theorem TargetReplay.chain {coalition : Finset Adr} {ca : Adr} {sevm : Sevm}
+    {pre post : Devm} (replay : TargetReplay coalition ca sevm pre post) :
+    ∃ steps, RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
+      (snapshot coalition ca post.state) := by
+  rcases replay with ⟨op, nested, preEq, _, tail⟩
+  exact ⟨op :: nested, Chain.cons preEq tail⟩
+
+/-- A head step with no nested callback. -/
+theorem TargetReplay.single {coalition : Finset Adr} {ca : Adr} {sevm : Sevm}
+    {pre post : Devm}
+    (effect : Effect scale.toNat freshNat
+      (execEntrySnapshot coalition ca sevm pre.state) (opTag coalition sevm pre)
+      (snapshot coalition ca post.state)) :
+    TargetReplay coalition ca sevm pre post :=
+  ⟨⟨_, _, _, effect⟩, [], rfl, rfl, Chain.nil _⟩
+
+theorem execEntrySnapshot_of_value_zero {coalition : Finset Adr} {ca : Adr}
+    {sevm : Sevm} {state : State} (value : sevm.value = 0) :
+    execEntrySnapshot coalition ca sevm state = snapshot coalition ca state := by
+  unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry
+  rw [value, B256.toNat_zero]
+  split <;> rfl
+
+/-! ## Views never move ETH
+
+The two preview endpoints share one guarded entry into the fresh-index
+machine.  Their effect theorems fix storage; the replay also needs the target
+balance, which the same walk supplies: the machine keeps the entry world in
+its `Frame`, and the selected return tail is call-free. -/
+
+private theorem of_run_view_balance_eq {fs : List Func} (hlookup : AuxLookup fs)
+    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
+    {cap route : B256}
+    (view : route = routeConvertToAssets ∨ route = routeConvertToUnits)
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run fs e s
+      (arg 0 +++ dup 0 ::: mstoreAt argumentWord +++ pushB256 cap ::: lt :::
+        (.revert <?> (stageRoute route +++ Func.call freshStartSlot))) r) :
+    Devm.getBal r = Devm.getBal entry := by
+  refine run_prepend_elim _ (arg 0) ?_ run
+  intro s1 hline1 run
+  have frame1 := frame.line (by line_inv) (by line_inv) (by line_inv) hline1
+  have hp1 : Sevm.dataWord e (32 * 0 + 4) :: tail <<+ s1.stack :=
+    prefix_of_cdl_val hp hline1
+  refine run_prepend_elim _ [dup 0] ?_ run
+  intro s2 hline2 run
+  have frame2 := frame1.line (by line_inv) (by line_inv) (by line_inv) hline2
+  have hp2 : Sevm.dataWord e (32 * 0 + 4) :: Sevm.dataWord e (32 * 0 + 4) ::
+      tail <<+ s2.stack :=
+    prefix_of_dup_val (of_run_singleton hline2) (by show_nth) hp1
+  refine run_prepend_elim _ (mstoreAt argumentWord) ?_ run
+  intro s3 hline3 run
+  obtain ⟨hp3, frame3⟩ := frame2.mstoreAt hp2 hline3
+  refine run_prepend_elim _ [pushB256 cap, lt] ?_ run
+  intro s4 hline4 run
+  have frame4 := frame3.line (by line_inv) (by line_inv) (by line_inv) hline4
+  have hp4 : (cap <? Sevm.dataWord e (32 * 0 + 4)) :: tail <<+ s4.stack := by
+    rcases Line.of_run_cons hline4 with ⟨u1, hpush, hrest⟩
+    rcases Line.of_run_cons hrest with ⟨u2, hlt, hnil⟩
+    cases hnil
+    exact prefix_of_lt hlt (prefix_of_push (of_run_pushB256 hpush) hp3)
+  obtain ⟨_, s5, hp5, hpop5, run⟩ := of_run_guard hp4 run
+  have frame5 := frame4.of_popBurn hpop5
+  unfold Drip.stageRoute at run
+  refine run_prepend_elim _ [pushB256 route] ?_ run
+  intro s6 hline6 run
+  have frame6 := frame5.line (by line_inv) (by line_inv) (by line_inv) hline6
+  have hp6 : route :: tail <<+ s6.stack := by
+    rcases Line.of_run_cons hline6 with ⟨u, hpush, hnil⟩
+    cases hnil
+    exact prefix_of_push (of_run_pushB256 hpush) hp5
+  refine run_prepend_elim _ (mstoreAt routeWord) ?_ run
+  intro s7 hline7 run
+  obtain ⟨hp7, frame7⟩ := frame6.mstoreAt hp6 hline7
+  obtain ⟨t8, image8, -, -, -, -, -, -, -, -, -, hmachine, frame8, hp8, run⟩ :=
+    of_run_freshStart hlookup frame7 hp7 run
+  have htag : scratch image8 routeWord = route := by
+    rw [hmachine.1, scratch_setScratch_self]
+  obtain ⟨t9, frame9, hp9, hroute⟩ := of_run_freshRoute hlookup frame8 hp8 run
+  have tailEq : ∀ {after : Func}, Func.Inv Devm.getBal Devm.getBal after →
+      Func.Run fs e t9 after r → Devm.getBal r = Devm.getBal entry := by
+    intro after inv tailRun
+    have htail : Devm.getBal t9 = Devm.getBal r :=
+      Func.of_inv Devm.getBal Devm.getBal inv tailRun
+    funext a
+    exact (congrFun htail a).symm.trans
+      (getBal_eq_of_state_eq frame9.state a).symm
+  rcases hroute with ⟨htagA, run⟩ | ⟨htagE, run⟩ | ⟨htagU, run⟩ |
+    ⟨htagD, run⟩ | ⟨htagJ, run⟩
+  · exact tailEq (by func_inv) run
+  · rcases view with rfl | rfl <;>
+      exact absurd (htag.symm.trans htagE) (by decide +kernel)
+  · exact tailEq (by func_inv) run
+  · rcases view with rfl | rfl <;>
+      exact absurd (htag.symm.trans htagD) (by decide +kernel)
+  · rcases view with rfl | rfl <;>
+      exact absurd (htag.symm.trans htagJ) (by decide +kernel)
+
+/-- A successful deployed preview leaves the target balance in place. -/
+theorem view_exec_balance_eq {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = convertToAssetsSelector ∨
+      Sevm.selector sevm = convertToUnitsSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    Devm.getBal post = Devm.getBal pre := by
+  have finish : ∀ {entry : Devm}, pre.state = entry.state →
+      Devm.getBal post = Devm.getBal entry → Devm.getBal post = Devm.getBal pre := by
+    intro entry hst hbal
+    rw [hbal]
+    funext a
+    exact getBal_eq_of_state_eq hst.symm a
+  rcases hsel with hsel | hsel
+  · rcases exec_enters_convertToAssets exc hcode hsel hnonempty with
+      ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+    have hentryMemory : entry.memory = Mem.empty := hmm.symm.trans hcanon
+    have hframe : Frame [] entry entry :=
+      ⟨by rw [hentryMemory]; exact Mem.wf_empty,
+        by rw [hentryMemory]; exact Mem.reads_empty, rfl, rfl⟩
+    unfold Drip.convertToAssets at hbody
+    exact finish hst
+      (of_run_view_balance_eq auxLookup_runtime (Or.inl rfl) hframe nil_pref hbody)
+  · rcases exec_enters_convertToUnits exc hcode hsel hnonempty with
+      ⟨-, -, entry, hst, hmm, -, -, hbody⟩
+    have hentryMemory : entry.memory = Mem.empty := hmm.symm.trans hcanon
+    have hframe : Frame [] entry entry :=
+      ⟨by rw [hentryMemory]; exact Mem.wf_empty,
+        by rw [hentryMemory]; exact Mem.reads_empty, rfl, rfl⟩
+    unfold Drip.convertToUnits at hbody
+    exact finish hst
+      (of_run_view_balance_eq auxLookup_runtime (Or.inr rfl) hframe nil_pref hbody)
+
+/-! ## The target frame, classified -/
+
+private theorem selector_facts :
+    joinSelector ≠ dripSelector ∧ exitSelector ≠ dripSelector ∧
+    exitSelector ≠ joinSelector ∧
+    convertToAssetsSelector ≠ dripSelector ∧
+    convertToAssetsSelector ≠ joinSelector ∧
+    convertToAssetsSelector ≠ exitSelector ∧
+    convertToUnitsSelector ≠ dripSelector ∧
+    convertToUnitsSelector ≠ joinSelector ∧
+    convertToUnitsSelector ≠ exitSelector := by
+  decide +kernel
+
+/-- Every successful frame of the deployed runtime is one tagged head step
+followed by the replay of its accepted exit callback, if it has one.  The
+callback's replay is the only premise: it is supplied by the deeper-frame
+induction hypothesis of the recursion below, never assumed of the child. -/
+theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
+    {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hcanon : pre.memory = Mem.empty)
+    (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
+    (caller_ne : sevm.caller ≠ sevm.currentTarget)
+    (exitNested : ∀ handoff : ExitHandoff coalition sevm pre post,
+      ∃ nested, RealizedChain
+        (snapshot coalition sevm.currentTarget handoff.entry.state) nested
+        (snapshot coalition sevm.currentTarget handoff.child.state)) :
+    TargetReplay coalition sevm.currentTarget sevm pre post := by
+  have credited : sevm.value.toNat ≤ (pre.state.bal sevm.currentTarget).toNat :=
+    precondition.inv.1 rfl
+  obtain ⟨joinDrip, exitDrip, exitJoin, assetsDrip, assetsJoin, assetsExit,
+    unitsDrip, unitsJoin, unitsExit⟩ := selector_facts
+  by_cases hempty : sevm.data.length.toB256 = 0
+  · have stateEq := (exec_receive exc hcode hempty).1
+    by_cases hvalue : sevm.value = 0
+    · apply TargetReplay.single
+      have tag : opTag coalition sevm pre = .silent := by
+        simp only [opTag, hempty, hvalue, if_true]
+      rw [tag, execEntrySnapshot_of_value_zero hvalue, stateEq]
+      exact .silent _
+    · have tag : opTag coalition sevm pre = .externalCredit sevm.value.toNat := by
+        simp only [opTag, hempty, hvalue, if_true, if_false]
+      have positive : 0 < sevm.value.toNat := by
+        rcases Nat.eq_zero_or_pos sevm.value.toNat with zero | positive
+        · exact absurd (B256.toNat_inj _ _ (zero.trans B256.toNat_zero.symm)) hvalue
+        · exact positive
+      rcases externalCredit_chain (coalition := coalition)
+          (ca := sevm.currentTarget)
+          (pre := precreditState sevm.currentTarget sevm.value pre.state)
+          (post := post.state) (amount := sevm.value.toNat)
+          (by rw [precreditState_getStor, stateEq])
+          (by rw [← stateEq, precreditState_bal credited]; omega)
+          positive with ⟨op, kindEq, preEq, postEq⟩
+      refine ⟨op, [], ?_, kindEq.trans tag.symm, ?_⟩
+      · rw [preEq, execEntrySnapshot_of_target rfl credited]
+      · rw [postEq]
+        exact Chain.nil _
+  · have member := exec_selector_mem exc hcode hempty
+    simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at member
+    rcases member with hsel | hsel | hsel | hsel | hsel
+    · -- convertToAssets
+      apply TargetReplay.single
+      have tag : opTag coalition sevm pre = .silent := by
+        simp only [opTag, hempty, hsel, assetsDrip, assetsJoin, assetsExit,
+          if_false]
+      have hvalue := (exec_enters_convertToAssets exc hcode hsel hempty).1
+      have storage := (convertToAssets_exec_effect exc hcode hsel hempty
+        hcanon).2.2.2.2.2.2.1
+      have balance := view_exec_balance_eq exc hcode (Or.inl hsel) hempty hcanon
+      rw [tag, execEntrySnapshot_of_value_zero hvalue,
+        ← snapshot_eq_of_getStor_bal
+          (congrFun storage.symm sevm.currentTarget)
+          (congrFun balance sevm.currentTarget)]
+      exact .silent _
+    · -- exit
+      have hvalue := (exec_enters_exit exc hcode hsel hempty).1
+      obtain ⟨handoff⟩ := exit_exec_handoff coalition exc hcode hsel hempty
+        hcanon precondition caller_ne
+      rcases exitNested handoff with ⟨nested, chain⟩
+      refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_⟩
+      · exact (execEntrySnapshot_of_value_zero hvalue).symm
+      · simp only [opTag, hempty, hsel, exitDrip, exitJoin, if_false, if_true]
+      · rw [handoff.postSnapshot]
+        exact chain
+    · -- convertToUnits
+      apply TargetReplay.single
+      have tag : opTag coalition sevm pre = .silent := by
+        simp only [opTag, hempty, hsel, unitsDrip, unitsJoin, unitsExit,
+          if_false]
+      have hvalue := (exec_enters_convertToUnits exc hcode hsel hempty).1
+      have storage := (convertToUnits_exec_effect exc hcode hsel hempty
+        hcanon).2.2.2.2.2.2.1
+      have balance := view_exec_balance_eq exc hcode (Or.inr hsel) hempty hcanon
+      rw [tag, execEntrySnapshot_of_value_zero hvalue,
+        ← snapshot_eq_of_getStor_bal
+          (congrFun storage.symm sevm.currentTarget)
+          (congrFun balance sevm.currentTarget)]
+      exact .silent _
+    · -- drip
+      have hvalue := (exec_enters_drip exc hcode hsel hempty).1
+      refine ⟨⟨_, _, _,
+        drip_exec_realized_effect coalition exc hcode hsel hempty hcanon⟩, [],
+        ?_, ?_, Chain.nil _⟩
+      · exact (execEntrySnapshot_of_value_zero hvalue).symm
+      · simp only [opTag, hempty, hsel, if_false, if_true]
+    · -- join
+      rcases join_exec_effect exc hcode hsel hempty hcanon with
+        ⟨assetCap, rowCap, totalCap, lower, _, clock, _, guards,
+          fresh, units, freshEq, unitsEq, _, _, storageRun, _⟩
+      rcases join_exec_nofm_and_balance exc hcode hsel hempty hcanon with
+        ⟨freshNof, balanceRun⟩
+      rcases join_source_word_facts (s := pre.state.getStor sevm.currentTarget)
+          (caller := sevm.caller) assetCap rowCap totalCap lower guards freshNof
+          freshEq unitsEq with ⟨freshNatEq, quote, rowNof, totalNof⟩
+      have timeNat : sevm.benvStat.time.toNat =
+          rhoN (pre.state.getStor sevm.currentTarget) +
+            (sevm.benvStat.time -
+              Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat := by
+        have timeLe := le_of_not_gt clock
+        have timeLeNat := B256.toNat_le_toNat timeLe
+        have := B256.toNat_sub_eq_of_le _ _ timeLe
+        unfold rhoN
+        change sevm.benvStat.time.toNat =
+          (Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat + _
+        omega
+      have before :=
+        precreditState_getStor sevm.currentTarget sevm.value pre.state
+      have effect := join_write_realized_effect coalition sevm.currentTarget
+        sevm.caller
+        (before := precreditState sevm.currentTarget sevm.value pre.state)
+        (after := post.state) (fresh := fresh) (now := sevm.benvStat.time)
+        (units := units) (value := sevm.value)
+        (elapsed := (sevm.benvStat.time -
+          Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+        (by rw [before]; exact storageRun)
+        (by rw [before]; exact freshNatEq)
+        (by rw [before]; exact timeNat)
+        (by rw [before]; exact quote)
+        (by rw [before]; exact rowNof)
+        (by rw [before]; exact totalNof)
+        (by
+          rw [precreditState_bal credited]
+          have := congrArg B256.toNat balanceRun
+          change (post.state.bal sevm.currentTarget).toNat =
+            (pre.state.bal sevm.currentTarget).toNat at this
+          omega)
+      rw [quote] at effect
+      refine ⟨⟨_, _, _, effect⟩, [], ?_, ?_, Chain.nil _⟩
+      · exact (execEntrySnapshot_of_target rfl credited).symm
+      · simp only [opTag, hempty, hsel, joinDrip, if_false, if_true]
+        rfl
 
 end Drip
 
