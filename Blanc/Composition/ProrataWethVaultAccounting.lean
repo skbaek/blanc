@@ -937,7 +937,7 @@ private theorem actual_credit_vault_storage_eq
 /-- Actual share evidence is indexed by the accepted ten-tag operation.  It
 retains endpoint guards and canonical ABI roles; public projections derive,
 rather than assume, the resulting row movement.  The credit case retains the
-bounded-entry actual root instead of endpoint guards. -/
+vault storage equation instead of endpoint guards. -/
 inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
     FourQuoteOperation vault sevm pre post → Prop where
   | deposit (words : InboundWords) (target : sevm.currentTarget = vault)
@@ -1034,8 +1034,7 @@ inductive FourQuoteShareEvidence {vault : Adr} {sevm : Sevm} {pre post : Devm} :
         words.amount)
       (effect : Transfer (Stor.rest (Devm.getStor pre wethAccount)) words.source
         words.amount vault (Stor.rest (Devm.getStor post wethAccount)))
-      (actual : ActualDirectWethCredit vault words sevm pre post)
-      (separation : wethAccount ≠ vault) :
+      (vaultKept : Devm.getStor post vault = Devm.getStor pre vault) :
       FourQuoteShareEvidence
         (.credit words wethTarget sourceNotVault supplyKept rowNof effect)
   | transfer (words : ShareTransferWords) (target : sevm.currentTarget = vault)
@@ -1334,8 +1333,8 @@ theorem FourQuoteShareEvidence.preserves_conserved
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
       rw [← target] at conserved ⊢
       exact outboundEffect_preserves_conserved ownerValid covered effect conserved
-  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
-      rw [actual_credit_vault_storage_eq actual separation]
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
+      rw [vaultKept]
       exact conserved
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
       rw [← target] at conserved ⊢
@@ -1374,9 +1373,9 @@ theorem FourQuoteShareEvidence.actual_share_rows_move
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
       dsimp [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
-  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
       dsimp [FourQuoteShareRowsMove]
-      rw [actual_credit_vault_storage_eq actual separation]
+      rw [vaultKept]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
       dsimp [FourQuoteShareRowsMove]
       exact transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
@@ -1429,9 +1428,9 @@ theorem FourQuoteShareEvidence.coalition
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
-  | credit words wethTarget sourceNotVault supplyKept rowNof effect actual separation =>
+  | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
       dsimp [FourQuoteShareCoalition]
-      rw [actual_credit_vault_storage_eq actual separation]
+      rw [vaultKept]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
       dsimp [FourQuoteShareCoalition]
       exact ledgerSumOn_transfer conserved.sumNof
@@ -1870,7 +1869,7 @@ theorem credit_compiled_share_evidence
     rw [vaultStor]
   exact ⟨supplyKept, movement,
     .credit words actual.target sourceNotVault supplyKept rowNof movement
-      actual separation⟩
+      vaultStor⟩
 
 /-- The bounded quote-residue part of an actual operation. -/
 def roundingContribution {vault : Adr} {sevm : Sevm} {pre post : Devm} :
