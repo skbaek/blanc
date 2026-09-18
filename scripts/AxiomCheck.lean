@@ -86,6 +86,7 @@ import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultRely
+import Blanc.Composition.ProrataWethVaultEnvironment
 import Blanc.ProrataWethVaultShares
 import Blanc.ProrataWethVaultDust
 import Blanc.BeaconDepositCorrectness
@@ -109,6 +110,13 @@ import Blanc.DripMonotone
 import Blanc.DripMonotoneHistory
 import Blanc.DripFresh
 import Blanc.DripAccounting
+import Blanc.DripTraceRealizes
+import Blanc.DripConcreteRealized
+import Blanc.Composition.ProrataWethVaultPairHistory
+import Blanc.Composition.ProrataWethVaultAccountingHistory
+import Blanc.Composition.ProrataWethVaultCoalitionHistory
+import Blanc.Composition.ProrataWethVaultLedgerFaithful
+import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1126,6 +1134,34 @@ import Blanc.DripAccounting
 #print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed
 #print axioms Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved
 #print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved
+#print axioms Blanc.Composition.ProrataWethVault.wethFrame_vaultRow_classified
+#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_sound
+#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_complete
+#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_total
+#print axioms Blanc.Drip.history_accounting_exact
+#print axioms Blanc.Drip.history_balance_exact
+#print axioms Blanc.Drip.history_entitlement
+#print axioms Blanc.Drip.history_chi_rho_mono
+#print axioms Blanc.Drip.concreteHistory_realizes
+#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed_or_debit
+#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_stable
+#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed
+#print axioms Blanc.Composition.ProrataWethVault.PairTraceRealizes.authorizedDebit_zero
+#print axioms Blanc.Composition.ProrataWethVault.pair_realized_dust_trace_exact
+#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_open_context
+#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit
+#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit_of_no_share_gifts
+#print axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound
+#print axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound_of_trace
+#print axioms Blanc.Composition.ProrataWethVault.pair_history_backed
+#print axioms Blanc.Composition.ProrataWethVault.pair_history_stable
+#print axioms Blanc.Composition.ProrataWethVault.pair_history_realized_dust_trace_exact
+#print axioms Blanc.Composition.ProrataWethVault.pair_history_attacker_open_context
+#print axioms Blanc.Composition.ProrataWethVault.pair_history_victim_loss_bound
+#print axioms Blanc.Drip.dripTraceRealizes_exists_of_reachUsing
+#print axioms Blanc.Drip.DripTraceRealizes.toReachUsing
+#print axioms Blanc.Drip.concreteHistory_not_draftedKinds
+#print axioms Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited
 #print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq
 #print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay
 #print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono
