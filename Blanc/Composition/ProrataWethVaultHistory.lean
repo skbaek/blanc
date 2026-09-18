@@ -326,33 +326,8 @@ def pairCarrier (vault : Adr) (blockIndex : Nat) (transactionIndex : Option Nat)
 
 /-! ## Transport of the frame invariant across a foreign frame's steps
 
-The vault half restates, as lemmas, the four foreign-frame obligations that
+The vault half discharges the four foreign-frame obligations that
 `vault_rely_preserves_conserved` discharges inline. -/
-
-private theorem wethCode_toList_ne_nil' {vault : Adr} {sevm : Sevm} {pre : Devm}
-    (config : DirectWethConfiguration vault sevm pre) :
-    (pre.getCode wethAccount).toList ≠ [] := by
-  rw [config.code]
-  exact wethCode_nonempty
-
-private theorem DirectWethConfiguration.of_codePreserve'
-    {vault : Adr} {sevm sevm' : Sevm} {pre inter : Devm}
-    (config : DirectWethConfiguration vault sevm pre)
-    (stat : sevm'.benvStat = sevm.benvStat)
-    (preserve : Devm.CodePreserve pre inter) :
-    DirectWethConfiguration vault sevm' inter := by
-  refine ⟨config.distinct, ?_, ?_⟩
-  · rw [stat]
-    exact config.nonprecompile
-  · rw [preserve wethAccount (wethCode_toList_ne_nil' config)]
-    exact config.code
-
-private theorem ninst_stepRun_codePreserve
-    {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst} {xl : Xlot}
-    (child : Xlot.Rel Devm.CodePreserve xl)
-    (run : Ninst.StepRun pc sevm pre n xl (.ok inter)) :
-    Devm.CodePreserve pre inter :=
-  Ninst.codePreserve_effectRec n child run
 
 /-- A childless step of a frame foreign to the vault keeps the vault's frame invariant. -/
 theorem VaultFrameInv.ninst_none {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
@@ -360,8 +335,8 @@ theorem VaultFrameInv.ninst_none {vault : Adr} {pc : Nat} {sevm : Sevm} {pre int
     (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
     VaultFrameInv vault sevm inter := by
   refine ⟨⟨?_, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve' rfl
-      (ninst_stepRun_codePreserve (xl := .none) trivial h_run),
+    inv.config.of_codePreserve rfl
+      (Ninst.stepRun_codePreserve (xl := .none) trivial h_run),
     inv.code⟩
   have hσ' := inv.preWf.pre
   cases n with
@@ -429,15 +404,15 @@ theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre int
       rw [hsrc (not_delegation_of_compile inv.preWf.pre.code)]
       exact inv.preWf.pre.code
   refine ⟨⟨⟨h_child, fun _ => Xinst.some_child_wf hx⟩,
-    inv.config.of_codePreserve' childStat childCode, childOwnCode⟩, ?_⟩
+    inv.config.of_codePreserve childStat childCode, childOwnCode⟩, ?_⟩
   intro h_if
   have wholeStep : Devm.CodePreserve pre inter :=
-    ninst_stepRun_codePreserve (xl := .some ⟨evm', out'⟩)
+    Ninst.stepRun_codePreserve (xl := .some ⟨evm', out'⟩)
       (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
         Ninst.codePreserve_effectRec Jinst.codePreserve_effect
         Linst.codePreserve_effect child) h_run
   exact ⟨⟨h_back h_if, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve' rfl wholeStep, inv.code⟩
+    inv.config.of_codePreserve rfl wholeStep, inv.code⟩
 
 /-- A jump of a frame foreign to the vault keeps the vault's frame invariant. -/
 theorem VaultFrameInv.jinst {vault : Adr} {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
@@ -446,7 +421,7 @@ theorem VaultFrameInv.jinst {vault : Adr} {pc pc' : Nat} {sevm : Sevm} {pre inte
     VaultFrameInv vault sevm inter := by
   have state := Jinst.preserves_state h_run
   refine ⟨⟨inv.preWf.pre.state_eq state, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve' rfl ?_, inv.code⟩
+    inv.config.of_codePreserve rfl ?_, inv.code⟩
   intro a _
   exact getCode_eq_of_state_eq state a
 
