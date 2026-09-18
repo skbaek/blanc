@@ -424,7 +424,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
     """Tie this source family to its exact repository-wide axiom probes."""
     # The constructor owner is included only to enforce the private-to-proof
     # façade below.  Its pre-existing theorem inventory is outside the nine
-    # deployment proof owners and therefore outside this exact 165-name set.
+    # deployment proof owners and therefore outside this exact 164-name set.
     names = public_theorem_names({
         owner: source for owner, source in sources.items()
         if owner != "constructor"
