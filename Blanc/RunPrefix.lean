@@ -139,4 +139,27 @@ theorem Func.RunPrefix.of_run_call {fs : List Func} {e : Sevm} {s : Devm}
   rcases Blanc.of_run_call h with ⟨f, s', hget, hburn, hrun⟩
   exact ⟨f, s', hget, hburn, hrun, RunPrefix.call hget hburn RunPrefix.refl⟩
 
+/-- A gas-free walk prefix never moves ETH. -/
+theorem Func.RunPrefix.getBal_eq {fs : List Func} {e : Sevm}
+    {path target : Prog.SourcePath} {s t : Devm} {body rest : Func}
+    (walk : Func.RunPrefix fs e path s body target t rest) :
+    Devm.getBal t = Devm.getBal s := by
+  induction walk with
+  | refl => rfl
+  | @next k steps s i s' f target t rest free step _ ih =>
+      have stepEq : Devm.getBal s = Devm.getBal s' := by
+        cases i with
+        | reg r => exact (inferInstance : Ninst.Hinv Devm.getBal (.reg r)).inv step
+        | push xs p =>
+            exact (inferInstance : Ninst.Hinv Devm.getBal (.push xs p)).inv step
+        | exec x => simp [Ninst.gasFree] at free
+      exact ih.trans stepEq.symm
+  | zero pop _ ih =>
+      exact ih.trans (funext fun a => getBal_eq_of_state_eq pop.state.symm a)
+  | succ _ pop burn _ ih =>
+      exact ih.trans (funext fun a =>
+        getBal_eq_of_state_eq (pop.state.trans burn.state).symm a)
+  | call _ burn _ ih =>
+      exact ih.trans (funext fun a => getBal_eq_of_state_eq burn.state.symm a)
+
 end Blanc

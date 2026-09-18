@@ -55,7 +55,8 @@ registry has identified the likely vocabulary.
   gas-free line, `RunPrefix.trans` composes prefixes, `Func.Run.of_prefix`
   splices a completion run back onto a prefix, and the `of_run_prepend`,
   `of_run_branch`, and `of_run_call` twins expose the prefix alongside the
-  corresponding elimination. Paths accumulate exactly as in
+  corresponding elimination. `Func.RunPrefix.getBal_eq` shows a prefix moves no ETH (every
+  crossed instruction is gas-free). Paths accumulate exactly as in
   `Func.sourceSites`, with the extended path in the premise so elimination
   never reduces paths. A prefix into a line is unconstructible without that
   line's gas-free certificate. Registered triggers were checked: the
