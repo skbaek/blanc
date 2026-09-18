@@ -126,7 +126,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
-          "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix",
+          "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecutionSettlement", "ExecutionPath",
           "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionMessageStateTrace",
@@ -210,7 +210,8 @@ CONTRACTS = {
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate",
-             "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory"],
+             "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
+             "DripRealizedExec", "DripExitPreCallbackLocator"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
@@ -396,6 +397,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultPair",
     "Composition.ProrataWethVaultRely",
     "Composition.ProrataWethVaultEnvironment",
+    "Composition.ProrataWethVaultHistory",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

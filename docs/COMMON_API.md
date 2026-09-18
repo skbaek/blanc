@@ -593,6 +593,22 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   completed spawn, and the resumed child.
 - For a loose gas-free walk prefix with source-path accumulation, see E1 and
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
+- To place the cut of a loose gas-free `Func.RunPrefix` on the *actual*
+  execution, use `Exec.Deriv.SourceCursor.ofRunPrefix` in
+  [`Blanc/PrefixTransport.lean`](../Blanc/PrefixTransport.lean). From a source
+  cursor of a successful frame (`root.exn = .ok post`) whose state agrees with
+  the loose start under `Devm.EqModGas`, it returns the source cursor at the
+  prefix's target path and body, its state again equal modulo `gasLeft`, and a
+  same-frame `ParentPrefix` from the starting node. The forward cursor duals
+  `SourceCursor.mainForward`, `nextForward`, `branchForward`, and
+  `callForward` advance without a nominated target (`mainForward` needs only
+  the entry counter and the compiled bytes), `SourceCursor.ninstAt` decodes
+  the instruction under a `.next` cursor, and
+  `ParentStep.exists_of_ninstAt_ok`, `exists_of_pushAt_ok`, and
+  `exists_of_jinstAt_ok` supply the underlying continuation edges. They need
+  the successful outcome; for an arbitrary-outcome frame use the
+  target-directed `*Toward` family above. A word read from `gasLeft` is not
+  transported: stop the prefix before `gas` and cross it on the actual node.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
@@ -1749,13 +1765,32 @@ ledger.  Use
 [`Blanc/ExecutionAccountingReplay.lean`](../Blanc/ExecutionAccountingReplay.lean)
 rather than restating them:
 
-- `ExecutionAccountingReplay.ReplayCarrier ca` is the interface.  Supply your
-  own boundary type `Snap`, step type `Step`, credit provenance `Tag`, replay
-  relation `Replay`, the boundary `ofState` of an ordinary world state, the
-  boundary `frameEntry` at an entered instruction frame — which may sit
-  *before* a message's value credit and so need not be any world state's
-  boundary — and the five laws `nil`, `silent`, `credit` and
-  `entry_eq_ofState`.
+- `ExecutionAccountingReplay.SettlementCarrier ca` is the settlement-facing
+  interface, and it is exactly what the three seams below consume: `Snap`,
+  `Step`, `Replay`, `ofState`, `frameEntry`, and the three laws `nil`,
+  `worldSilent` and `entry_eq_ofState`.  `worldSilent` is the one to read
+  first: it says only that a transition fixing **every** account's storage and
+  balance moves no boundary — `post.getStor = pre.getStor` and
+  `post.bal = pre.bal` as whole-world function equalities.  That is all a
+  settlement seam ever knows at its three silent sites (CREATE fresh-account
+  preparation, clean code deposit, the prepared CREATE world), and stating the
+  law at that strength is what lets a boundary read **more than one account**.
+  A law keyed to `ca` alone would be false for such a boundary, which is why
+  `Blanc/Composition/ProrataWethVaultHistory.lean`'s two-storage pair boundary
+  is a `SettlementCarrier` and not a `ReplayCarrier`.  `ca` survives only in
+  the two value-transfer side conditions of `entry_eq_ofState`.
+- `ExecutionAccountingReplay.ReplayCarrier ca` is the account-local carrier:
+  the same fields plus credit provenance `Tag`, with the account-local `silent`
+  (storage and balance fixed *at `ca`*) and `credit` (a storage-fixed strictly
+  increasing balance is some replay) in place of `worldSilent`.  It reaches the
+  seams through `ReplayCarrier.toSettlementCarrier`, which discharges
+  `worldSilent` by reading the whole-world equalities at `ca`; the seam
+  theorems are then restated at `ReplayCarrier` under their own names, so an
+  existing account-local consumer needs no change.  **Which to use:** a
+  boundary that reads one account and wants the balance-monotone step
+  classifier (`ofStorageEqBalanceMono`) takes `ReplayCarrier`; a boundary over
+  several accounts, or one that produces its steps some other way, takes
+  `SettlementCarrier` directly and simply never gains `credit`.
 - `ReplayCarrier.processMessage_of_body` and
   `ReplayCarrier.processCreateMessage_of_body` take the *committed body's*
   replay to the whole retained CALL or CREATE, splitting on settlement: a

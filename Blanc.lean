@@ -153,6 +153,7 @@ import Blanc.AbstractStackTransfer
 import Blanc.GasErasure
 import Blanc.RunPrefix
 import Blanc.ReachDispatchPrefix
+import Blanc.PrefixTransport
 import Blanc.AbstractStackCertificate
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
@@ -331,6 +332,7 @@ import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultPair
 import Blanc.Composition.ProrataWethVaultRely
 import Blanc.Composition.ProrataWethVaultEnvironment
+import Blanc.Composition.ProrataWethVaultHistory
 
 import Blanc.Drip
 import Blanc.DripAccounting
@@ -346,6 +348,8 @@ import Blanc.DripFunctional
 import Blanc.DripIngress
 import Blanc.DripHistory
 import Blanc.DripRealizedHistory
+import Blanc.DripRealizedExec
+import Blanc.DripExitPreCallbackLocator
 import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripMonotone

@@ -208,7 +208,7 @@ theorem main_receive {fs : List Func} {sevm : Sevm} {pre post : Devm}
 
 /-- Nonempty calldata reaches the shared dispatcher with the frame intact and
 the selector alone on the stack. -/
-private theorem dispatch_entry_of_run_main_prefix {fs : List Func}
+theorem dispatch_entry_of_run_main_prefix {fs : List Func}
     {sevm : Sevm} {pre post : Devm} {path : Prog.SourcePath}
     (run : Func.Run fs sevm pre main post)
     (hnonempty : sevm.data.length.toB256 ≠ 0) :
