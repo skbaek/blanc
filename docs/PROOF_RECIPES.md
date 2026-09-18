@@ -19,6 +19,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/TaggedStorage.lean`, `declaration:Blanc.TaggedStorage.encode`, `declaration:Blanc.TaggedStorage.encode_eq_of_payload_lt`, `declaration:Blanc.TaggedStorage.encode_injective_of_payload_lt`, `declaration:Blanc.TaggedStorage.encode_ne_of_region_ne`
 - Review: `proof-infrastructure` on `2026-09-09`
 
+## `same-frame-stack-certificate`
+
+- Status: `active`
+- Triggers: `goal-head:CompiledStackSafety.StepSafe`, `goal-head:CompiledStackSafety.ResumeSafe`
+- Preferred path: Use CompiledStackSafety.Certificate.at_parentPrefix for a checked certificate and an actual same-frame prefix, deriving the exact root entry invariant first. Use resume_call_safe to close an actual CALL resumption from parent headroom and its continuation stack invariant; call_resumes_of_room constructs the actual status-word result.
+- Boundary: The certificate requires local proofs for actual decoded steps; a symbolic PC/height table alone is insufficient. The theorem covers arbitrary raw parent outcomes but does not assert safety of arbitrary entered child code. Fatal child errors are distinguished from newly generated parent stack faults.
+- Owner module: [Blanc/CompiledStackSafety.lean](../Blanc/CompiledStackSafety.lean)
+- Canonical example: [Blanc/CompiledStackSafety.lean](../Blanc/CompiledStackSafety.lean) — `Certificate.at_parentPrefix`
+- Registered symbols: `declaration:Blanc.CompiledStackSafety.Certificate`, `declaration:Blanc.CompiledStackSafety.Certificate.parentStep`, `declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix`, `declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix`, `declaration:Blanc.CompiledStackSafety.call_resumes_of_room`, `declaration:Blanc.CompiledStackSafety.resume_call_safe`
+- Review: `proof-infrastructure` on `2026-09-06`
+
 ## `runcompiled-construction`
 
 - Status: `active`
@@ -78,11 +89,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:stack-prefix-line-run`
-- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm.
+- Preferred path: Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, ADDMOD, MULMOD, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm.
 - Boundary: `line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried.
 - Owner module: [Blanc/Tactics.lean](../Blanc/Tactics.lean)
 - Canonical example: [Blanc/Weth10HolderFlowCompiled.lean](../Blanc/Weth10HolderFlowCompiled.lean) — `recognized_of_run_dispatchWith`
-- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_mul`, `declaration:prefix_of_div`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`, `declaration:prefix_of_argCheckNonAddress`
+- Registered symbols: `tactic:line_prefix`, `tactic:generalize_line_prefix`, `tactic:show_pref`, `declaration:prefix_of_mul`, `declaration:prefix_of_div`, `declaration:prefix_of_addmod`, `declaration:prefix_of_mulmod`, `declaration:prefix_of_timestamp`, `declaration:prefix_of_xor`, `declaration:prefix_of_argCheckNonAddress`
 - Review: `proof-infrastructure` on `2026-08-20`
 
 ## `state-context-cleanup`
@@ -448,6 +459,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/AbstractStackCertificate.lean](../Blanc/AbstractStackCertificate.lean) — `exampleTable_certificate`
 - Registered symbols: `module:Blanc/AbstractStackCertificate.lean`, `module:Blanc/AbstractStackTransfer.lean`, `module:Blanc/AbstractStackSafety.lean`, `module:Blanc/CompiledStackSafety.lean`, `declaration:Blanc.CompiledStackSafety.StackFault`, `declaration:Blanc.CompiledStackSafety.NoStackFault`, `declaration:Blanc.CompiledStackSafety.InheritedStackFault`, `declaration:Blanc.CompiledStackSafety.ResumeSafe`, `declaration:Blanc.CompiledStackSafety.StepSafe`, `declaration:Blanc.CompiledStackSafety.Certificate`, `declaration:Blanc.CompiledStackSafety.Certificate.parentStep`, `declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix`, `declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix`, `declaration:Blanc.AbstractStackSafety.Pattern`, `declaration:Blanc.AbstractStackSafety.Matches`, `declaration:Blanc.AbstractStackSafety.SafeResult`, `declaration:Blanc.AbstractStackSafety.regularTransfer`, `declaration:Blanc.AbstractStackSafety.terminalTransfer`, `declaration:Blanc.AbstractStackSafety.callTransfer`, `declaration:Blanc.AbstractStackSafety.Table`, `declaration:Blanc.AbstractStackSafety.Table.Invariant`, `declaration:Blanc.AbstractStackSafety.Table.all_node`, `declaration:Blanc.AbstractStackSafety.Table.count_le_one`, `declaration:Blanc.AbstractStackSafety.Table.checkLayout`, `declaration:Blanc.AbstractStackSafety.checkTable`, `declaration:Blanc.AbstractStackSafety.checkTable_certificate`, `declaration:Blanc.AbstractStackSafety.exampleTable_checked`, `declaration:Blanc.AbstractStackSafety.exampleTable_certificate`
 - Review: `proof-infrastructure` on `2026-09-07`
+
+## `finite-coalition-ledger`
+
+- Status: `active`
+- Triggers: `goal-shape:finite-coalition-ledger`
+- Preferred path: Import `Blanc.LedgerConservation` and express the observation as `ledgerSumOn coalition balances`. Use `ledgerSumOn_congr` for pointwise equality, `ledgerSumOn_increase` for an actual `Increase` plus receiver-row `B256.Nof`, `ledgerSumOn_decrease` for an actual `Decrease` plus owner cover, and `ledgerSumOn_transfer` for an actual `Transfer` plus pre-state `SumNof`. The transfer theorem handles a self-transfer and every coalition-membership overlap; do not split them into an owner-not-receiver side condition.
+- Boundary: These are local finite-coalition equations. An `Increase` alone permits receiver-side word wrap, a `Decrease` needs cover, and a `Transfer` needs pre-state `SumNof`; prove those facts at the operation boundary. Neither the equations nor `LedgerConserved` establish configured-history admission, an actual endpoint run, or path-level preservation.
+- Owner module: [Blanc/LedgerConservation.lean](../Blanc/LedgerConservation.lean)
+- Canonical example: [Blanc/LedgerConservation.lean](../Blanc/LedgerConservation.lean) — `ledgerSumOn_transfer`
+- Registered symbols: `module:Blanc/LedgerConservation.lean`, `declaration:Blanc.ledgerSumOn`, `declaration:Blanc.ledgerSumOn_congr`, `declaration:Blanc.ledgerSumOn_increase`, `declaration:Blanc.ledgerSumOn_decrease`, `declaration:Blanc.ledgerSumOn_transfer`, `declaration:Blanc.LedgerConserved.sumNof`
+- Review: `proof-infrastructure` on `2026-09-16`
 
 ## `symbolic-label-linking`
 

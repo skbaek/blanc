@@ -15,6 +15,136 @@ namespace Blanc
 open Jaune
 open scoped LogOutputHinv
 
+/-! ## One walk vocabulary for two relations
+
+`Func.Run` and `Func.RunCompiledTo … (.ok ·)` are inverted by the same five
+principles, and a contract's storage, memory, stack and log reasoning uses
+nothing else.  Only the *gas* differs: the compiled relation pins each step's
+cost, the source relation only requires it not to rise.
+
+`Func.WalkInv` names those five principles at the source shapes, which the
+compiled relation satisfies by forgetting its gas.  A trace stated over an
+abstract `R` therefore serves both consumers from one proof: a compiled caller
+instantiates `R` at the compiled relation and keeps compiled continuations, a
+ladder obligation instantiates it at `Func.Run`.
+
+This is what lets a contract's effect proofs be written once instead of once
+per relation — and the alternative is not two cheap proofs but one proof and
+one near-identical copy, which the proof-duplication ratchet rejects. -/
+
+/-- The inversion principles shared by the source walk and the gas-exact
+compiled walk, stated at the source shapes. -/
+class Func.WalkInv
+    (R : List Func → Sevm → Devm → Func → Devm → Prop) : Prop where
+  /-- A `.next` node runs its instruction and continues. -/
+  next : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {i : Ninst}
+    {f : Func}, R fs sevm pre (Func.next i f) post →
+    ∃ mid, Ninst.Run sevm pre i mid ∧ R fs sevm mid f post
+  /-- A `.branch` node takes the zero arm or a nonzero arm. -/
+  branch : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {f g : Func},
+    R fs sevm pre (Func.branch f g) post →
+    (∃ mid, Devm.PopBurn [0] pre mid ∧ R fs sevm mid f post) ∨
+      (∃ (w : B256) (mid mid' : Devm), w ≠ 0 ∧ Devm.PopBurn [w] pre mid ∧
+        Devm.Burn mid mid' ∧ R fs sevm mid' g post)
+  /-- A `.call` node resolves its index in the fixed context. -/
+  call : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {k : Nat},
+    R fs sevm pre (Func.call k) post →
+    ∃ f mid, fs[k]? = some f ∧ Devm.Burn pre mid ∧ R fs sevm mid f post
+  /-- No successful walk witnesses `Func.revert`. -/
+  noRevert : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm},
+    ¬ R fs sevm pre Func.revert post
+  /-- Every walk is in particular a source walk, so a generic trace can still
+  reach a lemma stated only at `Func.Run`.  This is the direction that costs
+  nothing: the compiled relation pins the gas the source relation only
+  bounds. -/
+  toRun : ∀ {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func},
+    R fs sevm pre f post → Func.Run fs sevm pre f post
+
+instance : Func.WalkInv Func.Run where
+  toRun := id
+  next := of_run_next
+  branch := of_run_branch
+  call := fun h => by
+    obtain ⟨f, mid, hget, hburn, hrun⟩ := of_run_call h
+    exact ⟨f, mid, hget, hburn, hrun⟩
+  noRevert := not_run_revert
+
+/-- A `Line` prefix, derived from `next` rather than assumed. -/
+theorem Func.WalkInv.prepend
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {post : Devm} {l : Line} {f : Func} :
+    ∀ {pre : Devm}, R fs sevm pre (l +++ f) post →
+      ∃ mid, Line.Run sevm pre l mid ∧ R fs sevm mid f post := by
+  induction l with
+  | nil => exact fun h => ⟨_, Line.Run.nil, h⟩
+  | cons i l ih =>
+    intro pre h
+    obtain ⟨mid, hstep, hrest⟩ := Func.WalkInv.next h
+    obtain ⟨fin, hline, hf⟩ := ih hrest
+    exact ⟨fin, Line.Run.cons hstep hline, hf⟩
+
+/-- The zero arm, selected by a known stack prefix rather than by inspecting
+the branch word. -/
+theorem Func.WalkInv.zero_branch_of_prefix
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {left right : Func}
+    {xs : Stack}
+    (hp : (0 : B256) :: xs <<+ pre.stack)
+    (run : R fs sevm pre (Func.branch left right) post) :
+    ∃ armPre, Devm.PopBurn [0] pre armPre ∧ R fs sevm armPre left post ∧
+      xs <<+ armPre.stack := by
+  rcases Func.WalkInv.branch run with
+    ⟨mid, hpop, harm⟩ | ⟨w, mid, mid', hw, hpop, -, -⟩
+  · exact ⟨mid, hpop, harm, (popBurn_pref hpop hp).2⟩
+  · exact absurd (popBurn_pref hpop hp).1 hw
+
+/-- Composing the branch pop with the jumped arm's burn.  Both relations fix
+everything but gas and only relax it, so the composite is again a pop. -/
+theorem Devm.PopBurn.trans_burn {xs : List B256} {a b c : Devm}
+    (hp : Devm.PopBurn xs a b) (hb : Devm.Burn b c) : Devm.PopBurn xs a c :=
+  { stack := by rw [← hb.stack]; exact hp.stack
+    memory := hp.memory.trans hb.memory,
+    gasLeft := le_trans hb.gasLeft hp.gasLeft,
+    logs := hp.logs.trans hb.logs,
+    refundCounter := hp.refundCounter.trans hb.refundCounter,
+    output := hp.output.trans hb.output,
+    accountsToDelete := hp.accountsToDelete.trans hb.accountsToDelete,
+    returnData := hp.returnData.trans hb.returnData,
+    error := hp.error.trans hb.error,
+    accessedAddresses := hp.accessedAddresses.trans hb.accessedAddresses,
+    accessedStorageKeys := hp.accessedStorageKeys.trans hb.accessedStorageKeys,
+    state := hp.state.trans hb.state,
+    createdAccounts := hp.createdAccounts.trans hb.createdAccounts,
+    transientStorage := hp.transientStorage.trans hb.transientStorage }
+
+/-- The nonzero arm, selected the same way.  The jumped arm's extra burn is
+folded into the pop, so this has the same four-part shape as the zero arm. -/
+theorem Func.WalkInv.succ_branch_of_prefix
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {left right : Func}
+    {w : B256} {xs : Stack}
+    (hw : w ≠ 0) (hp : w :: xs <<+ pre.stack)
+    (run : R fs sevm pre (Func.branch left right) post) :
+    ∃ armPre, Devm.PopBurn [w] pre armPre ∧ R fs sevm armPre right post ∧
+      xs <<+ armPre.stack := by
+  rcases Func.WalkInv.branch run with
+    ⟨mid, hpop, -⟩ | ⟨w', mid, mid', hw', hpop, hburn, harm⟩
+  · exact absurd (popBurn_pref hpop hp).1.symm hw
+  · obtain rfl : w' = w := (popBurn_pref hpop hp).1
+    refine ⟨mid', hpop.trans_burn hburn, harm, ?_⟩
+    rw [← hburn.stack]
+    exact (popBurn_pref hpop hp).2
+
+/-- The zero arm of a guard whose nonzero arm reverts. -/
+theorem Func.WalkInv.branch_revert
+    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
+    (h : R fs sevm pre (Func.revert <?> f) post) :
+    ∃ mid, Devm.PopBurn [0] pre mid ∧ R fs sevm mid f post := by
+  rcases Func.WalkInv.branch h with ⟨mid, hpop, hrun⟩ | ⟨w, mid, mid', _, _, _, hrun⟩
+  · exact ⟨mid, hpop, hrun⟩
+  · exact absurd hrun Func.WalkInv.noRevert
+
 /-- `Func.RunCompiledTo` at a `.next` node. -/
 theorem runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
     {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
@@ -269,6 +399,38 @@ theorem runCompiledTo_revert_inv {fs : List Func} {sevm : Sevm} {devm : Devm}
   have hstk : d2.stack = (0 : B256) :: (0 : B256) :: devm.stack := by
     rw [p2.stack, p1.stack]; rfl
   exact of_run_revert_empty hstk hrev
+
+/-- The successful compiled walk as a five-place relation.  A generic trace is
+instantiated at this name — `nonzeroCaller_trace (R := Func.RunOk) …` — because
+recovering the outcome wrapper from `Func.RunCompiledTo … (.ok post)` is a
+higher-order unification Lean will not guess. -/
+abbrev Func.RunOk (fs : List Func) (sevm : Sevm) (pre : Devm) (f : Func)
+    (post : Devm) : Prop :=
+  Func.RunCompiledTo fs sevm pre f (.ok post)
+
+/-- The gas-exact compiled walk meets the shared inversion vocabulary: each
+principle is its compiled counterpart with the cost forgotten.  The `.succ`
+arm has no separate `Devm.Burn` step — the compiled relation folds the
+jumpdest into the pop's cost — so the source shape is met at a reflexive
+burn. -/
+instance : Func.WalkInv Func.RunOk where
+  next h := by
+    obtain ⟨mid, hstep, hrest⟩ := runCompiledTo_next_inv h
+    exact ⟨mid, Ninst.Run.of_runCompiled hstep, hrest⟩
+  branch h := by
+    rcases runCompiledTo_branch_inv h with
+      ⟨mid, -, hpop, hrun⟩ | ⟨w, mid, hne, -, hpop, hrun⟩
+    · exact Or.inl ⟨mid, Devm.PopBurn.of_popBurnBy hpop, hrun⟩
+    · exact Or.inr ⟨w, mid, mid, hne, Devm.PopBurn.of_popBurnBy hpop,
+        Devm.Burn.refl, hrun⟩
+  call h := by
+    cases h with
+    | call hget _ hburn hrest =>
+      exact ⟨_, _, hget, Devm.Burn.of_burnBy hburn, hrest⟩
+  noRevert h := by
+    obtain ⟨_, hex, -⟩ := runCompiledTo_revert_inv h
+    exact absurd hex (by simp)
+  toRun h := Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok h)
 
 /-- A compiled walk of `nonpayable body` at nonzero call value takes the
 empty-revert arm. No premise about `body` is admitted, so the compiler guard
@@ -759,5 +921,157 @@ theorem Func.RunCompiledTo.not_ok_call_revertData
     (run : Func.RunCompiledTo fs sevm pre (.call slot) (.ok post)) : False := by
   obtain ⟨_, -, bodyRun⟩ := runCompiledTo_call_inv hget run
   exact Func.RunCompiledTo.not_ok_revertData bodyRun
+
+/-- One compiled instruction, including a CALL-family crossing that retains a
+whole sub-execution, leaves already-installed code where it is.  `CREATE` is
+the only opcode that installs code, and it installs it at a fresh account, so
+an account whose code is already non-empty keeps exactly that code. -/
+lemma Ninst.runCompiled_preserves_getCode
+    {sevm : Sevm} {pre post : Devm} {n : Ninst} {owner : Adr}
+    (run : Ninst.RunCompiled sevm pre n post)
+    (nonempty : (pre.getCode owner).toList ≠ []) :
+    post.getCode owner = pre.getCode owner := by
+  rcases run with ⟨xl, filled, steps⟩
+  have slotCode : Xlot.Rel Devm.CodePreserve xl := by
+    rcases xl with _ | ⟨evm, raw⟩
+    · trivial
+    · rcases filled with ⟨childRun⟩
+      cases raw <;> exact Exec.preserves_getCode childRun
+  exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
+
+
+/-- A whole successful compiled walk leaves already-installed code where it is.
+
+This lifts `Ninst.runCompiled_preserves_getCode` over every constructor of the
+compiled walk, including internal `Func.call` jumps and CALL-family crossings
+that retain a sub-execution.  It is what lets a configuration premise about an
+installed program survive an arbitrary stretch of a contract body without
+threading state through each individual step. -/
+lemma Func.runCompiledTo_preserves_getCode
+    {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func} {owner : Adr}
+    (run : Func.RunCompiledTo fs sevm pre f (.ok post))
+    (nonempty : (pre.getCode owner).toList ≠ []) :
+    post.getCode owner = pre.getCode owner := by
+  have sourceRun : Func.Run fs sevm pre f post :=
+    Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok run)
+  refine Func.effect codePreserve_refl_trans.2 ?_ ?_
+    (Ninst.effect_of_effectRec codePreserve_refl_trans.1
+      codePreserve_refl_trans.2 Ninst.codePreserve_effectRec
+      Jinst.codePreserve_effect Linst.codePreserve_effect)
+    Linst.codePreserve_effect sourceRun owner nonempty
+  · intro xs a b pop account _
+    exact (getCode_eq_of_state_eq pop.state account).symm
+  · intro a b burn account _
+    exact (getCode_eq_of_state_eq burn.state account).symm
+
+
+/-- The frame a quiet stretch of a compiled walk leaves behind: neither the
+persistent world nor the event log moves.  Arithmetic bodies that only touch
+memory and the stack satisfy it, and it composes along a walk, so a
+configuration premise stated at one point carries to any later point the frame
+reaches. -/
+def Devm.QuietFrame (pre post : Devm) : Prop :=
+  pre.state = post.state ∧ pre.logs = post.logs
+
+theorem Devm.QuietFrame.rfl' (d : Devm) : Devm.QuietFrame d d := ⟨rfl, rfl⟩
+
+theorem Devm.QuietFrame.mk' {a b : Devm} (state : a.state = b.state)
+    (logs : a.logs = b.logs) : Devm.QuietFrame a b := ⟨state, logs⟩
+
+theorem Devm.QuietFrame.trans {a b c : Devm}
+    (first : Devm.QuietFrame a b) (second : Devm.QuietFrame b c) :
+    Devm.QuietFrame a c :=
+  ⟨first.1.trans second.1, first.2.trans second.2⟩
+
+/-- Every `Line` whose instructions preserve both projections is quiet. -/
+theorem Devm.QuietFrame.ofLine {sevm : Sevm} {a b : Devm} {line : Line}
+    (stateInv : Line.Inv Devm.state line) (logsInv : Line.Inv Devm.logs line)
+    (run : Line.Run sevm a line b) : Devm.QuietFrame a b :=
+  ⟨Line.of_inv Devm.state stateInv run, Line.of_inv Devm.logs logsInv run⟩
+
+/-- One quiet instruction. -/
+theorem Devm.QuietFrame.ofNinst {sevm : Sevm} {a b : Devm} {i : Ninst}
+    [Ninst.Hinv Devm.state i] [Ninst.Hinv Devm.logs i]
+    (run : Ninst.Run sevm a i b) : Devm.QuietFrame a b :=
+  ⟨Ninst.Hinv.inv (f := Devm.state) run, Ninst.Hinv.inv (f := Devm.logs) run⟩
+
+theorem Devm.QuietFrame.ofPopBurnBy {xs : List B256} {cost : Nat}
+    {a b : Devm} (pop : Devm.PopBurnBy xs cost a b) : Devm.QuietFrame a b :=
+  ⟨pop.state, pop.logs⟩
+
+theorem Devm.QuietFrame.ofBurnBy {cost : Nat} {a b : Devm}
+    (burn : Devm.BurnBy cost a b) : Devm.QuietFrame a b :=
+  ⟨burn.state, burn.logs⟩
+
+/-- The gas-forgetting counterparts, for a walk inverted through
+`Func.WalkInv`. -/
+theorem Devm.QuietFrame.ofPopBurn {xs : List B256} {a b : Devm}
+    (pop : Devm.PopBurn xs a b) : Devm.QuietFrame a b :=
+  ⟨pop.state, pop.logs⟩
+
+theorem Devm.QuietFrame.ofBurn {a b : Devm}
+    (burn : Devm.Burn a b) : Devm.QuietFrame a b :=
+  ⟨burn.state, burn.logs⟩
+
+/-- **Dispatch exhaustiveness.**  A compiled walk through `dispatchWith` that
+*succeeds* must have matched one of the tree's selectors.
+
+The contrapositive is the content: every miss falls through to the revert slot,
+and a revert is not a success.  This is what lets a whole-program theorem case
+on the selector table and know the case analysis is complete -- without it, a
+statement about "any successful message" would have to leave the unmatched
+selector as an unproved gap. -/
+theorem sig_mem_of_dispatchWith_ok :
+    ∀ {dt : DispatchTree} {sig : B256} {fs : List Func} {k : Nat}
+      {sevm : Sevm} {s post : Devm} {tail : Stack},
+      fs[k]? = some Func.revert →
+      sig :: tail <<+ s.stack →
+      Func.RunCompiledTo fs sevm s (dispatchWith k dt) (.ok post) →
+      ∃ body, (sig, body) ∈ dt := by
+  intro dt
+  induction dt with
+  | leaf w p =>
+    intro sig fs k sevm s post tail revertLookup hp run
+    simp only [dispatchWith] at run
+    obtain ⟨pushPost, pushRun, run⟩ := runCompiledTo_next_inv run
+    have pushed := of_run_pushB256 (Ninst.Run.of_runCompiled pushRun)
+    have hp1 : w :: sig :: tail <<+ pushPost.stack :=
+      prefix_of_push pushed hp
+    obtain ⟨testPost, testRun, branchRun⟩ := runCompiledTo_next_inv run
+    have testPrefix :=
+      prefix_of_eq (Ninst.Run.of_runCompiled testRun) hp1
+    by_cases hit : w = sig
+    · exact ⟨p, by rw [hit]; exact rfl⟩
+    · exfalso
+      have zeroPrefix : (0 : B256) :: tail <<+ testPost.stack := by
+        simpa [B256.eqCheck, hit] using testPrefix
+      obtain ⟨missPre, -, missRun, -⟩ :=
+        Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
+      exact Func.RunCompiledTo.not_ok_call_revert revertLookup missRun
+  | fork tl tr ihl ihr =>
+    intro sig fs k sevm s post tail revertLookup hp run
+    simp only [dispatchWith] at run
+    obtain ⟨dupPost, dupRun, run⟩ := runCompiledTo_next_inv run
+    have dupPrefix : sig :: sig :: tail <<+ dupPost.stack :=
+      prefix_of_dup_val (Ninst.Run.of_runCompiled dupRun) (by show_nth) hp
+    obtain ⟨pushPost, pushRun, run⟩ := runCompiledTo_next_inv run
+    have pushed := of_run_pushB256 (Ninst.Run.of_runCompiled pushRun)
+    have hp1 : leftmostFsig tr :: sig :: sig :: tail <<+ pushPost.stack :=
+      prefix_of_push pushed dupPrefix
+    obtain ⟨testPost, testRun, branchRun⟩ := runCompiledTo_next_inv run
+    have testPrefix :=
+      prefix_of_gt (Ninst.Run.of_runCompiled testRun) hp1
+    rcases runCompiledTo_branch_inv branchRun with left | right
+    · obtain ⟨leftPre, -, leftPop, leftRun⟩ := left
+      have leftPrefix : sig :: tail <<+ leftPre.stack :=
+        (popBurn_pref (Devm.PopBurn.of_popBurnBy leftPop) testPrefix).2
+      obtain ⟨body, mem⟩ := ihr revertLookup leftPrefix leftRun
+      exact ⟨body, Or.inr mem⟩
+    · obtain ⟨flag, rightPre, -, -, rightPop, rightRun⟩ := right
+      have rightPrefix : sig :: tail <<+ rightPre.stack :=
+        (popBurn_pref (Devm.PopBurn.of_popBurnBy rightPop) testPrefix).2
+      obtain ⟨body, mem⟩ := ihl revertLookup rightPrefix rightRun
+      exact ⟨body, Or.inl mem⟩
+
 
 end Blanc

@@ -1,88 +1,909 @@
 {
-  "schema": 1,
-  "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
-  "launch_population": 53,
-  "launch_ci_population": 34,
-  "final_ci_population": 40,
-  "split_families": [
-    "lido-circuit-breaker-registry",
-    "execution-occurrence",
-    "cycle-write-free",
-    "transient-settlement",
-    "proxy-pair-upgrade"
-  ],
-  "post_launch_gates": [
-    "beacon-deposit-assurance",
-    "beacon-deposit-deployment",
-    "weth10-current-mainnet",
-    "keccak-rate-boundary",
-    "drip-stack-certificate-data",
-    "lido-twg-pinned-target-current-mainnet"
-  ],
-  "rows": [
-    {"id":"doc-counts","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale published theorem counts"]},
-    {"id":"lido-circuit-breaker-assurance","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["stale claim metadata"]},
-    {"id":"beacon-deposit-assurance","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"layering","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["forbidden WETH re-export"]},
-    {"id":"proof-recipes","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proof-debt","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proof-module-size","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proof-duplication","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proof-residue","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"extraction-ownership","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"trust-surface","work":["static-corpus"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"keccak-rate-boundary","work":["candidate-positive","static-corpus"],"resource_class":"light","prerequisites":[],"historical_catches":["eight of the nine independent pure-Python Keccak-256 sponges merged pad10*1 wrongly at every rate boundary until 2026-09-07; reverting only that repair reddens this row with 8 x 4 failures"]},
-    {"id":"weth10-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-twg-census","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-twg-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-ossifiable-proxy-reference","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-ossifiable-proxy-performance","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lake-build","work":["prerequisite"],"resource_class":"elaboration","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-ossifiable-proxy-artifacts","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"light","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-artifact-profile","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-constructor","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-runtime-errors","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-registry-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"lido-registry-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-enumeration","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-access","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-history","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"lido-deployment","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"execution-settlement","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"execution-occurrence-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":["unauthorized edit to a frozen occurrence artifact"]},
-    {"id":"execution-occurrence-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","execution-settlement"],"historical_catches":[]},
-    {"id":"cycle-write-free-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"cycle-write-free-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"transient-settlement-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"transient-settlement-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"weth10-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds the exact compiled WETH10 bytes"},
-    {"id":"lido-dispatchers","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: dispatcher proof and semantic campaign are entangled; no cheaper complete projection is established"},
-    {"id":"lido-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: the evaluator and case projection have no separately proved cheap complete certificate"},
-    {"id":"lido-twg-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build","lido-twg-reference","lido-twg-census"],"historical_catches":[],"material_identity":"conservative: causal histories and artifact projection remain one semantic campaign"},
-    {"id":"lido-ossifiable-proxy-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic artifact evaluator stdout plus producer authority binds generated bytes"},
-    {"id":"weth10-redemption","work":["candidate-positive","static-corpus"],"resource_class":"exclusive","prerequisites":[],"historical_catches":[],"material_identity":"already precise: exact source literals, reference bytes and external runtime closure are direct inputs"},
-    {"id":"weth10-deployment","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: deployment-root semantics have no cheaper complete output projection"},
-    {"id":"error-data","work":["candidate-positive","static-corpus"],"resource_class":"light","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"beacon-deposit-model","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":[],"historical_catches":[],"material_identity":"already precise: exact target checkout, runtime closure, profile and helper are direct inputs"},
-    {"id":"weth10-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build","current-mainnet"],"historical_catches":[],"material_identity":"output-aware: two deterministic evaluator outputs bind the exact initcode, mainnet-family runtimes, selector inventory, and neutral system program; fixtures and matrix are direct inputs"},
-    {"id":"beacon-deposit-current-mainnet","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build","current-mainnet"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds BeaconDeposit creation and runtime bytes"},
-    {"id":"beacon-deposit-differential","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"conservative: the Prague model and differential projections remain coupled"},
-    {"id":"beacon-deposit-deployment","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"output-aware: deterministic evaluator stdout binds exact deployment artifacts, storage projection, gas coordinates, and system programs"},
-    {"id":"prorata-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: no broad Lean identity; exact fixtures, references, target and runtime closure are inputs"},
-    {"id":"lido-ossifiable-proxy-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: generated artifact JSON, result, target and runtime closure are direct inputs"},
-    {"id":"lido-twg-pinned-target-current-mainnet","work":["candidate-positive","static-corpus","harness-self-test"],"resource_class":"exclusive","prerequisites":["current-mainnet"],"historical_catches":[],"material_identity":"already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs"},
-    {"id":"axiom-audit","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":[]},
-    {"id":"claims","work":["candidate-positive","static-corpus"],"resource_class":"elaboration","prerequisites":["lake-build"],"historical_catches":["stale claim metadata"]},
-    {"id":"elab","work":["candidate-positive","harness-self-test"],"resource_class":"exclusive","prerequisites":["lake-build"],"historical_catches":[],"material_identity":"already precise: content-addressed module selection is the measured subject"},
-    {"id":"fmint-fixtures","work":["candidate-positive"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"weth-fixtures","work":["candidate-positive"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"prorata-fixtures","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"fmint-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"weth-coverage","work":["candidate-positive","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proxy-pair-upgrade-static","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]},
-    {"id":"proxy-pair-upgrade-semantic","work":["candidate-positive","harness-self-test"],"resource_class":"elaboration","prerequisites":["lake-build","layering"],"historical_catches":[]},
-    {"id":"drip-stack-certificate-data","work":["static-corpus","harness-self-test"],"resource_class":"light","prerequisites":[],"historical_catches":[]}
-  ]
+ "schema": 1,
+ "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
+ "launch_population": 53,
+ "launch_ci_population": 34,
+ "final_ci_population": 41,
+ "split_families": [
+  "lido-circuit-breaker-registry",
+  "execution-occurrence",
+  "cycle-write-free",
+  "transient-settlement",
+  "proxy-pair-upgrade"
+ ],
+ "post_launch_gates": [
+  "beacon-deposit-assurance",
+  "beacon-deposit-deployment",
+  "weth10-current-mainnet",
+  "keccak-rate-boundary",
+  "drip-stack-certificate-data",
+  "prorata-weth-vault-artifact",
+  "prorata-weth-vault-boundary",
+  "prorata-weth-vault-reference",
+  "prorata-weth-vault-oracle",
+  "prorata-weth-vault-differential",
+  "prorata-weth-vault-oracle-self-test",
+  "prorata-weth-vault-differential-self-test",
+  "prorata-weth-vault-reference-self-test",
+  "drip-evidence",
+  "drip-current-mainnet",
+  "lido-twg-pinned-target-current-mainnet",
+  "recipe-dispatch-controls"
+ ],
+ "rows": [
+  {
+   "id": "doc-counts",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "stale published theorem counts"
+   ]
+  },
+  {
+   "id": "lido-circuit-breaker-assurance",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "stale claim metadata"
+   ]
+  },
+  {
+   "id": "beacon-deposit-assurance",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "layering",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "forbidden WETH re-export"
+   ]
+  },
+  {
+   "id": "proof-recipes",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proof-debt",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proof-module-size",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proof-duplication",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proof-residue",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "extraction-ownership",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "trust-surface",
+   "work": [
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "keccak-rate-boundary",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "eight of the nine independent pure-Python Keccak-256 sponges merged pad10*1 wrongly at every rate boundary until 2026-09-07; reverting only that repair reddens this row with 8 x 4 failures"
+   ]
+  },
+  {
+   "id": "weth10-reference",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-reference",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-twg-census",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-twg-reference",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-ossifiable-proxy-reference",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-ossifiable-proxy-performance",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lake-build",
+   "work": [
+    "prerequisite"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-ossifiable-proxy-artifacts",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-artifact-profile",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-constructor",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-runtime-errors",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-registry-static",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-registry-semantic",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-enumeration",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-access",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-history",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-deployment",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "execution-settlement",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "execution-occurrence-static",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "unauthorized edit to a frozen occurrence artifact"
+   ]
+  },
+  {
+   "id": "execution-occurrence-semantic",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build",
+    "execution-settlement"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "cycle-write-free-static",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "cycle-write-free-semantic",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "transient-settlement-static",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "transient-settlement-semantic",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "weth10-differential",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "output-aware: deterministic evaluator stdout binds the exact compiled WETH10 bytes"
+  },
+  {
+   "id": "lido-dispatchers",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "conservative: dispatcher proof and semantic campaign are entangled; no cheaper complete projection is established"
+  },
+  {
+   "id": "lido-differential",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "conservative: the evaluator and case projection have no separately proved cheap complete certificate"
+  },
+  {
+   "id": "lido-twg-differential",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build",
+    "lido-twg-reference",
+    "lido-twg-census"
+   ],
+   "historical_catches": [],
+   "material_identity": "conservative: causal histories and artifact projection remain one semantic campaign"
+  },
+  {
+   "id": "lido-ossifiable-proxy-differential",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "output-aware: deterministic artifact evaluator stdout plus producer authority binds generated bytes"
+  },
+  {
+   "id": "weth10-redemption",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [],
+   "historical_catches": [],
+   "material_identity": "already precise: exact source literals, reference bytes and external runtime closure are direct inputs"
+  },
+  {
+   "id": "weth10-deployment",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "conservative: deployment-root semantics have no cheaper complete output projection"
+  },
+  {
+   "id": "error-data",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "beacon-deposit-model",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [],
+   "historical_catches": [],
+   "material_identity": "already precise: exact target checkout, runtime closure, profile and helper are direct inputs"
+  },
+  {
+   "id": "weth10-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build",
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "output-aware: two deterministic evaluator outputs bind the exact initcode, mainnet-family runtimes, selector inventory, and neutral system program; fixtures and matrix are direct inputs"
+  },
+  {
+   "id": "beacon-deposit-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build",
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "output-aware: deterministic evaluator stdout binds BeaconDeposit creation and runtime bytes"
+  },
+  {
+   "id": "beacon-deposit-differential",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "conservative: the Prague model and differential projections remain coupled"
+  },
+  {
+   "id": "beacon-deposit-deployment",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "output-aware: deterministic evaluator stdout binds exact deployment artifacts, storage projection, gas coordinates, and system programs"
+  },
+  {
+   "id": "prorata-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "already precise: no broad Lean identity; exact fixtures, references, target and runtime closure are inputs"
+  },
+  {
+   "id": "lido-ossifiable-proxy-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "already precise: generated artifact JSON, result, target and runtime closure are direct inputs"
+  },
+  {
+   "id": "axiom-audit",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "claims",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [
+    "stale claim metadata"
+   ]
+  },
+  {
+   "id": "elab",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [],
+   "material_identity": "already precise: content-addressed module selection is the measured subject"
+  },
+  {
+   "id": "fmint-fixtures",
+   "work": [
+    "candidate-positive"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "weth-fixtures",
+   "work": [
+    "candidate-positive"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-fixtures",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "fmint-coverage",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "weth-coverage",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proxy-pair-upgrade-static",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "proxy-pair-upgrade-semantic",
+   "work": [
+    "candidate-positive",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build",
+    "layering"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "drip-stack-certificate-data",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-artifact",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-boundary",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "lake-build",
+    "layering"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-reference",
+   "work": [
+    "candidate-positive",
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-oracle",
+   "work": [
+    "candidate-positive"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-differential",
+   "work": [
+    "candidate-positive"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": [
+    "first-draft cases divided evenly, so no rounding direction was observable (2026-09-03)",
+    "revert arm compared the receipt status against a spelling the runner never emits (2026-09-03)",
+    "bytecode-cache race let a perturbed oracle pass the chained self-tests (2026-09-03)"
+   ]
+  },
+  {
+   "id": "prorata-weth-vault-oracle-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-differential-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "prorata-weth-vault-reference-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-twg-pinned-target-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs"
+  },
+  {
+   "id": "recipe-dispatch-controls",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [],
+   "historical_catches": [
+    "a suggestion harness that re-implemented the production dispatch, so deleting the leaf delegation inside proofRecipeMatches left every assertion green"
+   ]
+  },
+  {
+   "id": "drip-evidence",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": [
+    "a nominal underfunded fixture whose floored payout still fit the target balance"
+   ],
+   "material_identity": "output-aware: non-elaborating evaluator identity binds actual compiler bytes, normalized cache environment, current Jaune source discovery and imported depHash metadata; fixture JSON, literal/parser/verifier and pinned runner still bind replay; standalone arithmetic validated; complete replay verdict remains pending"
+  },
+  {
+   "id": "drip-current-mainnet",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "exclusive",
+   "prerequisites": [
+    "current-mainnet"
+   ],
+   "historical_catches": [],
+   "material_identity": "already precise: generated fixture sources, complete fixture population, target and native runtime closure are direct inputs"
+  }
+ ]
 }

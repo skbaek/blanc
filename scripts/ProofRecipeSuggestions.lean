@@ -12,6 +12,7 @@ import Blanc.TaggedStorage
 import Blanc.AddressSlot
 import Blanc.MemoryLayout
 import Blanc.CommonProofs
+import Blanc.LedgerConservation
 import Blanc.ForwardStorageEffects
 import Blanc.CompiledStackSafety
 import Blanc.ContractAdmission
@@ -30,15 +31,114 @@ open Jaune
 
 set_option linter.unusedTactic false
 
-elab "expect_recipe_trigger" trigger:str : tactic => do
-  let target ← Lean.Elab.Tactic.getMainTarget
-  unless ← proofRecipeTriggerMatches target trigger.getString do
-    throwError "expected proof-recipe trigger {trigger.getString} to match"
+-- The controls below decide every assertion through the PRODUCTION dispatch
+-- `Blanc.proofRecipeMatches`, the single function `blanc_suggest` consults.
+--
+-- They used to call a harness-local copy of that function's disjunction, and
+-- that copy was the defect this file exists to prevent: deleting the leaf
+-- delegation inside `proofRecipeMatches` left every assertion here green while
+-- `blanc_suggest` had stopped offering the leaf-owned recipes entirely. A
+-- control that re-implements the thing it is controlling witnesses nothing.
+--
+-- `expect_recipe_trigger` and `expect_no_recipe_trigger` keep their names and
+-- their trigger-string argument -- the generator's harness enumeration reads
+-- exactly those two spellings out of this file -- but each now RESOLVES the
+-- registered recipes that declare the trigger in `Blanc.ProofRecipesGenerated`
+-- and decides the goal through `proofRecipeMatches`. An unregistered trigger
+-- is an error rather than a silent false, so a misspelling cannot turn a
+-- negative control into a control over nothing.
 
-elab "expect_no_recipe_trigger" trigger:str : tactic => do
-  let target ← Lean.Elab.Tactic.getMainTarget
-  if ← proofRecipeTriggerMatches target trigger.getString then
-    throwError "expected proof-recipe trigger {trigger.getString} not to match"
+/-- The registered recipes that declare `trigger`. Fails if none does. -/
+def proofRecipeRegisteredFor (trigger : String) :
+    Lean.Elab.Tactic.TacticM (List ProofRecipes.Recipe) := do
+  let registered := ProofRecipes.recipes.filter (fun recipe => recipe.triggers.contains trigger)
+  if registered.isEmpty then
+    throwError "proof-recipe trigger {trigger} is declared by no recipe in \
+      Blanc.ProofRecipesGenerated"
+  return registered
+
+/-- Decide `trigger` on `target` through the production dispatcher, one
+registered recipe at a time, each projected onto the single trigger under test
+so a sibling trigger of the same recipe cannot answer for it. -/
+def proofRecipeProductionTriggerMatches (target : Lean.Expr) (trigger : String) :
+    Lean.Elab.Tactic.TacticM Bool := do
+  for recipe in ← proofRecipeRegisteredFor trigger do
+    if ← proofRecipeMatches target { recipe with triggers := [trigger] } then
+      return true
+  return false
+
+/-- The registered recipe with this id. -/
+def proofRecipeById (id : String) : Lean.Elab.Tactic.TacticM ProofRecipes.Recipe := do
+  match ProofRecipes.recipes.find? (fun recipe => recipe.id == id) with
+  | some recipe => return recipe
+  | none => throwError "proof-recipe id {id} is not registered in Blanc.ProofRecipesGenerated"
+
+elab "expect_recipe_trigger" trigger:str : tactic =>
+  Lean.Elab.Tactic.withMainContext do
+    let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
+    unless ← proofRecipeProductionTriggerMatches target trigger.getString do
+      throwError "expected proof-recipe trigger {trigger.getString} to match through \
+        the production dispatcher Blanc.proofRecipeMatches"
+
+elab "expect_no_recipe_trigger" trigger:str : tactic =>
+  Lean.Elab.Tactic.withMainContext do
+    let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
+    if ← proofRecipeProductionTriggerMatches target trigger.getString then
+      throwError "expected proof-recipe trigger {trigger.getString} not to match through \
+        the production dispatcher Blanc.proofRecipeMatches"
+
+/-- Whole-recipe form: the registered record, exactly as `blanc_suggest`
+iterates it, must be offered on this goal. -/
+elab "expect_recipe_offered" id:str : tactic =>
+  Lean.Elab.Tactic.withMainContext do
+    let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
+    unless ← proofRecipeMatches target (← proofRecipeById id.getString) do
+      throwError "expected blanc_suggest to offer proof recipe {id.getString} on this goal"
+
+elab "expect_no_recipe_offered" id:str : tactic =>
+  Lean.Elab.Tactic.withMainContext do
+    let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
+    if ← proofRecipeMatches target (← proofRecipeById id.getString) then
+      throwError "expected blanc_suggest not to offer proof recipe {id.getString} on this goal"
+
+-- EXPECT: finite-coalition-ledger
+example {coalition : Finset Adr} {before after : Adr → B256}
+    (movement : ledgerSumOn coalition before = ledgerSumOn coalition after) :
+    ledgerSumOn coalition before = ledgerSumOn coalition after := by
+  expect_recipe_trigger "goal-shape:finite-coalition-ledger"
+  expect_recipe_offered "finite-coalition-ledger"
+  blanc_suggest
+  exact movement
+
+-- EXPECT-NO-MATCH: finite-coalition-ledger must not surface for the whole
+-- ledger sum, which does not preserve a selected coalition.
+example (storage : Stor) : balSum storage = balSum storage := by
+  expect_no_recipe_trigger "goal-shape:finite-coalition-ledger"
+  expect_no_recipe_offered "finite-coalition-ledger"
+  blanc_suggest
+  rfl
+
+-- EXPECT: same-frame-stack-certificate
+example (pre : Devm) :
+    CompiledStackSafety.StepSafe (fun _ _ => True) (.halt (.ok pre)) := by
+  expect_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  blanc_suggest
+  intro err post impossible
+  cases impossible
+
+-- EXPECT: same-frame-stack-certificate
+example (parent : Devm) (room : parent.stack.length < 1024) :
+    CompiledStackSafety.ResumeSafe (fun _ _ => True) 0 (.call parent 0 0) := by
+  expect_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  blanc_suggest
+  exact CompiledStackSafety.resume_call_safe parent 0 0 room (by intros; trivial)
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  trivial
 
 -- EXPECT: tagged-storage-region-separation
 example {leftRegion rightRegion : Nat} {left right : B256}

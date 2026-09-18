@@ -7,6 +7,7 @@ import Blanc.Weth10Code
 import Blanc.Compiled
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionOccurrence
+import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionNoninterference
 import Blanc.SourceAttainment
 import Blanc.CycleWriteFree
@@ -80,6 +81,13 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlR
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.LidoTriggerableWithdrawalsGatewayDeploy
 import Blanc.ProrataAttackTrace
+import Blanc.Composition.ProrataWethVaultCapacities
+import Blanc.Composition.ProrataWethVaultInbound
+import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.Composition.ProrataWethVaultMessage
+import Blanc.Composition.ProrataWethVaultRely
+import Blanc.ProrataWethVaultShares
+import Blanc.ProrataWethVaultDust
 import Blanc.BeaconDepositCorrectness
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
@@ -96,6 +104,11 @@ import Blanc.BeaconDepositHistorySound
 import Blanc.BeaconDepositHistoryChain
 import Blanc.AbstractStackCertificate
 import Blanc.ProxyPairUpgradeStackSafety
+import Blanc.DripSound
+import Blanc.DripMonotone
+import Blanc.DripMonotoneHistory
+import Blanc.DripFresh
+import Blanc.DripAccounting
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1038,6 +1051,90 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.Prorata.attacker_open_context
 #print axioms Blanc.Prorata.attacker_no_profit
 #print axioms Blanc.Prorata.victim_loss_bound
+#print axioms Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect
+#print axioms Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance
+#print axioms Blanc.Composition.ProrataWethVault.Source.totalAssetsResources_of_run
+#print axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_body_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact
+#print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.mint_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.withdraw_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect
+#print axioms Blanc.ProrataWethVault.approve_compiled_effect
+#print axioms Blanc.ProrataWethVault.transfer_compiled_effect
+#print axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
+#print axioms Blanc.ProrataWethVault.roundtrip_loss_le
+#print axioms Blanc.ProrataWethVault.redemption_le_assets
+#print axioms Blanc.ProrataWethVault.victim_loss_le
+#print axioms Blanc.ProrataWethVault.victim_loss_le_over_history
+#print axioms Blanc.ProrataWethVault.dust_trace_exact
+#print axioms Blanc.ProrataWethVault.depositStep
+#print axioms Blanc.ProrataWethVault.redeemStep
+#print axioms Blanc.ProrataWethVault.donationStep
+#print axioms Blanc.ProrataWethVault.two_le_offsetN
+#print axioms Blanc.ProrataWethVault.attacker_open_context
+#print axioms Blanc.ProrataWethVault.attacker_no_profit
+#print axioms Blanc.ProrataWethVault.victim_loss_bound
+#print axioms Blanc.ProrataWethVault.attack_carrier_inhabited
+#print axioms Blanc.ProrataWethVault.transferStaged_storesOrHalts
+#print axioms Blanc.ProrataWethVault.withdrawBurn_storesOrHalts
+#print axioms Blanc.ProrataWethVault.redeemBurn_storesOrHalts
+#print axioms Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts
+#print axioms Blanc.ProrataWethVault.finishInbound_storesOrHalts
+#print axioms Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts
+#print axioms Blanc.ProrataWethVault.depositAfterQuote_not_static
+#print axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
+#print axioms Blanc.ProrataWethVault.mint_never_overmints
+#print axioms Blanc.ProrataWethVault.withdraw_never_overpays
+#print axioms Blanc.Frame.enter_run_benvStat
+#print axioms Blanc.RunFrame.benvStat_eq
+#print axioms Blanc.genericCall.step_spawn_benvStat
+#print axioms Blanc.genericCreate.step_spawn_benvStat
+#print axioms Blanc.Xinst.step_spawn_benvStat
+#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves
+#print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.transferEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.approveEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep_of_view
+#print axioms Blanc.Composition.ProrataWethVault.readOnlyEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.transferFromEffect_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named
+#print axioms Blanc.Composition.ProrataWethVault.deposit_message_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named
+#print axioms Blanc.Composition.ProrataWethVault.redeem_message_accountingStep
+#print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.toPath
+#print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le
+#print axioms Blanc.Composition.ProrataWethVault.PairBacked.donation
+#print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
+#print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved
+#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body
+#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome
+#print axioms Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState
+#print axioms Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body
+#print axioms Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono
 #print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
 #print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #print axioms Blanc.Func.localExecFree_iff
@@ -1185,3 +1282,34 @@ import Blanc.ProxyPairUpgradeStackSafety
 #print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause
 #print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause
 #print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
+#print axioms Blanc.Drip.sound_of_stepClosed
+#print axioms Blanc.Drip.accountingInv_stepClosed
+#print axioms Blanc.Drip.dripSpec_sound
+#print axioms Blanc.Drip.dripSpec_preserves
+#print axioms Blanc.Drip.monoInv_stepClosed
+#print axioms Blanc.Drip.dripMonoSpec_sound
+#print axioms Blanc.Drip.dripMonoSpec_preserves
+#print axioms Blanc.Drip.DeploymentRoot.monoStateInv
+#print axioms Blanc.Drip.DeploymentRoot.rho
+#print axioms Blanc.Drip.DeploymentRoot.reachable_chi_mono
+#print axioms Blanc.Drip.DeploymentRoot.reachable_rho_mono
+#print axioms Blanc.Drip.reach_chi_rho_mono
+#print axioms Blanc.Drip.rho_le_timestamp_at_boundary
+#print axioms Blanc.Drip.bodyOccurrence_mono
+#print axioms Blanc.Drip.exec_monoInv
+#print axioms Blanc.Drip.processMessage_mono
+#print axioms Blanc.Drip.message_error_mono
+#print axioms Blanc.Drip.transaction_mono
+#print axioms Blanc.Drip.transactionList_mono
+#print axioms Blanc.Drip.systemMessage_mono
+#print axioms Blanc.Drip.requests_mono
+#print axioms Blanc.Drip.withdrawals_mono
+#print axioms Blanc.Drip.body_mono
+#print axioms Blanc.Drip.configuredBlock_mono
+#print axioms Blanc.Drip.configuredHistory_mono
+#print axioms Blanc.Drip.drip_compiled_join
+#print axioms Blanc.Drip.drip_compiled_exit
+#print axioms Blanc.Drip.no_stale_index_success_callback_free
+#print axioms Blanc.Drip.no_stale_index_settlement_exit
+#print axioms Blanc.Drip.view_eq_same_timestamp_join
+#print axioms Blanc.Drip.chain_drips_eq_segmentIndex

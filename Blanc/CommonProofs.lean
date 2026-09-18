@@ -756,6 +756,27 @@ def Func.SilentIn {Observation : Type}
   | .next i body => Ninst.Inv observe i ∧ Func.SilentIn observe P body
   | .call k => P k
 
+/-- Walk a `Func.SilentIn` goal structurally: `And.intro` at each `branch` and
+`next`, the synthesised `Ninst`/`Linst` instance at each leaf.  A tail call
+leaves the slot obligation `P k` open; supply `with tac` to close those, since
+what makes a slot permitted is contract-specific.
+
+Two consumers: the beacon deposit root's mutually recursive loop and the
+WETH-backed PRORATA vault's live-quoting views. -/
+syntax "silent_structure" (ppSpace "with" ppSpace tacticSeq)? : tactic
+macro_rules
+| `(tactic| silent_structure) =>
+  `(tactic| repeat' first
+      | exact Ninst.Hinv.inv
+      | exact Linst.Hinv.inv
+      | apply And.intro)
+| `(tactic| silent_structure with $d:tacticSeq) =>
+  `(tactic| repeat' first
+      | exact Ninst.Hinv.inv
+      | exact Linst.Hinv.inv
+      | apply And.intro
+      | ($d))
+
 /-- A `SilentIn` body preserves its observation in a fixed function context
 closed under permitted tail calls.  Recursion is on the successful run, so a
 closed set of mutually recursive slots needs no fuel premise. -/
@@ -6004,6 +6025,53 @@ lemma prefix_of_sload {e x xs} {s s' : Devm} :
   subst hx
   exact ⟨_, append_pref h3 (of_append_pref h2 h1), rfl⟩
 
+/-- A successful `SLOAD` does not mutate persistent EVM state.  The access-list
+warming performed on the cold path is execution metadata, not `Devm.state`. -/
+lemma of_run_sload_state {e : Sevm} {s s' : Devm}
+    (run : Ninst.Run e s sload s') : s.state = s'.state := by
+  rcases of_run_reg run with ⟨_pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s1⟩, popRun, tailRun⟩
+  have popState := (Devm.pop_of_pop popRun).state
+  suffices preserve : ∀ (d : Devm) (cost : Nat),
+      s1.state = d.state →
+      (chargeGas cost d >>=
+        fun next => Devm.push
+          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+      s1.state = s'.state by
+    refine popState.trans ?_
+    split at tailRun
+    · exact preserve s1 gasWarmAccess rfl tailRun
+    · exact preserve (addAccessedStorageKey s1 e.currentTarget key)
+        gasColdSload rfl tailRun
+  intro d cost stateEq tailRun
+  rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
+  exact (stateEq.trans (Devm.burn_of_chargeGas chargeRun).state).trans
+    (Devm.push_of_push pushRun).state
+
+/-- A successful `SLOAD` emits no log entries. -/
+lemma of_run_sload_logs {e : Sevm} {s s' : Devm}
+    (run : Ninst.Run e s sload s') : s.logs = s'.logs := by
+  rcases of_run_reg run with ⟨_pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨⟨key, s1⟩, popRun, tailRun⟩
+  have popLogs := (Devm.pop_of_pop popRun).logs
+  suffices preserve : ∀ (d : Devm) (cost : Nat),
+      s1.logs = d.logs →
+      (chargeGas cost d >>=
+        fun next => Devm.push
+          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+      s1.logs = s'.logs by
+    refine popLogs.trans ?_
+    split at tailRun
+    · exact preserve s1 gasWarmAccess rfl tailRun
+    · exact preserve (addAccessedStorageKey s1 e.currentTarget key)
+        gasColdSload rfl tailRun
+  intro d cost logsEq tailRun
+  rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
+  exact (logsEq.trans (Devm.burn_of_chargeGas chargeRun).logs).trans
+    (Devm.push_of_push pushRun).logs
+
 lemma prefix_of_mload {e x xs} {s s' : Devm} :
     Ninst.Run e s mload s' → (x :: xs <<+ s.stack) → ∃ y, y :: xs <<+ s'.stack := by
   intro h0 h1
@@ -6333,6 +6401,11 @@ instance : Rinst.Hinv Devm.state Rinst.mod := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.exp := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.slt := by show_hinv_state
 instance : Rinst.Hinv Devm.state Rinst.sgt := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.timestamp := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.caller := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.gas := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.sload := by show_hinv_state
+instance : Rinst.Hinv Devm.state Rinst.pop := by show_hinv_state
 
 /-- An observation preserved as a whole family is preserved at each index.  A
 walk that only tracks one account's balance states its invariant as the
@@ -6547,6 +6620,18 @@ instance {n} : Ninst.Hinv Devm.state (Ninst.dup n) := ⟨by
       rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
       exact h_state
 ⟩
+
+instance {n} : Ninst.Hinv Devm.state (Ninst.swap n) := ⟨by
+  intro e s s' h
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
+  have hb := Devm.burn_of_chargeGas h1
+  split at h2
+  · cases h2
+  · injection h2 with eq
+    subst eq
+    exact hb.state⟩
 
 instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
   intros e s s' h
@@ -6794,6 +6879,9 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.gt := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.lt := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.shl := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.shr := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.mul := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.div := by show_hinv_logs_binary
+scoped instance : Rinst.Hinv Devm.logs Rinst.sub := by show_hinv_logs_binary
 scoped instance : Rinst.Hinv Devm.logs Rinst.iszero := by show_hinv_logs_unary
 scoped instance : Rinst.Hinv Devm.logs Rinst.not := by show_hinv_logs_unary
 
@@ -6805,6 +6893,9 @@ scoped instance : Rinst.Hinv Devm.output Rinst.gt := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.lt := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.shl := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.shr := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.mul := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.div := by show_hinv_output_binary
+scoped instance : Rinst.Hinv Devm.output Rinst.sub := by show_hinv_output_binary
 scoped instance : Rinst.Hinv Devm.output Rinst.iszero := by show_hinv_output_unary
 scoped instance : Rinst.Hinv Devm.output Rinst.not := by show_hinv_output_unary
 
@@ -6846,6 +6937,36 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.caller := ⟨by
   exact (Devm.pushBurn_of_pushItem run).logs⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.caller := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.callvalue := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.callvalue := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.calldatasize := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.calldatasize := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).output⟩
+
+scoped instance : Rinst.Hinv Devm.logs Rinst.timestamp := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact (Devm.pushBurn_of_pushItem run).logs⟩
+
+scoped instance : Rinst.Hinv Devm.output Rinst.timestamp := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   exact (Devm.pushBurn_of_pushItem run).output⟩
@@ -7451,6 +7572,245 @@ theorem reach_of_dispatchWith {funcs : List (B256 × Func)} {sig : B256} {f : Fu
       Func.Run c e s' f r :=
   reach_of_dispatchWith_build h_sorted (Nat.le_succ _) h_mem h_pfx h_run
 
+/-! ### Inline-revert dispatch reachability
+
+`dispatch` has the same balanced-search shape as `dispatchWith`, but a leaf
+miss executes `Func.revert` directly instead of tail-calling a fallback slot.
+The successful selected-body theorem is therefore strictly simpler at the
+leaf while retaining the same sortedness and frame guarantees. -/
+
+private lemma reach_of_dispatch_leaf {sig w : B256} {f p : Func}
+    {c : List Func} {e : Sevm} {s r : Devm} {ws : Stack}
+    (h_mem : (sig, f) ∈ [(w, p)])
+    (h_pfx : sig :: ws <<+ s.stack) :
+    Func.Run c e s (dispatch (DispatchTree.leaf w p)) r →
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      Func.Run c e s' f r := by
+  have h_eq : (sig, f) = (w, p) := List.mem_singleton.mp h_mem
+  injection h_eq with h_sig h_f
+  subst h_sig
+  subst h_f
+  func_execute 2
+  intro h₂
+  have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by
+    generalize_line_prefix
+  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rcases of_run_branch h₂ with
+      ⟨s₂, h_pop, h_runf⟩ |
+      ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
+  · exact absurd h_runf not_run_revert
+  · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
+    refine ⟨s₃, ?_, ?_, ?_, h_runf⟩
+    · rw [← h_burn.stack]
+      exact h_pfx2
+    · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+        (h_pop.state.trans h_burn.state)
+    · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+        (h_pop.memory.trans h_burn.memory)
+
+private theorem reach_of_dispatch_build :
+    ∀ {n : Nat} {xs : List (B256 × Func)} {sig : B256} {f : Func}
+      {c : List Func} {e : Sevm} {s r : Devm} {ws : Stack},
+      DispatchTree.sorted xs = true →
+      xs.length ≤ n + 1 →
+      (sig, f) ∈ xs →
+      (sig :: ws <<+ s.stack) →
+      Func.Run c e s (dispatch (DispatchTree.build n xs)) r →
+      ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+        Func.Run c e s' f r := by
+  intro n
+  induction n with
+  | zero =>
+    intro xs sig f c e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatch_leaf h_mem h_pfx
+    · intro _
+      exfalso
+      simp only [List.length_cons] at h_len
+      omega
+  | succ n ih =>
+    intro xs sig f c e s r ws h_sorted h_len h_mem h_pfx
+    rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases h_mem
+    · exact reach_of_dispatch_leaf h_mem h_pfx
+    ·
+      simp only [List.length_cons] at h_len
+      have h_take_len :
+          (((w, p) :: y :: ys).take
+            ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+        simp only [List.length_take, List.length_cons]
+        omega
+      have h_drop_len :
+          (((w, p) :: y :: ys).drop
+            ((((w, p) :: y :: ys).length + 1) / 2)).length ≤ n + 1 := by
+        simp only [List.length_drop, List.length_cons]
+        omega
+      obtain ⟨z, zs, h_drop⟩ :
+          ∃ z zs, ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2) = z :: zs := by
+        rcases h_d : ((w, p) :: y :: ys).drop
+            ((((w, p) :: y :: ys).length + 1) / 2) with _ | ⟨z, zs⟩
+        · exfalso
+          have h_l := congrArg List.length h_d
+          simp only [List.length_drop, List.length_cons, List.length_nil] at h_l
+          omega
+        · exact ⟨z, zs, rfl⟩
+      have h_sorted_split : DispatchTree.sorted
+          (((w, p) :: y :: ys).take
+              ((((w, p) :: y :: ys).length + 1) / 2) ++
+           ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2)) = true := by
+        rw [List.take_append_drop]
+        exact h_sorted
+      have h_sorted_take := DispatchTree.sorted_append_left h_sorted_split
+      have h_sorted_drop := DispatchTree.sorted_append_right h_sorted_split
+      have h_mem_split : (sig, f) ∈
+          ((w, p) :: y :: ys).take
+              ((((w, p) :: y :: ys).length + 1) / 2) ∨
+          (sig, f) ∈ ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2) := by
+        apply List.mem_append.mp
+        rw [List.take_append_drop]
+        exact h_mem
+      func_execute 3
+      intro h₂
+      have h_pfx1 :
+          (leftmostFsig (DispatchTree.build n
+            (((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2))) >? sig) ::
+            sig :: ws <<+ s₁.stack := by
+        generalize_line_prefix
+      rw [h_drop, DispatchTree.leftmostFsig_build] at h_pfx1
+      rcases of_run_branch h₂ with
+          ⟨s₂, h_pop, h_run'⟩ |
+          ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_run'⟩
+      ·
+        rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_le : z.fst ≤ sig := by
+          rw [← B256.not_lt]
+          intro h_lt
+          have h_gt : z.fst > sig := h_lt
+          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          exact B256.zero_ne_one h_flag
+        have h_mem_drop : (sig, f) ∈
+            ((w, p) :: y :: ys).drop
+              ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exfalso
+            have h_z : z ∈ ((w, p) :: y :: ys).drop
+                ((((w, p) :: y :: ys).length + 1) / 2) := by
+              rw [h_drop]
+              exact List.mem_cons_self ..
+            have h_lt := DispatchTree.fst_lt_of_sorted_append
+              h_sorted_split h_in h_z
+            have h1 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            have h2 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            omega
+          · exact h_in
+        rcases ih h_sorted_drop h_drop_len h_mem_drop h_pfx2 h_run'
+          with ⟨s', h_s', h_st, h_mm, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+            (h_pop.state.trans h_st)
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+            (h_pop.memory.trans h_mm)
+      ·
+        rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
+        have h_lt : sig < z.fst := by
+          by_contra h_nlt
+          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          exact h_ne h_flag
+        have h_mem_take : (sig, f) ∈
+            ((w, p) :: y :: ys).take
+              ((((w, p) :: y :: ys).length + 1) / 2) := by
+          rcases h_mem_split with h_in | h_in
+          · exact h_in
+          · exfalso
+            rw [h_drop] at h_in
+            have h_sorted_zzs : DispatchTree.sorted (z :: zs) = true := by
+              rw [← h_drop]
+              exact h_sorted_drop
+            have h_le := DispatchTree.fst_le_of_sorted_mem h_sorted_zzs h_in
+            have h1 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat h_le
+            have h2 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat h_lt
+            omega
+        rw [h_burn.stack] at h_pfx2
+        rcases ih h_sorted_take h_take_len h_mem_take h_pfx2 h_run'
+          with ⟨s', h_s', h_st, h_mm, h_rf⟩
+        refine ⟨s', h_s', ?_, ?_, h_rf⟩
+        · exact (Line.of_inv Devm.state (by line_inv) h₁).trans
+            (h_pop.state.trans (h_burn.state.trans h_st))
+        · exact (Line.of_inv Devm.memory (by line_inv) h₁).trans
+            (h_pop.memory.trans (h_burn.memory.trans h_mm))
+
+/-- **Inline-revert dispatch reachability.** A successful run over a sorted
+function list factors through the entry paired with the selector on top of the
+stack. The selector is removed and the dispatcher preserves world state and
+memory; selector misses cannot produce a successful run. -/
+theorem reach_of_dispatch {funcs : List (B256 × Func)}
+    {sig : B256} {f : Func} {c : List Func} {e : Sevm} {s r : Devm}
+    {ws : Stack}
+    (h_sorted : DispatchTree.sorted funcs = true)
+    (h_mem : (sig, f) ∈ funcs)
+    (h_pfx : sig :: ws <<+ s.stack)
+    (h_run : Func.Run c e s (dispatch (DispatchTree.ofSorted funcs)) r) :
+    ∃ s', (ws <<+ s'.stack) ∧ s.state = s'.state ∧ s.memory = s'.memory ∧
+      Func.Run c e s' f r :=
+  reach_of_dispatch_build h_sorted (Nat.le_succ _) h_mem h_pfx h_run
+
+/-- **Inline-revert dispatch misses cannot succeed.** `Func.Run` is the
+successful source relation, so a selector with no leaf in the tree has no
+successful dispatcher run at all: every branch it can take ends at the inline
+`Func.revert`.  This is the source-level counterpart of
+`DispatchTree.dispatchMiss_runCompiledTo_with_path`, and it is what turns a
+contract's selector census into "every successful call is one of these
+entries". -/
+theorem not_run_dispatch_of_miss :
+    ∀ {tree : DispatchTree} {sig : B256} {c : List Func} {e : Sevm}
+      {s r : Devm} {ws : Stack},
+      (∀ body : Func, (sig, body) ∉ tree) →
+      (sig :: ws <<+ s.stack) →
+      Func.Run c e s (dispatch tree) r → False := by
+  intro tree
+  induction tree with
+  | leaf w p =>
+    intro sig c e s r ws h_miss h_pfx
+    have h_ne : w ≠ sig := by
+      intro h_eq
+      exact h_miss p (show (sig, p) = (w, p) by rw [h_eq])
+    func_execute 2
+    intro h₂
+    have h_pfx1 : (w =? sig) :: ws <<+ s₁.stack := by
+      generalize_line_prefix
+    rw [B256.eqCheck, if_neg h_ne] at h_pfx1
+    rcases of_run_branch h₂ with
+        ⟨s₂, h_pop, h_runf⟩ |
+        ⟨v, s₂, s₃, h_vne, h_pop, h_burn, h_runf⟩
+    · exact not_run_revert h_runf
+    · rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, -⟩
+      exact h_vne h_flag
+  | fork tl tr ihl ihr =>
+    intro sig c e s r ws h_miss h_pfx
+    have h_missl : ∀ body : Func, (sig, body) ∉ tl := by
+      intro body h_mem
+      exact h_miss body (Or.inl h_mem)
+    have h_missr : ∀ body : Func, (sig, body) ∉ tr := by
+      intro body h_mem
+      exact h_miss body (Or.inr h_mem)
+    func_execute 3
+    intro h₂
+    have h_pfx1 : (leftmostFsig tr >? sig) :: sig :: ws <<+ s₁.stack := by
+      generalize_line_prefix
+    rcases of_run_branch h₂ with
+        ⟨s₂, h_pop, h_run'⟩ |
+        ⟨v, s₂, s₃, h_vne, h_pop, h_burn, h_run'⟩
+    · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
+      exact ihr h_missr h_pfx2 h_run'
+    · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
+      rw [h_burn.stack] at h_pfx2
+      exact ihl h_missl h_pfx2 h_run'
+
 /-! ### Dispatch reachability with the event-log frame
 
 Functional contract theorems need the same selected-leaf factorization as
@@ -7678,6 +8038,51 @@ theorem reach_of_dispatchWith_logs
       s.logs = s'.logs ∧ s.output = s'.output ∧
         Func.Run c e s' f r :=
   reach_of_dispatchWith_build_logs h_sorted (Nat.le_succ _) h_mem h_pfx h_run
+
+/-- `run_body_of_run_nonpayable_frame` with the wrapper's log and output
+silence.  A functional theorem that must relate a nonpayable endpoint's events
+or returndata to the public frame's entry needs the same two projections the
+dispatcher already carries. -/
+theorem run_body_of_run_nonpayable_logs
+    {fs : List Func} {sevm : Sevm} {s r : Devm} {body : Func}
+    (run : Func.Run fs sevm s (nonpayable body) r) :
+    ∃ mid, sevm.value = 0 ∧ s.state = mid.state ∧ s.memory = mid.memory ∧
+      s.logs = mid.logs ∧ s.output = mid.output ∧
+      Func.Run fs sevm mid body r := by
+  unfold nonpayable at run
+  refine run_prepend_elim _ [callvalue, iszero] ?_ run
+  intro s1 hline hbranch
+  rcases Line.of_run_cons hline with ⟨s0, hcv, hline'⟩
+  rcases Line.of_run_cons hline' with ⟨s1', hiz, hnil⟩
+  cases hnil
+  have hpv : [sevm.value] <<+ s0.stack :=
+    prefix_of_push (of_run_callvalue hcv) nil_pref
+  have hpflag : [sevm.value =? 0] <<+ s1.stack :=
+    prefix_of_iszero hiz hpv
+  rcases of_run_branch hbranch with
+    ⟨s2, hpop, hrev⟩ | ⟨w, s2, s3, hnz, hpop, hburn, hbody⟩
+  · exact absurd hrev not_run_revert
+  · have hpop' := hpop.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
+    rw [hpop'] at hpflag
+    have hw : (sevm.value =? 0) = w :=
+      pref_head_unique hpflag (pref_append [w] s2.stack)
+    have hflag : (sevm.value =? 0) ≠ 0 := by
+      rw [hw]
+      exact hnz
+    have hv : sevm.value = 0 := by
+      by_cases hv : sevm.value = 0
+      · exact hv
+      · simp [B256.eqCheck, hv] at hflag
+    refine ⟨s3, hv, ?_, ?_, ?_, ?_, hbody⟩
+    · exact (Line.of_inv Devm.state (by line_inv) hline).trans
+        (hpop.state.trans hburn.state)
+    · exact (Line.of_inv Devm.memory (by line_inv) hline).trans
+        (hpop.memory.trans hburn.memory)
+    · exact (Line.of_inv Devm.logs (by line_inv) hline).trans
+        (hpop.logs.trans hburn.logs)
+    · exact (Line.of_inv Devm.output (by line_inv) hline).trans
+        (hpop.output.trans hburn.output)
 
 end DispatchLogFrame
 
@@ -11786,6 +12191,229 @@ lemma of_logWith201_mem {e : Sevm} {s s' : Devm}
   rcases heq with ⟨rfl, rfl, rfl⟩
   rw [hmemory, ← hb0.memory, ← hb32.memory]
   rfl
+
+section TransferLogFrame
+
+open scoped LogOutputHinv
+
+/-- The canonical ERC-20 `Transfer(src, dst, amount)` entry emitted by the
+shared `transferFromLog` fragment. -/
+def transferLogEntry (e : Sevm) (src dst amount : B256) : Log :=
+  ⟨e.currentTarget, [transferEvent, src, dst], amount.toBytes⟩
+
+/-- Exact effect of the shared `transferFromLog` fragment, retaining the
+concrete post-log memory image.
+
+This is contract-neutral: `transferFromLog` is the ERC-20 event tail that WETH,
+WETH10, and the PRORATA WETH vault's asset child all reach, so the walk is
+proved once here rather than once per family.  Keeping the resulting image lets
+a following fragment reuse the word written for the event data without
+replaying the LOG walk. -/
+theorem transferFromLog_effect_frame
+    {e : Sevm} {s r : Devm} {src dst amount : B256}
+    {xs : Stack} {img : Bytes}
+    (hp : dst :: amount :: src :: xs <<+ s.stack)
+    (h_wf : Mem.Wf s.memory)
+    (h_reads : Mem.Reads s.memory img)
+    (run : Line.Run e s transferFromLog r) :
+    amount :: src :: xs <<+ r.stack ∧
+      r.logs = s.logs ++ [transferLogEntry e src dst amount] ∧
+      Devm.getStor r = Devm.getStor s ∧
+      Devm.getBal r = Devm.getBal s ∧
+      Devm.getCode r = Devm.getCode s ∧
+      r.output = s.output ∧
+      Mem.Wf r.memory ∧
+      Mem.Reads r.memory (Bytes.writeAt img 0 amount.toBytes) := by
+  simp only [transferFromLog] at run
+  rcases Line.of_run_cons run with ⟨s1, hdupSrc, run1⟩
+  have hp1 : src :: dst :: amount :: src :: xs <<+ s1.stack :=
+    prefix_of_dup_val hdupSrc (by show_nth) hp
+  rcases Line.of_run_cons run1 with ⟨s2, hevent, run2⟩
+  have hbevent := of_run_pushB256 hevent
+  have hp2 : transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s2.stack := prefix_of_push hbevent hp1
+  rcases Line.of_run_cons run2 with ⟨s3, hdupAmount, run3⟩
+  have hp3 : amount :: transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s3.stack := prefix_of_dup_val hdupAmount (by show_nth) hp2
+  rcases of_run_append (mstoreAt 0) run3 with ⟨s4, hstore, hlog⟩
+  rcases of_run_mstoreAt_val hstore hp3 with ⟨hp4, hm4⟩
+  have hm4' : s4.memory = s3.memory.write 0 amount.toBytes := by
+    simpa only [show (0 * 32 : B256).toNat = 0 by decide +kernel]
+      using hm4
+  rcases of_logWith201_val hp4 hlog with ⟨hp5, hlogs⟩
+  have hlogMem := of_logWith201_mem hp4 hlog
+  have hmem_s_s3 : s.memory = s3.memory := by
+    calc
+      s.memory = s1.memory := Ninst.Hinv.inv (f := Devm.memory) hdupSrc
+      _ = s2.memory := hbevent.memory
+      _ = s3.memory := Ninst.Hinv.inv (f := Devm.memory) hdupAmount
+  let img1 := Bytes.writeAt img 0 amount.toBytes
+  have hwf4 : Mem.Wf s4.memory := by
+    rw [hm4', ← hmem_s_s3]
+    exact h_wf.write 0 amount.toBytes
+  have hreads4 : Mem.Reads s4.memory img1 := by
+    rw [hm4', ← hmem_s_s3]
+    exact Mem.Reads.write h_wf h_reads 0 amount.toBytes
+  have hdata : (s4.memory.read 0 32).1 = amount.toBytes := by
+    rw [Mem.Reads.read hreads4 0 32,
+      show 32 = amount.toBytes.length by rw [B256.length_toBytes],
+      Bytes.sliceD_writeAt]
+  have hlogs_s_s4 : s.logs = s4.logs := by
+    calc
+      s.logs = s1.logs := Ninst.Hinv.inv (f := Devm.logs) hdupSrc
+      _ = s2.logs := hbevent.logs
+      _ = s3.logs := Ninst.Hinv.inv (f := Devm.logs) hdupAmount
+      _ = s4.logs := Line.of_inv Devm.logs (by
+        unfold mstoreAt
+        line_inv) hstore
+  have hwfR : Mem.Wf r.memory := by
+    rw [hlogMem]
+    exact hwf4.extend 0 32
+  have hreadsR : Mem.Reads r.memory img1 := by
+    rw [hlogMem]
+    exact Mem.Reads.extend hreads4 0 32
+  refine ⟨hp5, ?_, ?_, ?_, ?_, ?_, hwfR, hreadsR⟩
+  · rw [hlogs, hdata, ← hlogs_s_s4]
+    rfl
+  · exact (Line.of_inv Devm.getStor (by line_inv) run).symm
+  · exact (Line.of_inv Devm.getBal (by line_inv) run).symm
+  · exact (Line.of_inv Devm.getCode (by line_inv) run).symm
+  · exact (Line.of_inv Devm.output (by line_inv) run).symm
+
+/-- Memory-premise-free form of the shared `transferFromLog` effect.  The
+event data is read straight back out of the write that produced it, so no
+`Mem.Wf` or proof-carrying image is needed.  Use this inside a contract body
+walk that does not otherwise track memory. -/
+theorem transferFromLog_effect
+    {e : Sevm} {s r : Devm} {src dst amount : B256} {xs : Stack}
+    (hp : dst :: amount :: src :: xs <<+ s.stack)
+    (run : Line.Run e s transferFromLog r) :
+    amount :: src :: xs <<+ r.stack ∧
+      r.logs = s.logs ++ [transferLogEntry e src dst amount] := by
+  simp only [transferFromLog] at run
+  rcases Line.of_run_cons run with ⟨s1, hdupSrc, run1⟩
+  have hp1 : src :: dst :: amount :: src :: xs <<+ s1.stack :=
+    prefix_of_dup_val hdupSrc (by show_nth) hp
+  rcases Line.of_run_cons run1 with ⟨s2, hevent, run2⟩
+  have hbevent := of_run_pushB256 hevent
+  have hp2 : transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s2.stack := prefix_of_push hbevent hp1
+  rcases Line.of_run_cons run2 with ⟨s3, hdupAmount, run3⟩
+  have hp3 : amount :: transferEvent :: src :: dst :: amount :: src :: xs <<+
+      s3.stack := prefix_of_dup_val hdupAmount (by show_nth) hp2
+  rcases of_run_append (mstoreAt 0) run3 with ⟨s4, hstore, hlog⟩
+  rcases of_run_mstoreAt_val hstore hp3 with ⟨hp4, hm4⟩
+  have hm4' : s4.memory = s3.memory.write 0 amount.toBytes := by
+    simpa only [show (0 * 32 : B256).toNat = 0 by decide +kernel]
+      using hm4
+  rcases of_logWith201_val hp4 hlog with ⟨hp5, hlogs⟩
+  have amountNonempty : amount.toBytes ≠ [] := by
+    intro empty
+    have lengthEq : amount.toBytes.length = 32 := B256.length_toBytes amount
+    rw [empty] at lengthEq
+    exact absurd lengthEq (by decide)
+  have hdata : (s4.memory.read 0 32).1 = amount.toBytes := by
+    rw [hm4', show (32 : Nat) = amount.toBytes.length from
+      (B256.length_toBytes amount).symm]
+    exact Mem.read_write_zero s3.memory amountNonempty
+  have hlogs_s_s4 : s.logs = s4.logs := by
+    calc
+      s.logs = s1.logs := Ninst.Hinv.inv (f := Devm.logs) hdupSrc
+      _ = s2.logs := hbevent.logs
+      _ = s3.logs := Ninst.Hinv.inv (f := Devm.logs) hdupAmount
+      _ = s4.logs := Line.of_inv Devm.logs (by
+        unfold mstoreAt
+        line_inv) hstore
+  refine ⟨hp5, ?_⟩
+  rw [hlogs, hdata, ← hlogs_s_s4]
+  rfl
+
+/-- Exact effect of the shared `logTransfer` fragment.
+
+This is the ERC-20 event tail of `transfer(dst, wad)`, the sibling of
+`transferFromLog`: the source is the executing frame's caller rather than a
+stack word, and the data word is copied straight out of calldata instead of
+being taken from the stack.  It is contract-neutral -- WETH, WETH10 and the
+PRORATA WETH vault's asset child all reach it through `transferCore` -- so the
+walk is proved once here.
+
+The fragment consumes and produces nothing on the stack, so any prefix
+survives it. -/
+theorem logTransfer_effect
+    {e : Sevm} {s r : Devm} {xs : Stack}
+    (hp : xs <<+ s.stack)
+    (run : Line.Run e s logTransfer r) :
+    xs <<+ r.stack ∧
+      r.logs = s.logs ++
+        [transferLogEntry e e.caller.toB256 (Sevm.argWord e 0)
+          (Sevm.argWord e 1)] := by
+  simp only [logTransfer, argCopy, cdc] at run
+  rcases Line.of_run_cons run with ⟨c1, hsize, run1⟩
+  have hsizeB := of_run_pushB256 hsize
+  have hc1 : (32 : B256) :: xs <<+ c1.stack := by
+    rw [show (1 * 32 : B256) = 32 by decide +kernel] at hsizeB
+    exact prefix_of_push hsizeB hp
+  rcases Line.of_run_cons run1 with ⟨c2, hsrc, run2⟩
+  have hsrcB := of_run_pushB256 hsrc
+  have hc2 : (36 : B256) :: 32 :: xs <<+ c2.stack := by
+    rw [show (1 * 32 + 4 : B256) = 36 by decide +kernel] at hsrcB
+    exact prefix_of_push hsrcB hc1
+  rcases Line.of_run_cons run2 with ⟨c3, hdst, run3⟩
+  have hdstB := of_run_pushB256 hdst
+  have hc3 : (0 : B256) :: 36 :: 32 :: xs <<+ c3.stack := by
+    rw [show (0 * 32 : B256) = 0 by decide +kernel] at hdstB
+    exact prefix_of_push hdstB hc2
+  rcases Line.of_run_cons run3 with ⟨c4, hcopy, run4⟩
+  rcases prefix_of_calldatacopy_val hcopy hc3 with ⟨hc4, hcopyMem⟩
+  have copyMemory : c4.memory = s.memory.write 0 (e.data.sliceD 36 32 0) := by
+    rw [hcopyMem, ← hdstB.memory, ← hsrcB.memory, ← hsizeB.memory]
+    rfl
+  have copyLogs : s.logs = c4.logs :=
+    hsizeB.logs.trans (hsrcB.logs.trans
+      (hdstB.logs.trans (Ninst.Hinv.inv (f := Devm.logs) hcopy)))
+  rcases of_run_append (arg 0) run4 with ⟨c5, hargRun, run5⟩
+  have hc5 : Sevm.argWord e 0 :: xs <<+ c5.stack := prefix_of_arg hc4 hargRun
+  have argMemory : c4.memory = c5.memory :=
+    Line.of_inv Devm.memory (by line_inv) hargRun
+  have argLogs : c4.logs = c5.logs :=
+    Line.of_inv Devm.logs (by line_inv) hargRun
+  rcases Line.of_run_cons run5 with ⟨c6, hcaller, run6⟩
+  have hcallerB := of_run_caller hcaller
+  have hc6 : e.caller.toB256 :: Sevm.argWord e 0 :: xs <<+ c6.stack :=
+    prefix_of_push hcallerB hc5
+  rcases Line.of_run_cons run6 with ⟨c7, hevent, run7⟩
+  have heventB := of_run_pushB256 hevent
+  have hc7 : transferEvent :: e.caller.toB256 :: Sevm.argWord e 0 :: xs <<+
+      c7.stack := prefix_of_push heventB hc6
+  rcases of_logWith201_val hc7 run7 with ⟨hc8, hlogs⟩
+  have sliceLength : (e.data.sliceD 36 32 0).length = 32 :=
+    List.takeD_length _ _ _
+  have sliceNonempty : e.data.sliceD 36 32 0 ≠ [] := by
+    intro empty
+    rw [empty] at sliceLength
+    exact absurd sliceLength (by decide)
+  have eventMemory : c7.memory = s.memory.write 0 (e.data.sliceD 36 32 0) := by
+    rw [← heventB.memory, ← hcallerB.memory, ← argMemory, copyMemory]
+  have readBack :
+      ((s.memory.write 0 (e.data.sliceD 36 32 0)).read 0 32).1 =
+        e.data.sliceD 36 32 0 := by
+    have raw := Mem.read_write_zero s.memory sliceNonempty
+    rwa [sliceLength] at raw
+  have hdata : (c7.memory.read 0 32).1 = (Sevm.argWord e 1).toBytes := by
+    rw [eventMemory, readBack]
+    show e.data.sliceD 36 32 0 = (Sevm.dataWord e ((32 * 1) + 4)).toBytes
+    rw [show ((32 : B256) * 1 + 4) = 36 by decide +kernel]
+    unfold Sevm.dataWord
+    rw [show ((36 : B256)).toNat = 36 by decide +kernel]
+    exact (Bytes.toBytes_toB256_of_length sliceLength).symm
+  have eventLogs : s.logs = c7.logs :=
+    copyLogs.trans (argLogs.trans
+      (hcallerB.logs.trans heventB.logs))
+  refine ⟨hc8, ?_⟩
+  rw [hlogs, hdata, ← eventLogs]
+  rfl
+
+end TransferLogFrame
 
 /-- `MLOAD` pushes *the word at the offset it popped*, and only extends
 memory.  The value-carrying companion of `of_run_mload`. -/

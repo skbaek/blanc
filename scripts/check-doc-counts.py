@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import json
 import pathlib
 import re
@@ -99,6 +100,43 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
     return len(node)
 
 
+def load_checker(root: pathlib.Path, rel: str):
+    """Import a committed checker as a module, without running its `main`."""
+    path = root / rel
+    name = "_doc_counts_" + re.sub(r"\W+", "_", rel)
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {rel}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def count_script_population(root: pathlib.Path, rel: str, function: str) -> int:
+    """Length of a static population returned by a committed checker."""
+    return len(getattr(load_checker(root, rel), function)(root))
+
+
+def count_deployment_public_theorems(root: pathlib.Path) -> int:
+    """The Lido CircuitBreaker deployment gate's public theorem inventory.
+
+    Derived by that gate's own rule, not a copy of it: `public_theorem_names`
+    over its `source_map`, excluding the constructor owner exactly as
+    `require_axiom_inventory` does. It reads committed Lean source as text and
+    elaborates nothing. The gate pins the same figure as `PUBLIC_THEOREM_COUNT`
+    and fails if the two disagree, so this derivation and that pin cannot drift
+    apart unnoticed.
+    """
+    module = load_checker(root, "scripts/check-lido-circuit-breaker-deployment.py")
+    sources = module.source_map(root)
+    return len(
+        module.public_theorem_names(
+            {owner: text for owner, text in sources.items() if owner != "constructor"}
+        )
+    )
+
+
 # --------------------------------------------------------------------------
 # CLAIMS -- published numbers, their producers, and every surface stating them
 # --------------------------------------------------------------------------
@@ -113,6 +151,10 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
 #                Anti-vacuity per surface: the registered patterns are what the
 #                gate knows about, the census is what the surface actually
 #                contains, and the two must agree in number.
+#   census_patterns -- optional per-surface patterns for stale quotations whose
+#                      published value differs from the produced value; these
+#                      count the quotation while the consumer still checks its
+#                      captured value against the producer.
 #
 # Anti-vacuity is per PATTERN, not per file: README.md's three audited-theorem
 # patterns yield four captured groups, so a file-level floor of three still
@@ -124,6 +166,19 @@ def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
 # reproduce `scripts/check-claims.sh`'s verdict line. TRANSCRIPTS below pins the
 # whole line against the gate's own format string; this pattern pins the number.
 CLAIM_TRANSCRIPT = re.compile(r"OK — claim statements: (\d{2,5}) definitions/statements and exact")
+
+LAYERING_MODULE_CELL = re.compile(
+    r"\| `scripts/check-layering\.sh` \| [^\n]* \| "
+    r"\d{1,5} contracts,\s*(\d{1,5}) modules,"
+)
+MODULE_SIZE_MODULE_CELL = re.compile(
+    r"\| `scripts/check-proof-module-size\.sh` \| [^\n]* \| "
+    r"(\d{1,5}) modules;"
+)
+TRUST_CLOSURE_MODULE_CELL = re.compile(
+    r"\| `scripts/check-trust-surface\.sh` \| [^\n]* \| "
+    r"(\d{1,5}) closure modules;"
+)
 
 CLAIMS = [
     {
@@ -375,6 +430,169 @@ CLAIMS = [
         },
         "foreign": [],
     },
+    {
+        "name": "layering module count",
+        "producer": (
+            "scripts/check-layering.py: modules_on_disk",
+            # The layering gate's recursive source census is the population
+            # behind `len(found)` in its terminal OK line.
+            lambda root: count_script_population(
+                root, "scripts/check-layering.py", "modules_on_disk"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    LAYERING_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        # The cell is stale, so its one quotation is not a standalone
+        # occurrence of the produced value. Count the registered quotation
+        # separately; the consumer above still checks its captured value.
+        "census_patterns": {"scripts/GATES.md": LAYERING_MODULE_CELL},
+        "foreign": [],
+    },
+    {
+        "name": "proof module-size module count",
+        "producer": (
+            "scripts/check-proof-module-size.py: production_modules",
+            # `ordinary` prints `len(modules)`, where `modules` is exactly the
+            # path-policy-checked production population returned here.
+            lambda root: count_script_population(
+                root, "scripts/check-proof-module-size.py", "production_modules"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    MODULE_SIZE_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        "census_patterns": {"scripts/GATES.md": MODULE_SIZE_MODULE_CELL},
+        "foreign": [],
+    },
+    {
+        "name": "trust-surface closure module count",
+        "producer": (
+            "scripts/check-trust-surface.py: closure_files",
+            # The trust gate's transitive import closure is the population
+            # behind `len(files)` in its terminal OK line.
+            lambda root: count_script_population(
+                root, "scripts/check-trust-surface.py", "closure_files"
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    TRUST_CLOSURE_MODULE_CELL
+                ],
+            )
+        ],
+        "census": {"scripts/GATES.md": 1},
+        "census_patterns": {"scripts/GATES.md": TRUST_CLOSURE_MODULE_CELL},
+        "foreign": [],
+    },
+    {
+        "name": "Lido CircuitBreaker deployment public theorem count",
+        "producer": (
+            "scripts/check-lido-circuit-breaker-deployment.py: public_theorem_names",
+            count_deployment_public_theorems,
+        ),
+        "consumers": [
+            (
+                # The deployment gate's catalogue row states the inventory twice
+                # (the derivation and its scale cell) and its helper-script row
+                # once. The value collides with nothing else in the catalogue;
+                # the three `ERC-165` mentions are the neighbouring integer and
+                # are not counted by a census of this one.
+                "scripts/GATES.md",
+                [
+                    re.compile(r"the exact (\d{2,5})-name public theorem inventory"),
+                    re.compile(r"semantic fragments; (\d{2,5}) exact axiom probes"),
+                    re.compile(r"derives all (\d{2,5}) public theorem names"),
+                ],
+            ),
+        ],
+        "census": {"scripts/GATES.md": 3},
+        "foreign": [],
+    },
+    {
+        "name": "registered CI command count",
+        "producer": (
+            "scripts/gate-cache.py: ci_commands",
+            # The gate-cache audit's own census of `.github/workflows/ci.yml`,
+            # and the population `scripts/ci_gate_policy.py` reports as
+            # "registered commands selected fresh". It reads the committed
+            # workflow as text.
+            lambda root: count_script_population(root, "scripts/gate-cache.py", "ci_commands"),
+        ),
+        "consumers": [
+            (
+                # docs/GATE_ECONOMY.md states the same figure but is written by
+                # scripts/gate-economy.py and recomputes itself; it is not a
+                # hand-maintained surface and is deliberately not a consumer.
+                "scripts/GATES.md",
+                [re.compile(r"Production CI executes its (\d{1,4}) registered commands")],
+            ),
+        ],
+        "census": {"scripts/GATES.md": 1},
+        "foreign": [],
+    },
+    {
+        "name": "Lido CircuitBreaker assurance register row count",
+        "producer": (
+            "LIDO_CIRCUIT_BREAKER_ASSURANCE.md",
+            # One `####` heading per register row. The assurance gate parses
+            # rows with its own grammar and pins the total as
+            # EXPECTED_TOTAL_ROWS; this counting rule is written independently
+            # and the gate's own pin is not read, so a divergence between the
+            # two is self-detecting, as with the claim-pin count above. The
+            # cell's other figures are named in UNCHECKED_PUBLISHED_NUMBERS.
+            lambda root: count_matches(
+                root, "LIDO_CIRCUIT_BREAKER_ASSURANCE.md", re.compile(r"^####\s", re.M)
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                # Only the row count is captured; the pillar count beside it is
+                # a different figure.
+                [re.compile(r"\| (\d{1,4}) rows across \d{1,4} pillars,")],
+            ),
+            (
+                "docs/contracts/lido-triggerable-withdrawals-gateway.html",
+                [re.compile(r"CircuitBreaker’s (\d{1,4})-row assurance register")],
+            ),
+            (
+                # The contract page states it five times: the meta description,
+                # the register link, the assurance gate's transcript (only its
+                # row-count field is captured here; the transcript's other
+                # figures stay named in UNCHECKED_PUBLISHED_NUMBERS), the pill,
+                # and the closing note.
+                "docs/contracts/lido-circuit-breaker.html",
+                [
+                    re.compile(r"a (\d{1,4})-row consistency-checked assurance register"),
+                    re.compile(r"assurance register</a>:\s+(\d{1,4}) rows mapping"),
+                    re.compile(r"OK — lido-circuit-breaker-assurance: (\d{1,4}) rows across"),
+                    re.compile(r'</span>(\d{1,4})-row assurance register</span>'),
+                    re.compile(r"The (\d{1,4})-row assurance register maps"),
+                ],
+            ),
+        ],
+        "census": {
+            "scripts/GATES.md": 1,
+            "docs/contracts/lido-triggerable-withdrawals-gateway.html": 1,
+            "docs/contracts/lido-circuit-breaker.html": 5,
+        },
+        "foreign": [],
+    },
 ]
 
 
@@ -535,15 +753,54 @@ UNCHECKED_PUBLISHED_NUMBERS = [
         "lines)",
         "surfaces": "docs/index.html, docs/contracts/*.html",
         "producer": "the gates themselves, at run time",
-        "blocker": "Those verdict lines interpolate values computed during the run, "
-        "not a format string plus a claim this gate produces, so no static "
-        "derivation of the published line exists. It becomes checkable if a gate "
-        "commits its verdict line as an artifact, the way the WETH10 manifest "
-        "commits its row inventory.",
+        "blocker": "scripts/check-layering.py is static and deterministic over committed "
+        "files, but this gate has not registered every interpolated field of the "
+        "two published layering transcript copies; the module-count field is "
+        "registered above, while the remaining layering fields and exact transcript "
+        "enumeration remain unchecked. The other verdict lines interpolate values "
+        "computed during their runs and are likewise not fully enumerated here. "
+        "They become checkable when this gate registers each static derivation and "
+        "exact surface, or a gate commits its verdict line as an artifact, the way "
+        "the WETH10 manifest commits its row inventory.",
+    },
+    {
+        "number": "the Lido CircuitBreaker assurance scale cell's figures other than its "
+        "row count: 9 gate-owned rows, 7 rows naming two gates, 158 cited declarations "
+        "and 158 axiom expectations matched, 82 gate paths, 14 pinned non-claim phrases",
+        "surfaces": "scripts/GATES.md (the check-lido-circuit-breaker-assurance.sh row)",
+        "producer": "scripts/check-lido-circuit-breaker-assurance.sh's verdict line -- "
+        "static by default. 9, 7 and 14 are pinned in that checker as "
+        "EXPECTED_GATE_OWNED_ROWS, EXPECTED_MULTI_GATE_ROWS and NONCLAIM_PHRASES; 158 "
+        "and 82 are counted inline in its main() while resolving the register "
+        "against five axiom authorities",
+        "blocker": "9, 7 and 14 are not distinctive on scripts/GATES.md: each occurs "
+        "more than ten times there in unrelated rows, so no census is computable. 82 "
+        "also counts the CircuitBreaker resource row's CALL/STATICCALL traces. 158 is "
+        "distinctive, but no callable in the assurance checker returns it or 82: "
+        "both are tallied inside main(), and re-deriving them here would be a "
+        "second, unowned producer. The row count, the one figure in the cell with "
+        "an independent static producer and an enumerable census, is registered "
+        "above. The rest become checkable when the assurance checker exposes its "
+        "resolution as a function of the tree root.",
+    },
+    {
+        "number": "the proof-recipe generator's 31 self-test controls",
+        "surfaces": "scripts/GATES.md (the check-proof-recipes.sh --base main row and the "
+        "check-proof-recipes.sh/--write row)",
+        "producer": "scripts/generate-proof-recipes.py --self-test -- the self-test's "
+        "accounting check (`expected 31 controls, ran N`) and its 31/31 verdict line, "
+        "both committed literals",
+        "blocker": "31 is not distinctive on scripts/GATES.md: it also counts a "
+        "SHA chain's calls, reconstructed storage words and a date, so no census is "
+        "computable. And the committed literal is only the self-test's own "
+        "expectation; the number of controls that actually run is established by "
+        "executing the roughly three-minute self-test, which a static gate does not "
+        "do. It becomes checkable when the generator exposes its control inventory "
+        "as a static population.",
     },
 ]
 
-UNCHECKED_PUBLISHED_NUMBER_COUNT = 5
+UNCHECKED_PUBLISHED_NUMBER_COUNT = 7
 
 
 # --------------------------------------------------------------------------
@@ -651,11 +908,17 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
             path = root / rel
             if not path.is_file():
                 continue
-            found = len(pat.findall(path.read_text(encoding="utf-8")))
+            census_pattern = claim.get("census_patterns", {}).get(rel, pat)
+            found = len(census_pattern.findall(path.read_text(encoding="utf-8")))
             if found != want:
+                subject = (
+                    "registered quotation(s)"
+                    if rel in claim.get("census_patterns", {})
+                    else f"occurrence(s) of {expected}"
+                )
                 failures.append(
-                    f"{rel}: census for {name} expects {want} occurrence(s) of "
-                    f"{expected}, found {found}. Either a statement of this claim "
+                    f"{rel}: census for {name} expects {want} {subject}, found "
+                    f"{found}. Either a statement of this claim "
                     "drifted to another value on this surface, or a new statement "
                     "was added without registering it in CLAIMS."
                 )

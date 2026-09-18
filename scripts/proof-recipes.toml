@@ -20,6 +20,25 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-09"
 
 [[recipe]]
+id = "same-frame-stack-certificate"
+status = "active"
+triggers = ["goal-head:CompiledStackSafety.StepSafe", "goal-head:CompiledStackSafety.ResumeSafe"]
+preferred_path = "Use CompiledStackSafety.Certificate.at_parentPrefix for a checked certificate and an actual same-frame prefix, deriving the exact root entry invariant first. Use resume_call_safe to close an actual CALL resumption from parent headroom and its continuation stack invariant; call_resumes_of_room constructs the actual status-word result."
+boundary = "The certificate requires local proofs for actual decoded steps; a symbolic PC/height table alone is insufficient. The theorem covers arbitrary raw parent outcomes but does not assert safety of arbitrary entered child code. Fatal child errors are distinguished from newly generated parent stack faults."
+owner_module = "Blanc/CompiledStackSafety.lean"
+canonical_example = "Blanc/CompiledStackSafety.lean:Certificate.at_parentPrefix"
+symbols = [
+  "declaration:Blanc.CompiledStackSafety.Certificate",
+  "declaration:Blanc.CompiledStackSafety.Certificate.parentStep",
+  "declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix",
+  "declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix",
+  "declaration:Blanc.CompiledStackSafety.call_resumes_of_room",
+  "declaration:Blanc.CompiledStackSafety.resume_call_safe",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-06"
+
+[[recipe]]
 id = "runcompiled-construction"
 status = "active"
 triggers = [
@@ -127,7 +146,7 @@ review_date = "2026-09-08"
 id = "stack-prefix-transport"
 status = "active"
 triggers = ["goal-shape:stack-prefix-line-run"]
-preferred_path = "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
+preferred_path = "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, ADDMOD, MULMOD, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
 boundary = "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried."
 owner_module = "Blanc/Tactics.lean"
 canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:recognized_of_run_dispatchWith"
@@ -137,6 +156,8 @@ symbols = [
   "tactic:show_pref",
   "declaration:prefix_of_mul",
   "declaration:prefix_of_div",
+  "declaration:prefix_of_addmod",
+  "declaration:prefix_of_mulmod",
   "declaration:prefix_of_timestamp",
   "declaration:prefix_of_xor",
   "declaration:prefix_of_argCheckNonAddress",
@@ -947,6 +968,26 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-09-07"
+
+[[recipe]]
+id = "finite-coalition-ledger"
+status = "active"
+triggers = ["goal-shape:finite-coalition-ledger"]
+preferred_path = "Import `Blanc.LedgerConservation` and express the observation as `ledgerSumOn coalition balances`. Use `ledgerSumOn_congr` for pointwise equality, `ledgerSumOn_increase` for an actual `Increase` plus receiver-row `B256.Nof`, `ledgerSumOn_decrease` for an actual `Decrease` plus owner cover, and `ledgerSumOn_transfer` for an actual `Transfer` plus pre-state `SumNof`. The transfer theorem handles a self-transfer and every coalition-membership overlap; do not split them into an owner-not-receiver side condition."
+boundary = "These are local finite-coalition equations. An `Increase` alone permits receiver-side word wrap, a `Decrease` needs cover, and a `Transfer` needs pre-state `SumNof`; prove those facts at the operation boundary. Neither the equations nor `LedgerConserved` establish configured-history admission, an actual endpoint run, or path-level preservation."
+owner_module = "Blanc/LedgerConservation.lean"
+canonical_example = "Blanc/LedgerConservation.lean:ledgerSumOn_transfer"
+symbols = [
+  "module:Blanc/LedgerConservation.lean",
+  "declaration:Blanc.ledgerSumOn",
+  "declaration:Blanc.ledgerSumOn_congr",
+  "declaration:Blanc.ledgerSumOn_increase",
+  "declaration:Blanc.ledgerSumOn_decrease",
+  "declaration:Blanc.ledgerSumOn_transfer",
+  "declaration:Blanc.LedgerConserved.sumNof",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-16"
 
 [[recipe]]
 id = "symbolic-label-linking"

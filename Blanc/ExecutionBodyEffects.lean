@@ -223,6 +223,25 @@ theorem RequestsTrace.stateInv_and_sum_le
   ContractSpec.processGeneralPurposeRequests_preserves_inv_sum_le ca preserves
     benv bout state bout' trace.run inv
 
+/-- A retained body with no consensus withdrawals cannot increase the
+world's total balance. Both system prefixes, every transaction, and both
+request-system calls are included; no contract invariant is required. -/
+theorem AppliedBodyTrace.sum_le_of_empty_withdrawals
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs [] state bout) :
+    sum state.bal ≤ sum benv.state.bal := by
+  have beacon := processMessageCall_sum_le trace.beacon.message.result
+  have history := processMessageCall_sum_le trace.history.message.result
+  have transactions := trace.transactions.sum_le
+  have withdrawal := processMessageCall_sum_le trace.requests.withdrawal.message.result
+  have consolidation := processMessageCall_sum_le trace.requests.consolidation.message.result
+  simp only [systemTransactionMessage_benv_state, Benv.withState,
+    processWithdrawalsState, List.foldl_nil] at beacon history transactions withdrawal consolidation
+  rw [trace.requests.state_eq_consolidationState]
+  exact consolidation.trans (withdrawal.trans
+    (transactions.trans (history.trans beacon)))
+
 end ExecutionTrace
 
 end Blanc

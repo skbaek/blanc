@@ -39,6 +39,7 @@ REGISTRY_PATH = Path("scripts/proof-recipes.toml")
 MARKDOWN_PATH = "docs/PROOF_RECIPES.md"
 LEAN_PATH = "Blanc/ProofRecipesGenerated.lean"
 TACTICS_PATH = Path("Blanc/Tactics.lean")
+LEAF_TACTICS_PATH = Path("Blanc/ProofRecipeTactic.lean")
 SUGGESTIONS_PATH = Path("scripts/ProofRecipeSuggestions.lean")
 MANIFEST_PATH = Path("lake-manifest.json")
 LAKEFILE_PATH = Path("lakefile.lean")
@@ -51,6 +52,7 @@ LAKEFILE_PATH = Path("lakefile.lean")
 JAUNE_PACKAGE_PARTS = (".lake", "packages", "jaune")
 JAUNE_LIBRARY_DIR = "Jaune"
 JAUNE_LIBRARY_AGGREGATE = "Jaune.lean"
+
 
 TOP_LEVEL_KEYS = {"schema_version", "generated_notice"}
 REQUIRED_RECIPE_KEYS = {
@@ -438,28 +440,29 @@ def validate_trigger(trigger: str, where: str) -> None:
         raise RecipeError(f"{where}: trigger {trigger!r} needs a lowercase kebab slug")
 
 
-def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
-    """Read the explicit fail-closed trigger dispatch from Blanc/Tactics.lean.
+def matcher_trigger_inventory(root: Path, relative: Path, declaration: str) -> Dict[str, str]:
+    """Read one fixed declaration with explicit arms and a final false fallback.
 
     Maps each implemented trigger to the source text of its arm, so
     ``validate_trigger_dispatch`` can check that the arm still dispatches on
     live declarations.
     """
-    path = root / TACTICS_PATH
+    path = root / relative
+
     try:
         clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
     except OSError as exc:
-        raise RecipeError(f"cannot read trigger matcher {TACTICS_PATH}: {exc}") from exc
+        raise RecipeError(f"cannot read trigger matcher {relative}: {exc}") from exc
 
     lines = clean.splitlines()
     starts = [
         index
         for index, line in enumerate(lines)
-        if re.match(r"^def\s+proofRecipeTriggerMatches\b", line)
+        if re.match(rf"^def\s+{re.escape(declaration)}\b", line)
     ]
     if len(starts) != 1:
         raise RecipeError(
-            f"{TACTICS_PATH}: expected exactly one proofRecipeTriggerMatches definition, "
+            f"{relative}: expected exactly one {declaration} definition, "
             f"found {len(starts)}"
         )
     start = starts[0]
@@ -479,7 +482,7 @@ def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
     ]
     if len(matches) != 1:
         raise RecipeError(
-            f"{TACTICS_PATH}: proofRecipeTriggerMatches must contain exactly one "
+            f"{relative}: {declaration} must contain exactly one "
             f"`match trigger with`, found {len(matches)}"
         )
     match_index, indent = matches[0]
@@ -499,13 +502,13 @@ def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
         pattern = arm.group(1)
         if saw_wildcard:
             raise RecipeError(
-                f"{TACTICS_PATH}: proofRecipeTriggerMatches fail-closed wildcard "
+                f"{relative}: {declaration} fail-closed wildcard "
                 "must be its final arm"
             )
         if pattern == "_":
             if line.strip() != "| _ => return false":
                 raise RecipeError(
-                    f"{TACTICS_PATH}: proofRecipeTriggerMatches wildcard must be "
+                    f"{relative}: {declaration} wildcard must be "
                     "exactly `| _ => return false`"
                 )
             wildcard_count += 1
@@ -513,24 +516,36 @@ def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
             continue
         if not literal_re.fullmatch(pattern):
             raise RecipeError(
-                f"{TACTICS_PATH}: unsupported proofRecipeTriggerMatches arm {pattern!r}; "
+                f"{relative}: unsupported {declaration} arm {pattern!r}; "
                 "use one explicit string literal per trigger"
             )
-        trigger = parse_basic_string(pattern, f"{TACTICS_PATH}: trigger matcher arm")
+        trigger = parse_basic_string(pattern, f"{relative}: trigger matcher arm")
         if trigger in triggers:
             raise RecipeError(
-                f"{TACTICS_PATH}: duplicate proofRecipeTriggerMatches arm {trigger!r}"
+                f"{relative}: duplicate {declaration} arm {trigger!r}"
             )
         triggers[trigger] = line
         current = trigger
     if wildcard_count != 1:
         raise RecipeError(
-            f"{TACTICS_PATH}: proofRecipeTriggerMatches must have exactly one "
+            f"{relative}: {declaration} must have exactly one "
             f"fail-closed wildcard, found {wildcard_count}"
         )
     if not triggers:
-        raise RecipeError(f"{TACTICS_PATH}: proofRecipeTriggerMatches has no explicit triggers")
+        raise RecipeError(f"{relative}: {declaration} has no explicit triggers")
     return triggers
+
+
+def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
+    """Union two fixed dispatch inventories; ambiguous ownership fails closed."""
+    core = matcher_trigger_inventory(root, TACTICS_PATH, "proofRecipeTriggerMatches")
+    leaf = matcher_trigger_inventory(root, LEAF_TACTICS_PATH, "proofRecipeLeafTriggerMatches")
+    duplicates = set(core) & set(leaf)
+    if duplicates:
+        raise RecipeError(
+            f"duplicate trigger ownership across core and leaf matchers: {sorted(duplicates)}"
+        )
+    return {**core, **leaf}
 
 
 # A Lean name literal inside a trigger arm: `Blanc.Foo.bar, or ``Blanc.Foo.bar.
@@ -664,10 +679,10 @@ CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne"})
 # them silently. It is checked in both directions: a listed recipe that gains a
 # case, or that leaves the registry, fails.
 UNWITNESSED_RECIPES: Dict[str, str] = {
-    # Empty: every registered recipe currently has a harness case. The
-    # table stays so the next recipe added without a case fails here
-    # instead of joining a silent gap; list it with what a case would
-    # have to exhibit.
+    # Recipes with no case in the suggestions harness, each with what a case
+    # would have to exhibit. Checked in both directions by
+    # validate_harness_coverage, so a listed recipe that gains a case, or that
+    # leaves the registry, fails here instead of joining a silent gap.
 }
 
 # Triggers whose reachability is *proved*: the harness states a real goal and
@@ -680,6 +695,8 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
+    "goal-head:CompiledStackSafety.StepSafe",
+    "goal-head:CompiledStackSafety.ResumeSafe",
     "goal-head:ContractSpec.PreservesAdmitted",
     "goal-head:Func.ExecSat",
     "goal-head:Func.Inv",
@@ -701,6 +718,7 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-shape:devm-common-update-law",
     "goal-shape:devm-update-projection",
     "goal-shape:exact-retained-storage-effects",
+    "goal-shape:finite-coalition-ledger",
     "goal-shape:fixed-byte-offset",
     "goal-shape:frame-root-carrying",
     "goal-shape:full-length-slice",
@@ -1321,6 +1339,15 @@ def validate_harness_coverage(
             f"an unrelated new one"
         )
     return len(expected_ids), len(positive)
+def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
+    """Union two fixed dispatch inventories; ambiguous duplicate ownership fails."""
+    core = matcher_trigger_inventory(root, TACTICS_PATH, "proofRecipeTriggerMatches")
+    leaf = matcher_trigger_inventory(root, LEAF_TACTICS_PATH, "proofRecipeLeafTriggerMatches")
+    duplicates = set(core) & set(leaf)
+    if duplicates:
+        raise RecipeError(f"duplicate trigger ownership across core and leaf matchers: {sorted(duplicates)}")
+    return {**core, **leaf}
+
 
 
 def validate_symbol(
@@ -1435,7 +1462,7 @@ def load_and_validate(root: Path) -> Registry:
             if trigger not in supported_triggers:
                 raise RecipeError(
                     f"{where}.triggers: trigger {trigger!r} is not implemented by "
-                    f"{TACTICS_PATH}"
+                    f"{TACTICS_PATH} or {LEAF_TACTICS_PATH}"
                 )
         preferred_path = expect_string(raw, "preferred_path", where)
         boundary = expect_string(raw, "boundary", where)
@@ -1842,6 +1869,8 @@ def self_test(root: Path) -> None:
 
         tactics_path = test_root / TACTICS_PATH
         tactics_original = tactics_path.read_text(encoding="utf-8")
+        leaf_dispatch_path = test_root / LEAF_TACTICS_PATH
+        leaf_dispatch_original = leaf_dispatch_path.read_text(encoding="utf-8")
 
         def rejected_tactics(label: str, mutated: str, expected: str) -> None:
             nonlocal controls
@@ -1875,12 +1904,20 @@ def self_test(root: Path) -> None:
             "can never fire",
         )
         # ... and the check is not vacuous: dispatch reworded out of its sight
-        # fails rather than passing green over an empty population.
-        rejected_tactics(
-            "emptied-trigger-dispatch",
-            tactics_original.replace("`Blanc.", "`Departed."),
-            "reworded out of",
+        # fails rather than passing green over an empty population. The
+        # population spans both dispatch files, so emptying the core alone
+        # would leave the leaf arm checked and trip the per-arm guard instead.
+        leaf_dispatch_path.write_text(
+            leaf_dispatch_original.replace("`Blanc.", "`Departed."), encoding="utf-8"
         )
+        try:
+            rejected_tactics(
+                "emptied-trigger-dispatch",
+                tactics_original.replace("`Blanc.", "`Departed."),
+                "reworded out of",
+            )
+        finally:
+            leaf_dispatch_path.write_text(leaf_dispatch_original, encoding="utf-8")
         # ... and the guard is per arm, not per table.  One arm reworded out of
         # sight leaves forty-five neighbours dispatching on live names, which is
         # everything a table-wide guard asks for, while the arm nobody is
@@ -2133,6 +2170,71 @@ def self_test(root: Path) -> None:
             ),
             "not an exact directory entry",
         )
+        leaf_path = test_root / LEAF_TACTICS_PATH
+        leaf_original = leaf_path.read_text(encoding="utf-8")
+
+        def rejected_matcher(label: str, mutated: str, expected: str) -> None:
+            nonlocal controls
+            if mutated == leaf_original:
+                raise RecipeError(f"self-test {label}: mutation changed nothing")
+            leaf_path.write_text(mutated, encoding="utf-8")
+            try:
+                load_and_validate(test_root)
+            except RecipeError as exc:
+                if expected not in str(exc):
+                    raise RecipeError(
+                        f"self-test {label}: expected {expected!r}, got {str(exc)!r}"
+                    ) from exc
+            else:
+                raise RecipeError(f"self-test {label}: malformed matcher passed")
+            finally:
+                leaf_path.write_text(leaf_original, encoding="utf-8")
+            load_and_validate(test_root)
+            controls += 1
+
+        coalition_trigger = '"goal-shape:finite-coalition-ledger"'
+        rejected_matcher("missing-leaf-definition", replace_once(
+            leaf_original,
+            "def proofRecipeLeafTriggerMatches",
+            "def missingLeafTriggerMatches",
+            "missing-leaf-definition",
+        ), "expected exactly one proofRecipeLeafTriggerMatches definition")
+        rejected_matcher("unimplemented-leaf-trigger", replace_once(
+            leaf_original,
+            coalition_trigger,
+            '"goal-shape:finite-coalition-ledger-absent"',
+            "unimplemented-leaf-trigger",
+        ), "is not implemented by")
+        resume_trigger = '"goal-head:CompiledStackSafety.ResumeSafe"'
+        rejected_matcher("unimplemented-leaf-head", replace_once(
+            leaf_original,
+            resume_trigger,
+            '"goal-head:CompiledStackSafety.Absent"',
+            "unimplemented-leaf-head",
+        ), "is not implemented by")
+        rejected_matcher("leaf-open-fallback", replace_once(
+            leaf_original,
+            "| _ => return false",
+            "| _ => return true",
+            "leaf-open-fallback",
+        ), "wildcard must be exactly")
+        rejected_matcher("duplicate-leaf-trigger", replace_once(
+            leaf_original,
+            "| _ => return false",
+            '| "goal-shape:finite-coalition-ledger" =>\n'
+            '      return proofRecipeContainsName `Blanc.ledgerSumOn target\n'
+            "  | _ => return false",
+            "duplicate-leaf-trigger",
+        ), "duplicate proofRecipeLeafTriggerMatches arm")
+        core_trigger = sorted(matcher_trigger_inventory(
+            test_root, TACTICS_PATH, "proofRecipeTriggerMatches"
+        ))[0]
+        rejected_matcher("duplicate-trigger-ownership", replace_once(
+            leaf_original,
+            coalition_trigger,
+            json.dumps(core_trigger),
+            "duplicate-trigger-ownership",
+        ), "duplicate trigger ownership across core and leaf matchers")
         outside = Path(directory) / "outside"
         outside.mkdir()
         (outside / "Back").symlink_to(test_root / "Blanc", target_is_directory=True)
@@ -2182,8 +2284,8 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 25:
-        raise RecipeError(f"self-test accounting: expected 25 controls, ran {controls}")
+    if controls != 31:
+        raise RecipeError(f"self-test accounting: expected 31 controls, ran {controls}")
 
 
 def coverage_phrase(registry: Registry) -> str:
@@ -2199,6 +2301,7 @@ def coverage_phrase(registry: Registry) -> str:
         f"{recipes}/{len(registry.recipes)} recipes exercised by the suggestions "
         f"harness; {triggers} trigger(s) with a reachability witness"
     )
+
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2224,10 +2327,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.self_test:
             self_test(root)
             print(
-                "OK — proof recipes self-test: 25/25 drift, schema, trigger, "
-                "trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
+                "OK — proof recipes self-test: 31/31 drift, schema, trigger, "
+                "matcher-ownership, trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
                 "controls live"
             )
+
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)

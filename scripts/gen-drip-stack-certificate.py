@@ -226,6 +226,11 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
             return part.name
         return f"{spec.internal_theorem_prefix}{part.name}"
 
+    def theorem_stem(part: Subtree) -> str:
+        if part is root:
+            return part.name
+        return f"{spec.internal_theorem_prefix}{part.name}"
+
     output = ["import Blanc.DripStackSafety", "", "/-!", *spec.module_doc, "-/", "",
               "namespace Blanc.Drip.StackSafety", "", "open Jaune AbstractStackSafety", ""]
     for part in parts:

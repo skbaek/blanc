@@ -7,10 +7,27 @@ namespace Blanc
 
 open Lean.Elab.Tactic
 
+/-- Advice-only extensions for downstream goal heads. Keeping these matches
+in this leaf avoids invalidating the globally imported proof tactics.
+`StepSafe` stays owned by the core `proofRecipeTriggerMatches`; only the
+`ResumeSafe` and finite-coalition-ledger arms below are leaf-only. -/
+def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
+  let head := proofRecipeHeadName? target
+  match trigger with
+  | "goal-head:CompiledStackSafety.ResumeSafe" =>
+      return head == some `Blanc.CompiledStackSafety.ResumeSafe
+  | "goal-shape:finite-coalition-ledger" =>
+      return proofRecipeContainsName `Blanc.ledgerSumOn target
+  | _ => return false
+
 def proofRecipeMatches (target : Lean.Expr)
     (recipe : ProofRecipes.Recipe) : TacticM Bool := do
   for trigger in recipe.triggers do
+    if ← proofRecipeLeafTriggerMatches target trigger then
+      return true
     if ← proofRecipeTriggerMatches target trigger then
+      return true
+    if ← proofRecipeLeafTriggerMatches target trigger then
       return true
   return false
 

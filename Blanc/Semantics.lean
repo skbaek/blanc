@@ -453,6 +453,59 @@ lemma Frame.enter_run_depth {f : Frame} {cevm : Evm}
         · cases heq; rfl
     · cases h
 
+/-- Moving the call value preserves the block environment's static part.
+
+`benvAfterTransfer` either returns the environment untouched or rebuilds it
+through `Benv.withState`, which replaces the state and nothing else.
+
+Lives here, below every consumer, because it had been proved three times:
+in `Blanc/DeploymentMessage.lean` for four deployment-message families, again
+privately in `Blanc/Weth10AllowanceArmsPermit.lean`, and once more for
+`Frame.enter_run_benvStat` just below. Both copies are gone and every caller
+resolves to this one unchanged. -/
+lemma benvAfterTransfer_stat {msg : Msg} {benv : Benv}
+    (h : msg.benvAfterTransfer = .ok benv) : benv.stat = msg.benv.stat := by
+  unfold Msg.benvAfterTransfer at h
+  split at h
+  · rcases Except.bind_eq_ok h with ⟨b, hb, hok⟩
+    cases hok
+    unfold Option.toExcept at hb
+    split at hb
+    · cases hb
+    · cases hb
+      rename_i w hw
+      unfold Benv.subBal at hw
+      rcases Option.bind_eq_some_iff.mp hw with ⟨st, hst, hb2⟩
+      cases hb2
+      rfl
+  · cases h; rfl
+
+/-- Entering a frame preserves the block environment's static part.
+
+`Frame.enter` routes through `benvAfterTransfer`, which moves balances, and
+installs the result; neither touches `BenvStat` — the chain rules, chain id and
+the rest are fixed for the block. A multi-contract frame invariant that names
+another account's status under those rules needs exactly this to cross a call
+boundary, which `Frame.enter_run_depth` alone cannot supply. -/
+lemma Frame.enter_run_benvStat {f : Frame} {cevm : Evm}
+    (h : f.enter = .run cevm) : cevm.sta.benvStat = f.inner.benv.stat := by
+  unfold Frame.enter at h
+  split at h
+  · cases h
+  · rename_i benv hbenv
+    rw [← benvAfterTransfer_stat hbenv]
+    split at h
+    · cases h
+      rename_i heq
+      unfold executeCode.enter at heq
+      simp only [] at heq
+      split at heq
+      · cases heq; rfl
+      · split at heq
+        · cases heq
+        · cases heq; rfl
+    · cases h
+
 /-- A filled slot means the frame was actually entered, and the suspended
 machine is exactly the one `Frame.enter` produced. -/
 lemma RunFrame.some_inv {f : Frame} {evm_ : Evm} {exn_ : Execution} {r}
@@ -470,6 +523,14 @@ lemma RunFrame.depth_eq {f : Frame} {evm_ : Evm} {exn_ : Execution} {r}
     (run : RunFrame f (.some ⟨evm_, exn_⟩) r) :
     evm_.sta.depth = f.inner.depth :=
   Frame.enter_run_depth (RunFrame.some_inv run).1
+
+/-- The block statics of a suspended child frame, read off the slot. The
+`RunFrame` form of `Frame.enter_run_benvStat`, shaped like `depth_eq` so the
+two read the same way at a call site. -/
+lemma RunFrame.benvStat_eq {f : Frame} {evm_ : Evm} {exn_ : Execution} {r}
+    (run : RunFrame f (.some ⟨evm_, exn_⟩) r) :
+    evm_.sta.benvStat = f.inner.benv.stat :=
+  Frame.enter_run_benvStat (RunFrame.some_inv run).1
 
 /-- A filled slot on a call-type instruction means the step spawned, and the
 slot holds that spawn's child frame. -/
@@ -902,6 +963,51 @@ lemma Xinst.step_spawn_depth {sevm : Sevm} {devm : Devm} {x : Xinst}
     first
       | exact genericCreate.step_spawn_depth hs
       | exact genericCall.step_spawn_depth hs
+
+/-- A CALL-family spawn hands the parent's block statics to the child frame. -/
+lemma genericCall.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {f : Frame} {rsm : Resume}
+    (hs : genericCall.step sevm devm gas value caller target codeAddress
+      shouldTransferValue isStaticcall inputIndex inputSize outputIndex
+      outputSize code disablePrecompiles = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- A CREATE-family spawn hands the parent's block statics to the child frame. -/
+lemma genericCreate.step_spawn_benvStat
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreate.step sevm devm endowment newAddress memoryIndex memorySize
+      = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- Every spawning instruction hands the parent's block statics to the child. -/
+lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  cases x <;>
+    simp only [Xinst.step, Bind.bind, Except.bind, Except.assert,
+      Pure.pure, Except.pure] at hs <;>
+    repeat' split at hs
+  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+  all_goals
+    first
+      | exact genericCreate.step_spawn_benvStat hs
+      | exact genericCall.step_spawn_benvStat hs
 
 lemma Ninst.step_spawn_depth {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}

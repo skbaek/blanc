@@ -1,0 +1,7416 @@
+#!/usr/bin/env python3
+"""Differential: the compiled vault and the compiled reference against the
+independent oracle.
+
+Executes the committed vault runtime on Jaune's EVM through `jaune t8n` and
+compares the resulting storage, and the acceptance or rejection of the call,
+against `prorata_weth_vault_oracle.py` — which is written from the frozen
+statement rather than from the Lean development.  Neither side is derived from
+the other, so agreement is evidence and disagreement is a real defect in one of
+them.
+
+The same cases then run against the **compiled reference**: the OpenZeppelin
+v5.7.0 harness's creation input (`scripts/prorata-weth-vault-reference.json`)
+is executed on Jaune against Blanc's WETH, the constructor-patched runtime it
+installs is identity-checked against the lock, and that runtime is installed
+in the vault's place.  Storage is projected through each side's own layout —
+Blanc's flat keys, Solidity's mapping slots — so both are read against the
+same oracle expectation.  This is G8's compiled-reference half.
+
+G9's measurements ride on the same runs: both runtime sizes and the gas each
+side charges per successful case are recorded in
+`scripts/prorata-weth-vault-reference-measurements.json`, which this gate
+regenerates in memory and compares byte-for-byte (`--write-measurements`
+refreshes the file after a reviewed change).  Gas is never compared against
+the oracle, which does not model it; it is measured, not asserted.
+
+Finite evidence, never a theorem.
+"""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from types import SimpleNamespace
+from copy import deepcopy
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+
+from evm_tx import address_of, sign_eip1559  # noqa: E402
+from evm_return_capture import (  # noqa: E402
+    capture_runtime,
+    decode as decode_capture,
+    decode_fresh as decode_fresh_capture,
+    forwarding_capture_runtime,
+)
+from keccak import keccak256, selector  # noqa: E402
+from prorata_weth_vault_differential_matrix import (  # noqa: E402
+    ARITHMETIC_CAPACITY_CASES,
+    CASES,
+    SUPERSEDED_CASES,
+    UNIMPLEMENTED_CASES,
+    validate_manifest,
+)
+
+import prorata_weth_vault_oracle as V  # noqa: E402
+
+JAUNE = ROOT / ".lake" / "packages" / "jaune" / ".lake" / "build" / "bin" / "jaune"
+SOURCES = ROOT / ".lake" / "packages" / "jaune" / "scripts" / "sources.json"
+LOCK = ROOT / "scripts" / "prorata-weth-vault-reference.json"
+OUTPUT = ROOT / "scripts" / "reference" / "prorata-weth-vault" / "inputs" / "standard-json-output.json"
+MEASUREMENTS = ROOT / "scripts" / "prorata-weth-vault-reference-measurements.json"
+EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
+
+WETH_ADDR = 0x1000       # ProrataWethVault.assetAddress, compiled in
+VAULT_ADDR = 0x2000
+CAPTURE_ADDR = 0x3000
+KEY = 1
+SUPPLY_SLOT = (1 << 256) - 1   # ProrataWethVault.supplySlot = B256.max
+
+FAILURES: list[str] = []
+EXECUTED_ARITHMETIC_CAPACITY: set[tuple[str, str, str]] = set()
+EXECUTED_DECLARED_CASES: set[tuple[str, str, str]] = set()
+
+# The Blanc artifact's D2 policy is an empty revert payload.  The locked
+# OpenZeppelin source calls Panic.panic(Panic.UNDER_OVERFLOW) when Math.mulDiv
+# sees denominator <= high (Math.sol:218-220; Panic.sol:32,50-54).
+BLANC_EMPTY_REVERT = b""
+REFERENCE_MULDIV_OVERFLOW = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+
+# These are only cases that the present harness actually executes.  They are
+# deliberately narrower than the matrix declaration: unimplemented SF rows
+# stay declared but cannot acquire coverage credit from this ledger.
+EXECUTED_CASE_CHANNELS = {
+    "metadata-and-zero-views": ("jaune", "eels"),
+    "nonempty-and-donated-views": ("jaune", "eels"),
+    "deposit-empty": ("jaune",),
+    "deposit-donated": ("jaune",),
+    "causal-donation-before-deposit": ("jaune", "eels"),
+    "causal-donation-before-exit": ("jaune", "eels"),
+    "causal-between-users-donation": ("jaune", "eels"),
+    "causal-delegated-redeem": ("jaune", "eels"),
+    "causal-delegated-withdraw": ("jaune", "eels"),
+    "supported-root-deposit-zero": ("jaune", "eels"),
+    "supported-root-deposit-nonzero": ("jaune", "eels"),
+    "supported-root-mint-zero": ("jaune", "eels"),
+    "supported-root-mint-nonzero": ("jaune", "eels"),
+    "supported-root-deposit-caller-receiver": ("jaune", "eels"),
+    "supported-root-deposit-caller-distinct-receiver": ("jaune", "eels"),
+    "supported-root-mint-caller-receiver": ("jaune", "eels"),
+    "supported-root-mint-caller-distinct-receiver": ("jaune", "eels"),
+    "supported-root-withdraw-zero": ("jaune", "eels"),
+    "supported-root-withdraw-nonzero": ("jaune", "eels"),
+    "supported-root-redeem-zero": ("jaune", "eels"),
+    "supported-root-redeem-nonzero": ("jaune", "eels"),
+    "supported-root-withdraw-vault-self-receiver": ("jaune", "eels"),
+    "supported-root-redeem-vault-self-receiver": ("jaune", "eels"),
+    **{f"supported-root-{method}-{role}": ("jaune", "eels")
+       for method in ("withdraw", "redeem") for role in (
+           "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+           "owner-receiver-distinct-caller", "all-distinct")},
+    "supported-root-approve-initial-finite": ("jaune", "eels"),
+    "supported-root-approve-overwrite": ("jaune", "eels"),
+    "supported-root-approve-zero": ("jaune", "eels"),
+    "supported-root-approve-restored-finite": ("jaune", "eels"),
+    "supported-root-approve-self": ("jaune", "eels"),
+    "supported-root-approve-max": ("jaune", "eels"),
+    "supported-root-transfer-from-finite": ("jaune", "eels"),
+    "supported-root-transfer-from-owner": ("jaune", "eels"),
+    "supported-root-transfer-from-infinite": ("jaune", "eels"),
+    "supported-root-transfer-self": ("jaune", "eels"),
+    "supported-root-transfer-zero": ("jaune", "eels"),
+    "supported-root-allowance-underflow-rollback": ("jaune", "eels"),
+    "supported-root-deposit-zero-receiver-rollback": ("jaune", "eels"),
+    "supported-root-transfer-zero-receiver-rollback": ("jaune", "eels"),
+    "foreign-child-canonical-return-and-rollback": ("jaune", "eels"),
+    **{f"foreign-child-{flow}-{kind}": ("jaune", "eels")
+       for flow in ("deposit", "mint", "withdraw", "redeem") for kind in (
+           "true", "false", "short-1", "short-31", "long-64-leading-one",
+           "boolean-2", "revert")},
+    "mint-inexact": ("jaune",),
+    "redeem-inexact": ("jaune",),
+    "withdraw-inexact": ("jaune",),
+    "zero-address-rollbacks": ("jaune",),
+    "capacity-boundaries": ("jaune", "eels"),
+    "capacity-a-u-257-bit": ("jaune", "eels"),
+    "malformed-dispatch": ("jaune",),
+    "nonpayable-rollbacks": ("jaune",),
+    "event-order-deposit": ("jaune",),
+    "event-order-share-transfer": ("jaune",),
+    "return-capture-controls": ("jaune",),
+    "callback-and-child-failure-rollback": ("jaune",),
+    "event-order-mint": ("jaune",),
+    "event-order-withdraw": ("jaune",),
+    "event-order-redeem": ("jaune",),
+    "quote-timing-pre-transfer": ("jaune",),
+    "capacity-a-u-zero-flows": ("jaune", "eels"),
+    "capacity-a-u-nonzero-redeem": ("jaune", "eels"),
+    "capacity-a-u-nonzero-deposit": ("jaune", "eels"),
+    "capacity-a-u-nonzero-mint": ("jaune", "eels"),
+    "capacity-a-u-nonzero-withdraw": ("jaune", "eels"),
+    "capacity-receiver-wrap-withdraw": ("jaune", "eels"),
+    "capacity-receiver-wrap-redeem": ("jaune", "eels"),
+    "capacity-supply-ceiling-flows": ("jaune", "eels"),
+    "composition-exact-child-provenance": ("jaune",),
+    "composition-collision-premise-pairs": ("jaune",),
+    "donation-classification": ("jaune", "eels"),
+    "attack-transcript-frozen": ("jaune", "eels"),
+    "attack-economics-offset-comparator": ("jaune", "eels"),
+    "economics-cumulative-residue": ("jaune", "eels"),
+    "economics-coalition-partition": ("jaune", "eels"),
+    "causal-return-deposit-caller-receiver": ("jaune", "eels"),
+    "causal-return-deposit-caller-distinct-receiver": ("jaune", "eels"),
+    "causal-return-mint-caller-receiver": ("jaune", "eels"),
+    "causal-return-mint-caller-distinct-receiver": ("jaune", "eels"),
+    **{f"causal-return-{method}-{role}": ("jaune", "eels")
+       for method in ("withdraw", "redeem") for role in (
+           "all-equal", "caller-owner-distinct-receiver", "caller-receiver-distinct-owner",
+           "owner-receiver-distinct-caller", "all-distinct")},
+    **{case: ("jaune", "eels") for case in ARITHMETIC_CAPACITY_CASES},
+}
+
+
+def fail(msg: str) -> None:
+    FAILURES.append(msg)
+
+
+def record_declared_cases(cases: tuple[str, ...], channel: str, side: str) -> None:
+    """Credit only a completed named check on its actual engine and side."""
+    for case in cases:
+        if case not in CASES:
+            fail(f"executed coverage names undeclared case {case!r}")
+            continue
+        if channel not in EXECUTED_CASE_CHANNELS.get(case, ()):
+            fail(f"executed coverage names unimplemented channel {case}/{channel}")
+            continue
+        EXECUTED_DECLARED_CASES.add((case, channel, side))
+
+
+def record_case_if_clean(case: str, channel: str, side: str, failures_before: int) -> None:
+    """Emit one SF subcase ID only after its own concrete assertions passed."""
+    if len(FAILURES) == failures_before:
+        record_declared_cases((case,), channel, side)
+
+
+def validate_case_disposition() -> None:
+    """Require every declared case to have exactly one honest disposition.
+
+    A declared case is either implemented here, or discharged by named
+    successors that are themselves implemented, or recorded as unimplemented
+    with a reason.  Without this the declaration can accumulate names that are
+    never credited and never missed, which is indistinguishable from coverage
+    to anyone reading the case count.
+    """
+    for case in CASES:
+        dispositions = [
+            label for label, holds in (
+                ("implemented", case in EXECUTED_CASE_CHANNELS),
+                ("superseded", case in SUPERSEDED_CASES),
+                ("unimplemented", case in UNIMPLEMENTED_CASES),
+            ) if holds
+        ]
+        if len(dispositions) != 1:
+            fail(f"declared case {case!r} has {len(dispositions)} dispositions "
+                 f"({', '.join(dispositions) or 'none'}); it must be exactly one "
+                 f"of implemented, superseded, or unimplemented")
+    for case, successors in sorted(SUPERSEDED_CASES.items()):
+        for successor in successors:
+            if successor not in EXECUTED_CASE_CHANNELS:
+                fail(f"superseded case {case!r} names successor {successor!r}, "
+                     f"which no channel implements; the original obligation is "
+                     f"uncovered")
+
+
+def validate_declared_case_coverage() -> None:
+    """Require every claimed implemented case/channel to have run on both sides."""
+    expected = {
+        (case, channel, side)
+        for case, channels in EXECUTED_CASE_CHANNELS.items()
+        for channel in channels
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    unexpected = sorted(EXECUTED_DECLARED_CASES - expected)
+    if missing:
+        fail("declared executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if unexpected:
+        fail("declared executed coverage recorded undeclared IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in unexpected))
+
+
+def verify_wrap_proof(run: Runner) -> None:
+    """The committed wrap proof regenerates byte-for-byte (review F14).
+
+    Re-executes the registered wrap-probe generator against the exact
+    program and requires the committed JSON to match, so the F14 claim
+    cannot rot.  Execution-only: no oracle query, so oracle mutants in
+    the self-test campaigns cannot disturb it.
+    """
+    path = HERE / "gen-prorata-weth-wrap-proof.py"
+    spec = importlib.util.spec_from_file_location("weth_wrap_proof", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        payload = module.build(run)
+    except (RuntimeError, AssertionError) as exc:
+        fail(f"wrap proof regeneration failed: {exc}")
+        return
+    committed = HERE / "prorata-weth-wrap-proof.json"
+    if not committed.is_file() or committed.read_bytes() != payload:
+        fail("prorata-weth-wrap-proof.json is not what the registered "
+             "generator produces; regenerate it with gen-prorata-weth-wrap-proof.py")
+
+
+def record_arithmetic_capacity(case: str, channel: str, side: str) -> None:
+    """Record an executed seeded-arithmetic case for both independent engines."""
+    if case not in ARITHMETIC_CAPACITY_CASES:
+        fail(f"unknown arithmetic capacity case {case!r}")
+        return
+    if channel not in ("jaune", "eels"):
+        fail(f"unknown arithmetic capacity channel {channel!r}")
+        return
+    EXECUTED_ARITHMETIC_CAPACITY.add((case, channel, side))
+
+
+def capacity_revert_payload(run: Runner) -> bytes:
+    """Frozen Blanc D2 versus locked-OZ mulDiv overflow payloads."""
+    return REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else BLANC_EMPTY_REVERT
+
+
+def validate_arithmetic_capacity_coverage() -> None:
+    """Fail closed when a declared arithmetic case/channel did not execute."""
+    expected = {
+        (case, channel, side)
+        for case in ARITHMETIC_CAPACITY_CASES
+        for channel in ("jaune", "eels")
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_ARITHMETIC_CAPACITY)
+    unexpected = sorted(EXECUTED_ARITHMETIC_CAPACITY - expected)
+    if missing:
+        fail("arithmetic capacity coverage missing executed case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if unexpected:
+        fail("arithmetic capacity coverage recorded undeclared IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in unexpected))
+
+
+def _literal(lean: str, name: str) -> bytes:
+    spec = importlib.util.spec_from_file_location(
+        "crb", HERE / "check-runtime-bytes.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.parse_lean_literal(str(ROOT / lean), name)
+
+
+def h(n: int) -> str:
+    s = format(n, "x")
+    return "0x" + ("0" + s if len(s) % 2 else s)
+
+
+def word(n: int) -> str:
+    return "0x" + format(n, "064x")
+
+
+def address(n: int) -> str:
+    return "0x" + format(n, "040x")
+
+
+def weth_allowance_key(owner: int, spender: int) -> int:
+    """Blanc WETH hashes `owner ‖ spender`; see `Weth.updateAllowance`."""
+    return int.from_bytes(
+        keccak256(owner.to_bytes(32, "big") + spender.to_bytes(32, "big")), "big")
+
+
+def mapping_slot(key: int, slot: int) -> int:
+    """Solidity's `mapping(address => …)` cell: `keccak(pad32(key) ‖ pad32(slot))`."""
+    return int.from_bytes(
+        keccak256(key.to_bytes(32, "big") + slot.to_bytes(32, "big")), "big")
+
+
+def storage_get(storage: dict, key: int) -> int:
+    for slot, value in storage.items():
+        if int(slot, 16) == key:
+            return int(value, 16)
+    return 0
+
+
+class Side:
+    """One runtime under test and how its share ledger is laid out."""
+
+    def __init__(self, name: str, code: bytes, shares_slot, allowance_slot,
+                 supply_slot: int,
+                 base_storage: dict | None = None) -> None:
+        self.name = name
+        self.code = code
+        self.shares_slot = shares_slot
+        self.allowance_slot = allowance_slot
+        self.supply_slot = supply_slot
+        self.base_storage = base_storage or {}
+
+
+def vault_allowance_key(owner: int, spender: int) -> int:
+    """The Blanc share allowance key is `keccak(owner ‖ spender)`."""
+    return int.from_bytes(
+        keccak256(owner.to_bytes(32, "big") + spender.to_bytes(32, "big")), "big")
+
+
+def blanc_side() -> Side:
+    code = _literal("Blanc/ProrataWethVaultCode.lean", "prorataWethVaultCode")
+    return Side("blanc", code, lambda account: account, vault_allowance_key, SUPPLY_SLOT)
+
+
+def t8n(alloc: dict, txs: list) -> dict:
+    env = {"currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+           "currentGasLimit": h(30_000_000), "currentNumber": h(1),
+           "currentTimestamp": h(1000), "currentRandom": word(0),
+           "currentBaseFee": h(7), "parentBeaconBlockRoot": word(0),
+           "withdrawals": [], "currentExcessBlobGas": h(0),
+           "parentBlobGasUsed": h(0), "blockHashes": {}}
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = {}
+        for name, payload in [("alloc", alloc), ("env", env), ("txs", txs)]:
+            path = Path(tmp) / f"{name}.json"
+            path.write_text(json.dumps(payload))
+            paths[name] = str(path)
+        out = subprocess.run(
+            [str(JAUNE), "t8n", "--state-test", "--state.fork", "BPO2",
+             "--state.chainid", "1", "--input.alloc", paths["alloc"],
+             "--input.env", paths["env"], "--input.txs", paths["txs"],
+             "--output.alloc", "stdout", "--output.result", "stdout"],
+            capture_output=True, text=True,
+            env={**os.environ, "JAUNE_SOURCES": str(SOURCES)})
+    if out.returncode != 0:
+        raise RuntimeError(f"jaune t8n failed: {out.stderr[:400]}")
+    return json.loads(out.stdout)
+
+
+def signed_tx(to: int | None, data: str, value: int, gas: int, *, nonce: int = 0,
+              signing_key: int = KEY) -> dict:
+    tx = {"chainId": 1, "nonce": nonce, "maxPriorityFeePerGas": 0,
+          "maxFeePerGas": 1000, "gasLimit": gas,
+          "to": address(to) if to is not None else "0x",
+          "value": value, "data": data, "accessList": []}
+    signed = sign_eip1559(tx, signing_key)
+    return {"type": h(2), "chainId": h(1), "nonce": h(nonce),
+            "maxPriorityFeePerGas": h(0), "maxFeePerGas": h(1000),
+            "gasLimit": h(gas), "gas": h(gas),
+            "to": address(to) if to is not None else None,
+            "value": h(value), "data": data, "input": data,
+            "accessList": [], "yParity": h(signed["yParity"]),
+            "v": h(signed["yParity"]), "r": h(signed["r"]), "s": h(signed["s"])}
+
+
+def reference_side(weth_code: bytes) -> Side | None:
+    """Deploy the reference on Jaune and identity-check the installed runtime."""
+    try:
+        lock = json.loads(LOCK.read_text(encoding="utf-8"))
+        output = json.loads(OUTPUT.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"reference lock or output unreadable: {exc}")
+        return None
+    art = lock["artifacts"]
+    contract = output["contracts"]["contracts/ProrataWethVaultReference.sol"]["ProrataWethVaultReference"]
+    creation = bytes.fromhex(contract["evm"]["bytecode"]["object"])
+    creation_input = creation + bytes.fromhex(art["creationInput"]["assetWord"][2:])
+    if hashlib.sha256(creation_input).hexdigest() != art["creationInput"]["sha256"]:
+        fail("the committed compiler output's creation input is not the locked identity")
+        return None
+    user = int(address_of(KEY), 16)
+    alloc = {
+        address(user): {"balance": h(10 ** 21), "nonce": h(0), "code": "0x", "storage": {}},
+        address(WETH_ADDR): {"balance": h(0), "nonce": h(1),
+                             "code": "0x" + weth_code.hex(), "storage": {}},
+    }
+    result = t8n(alloc, [signed_tx(None, "0x" + creation_input.hex(), 0, 3_000_000)])
+    receipts = result["result"].get("receipts") or []
+    if result["result"].get("rejected") or not receipts or int(receipts[0]["status"], 16) != 1:
+        fail("the reference creation transaction did not succeed on Jaune")
+        return None
+    created = [(acct, entry) for acct, entry in result["alloc"].items()
+               if len(entry.get("code", "0x")) > 2 and acct != address(WETH_ADDR)]
+    if len(created) != 1:
+        fail(f"the reference creation installed {len(created)} runtimes, not 1")
+        return None
+    _, entry = created[0]
+    runtime = bytes.fromhex(entry["code"][2:])
+    want = art["configuredRuntime"]
+    if len(runtime) != want["bytes"] or hashlib.sha256(runtime).hexdigest() != want["sha256"]:
+        fail(f"the constructor-patched reference runtime is {len(runtime)} bytes / "
+             f"{hashlib.sha256(runtime).hexdigest()}, locked {want['bytes']} / {want['sha256']}")
+        return None
+    # Solidity ERC20 layout: _balances at slot 0, _allowances at 1,
+    # _totalSupply at 2, _name at 3, _symbol at 4; ERC4626 adds immutables only.
+    return Side("reference", runtime, lambda account: mapping_slot(account, 0),
+                lambda owner, spender: mapping_slot(spender, mapping_slot(owner, 1)), 2,
+                dict(entry.get("storage", {})))
+
+
+class Runner:
+    def __init__(self, side: Side, weth_code: bytes) -> None:
+        self.side = side
+        self.weth_code = weth_code
+        self.user = int(address_of(KEY), 16)
+        self.gas: dict[str, int] = {}
+
+    def add_eoa(self, alloc: dict, signing_key: int, *, weth: int = 0,
+                weth_allowance: int = 0) -> int:
+        """Add one independent causal-fixture caller and optional WETH rows."""
+        who = int(address_of(signing_key), 16)
+        alloc[address(who)] = {"balance": h(10 ** 21), "nonce": h(0), "code": "0x", "storage": {}}
+        storage = alloc[address(WETH_ADDR)]["storage"]
+        if weth:
+            storage[word(who)] = word(weth)
+        if weth_allowance:
+            storage[word(weth_allowance_key(who, VAULT_ADDR))] = word(weth_allowance)
+        return who
+
+    def alloc(self, user_weth: int, allowance: int, shares: dict | None = None,
+              supply: int = 0, weth_extra=None) -> dict:
+        weth_storage = {word(self.user): word(user_weth)}
+        if allowance:
+            weth_storage[word(weth_allowance_key(self.user, VAULT_ADDR))] = \
+                word(allowance)
+        if weth_extra:
+            weth_storage.update(weth_extra)
+        vault_storage = dict(self.side.base_storage)
+        for account, amount in (shares or {}).items():
+            vault_storage[word(self.side.shares_slot(account))] = word(amount)
+        if supply:
+            vault_storage[word(self.side.supply_slot)] = word(supply)
+        return {
+            address(self.user): {"balance": h(10 ** 21), "nonce": h(0),
+                                 "code": "0x", "storage": {}},
+            address(WETH_ADDR): {"balance": h(0), "nonce": h(1),
+                                 "code": "0x" + self.weth_code.hex(),
+                                 "storage": weth_storage},
+            address(VAULT_ADDR): {"balance": h(0), "nonce": h(1),
+                                  "code": "0x" + self.side.code.hex(),
+                                  "storage": vault_storage},
+        }
+
+    def causal_root(self, signing_keys: tuple[int, ...]) -> dict:
+        """Fresh exact-code pair root for histories funded by WETH deposits.
+
+        This deliberately starts with no internal WETH rows and no ether held
+        by WETH.  Callers must establish both through payable WETH calls before
+        calling the vault, so a positive token balance is always backed by the
+        WETH account's native balance in the resulting history.
+        """
+        world = self.alloc(0, 0)
+        for signing_key in signing_keys:
+            if signing_key != KEY:
+                self.add_eoa(world, signing_key)
+        return world
+
+    def causal_capture_root(self, signing_keys: tuple[int, ...], *,
+                            max_return_bytes: int = 32
+                            ) -> tuple[dict, bytes, object]:
+        """Install the reusable recorder once in the otherwise fresh root."""
+        code, layout = forwarding_capture_runtime(
+            max_return_bytes=max_return_bytes, base=0xC000)
+        world = self.causal_root(signing_keys)
+        world[address(CAPTURE_ADDR)] = {
+            "balance": h(0), "nonce": h(1),
+            "code": "0x" + code.hex(), "storage": {},
+        }
+        return world, code, layout
+
+    def call(self, alloc: dict, data: str, value: int = 0,
+             gas: int = 3_000_000, label: str | None = None, *,
+             target: int = VAULT_ADDR, nonce: int = 0, signing_key: int = KEY) -> dict:
+        result = t8n(alloc, [signed_tx(target, data, value, gas, nonce=nonce,
+                                       signing_key=signing_key)])
+        receipts = result["result"].get("receipts") or []
+        if label and receipts and int(receipts[0].get("status", "0x0"), 16) == 1:
+            self.gas[label] = int(receipts[0]["cumulativeGasUsed"], 16)
+        return result
+
+    def capture(self, alloc: dict, data: str, *, max_return_bytes: int,
+                label: str) -> tuple[dict, dict[str, int | bytes]]:
+        """Observe a vault return through a deterministic storage recorder.
+
+        The recorder is an additional transaction shape: its inner call has
+        the recorder as ``msg.sender``.  Direct-EOA cases remain on ``call``;
+        callers of this method must therefore seed any sender-sensitive state
+        for ``CAPTURE_ADDR`` explicitly.
+        """
+        code, layout = capture_runtime(
+            VAULT_ADDR, bytes.fromhex(data.removeprefix("0x")),
+            max_return_bytes=max_return_bytes, base=0xC000)
+        world = deepcopy(alloc)
+        world[address(CAPTURE_ADDR)] = {"balance": h(0), "nonce": h(1),
+                                        "code": "0x" + code.hex(), "storage": {}}
+        result = t8n(world, [signed_tx(CAPTURE_ADDR, "0x", 0, 3_000_000)])
+        body = result.get("result")
+        receipts = body.get("receipts") if isinstance(body, dict) else None
+        if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+            raise RuntimeError(f"{label}: recorder transaction was not accepted exactly once")
+        try:
+            status = int(receipts[0]["status"], 16)
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError(f"{label}: recorder receipt has no hexadecimal status") from None
+        if status != 1:
+            raise RuntimeError(f"{label}: recorder transaction reverted with status {status}")
+        storage = result.get("alloc", {}).get(address(CAPTURE_ADDR), {}).get("storage")
+        if not isinstance(storage, dict):
+            raise RuntimeError(f"{label}: recorder post-state storage is absent")
+        try:
+            observed = decode_capture(lambda slot: storage_get(storage, slot), layout)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: {exc}") from exc
+        return result, observed
+
+    def causal_capture(self, alloc: dict, target: int, data: str, *,
+                       code: bytes, layout, label: str,
+                       signing_key: int = KEY
+                       ) -> tuple[dict, dict[str, int | bytes]]:
+        """Execute one call through the root-installed recorder and decode it.
+
+        Code identity is checked before and after the transaction.  The
+        expected marker derives from the actual prior storage, so omission or
+        reuse of an older observation cannot satisfy this call.
+        """
+        try:
+            before = _normalized_account(alloc, CAPTURE_ADDR)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: recorder root account is malformed: {exc}") from exc
+        if (before["balance"] != 0 or before["nonce"] != 1
+                or before["code"] != code):
+            raise RuntimeError(f"{label}: recorder code identity changed during causal history")
+        prior_marker = storage_get(alloc[address(CAPTURE_ADDR)].get("storage", {}),
+                                   layout.marker)
+        payload = target.to_bytes(32, "big") + bytes.fromhex(data.removeprefix("0x"))
+        result = self.call(
+            alloc, "0x" + payload.hex(), target=CAPTURE_ADDR,
+            nonce=_next_nonce(alloc, signing_key), signing_key=signing_key)
+        body = result.get("result")
+        receipts = body.get("receipts") if isinstance(body, dict) else None
+        if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+            raise RuntimeError(f"{label}: recorder transaction was not accepted exactly once")
+        try:
+            status = int(receipts[0]["status"], 16)
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError(f"{label}: recorder receipt has no hexadecimal status") from None
+        if status != 1:
+            raise RuntimeError(f"{label}: recorder transaction reverted with status {status}")
+        post = result.get("alloc", {})
+        try:
+            after = _normalized_account(post, CAPTURE_ADDR)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: recorder post-state is malformed: {exc}") from exc
+        if (after["balance"] != 0 or after["nonce"] != 1
+                or after["code"] != code):
+            raise RuntimeError(f"{label}: recorder code identity changed during causal history")
+        storage = post.get(address(CAPTURE_ADDR), {}).get("storage")
+        if not isinstance(storage, dict):
+            raise RuntimeError(f"{label}: recorder post-state storage is absent")
+        try:
+            observed = decode_fresh_capture(
+                lambda slot: storage_get(storage, slot), layout, prior_marker + 1)
+        except ValueError as exc:
+            raise RuntimeError(f"{label}: {exc}") from exc
+        if set(after["storage"]) - set(layout.slots()):
+            raise RuntimeError(f"{label}: recorder owns unexpected nonzero storage slots")
+        return result, observed
+
+    def shares(self, vault_storage: dict, account: int) -> int:
+        return storage_get(vault_storage, self.side.shares_slot(account))
+
+    def supply(self, vault_storage: dict) -> int:
+        return storage_get(vault_storage, self.side.supply_slot)
+
+    def share_allowance(self, vault_storage: dict, owner: int, spender: int) -> int:
+        return storage_get(vault_storage, self.side.allowance_slot(owner, spender))
+
+
+def abi(sig: str, *args: int) -> str:
+    return "0x" + selector(sig).hex() + "".join(format(a, "064x") for a in args)
+
+
+def vault_state(result: dict) -> tuple[dict, dict]:
+    post = result["alloc"]
+    return (post.get(address(VAULT_ADDR), {}).get("storage", {}),
+            post.get(address(WETH_ADDR), {}).get("storage", {}))
+
+
+def expect(label: str, got: int, want: int) -> None:
+    if got != want:
+        fail(f"{label}: executed {got}, oracle {want}")
+
+
+def signer_address(signing_key: int) -> int:
+    return int(address_of(signing_key), 16)
+
+
+def _next_nonce(alloc: dict, signing_key: int) -> int:
+    entry = alloc.get(address(signer_address(signing_key)), {})
+    return _quantity(entry.get("nonce", "0x0"), "causal signer nonce")
+
+
+def run_sequence(run: Runner, label: str, root: dict,
+                 steps: list[tuple[str, int, str, int, int]]) -> list[dict] | None:
+    """Run an actual serial t8n history, feeding every post-state forward.
+
+    A step is ``(name, target, calldata, value, signing_key)``.  The signer
+    nonce comes from the prior t8n allocation rather than a hand-maintained
+    counter, so mixed-signer histories cannot silently reuse a nonce.
+    """
+    current = root
+    results = []
+    for name, target, data, value, signing_key in steps:
+        result = run.call(current, data, value=value, target=target,
+                          nonce=_next_nonce(current, signing_key), signing_key=signing_key)
+        if not _causal_success(f"{label} {name}", result):
+            return None
+        post = result.get("alloc")
+        if not isinstance(post, dict):
+            fail(f"{label} {name}: successful transaction has no allocation")
+            return None
+        results.append(result)
+        current = post
+    return results
+
+
+def _exact_event(label: str, result: dict, *, contract: int, signature: str,
+                 indexed: tuple[int, ...], data_words: tuple[int, ...]) -> None:
+    """Check one complete application event, including address and word order."""
+    entries = logs_of(result)
+    if len(entries) != 1:
+        fail(f"{label}: expected exactly one event, got {len(entries)}")
+        return
+    entry = entries[0]
+    if entry.get("address") != address(contract) or entry.get("topics", [None])[0] != event_topic(signature):
+        fail(f"{label}: event contract or signature differs")
+        return
+    topics = entry.get("topics")
+    if not isinstance(topics, list) or len(topics) != len(indexed) + 1:
+        fail(f"{label}: event indexed-topic count differs")
+        return
+    if tuple(int(topic, 16) for topic in topics[1:]) != indexed:
+        fail(f"{label}: event indexed words differ")
+        return
+    raw = entry.get("data", "")
+    if not isinstance(raw, str) or not raw.startswith("0x") or len(raw) != 2 + 64 * len(data_words):
+        fail(f"{label}: event data length differs")
+        return
+    if tuple(int(raw[2 + 64 * i:2 + 64 * (i + 1)], 16) for i in range(len(data_words))) != data_words:
+        fail(f"{label}: event data words differ")
+
+
+def _normalized_storage_map(storage: dict, label: str) -> dict[int, int]:
+    if not isinstance(storage, dict):
+        raise ValueError(f"{label} storage is not an object")
+    normalized = {}
+    for raw_slot, raw_value in storage.items():
+        slot = _quantity(raw_slot, f"{label} storage key")
+        value = _quantity(raw_value, f"{label} storage value")
+        if value:
+            if slot in normalized:
+                raise ValueError(f"{label} storage spells slot {slot} twice")
+            normalized[slot] = value
+    return normalized
+
+
+def _set_storage_word(storage: dict[int, int], slot: int, value: int, label: str) -> None:
+    if value:
+        storage[slot] = value
+    else:
+        storage.pop(slot, None)
+
+
+def _deposit_events(label: str, result: dict, caller: int, receiver: int,
+                    assets: int, shares: int) -> None:
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    if [(row.get("address"), (row.get("topics") or [None])[0]) for row in entries] != [
+            (address(WETH_ADDR), transfer), (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]:
+        fail(f"{label}: WETH transfer, share mint, Deposit order differs")
+        return
+    if (len(entries[0].get("topics", [])) != 3 or len(entries[0].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (caller, VAULT_ADDR)
+            or int(entries[0]["data"], 16) != assets):
+        fail(f"{label}: inbound WETH Transfer words differ")
+    if (len(entries[1].get("topics", [])) != 3 or len(entries[1].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (0, receiver)
+            or int(entries[1]["data"], 16) != shares):
+        fail(f"{label}: share-mint Transfer words differ")
+    if (len(entries[2].get("topics", [])) != 3 or len(entries[2].get("data", "")) != 130
+            or tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver)
+            or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
+                     for i in range(2)) != (assets, shares)):
+        fail(f"{label}: Deposit words differ")
+
+
+def _withdraw_events(label: str, result: dict, caller: int, receiver: int,
+                     owner: int, assets: int, shares: int) -> None:
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    withdraw = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    if [(row.get("address"), (row.get("topics") or [None])[0]) for row in entries] != [
+            (address(VAULT_ADDR), transfer), (address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), withdraw)]:
+        fail(f"{label}: share burn, WETH transfer, Withdraw order differs")
+        return
+    if (len(entries[0].get("topics", [])) != 3 or len(entries[0].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[0]["topics"][1:]) != (owner, 0)
+            or int(entries[0]["data"], 16) != shares):
+        fail(f"{label}: share-burn Transfer words differ")
+    if (len(entries[1].get("topics", [])) != 3 or len(entries[1].get("data", "")) != 66
+            or tuple(int(topic, 16) for topic in entries[1]["topics"][1:]) != (VAULT_ADDR, receiver)
+            or int(entries[1]["data"], 16) != assets):
+        fail(f"{label}: outbound WETH Transfer words differ")
+    if (len(entries[2].get("topics", [])) != 4 or len(entries[2].get("data", "")) != 130
+            or tuple(int(topic, 16) for topic in entries[2]["topics"][1:]) != (caller, receiver, owner)
+            or tuple(int(entries[2]["data"][2 + 64 * i:2 + 64 * (i + 1)], 16)
+                     for i in range(2)) != (assets, shares)):
+        fail(f"{label}: Withdraw words differ")
+
+
+def _projected_pair_accounts(run: Runner, label: str, model: V.Vault,
+                             accounts: tuple[int, ...], *,
+                             weth_allowances: tuple[tuple[int, int], ...] = (),
+                             share_allowances: tuple[tuple[int, int], ...] = ()
+                             ) -> tuple[dict, dict]:
+    """Project the oracle model into normalized WETH/vault accounts.
+
+    The single projection consumed both by `_pair_state` (Jaune
+    post-states) and by the EELS history replays (review F27), so the two
+    engines assert the identical oracle picture after every step.
+    """
+    base_vault = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+    if not model.conserved():
+        fail(f"{label}: oracle share ledger is not conserved")
+    expected_weth = {}
+    for account in accounts:
+        _set_storage_word(expected_weth, account, model.weth.get(account, 0), label)
+    for owner, spender in weth_allowances:
+        _set_storage_word(expected_weth, weth_allowance_key(owner, spender),
+                          model.weth_allowances.get((owner, spender), 0), label)
+    expected_vault = dict(base_vault)
+    for account in accounts:
+        _set_storage_word(expected_vault, run.side.shares_slot(account), model.balance_of(account), label)
+    _set_storage_word(expected_vault, run.side.supply_slot, model.supply, label)
+    for owner, spender in share_allowances:
+        _set_storage_word(expected_vault, run.side.allowance_slot(owner, spender),
+                          model.allowance(owner, spender), label)
+    backed = sum(model.weth.get(account, 0) for account in accounts)
+    return ({"balance": backed, "nonce": 1, "code": run.weth_code,
+             "storage": expected_weth},
+            {"balance": 0, "nonce": 1, "code": run.side.code,
+             "storage": expected_vault})
+
+
+def _pair_state(run: Runner, label: str, result: dict, model: V.Vault,
+                accounts: tuple[int, ...], *,
+                weth_allowances: tuple[tuple[int, int], ...] = (),
+                share_allowances: tuple[tuple[int, int], ...] = ()) -> None:
+    """Project the whole relevant backed pair state after one causal step.
+
+    Native WETH ether backs every tracked internal WETH row.  Gas-payer nonce
+    and ether changes are transaction-envelope effects and intentionally are
+    not compared; WETH/vault code, full application ledgers, allowance rows,
+    and WETH's native balance are compared exactly.
+    """
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: missing post-state allocation")
+        return
+    try:
+        weth_account = _normalized_account(post, WETH_ADDR)
+        vault_account = _normalized_account(post, VAULT_ADDR)
+        expected_weth_account, expected_vault_account = _projected_pair_accounts(
+            run, label, model, accounts, weth_allowances=weth_allowances,
+            share_allowances=share_allowances)
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize application account: {exc}")
+        return
+    if weth_account != expected_weth_account:
+        fail(f"{label}: complete normalized WETH account differs from oracle projection")
+    if vault_account != expected_vault_account:
+        fail(f"{label}: complete normalized vault account differs from oracle projection")
+
+
+def funded_pair(run: Runner, label: str, funding: dict[int, int], approvals: dict[int, int],
+                *, extra_signers: tuple[int, ...] = ()) -> tuple[list[dict], V.Vault, tuple[int, ...]] | None:
+    """Create a reachable pair history using payable WETH funding then approval."""
+    if set(approvals) - set(funding):
+        fail(f"{label}: approval signer lacks an actual WETH funding step")
+        return None
+    keys = tuple(dict.fromkeys((*funding, *extra_signers)))
+    accounts = tuple(signer_address(key) for key in keys) + (VAULT_ADDR,)
+    steps = []
+    for key, amount in funding.items():
+        steps.append(("fund WETH", WETH_ADDR, "0x", amount, key))
+    for key, amount in approvals.items():
+        steps.append(("approve WETH", WETH_ADDR,
+                      abi("approve(address,uint256)", VAULT_ADDR, amount), 0, key))
+    results = run_sequence(run, label, run.causal_root(keys), steps)
+    if results is None:
+        return None
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={signer_address(key): amount for key, amount in funding.items()},
+                    weth_allowances={(signer_address(key), VAULT_ADDR): amount
+                                     for key, amount in approvals.items()})
+    pairs = tuple((signer_address(key), VAULT_ADDR) for key in approvals)
+    _pair_state(run, f"{label} setup", results[-1], model, accounts,
+                weth_allowances=pairs)
+    approval_results = results[len(funding):]
+    for (key, amount), result in zip(approvals.items(), approval_results, strict=True):
+        owner = signer_address(key)
+        _exact_event(f"{label} WETH approval", result, contract=WETH_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(owner, VAULT_ADDR), data_words=(amount,))
+    return results, model, accounts
+
+
+def check_deposit_into_empty_vault(run: Runner) -> None:
+    assets = 10 ** 6
+    result = run.call(run.alloc(10 ** 18, 10 ** 18),
+                      abi("deposit(uint256,address)", assets, run.user),
+                      label="deposit_into_empty_vault")
+    if result["result"].get("rejected"):
+        fail(f"deposit rejected: {result['result']['rejected']}")
+        return
+    vault, weth = vault_state(result)
+    shares = V.convert_to_shares(assets, 0, 0)
+    expect("deposit shares", run.shares(vault, run.user), shares)
+    expect("deposit supply", run.supply(vault), shares)
+    expect("deposit weth[vault]", storage_get(weth, VAULT_ADDR), assets)
+    expect("deposit weth[user]", storage_get(weth, run.user), 10 ** 18 - assets)
+
+
+def check_deposit_into_donated_vault(run: Runner) -> None:
+    """A donation moves the price; the oracle must predict the new quote."""
+    # 4 * 6000 / 9 is 2666.67, so floor and ceil differ and the rounding
+    # direction is actually observed rather than coinciding.
+    seeded_shares, seeded_assets, donation = 5000, 5, 3
+    weth_extra = {word(VAULT_ADDR): word(seeded_assets + donation)}
+    assets = 4
+    result = run.call(
+        run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                  weth_extra),
+        abi("deposit(uint256,address)", assets, run.user),
+        label="deposit_into_donated_vault")
+    if result["result"].get("rejected"):
+        fail(f"donated deposit rejected: {result['result']['rejected']}")
+        return
+    vault, _ = vault_state(result)
+    minted = V.convert_to_shares(assets, seeded_assets + donation, seeded_shares)
+    expect("donated deposit shares",
+           run.shares(vault, run.user), seeded_shares + minted)
+    expect("donated deposit supply", run.supply(vault), seeded_shares + minted)
+
+
+def check_causal_donation_before_deposit(run: Runner) -> None:
+    """Fund/approve WETH, donate, then deposit from actual backed post-states."""
+    donation, assets = 3, 4
+    setup = funded_pair(run, "donation-before-deposit", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-before-deposit", setup_results[-1]["alloc"], [
+        ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY),
+        ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", assets, run.user), 0, KEY),
+    ])
+    if steps is None:
+        return
+    committed, _, model = oracle_transaction(model, "donate", run.user, donation)
+    if not committed:
+        fail("donation-before-deposit oracle rejected donation")
+        return
+    _pair_state(run, "donation-before-deposit donation", steps[0], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
+    committed, shares, model = oracle_transaction(model, "deposit", run.user, assets, run.user)
+    if not committed:
+        fail("donation-before-deposit oracle rejected deposit")
+        return
+    _pair_state(run, "donation-before-deposit deposit", steps[1], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
+    _deposit_events("donation-before-deposit deposit", steps[1], run.user, run.user, assets, shares)
+
+
+def _causal_success(label: str, result: dict) -> bool:
+    body = result.get("result", {})
+    receipts = body.get("receipts") or []
+    if body.get("rejected") or len(receipts) != 1 or int(receipts[0].get("status", "0x0"), 16) != 1:
+        fail(f"{label}: expected one accepted successful causal transaction")
+        return False
+    return True
+
+
+def check_causal_donation_before_exit(run: Runner) -> None:
+    """Actual funding, deposit, outside gift, then a partial backed redemption."""
+    deposit_assets, donation, redeem_shares = 10, 3, 2000
+    setup = funded_pair(run, "donation-before-exit", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-before-exit", setup_results[-1]["alloc"], [
+        ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", deposit_assets, run.user), 0, KEY),
+        ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY),
+        ("vault redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", redeem_shares, run.user, run.user), 0, KEY),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, deposit_assets, run.user)),
+                                       ("donate", (run.user, donation)),
+                                       ("redeem", (run.user, redeem_shares, run.user, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"donation-before-exit oracle rejected {method}")
+            return
+        _pair_state(run, f"donation-before-exit {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+    _withdraw_events("donation-before-exit redeem", steps[-1], run.user, run.user, run.user,
+                     V.convert_to_assets(redeem_shares, deposit_assets + donation,
+                                         V.convert_to_shares(deposit_assets, 0, 0)), redeem_shares)
+
+
+def check_causal_between_users_donation(run: Runner) -> None:
+    """Two actual WETH funders donate and deposit without synthetic snapshots."""
+    key2 = 2
+    user2 = signer_address(key2)
+    setup = funded_pair(run, "between-users-donation", {KEY: 100, key2: 100},
+                        {KEY: 100, key2: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "between-users-donation", setup_results[-1]["alloc"], [
+        ("first deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("outside donation", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, key2),
+        ("second deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, user2), 0, key2),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("donate", (user2, 3)),
+                                       ("deposit", (user2, 4, user2))), steps, strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"between-users-donation oracle rejected {method}")
+            return
+        _pair_state(run, f"between-users-donation {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR), (user2, VAULT_ADDR)))
+    first_shares = V.convert_to_shares(10, 0, 0)
+    _deposit_events("between-users-donation first deposit", steps[0], run.user, run.user, 10, first_shares)
+    _deposit_events("between-users-donation second deposit", steps[-1], user2, user2, 4,
+                    V.convert_to_shares(4, 13, first_shares))
+
+
+def check_causal_delegated_redeem(run: Runner) -> None:
+    """Actual deposit, approval, and distinct-caller redeem consumes allowance."""
+    key2, shares = 2, 2000
+    delegate = signer_address(key2)
+    setup = funded_pair(run, "delegated-redeem", {KEY: 100}, {KEY: 100}, extra_signers=(key2,))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "delegated-redeem", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+        ("delegated redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", shares, delegate, run.user), 0, key2),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("approve", (run.user, delegate, shares)),
+                                       ("redeem", (delegate, shares, delegate, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"delegated-redeem oracle rejected {method}")
+            return
+        _pair_state(run, f"delegated-redeem {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),),
+                    share_allowances=((run.user, delegate),))
+    _exact_event("delegated-redeem share approval", steps[1], contract=VAULT_ADDR,
+                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate),
+                 data_words=(shares,))
+    _withdraw_events("delegated-redeem redeem", steps[-1], delegate, delegate, run.user,
+                     V.convert_to_assets(shares, 10, V.convert_to_shares(10, 0, 0)), shares)
+
+
+def check_causal_share_allowance_roles(run: Runner) -> None:
+    """Backed ERC-20 history for overwrite, zero, finite/max, self, and zero flows."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    setup = funded_pair(run, "share-allowance-roles", {KEY: 100}, {KEY: 100},
+                        extra_signers=(delegate_key, receiver_key))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    finite, self_allowance, maximum = 3_000, 500, V.U
+    steps = run_sequence(run, "share-allowance-roles", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("overwrite approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 2_500), 0, KEY),
+        ("zero approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 0), 0, KEY),
+        ("restore finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("finite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 1_000),
+         0, delegate_key),
+        ("approve self", VAULT_ADDR, abi("approve(address,uint256)", run.user, self_allowance), 0, KEY),
+        ("owner transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100), 0, KEY),
+        ("approve max", VAULT_ADDR, abi("approve(address,uint256)", delegate, maximum), 0, KEY),
+        ("infinite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100),
+         0, delegate_key),
+        ("self transfer", VAULT_ADDR, abi("transfer(address,uint256)", run.user, 200), 0, KEY),
+        ("zero-value transfer", VAULT_ADDR, abi("transfer(address,uint256)", receiver, 0), 0, KEY),
+    ])
+    if steps is None:
+        return
+    model_steps = (
+        ("deposit", (run.user, 10, run.user)),
+        ("approve", (run.user, delegate, finite)),
+        ("approve", (run.user, delegate, 2_500)),
+        ("approve", (run.user, delegate, 0)),
+        ("approve", (run.user, delegate, finite)),
+        ("transfer_from", (delegate, run.user, receiver, 1_000)),
+        ("approve", (run.user, run.user, self_allowance)),
+        ("transfer_from", (run.user, run.user, receiver, 100)),
+        ("approve", (run.user, delegate, maximum)),
+        ("transfer_from", (delegate, run.user, receiver, 100)),
+        ("transfer", (run.user, run.user, 200)),
+        ("transfer", (run.user, receiver, 0)),
+    )
+    allowance_rows = ((run.user, delegate), (run.user, run.user))
+    approval_cases = {
+        1: (delegate, finite, "supported-root-approve-initial-finite"),
+        2: (delegate, 2_500, "supported-root-approve-overwrite"),
+        3: (delegate, 0, "supported-root-approve-zero"),
+        4: (delegate, finite, "supported-root-approve-restored-finite"),
+        6: (run.user, self_allowance, "supported-root-approve-self"),
+        8: (delegate, maximum, "supported-root-approve-max"),
+    }
+    transfer_cases = {
+        5: (receiver, 1_000, "supported-root-transfer-from-finite"),
+        7: (receiver, 100, "supported-root-transfer-from-owner"),
+        9: (receiver, 100, "supported-root-transfer-from-infinite"),
+        10: (run.user, 200, "supported-root-transfer-self"),
+        11: (receiver, 0, "supported-root-transfer-zero"),
+    }
+    minted = V.convert_to_shares(10, 0, 0)
+    for index, ((method, args), result) in enumerate(zip(model_steps, steps, strict=True)):
+        before = len(FAILURES)
+        committed, value, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"share-allowance-roles oracle rejected {method}")
+            return
+        _pair_state(run, f"share-allowance-roles {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),), share_allowances=allowance_rows)
+        if index == 0:
+            _deposit_events("share-allowance-roles deposit", result, run.user, run.user, 10, minted)
+        elif index in approval_cases:
+            spender, amount, case = approval_cases[index]
+            _exact_event("share-allowance-roles approval", result, contract=VAULT_ADDR,
+                         signature="Approval(address,address,uint256)", indexed=(run.user, spender),
+                         data_words=(amount,))
+            record_case_if_clean(case, "jaune", run.side.name, before)
+        elif index in transfer_cases:
+            receiver_, amount, case = transfer_cases[index]
+            _exact_event("share-allowance-roles transfer", result, contract=VAULT_ADDR,
+                         signature="Transfer(address,address,uint256)", indexed=(run.user, receiver_),
+                         data_words=(amount,))
+            record_case_if_clean(case, "jaune", run.side.name, before)
+
+    # Each failure starts from a genuine prior post-state. The whole vault
+    # account includes every share/allowance row; the WETH account includes its
+    # finite residual allowance. Only payer envelope effects stay excluded.
+    # The first probe underflows from an allowance zeroed by `approve(0)`;
+    # the true partial-spend probe below exhausts its approval by spending.
+    zeroed = steps[3]["alloc"]
+    before = len(FAILURES)
+    _check_revert_evidence("share-allowance-roles zeroed allowance underflow", zeroed,
+                           run.call(zeroed, abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+                                    signing_key=delegate_key,
+                                    nonce=_next_nonce(zeroed, delegate_key)))
+    record_case_if_clean("supported-root-allowance-underflow-rollback", "jaune", run.side.name, before)
+    # A true partial spend (review F27): the restored finite approval is
+    # exhausted by an exact transferFrom, and the next unit underflows with
+    # whole-call rollback. Blanc's updateAllowance runs after the balance
+    # move and log, so this is exactly the path where a rollback failure
+    # would show.
+    partial = steps[4]["alloc"]
+    before = len(FAILURES)
+    exact = run.call(partial,
+                     abi("transferFrom(address,address,uint256)", run.user, receiver, finite),
+                     signing_key=delegate_key,
+                     nonce=_next_nonce(partial, delegate_key))
+    if _accepted_success("share-allowance-roles partial spend exact", exact):
+        spent_vault, _ = vault_state(exact)
+        if run.share_allowance(spent_vault, run.user, delegate) != 0:
+            fail("share-allowance-roles partial spend did not exhaust the approval")
+        else:
+            _check_revert_evidence(
+                "share-allowance-roles partial spend over-spend", exact["alloc"],
+                run.call(exact["alloc"],
+                         abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+                         signing_key=delegate_key,
+                         nonce=_next_nonce(exact["alloc"], delegate_key)))
+    record_case_if_clean("supported-root-allowance-underflow-rollback", "jaune", run.side.name, before)
+    final = steps[-1]["alloc"]
+    before = len(FAILURES)
+    _check_revert_evidence("share-allowance-roles zero receiver", final,
+                           run.call(final, abi("transfer(address,uint256)", 0, 1),
+                                    nonce=_next_nonce(final, KEY)))
+    record_case_if_clean("supported-root-transfer-zero-receiver-rollback", "jaune", run.side.name, before)
+
+
+def check_causal_delegated_withdraw(run: Runner) -> None:
+    """Backed deposit, approval, and a distinct-caller delegated withdraw."""
+    delegate_key, shares, assets = 2, 2_000, 2
+    delegate = signer_address(delegate_key)
+    setup = funded_pair(run, "delegated-withdraw", {KEY: 100}, {KEY: 100},
+                        extra_signers=(delegate_key,))
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "delegated-withdraw", setup_results[-1]["alloc"], [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+        ("delegated withdraw", VAULT_ADDR,
+         abi("withdraw(uint256,address,address)", assets, delegate, run.user), 0, delegate_key),
+    ])
+    if steps is None:
+        return
+    for (method, args), result in zip((("deposit", (run.user, 10, run.user)),
+                                       ("approve", (run.user, delegate, shares)),
+                                       ("withdraw", (delegate, assets, delegate, run.user))), steps,
+                                      strict=True):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"delegated-withdraw oracle rejected {method}")
+            return
+        _pair_state(run, f"delegated-withdraw {method}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),),
+                    share_allowances=((run.user, delegate),))
+    _exact_event("delegated-withdraw share approval", steps[1], contract=VAULT_ADDR,
+                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate),
+                 data_words=(shares,))
+    _withdraw_events("delegated-withdraw withdraw", steps[-1], delegate, delegate, run.user, assets, shares)
+
+
+def check_causal_zero_nonzero_flows(run: Runner) -> None:
+    """A backed history for zero/nonzero ERC-4626 flows with equal roles."""
+    setup = funded_pair(run, "zero-nonzero-flows", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    flows = [
+        ("zero deposit", "deposit", (run.user, 0, run.user),
+         abi("deposit(uint256,address)", 0, run.user)),
+        ("nonzero deposit", "deposit", (run.user, 10, run.user),
+         abi("deposit(uint256,address)", 10, run.user)),
+        ("zero mint", "mint", (run.user, 0, run.user),
+         abi("mint(uint256,address)", 0, run.user)),
+        ("nonzero mint", "mint", (run.user, 5, run.user),
+         abi("mint(uint256,address)", 5, run.user)),
+        ("zero withdraw", "withdraw", (run.user, 0, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero withdraw", "withdraw", (run.user, 2, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 2, run.user, run.user)),
+        ("zero redeem", "redeem", (run.user, 0, run.user, run.user),
+         abi("redeem(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero redeem", "redeem", (run.user, 5, run.user, run.user),
+         abi("redeem(uint256,address,address)", 5, run.user, run.user)),
+    ]
+    steps = run_sequence(run, "zero-nonzero-flows", setup_results[-1]["alloc"], [
+        (label, VAULT_ADDR, data, 0, KEY) for label, _, _, data in flows
+    ])
+    if steps is None:
+        return
+    flow_cases = {
+        "zero deposit": "supported-root-deposit-zero",
+        "nonzero deposit": "supported-root-deposit-nonzero",
+        "zero mint": "supported-root-mint-zero",
+        "nonzero mint": "supported-root-mint-nonzero",
+        "zero withdraw": "supported-root-withdraw-zero",
+        "nonzero withdraw": "supported-root-withdraw-nonzero",
+        "zero redeem": "supported-root-redeem-zero",
+        "nonzero redeem": "supported-root-redeem-nonzero",
+    }
+    for (label, method, args, _), result in zip(flows, steps, strict=True):
+        before = len(FAILURES)
+        committed, value, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"zero-nonzero-flows oracle rejected {label}")
+            return
+        _pair_state(run, f"zero-nonzero-flows {label}", result, model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if method == "deposit":
+            _deposit_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                            args[1], value)
+        elif method == "mint":
+            _deposit_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                            value, args[1])
+        elif method == "withdraw":
+            _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                             run.user, args[1], value)
+        else:
+            _withdraw_events(f"zero-nonzero-flows {label}", result, run.user, run.user,
+                             run.user, value, args[1])
+        record_case_if_clean(flow_cases[label], "jaune", run.side.name, before)
+
+
+def check_causal_inbound_role_partitions(run: Runner) -> None:
+    """Reachable deposit/mint histories for equal and distinct receivers.
+
+    The only vault caller is the genuinely WETH-funded signer.  The distinct
+    receiver is a passive EOA, so this exercises the ERC-4626 receiver role
+    without inventing a funded vault-address caller.
+    """
+    receiver_key = 2
+    receiver_distinct = signer_address(receiver_key)
+    rows = (
+        ("deposit", "caller-receiver", run.user, 10,
+         "supported-root-deposit-caller-receiver"),
+        ("deposit", "caller-distinct-receiver", receiver_distinct, 10,
+         "supported-root-deposit-caller-distinct-receiver"),
+        ("mint", "caller-receiver", run.user, 5,
+         "supported-root-mint-caller-receiver"),
+        ("mint", "caller-distinct-receiver", receiver_distinct, 5,
+         "supported-root-mint-caller-distinct-receiver"),
+    )
+    for method, role, receiver, amount, case in rows:
+        before = len(FAILURES)
+        label = f"inbound-role-{method}-{role}"
+        setup = funded_pair(run, label, {KEY: 100}, {KEY: 100},
+                            extra_signers=(receiver_key,))
+        if setup is None:
+            continue
+        setup_results, model, accounts = setup
+        args = (run.user, amount, receiver)
+        data = (abi("deposit(uint256,address)", amount, receiver)
+                if method == "deposit" else abi("mint(uint256,address)", amount, receiver))
+        steps = run_sequence(run, label, setup_results[-1]["alloc"], [
+            (method, VAULT_ADDR, data, 0, KEY),
+        ])
+        if steps is None:
+            continue
+        committed, returned, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable {method}")
+            continue
+        _pair_state(run, label, steps[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if method == "deposit":
+            _deposit_events(label, steps[0], run.user, receiver, amount, returned)
+        else:
+            _deposit_events(label, steps[0], run.user, receiver, returned, amount)
+        record_case_if_clean(case, "jaune", run.side.name, before)
+
+
+def check_causal_vault_self_receiver_exits(run: Runner) -> None:
+    """A WETH transfer from the vault to itself leaves its WETH row unchanged."""
+    rows = (
+        ("withdraw", 2, "supported-root-withdraw-vault-self-receiver"),
+        ("redeem", 2_000, "supported-root-redeem-vault-self-receiver"),
+    )
+    for method, amount, case in rows:
+        before = len(FAILURES)
+        label = f"vault-self-receiver-{method}"
+        setup = funded_pair(run, label, {KEY: 100}, {KEY: 100})
+        if setup is None:
+            continue
+        setup_results, model, accounts = setup
+        deposit = run_sequence(run, label, setup_results[-1]["alloc"], [
+            ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ])
+        if deposit is None:
+            continue
+        committed, minted, model = oracle_transaction(model, "deposit", run.user, 10, run.user)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable funding deposit")
+            continue
+        _pair_state(run, f"{label} deposit", deposit[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        _deposit_events(f"{label} deposit", deposit[0], run.user, run.user, 10, minted)
+        vault_weth_before = model.weth.get(VAULT_ADDR, 0)
+        args = (run.user, amount, VAULT_ADDR, run.user)
+        data = (abi("withdraw(uint256,address,address)", amount, VAULT_ADDR, run.user)
+                if method == "withdraw" else abi("redeem(uint256,address,address)", amount, VAULT_ADDR, run.user))
+        steps = run_sequence(run, label, deposit[0]["alloc"], [
+            (method, VAULT_ADDR, data, 0, KEY),
+        ])
+        if steps is None:
+            continue
+        committed, returned, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected reachable {method}")
+            continue
+        _pair_state(run, label, steps[0], model, accounts,
+                    weth_allowances=((run.user, VAULT_ADDR),))
+        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:
+            fail(f"{label}: vault WETH changed under self-transfer")
+        if method == "withdraw":
+            _withdraw_events(label, steps[0], run.user, VAULT_ADDR, run.user, amount, returned)
+        else:
+            _withdraw_events(label, steps[0], run.user, VAULT_ADDR, run.user, returned, amount)
+        record_case_if_clean(case, "jaune", run.side.name, before)
+
+
+def check_causal_outbound_role_partitions(run: Runner) -> None:
+    """All caller/owner/receiver equality partitions from actual share ownership."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    # role, caller signer/address, receiver, approval (None means owner call).
+    roles = (
+        ("all-equal", KEY, run.user, None),
+        ("caller-owner-distinct-receiver", KEY, receiver, None),
+        ("caller-receiver-distinct-owner", delegate_key, delegate, 3_000),
+        ("owner-receiver-distinct-caller", delegate_key, run.user, V.U),
+        ("all-distinct", delegate_key, receiver, 3_000),
+    )
+    for method, amount in (("withdraw", 2), ("redeem", 2_000)):
+        for role, caller_key, recipient, approval in roles:
+            before = len(FAILURES)
+            label = f"outbound-role-{method}-{role}"
+            setup = funded_pair(run, label, {KEY: 100}, {KEY: 100},
+                                extra_signers=(delegate_key, receiver_key))
+            if setup is None:
+                continue
+            setup_results, model, accounts = setup
+            steps = [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY)]
+            model_steps = [("deposit", (run.user, 10, run.user))]
+            if approval is not None:
+                steps.append(("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, approval), 0, KEY))
+                model_steps.append(("approve", (run.user, delegate, approval)))
+            caller = signer_address(caller_key)
+            sig = "withdraw(uint256,address,address)" if method == "withdraw" else "redeem(uint256,address,address)"
+            steps.append((method, VAULT_ADDR, abi(sig, amount, recipient, run.user), 0, caller_key))
+            model_steps.append((method, (caller, amount, recipient, run.user)))
+            results = run_sequence(run, label, setup_results[-1]["alloc"], steps)
+            if results is None:
+                continue
+            allowance_rows = ((run.user, delegate),) if approval is not None else ()
+            for index, ((model_method, args), result) in enumerate(zip(model_steps, results, strict=True)):
+                committed, value, model = oracle_transaction(model, model_method, *args)
+                if not committed:
+                    fail(f"{label}: oracle rejected reachable {model_method}")
+                    break
+                _pair_state(run, f"{label} {model_method}", result, model, accounts,
+                            weth_allowances=((run.user, VAULT_ADDR),), share_allowances=allowance_rows)
+                if index == 0:
+                    _deposit_events(f"{label} deposit", result, run.user, run.user, 10, value)
+                elif model_method == "approve":
+                    _exact_event(f"{label} approval", result, contract=VAULT_ADDR,
+                                 signature="Approval(address,address,uint256)", indexed=(run.user, delegate), data_words=(approval,))
+                else:
+                    if approval not in (None, V.U):
+                        spent_shares = value if method == "withdraw" else amount
+                        expected_post_spend_allowance = approval - spent_shares
+                        vault_storage, _ = vault_state(result)
+                        actual_post_spend_allowance = run.share_allowance(
+                            vault_storage, run.user, delegate)
+                        if actual_post_spend_allowance != expected_post_spend_allowance:
+                            fail(f"{label} {model_method}: pair state post-spend share allowance is "
+                                 f"{actual_post_spend_allowance}, expected "
+                                 f"{expected_post_spend_allowance}")
+                    if method == "withdraw":
+                        _withdraw_events(label, result, caller, recipient, run.user, amount, value)
+                    else:
+                        _withdraw_events(label, result, caller, recipient, run.user, value, amount)
+            else:
+                record_case_if_clean(f"supported-root-{method}-{role}", "jaune", run.side.name, before)
+
+
+def _response_runtime(kind: str) -> bytes:
+    """Tiny WETH-address child responses for return/rollback probes only."""
+    table = {
+        "true": bytes.fromhex("600160005260206000f3"),
+        "empty": bytes.fromhex("60006000f3"),
+        "false": bytes.fromhex("600060005260206000f3"),
+        "short": bytes.fromhex("600160005360016000f3"),
+        "short31": bytes.fromhex("6001600052601f6001f3"),
+        "long": bytes.fromhex("6001600052602a60205260406000f3"),
+        "malformed": bytes.fromhex("600260005260206000f3"),
+        "revert": bytes.fromhex("60006000fd"),
+    }
+    response = table[kind]
+    # The vault first reads WETH.balanceOf(vault) to quote the withdrawal.
+    # Every other selector receives the deliberately adversarial response.
+    # CALLDATALOAD(0) >> 224 == balanceOf(address)'s four-byte selector.
+    prefix = bytes.fromhex("60003560e01c6370a0823114")
+    balance = bytes.fromhex("5b600a60005260206000f3")
+    destination = len(prefix) + 3 + len(response)
+    if destination >= 256:
+        raise ValueError("foreign WETH response jump no longer fits PUSH1")
+    jump = bytes((0x60, destination, 0x57))
+    return prefix + jump + response + balance
+
+
+def _adversarial_child_world(run: Runner, kind: str) -> tuple[dict, int]:
+    """Install foreign child code at the fixed address outside exact-pair scope.
+
+    This intentionally probes runtime canonical-return/CEI behavior, rather
+    than asserting that the vault authenticates the WETH bytecode.  Exact code
+    identity is an admission/provenance condition for pair evidence, not a
+    runtime rejection promise for a lookalike installed at `WETH_ADDR`.
+    """
+    delegate_key = 2
+    delegate = signer_address(delegate_key)
+    # With the `O = 1000` offset, 10 shares cannot withdraw two of ten assets.
+    # Seed a 10_000-share arbitrary probe state so the child return is reached.
+    world = run.alloc(0, 0, {run.user: 10_000}, 10_000,
+                      {word(VAULT_ADDR): word(10)})
+    run.add_eoa(world, delegate_key)
+    world[address(WETH_ADDR)]["code"] = "0x" + _response_runtime(kind).hex()
+    world[address(VAULT_ADDR)]["storage"][word(run.side.allowance_slot(run.user, delegate))] = word(10_000)
+    return world, delegate
+
+
+FOREIGN_CHILD_KINDS = (
+    ("true", "true"),
+    ("false", "false"),
+    ("short-1", "short"),
+    ("short-31", "short31"),
+    ("long-64-leading-one", "long"),
+    ("boolean-2", "malformed"),
+    ("revert", "revert"),
+)
+
+
+def _foreign_child_success_expected(side: str, case_kind: str) -> bool:
+    """Source-derived operational result for deliberately foreign token code."""
+    return case_kind == "true" or (
+        case_kind == "long-64-leading-one" and side == "reference")
+
+
+def _foreign_rollback_expected(run: Runner, before: dict) -> dict:
+    """Independent rollback projection, kept separate from execution input."""
+    return deepcopy(before)
+
+
+def _foreign_child_case(run: Runner, flow: str, runtime_kind: str
+                        ) -> tuple[dict, int, int, int, str, int, dict, list[dict]]:
+    """Build one arbitrary foreign-code probe and its successful projection."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    if flow in ("deposit", "mint"):
+        before = run.alloc(0, 0)
+        run.add_eoa(before, receiver_key)
+        caller, owner = run.user, run.user
+        supply, assets_before = 0, 10
+        if flow == "deposit":
+            assets = 2
+            shares = V.convert_to_shares(assets, assets_before, supply)
+            data = abi("deposit(uint256,address)", assets, receiver)
+            returned = shares
+        else:
+            shares = 200
+            assets = V.preview_mint(shares, assets_before, supply)
+            data = abi("mint(uint256,address)", shares, receiver)
+            returned = assets
+        signing_key = KEY
+    else:
+        before = run.alloc(0, 0, {run.user: 10_000}, 10_000,
+                           {word(VAULT_ADDR): word(10)})
+        run.add_eoa(before, delegate_key)
+        run.add_eoa(before, receiver_key)
+        caller, owner = delegate, run.user
+        before[address(VAULT_ADDR)]["storage"][
+            word(run.side.allowance_slot(owner, caller))] = word(3_000)
+        if flow == "withdraw":
+            assets = 2
+            shares = V.preview_withdraw(assets, 10, 10_000)
+            data = abi("withdraw(uint256,address,address)", assets, receiver, owner)
+            returned = shares
+        else:
+            shares = 2_000
+            assets = V.convert_to_assets(shares, 10, 10_000)
+            data = abi("redeem(uint256,address,address)", shares, receiver, owner)
+            returned = assets
+        signing_key = delegate_key
+    before[address(WETH_ADDR)]["code"] = "0x" + _response_runtime(runtime_kind).hex()
+    expected = deepcopy(before)
+    expected_vault = expected[address(VAULT_ADDR)]["storage"]
+    if flow in ("deposit", "mint"):
+        expected_vault[word(run.side.shares_slot(receiver))] = word(shares)
+        expected_vault[word(run.side.supply_slot)] = word(shares)
+    else:
+        expected_vault[word(run.side.shares_slot(owner))] = word(10_000 - shares)
+        expected_vault[word(run.side.supply_slot)] = word(10_000 - shares)
+        expected_vault[word(run.side.allowance_slot(owner, caller))] = word(3_000 - shares)
+    logs = _foreign_child_expected_logs(
+        flow, caller, receiver, owner, assets, shares)
+    return before, signing_key, caller, receiver, data, returned, expected, logs
+
+
+def _foreign_child_expected_logs(flow: str, caller: int, receiver: int,
+                                 owner: int, assets: int, shares: int) -> list[dict]:
+    """Exact two vault logs when foreign code returns success without a log."""
+    transfer = {
+        "address": address(VAULT_ADDR),
+        "topics": [event_topic("Transfer(address,address,uint256)"),
+                   word(0 if flow in ("deposit", "mint") else owner),
+                   word(receiver if flow in ("deposit", "mint") else 0)],
+        "data": word(shares),
+    }
+    if flow in ("deposit", "mint"):
+        operation = {
+            "address": address(VAULT_ADDR),
+            "topics": [event_topic("Deposit(address,address,uint256,uint256)"),
+                       word(caller), word(receiver)],
+            "data": word(assets) + word(shares)[2:],
+        }
+    else:
+        operation = {
+            "address": address(VAULT_ADDR),
+            "topics": [event_topic("Withdraw(address,address,address,uint256,uint256)"),
+                       word(caller), word(receiver), word(owner)],
+            "data": word(assets) + word(shares)[2:],
+        }
+    return [transfer, operation]
+
+
+def _foreign_child_success(run: Runner, label: str, result: dict,
+                           expected: dict, expected_logs: list[dict]) -> None:
+    """Require the intended vault operation, without claiming WETH movement."""
+    if not _accepted_success(label, result):
+        return
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful transaction has no allocation")
+        return
+    for account in (WETH_ADDR, VAULT_ADDR):
+        try:
+            actual_account = _normalized_account(post, account)
+            expected_account = _normalized_account(expected, account)
+        except ValueError as exc:
+            fail(f"{label}: cannot normalize successful foreign-code state: {exc}")
+            return
+        if actual_account != expected_account:
+            fail(f"{label}: successful foreign-code application state differs")
+    if logs_of(result) != expected_logs:
+        fail(f"{label}: successful foreign-code vault logs differ")
+
+
+def check_adversarial_child_returns_and_rollback(run: Runner) -> None:
+    """Foreign-child canonical-return and rollback probes, outside exact pairs."""
+    data_for = lambda delegate: abi("withdraw(uint256,address,address)", 2, delegate, run.user)
+    for flow in ("deposit", "mint", "withdraw", "redeem"):
+        for case_kind, runtime_kind in FOREIGN_CHILD_KINDS:
+            case = f"foreign-child-{flow}-{case_kind}"
+            failures_before = len(FAILURES)
+            before, signing_key, _, _, data, _, expected, expected_logs = \
+                _foreign_child_case(run, flow, runtime_kind)
+            result = run.call(before, data, signing_key=signing_key, label=case)
+            success_expected = _foreign_child_success_expected(run.side.name, case_kind)
+            if success_expected:
+                _foreign_child_success(run, case, result, expected, expected_logs)
+            else:
+                rollback_expected = _foreign_rollback_expected(run, before)
+                _check_revert_evidence(
+                    f"{case}: failed child rolls back complete state and logs",
+                    rollback_expected, result)
+            record_case_if_clean(case, "jaune", run.side.name, failures_before)
+
+    # A canonical true child is accepted operationally.  It is deliberately
+    # not compared as a WETH pair state because this foreign code does not
+    # implement WETH's asset movement.
+    before, delegate = _adversarial_child_world(run, "true")
+    if not _accepted_success("foreign child canonical true", run.call(
+            before, data_for(delegate), signing_key=2)):
+        return
+
+    # Frozen deviation 7: Blanc demands canonical true, while the reference's
+    # SafeERC20 accepts a successful empty return.  Neither result is labelled
+    # as an exact-WETH-pair transaction.
+    before, delegate = _adversarial_child_world(run, "empty")
+    result = run.call(before, data_for(delegate), signing_key=2)
+    if run.side.name == "reference":
+        _accepted_success("foreign child empty return (deviation 7 reference)", result)
+    else:
+        _check_revert_evidence("foreign child empty return rolls back (Blanc canonical true)",
+                               before, result)
+
+
+def _exact_rollback_before(before: dict) -> dict:
+    """The expected pre-state projection for exact-pair rollback evidence.
+
+    The flagship rollback check compares the post-state of an accepted
+    reverting execution against this projection.  It is a plain copy: any
+    divergence the comparison reports is a real rollback leak, and mutants
+    corrupt this projection to prove the comparison bites.
+    """
+    return deepcopy(before)
+
+
+def _expect_oracle_revert(label: str, model: V.Vault, cls: str, method: str,
+                          *args) -> bool:
+    """Require the independent oracle to predict one revert class exactly."""
+    committed, exc, _ = oracle_transaction(model, method, *args)
+    if committed:
+        fail(f"{label}: the oracle unexpectedly accepted the call")
+        return False
+    if exc.cls != cls:
+        fail(f"{label}: the oracle reverted with {exc.cls}, expected {cls}")
+        return False
+    return True
+
+
+def check_exact_child_failure_rollback(run: Runner) -> None:
+    """Failed-child storage/log rollback on the exact pair (SF section 11).
+
+    Every sub-case executes against the exact WETH runtime at the configured
+    account: no foreign code, no lookalike.  The outbound cases fail after
+    the vault's own allowance spend, so the rollback must restore the spent
+    allowance; the inbound cases fail at the child before any vault write.
+    The oracle predicts each revert class independently, and every revert
+    is required to be an accepted transaction with exactly one status-0
+    receipt and no logs.
+
+    A post-burn child failure is unreachable on the exact pair, and this is
+    shown rather than assumed.  A withdraw above the vault row always needs
+    at least ``D = S + O`` shares, which exceeds the supply, and a redeem
+    payout never exceeds the row, so the vault debit cannot fail after a
+    successful burn; and the exact WETH credit wraps instead of reverting
+    (executed: receiver ``U - 5`` credited ``10`` lands on ``4`` with
+    status 1, matching the wrap-aware ``creditLoss`` algebra), so the
+    receiver credit cannot fail either.  Burn-rollback-on-outbound-failure
+    therefore executes only against a foreign child, which the existing
+    foreign-child withdraw/redeem revert rows already cover.  The oracle
+    used to predict a ``weth-balance-overflow`` revert the exact program
+    does not perform; user decision vault-oracle-weth-wrap-20260916
+    (option A) resolved that packet, so the oracle wraps with the exact
+    program and the near-ceiling cases below exercise wrapping credits.
+
+    Exact WETH transfer/transferFrom carries no recipient callback (SF
+    section 5), so the failed-child trace contains no callback frame; that
+    negative is established by the exact zero-log and complete-rollback
+    assertions below, which any callback with observable effects would
+    break.  No callback is manufactured.
+    """
+    delegate_key = 2
+    delegate = signer_address(delegate_key)
+    setup = funded_pair(run, "child-failure-rollback", {KEY: 1000}, {KEY: 2000},
+                        extra_signers=(delegate_key,))
+    if setup is None:
+        return
+    setup_results, model, _ = setup
+    funding_alloc = setup_results[-1]["alloc"]
+    funded_model = deepcopy(model)
+    steps = run_sequence(run, "child-failure-rollback", funding_alloc, [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("approve delegate", VAULT_ADDR,
+         abi("approve(address,uint256)", delegate, 150_000), 0, KEY),
+    ])
+    if steps is None:
+        return
+    for method, args in (("deposit", (run.user, 100, run.user)),
+                         ("approve", (run.user, delegate, 150_000))):
+        committed, _, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"child-failure-rollback oracle rejected {method}")
+            return
+    funded = steps[1]["alloc"]
+    if not _expect_oracle_revert("child-failure withdraw burn-after-spend", model,
+                                 "insufficient-balance", "withdraw",
+                                 delegate, 101, delegate, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure withdraw burn-after-spend",
+        _exact_rollback_before(funded),
+        run.call(funded,
+                 abi("withdraw(uint256,address,address)", 101, delegate, run.user),
+                 signing_key=delegate_key,
+                 nonce=_next_nonce(funded, delegate_key)))
+    if not _expect_oracle_revert("child-failure withdraw owner-burn", model,
+                                 "insufficient-balance", "withdraw",
+                                 run.user, 101, run.user, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure withdraw owner-burn",
+        _exact_rollback_before(funded),
+        run.call(funded,
+                 abi("withdraw(uint256,address,address)", 101, run.user, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funded, KEY)))
+    if not _expect_oracle_revert("child-failure deposit allowance", funded_model,
+                                 "weth-insufficient-allowance", "deposit",
+                                 run.user, 2001, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure deposit allowance", _exact_rollback_before(funding_alloc),
+        run.call(funding_alloc, abi("deposit(uint256,address)", 2001, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funding_alloc, KEY)))
+    if not _expect_oracle_revert("child-failure deposit balance", model,
+                                 "weth-insufficient-balance", "deposit",
+                                 run.user, 901, run.user):
+        return
+    _check_revert_evidence(
+        "child-failure deposit balance", _exact_rollback_before(funded),
+        run.call(funded, abi("deposit(uint256,address)", 901, run.user),
+                 signing_key=KEY, nonce=_next_nonce(funded, KEY)))
+    rejected = run.call(funding_alloc, abi("deposit(uint256,address)", 1, run.user),
+                        signing_key=KEY, nonce=999999)
+    rejected_body = rejected.get("result", {})
+    if not rejected_body.get("rejected"):
+        fail("child-failure rejected transaction was not rejected before EVM execution")
+    elif rejected_body.get("receipts"):
+        fail("child-failure rejected transaction unexpectedly carries receipts")
+
+
+def _captured_word(run: Runner, label: str, alloc: dict, data: str) -> tuple[int, bytes]:
+    """Read a one-word capacity/conversion result through the Jaune recorder."""
+    _, observed = run.capture(alloc, data, max_return_bytes=64, label=label)
+    success = observed["success"]
+    payload = observed["returndata"]
+    if success == 1 and (observed["length"] != 32 or len(payload) != 32):
+        fail(f"{label}: successful word result has length {observed['length']}")
+    return success, payload
+
+
+def _accepted_success(label: str, result: dict) -> bool:
+    body = result.get("result")
+    receipts = body.get("receipts") if isinstance(body, dict) else None
+    if body is None or body.get("rejected") or not isinstance(receipts, list) or len(receipts) != 1:
+        fail(f"{label}: expected one accepted successful transaction")
+        return False
+    if int(receipts[0].get("status", "0x0"), 16) != 1:
+        fail(f"{label}: expected success, got receipt {receipts[0].get('status')!r}")
+        return False
+    return True
+
+
+def _stable_capacity_prestate(run: Runner) -> tuple[dict, int, int, int]:
+    """A nonoverflowing stable seeded prestate for cap endpoint calls.
+
+    This is intentionally not presented as an inhabited deployment history:
+    high-word capacity calls are independent arithmetic endpoint evidence.
+    """
+    room = 1_000
+    supply = V.MAX_SUPPLY - room
+    assets = V.ceil_div(supply, V.O)
+    user_weth = 2
+    world = run.alloc(user_weth, user_weth, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    # WETH's exact backing is the two known internal rows. This permitted
+    # finite prestate is distinct from the payable causal histories.
+    world[address(WETH_ADDR)]["balance"] = h(assets + user_weth)
+    return world, supply, assets, user_weth
+
+
+def _capacity_success_state(run: Runner, label: str, result: dict, *, supply: int,
+                            assets: int, paid: int, minted: int, user_weth: int) -> None:
+    """Require the complete WETH/vault application accounts after one cap call."""
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful capacity call has no allocation")
+        return
+    try:
+        got_weth = _normalized_account(post, WETH_ADDR)
+        got_vault = _normalized_account(post, VAULT_ADDR)
+        base = _normalized_storage_map(run.side.base_storage, f"{label} reference base")
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize capacity account: {exc}")
+        return
+    expected_weth_storage = {run.user: user_weth - paid, VAULT_ADDR: assets + paid,
+                             weth_allowance_key(run.user, VAULT_ADDR): user_weth - paid}
+    expected_weth_storage = {slot: value for slot, value in expected_weth_storage.items() if value}
+    expected_vault_storage = dict(base)
+    _set_storage_word(expected_vault_storage, run.side.shares_slot(run.user), supply + minted, label)
+    _set_storage_word(expected_vault_storage, run.side.supply_slot, supply + minted, label)
+    if got_weth != {"balance": assets + user_weth, "nonce": 1, "code": run.weth_code,
+                    "storage": expected_weth_storage}:
+        fail(f"{label}: complete WETH post-state differs from exact endpoint projection")
+    if got_vault != {"balance": 0, "nonce": 1, "code": run.side.code,
+                     "storage": expected_vault_storage}:
+        fail(f"{label}: complete vault post-state differs from exact endpoint projection")
+
+
+def check_capacity_boundaries(run: Runner) -> None:
+    """Isolated capacity ABI worlds, deliberately separate from economic traces.
+
+    Successful endpoint calls begin from a solvent, nonoverflowing capacity
+    root. `A=U` remains a view/preview-only arithmetic world: it tests the
+    257-bit denominator route but makes no global-balance or reachable-history
+    claim. Reference outcomes are checked only under frozen deviations 5
+    (unbounded maxima) and 6 (`A=U` checked-add reverts).
+    """
+    world, supply, assets, user_weth = _stable_capacity_prestate(run)
+    expected_max_deposit = V.max_deposit(run.user, assets, supply)
+    expected_max_mint = V.max_mint(run.user, assets, supply)
+    for label, data, blanc_value in (
+            ("capacity maxDeposit boundary", abi("maxDeposit(address)", run.user), expected_max_deposit),
+            ("capacity maxMint boundary", abi("maxMint(address)", run.user), expected_max_mint)):
+        try:
+            success, payload = _captured_word(run, label, world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        expected = V.U if run.side.name == "reference" else blanc_value
+        if success != 1 or payload != expected.to_bytes(32, "big"):
+            deviation = "5 (reference unbounded maximum)" if run.side.name == "reference" else "oracle"
+            fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
+
+    deposit = run.call(world, abi("deposit(uint256,address)", expected_max_deposit, run.user))
+    if _accepted_success("capacity deposit exact maximum", deposit):
+        minted = V.convert_to_shares(expected_max_deposit, assets, supply)
+        _capacity_success_state(run, "capacity deposit exact maximum", deposit, supply=supply,
+                                assets=assets, paid=expected_max_deposit, minted=minted,
+                                user_weth=user_weth)
+    deposit_next = run.call(world, abi("deposit(uint256,address)", expected_max_deposit + 1, run.user))
+    mint = run.call(world, abi("mint(uint256,address)", expected_max_mint, run.user))
+    if _accepted_success("capacity mint exact maximum", mint):
+        paid = V.preview_mint(expected_max_mint, assets, supply)
+        _capacity_success_state(run, "capacity mint exact maximum", mint, supply=supply,
+                                assets=assets, paid=paid, minted=expected_max_mint,
+                                user_weth=user_weth)
+    mint_next = run.call(world, abi("mint(uint256,address)", expected_max_mint + 1, run.user))
+    if run.side.name == "reference":
+        # Deviation 5 is the exact unbounded reference behavior: both adjacent
+        # calls execute, with the same formulas but without Blanc's supply cap.
+        for label, result, paid, minted in (
+                ("capacity reference deposit boundary plus one", deposit_next, expected_max_deposit + 1,
+                 V.convert_to_shares(expected_max_deposit + 1, assets, supply)),
+                ("capacity reference mint boundary plus one", mint_next,
+                 V.preview_mint(expected_max_mint + 1, assets, supply), expected_max_mint + 1)):
+            if _accepted_success(label, result):
+                _capacity_success_state(run, label, result, supply=supply, assets=assets,
+                                        paid=paid, minted=minted, user_weth=user_weth)
+    else:
+        _check_revert_evidence("capacity deposit boundary plus one", world, deposit_next)
+        _check_revert_evidence("capacity mint boundary plus one", world, mint_next)
+
+    a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+    panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+    a_u_cases = (
+        ("A=U maxDeposit", abi("maxDeposit(address)", run.user), V.U, True),
+        ("A=U maxMint", abi("maxMint(address)", run.user), V.max_mint(run.user, V.U, 0), True),
+        ("A=U convertToShares", abi("convertToShares(uint256)", V.U),
+         V.convert_to_shares(V.U, V.U, 0), False),
+        ("A=U previewMint", abi("previewMint(uint256)", V.max_mint(run.user, V.U, 0)),
+         V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0), False),
+    )
+    for label, data, blanc_value, maximum in a_u_cases:
+        try:
+            success, payload = _captured_word(run, label, a_u_world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if run.side.name == "reference" and not maximum:
+            if success != 0 or payload != panic_11:
+                fail(f"{label}: captured {success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        else:
+            expected = V.U if run.side.name == "reference" else blanc_value
+            if success != 1 or payload != expected.to_bytes(32, "big"):
+                deviation = "5" if run.side.name == "reference" else "oracle"
+                fail(f"{label}: captured {success}/{payload.hex()}, expected {deviation} {expected}")
+
+
+def _upper_supply_world(run: Runner) -> dict:
+    """Seed backed `S=A=U-O`; arithmetic evidence, never a payable history."""
+    supply = V.MAX_SUPPLY
+    world = run.alloc(0, 0, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(supply)})
+    world[address(WETH_ADDR)]["balance"] = h(supply)
+    return world
+
+
+def _one_share_room_world(run: Runner) -> tuple[dict, int, int, int]:
+    """Seed exactly one remaining share with solvent WETH rows for endpoint calls."""
+    supply = V.MAX_SUPPLY - 1
+    assets = supply
+    user_weth = 2
+    world = run.alloc(user_weth, user_weth, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets + user_weth)
+    return world, supply, assets, user_weth
+
+
+def _share_converter_world(run: Runner) -> dict:
+    """Seed `D=U, X=1` solely for share-converter word representability."""
+    return run.alloc(0, 0, {run.user: V.MAX_SUPPLY}, V.MAX_SUPPLY)
+
+
+def _high_word_donation_world(run: Runner) -> tuple[dict, int, int]:
+    """A backed high-word donation prestate, deliberately not a payable trace."""
+    supply = V.O
+    assets = (1 << 255) + 17
+    world = run.alloc(0, 0, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets)
+    return world, assets, supply
+
+
+def _asset_converter_world(run: Runner) -> dict:
+    """Seed `X = U, D = O` to expose asset-converter word overflow."""
+    assets = V.U - 1
+    world = run.alloc(0, 0, {}, 0, {word(VAULT_ADDR): word(assets)})
+    world[address(WETH_ADDR)]["balance"] = h(assets)
+    return world
+
+
+def _expect_capacity_word(run: Runner, label: str, alloc: dict, data: str,
+                          expected: int) -> None:
+    try:
+        success, payload = _captured_word(run, label, alloc, data)
+    except RuntimeError as exc:
+        fail(str(exc))
+        return
+    want = expected.to_bytes(32, "big")
+    if success != 1 or payload != want:
+        fail(f"{label}: captured {success}/{payload.hex()}, expected success/{want.hex()}")
+
+
+def _expect_capacity_revert(run: Runner, label: str, alloc: dict, data: str) -> None:
+    try:
+        success, payload = _captured_word(run, label, alloc, data)
+    except RuntimeError as exc:
+        fail(str(exc))
+        return
+    expected = capacity_revert_payload(run)
+    if success != 0 or payload != expected:
+        fail(f"{label}: captured {success}/{payload.hex()}, expected revert/{expected.hex()}")
+
+
+def check_explicit_arithmetic_capacity_cases(run: Runner) -> None:
+    """Explicit seeded arithmetic cases required apart from causal economics.
+
+    These fixtures bind exact arithmetic ABI outputs and receipt status on both
+    compiled sides.  They are deliberately labelled seeded prestates: neither
+    the upper-supply ledger nor the high-word donation is asserted to arise
+    from a payable deployment history.
+    """
+    upper = _upper_supply_world(run)
+    for label, data, blanc_value in (
+            ("S=U-O maxDeposit", abi("maxDeposit(address)", run.user), 0),
+            ("S=U-O maxMint", abi("maxMint(address)", run.user), 0)):
+        expected = V.U if run.side.name == "reference" else blanc_value
+        _expect_capacity_word(run, label, upper, data, expected)
+    record_arithmetic_capacity("capacity-supply-upper-bound", "jaune", run.side.name)
+
+    one_room, supply, assets, user_weth = _one_share_room_world(run)
+    max_mint = V.max_mint(run.user, assets, supply)
+    _expect_capacity_word(run, "one-share-room maxMint", one_room,
+                          abi("maxMint(address)", run.user),
+                          V.U if run.side.name == "reference" else max_mint)
+    mint_one = run.call(one_room, abi("mint(uint256,address)", 1, run.user))
+    if _accepted_success("one-share-room mint one", mint_one):
+        _capacity_success_state(run, "one-share-room mint one", mint_one, supply=supply,
+                                assets=assets, paid=1, minted=1, user_weth=user_weth)
+    mint_two = run.call(one_room, abi("mint(uint256,address)", 2, run.user))
+    if run.side.name == "reference":
+        if _accepted_success("one-share-room reference mint two", mint_two):
+            _capacity_success_state(run, "one-share-room reference mint two", mint_two,
+                                    supply=supply, assets=assets, paid=2, minted=2,
+                                    user_weth=user_weth)
+    else:
+        _check_revert_evidence("one-share-room mint two", one_room, mint_two)
+    record_arithmetic_capacity("capacity-one-share-room", "jaune", run.side.name)
+
+    # `D = U, X = 1`: one unit converts to the largest word, while two units
+    # cannot be returned as a word.  This is direct representability evidence,
+    # not an asset-flow scenario.
+    converter_shares = _share_converter_world(run)
+    converter_assets = _asset_converter_world(run)
+    _expect_capacity_word(run, "converter shares representable", converter_shares,
+                          abi("convertToShares(uint256)", 1), V.U)
+    _expect_capacity_word(run, "converter assets representable", converter_assets,
+                          abi("convertToAssets(uint256)", V.O), V.U)
+    for label, data, alloc, model in (
+            ("converter shares unrepresentable", abi("convertToShares(uint256)", 2), converter_shares,
+             lambda: V.convert_to_shares(2, 0, V.MAX_SUPPLY)),
+            ("converter assets unrepresentable", abi("convertToAssets(uint256)", V.O + 1), converter_assets,
+             lambda: V.convert_to_assets(V.O + 1, V.U - 1, 0))):
+        try:
+            model()
+        except V.Revert:
+            _expect_capacity_revert(run, label, alloc, data)
+        else:
+            fail(f"{label}: independent model unexpectedly returned a word")
+    record_arithmetic_capacity("converter-representable-and-unrepresentable", "jaune", run.side.name)
+
+    donation, assets, donation_supply = _high_word_donation_world(run)
+    for label, data, expected in (
+            ("high-word donation convertToShares", abi("convertToShares(uint256)", V.U),
+             V.convert_to_shares(V.U, assets, donation_supply)),
+            ("high-word donation convertToAssets", abi("convertToAssets(uint256)", 1),
+             V.convert_to_assets(1, assets, donation_supply)),
+            ("high-word donation previewMint", abi("previewMint(uint256)", 1),
+             V.preview_mint(1, assets, donation_supply))):
+        _expect_capacity_word(run, label, donation, data, expected)
+    record_arithmetic_capacity("high-word-donation-arithmetic", "jaune", run.side.name)
+
+
+def check_mint(run: Runner) -> None:
+    # Seeded, and 2000 * 6 / 6001 is 1.9996, so the upward rounding on the
+    # asset input is observed. An empty vault would divide evenly and the
+    # rounding direction would go unchecked.
+    seeded_shares, seeded_assets = 5001, 5
+    weth_extra = {word(VAULT_ADDR): word(seeded_assets)}
+    shares = 2000
+    result = run.call(
+        run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                  weth_extra),
+        abi("mint(uint256,address)", shares, run.user), label="mint")
+    if result["result"].get("rejected"):
+        fail(f"mint rejected: {result['result']['rejected']}")
+        return
+    vault, weth = vault_state(result)
+    assets = V.preview_mint(shares, seeded_assets, seeded_shares)
+    expect("mint shares", run.shares(vault, run.user), seeded_shares + shares)
+    expect("mint supply", run.supply(vault), seeded_shares + shares)
+    expect("mint weth[vault]", storage_get(weth, VAULT_ADDR),
+           seeded_assets + assets)
+
+
+def check_redeem(run: Runner) -> None:
+    # 2000 * 6 / 6001 is 1.9996, so the downward rounding is observable.
+    seeded_shares, seeded_assets = 5001, 5
+    weth_extra = {word(VAULT_ADDR): word(seeded_assets)}
+    burn = 2000
+    result = run.call(
+        run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                  weth_extra),
+        abi("redeem(uint256,address,address)", burn, run.user, run.user),
+        label="redeem")
+    if result["result"].get("rejected"):
+        fail(f"redeem rejected: {result['result']['rejected']}")
+        return
+    vault, weth = vault_state(result)
+    out = V.convert_to_assets(burn, seeded_assets, seeded_shares)
+    expect("redeem shares", run.shares(vault, run.user), seeded_shares - burn)
+    expect("redeem supply", run.supply(vault), seeded_shares - burn)
+    expect("redeem weth[vault]", storage_get(weth, VAULT_ADDR), seeded_assets - out)
+
+
+def check_withdraw(run: Runner) -> None:
+    # 3 * 6001 / 8 is 2250.375, so the upward rounding is observable.
+    seeded_shares, seeded_assets = 5001, 7
+    weth_extra = {word(VAULT_ADDR): word(seeded_assets)}
+    want = 3
+    result = run.call(
+        run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                  weth_extra),
+        abi("withdraw(uint256,address,address)", want, run.user, run.user),
+        label="withdraw")
+    if result["result"].get("rejected"):
+        fail(f"withdraw rejected: {result['result']['rejected']}")
+        return
+    vault, weth = vault_state(result)
+    burned = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    expect("withdraw shares", run.shares(vault, run.user), seeded_shares - burned)
+    expect("withdraw supply", run.supply(vault), seeded_shares - burned)
+    expect("withdraw weth[vault]", storage_get(weth, VAULT_ADDR),
+           seeded_assets - want)
+
+
+def check_share_transfer(run: Runner) -> None:
+    """A share transfer moves the ledger and leaves the supply alone."""
+    seeded, other = 5000, 0xBEEF
+    result = run.call(run.alloc(10 ** 18, 0, {run.user: seeded}, seeded),
+                      abi("transfer(address,uint256)", other, 1500),
+                      label="share_transfer")
+    if result["result"].get("rejected"):
+        fail(f"transfer rejected: {result['result']['rejected']}")
+        return
+    vault, _ = vault_state(result)
+    expect("transfer sender", run.shares(vault, run.user), seeded - 1500)
+    expect("transfer receiver", run.shares(vault, other), 1500)
+    expect("transfer supply", run.supply(vault), seeded)
+
+
+def check_zero_receiver_deposit_reverts(run: Runner) -> None:
+    """The oracle reverts on a zero receiver; so must the artifact."""
+    setup = funded_pair(run, "zero-receiver-deposit", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, _ = setup
+    prestate = setup_results[-1]["alloc"]
+    try:
+        model.deposit(run.user, 1, 0)
+        fail("the oracle accepted a zero-receiver deposit")
+        return
+    except V.Revert:
+        pass
+    result = run.call(prestate, abi("deposit(uint256,address)", 1, 0),
+                      nonce=_next_nonce(prestate, KEY))
+    failures_before = len(FAILURES)
+    _check_revert_evidence("zero-receiver deposit", prestate, result)
+    record_case_if_clean("supported-root-deposit-zero-receiver-rollback", "jaune", run.side.name,
+                         failures_before)
+
+
+def event_topic(signature: str) -> str:
+    return "0x" + keccak256(signature.encode("ascii")).hex()
+
+
+def logs_of(result: dict) -> list:
+    receipts = result["result"].get("receipts") or []
+    return receipts[0].get("logs", []) if receipts else []
+
+
+def check_deposit_event_order(run: Runner) -> None:
+    """SF section 5: the child's Transfer, then the share Transfer, then Deposit.
+
+    Order is part of the frozen statement, so it is checked as a sequence and
+    not as a set.
+    """
+    assets = 10 ** 6
+    result = run.call(run.alloc(10 ** 18, 10 ** 18),
+                      abi("deposit(uint256,address)", assets, run.user))
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"deposit event order: got {got}, statement says {want}")
+        return
+    shares = V.convert_to_shares(assets, 0, 0)
+    # The share Transfer is a mint: from the zero address to the receiver.
+    mint = entries[1]
+    if int(mint["topics"][1], 16) != 0:
+        fail("the share Transfer's source is not the zero address")
+    if int(mint["topics"][2], 16) != run.user:
+        fail("the share Transfer's destination is not the receiver")
+    if int(mint["data"], 16) != shares:
+        fail(f"the share Transfer's amount is {int(mint['data'], 16)}, "
+             f"oracle {shares}")
+    if int(entries[2]["data"][2:66], 16) != assets:
+        fail("the Deposit event's asset word disagrees with the call")
+    if int(entries[2]["data"][66:130], 16) != shares:
+        fail("the Deposit event's share word disagrees with the oracle")
+
+
+def check_share_transfer_event(run: Runner) -> None:
+    seeded, other = 5000, 0xBEEF
+    result = run.call(run.alloc(10 ** 18, 0, {run.user: seeded}, seeded),
+                      abi("transfer(address,uint256)", other, 1500))
+    entries = logs_of(result)
+    if len(entries) != 1:
+        fail(f"a share transfer emitted {len(entries)} events, statement says 1")
+        return
+    entry = entries[0]
+    if entry["address"] != address(VAULT_ADDR):
+        fail("the share Transfer was not emitted by the vault")
+    if entry["topics"][0] != event_topic("Transfer(address,address,uint256)"):
+        fail("the share Transfer's topic is not ERC-20 Transfer")
+    if (int(entry["topics"][1], 16) != run.user
+            or int(entry["topics"][2], 16) != other):
+        fail("the share Transfer's from/to topics are wrong")
+    if int(entry["data"], 16) != 1500:
+        fail("the share Transfer's amount word is wrong")
+
+
+def check_mint_event_order(run: Runner) -> None:
+    """SF section 5: mint emits the same inbound order as a deposit.
+
+    The child's Transfer, then the share Transfer, then Deposit, with the
+    oracle-quoted asset input and the exact share output as words.
+    """
+    shares = 2000
+    assets = V.preview_mint(shares, 0, 0)
+    result = run.call(run.alloc(10 ** 18, 10 ** 18),
+                      abi("mint(uint256,address)", shares, run.user))
+    _deposit_events("mint event order", result, run.user, run.user,
+                    assets, shares)
+
+
+def check_outbound_event_order(run: Runner) -> None:
+    """SF section 5 D8: burn, then the outbound WETH child, then Withdraw.
+
+    This is the explicit outbound order the inbound-only deposit check never
+    observed.  Both flows share it: withdraw burns the quoted shares for
+    exact assets, redeem burns exact shares for the quoted assets.
+    """
+    seeded_shares, seeded_assets = 5001, 7
+    world = run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares},
+                      seeded_shares, {word(VAULT_ADDR): word(seeded_assets)})
+    want = 3
+    shares = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 want, run.user, run.user))
+    _withdraw_events("outbound-order withdraw", result, run.user, run.user,
+                     run.user, want, shares)
+    burn = 2000
+    assets = V.convert_to_assets(burn, seeded_assets, seeded_shares)
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 burn, run.user, run.user))
+    _withdraw_events("outbound-order redeem", result, run.user, run.user,
+                     run.user, assets, burn)
+
+
+def abi_string(value: str) -> bytes:
+    raw = value.encode("utf-8")
+    return (32).to_bytes(32, "big") + len(raw).to_bytes(32, "big") + raw.ljust(
+        ((len(raw) + 31) // 32) * 32, b"\x00")
+
+
+def view_return_worlds(run: Runner) -> list[tuple[list, dict, dict[str, int]]]:
+    """All view selectors use t8n-observed full return-data capture.
+
+    These are two deliberately distinct worlds: empty checks the virtual
+    offset's base behavior and the nonempty/donated world makes every rounding
+    direction observable.  Both compiled runtimes are compared to values
+    independently computed by the frozen-statement oracle.
+    """
+    word_bytes = lambda value: value.to_bytes(32, "big")
+    # SF §11 deviations 3 and 5 bind these reference-only observations.  They
+    # are not omissions: the locked OZ v5.7.0 reference deliberately exposes
+    # its default unbounded maxima, while the Blanc/oracle side implements D7
+    # and A1's truthful zero-receiver and word-cap policy.
+    reference_maximum_deviations = {
+        "max deposit zero receiver": V.U,
+        "max mint zero receiver": V.U,
+        "max deposit donated": V.U,
+        "max mint donated": V.U,
+    }
+    zero_cases = [
+        ("name", abi("name()"), abi_string("PRORATA WETH Vault")),
+        ("symbol", abi("symbol()"), abi_string("prWETH")),
+        # ERC-4626 inherits WETH's 18 decimals and the frozen offset is 3.
+        ("decimals", abi("decimals()"), word_bytes(21)),
+        ("asset", abi("asset()"), word_bytes(WETH_ADDR)),
+        ("total assets zero", abi("totalAssets()"), word_bytes(0)),
+        ("total supply zero", abi("totalSupply()"), word_bytes(0)),
+        ("balance zero", abi("balanceOf(address)", run.user), word_bytes(0)),
+        ("allowance zero", abi("allowance(address,address)", run.user, VAULT_ADDR), word_bytes(0)),
+        ("convert shares empty", abi("convertToShares(uint256)", 17), word_bytes(V.convert_to_shares(17, 0, 0))),
+        ("convert assets empty", abi("convertToAssets(uint256)", 17), word_bytes(V.convert_to_assets(17, 0, 0))),
+        ("preview deposit empty", abi("previewDeposit(uint256)", 17), word_bytes(V.preview_deposit(17, 0, 0))),
+        ("preview mint empty", abi("previewMint(uint256)", 17), word_bytes(V.preview_mint(17, 0, 0))),
+        ("preview redeem empty", abi("previewRedeem(uint256)", 17), word_bytes(V.preview_redeem(17, 0, 0))),
+        ("preview withdraw empty", abi("previewWithdraw(uint256)", 17), word_bytes(V.preview_withdraw(17, 0, 0))),
+        ("max deposit zero receiver", abi("maxDeposit(address)", 0), word_bytes(0)),
+        ("max mint zero receiver", abi("maxMint(address)", 0), word_bytes(0)),
+        ("max redeem zero balance", abi("maxRedeem(address)", run.user), word_bytes(0)),
+        ("max withdraw zero balance", abi("maxWithdraw(address)", run.user), word_bytes(0)),
+    ]
+    seeded_shares, seeded_assets, donation = 5001, 5, 3
+    assets = seeded_assets + donation
+    nonempty_cases = [
+        ("nonempty total assets", abi("totalAssets()"), word_bytes(assets)),
+        ("nonempty total supply", abi("totalSupply()"), word_bytes(seeded_shares)),
+        ("nonempty balance", abi("balanceOf(address)", run.user), word_bytes(seeded_shares)),
+        ("convert shares donated", abi("convertToShares(uint256)", 4), word_bytes(V.convert_to_shares(4, assets, seeded_shares))),
+        ("convert assets donated", abi("convertToAssets(uint256)", 2000), word_bytes(V.convert_to_assets(2000, assets, seeded_shares))),
+        ("preview deposit donated", abi("previewDeposit(uint256)", 4), word_bytes(V.preview_deposit(4, assets, seeded_shares))),
+        ("preview mint donated", abi("previewMint(uint256)", 2000), word_bytes(V.preview_mint(2000, assets, seeded_shares))),
+        ("preview redeem donated", abi("previewRedeem(uint256)", 2000), word_bytes(V.preview_redeem(2000, assets, seeded_shares))),
+        ("preview withdraw donated", abi("previewWithdraw(uint256)", 3), word_bytes(V.preview_withdraw(3, assets, seeded_shares))),
+        ("max deposit donated", abi("maxDeposit(address)", run.user), word_bytes(V.max_deposit(run.user, assets, seeded_shares))),
+        ("max mint donated", abi("maxMint(address)", run.user), word_bytes(V.max_mint(run.user, assets, seeded_shares))),
+        ("max redeem donated", abi("maxRedeem(address)", run.user), word_bytes(V.max_redeem(seeded_shares))),
+        ("max withdraw donated", abi("maxWithdraw(address)", run.user), word_bytes(V.max_withdraw(seeded_shares, assets, seeded_shares))),
+    ]
+    return [
+        (zero_cases, run.alloc(10 ** 18, 10 ** 18), reference_maximum_deviations),
+        (nonempty_cases, run.alloc(10 ** 18, 10 ** 18, {run.user: seeded_shares}, seeded_shares,
+                                    {word(VAULT_ADDR): word(assets)}), reference_maximum_deviations),
+    ]
+
+
+def _view_expected(run: Runner, label: str, expected: bytes,
+                   reference_maximum_deviations: dict[str, int]) -> bytes:
+    if run.side.name == "reference" and label in reference_maximum_deviations:
+        return reference_maximum_deviations[label].to_bytes(32, "big")
+    return expected
+
+
+def check_view_returns(run: Runner) -> None:
+    """Check the Jaune recorder leg for every view selector."""
+    for cases, alloc, maximum_deviations in view_return_worlds(run):
+      for label, data, expected in cases:
+        expected = _view_expected(run, label, expected, maximum_deviations)
+        try:
+            _, observed = run.capture(alloc, data,
+                                      max_return_bytes=len(expected), label=label)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if observed["success"] != 1:
+            fail(f"{label}: captured inner call success is {observed['success']}, expected 1")
+        if observed["length"] != len(expected):
+            fail(f"{label}: captured full return length is {observed['length']}, expected {len(expected)}")
+        if observed["returndata"] != expected:
+            fail(f"{label}: captured return bytes differ from the frozen ABI value")
+
+
+def _eels_root() -> Path:
+    raw = os.environ.get("EELS_ROOT")
+    if not raw:
+        raise RuntimeError("EELS_ROOT is required for the independent EELS leg")
+    root = Path(raw).expanduser().resolve()
+    try:
+        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        dirty = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(f"cannot inspect EELS_ROOT {root}: {exc}") from exc
+    if head != EELS_PIN or dirty:
+        raise RuntimeError(f"EELS_ROOT must be clean at {EELS_PIN}, got {head}, dirty={bool(dirty)}")
+    return root
+
+
+def _eels_state(alloc: dict):
+    """Install the exact fixture allocation in a fresh pinned-EELS State."""
+    from ethereum.prague.state import State, set_account, set_storage
+    from ethereum.prague.fork_types import Account, Address
+    from ethereum_types.bytes import Bytes, Bytes32
+    from ethereum_types.numeric import U256, Uint
+
+    state = State()
+    for raw_address, entry in alloc.items():
+        account = Address(bytes.fromhex(raw_address.removeprefix("0x")))
+        set_account(state, account, Account(
+            Uint(_quantity(entry.get("nonce", "0x0"), f"{raw_address} nonce")),
+            U256(_quantity(entry.get("balance", "0x0"), f"{raw_address} balance")),
+            Bytes(bytes.fromhex(entry.get("code", "0x").removeprefix("0x"))),
+        ))
+        for slot, value in entry.get("storage", {}).items():
+            numeric = _quantity(value, f"{raw_address} storage value")
+            if numeric:
+                set_storage(state, account,
+                            Bytes32(_quantity(slot, f"{raw_address} storage key").to_bytes(32, "big")),
+                            U256(numeric))
+    return state
+
+
+def _eels_history(run: Runner, label: str, root_alloc: dict,
+                  setup_funding: dict[int, int], setup_approvals: dict[int, int],
+                  case_steps: list[tuple[str, int, str, int, int]],
+                  model_ops: list, accounts: tuple[int, ...], *,
+                  weth_allowances: tuple[tuple[int, int], ...] = (),
+                  share_allowances: tuple[tuple[int, int], ...] = (),
+                  records: dict[int, str] | None = None,
+                  returns: dict[int, int | None] | None = None,
+                  reverts: dict[int, bytes | None] | None = None,
+                  model_rejects: tuple[int, ...] = (),
+                  initial_model: V.Vault | None = None,
+                  callers: dict[int, int] | None = None,
+                  backed: bool = True) -> V.Vault | None:
+    """Replay a funded history on pinned EELS against the oracle projection.
+
+    The setup rebuilds `funded_pair` exactly (payable WETH funding, then
+    vault approvals) as direct EELS messages, unless `initial_model`
+    carries the prestate picture for a seeded (non-`funded_pair`) root;
+    `case_steps` are `(name, target, calldata, value, signing_key)`
+    tuples like `run_sequence` consumes, each paired with its `model_ops`
+    oracle call.  Pseudo-ops `("fund", (holder, amount))`,
+    `("approve_weth", (holder, amount))` and `("weth_move", (src, dst,
+    amount))` advance the model for setup-shaped steps in either
+    position.  Every step projects the live model into a full expected
+    allocation and requires the EELS state-root to match, so both engines
+    assert the identical oracle picture.  `records` maps a case-step
+    index to its matrix case for eels-channel credit, `returns` pins a
+    32-byte return word (an int, or None for the oracle step's own
+    returned value), and `reverts` requires a revert with rollback (plus
+    payload when given; steps listed in `model_rejects` must also be
+    rejected by the oracle).  `backed` requires native WETH ether to back
+    the projected ledger (the funded-pair histories); seeded arithmetic
+    roots pass False and keep their own native balances.  Returns the
+    final model, or None after recording a failure.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.fork_types import Address
+    from ethereum.prague.state import get_account, state_root
+    records = records or {}
+    returns = returns or {}
+    reverts = reverts or {}
+    callers = callers or {}
+    addr_bytes = lambda raw: bytes.fromhex(raw.removeprefix("0x"))
+    plan: list[tuple[str, tuple[str, int, str, int, int], tuple | None]] = []
+    for key, amount in setup_funding.items():
+        plan.append((f"{label} fund WETH",
+                     ("fund WETH", WETH_ADDR, "0x", amount, key),
+                     ("fund", (signer_address(key), amount))))
+    for key, amount in setup_approvals.items():
+        plan.append((f"{label} approve WETH",
+                     ("approve WETH", WETH_ADDR,
+                      abi("approve(address,uint256)", VAULT_ADDR, amount), 0, key),
+                     ("approve_weth", (signer_address(key), amount))))
+    if len(case_steps) != len(model_ops):
+        fail(f"{label}: {len(case_steps)} case steps but {len(model_ops)} model ops")
+        return None
+    base = len(plan)
+    for (name, target, data, value, key), op in zip(case_steps, model_ops):
+        plan.append((f"{label} {name}", (name, target, data, value, key), op))
+    if initial_model is not None and (setup_funding or setup_approvals):
+        fail(f"{label}: initial model with a funded_pair setup is contradictory")
+        return None
+    model = initial_model if initial_model is not None else V.Vault(vault_address=VAULT_ADDR)
+    state = _eels_state(root_alloc)
+    expected = deepcopy(root_alloc)
+    for position, (step_label, (_, target, data, value, key), op) in enumerate(plan):
+        case_index = position - base
+        if case_index in callers:
+            caller = callers[case_index]
+        else:
+            caller = signer_address(key)
+        step_failures = len(FAILURES)
+        have = int(get_account(state, Address(addr_bytes(address(caller)))).balance)
+        if have < value:
+            fail(f"{step_label}: EELS caller cannot fund value {value}; "
+                 f"refusing auto-funded replay")
+            return None
+        pre_root = bytes(state_root(state))
+        tx = SimpleNamespace(caller=address(caller), target=address(target),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=value,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=addr_bytes, coinbase=address(2),
+            default_origin=address(caller),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        if case_index in reverts:
+            want = reverts[case_index]
+            if eels.outcome(output) != "revert":
+                fail(f"{step_label}: EELS {eels.outcome(output)}, expected a revert")
+                return None
+            if want is not None and bytes(output.return_data) != want:
+                fail(f"{step_label}: EELS revert payload differs")
+                return None
+            if output.logs:
+                fail(f"{step_label}: EELS reverted but retained logs")
+                return None
+            if bytes(state_root(state)) != pre_root:
+                fail(f"{step_label}: EELS reverted but state differs from its pre-state")
+                return None
+            if case_index in model_rejects:
+                if op is None or op[0] != "reject":
+                    fail(f"{step_label}: revert step without a reject model op")
+                    return None
+                committed, _, _ = oracle_transaction(model, op[1][0], *op[1][1])
+                if committed:
+                    fail(f"{step_label}: oracle committed a step both engines revert")
+                    return None
+            elif op is not None and op[0] not in ("revert",):
+                fail(f"{step_label}: revert step carries a success model op")
+                return None
+            if case_index in records and len(FAILURES) == step_failures:
+                record_declared_cases((records[case_index],), "eels", run.side.name)
+            continue
+        if eels.outcome(output) != "success":
+            fail(f"{step_label}: EELS {eels.outcome(output)}, expected success")
+            return None
+        if op is None:
+            fail(f"{step_label}: success step without a model op")
+            return None
+        observed: int | None = None
+        if op[0] == "fund":
+            holder, amount = op[1]
+            model.weth[holder] = model.weth.get(holder, 0) + amount
+        elif op[0] == "approve_weth":
+            holder, amount = op[1]
+            model.weth_allowances[(holder, VAULT_ADDR)] = amount
+        elif op[0] == "weth_move":
+            src, dst, amount = op[1]
+            try:
+                model._weth_move(src, dst, amount)
+            except V.Revert as exc:
+                fail(f"{step_label}: oracle WETH move rejected: {exc.cls}")
+                return None
+        else:
+            committed, observed, model = oracle_transaction(model, op[0], *op[1])
+            if not committed:
+                fail(f"{step_label}: oracle rejected a step EELS executed")
+                return None
+        if case_index in returns:
+            pinned = returns[case_index]
+            if pinned is None:
+                if observed is None:
+                    fail(f"{step_label}: return pin needs an oracle step")
+                    return None
+                pinned = observed
+            if bytes(output.return_data) != pinned.to_bytes(32, "big"):
+                fail(f"{step_label}: EELS return differs from the oracle word")
+                return None
+        if value:
+            for account, delta in ((caller, -value), (target, value)):
+                entry = expected[address(account)]
+                entry["balance"] = h(_quantity(entry.get("balance", "0x0"),
+                                               f"{step_label} balance") + delta)
+        try:
+            weth_acct, vault_acct = _projected_pair_accounts(
+                run, step_label, model, accounts,
+                weth_allowances=weth_allowances, share_allowances=share_allowances)
+        except ValueError as exc:
+            fail(f"{step_label}: cannot project oracle accounts: {exc}")
+            return None
+        weth_balance = (h(weth_acct["balance"]) if backed
+                        else expected[address(WETH_ADDR)]["balance"])
+        expected[address(WETH_ADDR)] = {
+            "balance": weth_balance, "nonce": h(weth_acct["nonce"]),
+            "code": "0x" + weth_acct["code"].hex(),
+            "storage": {word(slot): word(val) for slot, val in weth_acct["storage"].items()}}
+        expected[address(VAULT_ADDR)] = {
+            "balance": h(vault_acct["balance"]), "nonce": h(vault_acct["nonce"]),
+            "code": "0x" + vault_acct["code"].hex(),
+            "storage": {word(slot): word(val) for slot, val in vault_acct["storage"].items()}}
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail(f"{step_label}: EELS state differs from the oracle projection")
+            return None
+        if case_index in records and len(FAILURES) == step_failures:
+            record_declared_cases((records[case_index],), "eels", run.side.name)
+    return model
+
+
+def check_eels_view_returns(run: Runner) -> None:
+    """Independent pinned-EELS direct-message observations for every view.
+
+    EELS exposes a top-level message's full return bytes directly, so this is
+    deliberately separate from Jaune's storage-recorder route.  Each EELS
+    output is compared to the same independent oracle observation, not to the
+    Jaune capture.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    for cases, alloc, maximum_deviations in view_return_worlds(run):
+      for label, data, expected in cases:
+        expected = _view_expected(run, label, expected, maximum_deviations)
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(run.user), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+            timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        if eels.outcome(output) != "success":
+            fail(f"EELS {label}: executed {eels.outcome(output)}, oracle requires success")
+        elif bytes(output.return_data) != expected:
+            fail(f"EELS {label}: full return bytes differ from its independent oracle observation")
+
+
+def _capture_caller_weth(run: Runner, assets: int, allowance: int) -> dict:
+    """Give the recorder caller its own WETH rows for a captured mutation."""
+    alloc = run.alloc(0, 0)
+    storage = alloc[address(WETH_ADDR)]["storage"]
+    storage[word(CAPTURE_ADDR)] = word(assets)
+    if allowance:
+        storage[word(weth_allowance_key(CAPTURE_ADDR, VAULT_ADDR))] = word(allowance)
+    return alloc
+
+
+def action_return_worlds(run: Runner) -> list[tuple[str, str, dict, bytes]]:
+    """One arbitrary-state ABI return probe for every mutation selector.
+
+    These small isolated worlds prove only canonical returndata.  In
+    particular, the transfer rows deliberately use an unbacked share ledger
+    and are not pair-stable or economic evidence; reachable-state, callback,
+    and attack scenarios must instead replay prior successful post-states.
+    """
+    true = (1).to_bytes(32, "big")
+    other = 0xBEEF
+    deposit_assets = 7
+    mint_shares = 2000
+    seeded_shares, seeded_assets = 5001, 5
+    redeem_shares, withdraw_assets = 2000, 3
+    deposit = _capture_caller_weth(run, deposit_assets, deposit_assets)
+    mint = _capture_caller_weth(run, 10 ** 18, 10 ** 18)
+    redeem = run.alloc(0, 0, {CAPTURE_ADDR: seeded_shares}, seeded_shares,
+                       {word(VAULT_ADDR): word(seeded_assets)})
+    withdraw = run.alloc(0, 0, {CAPTURE_ADDR: seeded_shares}, seeded_shares,
+                         {word(VAULT_ADDR): word(seeded_assets)})
+    transfer = run.alloc(0, 0, {CAPTURE_ADDR: 9}, 9)
+    transfer_from = run.alloc(0, 0, {run.user: 9}, 9)
+    approve = run.alloc(0, 0)
+    return [
+        ("approve canonical true", abi("approve(address,uint256)", other, 5), approve, true),
+        ("transfer canonical true", abi("transfer(address,uint256)", other, 4), transfer, true),
+        # Zero spends a zero allowance, so this covers transferFrom's exact
+        # true returndata without pretending the wrapper owns the EOA's row.
+        ("transferFrom canonical true", abi("transferFrom(address,address,uint256)", run.user, other, 0), transfer_from, true),
+        ("deposit return", abi("deposit(uint256,address)", deposit_assets, CAPTURE_ADDR), deposit,
+         V.convert_to_shares(deposit_assets, 0, 0).to_bytes(32, "big")),
+        ("mint return", abi("mint(uint256,address)", mint_shares, CAPTURE_ADDR), mint,
+         V.preview_mint(mint_shares, 0, 0).to_bytes(32, "big")),
+        ("redeem return", abi("redeem(uint256,address,address)", redeem_shares, CAPTURE_ADDR, CAPTURE_ADDR), redeem,
+         V.convert_to_assets(redeem_shares, seeded_assets, seeded_shares).to_bytes(32, "big")),
+        ("withdraw return", abi("withdraw(uint256,address,address)", withdraw_assets, CAPTURE_ADDR, CAPTURE_ADDR), withdraw,
+         V.preview_withdraw(withdraw_assets, seeded_assets, seeded_shares).to_bytes(32, "big")),
+    ]
+
+
+def oracle_transaction(model: V.Vault, method: str, *args):
+    """Apply one oracle endpoint atomically for causal fixture chains.
+
+    The executable oracle faithfully models local operation order, so a method
+    can mutate an allowance or burn shares before a later guard raises
+    ``Revert``.  EVM failure rolls those writes back.  Chained fixtures must
+    therefore retain the original model on a failure and commit only a fully
+    successful trial.
+    """
+    trial = deepcopy(model)
+    try:
+        value = getattr(trial, method)(*args)
+    except V.Revert as exc:
+        return False, exc, model
+    return True, value, trial
+
+
+def check_action_returns(run: Runner) -> None:
+    """Jaune recorder observations for all seven mutating-selector returns."""
+    for label, data, alloc, expected in action_return_worlds(run):
+        try:
+            _, observed = run.capture(alloc, data, max_return_bytes=32, label=label)
+        except RuntimeError as exc:
+            fail(str(exc))
+            continue
+        if observed != {"success": 1, "length": 32, "returndata": expected}:
+            fail(f"{label}: captured action return differs from its independent oracle observation")
+
+
+def _causal_return_observation(label: str, observed: dict[str, int | bytes],
+                               expected_value: int) -> None:
+    expected = expected_value.to_bytes(32, "big")
+    if observed["success"] != 1:
+        fail(f"{label}: observed inner success {observed['success']}, expected 1")
+    if observed["length"] != 32:
+        fail(f"{label}: observed full return length {observed['length']}, expected 32")
+    if observed["returndata"] != expected:
+        fail(f"{label}: observed return word differs from independent oracle value {expected_value}")
+
+
+def _fixed_recorder_prefix(label: str, alloc: dict, code: bytes) -> None:
+    """Require the root recorder to remain exact across a direct prefix step."""
+    try:
+        account = _normalized_account(alloc, CAPTURE_ADDR)
+    except ValueError as exc:
+        fail(f"{label}: recorder account is malformed: {exc}")
+        return
+    expected = {"balance": 0, "nonce": 1, "code": code, "storage": {}}
+    if account != expected:
+        fail(f"{label}: fixed recorder identity or pristine storage changed during prefix")
+
+
+def _funded_recorder(run: Runner, label: str, funding: int,
+                     signing_keys: tuple[int, ...]
+                     ) -> tuple[dict, V.Vault, tuple[int, ...], bytes, object] | None:
+    """Fund the fixed recorder through actual WETH calls and approve the vault."""
+    root, code, layout = run.causal_capture_root(signing_keys)
+    funder = signer_address(KEY)
+    prefix = run_sequence(run, label, root, [
+        ("fund EOA WETH", WETH_ADDR, "0x", funding, KEY),
+        ("transfer WETH to recorder", WETH_ADDR,
+         abi("transfer(address,uint256)", CAPTURE_ADDR, funding), 0, KEY),
+    ])
+    if prefix is None:
+        return None
+    accounts = tuple(dict.fromkeys(
+        (funder, CAPTURE_ADDR, *(signer_address(key) for key in signing_keys), VAULT_ADDR)))
+    _fixed_recorder_prefix(f"{label} causal root", root, code)
+    model = V.Vault(vault_address=VAULT_ADDR, weth={funder: funding})
+    _fixed_recorder_prefix(f"{label} EOA WETH funding", prefix[0]["alloc"], code)
+    _exact_event(f"{label} EOA WETH funding", prefix[0], contract=WETH_ADDR,
+                 signature="Deposit(address,uint256)", indexed=(funder,),
+                 data_words=(funding,))
+    _pair_state(run, f"{label} EOA WETH funding", prefix[0], model, accounts)
+    model._weth_move(funder, CAPTURE_ADDR, funding)
+    _fixed_recorder_prefix(f"{label} recorder WETH transfer", prefix[1]["alloc"], code)
+    _exact_event(f"{label} recorder funding", prefix[-1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(funder, CAPTURE_ADDR), data_words=(funding,))
+    _pair_state(run, f"{label} recorder funding", prefix[-1], model, accounts)
+    try:
+        approval, observed = run.causal_capture(
+            prefix[-1]["alloc"], WETH_ADDR,
+            abi("approve(address,uint256)", VAULT_ADDR, funding),
+            code=code, layout=layout, label=f"{label} recorder WETH approval")
+    except RuntimeError as exc:
+        fail(str(exc))
+        return None
+    _causal_return_observation(f"{label} recorder WETH approval", observed, 1)
+    model.weth_allowances[(CAPTURE_ADDR, VAULT_ADDR)] = funding
+    _exact_event(f"{label} recorder WETH approval", approval, contract=WETH_ADDR,
+                 signature="Approval(address,address,uint256)",
+                 indexed=(CAPTURE_ADDR, VAULT_ADDR), data_words=(funding,))
+    _pair_state(run, f"{label} recorder WETH approval", approval, model, accounts,
+                weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),))
+    return approval["alloc"], model, accounts, code, layout
+
+
+def check_causal_inbound_action_returns(run: Runner) -> None:
+    """Observe actual deposit/mint returns from a funded fixed recorder."""
+    other_key = 2
+    other = signer_address(other_key)
+    cases = (
+        ("deposit", "caller-receiver", CAPTURE_ADDR, 7),
+        ("deposit", "caller-distinct-receiver", other, 7),
+        ("mint", "caller-receiver", CAPTURE_ADDR, 2000),
+        ("mint", "caller-distinct-receiver", other, 2000),
+    )
+    for method, role, receiver, amount in cases:
+        case = f"causal-return-{method}-{role}"
+        failures_before = len(FAILURES)
+        setup = _funded_recorder(run, case, 100, (KEY, other_key))
+        if setup is not None:
+            world, model, accounts, code, layout = setup
+            committed, expected, next_model = oracle_transaction(
+                model, method, CAPTURE_ADDR, amount, receiver)
+            if not committed:
+                fail(f"{case}: independent oracle rejected the funded inbound call")
+            else:
+                try:
+                    result, observed = run.causal_capture(
+                        world, VAULT_ADDR, abi(f"{method}(uint256,address)", amount, receiver),
+                        code=code, layout=layout, label=case)
+                except RuntimeError as exc:
+                    fail(str(exc))
+                else:
+                    _causal_return_observation(case, observed, expected)
+                    _pair_state(run, case, result, next_model, accounts,
+                                weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),))
+                    if method == "deposit":
+                        _deposit_events(case, result, CAPTURE_ADDR, receiver, amount, expected)
+                    else:
+                        _deposit_events(case, result, CAPTURE_ADDR, receiver, expected, amount)
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+
+
+def _outbound_return_case(run: Runner, method: str, role: str,
+                          owner: int, receiver: int, allowance: int | None) -> None:
+    """Build shares causally, then observe one recorder-owned or delegated exit."""
+    case = f"causal-return-{method}-{role}"
+    failures_before = len(FAILURES)
+    root, code, layout = run.causal_capture_root((KEY, 2))
+    funder = signer_address(KEY)
+    deposit_assets = 11
+    prefix_steps = [
+        ("fund owner WETH", WETH_ADDR, "0x", 100, KEY),
+        ("approve owner WETH", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+        ("deposit owner shares", VAULT_ADDR,
+         abi("deposit(uint256,address)", deposit_assets, owner), 0, KEY),
+    ]
+    if allowance is not None:
+        prefix_steps.append(("approve recorder shares", VAULT_ADDR,
+                             abi("approve(address,uint256)", CAPTURE_ADDR, allowance), 0, KEY))
+    prefix = run_sequence(run, case, root, prefix_steps)
+    if prefix is None:
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    accounts = (funder, CAPTURE_ADDR, signer_address(2), VAULT_ADDR)
+    _fixed_recorder_prefix(f"{case} causal root", root, code)
+    model = V.Vault(vault_address=VAULT_ADDR, weth={funder: 100})
+    _fixed_recorder_prefix(f"{case} owner WETH funding", prefix[0]["alloc"], code)
+    _exact_event(f"{case} owner WETH funding", prefix[0], contract=WETH_ADDR,
+                 signature="Deposit(address,uint256)", indexed=(funder,), data_words=(100,))
+    _pair_state(run, f"{case} owner WETH funding", prefix[0], model, accounts)
+    model.weth_allowances[(funder, VAULT_ADDR)] = 100
+    _fixed_recorder_prefix(f"{case} owner WETH approval", prefix[1]["alloc"], code)
+    _exact_event(f"{case} owner WETH approval", prefix[1], contract=WETH_ADDR,
+                 signature="Approval(address,address,uint256)",
+                 indexed=(funder, VAULT_ADDR), data_words=(100,))
+    _pair_state(run, f"{case} owner WETH approval", prefix[1], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),))
+    committed, minted, model = oracle_transaction(
+        model, "deposit", funder, deposit_assets, owner)
+    if not committed:
+        fail(f"{case}: independent oracle rejected share setup")
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    _fixed_recorder_prefix(f"{case} owner deposit", prefix[2]["alloc"], code)
+    _deposit_events(f"{case} owner deposit", prefix[2], funder, owner,
+                    deposit_assets, minted)
+    _pair_state(run, f"{case} owner deposit", prefix[2], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),))
+    if allowance is not None:
+        committed, _, model = oracle_transaction(
+            model, "approve", funder, CAPTURE_ADDR, allowance)
+        if not committed:
+            fail(f"{case}: independent oracle rejected share approval setup")
+            record_case_if_clean(case, "jaune", run.side.name, failures_before)
+            return
+        _exact_event(f"{case} share approval", prefix[-1], contract=VAULT_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(funder, CAPTURE_ADDR), data_words=(allowance,))
+        _fixed_recorder_prefix(f"{case} share approval", prefix[-1]["alloc"], code)
+    share_pairs = ((owner, CAPTURE_ADDR),) if allowance is not None else ()
+    _pair_state(run, f"{case} setup", prefix[-1], model, accounts,
+                weth_allowances=((funder, VAULT_ADDR),), share_allowances=share_pairs)
+    if method == "withdraw":
+        amount = 3
+        calldata = abi("withdraw(uint256,address,address)", amount, receiver, owner)
+    else:
+        amount = 2000
+        calldata = abi("redeem(uint256,address,address)", amount, receiver, owner)
+    committed, expected, next_model = oracle_transaction(
+        model, method, CAPTURE_ADDR, amount, receiver, owner)
+    if not committed:
+        fail(f"{case}: independent oracle rejected funded outbound call")
+        record_case_if_clean(case, "jaune", run.side.name, failures_before)
+        return
+    try:
+        result, observed = run.causal_capture(
+            prefix[-1]["alloc"], VAULT_ADDR, calldata,
+            code=code, layout=layout, label=case)
+    except RuntimeError as exc:
+        fail(str(exc))
+    else:
+        _causal_return_observation(case, observed, expected)
+        _pair_state(run, case, result, next_model, accounts,
+                    weth_allowances=((funder, VAULT_ADDR),), share_allowances=share_pairs)
+        if method == "withdraw":
+            _withdraw_events(case, result, CAPTURE_ADDR, receiver, owner, amount, expected)
+        else:
+            _withdraw_events(case, result, CAPTURE_ADDR, receiver, owner, expected, amount)
+    record_case_if_clean(case, "jaune", run.side.name, failures_before)
+
+
+def check_causal_outbound_action_returns(run: Runner) -> None:
+    """Observe withdraw/redeem returns across all five role partitions."""
+    owner_eoa = signer_address(KEY)
+    other = signer_address(2)
+    roles = (
+        ("all-equal", CAPTURE_ADDR, CAPTURE_ADDR, None),
+        ("caller-owner-distinct-receiver", CAPTURE_ADDR, other, None),
+        ("caller-receiver-distinct-owner", owner_eoa, CAPTURE_ADDR, 10_000),
+        ("owner-receiver-distinct-caller", owner_eoa, owner_eoa, V.U),
+        ("all-distinct", owner_eoa, other, 10_000),
+    )
+    for method in ("withdraw", "redeem"):
+        for role, owner, receiver, allowance in roles:
+            _outbound_return_case(run, method, role, owner, receiver, allowance)
+
+
+def check_pre_transfer_quotes(run: Runner) -> None:
+    """SF section 5: every flow quotes at the pre-transfer state.
+
+    Each flow executes from a fresh seeded prestate and its observed output
+    must equal the oracle quote at that pre-state.  The post-transfer quote
+    — the value a moved quote would produce — is computed alongside and must
+    *differ*: a witness that agrees both ways could not tell the orders
+    apart, so an insensitive witness fails the check instead of passing
+    vacuously.
+    """
+    seeded_shares, seeded_assets = 5001, 7
+    user_weth = 10 ** 18
+
+    def world() -> dict:
+        return run.alloc(user_weth, user_weth, {run.user: seeded_shares},
+                         seeded_shares,
+                         {word(VAULT_ADDR): word(seeded_assets)})
+
+    assets = 4
+    pre = V.convert_to_shares(assets, seeded_assets, seeded_shares)
+    post = V.convert_to_shares(assets, seeded_assets + assets, seeded_shares)
+    if post == pre:
+        fail("quote-timing deposit witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("deposit(uint256,address)", assets, run.user))
+    if not _accepted_success("quote-timing deposit", result):
+        return
+    vault, _ = vault_state(result)
+    expect("quote-timing deposit minted", run.supply(vault) - seeded_shares, pre)
+
+    shares = 2000
+    pre = V.preview_mint(shares, seeded_assets, seeded_shares)
+    post = V.preview_mint(shares, seeded_assets + pre, seeded_shares)
+    if post == pre:
+        fail("quote-timing mint witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("mint(uint256,address)", shares, run.user))
+    if not _accepted_success("quote-timing mint", result):
+        return
+    _, weth = vault_state(result)
+    expect("quote-timing mint paid", user_weth - storage_get(weth, run.user), pre)
+
+    want = 3
+    pre = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    post = V.preview_withdraw(want, seeded_assets - want, seeded_shares)
+    if post == pre:
+        fail("quote-timing withdraw witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("withdraw(uint256,address,address)",
+                                   want, run.user, run.user))
+    if not _accepted_success("quote-timing withdraw", result):
+        return
+    vault, _ = vault_state(result)
+    expect("quote-timing withdraw burned", seeded_shares - run.supply(vault), pre)
+
+    pre = V.convert_to_assets(shares, seeded_assets, seeded_shares)
+    post = V.convert_to_assets(shares, seeded_assets - pre, seeded_shares)
+    if post == pre:
+        fail("quote-timing redeem witness is insensitive to quote order")
+        return
+    result = run.call(world(), abi("redeem(uint256,address,address)",
+                                   shares, run.user, run.user))
+    if not _accepted_success("quote-timing redeem", result):
+        return
+    _, weth = vault_state(result)
+    expect("quote-timing redeem paid", storage_get(weth, run.user) - user_weth, pre)
+
+
+def _a_u_zero_world(run: Runner) -> dict:
+    """The A=U prestate with a funded user: views plus zero-amount flows only.
+
+    This world seeds the *user's WETH row at `U` as well as the vault's,
+    so every nonzero flow here moves a row across the word ceiling, where
+    both the exact program and (since user decision
+    vault-oracle-weth-wrap-20260916, option A) the oracle wrap.
+    Non-crossing nonzero flows are covered separately
+    (`check_a_u_nonzero_redeem`, `check_a_u_nonzero_withdraw`, review
+    F15); the crossing deposit and mint run from this world.
+    """
+    return run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+
+
+def _a_u_zero_model(run: Runner) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR,
+                   weth={run.user: V.U, VAULT_ADDR: V.U},
+                   weth_allowances={(run.user, VAULT_ADDR): V.U})
+
+
+def _zero_flow_ledger(run: Runner, label: str, result: dict) -> None:
+    """A zero-amount flow at A=U moves no row on the Blanc side."""
+    vault, weth = vault_state(result)
+    expect(f"{label} supply", run.supply(vault), 0)
+    expect(f"{label} user shares", run.shares(vault, run.user), 0)
+    expect(f"{label} vault row", storage_get(weth, VAULT_ADDR), V.U)
+    expect(f"{label} user row", storage_get(weth, run.user), V.U)
+    expect(f"{label} allowance",
+           storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)), V.U)
+
+
+def _zero_flow_deposit_logs(run: Runner, label: str, result: dict) -> None:
+    """The child Transfer still fires for a zero inbound flow, in order."""
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"{label}: got {got}, statement says {want}")
+        return
+    child, mint, receipt = entries
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (run.user, VAULT_ADDR, 0):
+        fail(f"{label}: child Transfer words differ")
+    if (int(mint["topics"][1], 16), int(mint["topics"][2], 16),
+            int(mint["data"], 16)) != (0, run.user, 0):
+        fail(f"{label}: share mint words differ")
+    if int(receipt["data"][2:66], 16) != 0 or int(receipt["data"][66:130], 16) != 0:
+        fail(f"{label}: Deposit words differ")
+
+
+def _zero_flow_withdraw_logs(run: Runner, label: str, result: dict) -> None:
+    """The child Transfer still fires for a zero outbound flow, in order."""
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    withdraw = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    want = [(address(VAULT_ADDR), transfer),
+            (address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), withdraw)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"{label}: got {got}, statement says {want}")
+        return
+    burn, child, receipt = entries
+    if (int(burn["topics"][1], 16), int(burn["topics"][2], 16),
+            int(burn["data"], 16)) != (run.user, 0, 0):
+        fail(f"{label}: share burn words differ")
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (VAULT_ADDR, run.user, 0):
+        fail(f"{label}: child Transfer words differ")
+    if int(receipt["data"][2:66], 16) != 0 or int(receipt["data"][66:130], 16) != 0:
+        fail(f"{label}: Withdraw words differ")
+
+
+def check_a_u_zero_flows(run: Runner) -> None:
+    """SF section 11 capacity: the 257-bit route executes zero-amount flows.
+
+    Views at A=U already exist; these are the four flows.  Blanc executes
+    each one through the 257-bit A+1 denominator, minting, burning and moving
+    nothing, with the child still invoked (its zero Transfer is emitted in
+    statement order).  The reference reverts every one of them under frozen
+    deviation 6, with the Panic(0x11) returndata pinned on the deposit leg.
+    """
+    world = _a_u_zero_world(run)
+    if run.side.name == "reference":
+        for label, data in (
+                ("a-u-zero reference deposit",
+                 abi("deposit(uint256,address)", 0, run.user)),
+                ("a-u-zero reference mint",
+                 abi("mint(uint256,address)", 0, run.user)),
+                ("a-u-zero reference withdraw",
+                 abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+                ("a-u-zero reference redeem",
+                 abi("redeem(uint256,address,address)", 0, run.user, run.user))):
+            _check_revert_evidence(label, world, run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-zero reference deposit panic", world,
+                abi("deposit(uint256,address)", 0, run.user))
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        panic_11 = bytes.fromhex("4e487b71" + "00" * 31 + "11")
+        if success != 0 or payload != panic_11:
+            fail("a-u-zero reference deposit panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, shares, _ = oracle_transaction(model, "deposit", run.user, 0, run.user)
+    if not committed:
+        fail("a-u-zero deposit: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("deposit(uint256,address)", 0, run.user))
+    if not _accepted_success("a-u-zero deposit", result):
+        return
+    vault, _ = vault_state(result)
+    expect("a-u-zero deposit minted", run.supply(vault), shares)
+    _zero_flow_ledger(run, "a-u-zero deposit", result)
+    _zero_flow_deposit_logs(run, "a-u-zero deposit", result)
+    committed, paid, _ = oracle_transaction(model, "mint", run.user, 0, run.user)
+    if not committed:
+        fail("a-u-zero mint: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("mint(uint256,address)", 0, run.user))
+    if not _accepted_success("a-u-zero mint", result):
+        return
+    _, weth = vault_state(result)
+    expect("a-u-zero mint paid", V.U - storage_get(weth, run.user), paid)
+    _zero_flow_ledger(run, "a-u-zero mint", result)
+    _zero_flow_deposit_logs(run, "a-u-zero mint", result)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 0,
+                                              run.user, run.user)
+    if not committed:
+        fail("a-u-zero withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 0, run.user, run.user))
+    if not _accepted_success("a-u-zero withdraw", result):
+        return
+    vault, _ = vault_state(result)
+    expect("a-u-zero withdraw burned", 0 - run.supply(vault), burned)
+    _zero_flow_ledger(run, "a-u-zero withdraw", result)
+    _zero_flow_withdraw_logs(run, "a-u-zero withdraw", result)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 0,
+                                            run.user, run.user)
+    if not committed:
+        fail("a-u-zero redeem: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 0, run.user, run.user))
+    if not _accepted_success("a-u-zero redeem", result):
+        return
+    _, weth = vault_state(result)
+    expect("a-u-zero redeem paid", storage_get(weth, run.user) - V.U, paid)
+    _zero_flow_ledger(run, "a-u-zero redeem", result)
+    _zero_flow_withdraw_logs(run, "a-u-zero redeem", result)
+
+
+def _a_u_nonzero_redeem_world(run: Runner) -> dict:
+    """The A=U prestate with an empty user row: a nonzero redeem crosses no ceiling.
+
+    Unlike `_a_u_zero_world` (whose user row also sits at `U`, so every
+    nonzero flow there would wrap), this world funds only the vault row.
+    A nonzero `redeem` pays the user out of the full vault -- vault row
+    `U -> U-a`, user row `0 -> a` -- exercising the 257-bit `A+1`
+    denominator route as a state-changing flow with no wrap (review F15).
+    """
+    return run.alloc(0, 0, {run.user: V.MAX_SUPPLY}, V.MAX_SUPPLY,
+                      {word(VAULT_ADDR): word(V.U)})
+
+
+def _a_u_nonzero_redeem_model(run: Runner) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR,
+                   balances={run.user: V.MAX_SUPPLY}, supply=V.MAX_SUPPLY,
+                   weth={run.user: 0, VAULT_ADDR: V.U})
+
+
+def check_a_u_nonzero_redeem(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero redeem out of a full vault (review F15).
+
+    `redeem(1, user, user)` from `S=MAX_SUPPLY, A=U` with an empty user row
+    pays exactly 1 through the 257-bit `A+1` denominator.  Blanc executes
+    against the full oracle projection (supply, shares, both WETH rows,
+    burn/transfer/Withdraw words); the reference reverts under frozen
+    deviation 6 with the `Panic(0x11)` returndata pinned.  Neither row
+    crosses the word ceiling, so nothing wraps and the oracle commits.
+    """
+    world = _a_u_nonzero_redeem_world(run)
+    data = abi("redeem(uint256,address,address)", 1, run.user, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference redeem", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference redeem panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference redeem panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_nonzero_redeem_model(run)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 1,
+                                            run.user, run.user)
+    if not committed:
+        fail("a-u-nonzero redeem: the oracle unexpectedly reverted")
+        return
+    if paid != 1:
+        fail(f"a-u-nonzero redeem: oracle paid {paid}, the 257-bit route pays 1")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero redeem", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero redeem supply", run.supply(vault), V.MAX_SUPPLY - 1)
+    expect("a-u-nonzero redeem user shares", run.shares(vault, run.user),
+           V.MAX_SUPPLY - 1)
+    expect("a-u-nonzero redeem vault row", storage_get(weth, VAULT_ADDR),
+           V.U - paid)
+    expect("a-u-nonzero redeem user row", storage_get(weth, run.user), paid)
+    _withdraw_events("a-u-nonzero redeem", result, run.user, run.user,
+                     run.user, paid, 1)
+
+
+def _wrap_receiver_world(run: Runner, receiver: int) -> dict:
+    """A funded ordinary world whose receiver WETH row sits at `U - 5`.
+
+    Vault row and supply are small; only the receiver row is near the
+    ceiling, so an outbound payout wraps exactly that row (review F15 /
+    decision vault-oracle-weth-wrap-20260916).
+    """
+    return run.alloc(100, V.U, {run.user: 1000}, 1000,
+                     {word(VAULT_ADDR): word(10000),
+                      word(receiver): word(V.U - 5)})
+
+
+def _wrap_receiver_model(run: Runner, receiver: int) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR, balances={run.user: 1000},
+                   supply=1000,
+                   weth={run.user: 100, VAULT_ADDR: 10000,
+                         receiver: V.U - 5},
+                   weth_allowances={(run.user, VAULT_ADDR): V.U})
+
+
+def check_a_u_nonzero_deposit(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero deposit into a full vault (review F15).
+
+    `deposit(10, user)` from `S=0, A=U` with the user's row also at `U`:
+    the user row lands on `U-10` while the vault row wraps `U -> 9`.
+    Blanc executes against the full oracle projection; the reference
+    reverts under frozen deviation 6 with `Panic(0x11)` pinned.
+    """
+    world = _a_u_zero_world(run)
+    data = abi("deposit(uint256,address)", 10, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference deposit", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference deposit panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference deposit panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, shares, _ = oracle_transaction(model, "deposit", run.user, 10,
+                                              run.user)
+    if not committed:
+        fail("a-u-nonzero deposit: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero deposit", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero deposit supply", run.supply(vault), shares)
+    expect("a-u-nonzero deposit user shares", run.shares(vault, run.user),
+           shares)
+    expect("a-u-nonzero deposit vault row", storage_get(weth, VAULT_ADDR),
+           (V.U + 10) & V.U)
+    expect("a-u-nonzero deposit user row", storage_get(weth, run.user),
+           V.U - 10)
+    _deposit_events("a-u-nonzero deposit", result, run.user, run.user, 10,
+                    shares)
+
+
+def check_a_u_nonzero_mint(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero mint into a full vault (review F15).
+
+    `mint(10, user)` from `S=0, A=U` with the user's row also at `U`:
+    the user pays the 257-bit quote while the vault row wraps past the
+    ceiling.  Blanc executes against the full oracle projection; the
+    reference reverts under frozen deviation 6 with `Panic(0x11)` pinned.
+    """
+    world = _a_u_zero_world(run)
+    data = abi("mint(uint256,address)", 10, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference mint", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference mint panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference mint panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_zero_model(run)
+    committed, paid, _ = oracle_transaction(model, "mint", run.user, 10,
+                                            run.user)
+    if not committed:
+        fail("a-u-nonzero mint: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero mint", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero mint supply", run.supply(vault), 10)
+    expect("a-u-nonzero mint user shares", run.shares(vault, run.user), 10)
+    expect("a-u-nonzero mint vault row", storage_get(weth, VAULT_ADDR),
+           (V.U + paid) & V.U)
+    expect("a-u-nonzero mint user row", storage_get(weth, run.user),
+           V.U - paid)
+    _deposit_events("a-u-nonzero mint", result, run.user, run.user, paid, 10)
+
+
+def check_a_u_nonzero_withdraw(run: Runner) -> None:
+    """SF section 11 capacity: a nonzero withdraw out of a full vault (review F15).
+
+    `withdraw(1, user, user)` from `S=MAX_SUPPLY, A=U` with an empty user
+    row pays exactly 1 through the 257-bit `A+1` denominator.  Blanc
+    executes against the full oracle projection (supply, shares, both
+    WETH rows, burn/transfer/Withdraw words); the reference reverts
+    under frozen deviation 6 with the `Panic(0x11)` returndata pinned.
+    """
+    world = _a_u_nonzero_redeem_world(run)
+    data = abi("withdraw(uint256,address,address)", 1, run.user, run.user)
+    if run.side.name == "reference":
+        _check_revert_evidence("a-u-nonzero reference withdraw", world,
+                               run.call(world, data))
+        try:
+            success, payload = _captured_word(
+                run, "a-u-nonzero reference withdraw panic", world, data)
+        except RuntimeError as exc:
+            fail(str(exc))
+            return
+        if success != 0 or payload != REFERENCE_MULDIV_OVERFLOW:
+            fail("a-u-nonzero reference withdraw panic: captured "
+                 f"{success}/{payload.hex()}; frozen deviation 6 requires Panic(0x11)")
+        return
+    model = _a_u_nonzero_redeem_model(run)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 1,
+                                              run.user, run.user)
+    if not committed:
+        fail("a-u-nonzero withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("a-u-nonzero withdraw", result):
+        return
+    vault, weth = vault_state(result)
+    expect("a-u-nonzero withdraw supply", run.supply(vault),
+           V.MAX_SUPPLY - burned)
+    expect("a-u-nonzero withdraw user shares", run.shares(vault, run.user),
+           V.MAX_SUPPLY - burned)
+    expect("a-u-nonzero withdraw vault row", storage_get(weth, VAULT_ADDR),
+           V.U - 1)
+    expect("a-u-nonzero withdraw user row", storage_get(weth, run.user), 1)
+    _withdraw_events("a-u-nonzero withdraw", result, run.user, run.user,
+                     run.user, 1, burned)
+
+
+def check_receiver_wrap_withdraw(run: Runner) -> None:
+    """SF section 11 capacity: a withdraw payout wraps the receiver row (review F15).
+
+    `withdraw(10, receiver, user)` with the receiver row at `U-5` wraps
+    it to 4 with status 1.  Both compiled sides execute against the
+    wrapping oracle projection: the reference vault calls the same exact
+    WETH child, so no deviation is involved.
+    """
+    receiver = signer_address(3)
+    world = _wrap_receiver_world(run, receiver)
+    data = abi("withdraw(uint256,address,address)", 10, receiver, run.user)
+    model = _wrap_receiver_model(run, receiver)
+    committed, burned, _ = oracle_transaction(model, "withdraw", run.user, 10,
+                                              receiver, run.user)
+    if not committed:
+        fail("receiver-wrap withdraw: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("receiver-wrap withdraw", result):
+        return
+    vault, weth = vault_state(result)
+    expect("receiver-wrap withdraw supply", run.supply(vault), 1000 - burned)
+    expect("receiver-wrap withdraw user shares", run.shares(vault, run.user),
+           1000 - burned)
+    expect("receiver-wrap withdraw vault row", storage_get(weth, VAULT_ADDR),
+           10000 - 10)
+    expect("receiver-wrap withdraw receiver row",
+           storage_get(weth, receiver), (V.U - 5 + 10) & V.U)
+    _withdraw_events("receiver-wrap withdraw", result, run.user, receiver,
+                     run.user, 10, burned)
+
+
+def check_receiver_wrap_redeem(run: Runner) -> None:
+    """SF section 11 capacity: a redeem payout wraps the receiver row (review F15).
+
+    `redeem(10, receiver, user)` with the receiver row at `U-5` wraps
+    it past the ceiling with status 1.  Both compiled sides execute
+    against the wrapping oracle projection: the reference vault calls
+    the same exact WETH child, so no deviation is involved.
+    """
+    receiver = signer_address(3)
+    world = _wrap_receiver_world(run, receiver)
+    data = abi("redeem(uint256,address,address)", 10, receiver, run.user)
+    model = _wrap_receiver_model(run, receiver)
+    committed, paid, _ = oracle_transaction(model, "redeem", run.user, 10,
+                                            receiver, run.user)
+    if not committed:
+        fail("receiver-wrap redeem: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, data)
+    if not _accepted_success("receiver-wrap redeem", result):
+        return
+    vault, weth = vault_state(result)
+    expect("receiver-wrap redeem supply", run.supply(vault), 1000 - 10)
+    expect("receiver-wrap redeem user shares", run.shares(vault, run.user),
+           1000 - 10)
+    expect("receiver-wrap redeem vault row", storage_get(weth, VAULT_ADDR),
+           10000 - paid)
+    expect("receiver-wrap redeem receiver row",
+           storage_get(weth, receiver), (V.U - 5 + paid) & V.U)
+    _withdraw_events("receiver-wrap redeem", result, run.user, receiver,
+                     run.user, paid, 10)
+
+
+def _ceiling_world(run: Runner) -> tuple[dict, int]:
+    """The S=A=U-O prestate with a funded user: cap flows, not a history."""
+    supply = V.MAX_SUPPLY
+    world = run.alloc(100, 100, {run.user: supply}, supply,
+                      {word(VAULT_ADDR): word(supply)})
+    world[address(WETH_ADDR)]["balance"] = h(supply + 100)
+    return world, supply
+
+
+def _ceiling_model(run: Runner, supply: int) -> V.Vault:
+    return V.Vault(vault_address=VAULT_ADDR, balances={run.user: supply},
+                   supply=supply, weth={run.user: 100, VAULT_ADDR: supply},
+                   weth_allowances={(run.user, VAULT_ADDR): 100})
+
+
+def check_supply_ceiling_flows(run: Runner) -> None:
+    """SF section 11 capacity: flows at the S=U-O supply ceiling.
+
+    Blanc reports zero maxima and reverts any minting flow with the
+    oracle-predicted supply-cap class and complete rollback, while exits
+    execute against the full oracle projection.  The reference has no cap
+    under frozen deviation 5: its maxima read U and the same minting flows
+    succeed with the same formulas.
+    """
+    world, supply = _ceiling_world(run)
+    is_reference = run.side.name == "reference"
+    _expect_capacity_word(run, "ceiling maxDeposit", world,
+                          abi("maxDeposit(address)", run.user),
+                          V.U if is_reference else 0)
+    _expect_capacity_word(run, "ceiling maxMint", world,
+                          abi("maxMint(address)", run.user),
+                          V.U if is_reference else 0)
+    model = _ceiling_model(run, supply)
+    accounts = (run.user, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    deposit = run.call(world, abi("deposit(uint256,address)", 1, run.user))
+    if is_reference:
+        if _accepted_success("ceiling reference deposit one", deposit):
+            _capacity_success_state(run, "ceiling reference deposit one", deposit,
+                                    supply=supply, assets=supply, paid=1,
+                                    minted=V.convert_to_shares(1, supply, supply),
+                                    user_weth=100)
+    else:
+        if not _expect_oracle_revert("ceiling deposit one", model, "supply-cap",
+                                     "deposit", run.user, 1, run.user):
+            return
+        _check_revert_evidence("ceiling deposit one", world, deposit)
+    mint = run.call(world, abi("mint(uint256,address)", 1, run.user))
+    if is_reference:
+        if _accepted_success("ceiling reference mint one", mint):
+            _capacity_success_state(run, "ceiling reference mint one", mint,
+                                    supply=supply, assets=supply,
+                                    paid=V.preview_mint(1, supply, supply), minted=1,
+                                    user_weth=100)
+    else:
+        if not _expect_oracle_revert("ceiling mint one", model, "supply-cap",
+                                     "mint", run.user, 1, run.user):
+            return
+        _check_revert_evidence("ceiling mint one", world, mint)
+    committed, burned, trial = oracle_transaction(model, "withdraw", run.user, 1,
+                                                  run.user, run.user)
+    if not committed:
+        fail("ceiling withdraw one: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 1, run.user, run.user))
+    if _accepted_success("ceiling withdraw one", result):
+        vault, _ = vault_state(result)
+        expect("ceiling withdraw one burned", supply - run.supply(vault), burned)
+        _pair_state(run, "ceiling withdraw one", result, trial, accounts,
+                    weth_allowances=pairs)
+    committed, paid, trial = oracle_transaction(model, "redeem", run.user, 1,
+                                                run.user, run.user)
+    if not committed:
+        fail("ceiling redeem one: the oracle unexpectedly reverted")
+        return
+    result = run.call(world, abi("redeem(uint256,address,address)",
+                                 1, run.user, run.user))
+    if _accepted_success("ceiling redeem one", result):
+        _, weth = vault_state(result)
+        expect("ceiling redeem one paid",
+               storage_get(weth, run.user) - 100, paid)
+        _pair_state(run, "ceiling redeem one", result, trial, accounts,
+                    weth_allowances=pairs)
+
+
+DECOY_WETH_ADDR = 0x1001
+
+
+def _provenance_world(run: Runner, shares: int, supply: int,
+                      assets: int) -> dict:
+    """A funded world with a byte-identical WETH decoy at a second address.
+
+    The decoy mirrors the user's row so that any child call routed to it
+    would visibly move decoy state; the check requires it to be untouched.
+    """
+    world = run.alloc(10 ** 18, 10 ** 18,
+                      {run.user: shares} if shares else None, supply,
+                      {word(VAULT_ADDR): word(assets)} if assets else None)
+    world[address(DECOY_WETH_ADDR)] = {
+        "balance": h(0), "nonce": h(1),
+        "code": "0x" + run.weth_code.hex(),
+        "storage": {word(run.user): word(10 ** 18)}}
+    return world
+
+
+def _provenance_codes(run: Runner, world: dict) -> bool:
+    """The exact child and the decoy both carry the committed WETH bytes."""
+    for label, account in (("provenance exact child code", WETH_ADDR),
+                           ("provenance decoy code", DECOY_WETH_ADDR)):
+        try:
+            code = _normalized_account(world, account)["code"]
+        except ValueError as exc:
+            fail(f"{label}: {exc}")
+            return False
+        if code != run.weth_code:
+            fail(f"{label}: differs from the committed wethCode literal")
+            return False
+    return True
+
+
+def _provenance_decoy_untouched(label: str, before: dict, result: dict) -> None:
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: successful provenance call has no allocation")
+        return
+    try:
+        old = _normalized_account(before, DECOY_WETH_ADDR)
+        new = _normalized_account(post, DECOY_WETH_ADDR)
+    except ValueError as exc:
+        fail(f"{label}: cannot normalize decoy account: {exc}")
+        return
+    if old != new:
+        fail(f"{label}: decoy account content differs; the child call escaped "
+             f"the exact target")
+
+
+def check_exact_child_provenance(run: Runner) -> None:
+    """SF section 11 composition: the child call provably hits the exact WETH.
+
+    One inbound and one outbound flow execute with a byte-identical decoy
+    deployed beside the exact child.  The check binds the child target (the
+    Transfer is emitted by 0x1000 and only 0x1000's rows move), the child
+    code (both accounts carry the committed literal, and the decoy is
+    byte-identical yet untouched), the caller (the vault's allowance is
+    spent on the inbound leg), and the calldata (event words and state
+    deltas equal the oracle projection).  Both compiled sides route their
+    child calls identically.
+    """
+    assets = 10 ** 6
+    world = _provenance_world(run, 0, 0, 0)
+    if not _provenance_codes(run, world):
+        return
+    shares = V.convert_to_shares(assets, 0, 0)
+    result = run.call(world, abi("deposit(uint256,address)", assets, run.user))
+    if not _accepted_success("provenance deposit", result):
+        return
+    entries = logs_of(result)
+    transfer = event_topic("Transfer(address,address,uint256)")
+    deposit = event_topic("Deposit(address,address,uint256,uint256)")
+    want = [(address(WETH_ADDR), transfer),
+            (address(VAULT_ADDR), transfer),
+            (address(VAULT_ADDR), deposit)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want:
+        fail(f"provenance deposit: got {got}, statement says {want}")
+        return
+    child, mint, receipt = entries
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (run.user, VAULT_ADDR, assets):
+        fail("provenance deposit: child Transfer words differ")
+    if (int(mint["topics"][1], 16), int(mint["topics"][2], 16),
+            int(mint["data"], 16)) != (0, run.user, shares):
+        fail("provenance deposit: share mint words differ")
+    if int(receipt["data"][2:66], 16) != assets:
+        fail("provenance deposit: Deposit asset word differs")
+    if int(receipt["data"][66:130], 16) != shares:
+        fail("provenance deposit: Deposit share word differs")
+    _, weth = vault_state(result)
+    expect("provenance deposit vault allowance spent",
+           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),
+           assets)
+    _provenance_decoy_untouched("provenance deposit decoy", world, result)
+
+    seeded_shares, seeded_assets, want = 5000, 5, 3
+    world = _provenance_world(run, seeded_shares, seeded_shares, seeded_assets)
+    if not _provenance_codes(run, world):
+        return
+    burned = V.preview_withdraw(want, seeded_assets, seeded_shares)
+    result = run.call(world, abi("withdraw(uint256,address,address)",
+                                 want, run.user, run.user))
+    if not _accepted_success("provenance withdraw", result):
+        return
+    entries = logs_of(result)
+    withdraw_sig = event_topic("Withdraw(address,address,address,uint256,uint256)")
+    want_logs = [(address(VAULT_ADDR), transfer),
+                 (address(WETH_ADDR), transfer),
+                 (address(VAULT_ADDR), withdraw_sig)]
+    got = [(entry["address"], entry["topics"][0]) for entry in entries]
+    if got != want_logs:
+        fail(f"provenance withdraw: got {got}, statement says {want_logs}")
+        return
+    burn, child, receipt = entries
+    if (int(burn["topics"][1], 16), int(burn["topics"][2], 16),
+            int(burn["data"], 16)) != (run.user, 0, burned):
+        fail("provenance withdraw: share burn words differ")
+    if (int(child["topics"][1], 16), int(child["topics"][2], 16),
+            int(child["data"], 16)) != (VAULT_ADDR, run.user, want):
+        fail("provenance withdraw: child Transfer words differ")
+    if int(receipt["data"][2:66], 16) != want:
+        fail("provenance withdraw: Withdraw asset word differs")
+    if int(receipt["data"][66:130], 16) != burned:
+        fail("provenance withdraw: Withdraw share word differs")
+    _provenance_decoy_untouched("provenance withdraw decoy", world, result)
+
+
+def _collision_key_report(keyed):
+    """Report every raw key shared by two different allowance pairs.
+
+    Pure over ``((owner, spender), key)`` rows: the collision check calls it
+    on executed keys (which must report nothing) and on a synthetic
+    colliding set (which must report the collision).  A weakened evaluator
+    that always returns empty passes the first call and fails the second,
+    so the weakening mutant bites at the synthetic probe.
+    """
+    seen = {}
+    collisions = []
+    for pair, key in keyed:
+        if key in seen:
+            if seen[key] != pair:
+                collisions.append((seen[key], pair, key))
+        else:
+            seen[key] = pair
+    return collisions
+
+
+def check_collision_premise_pairs(run: Runner) -> None:
+    """SF section 11 composition: the finite collision premise, executed.
+
+    Six distinct raw allowance pairs are touched by real WETH calls: four
+    approvals (including the role-order pair ``(B,A)``/``(A,B)``), one
+    successful third-party ``transferFrom`` that spends ``(B,A)`` down, and
+    two reverting foreign attempts to spend the vault's own row, which read
+    the zero ``(vault,C)`` and ``(vault,B)`` cells.  Reads count as touches:
+    SF section 6 puts approves and ``transferFrom`` reads in the same raw
+    key space, and the premise quantifies over the finite touched set.
+
+    The evaluator has four legs.  The recorded set must equal the required
+    six pairs exactly; every recorded pair's executed cell must hold its
+    independently modelled allowance; the executed keys must be pairwise
+    distinct with a vault-owned pair present (non-vacuous, so the SF section
+    6 vault leg is covered by the pairwise report); and a synthetic
+    colliding set must be reported, proving the evaluator is not vacuous.
+    No global Keccak claim is made and no practical collision is exhibited.
+    """
+    key_b, key_c = 2, 3
+    user_a = signer_address(KEY)
+    user_b = signer_address(key_b)
+    user_c = signer_address(key_c)
+    root = run.causal_root((KEY, key_b, key_c))
+    steps = run_sequence(run, "collision-premise", root, [
+        ("fund A", WETH_ADDR, "0x", 100, KEY),
+        ("fund B", WETH_ADDR, "0x", 100, key_b),
+        ("fund C", WETH_ADDR, "0x", 100, key_c),
+        ("A approves vault", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+        ("B approves A", WETH_ADDR,
+         abi("approve(address,uint256)", user_a, 50), 0, key_b),
+        ("A approves B", WETH_ADDR,
+         abi("approve(address,uint256)", user_b, 60), 0, KEY),
+        ("C approves vault", WETH_ADDR,
+         abi("approve(address,uint256)", VAULT_ADDR, 70), 0, key_c),
+        ("A spends B allowance", WETH_ADDR,
+         abi("transferFrom(address,address,uint256)", user_b, user_a, 20),
+         0, KEY),
+    ])
+    if steps is None:
+        return
+    for name, owner, spender, amount in (
+            ("A approves vault", user_a, VAULT_ADDR, 100),
+            ("B approves A", user_b, user_a, 50),
+            ("A approves B", user_a, user_b, 60),
+            ("C approves vault", user_c, VAULT_ADDR, 70)):
+        index = {"A approves vault": 3, "B approves A": 4,
+                 "A approves B": 5, "C approves vault": 6}[name]
+        _exact_event(f"collision-premise {name}", steps[index],
+                     contract=WETH_ADDR,
+                     signature="Approval(address,address,uint256)",
+                     indexed=(owner, spender), data_words=(amount,))
+    _exact_event("collision-premise A spends B allowance", steps[7],
+                 contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(user_b, user_a), data_words=(20,))
+    final = steps[-1]["alloc"]
+    for key, caller in ((key_c, user_c), (key_b, user_b)):
+        attempt = run.call(final,
+                           abi("transferFrom(address,address,uint256)",
+                               VAULT_ADDR, caller, 1),
+                           target=WETH_ADDR,
+                           nonce=_next_nonce(final, key), signing_key=key)
+        receipts = attempt["result"].get("receipts") or []
+        if (attempt["result"].get("rejected") or len(receipts) != 1
+                or int(receipts[0].get("status", "0x1"), 16) != 0):
+            fail(f"collision-premise vault debit by {caller:#x}: expected one "
+                 "accepted reverting execution")
+            return
+    required_pairs = frozenset({
+        (user_a, VAULT_ADDR),
+        (user_b, user_a),
+        (user_a, user_b),
+        (user_c, VAULT_ADDR),
+        (VAULT_ADDR, user_c),
+        (VAULT_ADDR, user_b),
+    })
+    touched_pairs = [
+        (user_a, VAULT_ADDR),  # approved by the A setup step
+        (user_b, user_a),  # B-approved cell spent by the A transferFrom
+        (user_a, user_b),  # A-approved cell held against the B approval
+        (user_c, VAULT_ADDR),  # approved by the C setup step
+        (VAULT_ADDR, user_c),  # read by the reverting C vault debit
+        (VAULT_ADDR, user_b),  # read by the reverting B vault debit
+    ]
+    if set(touched_pairs) != required_pairs:
+        fail("collision-premise pair set differs from the required touched pairs")
+        return
+    _, weth = vault_state(steps[-1])
+    expected_allowances = {
+        (user_a, VAULT_ADDR): 100,
+        (user_b, user_a): 30,
+        (user_a, user_b): 60,
+        (user_c, VAULT_ADDR): 70,
+        (VAULT_ADDR, user_c): 0,
+        (VAULT_ADDR, user_b): 0,
+    }
+    for owner, spender in touched_pairs:
+        cell = weth_allowance_key(owner, spender)
+        expect(f"collision-premise binding {owner:#x}/{spender:#x}",
+               storage_get(weth, cell), expected_allowances[(owner, spender)])
+    keyed = [(pair, weth_allowance_key(*pair)) for pair in touched_pairs]
+    collisions = _collision_key_report(keyed)
+    if collisions:
+        (owner_a, spender_a), (owner_b, spender_b), key = collisions[0]
+        fail(f"collision-premise violation: distinct pairs "
+             f"{owner_a:#x}/{spender_a:#x} and {owner_b:#x}/{spender_b:#x} "
+             f"share key {key:#x}")
+        return
+    if not [pair for pair in touched_pairs if pair[0] == VAULT_ADDR]:
+        fail("collision-premise evaluator ran with no vault-owned pair touched")
+        return
+    synthetic = _collision_key_report([((11, 22), 0xAB), ((33, 44), 0xAB)])
+    if len(synthetic) != 1:
+        fail("collision-premise evaluator accepted a synthetic colliding pair set")
+        return
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={user_a: 120, user_b: 80, user_c: 100},
+                    weth_allowances={(user_a, VAULT_ADDR): 100,
+                                     (user_b, user_a): 30,
+                                     (user_a, user_b): 60,
+                                     (user_c, VAULT_ADDR): 70})
+    _pair_state(run, "collision-premise final", steps[-1], model,
+                (user_a, user_b, user_c, VAULT_ADDR),
+                weth_allowances=((user_a, VAULT_ADDR), (user_b, user_a),
+                                 (user_a, user_b), (user_c, VAULT_ADDR)))
+
+
+def check_donation_classification(run: Runner) -> None:
+    """SF section 11 donations: a donation mints no shares.
+
+    A backed user deposits, then donates outside the vault's inbound child.
+    The settled WETH increase is classified as a donation: the vault row
+    grows by the gift while supply and the giver's shares are exactly what
+    the deposit left.  The full post-state is projected through the
+    independent oracle, so a classifier that minted on donation fails both
+    the explicit no-mint expects and the whole-account comparison.
+    """
+    assets, donation = 10, 3
+    setup = funded_pair(run, "donation-classification", {KEY: 100}, {KEY: 100})
+    if setup is None:
+        return
+    setup_results, model, accounts = setup
+    steps = run_sequence(run, "donation-classification",
+                         setup_results[-1]["alloc"], [
+                             ("deposit", VAULT_ADDR,
+                              abi("deposit(uint256,address)", assets, run.user),
+                              0, KEY),
+                             ("donate", WETH_ADDR,
+                              abi("transfer(address,uint256)", VAULT_ADDR, donation),
+                              0, KEY),
+                         ])
+    if steps is None:
+        return
+    committed, _, model = oracle_transaction(model, "deposit", run.user, assets,
+                                             run.user)
+    if not committed:
+        fail("donation-classification oracle rejected deposit")
+        return
+    supply_before = model.supply
+    user_shares_before = model.balance_of(run.user)
+    committed, _, model = oracle_transaction(model, "donate", run.user, donation)
+    if not committed:
+        fail("donation-classification oracle rejected donation")
+        return
+    if model.supply != supply_before or \
+            model.balance_of(run.user) != user_shares_before:
+        fail("donation-classification oracle model minted shares on donation")
+    _exact_event("donation-classification gift", steps[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(donation,))
+    _pair_state(run, "donation-classification final", steps[-1], model, accounts,
+                weth_allowances=((run.user, VAULT_ADDR),))
+    vault, weth = vault_state(steps[-1])
+    expect("donation mints no shares supply", run.supply(vault), model.supply)
+    expect("donation mints no shares balance",
+           run.shares(vault, run.user), model.balance_of(run.user))
+    expect("donation vault row grows by the gift",
+           storage_get(weth, VAULT_ADDR), assets + donation)
+def check_eels_action_returns(run: Runner) -> None:
+    """Pinned EELS executes the same seven mutation-return observations."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    for label, data, alloc, expected in action_return_worlds(run):
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(CAPTURE_ADDR), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+            timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(CAPTURE_ADDR),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        if eels.outcome(output) != "success":
+            fail(f"EELS {label}: executed {eels.outcome(output)}, oracle requires success")
+        elif bytes(output.return_data) != expected:
+            fail(f"EELS {label}: action return bytes differ from its independent oracle observation")
+
+
+def check_eels_capacity_views(run: Runner) -> None:
+    """Independent EELS observations for the finite extreme capacity outputs.
+
+    These share the explicitly arbitrary arithmetic worlds in
+    ``check_capacity_boundaries``.  They are not economic traces, but they do
+    keep the Jaune and EELS capacity observations independently bound to the
+    oracle and frozen deviations 5 and 6.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    near_supply = V.MAX_SUPPLY - 1_000
+    near_assets = V.ceil_div(near_supply, V.O)
+    near_world = run.alloc(2, 2, {run.user: near_supply}, near_supply,
+                           {word(VAULT_ADDR): word(near_assets)})
+    near_world[address(WETH_ADDR)]["balance"] = h(near_assets + 2)
+    a_u_world = run.alloc(V.U, V.U, {}, 0, {word(VAULT_ADDR): word(V.U)})
+    cases = [
+        ("EELS capacity maxDeposit boundary", near_world,
+         abi("maxDeposit(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_deposit(run.user, near_assets, near_supply)),
+        ("EELS capacity maxMint boundary", near_world,
+         abi("maxMint(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_mint(run.user, near_assets, near_supply)),
+        ("EELS A=U maxDeposit", a_u_world, abi("maxDeposit(address)", run.user), "success", V.U),
+        ("EELS A=U maxMint", a_u_world, abi("maxMint(address)", run.user), "success",
+         V.U if run.side.name == "reference" else V.max_mint(run.user, V.U, 0)),
+        ("EELS A=U convertToShares", a_u_world, abi("convertToShares(uint256)", V.U),
+         "revert" if run.side.name == "reference" else "success",
+         REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else V.convert_to_shares(V.U, V.U, 0)),
+        ("EELS A=U previewMint", a_u_world,
+         abi("previewMint(uint256)", V.max_mint(run.user, V.U, 0)),
+         "revert" if run.side.name == "reference" else "success",
+         REFERENCE_MULDIV_OVERFLOW if run.side.name == "reference" else V.preview_mint(V.max_mint(run.user, V.U, 0), V.U, 0)),
+    ]
+    for label, alloc, data, expected_outcome, expected in cases:
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        outcome = eels.outcome(output)
+        expected_bytes = expected if isinstance(expected, bytes) else expected.to_bytes(32, "big")
+        if outcome != expected_outcome or bytes(output.return_data) != expected_bytes:
+            fail(f"{label}: EELS {outcome}/{bytes(output.return_data).hex()}, "
+                 f"expected {expected_outcome}/{expected_bytes.hex()}")
+
+
+def check_eels_a_u_nonzero_redeem(run: Runner) -> None:
+    """Independent EELS replay of the nonzero redeem out of a full vault.
+
+    The same world the Jaune leg executes: Blanc succeeds paying exactly
+    1 with the complete post-state bound to the oracle projection, while
+    the reference reverts under frozen deviation 6 with the `Panic(0x11)`
+    payload pinned and complete state rolled back (review F15).
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    failures_before = len(FAILURES)
+    alloc = _a_u_nonzero_redeem_world(run)
+    data = abi("redeem(uint256,address,address)", 1, run.user, run.user)
+    state = _eels_state(alloc)
+    before_root = bytes(state_root(state))
+    tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                         calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                         timestamp=1000, gas=3_000_000)
+    output, _, _, _, _ = eels.execute_tx(
+        state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+        coinbase=address(2), default_origin=address(run.user),
+        fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+    if run.side.name == "reference":
+        if eels.outcome(output) != "revert":
+            fail("EELS a-u-nonzero redeem: succeeded, "
+                 "frozen deviation 6 requires a revert")
+        elif bytes(output.return_data) != REFERENCE_MULDIV_OVERFLOW:
+            fail("EELS a-u-nonzero redeem: revert payload differs from Panic(0x11)")
+        if output.logs:
+            fail("EELS a-u-nonzero redeem: failed call retained logs")
+        if bytes(state_root(state)) != before_root:
+            fail("EELS a-u-nonzero redeem: failed call did not roll back complete state")
+    else:
+        paid = V.convert_to_assets(1, V.U, V.MAX_SUPPLY)
+        if paid != 1:
+            fail(f"EELS a-u-nonzero redeem: oracle paid {paid}, the 257-bit route pays 1")
+        elif eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero redeem: reverted, the oracle commits")
+        elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero redeem: return bytes differ from the paid asset word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(V.MAX_SUPPLY - 1)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(V.MAX_SUPPLY - 1)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(V.U - paid)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(paid)
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero redeem: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-redeem", "eels", run.side.name,
+                         failures_before)
+
+
+def _eels_single_tx(run: Runner, alloc: dict, data: str):
+    """Execute one vault call on pinned EELS, returning (output, before_root, state)."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    state = _eels_state(alloc)
+    before_root = bytes(state_root(state))
+    tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                         calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                         timestamp=1000, gas=3_000_000)
+    output, _, _, _, _ = eels.execute_tx(
+        state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+        coinbase=address(2), default_origin=address(run.user),
+        fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+    return eels, output, before_root, state
+
+
+def _eels_expect_dev6_revert(run: Runner, label: str, eels, output,
+                             before_root: bytes, state) -> None:
+    """The reference side of an A=U flow: dev-6 revert, panic pinned, rolled back."""
+    from ethereum.prague.state import state_root
+    if eels.outcome(output) != "revert":
+        fail(f"{label}: succeeded, frozen deviation 6 requires a revert")
+    elif bytes(output.return_data) != REFERENCE_MULDIV_OVERFLOW:
+        fail(f"{label}: revert payload differs from Panic(0x11)")
+    if output.logs:
+        fail(f"{label}: failed call retained logs")
+    if bytes(state_root(state)) != before_root:
+        fail(f"{label}: failed call did not roll back complete state")
+
+
+def check_eels_a_u_nonzero_deposit(run: Runner) -> None:
+    """Independent EELS replay of the nonzero deposit into a full vault.
+
+    Blanc wraps the vault row `U -> 9` with the complete post-state bound
+    to the oracle projection, while the reference reverts under frozen
+    deviation 6 with the `Panic(0x11)` payload pinned (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_zero_world(run)
+    data = abi("deposit(uint256,address)", 10, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero deposit", eels,
+                                 output, before_root, state)
+    else:
+        shares = V.convert_to_shares(10, V.U, 0)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero deposit: reverted, the oracle commits")
+        elif bytes(output.return_data) != shares.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero deposit: return bytes differ from the minted shares word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(shares)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(shares)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word((V.U + 10) & V.U)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(V.U - 10)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero deposit: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-deposit", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_a_u_nonzero_mint(run: Runner) -> None:
+    """Independent EELS replay of the nonzero mint into a full vault.
+
+    Blanc collects the 257-bit quote and wraps the vault row past the
+    ceiling with the complete post-state bound to the oracle projection,
+    while the reference reverts under frozen deviation 6 (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_zero_world(run)
+    data = abi("mint(uint256,address)", 10, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero mint", eels, output,
+                                 before_root, state)
+    else:
+        paid = V.preview_mint(10, V.U, 0)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero mint: reverted, the oracle commits")
+        elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero mint: return bytes differ from the paid assets word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(10)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(10)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word((V.U + paid) & V.U)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(V.U - paid)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero mint: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-mint", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_a_u_nonzero_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the nonzero withdraw out of a full vault.
+
+    Blanc pays exactly 1 through the 257-bit route with the complete
+    post-state bound to the oracle projection, while the reference
+    reverts under frozen deviation 6 (review F15).
+    """
+    failures_before = len(FAILURES)
+    alloc = _a_u_nonzero_redeem_world(run)
+    data = abi("withdraw(uint256,address,address)", 1, run.user, run.user)
+    eels, output, before_root, state = _eels_single_tx(run, alloc, data)
+    if run.side.name == "reference":
+        _eels_expect_dev6_revert(run, "EELS a-u-nonzero withdraw", eels,
+                                 output, before_root, state)
+    else:
+        burned = V.preview_withdraw(1, V.U, V.MAX_SUPPLY)
+        if eels.outcome(output) != "success":
+            fail("EELS a-u-nonzero withdraw: reverted, the oracle commits")
+        elif bytes(output.return_data) != burned.to_bytes(32, "big"):
+            fail("EELS a-u-nonzero withdraw: return bytes differ from the burned shares word")
+        else:
+            expected = deepcopy(alloc)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.shares_slot(run.user))] = word(V.MAX_SUPPLY - burned)
+            expected[address(VAULT_ADDR)]["storage"][
+                word(run.side.supply_slot)] = word(V.MAX_SUPPLY - burned)
+            expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(V.U - 1)
+            expected[address(WETH_ADDR)]["storage"][word(run.user)] = word(1)
+            from ethereum.prague.state import state_root
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail("EELS a-u-nonzero withdraw: complete successful state differs")
+    record_case_if_clean("capacity-a-u-nonzero-withdraw", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_receiver_wrap_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the receiver-row wrap on withdraw (review F15).
+
+    Both compiled sides wrap the `U-5` receiver row to 4 with status 1
+    against the wrapping oracle projection.
+    """
+    failures_before = len(FAILURES)
+    receiver = signer_address(3)
+    alloc = _wrap_receiver_world(run, receiver)
+    data = abi("withdraw(uint256,address,address)", 10, receiver, run.user)
+    eels, output, _, state = _eels_single_tx(run, alloc, data)
+    burned = V.preview_withdraw(10, 10000, 1000)
+    if eels.outcome(output) != "success":
+        fail("EELS receiver-wrap withdraw: reverted, the oracle commits")
+    elif bytes(output.return_data) != burned.to_bytes(32, "big"):
+        fail("EELS receiver-wrap withdraw: return bytes differ from the burned shares word")
+    else:
+        expected = deepcopy(alloc)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.shares_slot(run.user))] = word(1000 - burned)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.supply_slot)] = word(1000 - burned)
+        expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(10000 - 10)
+        expected[address(WETH_ADDR)]["storage"][word(receiver)] = word((V.U - 5 + 10) & V.U)
+        from ethereum.prague.state import state_root
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail("EELS receiver-wrap withdraw: complete successful state differs")
+    record_case_if_clean("capacity-receiver-wrap-withdraw", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_receiver_wrap_redeem(run: Runner) -> None:
+    """Independent EELS replay of the receiver-row wrap on redeem (review F15).
+
+    Both compiled sides wrap the `U-5` receiver row past the ceiling
+    with status 1 against the wrapping oracle projection.
+    """
+    failures_before = len(FAILURES)
+    receiver = signer_address(3)
+    alloc = _wrap_receiver_world(run, receiver)
+    data = abi("redeem(uint256,address,address)", 10, receiver, run.user)
+    eels, output, _, state = _eels_single_tx(run, alloc, data)
+    paid = V.convert_to_assets(10, 10000, 1000)
+    if eels.outcome(output) != "success":
+        fail("EELS receiver-wrap redeem: reverted, the oracle commits")
+    elif bytes(output.return_data) != paid.to_bytes(32, "big"):
+        fail("EELS receiver-wrap redeem: return bytes differ from the paid assets word")
+    else:
+        expected = deepcopy(alloc)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.shares_slot(run.user))] = word(1000 - 10)
+        expected[address(VAULT_ADDR)]["storage"][
+            word(run.side.supply_slot)] = word(1000 - 10)
+        expected[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(10000 - paid)
+        expected[address(WETH_ADDR)]["storage"][word(receiver)] = word((V.U - 5 + paid) & V.U)
+        from ethereum.prague.state import state_root
+        if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+            fail("EELS receiver-wrap redeem: complete successful state differs")
+    record_case_if_clean("capacity-receiver-wrap-redeem", "eels", run.side.name,
+                         failures_before)
+
+
+def check_eels_causal_donation_before_deposit(run: Runner) -> None:
+    """Independent EELS replay of the donation-before-deposit history."""
+    _eels_history(
+        run, "eels-donation-before-deposit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, KEY),
+         ("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, run.user), 0, KEY)],
+        [("donate", (run.user, 3)),
+         ("deposit", (run.user, 4, run.user))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={1: "causal-donation-before-deposit"})
+
+
+def check_eels_causal_donation_before_exit(run: Runner) -> None:
+    """Independent EELS replay of the donation-before-exit history."""
+    _eels_history(
+        run, "eels-donation-before-exit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("vault deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, KEY),
+         ("vault redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", 2000, run.user, run.user), 0, KEY)],
+        [("deposit", (run.user, 10, run.user)),
+         ("donate", (run.user, 3)),
+         ("redeem", (run.user, 2000, run.user, run.user))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={2: "causal-donation-before-exit"})
+
+
+def check_eels_causal_between_users_donation(run: Runner) -> None:
+    """Independent EELS replay of the two-funder donation history."""
+    key2 = 2
+    user2 = signer_address(key2)
+    _eels_history(
+        run, "eels-between-users-donation", run.causal_root((KEY, key2)),
+        {KEY: 100, key2: 100}, {KEY: 100, key2: 100},
+        [("first deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("outside donation", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, 3), 0, key2),
+         ("second deposit", VAULT_ADDR, abi("deposit(uint256,address)", 4, user2), 0, key2)],
+        [("deposit", (run.user, 10, run.user)),
+         ("donate", (user2, 3)),
+         ("deposit", (user2, 4, user2))],
+        (run.user, user2, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (user2, VAULT_ADDR)),
+        records={2: "causal-between-users-donation"})
+
+
+def check_eels_causal_delegated_redeem(run: Runner) -> None:
+    """Independent EELS replay of the delegated-redeem history."""
+    key2, shares = 2, 2000
+    delegate = signer_address(key2)
+    _eels_history(
+        run, "eels-delegated-redeem", run.causal_root((KEY, key2)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+         ("delegated redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", shares, delegate, run.user), 0, key2)],
+        [("deposit", (run.user, 10, run.user)),
+         ("approve", (run.user, delegate, shares)),
+         ("redeem", (delegate, shares, delegate, run.user))],
+        (run.user, delegate, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        share_allowances=((run.user, delegate),),
+        records={2: "causal-delegated-redeem"})
+
+
+def check_eels_causal_delegated_withdraw(run: Runner) -> None:
+    """Independent EELS replay of the delegated-withdraw history."""
+    delegate_key, shares, assets = 2, 2_000, 2
+    delegate = signer_address(delegate_key)
+    _eels_history(
+        run, "eels-delegated-withdraw", run.causal_root((KEY, delegate_key)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+         ("approve shares", VAULT_ADDR, abi("approve(address,uint256)", delegate, shares), 0, KEY),
+         ("delegated withdraw", VAULT_ADDR,
+          abi("withdraw(uint256,address,address)", assets, delegate, run.user), 0, delegate_key)],
+        [("deposit", (run.user, 10, run.user)),
+         ("approve", (run.user, delegate, shares)),
+         ("withdraw", (delegate, assets, delegate, run.user))],
+        (run.user, delegate, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        share_allowances=((run.user, delegate),),
+        records={2: "causal-delegated-withdraw"})
+
+
+def check_eels_share_allowance_roles(run: Runner) -> None:
+    """Independent EELS replay of the share-allowance history and its probes."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    keys = (KEY, delegate_key, receiver_key)
+    accounts = (run.user, delegate, receiver, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    share_rows = ((run.user, delegate), (run.user, run.user))
+    finite, self_allowance, maximum = 3_000, 500, V.U
+    steps = [
+        ("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+        ("approve finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("overwrite approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 2_500), 0, KEY),
+        ("zero approval", VAULT_ADDR, abi("approve(address,uint256)", delegate, 0), 0, KEY),
+        ("restore finite", VAULT_ADDR, abi("approve(address,uint256)", delegate, finite), 0, KEY),
+        ("finite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 1_000),
+         0, delegate_key),
+        ("approve self", VAULT_ADDR, abi("approve(address,uint256)", run.user, self_allowance), 0, KEY),
+        ("owner transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100), 0, KEY),
+        ("approve max", VAULT_ADDR, abi("approve(address,uint256)", delegate, maximum), 0, KEY),
+        ("infinite transferFrom", VAULT_ADDR, abi("transferFrom(address,address,uint256)", run.user, receiver, 100),
+         0, delegate_key),
+        ("self transfer", VAULT_ADDR, abi("transfer(address,uint256)", run.user, 200), 0, KEY),
+        ("zero-value transfer", VAULT_ADDR, abi("transfer(address,uint256)", receiver, 0), 0, KEY),
+    ]
+    ops = [
+        ("deposit", (run.user, 10, run.user)),
+        ("approve", (run.user, delegate, finite)),
+        ("approve", (run.user, delegate, 2_500)),
+        ("approve", (run.user, delegate, 0)),
+        ("approve", (run.user, delegate, finite)),
+        ("transfer_from", (delegate, run.user, receiver, 1_000)),
+        ("approve", (run.user, run.user, self_allowance)),
+        ("transfer_from", (run.user, run.user, receiver, 100)),
+        ("approve", (run.user, delegate, maximum)),
+        ("transfer_from", (delegate, run.user, receiver, 100)),
+        ("transfer", (run.user, run.user, 200)),
+        ("transfer", (run.user, receiver, 0)),
+    ]
+    _eels_history(
+        run, "eels-share-allowance-roles", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100}, steps, ops, accounts,
+        weth_allowances=pairs, share_allowances=share_rows,
+        records={1: "supported-root-approve-initial-finite",
+                 2: "supported-root-approve-overwrite",
+                 3: "supported-root-approve-zero",
+                 4: "supported-root-approve-restored-finite",
+                 5: "supported-root-transfer-from-finite",
+                 6: "supported-root-approve-self",
+                 7: "supported-root-transfer-from-owner",
+                 8: "supported-root-approve-max",
+                 9: "supported-root-transfer-from-infinite",
+                 10: "supported-root-transfer-self",
+                 11: "supported-root-transfer-zero"})
+    over = [("over-spend", VAULT_ADDR,
+             abi("transferFrom(address,address,uint256)", run.user, receiver, 1),
+             0, delegate_key)]
+    reject_over = ("reject", ("transfer_from", (delegate, run.user, receiver, 1)))
+    _eels_history(
+        run, "eels-share-allowance-roles zeroed", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100}, steps[:4] + over, ops[:4] + [reject_over],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={4: "supported-root-allowance-underflow-rollback"},
+        reverts={4: None}, model_rejects=(4,))
+    _eels_history(
+        run, "eels-share-allowance-roles partial spend", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100},
+        steps[:5] + [("exact spend", VAULT_ADDR,
+                      abi("transferFrom(address,address,uint256)", run.user, receiver, finite),
+                      0, delegate_key)] + over,
+        ops[:5] + [("transfer_from", (delegate, run.user, receiver, finite)), reject_over],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={6: "supported-root-allowance-underflow-rollback"},
+        reverts={6: None}, model_rejects=(6,))
+    _eels_history(
+        run, "eels-share-allowance-roles zero receiver", run.causal_root(keys),
+        {KEY: 100}, {KEY: 100},
+        steps + [("zero receiver", VAULT_ADDR,
+                  abi("transfer(address,uint256)", 0, 1), 0, KEY)],
+        ops + [("reject", ("transfer", (run.user, 0, 1)))],
+        accounts, weth_allowances=pairs, share_allowances=share_rows,
+        records={12: "supported-root-transfer-zero-receiver-rollback"},
+        reverts={12: None}, model_rejects=(12,))
+
+
+def check_eels_zero_nonzero_flows(run: Runner) -> None:
+    """Independent EELS replay of the zero/nonzero flow history."""
+    flows = [
+        ("zero deposit", "deposit", (run.user, 0, run.user),
+         abi("deposit(uint256,address)", 0, run.user)),
+        ("nonzero deposit", "deposit", (run.user, 10, run.user),
+         abi("deposit(uint256,address)", 10, run.user)),
+        ("zero mint", "mint", (run.user, 0, run.user),
+         abi("mint(uint256,address)", 0, run.user)),
+        ("nonzero mint", "mint", (run.user, 5, run.user),
+         abi("mint(uint256,address)", 5, run.user)),
+        ("zero withdraw", "withdraw", (run.user, 0, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero withdraw", "withdraw", (run.user, 2, run.user, run.user),
+         abi("withdraw(uint256,address,address)", 2, run.user, run.user)),
+        ("zero redeem", "redeem", (run.user, 0, run.user, run.user),
+         abi("redeem(uint256,address,address)", 0, run.user, run.user)),
+        ("nonzero redeem", "redeem", (run.user, 5, run.user, run.user),
+         abi("redeem(uint256,address,address)", 5, run.user, run.user)),
+    ]
+    flow_cases = {
+        "zero deposit": "supported-root-deposit-zero",
+        "nonzero deposit": "supported-root-deposit-nonzero",
+        "zero mint": "supported-root-mint-zero",
+        "nonzero mint": "supported-root-mint-nonzero",
+        "zero withdraw": "supported-root-withdraw-zero",
+        "nonzero withdraw": "supported-root-withdraw-nonzero",
+        "zero redeem": "supported-root-redeem-zero",
+        "nonzero redeem": "supported-root-redeem-nonzero",
+    }
+    _eels_history(
+        run, "eels-zero-nonzero-flows", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [(label, VAULT_ADDR, data, 0, KEY) for label, _, _, data in flows],
+        [(method, args) for _, method, args, _ in flows],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={index: flow_cases[label] for index, (label, _, _, _) in enumerate(flows)})
+
+
+def check_eels_inbound_role_partitions(run: Runner) -> None:
+    """Independent EELS replays of the inbound receiver histories."""
+    receiver_key = 2
+    receiver_distinct = signer_address(receiver_key)
+    for method, role, receiver, amount, case in (
+            ("deposit", "caller-receiver", run.user, 10,
+             "supported-root-deposit-caller-receiver"),
+            ("deposit", "caller-distinct-receiver", receiver_distinct, 10,
+             "supported-root-deposit-caller-distinct-receiver"),
+            ("mint", "caller-receiver", run.user, 5,
+             "supported-root-mint-caller-receiver"),
+            ("mint", "caller-distinct-receiver", receiver_distinct, 5,
+             "supported-root-mint-caller-distinct-receiver")):
+        data = (abi("deposit(uint256,address)", amount, receiver)
+                if method == "deposit" else abi("mint(uint256,address)", amount, receiver))
+        _eels_history(
+            run, f"eels-inbound-role-{method}-{role}",
+            run.causal_root((KEY, receiver_key)),
+            {KEY: 100}, {KEY: 100}, [(method, VAULT_ADDR, data, 0, KEY)],
+            [(method, (run.user, amount, receiver))],
+            (run.user, receiver_distinct, VAULT_ADDR),
+            weth_allowances=((run.user, VAULT_ADDR),),
+            records={0: case})
+
+
+def check_eels_vault_self_receiver_exits(run: Runner) -> None:
+    """Independent EELS replays of the vault-self-receiver exits."""
+    for method, amount, case in (
+            ("withdraw", 2, "supported-root-withdraw-vault-self-receiver"),
+            ("redeem", 2_000, "supported-root-redeem-vault-self-receiver")):
+        data = (abi("withdraw(uint256,address,address)", amount, VAULT_ADDR, run.user)
+                if method == "withdraw"
+                else abi("redeem(uint256,address,address)", amount, VAULT_ADDR, run.user))
+        _eels_history(
+            run, f"eels-vault-self-receiver-{method}", run.causal_root((KEY,)),
+            {KEY: 100}, {KEY: 100},
+            [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY),
+             (method, VAULT_ADDR, data, 0, KEY)],
+            [("deposit", (run.user, 10, run.user)),
+             (method, (run.user, amount, VAULT_ADDR, run.user))],
+            (run.user, VAULT_ADDR),
+            weth_allowances=((run.user, VAULT_ADDR),),
+            records={1: case})
+
+
+def check_eels_outbound_role_partitions(run: Runner) -> None:
+    """Independent EELS replays of the outbound role histories."""
+    delegate_key, receiver_key = 2, 3
+    delegate, receiver = signer_address(delegate_key), signer_address(receiver_key)
+    roles = (
+        ("all-equal", KEY, run.user, None),
+        ("caller-owner-distinct-receiver", KEY, receiver, None),
+        ("caller-receiver-distinct-owner", delegate_key, delegate, 3_000),
+        ("owner-receiver-distinct-caller", delegate_key, run.user, V.U),
+        ("all-distinct", delegate_key, receiver, 3_000),
+    )
+    for method, amount in (("withdraw", 2), ("redeem", 2_000)):
+        for role, caller_key, recipient, approval in roles:
+            sig = "withdraw(uint256,address,address)" if method == "withdraw" else "redeem(uint256,address,address)"
+            steps = [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 10, run.user), 0, KEY)]
+            ops = [("deposit", (run.user, 10, run.user))]
+            if approval is not None:
+                steps.append(("approve shares", VAULT_ADDR,
+                              abi("approve(address,uint256)", delegate, approval), 0, KEY))
+                ops.append(("approve", (run.user, delegate, approval)))
+            caller = signer_address(caller_key)
+            steps.append((method, VAULT_ADDR, abi(sig, amount, recipient, run.user), 0, caller_key))
+            ops.append((method, (caller, amount, recipient, run.user)))
+            _eels_history(
+                run, f"eels-outbound-role-{method}-{role}",
+                run.causal_root((KEY, delegate_key, receiver_key)),
+                {KEY: 100}, {KEY: 100}, steps, ops,
+                (run.user, delegate, receiver, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                share_allowances=((run.user, delegate),) if approval is not None else (),
+                records={len(steps) - 1: f"supported-root-{method}-{role}"})
+
+
+def check_eels_zero_receiver_deposit(run: Runner) -> None:
+    """Independent EELS replay of the zero-receiver deposit revert."""
+    _eels_history(
+        run, "eels-zero-receiver-deposit", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 1, 0), 0, KEY)],
+        [("reject", ("deposit", (run.user, 1, 0)))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={0: "supported-root-deposit-zero-receiver-rollback"},
+        reverts={0: None}, model_rejects=(0,))
+
+
+def check_eels_inbound_action_returns(run: Runner) -> None:
+    """Independent EELS observations of the funded inbound returns.
+
+    No recorder is needed: EELS exposes the top-level return bytes
+    directly, with the vault call issued as a direct message from the
+    recorder's address.
+    """
+    other_key = 2
+    other = signer_address(other_key)
+    funder = signer_address(KEY)
+    for method, role, receiver, amount in (
+            ("deposit", "caller-receiver", CAPTURE_ADDR, 7),
+            ("deposit", "caller-distinct-receiver", other, 7),
+            ("mint", "caller-receiver", CAPTURE_ADDR, 2000),
+            ("mint", "caller-distinct-receiver", other, 2000)):
+        case = f"causal-return-{method}-{role}"
+        root, _, _ = run.causal_capture_root((KEY, other_key))
+        accounts = tuple(dict.fromkeys(
+            (funder, CAPTURE_ADDR, *(signer_address(key) for key in (KEY, other_key)),
+             VAULT_ADDR)))
+        _eels_history(
+            run, f"eels-{case}", root, {}, {},
+            [("fund EOA WETH", WETH_ADDR, "0x", 100, KEY),
+             ("transfer WETH to recorder", WETH_ADDR,
+              abi("transfer(address,uint256)", CAPTURE_ADDR, 100), 0, KEY),
+             ("approve WETH", WETH_ADDR,
+              abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+             (method, VAULT_ADDR,
+              abi(f"{method}(uint256,address)", amount, receiver), 0, KEY)],
+            [("fund", (funder, 100)),
+             ("weth_move", (funder, CAPTURE_ADDR, 100)),
+             ("approve_weth", (CAPTURE_ADDR, 100)),
+             (method, (CAPTURE_ADDR, amount, receiver))],
+            accounts,
+            weth_allowances=((CAPTURE_ADDR, VAULT_ADDR),),
+            records={3: case}, returns={2: 1, 3: None},
+            callers={2: CAPTURE_ADDR, 3: CAPTURE_ADDR})
+
+
+def check_eels_outbound_action_returns(run: Runner) -> None:
+    """Independent EELS observations of the outbound returns by role."""
+    owner_eoa = signer_address(KEY)
+    funder = owner_eoa
+    other = signer_address(2)
+    roles = (
+        ("all-equal", CAPTURE_ADDR, CAPTURE_ADDR, None),
+        ("caller-owner-distinct-receiver", CAPTURE_ADDR, other, None),
+        ("caller-receiver-distinct-owner", owner_eoa, CAPTURE_ADDR, 10_000),
+        ("owner-receiver-distinct-caller", owner_eoa, owner_eoa, V.U),
+        ("all-distinct", owner_eoa, other, 10_000),
+    )
+    for method in ("withdraw", "redeem"):
+        for role, owner, receiver, allowance in roles:
+            case = f"causal-return-{method}-{role}"
+            root, _, _ = run.causal_capture_root((KEY, 2))
+            if method == "withdraw":
+                amount = 3
+                calldata = abi("withdraw(uint256,address,address)", amount, receiver, owner)
+            else:
+                amount = 2000
+                calldata = abi("redeem(uint256,address,address)", amount, receiver, owner)
+            steps = [
+                ("fund owner WETH", WETH_ADDR, "0x", 100, KEY),
+                ("approve owner WETH", WETH_ADDR,
+                 abi("approve(address,uint256)", VAULT_ADDR, 100), 0, KEY),
+                ("deposit owner shares", VAULT_ADDR,
+                 abi("deposit(uint256,address)", 11, owner), 0, KEY),
+            ]
+            ops = [
+                ("fund", (funder, 100)),
+                ("approve_weth", (funder, 100)),
+                ("deposit", (funder, 11, owner)),
+            ]
+            if allowance is not None:
+                steps.append(("approve recorder shares", VAULT_ADDR,
+                              abi("approve(address,uint256)", CAPTURE_ADDR, allowance), 0, KEY))
+                ops.append(("approve", (funder, CAPTURE_ADDR, allowance)))
+            steps.append(("exit", VAULT_ADDR, calldata, 0, KEY))
+            ops.append((method, (CAPTURE_ADDR, amount, receiver, owner)))
+            last = len(steps) - 1
+            _eels_history(
+                run, f"eels-{case}", root, {}, {}, steps, ops,
+                (funder, CAPTURE_ADDR, signer_address(2), VAULT_ADDR),
+                weth_allowances=((funder, VAULT_ADDR),),
+                share_allowances=((owner, CAPTURE_ADDR),) if allowance is not None else (),
+                records={last: case}, returns={last: None},
+                callers={last: CAPTURE_ADDR})
+
+
+def check_eels_donation_classification(run: Runner) -> None:
+    """Independent EELS replay of the donation-classification history."""
+    assets, donation = 10, 3
+    _eels_history(
+        run, "eels-donation-classification", run.causal_root((KEY,)),
+        {KEY: 100}, {KEY: 100},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", assets, run.user), 0, KEY),
+         ("donate", WETH_ADDR, abi("transfer(address,uint256)", VAULT_ADDR, donation), 0, KEY)],
+        [("deposit", (run.user, assets, run.user)),
+         ("donate", (run.user, donation))],
+        (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        records={1: "donation-classification"})
+
+
+def check_eels_a_u_zero_flows(run: Runner) -> None:
+    """Independent EELS replay of the A=U zero-amount flows.
+
+    Blanc executes each flow through the 257-bit route; the reference
+    reverts every one under frozen deviation 6, with `Panic(0x11)`
+    pinned on the deposit leg exactly as the Jaune side pins it.
+    """
+    legs = (
+        ("deposit", abi("deposit(uint256,address)", 0, run.user),
+         ("deposit", (run.user, 0, run.user)), True),
+        ("mint", abi("mint(uint256,address)", 0, run.user),
+         ("mint", (run.user, 0, run.user)), False),
+        ("withdraw", abi("withdraw(uint256,address,address)", 0, run.user, run.user),
+         ("withdraw", (run.user, 0, run.user, run.user)), False),
+        ("redeem", abi("redeem(uint256,address,address)", 0, run.user, run.user),
+         ("redeem", (run.user, 0, run.user, run.user)), False),
+    )
+    for name, data, op, pin_panic in legs:
+        if run.side.name == "reference":
+            _eels_history(
+                run, f"eels-a-u-zero reference {name}", _a_u_zero_world(run),
+                {}, {}, [(name, VAULT_ADDR, data, 0, KEY)], [("revert", None)],
+                (run.user, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                records={0: "capacity-a-u-zero-flows"},
+                reverts={0: REFERENCE_MULDIV_OVERFLOW if pin_panic else None})
+        else:
+            _eels_history(
+                run, f"eels-a-u-zero {name}", _a_u_zero_world(run),
+                {}, {}, [(name, VAULT_ADDR, data, 0, KEY)], [op],
+                (run.user, VAULT_ADDR),
+                weth_allowances=((run.user, VAULT_ADDR),),
+                records={0: "capacity-a-u-zero-flows"},
+                initial_model=_a_u_zero_model(run), backed=False)
+
+
+def check_eels_supply_ceiling_flows(run: Runner) -> None:
+    """Independent EELS replay of the supply-ceiling flows.
+
+    Blanc reverts the minting flows under the oracle supply-cap class
+    and executes the exits; the reference succeeds unbounded under
+    frozen deviation 5, projected with the same endpoint formulas.
+    """
+    world, supply = _ceiling_world(run)
+    accounts = (run.user, VAULT_ADDR)
+    pairs = ((run.user, VAULT_ADDR),)
+    if run.side.name == "reference":
+        _eels_history(
+            run, "eels-ceiling reference exits", world, {}, {},
+            [("withdraw", VAULT_ADDR,
+              abi("withdraw(uint256,address,address)", 1, run.user, run.user), 0, KEY),
+             ("redeem", VAULT_ADDR,
+              abi("redeem(uint256,address,address)", 1, run.user, run.user), 0, KEY)],
+            [("withdraw", (run.user, 1, run.user, run.user)),
+             ("redeem", (run.user, 1, run.user, run.user))],
+            accounts, weth_allowances=pairs,
+            records={1: "capacity-supply-ceiling-flows"},
+            initial_model=_ceiling_model(run, supply), backed=False)
+        # Unbounded minting under deviation 5: the same endpoint formulas
+        # `_capacity_success_state` asserts, as an expected allocation.
+        _eels_root()
+        try:
+            import eels_differential_common as eels
+        except ImportError as exc:
+            raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+        from ethereum.prague.state import state_root
+        for name, data, paid, minted in (
+                ("deposit", abi("deposit(uint256,address)", 1, run.user), 1,
+                 V.convert_to_shares(1, supply, supply)),
+                ("mint", abi("mint(uint256,address)", 1, run.user),
+                 V.preview_mint(1, supply, supply), 1)):
+            state = _eels_state(world)
+            tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                                 calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                                 timestamp=1000, gas=3_000_000)
+            output, _, _, _, _ = eels.execute_tx(
+                state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+                coinbase=address(2), default_origin=address(run.user),
+                fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+            if eels.outcome(output) != "success":
+                fail(f"eels-ceiling reference {name}: EELS reverted, deviation 5 succeeds")
+                return
+            expected = deepcopy(world)
+            weth_storage = expected[address(WETH_ADDR)]["storage"]
+            weth_storage[word(run.user)] = word(100 - paid)
+            weth_storage[word(VAULT_ADDR)] = word(supply + paid)
+            weth_storage[word(weth_allowance_key(run.user, VAULT_ADDR))] = word(100 - paid)
+            vault_storage = expected[address(VAULT_ADDR)]["storage"]
+            vault_storage[word(run.side.shares_slot(run.user))] = word(supply + minted)
+            vault_storage[word(run.side.supply_slot)] = word(supply + minted)
+            if bytes(state_root(state)) != bytes(state_root(_eels_state(expected))):
+                fail(f"eels-ceiling reference {name}: EELS state differs from the endpoint projection")
+                return
+        return
+    _eels_history(
+        run, "eels-ceiling flows", world, {}, {},
+        [("deposit", VAULT_ADDR, abi("deposit(uint256,address)", 1, run.user), 0, KEY),
+         ("mint", VAULT_ADDR, abi("mint(uint256,address)", 1, run.user), 0, KEY),
+         ("withdraw", VAULT_ADDR,
+          abi("withdraw(uint256,address,address)", 1, run.user, run.user), 0, KEY),
+         ("redeem", VAULT_ADDR,
+          abi("redeem(uint256,address,address)", 1, run.user, run.user), 0, KEY)],
+        [("reject", ("deposit", (run.user, 1, run.user))),
+         ("reject", ("mint", (run.user, 1, run.user))),
+         ("withdraw", (run.user, 1, run.user, run.user)),
+         ("redeem", (run.user, 1, run.user, run.user))],
+        accounts, weth_allowances=pairs,
+        records={3: "capacity-supply-ceiling-flows"},
+        reverts={0: None, 1: None}, model_rejects=(0, 1),
+        initial_model=_ceiling_model(run, supply), backed=False)
+
+
+def check_eels_explicit_arithmetic_capacity_cases(run: Runner) -> None:
+    """Pinned EELS replay of each new explicitly declared arithmetic prestate."""
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+
+    def expect(label: str, alloc: dict, data: str, outcome: str, expected: bytes = b"") -> None:
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(caller=address(run.user), target=address(VAULT_ADDR),
+                             calldata=bytes.fromhex(data.removeprefix("0x")), value=0,
+                             timestamp=1000, gas=3_000_000)
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(run.user),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)))
+        actual = eels.outcome(output)
+        returned = bytes(output.return_data)
+        if actual != outcome or returned != expected:
+            fail(f"{label}: EELS {actual}/{returned.hex()}, expected {outcome}/{expected.hex()}")
+
+    upper = _upper_supply_world(run)
+    for label, data, blanc_value in (
+            ("EELS S=U-O maxDeposit", abi("maxDeposit(address)", run.user), 0),
+            ("EELS S=U-O maxMint", abi("maxMint(address)", run.user), 0)):
+        value = V.U if run.side.name == "reference" else blanc_value
+        expect(label, upper, data, "success", value.to_bytes(32, "big"))
+    record_arithmetic_capacity("capacity-supply-upper-bound", "eels", run.side.name)
+
+    one_room, supply, assets, _ = _one_share_room_world(run)
+    expect("EELS one-share-room maxMint", one_room, abi("maxMint(address)", run.user), "success",
+           (V.U if run.side.name == "reference" else V.max_mint(run.user, assets, supply)).to_bytes(32, "big"))
+    expect("EELS one-share-room mint one", one_room, abi("mint(uint256,address)", 1, run.user),
+           "success", (1).to_bytes(32, "big"))
+    expect("EELS one-share-room mint two", one_room, abi("mint(uint256,address)", 2, run.user),
+           "success" if run.side.name == "reference" else "revert",
+           (2).to_bytes(32, "big") if run.side.name == "reference" else b"")
+    record_arithmetic_capacity("capacity-one-share-room", "eels", run.side.name)
+
+    converter_shares = _share_converter_world(run)
+    converter_assets = _asset_converter_world(run)
+    expect("EELS converter shares representable", converter_shares, abi("convertToShares(uint256)", 1),
+           "success", V.U.to_bytes(32, "big"))
+    expect("EELS converter assets representable", converter_assets, abi("convertToAssets(uint256)", V.O),
+           "success", V.U.to_bytes(32, "big"))
+    expect("EELS converter shares unrepresentable", converter_shares, abi("convertToShares(uint256)", 2),
+           "revert", capacity_revert_payload(run))
+    expect("EELS converter assets unrepresentable", converter_assets,
+           abi("convertToAssets(uint256)", V.O + 1),
+           "revert", capacity_revert_payload(run))
+    record_arithmetic_capacity("converter-representable-and-unrepresentable", "eels", run.side.name)
+
+    donation, assets, donation_supply = _high_word_donation_world(run)
+    for label, data, expected in (
+            ("EELS high-word donation convertToShares", abi("convertToShares(uint256)", V.U),
+             V.convert_to_shares(V.U, assets, donation_supply)),
+            ("EELS high-word donation convertToAssets", abi("convertToAssets(uint256)", 1),
+             V.convert_to_assets(1, assets, donation_supply)),
+            ("EELS high-word donation previewMint", abi("previewMint(uint256)", 1),
+             V.preview_mint(1, assets, donation_supply))):
+        expect(label, donation, data, "success", expected.to_bytes(32, "big"))
+    record_arithmetic_capacity("high-word-donation-arithmetic", "eels", run.side.name)
+
+
+def check_eels_adversarial_child_returns_and_rollback(run: Runner) -> None:
+    """Independent EELS outcomes for the foreign-child return probes.
+
+    These are deliberately not pair/provenance admission evidence. They only
+    replay the operational canonical-return decision at the fixed child
+    address, using adversarial replacement code.
+    """
+    _eels_root()
+    try:
+        import eels_differential_common as eels
+    except ImportError as exc:
+        raise RuntimeError("pinned EELS source is not on PYTHONPATH") from exc
+    from ethereum.prague.state import state_root
+    for flow in ("deposit", "mint", "withdraw", "redeem"):
+        for case_kind, runtime_kind in FOREIGN_CHILD_KINDS:
+            case = f"foreign-child-{flow}-{case_kind}"
+            failures_before = len(FAILURES)
+            alloc, _, caller, _, data, returned, expected_alloc, expected_logs = \
+                _foreign_child_case(run, flow, runtime_kind)
+            state = _eels_state(alloc)
+            before_root = bytes(state_root(state))
+            tx = SimpleNamespace(
+                caller=address(caller), target=address(VAULT_ADDR),
+                calldata=bytes.fromhex(data[2:]),
+                value=0, timestamp=1000, gas=3_000_000,
+            )
+            output, _, _, _, _ = eels.execute_tx(
+                state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+                coinbase=address(2), default_origin=address(caller),
+                fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            )
+            expected = "success" if _foreign_child_success_expected(
+                run.side.name, case_kind) else "revert"
+            outcome = eels.outcome(output)
+            if outcome != expected:
+                fail(f"EELS {case}: {outcome}, expected {expected}")
+            elif expected == "success":
+                expected_word = returned.to_bytes(32, "big")
+                if bytes(output.return_data) != expected_word:
+                    fail(f"EELS {case}: return bytes differ from expected operational word")
+                if eels.normalized_logs(output.logs) != expected_logs:
+                    fail(f"EELS {case}: successful foreign-code vault logs differ")
+                expected_state = _eels_state(expected_alloc)
+                if bytes(state_root(state)) != bytes(state_root(expected_state)):
+                    fail(f"EELS {case}: complete successful state differs")
+            else:
+                expected_revert = b""
+                if run.side.name == "reference" and case_kind != "revert":
+                    expected_revert = selector("SafeERC20FailedOperation(address)") \
+                        + WETH_ADDR.to_bytes(32, "big")
+                if bytes(output.return_data) != expected_revert:
+                    fail(f"EELS {case}: failed foreign child revert payload differs")
+                if output.logs:
+                    fail(f"EELS {case}: failed foreign child retained logs")
+                if bytes(state_root(state)) != before_root:
+                    fail(f"EELS {case}: failed foreign child did not roll back complete state")
+            record_case_if_clean(case, "eels", run.side.name, failures_before)
+
+    # Retain the frozen empty-return observation as a separate historical row.
+    for kind in ("true", "false", "short", "revert", "empty"):
+        alloc, delegate = _adversarial_child_world(run, kind)
+        state = _eels_state(alloc)
+        tx = SimpleNamespace(
+            caller=address(delegate), target=address(VAULT_ADDR),
+            calldata=bytes.fromhex(abi("withdraw(uint256,address,address)", 2, delegate, run.user)[2:]),
+            value=0, timestamp=1000, gas=3_000_000,
+        )
+        output, _, _, _, _ = eels.execute_tx(
+            state, tx, address_bytes=lambda raw: bytes.fromhex(raw.removeprefix("0x")),
+            coinbase=address(2), default_origin=address(delegate),
+            fail=lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        )
+        expected = "success" if kind == "true" or (
+            kind == "empty" and run.side.name == "reference") else "revert"
+        outcome = eels.outcome(output)
+        if outcome != expected:
+            deviation = " (deviation 7)" if kind == "empty" and run.side.name == "reference" else ""
+            fail(f"EELS foreign child {kind}{deviation}: {outcome}, expected {expected}")
+
+
+def _quantity(value, label: str) -> int:
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value, 16) if value.startswith("0x") else int(value)
+        except ValueError:
+            pass
+    raise ValueError(f"{label} is not a nonnegative quantity")
+
+
+def _normalized_account(alloc: dict, account: int) -> dict:
+    """Compare semantic account content, not JSON quantity spelling.
+
+    t8n may omit zero cells or render the same quantity with different hex
+    widths.  Normalizing and dropping zero storage means the rollback witness
+    accepts those equivalent encodings while still detecting every relevant
+    balance, nonce, code, or nonzero storage difference.
+    """
+    entry = alloc.get(address(account), {})
+    if not isinstance(entry, dict):
+        raise ValueError(f"{address(account)} account is not an object")
+    storage = entry.get("storage", {})
+    if not isinstance(storage, dict):
+        raise ValueError(f"{address(account)} storage is not an object")
+    normalized_storage = {}
+    for raw_slot, raw_value in storage.items():
+        slot = _quantity(raw_slot, f"{address(account)} storage key")
+        value = _quantity(raw_value, f"{address(account)} storage value")
+        if value:
+            if slot in normalized_storage:
+                raise ValueError(f"{address(account)} storage spells slot {slot} twice")
+            normalized_storage[slot] = value
+    code = entry.get("code", "0x")
+    if not isinstance(code, str) or not code.startswith("0x"):
+        raise ValueError(f"{address(account)} code is not 0x-prefixed hex")
+    try:
+        code_bytes = bytes.fromhex(code[2:])
+    except ValueError as exc:
+        raise ValueError(f"{address(account)} code is not hexadecimal") from exc
+    return {"balance": _quantity(entry.get("balance", "0x0"), f"{address(account)} balance"),
+            "nonce": _quantity(entry.get("nonce", "0x0"), f"{address(account)} nonce"),
+            "code": code_bytes, "storage": normalized_storage}
+
+
+def _check_revert_evidence(label: str, before: dict, result: dict,
+                           relevant_accounts: tuple[int, ...] = (WETH_ADDR, VAULT_ADDR)) -> None:
+    """Require one executed reverting transaction and complete relevant rollback.
+
+    `t8n` can reject a malformed transaction before it reaches the EVM.  That
+    is not an observation of this runtime's revert behavior.  Likewise, an
+    absent receipt is not evidence of a failed execution.  The relevant state
+    for this two-contract composition is the complete WETH and vault storage
+    maps, including allowance rows which a child call might otherwise mutate.
+    Transaction nonce and payer-balance changes are deliberately excluded:
+    they are consensus effects of an accepted failed transaction, not contract
+    rollback failures.
+    """
+    body = result.get("result")
+    if not isinstance(body, dict):
+        fail(f"{label}: t8n returned no result body")
+        return
+    if body.get("rejected"):
+        fail(f"{label}: transaction was rejected before EVM execution: {body['rejected']}")
+        return
+    receipts = body.get("receipts")
+    if not isinstance(receipts, list) or len(receipts) != 1:
+        fail(f"{label}: expected exactly one accepted-transaction receipt, got {receipts!r}")
+        return
+    receipt = receipts[0]
+    if not isinstance(receipt, dict) or "status" not in receipt:
+        fail(f"{label}: the accepted transaction receipt has no status")
+        return
+    try:
+        status = int(receipt["status"], 16)
+    except (TypeError, ValueError):
+        fail(f"{label}: receipt status is not a hexadecimal quantity: {receipt.get('status')!r}")
+        return
+    if status != 0:
+        fail(f"{label}: the call status is {status}, but the statement requires a revert")
+        return
+    logs = receipt.get("logs")
+    if not isinstance(logs, list):
+        fail(f"{label}: reverting receipt has no log list")
+    elif logs:
+        fail(f"{label}: reverted but emitted events")
+
+    post = result.get("alloc")
+    if not isinstance(post, dict):
+        fail(f"{label}: t8n returned no post-state allocation")
+        return
+    for account in relevant_accounts:
+        try:
+            old = _normalized_account(before, account)
+            new = _normalized_account(post, account)
+        except ValueError as exc:
+            fail(f"{label}: cannot normalize rollback account: {exc}")
+            continue
+        if old != new:
+            fail(f"{label}: reverted but {address(account)} account content differs from its complete pre-state")
+
+
+def _must_revert(run: Runner, label: str, data: str, value: int = 0) -> None:
+    """The call must execute, revert, and roll back contracts and logs whole."""
+    before = run.alloc(10 ** 18, 10 ** 18)
+    _check_revert_evidence(label, before, run.call(before, data, value=value))
+
+
+def check_malformed_calls_revert(run: Runner) -> None:
+    """Malformed dispatch and ABI: the frozen policy is an empty revert."""
+    _must_revert(run, "unknown selector", "0x" + "deadbeef")
+    _must_revert(run, "empty calldata", "0x")
+    _must_revert(run, "one-byte calldata", "0x00")
+    # A recognised selector whose static argument head is short.
+    _must_revert(run, "truncated deposit arguments",
+                 "0x" + selector("deposit(uint256,address)").hex()
+                 + format(1, "064x"))
+
+
+def check_value_bearing_call_reverts(run: Runner) -> None:
+    """Every endpoint is nonpayable; the vault holds no ether."""
+    _must_revert(run, "value-bearing deposit",
+                 abi("deposit(uint256,address)", 1, run.user), value=1)
+    _must_revert(run, "value-bearing transfer",
+                 abi("transfer(address,uint256)", 0xBEEF, 1), value=1)
+
+
+# --- A5 economics: cumulative residue, coalition partition, frozen transcript,
+# --- and the offset comparator (reviews F5/F6; decisions
+# --- g8-economics-rows-requeued-20260916, g8-attack-transcript-split-20260916,
+# --- prorata-vault-offset-control-definition) ---
+
+FROZEN_SEED, FROZEN_DONATION, FROZEN_VICTIM_ASSETS = 1, 10 ** 6, 10 ** 6
+"""The frozen first-depositor inflation transcript (control 6 / SF section 11)."""
+
+
+def _replay_model(label, funding, approvals, ops):
+    """Pure-model replay of a fixed funded history; per-step (out, post-model).
+
+    The Jaune legs bind each post-model to executed state with `_pair_state`;
+    the EELS legs bind theirs through `_eels_history`'s per-step state-root
+    projection and return pins.  Identities computed on these records
+    therefore speak about executed values, not just the model.
+    """
+    model = V.Vault(vault_address=VAULT_ADDR,
+                    weth={signer_address(key): amount
+                          for key, amount in funding.items()},
+                    weth_allowances={(signer_address(key), VAULT_ADDR): amount
+                                     for key, amount in approvals.items()})
+    records = []
+    for method, args in ops:
+        committed, out, model = oracle_transaction(model, method, *args)
+        if not committed:
+            fail(f"{label}: oracle rejected fixed step {method}")
+            return None
+        records.append((out, model))
+    return records
+
+
+def _executed_supply_assets(run, result):
+    """`(S, A)` read from an executed post-state allocation."""
+    vault, weth = vault_state(result)
+    return run.supply(vault), storage_get(weth, VAULT_ADDR)
+
+
+def _dust_step(label, kind, pre, amount_in, out, post):
+    """Assert the one-step dust equation and residue bounds; return (rho, kappa).
+
+    All inputs are executed values the caller already bound to the oracle.
+    Mirrors `ProrataAccountingStep.dust_exact` and `rho_lt_price_divisor`
+    at the frozen offset: deposit `rho = a*D - m*X < X`, redeem
+    `rho = s*X - p*D < D`, donation `kappa = d*D`.
+    """
+    (pre_S, pre_A), (post_S, post_A) = pre, post
+    D_pre, X_pre = pre_S + V.O, pre_A + 1
+    D_post, X_post = post_S + V.O, post_A + 1
+    if kind == "deposit":
+        rho, kappa = amount_in * D_pre - out * X_pre, 0
+        if not 0 <= rho < X_pre:
+            fail(f"{label}: deposit residue {rho} outside [0, {X_pre})")
+    elif kind == "redeem":
+        rho, kappa = amount_in * X_pre - out * D_pre, 0
+        if not 0 <= rho < D_pre:
+            fail(f"{label}: redeem residue {rho} outside [0, {D_pre})")
+    elif kind == "donate":
+        rho, kappa = 0, amount_in * D_pre
+    else:
+        fail(f"{label}: unknown dust kind {kind!r}")
+        return (0, 0)
+    if X_post * D_pre != X_pre * D_post + rho + kappa:
+        fail(f"{label}: one-step dust equation fails")
+    return (rho, kappa)
+
+
+def _dust_cumulative(label, snaps, rhos_kappas):
+    """Assert `dust_trace_exact` over `(S, A)` snapshots: an exact equality.
+
+    `X_n * Prod D = X_0 * Prod D + Sum (rho + kappa) * weights`, with the
+    Lean identity's own weighting: steps before `i` contribute their `D`
+    below `i`, steps after `i + 1` above it.
+    """
+    n = len(rhos_kappas)
+    if len(snaps) != n + 1:
+        fail(f"{label}: {n} steps but {len(snaps)} snapshots")
+        return
+    D = [s + V.O for s, _ in snaps]
+    X = [a + 1 for _, a in snaps]
+
+    def prod(values):
+        total = 1
+        for value in values:
+            total *= value
+        return total
+
+    lhs = X[n] * prod(D[j] for j in range(n))
+    rhs = X[0] * prod(D[j] for j in range(1, n + 1))
+    for i, (rho, kappa) in enumerate(rhos_kappas):
+        rhs += ((rho + kappa) * prod(D[j] for j in range(i))
+                * prod(D[j] for j in range(i + 2, n + 1)))
+    if lhs != rhs:
+        fail(f"{label}: cumulative dust identity fails")
+
+
+def _coalition_identities(label, fin_S, fin_A, nonvictim_shares,
+                          victim_shares, inA, outA, sub, outO,
+                          phase_in, phase_out):
+    """Assert the P4 finite counterpart on executed accumulators.
+
+    The exact shares partition and flow-exact conservation, the open-context
+    bound `outA <= inA + outsideSubsidy`, and the stronger claim bound that
+    prices the coalition's remaining shares at the final state.  Mirrors
+    `ProrataAttackState.SharesPartition/FlowExact` and
+    `attacker_open_context` at the frozen offset.
+    """
+    if nonvictim_shares + victim_shares != fin_S:
+        fail(f"{label}: shares partition fails")
+    if fin_A + (outA + outO) + phase_out != (inA + sub) + phase_in:
+        fail(f"{label}: flow-exact conservation fails")
+    if not outA <= inA + sub:
+        fail(f"{label}: open-context bound fails")
+    claim = V.convert_to_assets(nonvictim_shares, fin_A, fin_S)
+    if not (outA + outO) + claim <= inA + sub:
+        fail(f"{label}: claim bound fails")
+
+
+def _frozen_transcript_steps(run, victim_key):
+    """Static calldata for the frozen transcript: the seed is first from empty,
+    so the attacker's shares are the static `convert_to_shares(1, 0, 0)`."""
+    victim = signer_address(victim_key)
+    attacker_shares = V.convert_to_shares(FROZEN_SEED, 0, 0)
+    return attacker_shares, [
+        ("seed deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", FROZEN_SEED, run.user), 0, KEY),
+        ("seed donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, FROZEN_DONATION), 0, KEY),
+        ("victim deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", FROZEN_VICTIM_ASSETS, victim), 0, victim_key),
+        ("attacker exit", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", attacker_shares, run.user, run.user), 0, KEY),
+    ]
+
+
+def _frozen_transcript_ops(run, victim, attacker_shares):
+    return [
+        ("deposit", (run.user, FROZEN_SEED, run.user)),
+        ("donate", (run.user, FROZEN_DONATION)),
+        ("deposit", (victim, FROZEN_VICTIM_ASSETS, victim)),
+        ("redeem", (run.user, attacker_shares, run.user, run.user)),
+    ]
+
+
+def _assert_transcript_model(label, records):
+    """The frozen transcript against the O=1000 oracle: exact values, no profit."""
+    (m_seed, _), (_, _), (m_victim, _), (m_paid, _) = records
+    expect(f"{label} attacker seed shares", m_seed, 1000)
+    expect(f"{label} victim shares", m_victim, 1999)
+    expect(f"{label} attacker payout", m_paid, 500125)
+    profit = m_paid - (FROZEN_SEED + FROZEN_DONATION)
+    expect(f"{label} attacker profit", profit, -499876)
+    if profit > 0:
+        fail(f"{label}: frozen transcript profits")
+
+
+def _assert_comparator_profit(label, attacker, victim):
+    """The frozen transcript against `Vault(offset=0)`: strictly positive profit.
+
+    The approved unoffset comparator (no virtual terms, empty 1:1
+    bootstrap, floor throughout): the victim is starved to nothing and the
+    attacker exits 2000001 against 1000001 put in.
+    """
+    try:
+        control = V.Vault(
+            offset=0,
+            vault_address=VAULT_ADDR,
+            weth={attacker: FROZEN_SEED + FROZEN_DONATION,
+                  victim: FROZEN_VICTIM_ASSETS},
+            weth_allowances={(attacker, VAULT_ADDR): V.U,
+                             (victim, VAULT_ADDR): V.U})
+        c_seed = control.deposit(attacker, FROZEN_SEED, attacker)
+        control.donate(attacker, FROZEN_DONATION)
+        c_victim = control.deposit(victim, FROZEN_VICTIM_ASSETS, victim)
+        c_out = control.redeem(attacker, control.balance_of(attacker),
+                               attacker, attacker)
+    except V.Revert as exc:
+        fail(f"{label}: comparator reverted: {exc.cls}")
+        return
+    c_profit = c_out - (FROZEN_SEED + FROZEN_DONATION)
+    expect(f"{label} comparator seed shares", c_seed, 1)
+    expect(f"{label} comparator victim shares", c_victim, 0)
+    expect(f"{label} comparator attacker payout", c_out, 2000001)
+    expect(f"{label} comparator attacker profit", c_profit, 10 ** 6)
+    if c_profit <= 0:
+        fail(f"{label}: comparator does not profit strictly")
+
+
+def _coalition_plan(run):
+    """The static coalition history; the victim exit amount is precomputed.
+
+    Four signers partitioned into coalition `{KEY, 2}`, outside `{3}` and
+    victim `{4}`.  The victim's minted shares come from a pure-model replay
+    of the fixed prefix, so the exit calldata names the exact full-exit
+    amount the oracle predicts.
+    """
+    a2, o1, victim = signer_address(2), signer_address(3), signer_address(4)
+    funding = {KEY: 1000, 2: 1000, 3: 1000, 4: 1000}
+    approvals = dict(funding)
+    prefix_ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("deposit", (o1, 60, o1)),
+        ("deposit", (a2, 40, a2)),
+        ("donate", (run.user, 10)),
+        ("donate", (o1, 5)),
+        ("deposit", (victim, 50, victim)),
+    ]
+    prefix = _replay_model("coalition-partition prefix", funding, approvals,
+                           prefix_ops)
+    if prefix is None:
+        return None
+    victim_minted = prefix[-1][0]
+    ops = prefix_ops + [
+        ("redeem", (run.user, 30000, run.user, run.user)),
+        ("withdraw", (o1, 20, o1, o1)),
+        ("transfer", (run.user, a2, 10)),
+        ("redeem", (victim, victim_minted, victim, victim)),
+        ("redeem", (a2, 20000, a2, a2)),
+    ]
+    steps = [
+        ("a1 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("o1 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 60, o1), 0, 3),
+        ("a2 deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 40, a2), 0, 2),
+        ("a1 donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 10), 0, KEY),
+        ("o1 donation", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 5), 0, 3),
+        ("victim deposit", VAULT_ADDR,
+         abi("deposit(uint256,address)", 50, victim), 0, 4),
+        ("a1 redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 30000, run.user, run.user), 0, KEY),
+        ("o1 withdraw", VAULT_ADDR,
+         abi("withdraw(uint256,address,address)", 20, o1, o1), 0, 3),
+        ("a1 to a2 transfer", VAULT_ADDR,
+         abi("transfer(address,uint256)", a2, 10), 0, KEY),
+        ("victim exit", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", victim_minted, victim, victim), 0, 4),
+        ("a2 redeem", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, a2, a2), 0, 2),
+    ]
+    return (a2, o1, victim, funding, approvals, ops, steps, victim_minted)
+
+
+def check_economics_cumulative_residue(run: Runner) -> None:
+    """SF section 11 economics: cumulative floor/ceil residue, exactly.
+
+    A six-step carrier history (deposit, donation, deposit, redeem,
+    redeem, deposit) with one exact step and four inexact ones.  Every
+    step binds executed state to the frozen oracle, then asserts its
+    one-step dust equation and residue bound on executed values; the end
+    asserts the `dust_trace_exact` cumulative identity as an exact
+    integer equality over the executed snapshots.
+    """
+    label = "cumulative-residue"
+    funding, approvals = {KEY: 1000}, {KEY: 1000}
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    kinds = ("deposit", "donate", "deposit", "redeem", "redeem", "deposit")
+    inputs = (100, 50, 7, 50000, 20000, 3)
+    ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("donate", (run.user, 50)),
+        ("deposit", (run.user, 7, run.user)),
+        ("redeem", (run.user, 50000, run.user, run.user)),
+        ("redeem", (run.user, 20000, run.user, run.user)),
+        ("deposit", (run.user, 3, run.user)),
+    ]
+    case_steps = [
+        ("deposit 100", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("donate 50", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 50), 0, KEY),
+        ("deposit 7", VAULT_ADDR,
+         abi("deposit(uint256,address)", 7, run.user), 0, KEY),
+        ("redeem 50000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 50000, run.user, run.user), 0, KEY),
+        ("redeem 20000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, run.user, run.user), 0, KEY),
+        ("deposit 3", VAULT_ADDR,
+         abi("deposit(uint256,address)", 3, run.user), 0, KEY),
+    ]
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR),)
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    rhos_kappas = []
+    for index, (kind, amount_in) in enumerate(zip(kinds, inputs, strict=True)):
+        (pre_S, pre_A), (post_S, post_A) = snaps[index], snaps[index + 1]
+        out_model = records[index][0]
+        if kind == "deposit":
+            out_exec = post_S - pre_S
+            expect(f"{label} step {index} minted", out_exec, out_model)
+        elif kind == "redeem":
+            out_exec = pre_A - post_A
+            expect(f"{label} step {index} paid", out_exec, out_model)
+        else:
+            expect(f"{label} step {index} donated", post_A - pre_A, amount_in)
+            expect(f"{label} step {index} supply still", post_S, pre_S)
+            out_exec = 0
+        rhos_kappas.append(_dust_step(f"{label} step {index}", kind,
+                                     snaps[index], amount_in, out_exec,
+                                     snaps[index + 1]))
+    expect(f"{label} exact first residue", rhos_kappas[0][0], 0)
+    for index in (2, 3, 4, 5):
+        if rhos_kappas[index][0] == 0:
+            fail(f"{label} step {index} residue unexpectedly exact")
+    _dust_cumulative(label, snaps, rhos_kappas)
+    _deposit_events(f"{label} first deposit", results[0], run.user, run.user,
+                    100, records[0][0])
+    _exact_event(f"{label} donation", results[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(50,))
+    _deposit_events(f"{label} second deposit", results[2], run.user, run.user,
+                    7, records[2][0])
+    _withdraw_events(f"{label} first redeem", results[3], run.user, run.user,
+                     run.user, records[3][0], 50000)
+    _withdraw_events(f"{label} second redeem", results[4], run.user, run.user,
+                     run.user, records[4][0], 20000)
+    _deposit_events(f"{label} third deposit", results[5], run.user, run.user,
+                    3, records[5][0])
+
+
+def check_economics_coalition_partition(run: Runner) -> None:
+    """SF section 11 economics: a four-signer coalition partition, accumulated.
+
+    Coalition `{KEY, 2}`, outside `{3}`, victim `{4}`: attributed deposits
+    and donations feed `inA`/`outsideSubsidy`, coalition and outside exits
+    feed `outA`/`outsideOut`, a coalition share transfer moves no
+    accumulator, and the victim deposits then fully exits.  The end
+    asserts the shares partition, flow-exact conservation, the
+    open-context bound and the claim bound on executed values.
+    """
+    label = "coalition-partition"
+    plan = _coalition_plan(run)
+    if plan is None:
+        return
+    a2, o1, victim, funding, approvals, ops, case_steps, victim_minted = plan
+    expect(f"{label} victim minted", victim_minted, 46527)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = tuple((holder, VAULT_ADDR) for holder in (run.user, a2, o1, victim))
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    inA = 100 + 40 + 10
+    sub = 60 + 5
+    paid_a1 = snaps[6][1] - snaps[7][1]
+    paid_a2 = snaps[10][1] - snaps[11][1]
+    outA = paid_a1 + paid_a2
+    outO = 20
+    phase_in, phase_out = 50, snaps[9][1] - snaps[10][1]
+    expect(f"{label} a1 payout", paid_a1, records[6][0])
+    expect(f"{label} a1 payout pinned", paid_a1, 32)
+    expect(f"{label} o1 burned", snaps[7][0] - snaps[8][0], records[7][0])
+    expect(f"{label} victim payout", phase_out, records[9][0])
+    expect(f"{label} victim payout pinned", phase_out, 50)
+    expect(f"{label} a2 payout", paid_a2, records[10][0])
+    expect(f"{label} a2 payout pinned", paid_a2, 21)
+    expect(f"{label} transfer keeps supply", snaps[9][0], snaps[8][0])
+    expect(f"{label} transfer keeps assets", snaps[9][1], snaps[8][1])
+    fin_vault, _ = vault_state(results[-1])
+    victim_exec = run.shares(fin_vault, victim)
+    expect(f"{label} victim fully exited", victim_exec, 0)
+    nonvictim_exec = (run.shares(fin_vault, run.user)
+                      + run.shares(fin_vault, a2) + run.shares(fin_vault, o1))
+    _coalition_identities(label, snaps[11][0], snaps[11][1], nonvictim_exec,
+                          victim_exec, inA, outA, sub, outO,
+                          phase_in, phase_out)
+    _deposit_events(f"{label} a1 deposit", results[0], run.user, run.user,
+                    100, records[0][0])
+    _deposit_events(f"{label} o1 deposit", results[1], o1, o1, 60, records[1][0])
+    _deposit_events(f"{label} a2 deposit", results[2], a2, a2, 40, records[2][0])
+    _exact_event(f"{label} a1 donation", results[3], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(10,))
+    _exact_event(f"{label} o1 donation", results[4], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(o1, VAULT_ADDR), data_words=(5,))
+    _deposit_events(f"{label} victim deposit", results[5], victim, victim,
+                    50, victim_minted)
+    _withdraw_events(f"{label} a1 redeem", results[6], run.user, run.user,
+                     run.user, paid_a1, 30000)
+    _withdraw_events(f"{label} o1 withdraw", results[7], o1, o1, o1,
+                     20, records[7][0])
+    _exact_event(f"{label} coalition transfer", results[8], contract=VAULT_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, a2), data_words=(10,))
+    _withdraw_events(f"{label} victim exit", results[9], victim, victim,
+                     victim, phase_out, victim_minted)
+    _withdraw_events(f"{label} a2 redeem", results[10], a2, a2, a2,
+                     paid_a2, 20000)
+
+
+def check_attack_transcript_frozen(run: Runner) -> None:
+    """SF section 11 economics: the frozen attack transcript, executed.
+
+    Seed 1, donate a million, victim deposits a million, attacker exits
+    all: both runtimes must reproduce the frozen oracle's exact values
+    (victim 1999 shares, attacker out 500125, profit -499876).
+    """
+    label = "attack-transcript-frozen"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION, victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR), (victim, VAULT_ADDR))
+    snaps = [(0, 0)]
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+        snaps.append(_executed_supply_assets(run, result))
+    _assert_transcript_model(label, records)
+    expect(f"{label} executed seed shares", snaps[1][0] - snaps[0][0], 1000)
+    expect(f"{label} executed victim shares", snaps[3][0] - snaps[2][0], 1999)
+    expect(f"{label} executed attacker payout", snaps[3][1] - snaps[4][1], 500125)
+    _deposit_events(f"{label} seed", results[0], run.user, run.user,
+                    FROZEN_SEED, records[0][0])
+    _exact_event(f"{label} donation", results[1], contract=WETH_ADDR,
+                 signature="Transfer(address,address,uint256)",
+                 indexed=(run.user, VAULT_ADDR), data_words=(FROZEN_DONATION,))
+    _deposit_events(f"{label} victim deposit", results[2], victim, victim,
+                    FROZEN_VICTIM_ASSETS, records[2][0])
+    _withdraw_events(f"{label} attacker exit", results[3], run.user, run.user,
+                     run.user, records[3][0], records[0][0])
+
+
+def check_attack_economics_offset_comparator(run: Runner) -> None:
+    """SF section 11 economics: the frozen transcript against the comparator.
+
+    The same executed transcript as `attack-transcript-frozen` (no profit
+    at `O = 1000`), plus the approved unoffset comparator on the same
+    inputs: the victim is starved to nothing and the attacker profits
+    exactly a million, strictly positive.
+    """
+    label = "attack-economics-offset-comparator"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION, victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    setup = funded_pair(run, label, funding, approvals)
+    if setup is None:
+        return
+    setup_results, _, accounts = setup
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    results = run_sequence(run, label, setup_results[-1]["alloc"], case_steps)
+    if results is None:
+        return
+    pairs = ((run.user, VAULT_ADDR), (victim, VAULT_ADDR))
+    for (method, _), (_, post_model), result in zip(ops, records, results,
+                                                   strict=True):
+        _pair_state(run, f"{label} {method}", result, post_model, accounts,
+                    weth_allowances=pairs)
+    _assert_transcript_model(label, records)
+    _assert_comparator_profit(label, run.user, victim)
+
+
+def check_eels_economics_cumulative_residue(run: Runner) -> None:
+    """Independent EELS replay of the cumulative-residue history.
+
+    Return pins bind every priced output to the oracle word and the
+    per-step state-root projection binds the whole allocation; the dust
+    identities then run on the replay the projection verified.
+    """
+    label = "eels-cumulative-residue"
+    funding, approvals = {KEY: 1000}, {KEY: 1000}
+    ops = [
+        ("deposit", (run.user, 100, run.user)),
+        ("donate", (run.user, 50)),
+        ("deposit", (run.user, 7, run.user)),
+        ("redeem", (run.user, 50000, run.user, run.user)),
+        ("redeem", (run.user, 20000, run.user, run.user)),
+        ("deposit", (run.user, 3, run.user)),
+    ]
+    case_steps = [
+        ("deposit 100", VAULT_ADDR,
+         abi("deposit(uint256,address)", 100, run.user), 0, KEY),
+        ("donate 50", WETH_ADDR,
+         abi("transfer(address,uint256)", VAULT_ADDR, 50), 0, KEY),
+        ("deposit 7", VAULT_ADDR,
+         abi("deposit(uint256,address)", 7, run.user), 0, KEY),
+        ("redeem 50000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 50000, run.user, run.user), 0, KEY),
+        ("redeem 20000", VAULT_ADDR,
+         abi("redeem(uint256,address,address)", 20000, run.user, run.user), 0, KEY),
+        ("deposit 3", VAULT_ADDR,
+         abi("deposit(uint256,address)", 3, run.user), 0, KEY),
+    ]
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY,)), funding, approvals,
+        case_steps, ops, (run.user, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR),),
+        returns={0: None, 2: None, 3: None, 4: None, 5: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    kinds = ("deposit", "donate", "deposit", "redeem", "redeem", "deposit")
+    inputs = (100, 50, 7, 50000, 20000, 3)
+    snaps = [(0, 0)]
+    for _, post_model in records:
+        snaps.append((post_model.supply, post_model.total_assets()))
+    rhos_kappas = []
+    for index, (kind, amount_in) in enumerate(zip(kinds, inputs, strict=True)):
+        out = records[index][0] or 0
+        rhos_kappas.append(_dust_step(f"{label} step {index}", kind,
+                                     snaps[index], amount_in, out,
+                                     snaps[index + 1]))
+    expect(f"{label} exact first residue", rhos_kappas[0][0], 0)
+    for index in (2, 3, 4, 5):
+        if rhos_kappas[index][0] == 0:
+            fail(f"{label} step {index} residue unexpectedly exact")
+    _dust_cumulative(label, snaps, rhos_kappas)
+    record_case_if_clean("economics-cumulative-residue", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_economics_coalition_partition(run: Runner) -> None:
+    """Independent EELS replay of the coalition-partition history."""
+    label = "eels-coalition-partition"
+    plan = _coalition_plan(run)
+    if plan is None:
+        return
+    a2, o1, victim, funding, approvals, ops, case_steps, victim_minted = plan
+    expect(f"{label} victim minted", victim_minted, 46527)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, 2, 3, 4)), funding, approvals,
+        case_steps, ops, (run.user, a2, o1, victim, VAULT_ADDR),
+        weth_allowances=tuple((holder, VAULT_ADDR)
+                              for holder in (run.user, a2, o1, victim)),
+        returns={0: None, 1: None, 2: None, 5: None, 6: None,
+                 7: None, 9: None, 10: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    snaps = [(0, 0)]
+    for _, post_model in records:
+        snaps.append((post_model.supply, post_model.total_assets()))
+    inA = 100 + 40 + 10
+    sub = 60 + 5
+    paid_a1 = snaps[6][1] - snaps[7][1]
+    paid_a2 = snaps[10][1] - snaps[11][1]
+    outA = paid_a1 + paid_a2
+    outO = 20
+    phase_in, phase_out = 50, snaps[9][1] - snaps[10][1]
+    expect(f"{label} a1 payout", paid_a1, 32)
+    expect(f"{label} victim payout", phase_out, 50)
+    expect(f"{label} a2 payout", paid_a2, 21)
+    victim_exec = final.balance_of(victim)
+    expect(f"{label} victim fully exited", victim_exec, 0)
+    nonvictim_exec = (final.balance_of(run.user) + final.balance_of(a2)
+                      + final.balance_of(o1))
+    _coalition_identities(label, snaps[11][0], snaps[11][1], nonvictim_exec,
+                          victim_exec, inA, outA, sub, outO,
+                          phase_in, phase_out)
+    record_case_if_clean("economics-coalition-partition", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_attack_transcript_frozen(run: Runner) -> None:
+    """Independent EELS replay of the frozen attack transcript."""
+    label = "eels-attack-transcript-frozen"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION,
+               victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, victim_key)), funding, approvals,
+        case_steps, ops, (run.user, victim, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (victim, VAULT_ADDR)),
+        returns={0: None, 2: None, 3: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    _assert_transcript_model(label, records)
+    record_case_if_clean("attack-transcript-frozen", "eels",
+                         run.side.name, failures_before)
+
+
+def check_eels_attack_economics_offset_comparator(run: Runner) -> None:
+    """Independent EELS replay of the transcript plus the comparator verdict."""
+    label = "eels-attack-economics-offset-comparator"
+    victim_key = 2
+    victim = signer_address(victim_key)
+    funding = {KEY: FROZEN_SEED + FROZEN_DONATION,
+               victim_key: FROZEN_VICTIM_ASSETS}
+    approvals = dict(funding)
+    attacker_shares, case_steps = _frozen_transcript_steps(run, victim_key)
+    ops = _frozen_transcript_ops(run, victim, attacker_shares)
+    records = _replay_model(label, funding, approvals, ops)
+    if records is None:
+        return
+    failures_before = len(FAILURES)
+    final = _eels_history(
+        run, label, run.causal_root((KEY, victim_key)), funding, approvals,
+        case_steps, ops, (run.user, victim, VAULT_ADDR),
+        weth_allowances=((run.user, VAULT_ADDR), (victim, VAULT_ADDR)),
+        returns={0: None, 2: None, 3: None})
+    if final is None:
+        return
+    if final != records[-1][1]:
+        fail(f"{label}: identity replay diverged from the bound history")
+        return
+    _assert_transcript_model(label, records)
+    _assert_comparator_profit(label, run.user, victim)
+    record_case_if_clean("attack-economics-offset-comparator", "eels",
+                         run.side.name, failures_before)
+
+
+
+CHECKS = [
+    check_deposit_into_empty_vault,
+    check_deposit_into_donated_vault,
+    check_causal_donation_before_deposit,
+    check_causal_donation_before_exit,
+    check_causal_between_users_donation,
+    check_causal_delegated_redeem,
+    check_causal_share_allowance_roles,
+    check_causal_delegated_withdraw,
+    check_causal_zero_nonzero_flows,
+    check_causal_inbound_role_partitions,
+    check_causal_vault_self_receiver_exits,
+    check_causal_outbound_role_partitions,
+    check_adversarial_child_returns_and_rollback,
+    check_capacity_boundaries,
+    check_explicit_arithmetic_capacity_cases,
+    check_mint,
+    check_redeem,
+    check_withdraw,
+    check_share_transfer,
+    check_zero_receiver_deposit_reverts,
+    check_deposit_event_order,
+    check_share_transfer_event,
+    check_view_returns,
+    check_action_returns,
+    check_causal_inbound_action_returns,
+    check_causal_outbound_action_returns,
+    check_malformed_calls_revert,
+    check_value_bearing_call_reverts,
+    check_exact_child_failure_rollback,
+    check_mint_event_order,
+    check_outbound_event_order,
+    check_pre_transfer_quotes,
+    check_a_u_zero_flows,
+    check_a_u_nonzero_redeem,
+    check_a_u_nonzero_deposit,
+    check_a_u_nonzero_mint,
+    check_a_u_nonzero_withdraw,
+    check_receiver_wrap_withdraw,
+    check_receiver_wrap_redeem,
+    check_supply_ceiling_flows,
+    check_exact_child_provenance,
+    check_collision_premise_pairs,
+    check_donation_classification,
+    check_economics_cumulative_residue,
+    check_economics_coalition_partition,
+    check_attack_transcript_frozen,
+    check_attack_economics_offset_comparator,
+]
+
+JAUNE_CASES_BY_CHECK = {
+    "check_deposit_into_empty_vault": ("deposit-empty",),
+    "check_deposit_into_donated_vault": ("deposit-donated",),
+    "check_causal_donation_before_deposit": ("causal-donation-before-deposit",),
+    "check_causal_donation_before_exit": ("causal-donation-before-exit",),
+    "check_causal_between_users_donation": ("causal-between-users-donation",),
+    "check_causal_delegated_redeem": ("causal-delegated-redeem",),
+    "check_causal_delegated_withdraw": ("causal-delegated-withdraw",),
+    "check_adversarial_child_returns_and_rollback": ("foreign-child-canonical-return-and-rollback",),
+    "check_capacity_boundaries": ("capacity-boundaries", "capacity-a-u-257-bit"),
+    "check_explicit_arithmetic_capacity_cases": ARITHMETIC_CAPACITY_CASES,
+    "check_mint": ("mint-inexact",),
+    "check_redeem": ("redeem-inexact",),
+    "check_withdraw": ("withdraw-inexact",),
+    "check_zero_receiver_deposit_reverts": ("zero-address-rollbacks",),
+    "check_deposit_event_order": ("event-order-deposit",),
+    "check_share_transfer_event": ("event-order-share-transfer",),
+    "check_view_returns": ("metadata-and-zero-views", "nonempty-and-donated-views"),
+    "check_action_returns": ("return-capture-controls",),
+    "check_malformed_calls_revert": ("malformed-dispatch",),
+    "check_value_bearing_call_reverts": ("nonpayable-rollbacks",),
+    "check_exact_child_failure_rollback": ("callback-and-child-failure-rollback",),
+    "check_mint_event_order": ("event-order-mint",),
+    "check_outbound_event_order": ("event-order-withdraw", "event-order-redeem"),
+    "check_pre_transfer_quotes": ("quote-timing-pre-transfer",),
+    "check_a_u_zero_flows": ("capacity-a-u-zero-flows",),
+    "check_a_u_nonzero_redeem": ("capacity-a-u-nonzero-redeem",),
+    "check_a_u_nonzero_deposit": ("capacity-a-u-nonzero-deposit",),
+    "check_a_u_nonzero_mint": ("capacity-a-u-nonzero-mint",),
+    "check_a_u_nonzero_withdraw": ("capacity-a-u-nonzero-withdraw",),
+    "check_receiver_wrap_withdraw": ("capacity-receiver-wrap-withdraw",),
+    "check_receiver_wrap_redeem": ("capacity-receiver-wrap-redeem",),
+    "check_supply_ceiling_flows": ("capacity-supply-ceiling-flows",),
+    "check_exact_child_provenance": ("composition-exact-child-provenance",),
+    "check_collision_premise_pairs": ("composition-collision-premise-pairs",),
+    "check_donation_classification": ("donation-classification",),
+    "check_economics_cumulative_residue": ("economics-cumulative-residue",),
+    "check_economics_coalition_partition": ("economics-coalition-partition",),
+    "check_attack_transcript_frozen": ("attack-transcript-frozen",),
+    "check_attack_economics_offset_comparator": ("attack-economics-offset-comparator",),
+}
+
+EELS_CASES_BY_CHECK = {
+    "check_eels_view_returns": ("metadata-and-zero-views", "nonempty-and-donated-views"),
+    "check_eels_capacity_views": ("capacity-boundaries", "capacity-a-u-257-bit"),
+    "check_eels_explicit_arithmetic_capacity_cases": ARITHMETIC_CAPACITY_CASES,
+    "check_eels_adversarial_child_returns_and_rollback": ("foreign-child-canonical-return-and-rollback",),
+}
+
+MEASURED_CASES = ["deposit_into_empty_vault", "deposit_into_donated_vault",
+                  "mint", "redeem", "withdraw", "share_transfer"]
+
+
+def run_side(side: Side, weth_code: bytes) -> Runner:
+    run = Runner(side, weth_code)
+    for check in CHECKS:
+        before = len(FAILURES)
+        try:
+            check(run)
+        except RuntimeError as exc:
+            fail(f"{check.__name__}: {exc}")
+        if len(FAILURES) == before:
+            record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()), "jaune", side.name)
+        for index in range(before, len(FAILURES)):
+            FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    return run
+
+
+def run_eels_side(run: Runner) -> None:
+    checks = (
+        check_eels_view_returns,
+        check_eels_action_returns,
+        check_eels_capacity_views,
+        check_eels_a_u_nonzero_redeem,
+        check_eels_a_u_nonzero_deposit,
+        check_eels_a_u_nonzero_mint,
+        check_eels_a_u_nonzero_withdraw,
+        check_eels_receiver_wrap_withdraw,
+        check_eels_receiver_wrap_redeem,
+        check_eels_explicit_arithmetic_capacity_cases,
+        check_eels_adversarial_child_returns_and_rollback,
+        check_eels_causal_donation_before_deposit,
+        check_eels_causal_donation_before_exit,
+        check_eels_causal_between_users_donation,
+        check_eels_causal_delegated_redeem,
+        check_eels_causal_delegated_withdraw,
+        check_eels_share_allowance_roles,
+        check_eels_zero_nonzero_flows,
+        check_eels_inbound_role_partitions,
+        check_eels_vault_self_receiver_exits,
+        check_eels_outbound_role_partitions,
+        check_eels_zero_receiver_deposit,
+        check_eels_inbound_action_returns,
+        check_eels_outbound_action_returns,
+        check_eels_donation_classification,
+        check_eels_a_u_zero_flows,
+        check_eels_supply_ceiling_flows,
+        check_eels_economics_cumulative_residue,
+        check_eels_economics_coalition_partition,
+        check_eels_attack_transcript_frozen,
+        check_eels_attack_economics_offset_comparator,
+    )
+    for check in checks:
+        before = len(FAILURES)
+        try:
+            check(run)
+        except RuntimeError as exc:
+            fail(f"{check.__name__}: {exc}")
+        if len(FAILURES) == before:
+            record_declared_cases(EELS_CASES_BY_CHECK.get(check.__name__, ()), "eels", run.side.name)
+        for index in range(before, len(FAILURES)):
+            FAILURES[index] = f"[{run.side.name}] {FAILURES[index]}"
+
+
+def measurements(blanc: Runner, reference: Runner) -> dict:
+    gas = {}
+    for case in MEASURED_CASES:
+        if case not in blanc.gas or case not in reference.gas:
+            fail(f"no successful gas figure for {case} on both sides")
+            continue
+        gas[case] = {"blanc": blanc.gas[case], "reference": reference.gas[case]}
+    return {
+        "schema": 1,
+        "runtimeBytes": {"blanc": len(blanc.side.code),
+                         "reference": len(reference.side.code)},
+        "gas": gas,
+        "note": "gas is the receipt's cumulativeGasUsed of the single transaction "
+                "per case on Jaune t8n at BPO2, both sides against the same "
+                "Blanc WETH; sizes are the installed runtimes. Measured, never "
+                "compared with the oracle.",
+    }
+
+
+def capture_controls() -> tuple[list[str], list[dict]]:
+    """Executed t8n controls for return-data observability, not parser mocks."""
+    controls = [
+        ("empty success", b"\x00", 1, b""),
+        ("one-byte success", bytes.fromhex("60ab60005360016000f3"), 1, b"\xab"),
+        ("dynamic 96-byte success", bytes.fromhex("60606000f3"), 1, bytes(96)),
+        ("empty revert", bytes.fromhex("60006000fd"), 0, b""),
+    ]
+    missed = []
+    records = []
+    for label, code, success, payload in controls:
+        run = Runner(Side("return-capture-control", code, lambda account: account,
+                          vault_allowance_key, SUPPLY_SLOT), b"")
+        try:
+            _, observed = run.capture(run.alloc(0, 0), "0x", max_return_bytes=96,
+                                      label=f"capture control {label}")
+        except RuntimeError as exc:
+            missed.append(f"{label}: recorder did not preserve the child observation: {exc}")
+            records.append({"label": label, "expected": {"success": success,
+                            "returndata": payload.hex()}, "error": str(exc), "verdict": "missed"})
+            continue
+        expected = {"success": success, "length": len(payload), "returndata": payload}
+        if observed != expected:
+            missed.append(f"{label}: recorder observed {observed!r}, expected {expected!r}")
+            verdict = "missed"
+        else:
+            verdict = "caught"
+        records.append({"label": label, "expected": {"success": success,
+                        "returndata": payload.hex()}, "observed": {
+                            "success": observed["success"], "length": observed["length"],
+                            "returndata": observed["returndata"].hex()}, "verdict": verdict})
+    oversized = Runner(Side("return-capture-control", bytes.fromhex("60806000f3"),
+                            lambda account: account, vault_allowance_key, SUPPLY_SLOT), b"")
+    try:
+        oversized.capture(oversized.alloc(0, 0), "0x", max_return_bytes=96,
+                          label="capture control oversized success")
+    except RuntimeError as exc:
+        if "above its 96-byte bound" not in str(exc):
+            missed.append(f"oversized success: wrong rejection {exc}")
+            verdict = "missed"
+        else:
+            verdict = "caught"
+        records.append({"label": "oversized success", "expectedError": "above its 96-byte bound",
+                        "observedError": str(exc), "verdict": verdict})
+    else:
+        missed.append("oversized success: recorder accepted a truncated payload")
+        records.append({"label": "oversized success", "expectedError": "above its 96-byte bound",
+                        "verdict": "missed"})
+    return missed, records
+
+
+# --- self-test: the gate must be able to fail ---
+
+PERTURBATIONS = [
+    ("the virtual-share offset", "deposit shares",
+     "O = 1000\n", "O = 1001\n"),
+    ("convertToShares' rounding", "deposit shares",
+     "return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))",
+     "return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))"),
+    ("previewWithdraw's rounding", "withdraw shares",
+     "return representable(ceil_div(a * denominator(supply, offset), numerator(assets, offset)))"
+     "\n\n\npreview_deposit",
+     "return representable(floor_div(a * denominator(supply, offset), numerator(assets, offset)))"
+     "\n\n\npreview_deposit"),
+    ("convertToAssets' rounding", "redeem weth[vault]",
+     "return representable(floor_div(s * numerator(assets, offset), denominator(supply, offset)))",
+     "return representable(ceil_div(s * numerator(assets, offset), denominator(supply, offset)))"),
+    ("previewMint's rounding", "mint weth[vault]",
+     "return representable(ceil_div(s * numerator(assets, offset), denominator(supply, offset)))",
+     "return representable(floor_div(s * numerator(assets, offset), denominator(supply, offset)))"),
+]
+
+CAUSAL_RETURN_PERTURBATIONS = (
+    ("stale recorder observation", "capture marker is 0, expected 1", "helper",
+     'code += push(layout.marker) + b"\\x54" + push(1) + b"\\x01"',
+     'code += push(layout.marker) + b"\\x54"'),
+    ("wrong observed return word", "observed return word differs", "checker",
+     'expected = expected_' 'value.to_bytes(32, "big")',
+     'expected = (expected_value + 1).to_bytes(32, "big")'),
+    ("wrong observed return length", "observed full return length 32, expected 31", "checker",
+     'if observed["length"] != 32:\n        fail(f"{label}: observed full return length {observed[\'length\']}, expected 32")',
+     'if observed["length"] != 31:\n        fail(f"{label}: observed full return length {observed[\'length\']}, expected 31")'),
+    ("wrong observed inner status", "observed inner success 1, expected 0", "checker",
+     'if observed["success"] != 1:\n        fail(f"{label}: observed inner success {observed[\'success\']}, expected 1")',
+     'if observed["success"] != 0:\n        fail(f"{label}: observed inner success {observed[\'success\']}, expected 0")'),
+    ("missing real recorder approval", "observed inner success 0, expected 1", "checker",
+     'abi("approve(address,uint256)", VAULT_ADDR, funding),\n            code=code',
+     'abi("approve(address,uint256)", VAULT_ADDR, 0),\n            code=code'),
+    ("missing real recorder funding", "observed inner success 0, expected 1", "checker",
+     'abi("transfer(address,uint256)", CAPTURE_ADDR, ' 'funding), 0, KEY),',
+     'abi("transfer(address,uint256)", CAPTURE_ADDR, 0), 0, KEY),'),
+    ("changed recorder code", "recorder code identity changed during causal history", "checker",
+     'try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,',
+     'prefix[-1]["alloc"][address(CAPTURE_ADDR)]["code"] = "0x00"\n    try:\n        approval, observed = run.causal_capture(\n            prefix[-1]["alloc"], WETH_ADDR,'),
+)
+
+CHILD_RETURN_PERTURBATIONS = (
+    ("foreign child executed-ID omission",
+     "foreign-child-deposit-false/jaune/blanc",
+     '("false", ' '"false"),\n    ("short-1", "short"),',
+     '("short-1", "short"),'),
+    ("foreign child long-return policy", "long-64-leading-one: expected success",
+     'return case_kind == "true" or (\n        case_kind == "long-64-leading-one" and side == ' '"reference")',
+     'return case_kind == "true" or (\n        case_kind == "long-64-leading-one" and side == "blanc")'),
+    ("foreign child rollback projection", "account content differs from its complete pre-state",
+     'return deep' 'copy(before)\n\n\ndef _foreign_child_case',
+     'expected = deepcopy(before)\n    storage = expected[address(VAULT_ADDR)]["storage"]\n    slot = word(run.side.supply_slot)\n    storage[slot] = word(storage_get(storage, run.side.supply_slot) + 1)\n    return expected\n\n\ndef _foreign_child_case'),
+    ("foreign child operational return word", "return bytes differ from expected operational word",
+     'expected_word = returned.' 'to_bytes(32, "big")',
+     'expected_word = (returned + 1).to_bytes(32, "big")'),
+)
+
+
+ROLLBACK_ORDER_PERTURBATIONS = (
+    ("rollback executed-ID omission",
+     "callback-and-child-failure-rollback/jaune/blanc",
+     "    check_exact_child_failure_rollback,\n",
+     "    # omitted by rollback-order coverage control\n"),
+    ("outbound event-order omission",
+     "event-order-withdraw/jaune/blanc",
+     "    check_outbound_event_order,\n",
+     "    # omitted by outbound-order coverage control\n"),
+    ("mint event-order omission",
+     "event-order-mint/jaune/blanc",
+     "    check_mint_event_order,\n",
+     "    # omitted by mint-order coverage control\n"),
+    ("quote-timing omission",
+     "quote-timing-pre-transfer/jaune/blanc",
+     "    check_pre_transfer_quotes,\n",
+     "    # omitted by quote-timing coverage control\n"),
+    ("exact rollback projection", "account content differs from its complete pre-state",
+     '    return deep' 'copy(before)\n\n\ndef _expect_oracle_revert',
+     '    expected = deepcopy(before)\n    expected[address(VAULT_ADDR)]["storage"]'
+     '[word(0)] = word(1)\n    return expected\n\n\ndef _expect_oracle_revert'),
+    ("rejected transaction distinction", "was not rejected before EVM execution",
+     'nonce=999' '999',
+     'nonce=_next_nonce(funding_alloc, KEY)'),
+    ("post-transfer quote confusion", "quote-timing deposit minted",
+     '    expect("quote-timing deposit minted", run.supply(vault) - seeded'
+     '_shares, pre)',
+     '    expect("quote-timing deposit minted", run.supply(vault) - seeded_shares, post)'),
+    ("outbound event words", "outbound-order withdraw: Withdraw words differ",
+     '    _withdraw_events("outbound-order withdraw", result, run.user, run.user,\n'
+     '                     run.user, want, shar' 'es)',
+     '    _withdraw_events("outbound-order withdraw", result, run.user, run.user,\n'
+     '                     run.user, want, shares + 1)'),
+)
+
+
+CAPACITY_PROVENANCE_PERTURBATIONS = (
+    ("a-u-zero omission",
+     "capacity-a-u-zero-flows/jaune/blanc",
+     "    check_a_u_zero_flows,\n",
+     "    # omitted by a-u-zero coverage control\n"),
+    ("ceiling omission",
+     "capacity-supply-ceiling-flows/jaune/blanc",
+     "    check_supply_ceiling_flows,\n",
+     "    # omitted by ceiling coverage control\n"),
+    ("provenance omission",
+     "composition-exact-child-provenance/jaune/blanc",
+     "    check_exact_child_provenance,\n",
+     "    # omitted by provenance coverage control\n"),
+    ("257-bit zero-mint expectation", "a-u-zero deposit minted",
+     '    expect("a-u-zero deposit minted", run.supply(vault), shar' 'es)',
+     '    expect("a-u-zero deposit minted", run.supply(vault), shar' 'es + 1)'),
+    ("max-capacity honesty", "ceiling maxDeposit",
+     '    _expect_capacity_word(run, "ceiling maxDeposit", world,\n'
+     '                          abi("maxDeposit(address)", run.user),\n'
+     '                          V.U if is_reference else 0)',
+     '    _expect_capacity_word(run, "ceiling maxDeposit", world,\n'
+     '                          abi("maxDeposit(address)", run.user),\n'
+     '                          V.U if is_reference else 1)'),
+    ("reference deviation-5 confusion", "ceiling reference deposit one",
+     '                                    minted=V.convert_to_shares(1, supply, supp' 'ly),',
+     '                                    minted=V.convert_to_shares(1, supply, supp' 'ly) + 1,'),
+    ("provenance decoy confusion", "decoy account content differs",
+     '        old = _normalized_account(before, DECOY_WETH_AD' 'DR)',
+     '        old = _normalized_account(before, WETH_AD' 'DR)'),
+    ("provenance caller confusion", "provenance deposit vault allowance spent",
+     '    expect("provenance deposit vault allowance spent",\n'
+     '           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),\n'
+     '           assets)',
+     '    expect("provenance deposit vault allowance spent",\n'
+     '           10 ** 18 - storage_get(weth, weth_allowance_key(run.user, VAULT_ADDR)),\n'
+     '           assets + 1)'),
+)
+
+
+def _matching_regression_line(output: str, category: str, needle: str) -> str | None:
+    """Return the exact named regression line, never an incidental ledger line."""
+    prefix = f"REGRESSION — vault differential: {category}"
+    return next((line for line in output.splitlines()
+                 if line.startswith(prefix) and needle in line), None)
+
+
+# --- legacy slice plan: the registered --self-test composition in eight
+# foreground slices (review F13). The patch strings below are the single
+# definition consumed both by the whole-campaign self_test and by the
+# registered --slice mode; the retired evidence driver transcribed them
+# from here, never the reverse.
+LEGACY_INLINE_SPECS = [
+    {
+        # A declaration alone is not coverage: remove the live Jaune
+        # capacity implementation from CHECKS while retaining the manifest.
+        "label": "arithmetic capacity executed-ID omission",
+        "needle": "arithmetic capacity coverage missing executed case/channel IDs",
+        "old": "    check_explicit_arithmetic_capacity_cases,\n    check_mint,",
+        "new": "    # omitted by coverage control\n    check_mint,",
+        "rot": "arithmetic coverage omission control no longer applies exactly once",
+        "passed": "arithmetic capacity implementation was omitted and the gate still passed",
+        "unreached": "arithmetic coverage omission did not reach its executed-ID audit",
+        "restore": "arithmetic coverage omission",
+        "caught": "arithmetic coverage omission",
+    },
+    {
+        # Event ordering has two independent frozen subcases. Removing the
+        # deposit-order check must leave its own ID missing even though the
+        # share-transfer event check still runs.
+        "label": "deposit event-order executed-ID omission",
+        "needle": "declared executed coverage missing case/channel IDs: event-order-deposit/jaune/blanc",
+        "old": "    check_deposit_event_order,\n",
+        "new": "    # omitted by deposit event-order coverage control\n",
+        "rot": "deposit event-order omission control no longer applies exactly once",
+        "passed": "the deposit event-order implementation was omitted and the gate still passed",
+        "unreached": "deposit event-order omission did not reach its own executed-ID audit",
+        "restore": "deposit event-order omission",
+        "caught": "deposit event-order omission",
+    },
+    {
+        # A flow/allowance history is also ledgered at subcase granularity.
+        # Changing only the infinite-allowance credit must fail while its
+        # finite sibling continues to execute.
+        "label": "infinite allowance executed-ID omission",
+        "needle": ("declared executed coverage missing case/channel IDs: "
+                   "supported-root-transfer-from-infinite/jaune/blanc"),
+        "old": '        9: (receiver, 100, "supported-root-transfer-from-infinite"),\n',
+        "new": '        9: (receiver, 100, "supported-root-transfer-from-finite"),\n',
+        "rot": "infinite allowance omission control no longer applies exactly once",
+        "passed": "the infinite-allowance credit was omitted and the gate still passed",
+        "unreached": "infinite-allowance omission did not reach its own executed-ID audit",
+        "restore": "infinite allowance omission",
+        "caught": "infinite allowance omission",
+    },
+    {
+        # A vault-to-vault WETH transfer is a self-transfer: it emits a
+        # Transfer log but leaves the vault's internal WETH row unchanged.
+        # Treating it as an ordinary A-a debit must fail this backed exit case.
+        "label": "vault self-receiver WETH balance",
+        "needle": "vault-self-receiver-withdraw: vault WETH changed under self-transfer",
+        "old": "        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before:\n",
+        "new": ("        if model.weth.get(VAULT_ADDR, 0) != vault_weth_before - "
+                '(amount if method == "withdraw" else returned):\n'),
+        "rot": "vault self-receiver balance control no longer applies exactly once",
+        "passed": "the ordinary self-receiver WETH debit was accepted",
+        "unreached": "the ordinary self-receiver WETH debit missed its semantic assertion",
+        "restore": "vault self-receiver balance mutation",
+        "caught": "vault self-receiver balance",
+    },
+    {
+        # The new outbound partition implementation must retain its own ID.
+        "label": "outbound role executed-ID omission",
+        "needle": "supported-root-withdraw-all-equal/jaune/blanc",
+        "category": "declared executed coverage missing case/channel IDs:",
+        "old": "    check_causal_outbound_role_partitions,\n",
+        "new": "    # omitted outbound role coverage control\n",
+        "rot": "outbound role omission control no longer applies exactly once",
+        "unreached": "outbound role omission did not reach its named executed-ID audit",
+        "restore": "outbound role omission",
+        "caught": "outbound role omission",
+    },
+    {
+        # A finite delegated exit must consume the exact approved allowance.
+        # Development note: changing the role-table approval from 3_000 to
+        # 2_999 was rejected as a falsifier because it changed both the real
+        # approve transaction and the oracle model. This mutation changes
+        # only the independently asserted expected post-spend allowance.
+        "label": "outbound finite delegated post-spend allowance",
+        "needle": ("outbound-role-withdraw-caller-receiver-distinct-owner withdraw: "
+                   "pair state post-spend share allowance is 1000, expected 1001"),
+        "old": "                        expected_post_spend_allowance = approval - spent_shares\n",
+        "new": "                        expected_post_spend_allowance = approval - spent_shares + 1\n",
+        "rot": "outbound finite allowance control no longer applies exactly once",
+        "unreached": "outbound finite allowance mutation missed pair-state/event assertion",
+        "restore": "outbound finite allowance mutation",
+        "caught": "outbound finite allowance",
+    },
+    {
+        # The independent EELS arithmetic leg must be independently required:
+        # drop only its existing invocation, keep the declaration and Jaune
+        # implementation intact.
+        "label": "EELS arithmetic capacity executed-ID omission",
+        "needle": "arithmetic capacity coverage missing executed case/channel IDs",
+        "old": "        check_eels_explicit_arithmetic_capacity_cases,\n",
+        "new": "        # omitted by EELS coverage control\n",
+        "rot": "EELS arithmetic coverage omission control no longer applies exactly once",
+        "passed": "the EELS arithmetic implementation was omitted and the gate still passed",
+        "unreached": "EELS arithmetic coverage omission did not reach its executed-ID audit",
+        "restore": "EELS arithmetic coverage omission",
+        "caught": "EELS arithmetic coverage omission",
+    },
+]
+
+# Slice plan: ("pert", index) reuses PERTURBATIONS[i]; ("inline", index)
+# reuses LEGACY_INLINE_SPECS[i]; "measurements", "lock", "inprocess" are
+# the remaining self_test blocks in campaign order.
+LEGACY_SLICES = {
+    "L1": [("pert", 0), ("pert", 1)],
+    "L2": [("pert", 2), ("pert", 3)],
+    "L3": [("pert", 4), ("inline", 0)],
+    "L4": [("inline", 1), ("inline", 2)],
+    "L5": [("inline", 3), ("inline", 4)],
+    "L6": [("inline", 5), "measurements"],
+    "L7": [("inline", 6), "lock"],
+    "L8": ["inprocess"],
+}
+
+_LEGACY_ALL = ([("pert", index) for index in range(len(PERTURBATIONS))]
+               + [("inline", 0), ("inline", 1), ("inline", 2), ("inline", 3),
+                  ("inline", 4), ("inline", 5), "inprocess", "measurements",
+                  ("inline", 6), "lock"])
+
+
+class _LegacyCampaign:
+    """One disposable sandbox plus the shared legacy block runners.
+
+    Both the whole-campaign self_test and the registered --slice mode run
+    their blocks through here, so a slice executes byte-identical gate runs
+    to the composition it reconstructs. Block methods return record dicts
+    carrying matchedDiagnosticLine; self_test strips that key to keep its
+    long-standing report schema, the slice mode keeps it.
+    """
+
+    def __init__(self, prefix: str):
+        self._prefix = prefix
+        self.missed: list[str] = []
+        self.caught: list[str] = []
+
+    def __enter__(self) -> _LegacyCampaign:
+        here = Path(__file__).resolve().parent
+        root = here.parent
+        self._tmp = tempfile.TemporaryDirectory(prefix=self._prefix)
+        sandbox = Path(self._tmp.name)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        self.sandbox = sandbox
+        self.model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
+        self.checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        self.matrix = sandbox / "scripts" / "prorata_weth_vault_differential_matrix.py"
+        self.manifest = sandbox / "scripts" / "prorata-weth-vault-differential-manifest.json"
+        self.measurements_file = (
+            sandbox / "scripts" / "prorata-weth-vault-reference-measurements.json")
+        self.lock_file = sandbox / "scripts" / "prorata-weth-vault-reference.json"
+        self.env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        self.original_oracle = self.model.read_text()
+        self.original_checker = self.checker.read_text()
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self._tmp.cleanup()
+        return False
+
+    def refresh_manifest(self) -> bool:
+        generated = subprocess.run([sys.executable, "-B", str(self.matrix), "--print"],
+                                   cwd=self.sandbox, capture_output=True, text=True, env=self.env)
+        if generated.returncode:
+            self.missed.append("coverage producer failed in disposable mutation tree: "
+                               + generated.stderr.strip())
+            return False
+        self.manifest.write_text(generated.stdout)
+        return True
+
+    def run_gate(self) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-B", str(self.checker)], cwd=self.sandbox,
+                              capture_output=True, text=True, env=self.env)
+
+    def require_green(self, label: str) -> subprocess.CompletedProcess[str] | None:
+        if not self.refresh_manifest():
+            return None
+        restored = self.run_gate()
+        if restored.returncode:
+            self.missed.append(f"{label}: removing only the mutation did not restore green")
+        return restored
+
+    def record(self, proc) -> dict:
+        return {"argv": proc.args, "cwd": str(self.sandbox),
+                "returncode": proc.returncode, "stdout": proc.stdout,
+                "stderr": proc.stderr}
+
+    def run_item(self, item) -> list[dict]:
+        """Run one slice item; returns its record dicts (empty on a miss)."""
+        if item == "measurements":
+            record = self.run_measurements()
+            return [record] if record is not None else []
+        if item == "lock":
+            record = self.run_lock()
+            return [record] if record is not None else []
+        if item == "inprocess":
+            return self.run_inprocess()
+        kind, index = item
+        if kind == "pert":
+            record = self.run_oracle_perturbation(index)
+        else:
+            record = self.run_inline(index)
+        return [record] if record is not None else []
+
+    def run_oracle_perturbation(self, index: int) -> dict | None:
+        label, needle, old, new = PERTURBATIONS[index]
+        return self._run_patch(
+            target=self.model, original=self.original_oracle,
+            label=label, needle=needle, old=old, new=new, category=None,
+            rot=(f"{label}: the perturbation no longer applies cleanly to the oracle; "
+                 "this self-test has rotted and must be repaired, not skipped"),
+            unreached=f"{label}: did not reach its intended semantic check ({needle!r})",
+            passed=f"{label}: perturbed, and the gate still passed",
+            restore=label, caught=label, require_header=True)
+
+    def run_inline(self, index: int) -> dict | None:
+        spec = LEGACY_INLINE_SPECS[index]
+        return self._run_patch(
+            target=self.checker, original=self.original_checker,
+            label=spec["label"], needle=spec["needle"], old=spec["old"], new=spec["new"],
+            category=spec.get("category"), rot=spec["rot"], unreached=spec["unreached"],
+            passed=spec.get("passed"), restore=spec["restore"], caught=spec["caught"],
+            require_header=False)
+
+    def _run_patch(self, *, target: Path, original: str, label: str, needle: str,
+                   old: str, new: str, category: str | None, rot: str, unreached: str,
+                   passed: str | None, restore: str, caught: str,
+                   require_header: bool) -> dict | None:
+        if original.count(old) != 1:
+            self.missed.append(rot)
+            return None
+        target.write_text(original.replace(old, new, 1))
+        if not self.refresh_manifest():
+            target.write_text(original)
+            return None
+        result = self.run_gate()
+        output = result.stdout + result.stderr
+        if category is not None:
+            diagnostic = _matching_regression_line(output, category, needle)
+        else:
+            diagnostic = next((line for line in output.splitlines() if needle in line), None)
+        header_ok = not require_header or "REGRESSION — vault differential:" in output
+        if result.returncode == 0:
+            self.missed.append(passed if passed is not None else unreached)
+        elif diagnostic is None or not header_ok:
+            self.missed.append(unreached)
+        target.write_text(original)
+        restored = self.require_green(restore)
+        if (restored is not None and restored.returncode == 0
+                and result.returncode != 0 and diagnostic is not None and header_ok):
+            self.caught.append(f"{caught}: {diagnostic}; removal restored green")
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(result), "restored": self.record(restored)}
+        return None
+
+    def run_inprocess(self) -> list[dict]:
+        """Valid-call, receipt/rollback falsifiers, and capture probes (L8)."""
+        records: list[dict] = []
+        weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+        run = Runner(blanc_side(), weth_code)
+        FAILURES.clear()
+        _must_revert(run, "a genuinely valid deposit",
+                     abi("deposit(uint256,address)", 10 ** 6, run.user))
+        expected_valid_revert = "a genuinely valid deposit: the call status is 1, but the statement requires a revert"
+        valid_diagnostics = list(FAILURES)
+        if valid_diagnostics != [expected_valid_revert]:
+            self.missed.append("the valid-call-as-revert control did not report its exact successful-status diagnostic")
+        records.append({"label": "valid call as revert", "expectedDiagnostic": expected_valid_revert,
+                        "diagnostics": valid_diagnostics,
+                        "verdict": "caught" if valid_diagnostics == [expected_valid_revert] else "missed"})
+        FAILURES.clear()
+        # Receipt and rollback witnesses are deliberately checked apart from
+        # the real valid-call probe above. These synthetic t8n-shaped rows
+        # exercise the exact false-positive paths that used to make an
+        # unexecuted rejection or a receiptless result look like an EVM revert.
+        before = run.alloc(10 ** 18, 10 ** 18)
+
+        def caught(label: str, result: dict) -> None:
+            _check_revert_evidence(label, before, result)
+            if not FAILURES:
+                self.missed.append(f"{label}: bad revert evidence passed")
+            records.append({"label": label, "input": result,
+                            "diagnostics": list(FAILURES),
+                            "verdict": "caught" if FAILURES else "missed"})
+            FAILURES.clear()
+
+        caught("a pre-execution rejection", {"result": {"rejected": ["bad tx"], "receipts": []},
+                                              "alloc": before})
+        caught("a missing receipt", {"result": {"receipts": []}, "alloc": before})
+        changed = deepcopy(before)
+        changed[address(WETH_ADDR)]["storage"][word(VAULT_ADDR)] = word(1)
+        caught("a rollback leak", {"result": {"receipts": [{"status": "0x0", "logs": []}]},
+                                     "alloc": changed})
+        caught("a reverting log", {"result": {"receipts": [{"status": "0x0", "logs": [{}]}]},
+                                    "alloc": before})
+        capture_missed, capture_records = capture_controls()
+        self.missed.extend(capture_missed)
+        records.extend(capture_records)
+        return records
+
+    def run_measurements(self) -> dict | None:
+        label = "measurement identity"
+        needle = "is not what this run measures"
+        if not self.measurements_file.is_file():
+            self.missed.append("no committed measurements file to perturb")
+            return None
+        saved = self.measurements_file.read_text()
+        self.require_green("measurement baseline")
+        perturbed = json.loads(saved)
+        perturbed["runtimeBytes"]["reference"] += 1
+        self.measurements_file.write_text(json.dumps(perturbed, indent=2, sort_keys=True) + "\n")
+        result = self.run_gate()
+        output = result.stdout + result.stderr
+        if result.returncode == 0:
+            self.missed.append("the committed measurements were perturbed, and the gate still passed")
+        elif needle not in output:
+            self.missed.append("the perturbed measurements did not reach its identity check")
+        else:
+            diagnostic = next(line for line in output.splitlines() if needle in line)
+            self.caught.append(f"measurement identity: {diagnostic}; removal restored green")
+        self.measurements_file.write_text(saved)
+        restored = self.require_green("measurement mutation")
+        if (restored is not None and restored.returncode == 0 and result.returncode != 0
+                and needle in output):
+            diagnostic = next(line for line in output.splitlines() if needle in line)
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(result), "restored": self.record(restored)}
+        return None
+
+    def run_lock(self) -> dict | None:
+        label = "reference runtime identity"
+        needle = "constructor-patched reference runtime"
+        saved_lock = self.lock_file.read_text()
+        lock = json.loads(saved_lock)
+        digest = lock["artifacts"]["configuredRuntime"]["sha256"]
+        lock["artifacts"]["configuredRuntime"]["sha256"] = digest[:-1] + ("0" if digest[-1] != "0" else "1")
+        self.lock_file.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+        lock_result = None
+        lock_output = ""
+        if self.refresh_manifest():
+            lock_result = self.run_gate()
+            lock_output = lock_result.stdout + lock_result.stderr
+            if lock_result.returncode == 0:
+                self.missed.append("the locked reference runtime identity was perturbed, and the gate still passed")
+            elif needle not in lock_output:
+                self.missed.append("the perturbed runtime lock did not reach its identity check")
+            else:
+                diagnostic = next(line for line in lock_output.splitlines() if needle in line)
+                self.caught.append(f"reference runtime identity: {diagnostic}; removal restored green")
+        self.lock_file.write_text(saved_lock)
+        restored = self.require_green("reference runtime lock mutation")
+        if (lock_result is not None and restored is not None and restored.returncode == 0
+                and lock_result.returncode != 0 and needle in lock_output):
+            diagnostic = next(line for line in lock_output.splitlines() if needle in line)
+            return {"label": label, "expectedDiagnostic": needle,
+                    "matchedDiagnosticLine": diagnostic,
+                    "mutant": self.record(lock_result), "restored": self.record(restored)}
+        return None
+
+
+def self_test(report_path: Path | None = None) -> int:
+    """Perturb disposable copies and require targeted gate failures.
+
+    A differential that has not been shown to fail is not evidence.  This is
+    not a hypothetical: the first draft of these cases all divided evenly, so
+    every rounding direction could be flipped without the gate noticing, and
+    the revert check compared the receipt status against a spelling the runner
+    never emits.  Both were found here.
+    """
+    control_records: list[dict] = []
+    with _LegacyCampaign("prorata-weth-vault-differential-mutant-") as campaign:
+        for item in _LEGACY_ALL:
+            for record in campaign.run_item(item):
+                control_records.append({key: value for key, value in record.items()
+                                        if key != "matchedDiagnosticLine"})
+        missed = list(campaign.missed)
+        caught_controls = list(campaign.caught)
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — vault differential self-test: {message}")
+        return 1
+    for control in caught_controls:
+        print(f"OK — vault differential self-test control: {control}")
+    if report_path is not None:
+        report_path.write_text(json.dumps({"schema": 1, "controls": control_records},
+                                          indent=2, sort_keys=True) + "\n")
+    else:
+        print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
+    print(f"OK — vault differential self-test: {len(PERTURBATIONS)} oracle "
+          f"perturbations, Jaune and EELS arithmetic executed-ID omissions, one valid-call-as-revert "
+          f"probe, four receipt/rollback falsifiers, five executed return-capture controls, a perturbed "
+          f"measurements file and a perturbed reference identity are all caught")
+    return 0
+
+
+def legacy_slice_self_test(name: str, report_path: Path | None = None) -> int:
+    """Run one registered foreground slice (L1..L8) of the legacy campaign.
+
+    The legacy campaign needs ~29 full-gate runs, which does not fit one
+    foreground window; each slice re-executes its campaign blocks through
+    the same shared runners as the whole composition, so reassembling the
+    eight slice reports in campaign order reproduces it.
+    """
+    if name not in LEGACY_SLICES:
+        print(f"unknown slice {name}; want one of {sorted(LEGACY_SLICES)}")
+        return 2
+    items = LEGACY_SLICES[name]
+    controls: list[dict] = []
+    baseline = None
+    with _LegacyCampaign("prorata-legacy-slice-mutant-") as campaign:
+        if items != ["inprocess"]:
+            base = campaign.run_gate()
+            baseline = campaign.record(base)
+            if base.returncode:
+                campaign.missed.append(f"slice {name} baseline is not green before mutations")
+            else:
+                for item in items:
+                    controls.extend(campaign.run_item(item))
+        else:
+            controls.extend(campaign.run_inprocess())
+        missed = list(campaign.missed)
+    if report_path is not None:
+        report_path.write_text(json.dumps(
+            {"schema": 1, "slice": name, "baseline": baseline,
+             "controls": controls, "missed": missed},
+            indent=2, sort_keys=True) + "\n")
+    else:
+        print("SELFTEST-CONTROLS-JSON omitted; pass --self-test-report PATH for the full records")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — vault differential self-test slice {name}: {message}")
+        return 1
+    for control in controls:
+        line = control.get("matchedDiagnosticLine", control.get("verdict", "caught"))
+        print(f"OK — vault differential self-test slice {name} control: "
+              f"{control['label']}: {line}; removal restored green")
+    print(f"OK — vault differential self-test slice {name}: "
+          f"{len(controls)} records caught")
+    return 0
+
+
+def causal_return_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test the causal recorder's observation and setup controls."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-causal-return-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        helper = sandbox / "scripts" / "evm_return_capture.py"
+        originals = {"checker": checker.read_text(), "helper": helper.read_text()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--causal-return-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("causal-return baseline is not green before mutations")
+        for label, needle, file_key, old, new in CAUSAL_RETURN_PERTURBATIONS:
+            path = checker if file_key == "checker" else helper
+            original = originals[file_key]
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — causal return differential:")
+                and needle in line
+            ), None)
+            path.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--causal-return-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--causal-return-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--causal-return-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — causal return self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — causal return self-test control: {record['label']}")
+    print(f"OK — causal return self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+def child_return_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test cross-flow foreign-child outcomes and rollback checks."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-child-return-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--child-return-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("child-return baseline is not green before mutations")
+        for label, needle, old, new in CHILD_RETURN_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            required_prefix = "REGRESSION — child return differential:"
+            if label == "foreign child executed-ID omission":
+                required_prefix += " child return executed coverage missing case/channel IDs:"
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith(required_prefix)
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--child-return-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--child-return-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--child-return-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — child return self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — child return self-test control: {record['label']}")
+    print(f"OK — child return self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+def rollback_order_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test exact-pair rollback, outbound order, and quote timing."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-rollback-order-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--rollback-order-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("rollback-order baseline is not green before mutations")
+        for label, needle, old, new in ROLLBACK_ORDER_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — rollback order differential:")
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--rollback-order-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--rollback-order-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--rollback-order-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — rollback order self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — rollback order self-test control: {record['label']}")
+    print(f"OK — rollback order self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+COLLISION_DONATION_CASES = (
+    "composition-collision-premise-pairs",
+    "donation-classification",
+)
+
+COLLISION_DONATION_CHECK_NAMES = frozenset({
+    "check_collision_premise_pairs",
+    "check_donation_classification",
+})
+
+COLLISION_DONATION_PERTURBATIONS = (
+    ("collision-check omission",
+     "composition-collision-premise-pairs/jaune/blanc",
+     "checker",
+     "    check_collision_premise_pairs,\n",
+     "    # omitted by collision coverage control\n"),
+    ("donation-check omission",
+     "donation-classification/jaune/blanc",
+     "checker",
+     "    check_donation_classification,\n",
+     "    # omitted by donation coverage control\n"),
+    ("pair-set drop",
+     "collision-premise pair set differs",
+     "checker",
+     "        (user_b, user_a),  # B-approved cell spent by the A transferFrom\n",
+     ""),
+    ("allowance key-order confusion",
+     "collision-premise binding",
+     "checker",
+     "        cell = weth_allowance_key(owner, spender)\n",
+     "        cell = weth_allowance_key(spender, owner)\n"),
+    ("evaluator weakening",
+     "accepted a synthetic colliding pair set",
+     "checker",
+     "    return collisions\n",
+     "    return []\n"),
+    ("donation mint confusion",
+     "donation mints no shares",
+     "oracle",
+     '    def donate(self, giver: int, amount: int) -> None:\n'
+     '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+     "        self._weth_move(giver, self.vault_address, amount)\n",
+     '    def donate(self, giver: int, amount: int) -> None:\n'
+     '        """A third-party WETH transfer to the vault.  No share is minted."""\n'
+     "        self._weth_move(giver, self.vault_address, amount)\n"
+     "        self._mint(giver, amount)\n"),
+)
+
+
+def collision_donation_only() -> int:
+    """Run the collision/donation checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — collision donation differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in COLLISION_DONATION_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in COLLISION_DONATION_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("collision donation executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — collision donation differential: {message}")
+        return 1
+    print(f"OK — collision donation differential: {len(expected)} case/side observations")
+    return 0
+
+
+def collision_donation_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test the collision evaluator and donation classifier."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-collision-donation-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
+        originals = {"checker": checker.read_text(), "oracle": model.read_text()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--collision-donation-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("collision-donation baseline is not green before mutations")
+        for label, needle, file_key, old, new in COLLISION_DONATION_PERTURBATIONS:
+            path = checker if file_key == "checker" else model
+            original = originals[file_key]
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — collision donation differential:")
+                and needle in line
+            ), None)
+            path.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--collision-donation-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--collision-donation-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--collision-donation-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — collision donation self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — collision donation self-test control: {record['label']}")
+    print(f"OK — collision donation self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+DISPOSITION_PERTURBATIONS = (
+    # Dropping a successor must leave the superseded obligation visibly
+    # uncovered rather than quietly discharged by a name that no longer runs.
+    ("dropped superseded successor",
+     "superseded case 'transfer-from-infinite' names successor "
+     "'supported-root-transfer-from-infinite', which no channel implements",
+     "checker",
+     '    "supported-root-transfer-from-infinite": ("jaune", "eels"),\n',
+     ""),
+    # A case cannot be both executed and excused; the partition is exact.
+    ("double disposition",
+     "has 2 dispositions (implemented, unimplemented)",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "supported-root-transfer-self": "double '
+     'disposition control",\n'),
+    # An unimplemented case must be declared, not invented in the excuse list.
+    ("undeclared disposition name",
+     "disposition names undeclared case 'not-a-declared-case'",
+     "matrix",
+     'UNIMPLEMENTED_CASES = {\n',
+     'UNIMPLEMENTED_CASES = {\n    "not-a-declared-case": "undeclared '
+     'disposition control",\n'),
+)
+
+
+def disposition_self_test(report_path: Path | None = None) -> int:
+    """Require the declared-case disposition partition to be load-bearing.
+
+    The partition is what stops the declaration accumulating names that are
+    never credited and never missed.  A rule that cannot fail is decoration,
+    so each mutation below removes exactly one of its guarantees and must be
+    caught at its own named diagnostic.
+    """
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-disposition-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        matrix = sandbox / "scripts" / "prorata_weth_vault_differential_matrix.py"
+        manifest = sandbox / "scripts" / "prorata-weth-vault-differential-manifest.json"
+        files = {"checker": checker, "matrix": matrix}
+        originals = {name: path.read_text() for name, path in files.items()}
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def refresh_manifest() -> bool:
+            generated = subprocess.run([sys.executable, "-B", str(matrix), "--print"],
+                                       cwd=sandbox, capture_output=True, text=True, env=env)
+            if generated.returncode:
+                return False
+            manifest.write_text(generated.stdout)
+            return True
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
+                                  capture_output=True, text=True, env=env)
+
+        refresh_manifest()
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("disposition baseline is not green before mutations")
+        for label, needle, target, old, new in DISPOSITION_PERTURBATIONS:
+            path = files[target]
+            if originals[target].count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            path.write_text(originals[target].replace(old, new, 1))
+            # The producer is regenerated in the mutant tree so the failure is
+            # the disposition rule, never a stale manifest hash.
+            refresh_manifest()
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((line for line in output.splitlines()
+                               if line.startswith("REGRESSION — vault differential:")
+                               and needle in line), None)
+            path.write_text(originals[target])
+            refresh_manifest()
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "mutatedFile": target,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker)],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker)],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker)],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — disposition self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — disposition self-test control: {record['label']}")
+    print(f"OK — disposition self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+def registered_self_test(report_path: Path | None = None) -> int:
+    """Compose the legacy, causal-return, child-return, disposition, rollback-order,
+    capacity-provenance, and collision-donation controls."""
+    if report_path is None:
+        legacy_status = self_test(None)
+        causal_status = causal_return_self_test(None)
+        child_status = child_return_self_test(None)
+        disposition_status = disposition_self_test(None)
+        rollback_order_status = rollback_order_self_test(None)
+        capacity_provenance_status = capacity_provenance_self_test(None)
+        collision_donation_status = collision_donation_self_test(None)
+        return 1 if (legacy_status or causal_status or child_status
+                     or disposition_status or rollback_order_status
+                     or capacity_provenance_status
+                     or collision_donation_status) else 0
+    with tempfile.TemporaryDirectory(prefix="prorata-vault-combined-selftest-") as tmp:
+        legacy_path = Path(tmp) / "legacy.json"
+        causal_path = Path(tmp) / "causal-return.json"
+        child_path = Path(tmp) / "child-return.json"
+        disposition_path = Path(tmp) / "disposition.json"
+        rollback_order_path = Path(tmp) / "rollback-order.json"
+        capacity_provenance_path = Path(tmp) / "capacity-provenance.json"
+        collision_donation_path = Path(tmp) / "collision-donation.json"
+        legacy_status = self_test(legacy_path)
+        causal_status = causal_return_self_test(causal_path)
+        child_status = child_return_self_test(child_path)
+        disposition_status = disposition_self_test(disposition_path)
+        rollback_order_status = rollback_order_self_test(rollback_order_path)
+        capacity_provenance_status = capacity_provenance_self_test(capacity_provenance_path)
+        collision_donation_status = collision_donation_self_test(collision_donation_path)
+        try:
+            combined = {
+                "schema": 2,
+                "legacy": json.loads(legacy_path.read_text()),
+                "causalReturn": json.loads(causal_path.read_text()),
+                "childReturn": json.loads(child_path.read_text()),
+                "disposition": json.loads(disposition_path.read_text()),
+                "rollbackOrder": json.loads(rollback_order_path.read_text()),
+                "capacityProvenance": json.loads(capacity_provenance_path.read_text()),
+                "collisionDonation": json.loads(collision_donation_path.read_text()),
+                "returncodes": {"legacy": legacy_status, "causalReturn": causal_status,
+                                "childReturn": child_status,
+                                "disposition": disposition_status,
+                                "rollbackOrder": rollback_order_status,
+                                "capacityProvenance": capacity_provenance_status,
+                                "collisionDonation": collision_donation_status},
+            }
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"REGRESSION — vault differential self-test: combined report unavailable: {exc}")
+            return 1
+        report_path.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
+    return 1 if (legacy_status or causal_status or child_status
+                 or disposition_status or rollback_order_status
+                 or capacity_provenance_status
+                 or collision_donation_status) else 0
+
+
+def causal_return_only() -> int:
+    """Run the fixed-recorder cases on both compiled sides for control loops."""
+    if not JAUNE.is_file():
+        print(f"REGRESSION — causal return differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        check_causal_inbound_action_returns(run)
+        check_causal_outbound_action_returns(run)
+    expected = {
+        (case, "jaune", side)
+        for case in EXECUTED_CASE_CHANNELS
+        if case.startswith("causal-return-")
+        for side in ("blanc", "reference")
+    }
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("causal return executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — causal return differential: {message}")
+        return 1
+    print(f"OK — causal return differential: {len(expected)} case/side observations")
+    return 0
+
+
+def child_return_only() -> int:
+    """Run every foreign-child case on Jaune and pinned EELS for controls."""
+    if not JAUNE.is_file():
+        print(f"REGRESSION — child return differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        before = len(FAILURES)
+        check_adversarial_child_returns_and_rollback(run)
+        check_eels_adversarial_child_returns_and_rollback(run)
+        for index in range(before, len(FAILURES)):
+            FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    cases = tuple(case for case in EXECUTED_CASE_CHANNELS
+                  if case.startswith("foreign-child-")
+                  and case != "foreign-child-canonical-return-and-rollback")
+    expected = {(case, channel, side) for case in cases
+                for channel in ("jaune", "eels")
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("child return executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — child return differential: {message}")
+        return 1
+    print(f"OK — child return differential: {len(expected)} case/channel/side observations")
+    return 0
+
+
+ROLLBACK_ORDER_CASES = (
+    "callback-and-child-failure-rollback",
+    "event-order-mint",
+    "event-order-withdraw",
+    "event-order-redeem",
+    "quote-timing-pre-transfer",
+)
+
+ROLLBACK_ORDER_CHECK_NAMES = frozenset({
+    "check_exact_child_failure_rollback",
+    "check_mint_event_order",
+    "check_outbound_event_order",
+    "check_pre_transfer_quotes",
+})
+
+
+def rollback_order_only() -> int:
+    """Run the rollback/order checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — rollback order differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in ROLLBACK_ORDER_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in ROLLBACK_ORDER_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("rollback order executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — rollback order differential: {message}")
+        return 1
+    print(f"OK — rollback order differential: {len(expected)} case/side observations")
+    return 0
+
+
+CAPACITY_PROVENANCE_CASES = (
+    "capacity-a-u-zero-flows",
+    "capacity-supply-ceiling-flows",
+    "composition-exact-child-provenance",
+)
+
+CAPACITY_PROVENANCE_CHECK_NAMES = frozenset({
+    "check_a_u_zero_flows",
+    "check_supply_ceiling_flows",
+    "check_exact_child_provenance",
+})
+
+
+def capacity_provenance_only() -> int:
+    """Run the capacity/provenance checks on both compiled sides for controls.
+
+    The expected IDs are a static list, while the checks actually run are
+    filtered out of the live ``CHECKS``: omitting an implementation from
+    ``CHECKS`` therefore leaves its static ID missing, exactly as in the
+    full gate.
+    """
+    if not JAUNE.is_file():
+        print(f"REGRESSION — capacity provenance differential: Jaune runner missing at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    sides = (blanc_side(), reference_side(weth_code))
+    for side in sides:
+        if side is None:
+            continue
+        run = Runner(side, weth_code)
+        for check in CHECKS:
+            if check.__name__ not in CAPACITY_PROVENANCE_CHECK_NAMES:
+                continue
+            before = len(FAILURES)
+            try:
+                check(run)
+            except RuntimeError as exc:
+                fail(f"{check.__name__}: {exc}")
+            if len(FAILURES) == before:
+                record_declared_cases(JAUNE_CASES_BY_CHECK.get(check.__name__, ()),
+                                      "jaune", side.name)
+            for index in range(before, len(FAILURES)):
+                FAILURES[index] = f"[{side.name}] {FAILURES[index]}"
+    expected = {(case, "jaune", side) for case in CAPACITY_PROVENANCE_CASES
+                for side in ("blanc", "reference")}
+    missing = sorted(expected - EXECUTED_DECLARED_CASES)
+    if missing:
+        fail("capacity provenance executed coverage missing case/channel IDs: "
+             + ", ".join(f"{case}/{channel}/{side}" for case, channel, side in missing))
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — capacity provenance differential: {message}")
+        return 1
+    print(f"OK — capacity provenance differential: {len(expected)} case/side observations")
+    return 0
+
+
+
+def capacity_provenance_self_test(report_path: Path | None = None) -> int:
+    """Mutation-test capacity extremes and exact-child provenance."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    missed: list[str] = []
+    records: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="prorata-capacity-provenance-mutant-") as tmp:
+        sandbox = Path(tmp)
+        shutil.copytree(here, sandbox / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
+        (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
+        checker = sandbox / "scripts" / "check-prorata-weth-vault-differential.py"
+        original = checker.read_text()
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+        def run_target() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, "-B", str(checker), "--capacity-provenance-only"],
+                cwd=sandbox, capture_output=True, text=True, env=env)
+
+        baseline = run_target()
+        if baseline.returncode:
+            missed.append("capacity-provenance baseline is not green before mutations")
+        for label, needle, old, new in CAPACITY_PROVENANCE_PERTURBATIONS:
+            if original.count(old) != 1:
+                missed.append(f"{label}: mutation no longer applies exactly once")
+                continue
+            checker.write_text(original.replace(old, new, 1))
+            mutant = run_target()
+            output = mutant.stdout + mutant.stderr
+            diagnostic = next((
+                line for line in output.splitlines()
+                if line.startswith("REGRESSION — capacity provenance differential:")
+                and needle in line
+            ), None)
+            checker.write_text(original)
+            restored = run_target()
+            if mutant.returncode == 0 or diagnostic is None:
+                missed.append(f"{label}: mutant did not reach named diagnostic {needle!r}")
+            if restored.returncode:
+                missed.append(f"{label}: removing only the mutation did not restore green")
+            records.append({
+                "label": label, "expectedDiagnostic": needle,
+                "matchedDiagnosticLine": diagnostic,
+                "mutant": {"argv": [sys.executable, "-B", str(checker),
+                                     "--capacity-provenance-only"],
+                           "cwd": str(sandbox), "returncode": mutant.returncode,
+                           "stdout": mutant.stdout, "stderr": mutant.stderr},
+                "restored": {"argv": [sys.executable, "-B", str(checker),
+                                       "--capacity-provenance-only"],
+                             "cwd": str(sandbox), "returncode": restored.returncode,
+                             "stdout": restored.stdout, "stderr": restored.stderr},
+            })
+        if report_path is not None:
+            report_path.write_text(json.dumps({
+                "schema": 1,
+                "baseline": {"argv": [sys.executable, "-B", str(checker),
+                                      "--capacity-provenance-only"],
+                             "cwd": str(sandbox), "returncode": baseline.returncode,
+                             "stdout": baseline.stdout, "stderr": baseline.stderr},
+                "controls": records, "missed": missed,
+            }, indent=2, sort_keys=True) + "\n")
+    if missed:
+        for message in missed:
+            print(f"REGRESSION — capacity provenance self-test: {message}")
+        return 1
+    for record in records:
+        print(f"OK — capacity provenance self-test control: {record['label']}")
+    print(f"OK — capacity provenance self-test: {len(records)} mutations rejected and restored")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    for error in validate_manifest():
+        fail(error)
+    # The disposition partition reads only the static declaration, so it is
+    # settled before any execution: a declaration that cannot account for its
+    # own cases must not be able to spend twenty seconds looking healthy.
+    validate_case_disposition()
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — vault differential: {message}")
+        return 1
+    if not JAUNE.exists():
+        print("REGRESSION — vault differential: the Jaune runner is not built "
+              f"at {JAUNE}")
+        return 2
+    weth_code = _literal("Blanc/WethCode.lean", "wethCode")
+    blanc = run_side(blanc_side(), weth_code)
+    reference_runtime = reference_side(weth_code)
+    reference = run_side(reference_runtime, weth_code) if reference_runtime else None
+    run_eels_side(blanc)
+    if reference is not None:
+        run_eels_side(reference)
+    validate_arithmetic_capacity_coverage()
+    validate_declared_case_coverage()
+    verify_wrap_proof(blanc)
+    measured = measurements(blanc, reference) if reference else None
+    if measured is not None and not FAILURES:
+        text = json.dumps(measured, indent=2, sort_keys=True) + "\n"
+        if "--write-measurements" in argv:
+            MEASUREMENTS.write_text(text)
+        elif not MEASUREMENTS.is_file():
+            fail(f"{MEASUREMENTS.name} is missing; regenerate with --write-measurements")
+        elif MEASUREMENTS.read_text() != text:
+            fail(f"{MEASUREMENTS.name} is not what this run measures; a stale or "
+                 f"hand-edited measurement fails, regenerate with --write-measurements")
+    if FAILURES:
+        for message in FAILURES:
+            print(f"REGRESSION — vault differential: {message}")
+        return 1
+    assert reference is not None and measured is not None
+    print("  arithmetic capacity executed IDs: " + ", ".join(
+        f"{case}/{channel}/{side}"
+        for case, channel, side in sorted(EXECUTED_ARITHMETIC_CAPACITY)))
+    print("  declared executed IDs: " + ", ".join(
+        f"{case}/{channel}/{side}"
+        for case, channel, side in sorted(EXECUTED_DECLARED_CASES)))
+    print("  converter overflow returndata: Blanc " + BLANC_EMPTY_REVERT.hex()
+          + "; reference " + REFERENCE_MULDIV_OVERFLOW.hex()
+          + " (Jaune and EELS)")
+    for case, row in measured["gas"].items():
+        print(f"  gas {case}: blanc {row['blanc']} reference {row['reference']}")
+    print(f"  declared case disposition: {len(CASES)} declared, "
+          f"{len(EXECUTED_CASE_CHANNELS)} implemented here, "
+          f"{len(SUPERSEDED_CASES)} superseded by named executed successors, "
+          f"{len(UNIMPLEMENTED_CASES)} recorded unimplemented: "
+          + ", ".join(sorted(UNIMPLEMENTED_CASES)))
+    print(f"OK — vault differential: {len(CHECKS)} Jaune check groups and an "
+          f"independent EELS matrix for all 25 selectors on each compiled side; "
+          f"the {len(blanc.side.code)}-byte runtime and {len(reference.side.code)}-byte "
+          f"constructor-patched reference agree with the "
+          f"independent oracle; {len(measured['gas'])} gas rows match "
+          f"{MEASUREMENTS.name}. Bounded selector evidence only: the declared "
+          f"SF callback, rollback, capacity, provenance, and economics cases remain "
+          f"required and this is not G8 acceptance")
+    return 0
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if "--child-return-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(child_return_self_test(report))
+    if "--child-return-only" in args:
+        raise SystemExit(child_return_only())
+    if "--disposition-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(disposition_self_test(report))
+    if "--causal-return-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(causal_return_self_test(report))
+    if "--causal-return-only" in args:
+        raise SystemExit(causal_return_only())
+    if "--rollback-order-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(rollback_order_self_test(report))
+    if "--rollback-order-only" in args:
+        raise SystemExit(rollback_order_only())
+    if "--capacity-provenance-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(capacity_provenance_self_test(report))
+    if "--capacity-provenance-only" in args:
+        raise SystemExit(capacity_provenance_only())
+    if "--collision-donation-self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        raise SystemExit(collision_donation_self_test(report))
+    if "--collision-donation-only" in args:
+        raise SystemExit(collision_donation_only())
+    if "--slice" in args and "--self-test" not in args:
+        raise SystemExit("--slice requires --self-test")
+    if "--self-test" in args:
+        report = None
+        if "--self-test-report" in args:
+            index = args.index("--self-test-report")
+            if index + 1 >= len(args):
+                raise SystemExit("--self-test-report requires a path")
+            report = Path(args[index + 1])
+        if "--slice" in args:
+            index = args.index("--slice")
+            if index + 1 >= len(args):
+                raise SystemExit("--slice requires a slice name (L1..L8)")
+            raise SystemExit(legacy_slice_self_test(args[index + 1], report))
+        raise SystemExit(registered_self_test(report))
+    raise SystemExit(main(args))

@@ -46,6 +46,23 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- For the loose gas-free walk prefix reaching an intermediate cut of a
+  successful source run, with source-path accumulation, use
+  [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
+  `Func.RunPrefix` ends at an explicit target path, state, and body rather
+  than a terminal result, and every crossed instruction carries a
+  `Ninst.gasFree` certificate. `RunPrefix.line` builds a prefix across a
+  gas-free line, `RunPrefix.trans` composes prefixes, `Func.Run.of_prefix`
+  splices a completion run back onto a prefix, and the `of_run_prepend`,
+  `of_run_branch`, and `of_run_call` twins expose the prefix alongside the
+  corresponding elimination. Paths accumulate exactly as in
+  `Func.sourceSites`, with the extended path in the premise so elimination
+  never reduces paths. A prefix into a line is unconstructible without that
+  line's gas-free certificate. Registered triggers were checked: the
+  `implication-premise:Func.Run` tag advises splitting a run hypothesis
+  rather than constructing or consuming a prefix, and no goal-head or
+  goal-shape trigger names the prefix conclusion, so discovery remains in
+  this registry.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
@@ -61,6 +78,28 @@ registry has identified the likely vocabulary.
   input state and carries unchanged memory across address warming.
 - The common `fsig +++ dispatch` entry preserves logs and output by
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
+- Recover a known selected body from a sorted tree dispatcher with
+  `reach_of_dispatch` for the inline-revert form or `reach_of_dispatchWith`
+  for the indexed-fallback form in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
+  exact selector/list membership and return the selected body with the
+  selector removed while preserving world state and memory; neither asserts
+  that an execution exists.  `reach_of_dispatchWith_logs` is the same
+  factorization with the dispatcher's log and output silence carried to the
+  selected body.  `reach_of_dispatch_logs` in
+  [`Blanc/ReachDispatchPrefix.lean`](../Blanc/ReachDispatchPrefix.lean) is the
+  inline-revert form with log/output silence plus the loose gas-free walk
+  prefix reaching the selected body's entry state.
+- Rule a selector *out* at source level with `not_run_dispatch_of_miss` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean): a selector with no
+  leaf in the tree has no successful inline-revert dispatcher run at all, so a
+  contract's selector census becomes "every successful call is one of these
+  entries".  It is the `Func.Run` counterpart of the compiled
+  `DispatchTree.dispatchMiss_runCompiledTo_with_path`.
+- Peel the shared `nonpayable` entry wrapper on a source run with
+  `run_body_of_run_nonpayable_frame`, or with `run_body_of_run_nonpayable_logs`
+  when the endpoint's events or returndata must also be related to the public
+  frame's entry.  Both derive zero call value.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
   `MSTORE` and `MSTORE8` each consume the next numeric memory-expansion hint;
@@ -123,6 +162,24 @@ registry has identified the likely vocabulary.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
+- Carry an observable through a successful compiled walk with a fixed
+  function table using `Func.CompiledInv` in
+  [`Blanc/CompiledFixedInvariance.lean`](../Blanc/CompiledFixedInvariance.lean).
+  Its `call` rule requires both the exact table lookup and the callee
+  invariant, closing the soundness gap that makes table-polymorphic
+  `func_inv` refuse `Func.call`.  `compiled_inv` walks ordinary lines,
+  instructions, branches, and terminals and consumes an already-proved exact
+  call invariant at each tail jump.  The same module completes the opt-in
+  `LogOutputHinv` scope for ordinary arithmetic (`MUL`, `SUB`, `DIV`, `MOD`,
+  `ADDMOD`, `MULMOD`, `XOR`, `RETURNDATASIZE`, and `MLOAD`) and exposes
+  generic branch/call burn preservation, so contract modules do not redeclare
+  those instances privately.
+- Peel a successful source-level `nonpayable` wrapper while retaining state,
+  memory, logs, and output with `run_body_of_run_nonpayable_frame_logs` in
+  [`Blanc/NonpayableInversion.lean`](../Blanc/NonpayableInversion.lean).
+  This is the stronger event/returndata-sensitive companion of
+  `run_body_of_run_nonpayable_frame`; product modules should consume it rather
+  than restating the wrapper walk.
 - Recover a selected body from a linear selector dispatcher:
   [`Blanc/LinearDispatch.lean`](../Blanc/LinearDispatch.lean) defines the
   shared `Blanc.linearDispatchWith` and `Blanc.selectorUnique`; the companion
@@ -204,6 +261,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   resolved frames.
 - `Func.exec_of_runCompiledTo` and its program bridge recover an `Exec`
   derivation from a completed arbitrary-outcome compiled walk.
+- When a frame invariant must retain block statics across a child spawn, use
+  `genericCall.step_spawn_benvStat`, `genericCreate.step_spawn_benvStat`, or
+  the instruction-neutral `Xinst.step_spawn_benvStat` in
+  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean), then combine it with
+  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry.
 
 For an exact `DELEGATECALL` boundary, use
 [`Blanc/DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean).
@@ -401,6 +463,109 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 
 ### E5. I need to inspect what happened in an `Exec`
 
+- For operand-stack safety at every reached same-frame node, use
+  [`Blanc/CompiledStackSafety.lean`](../Blanc/CompiledStackSafety.lean).
+  `CompiledStackSafety.Certificate` carries local actual-decoder step and height
+  proofs; `Certificate.parentStep`, `parentPrefix`, and `at_parentPrefix`
+  transport them over the existing raw `Exec.Deriv.ParentPrefix`, including
+  failing outcomes and repeated loops. The entry invariant must be proved for
+  the exact execution root. `call_resumes_of_room` constructs a status-word
+  resume from parent headroom; `resume_call_safe` distinguishes a newly generated
+  parent operand-stack fault from an inherited child-settlement error. This
+  interface does not synthesize an opcode or concrete-program certificate.
+  Its exact `StepSafe` goal-head advice lives in the core `proofRecipeTriggerMatches`
+  dispatch, shared with the generalized certificate recipe, while the `ResumeSafe`
+  arm stays leaf-only in `proofRecipeLeafTriggerMatches` in `ProofRecipeTactic`,
+  reusing the shared raw-head helper. Unmatched triggers retain the original matcher;
+  the generator validates both fixed inventories and rejects duplicate owners.
+- Forward primitive stack safety, including failure arms, is in
+  [`Blanc/AbstractStackSafety.lean`](../Blanc/AbstractStackSafety.lean).
+  `AbstractStackSafety.Matches` matches the entire operand stack against
+  exact literals or arbitrary words; `Matches.length`, `getElem?`, `set`,
+  and `swap` preserve its structural information. `SafeResult` permits
+  non-stack errors while requiring the supplied successful postcondition.
+  Compose it with `SafeResult.bind` and `mono`. `chargeGas_safe`, `push_safe`,
+  `pop_safe`, `pushItem_safe`, `applyUnary_safe`, `applyBinary_safe`,
+  `dup_safe`, and `swap_safe` cover the named actual primitive semantics.
+  `WordMatches.eq_of_some` recovers an exact concrete operand.
+  `ninst_push_safe` includes exact next-PC equality; `step_ofExecution_safe`,
+  `step_ofJump_safe`, and `call_resume_safe` connect to the existing
+  `StepSafe`/`ResumeSafe` obligations. None requires sufficient gas or a
+  successful terminal outcome. These lemmas do not construct a concrete
+  program certificate. The generic `SafeResult` head alone does not identify
+  an instruction or transfer, so this primitive inventory is registry-only
+  until that selection interface exists.
+- Forward stack safety for concrete regular and control-flow opcodes, proved
+  against the actual `Rinst.runCore` and `Jinst.runCore` implementations
+  including every raw error arm, is in
+  [`Blanc/AbstractStackTransfer.lean`](../Blanc/AbstractStackTransfer.lean).
+  `regularTransfer` is the decidable abstract transfer for the regular opcodes
+  a DRIP row can carry. `regularTransfer_safe` proves every accepted transfer
+  against actual `Rinst.run`, from exact full-stack matching and an input
+  length at most eight; `ninst_regularTransfer_safe` lifts it to `Ninst.step`
+  with the exact fall-through PC. Both include every error arm, without a
+  successful-run or adequate-gas premise. Unsupported opcodes and insufficient
+  operand shapes are rejected by the existing check. The individual
+  `gas_safe`, `calldataload_safe`, `mload_safe`, `mstore_safe`, `sload_safe`,
+  `sstore_safe`, and `ninst_pop_safe` remain available for direct composition.
+  `SafeResult.map`, `SafeResult.pure_bind`, `assert_safe` (any decidable
+  proposition), `assert_true_safe`, and `assertDynamic_safe` are the
+  composition helpers they use. `SafeResult.noStackFault` and
+  `xstep_ofExcept_safe` connect terminal/external outcomes to `StepSafe`;
+  the `Matches` update lemmas for output, return data, gas, memory extension,
+  accessed addresses, and delegation resolution preserve the complete stack
+  through CALL staging. `jumpTransfer`, `jumpiTransfer`, and
+  `jumpdestTransfer` are universal decidable transfers for the exact-destination
+  `JUMP`, exact-destination/arbitrary-condition `JUMPI`, and stack-preserving
+  `JUMPDEST` shapes. Their `_safe` theorems expose the actual taken target,
+  `JUMPI` one-byte fall-through, and successful `jumpable` check while allowing
+  gas and invalid-target failures as non-stack errors. The `jinst_*Transfer_safe`
+  wrappers lift those facts to the actual `Step.ofJump (Jinst.run ...)` step.
+  `terminalTransfer` covers `STOP`, `RETURN`, and `REVERT` through actual
+  `Linst.run`; `terminalTransfer_safe` retains the successful RETURN tail and
+  all non-stack error arms, while `linst_terminalTransfer_safe` is the actual
+  halted dispatcher path. `callTransfer` removes CALL's seven operands and
+  prepends its eventual status word. `callTransfer_safe` follows actual
+  `Xinst.step` through access/delegation, gas, static, insufficient-balance,
+  depth-zero, child-spawn and resumption behavior, and
+  `ninst_callTransfer_safe` fixes the actual one-byte parent continuation PC.
+  `genericCall_step_safe` makes the caller/callee boundary explicit: it proves
+  the caller's status-word continuation for arbitrary child settlement and
+  does not assert operand-stack safety of arbitrary callee code. Decoded-table
+  validation and a concrete program certificate remain separate obligations.
+  The existing stack-certificate recipe advises the `StepSafe` head; selecting
+  a transfer wrapper additionally needs the exact instruction and successful
+  check, so discovery remains in this registry.
+- For per-instruction equality modulo gas over the same opcode family minus
+  `gas`, see I1 and
+  [`Blanc/GasErasure.lean`](../Blanc/GasErasure.lean).
+- For a finite table of actual decoded stack patterns, use
+  [`Blanc/AbstractStackCertificate.lean`](../Blanc/AbstractStackCertificate.lean).
+  `AbstractStackSafety.Table` stores full patterns in a finite search tree.
+  `checkTable_certificate` constructs `CompiledStackSafety.Certificate` from
+  the kernel-checked `checkTable` result. The checker reads the actual public
+  `ByteArray.getInst`, rejects out-of-code rows and truncated PUSH widths,
+  preserves exact PUSH literals, and checks both JUMPI successors and actual
+  `jumpable` destinations. `checkSuccessor` independently checks output and
+  destination bounds and full-pattern inclusion through `covers`;
+  `Matches.covered` proves that inclusion sound. The accepted transfer family
+  supports maximum bounds at most eight and rejects unsupported opcodes,
+  including SELFDESTRUCT. `stepSafe_mono` retains every child settlement and
+  fatal-error provenance while adapting the accepted opcode theorems.
+  `Table.checkOrder_sound`, `lookup_iff_row`, and `row_unique` connect checked
+  strict subtree ordering to exact structural-row lookup and unique patterns.
+  `Table.count_le_one` excludes even identical duplicate rows. Independently,
+  `Table.checkLayout_sound` proves exact decoded-byte interval coverage from
+  the layout check; each node consumes its actual decoded instruction width.
+  `Table.all_node` composes named row checks while retaining their identical
+  predicate (and thus the complete table for successor lookup).
+  `Table.checkLayout_node` composes checked left/right intervals through an
+  actual-decoder-checked singleton; no gap or assumed instruction width is
+  introduced by a named-subtree boundary.
+  `checkTable` itself does not include that separate layout check or establish
+  entry, feasible-path reachability, or arbitrary child-frame stack safety.
+  This table-construction interface is registered here; the existing
+  same-frame recipe supplies the subsequent actual `ParentPrefix` transport.
 - Raw nodes, raw frame roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
@@ -421,6 +586,13 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `SourceCursor.branchFlagToward`, and `ninstRun_of_nextEdge` retain the exact
   same-frame chronology and stack effects across compiler glue; they do not
   assert liveness or a final execution outcome.
+- Every actual same-frame continuation edge preserves nonempty code:
+  `Exec.Deriv.ParentStep.codePreserve` in
+  [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean),
+  beside `ParentStep.sevm_eq`; it covers the plain step, the immediately
+  completed spawn, and the resumed child.
+- For a loose gas-free walk prefix with source-path accumulation, see E1 and
+  [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
@@ -462,6 +634,16 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To identify the literal block in a retained configured transition, use
+`ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
+[`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
+Supply a successful transition with the same configuration and endpoints;
+the post-world last-block field identifies the retained block without
+reconstructing its body trace. This remains COMMON_API-only: the projected
+block equality alone does not identify an available successful-transition
+witness. Existing facilities were checked, but current matchers do not inspect
+that required local premise; a broad `Eq` trigger would not be selective.
+
 ### E7. I need stable paths to settlement-retained frames
 
 Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
@@ -472,6 +654,35 @@ Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
   descendants and the root-inclusive committed path list.
 - `Exec.committedFramePaths_map_frame` forgets paths back to the ordinary
   committed-frame list.
+- `Exec.LocatedFrame.EnteringOccurrence` is indexed by the original execution
+  and preserves the exact immediate retained parent as an original
+  `committedFramePaths` member, the actual child counter, its same-frame
+  retained instruction occurrence, and that occurrence's exact recursive child
+  slot and `runOk` equations. This keeps equal-looking frame occurrences
+  distinct.
+- `Exec.LocatedFrame.exists_enteringOccurrence` is the minimal consumer route:
+  apply it to a non-root `committedFramePaths` member, then refine the retained
+  occurrence's decoded instruction if the contract needs a particular family.
+  It deliberately does not classify the root `[]`; use configured transaction
+  or system-envelope provenance for that case.
+
+For forward location from a supplied root-frame occurrence, use
+[`Blanc/ExecutionPathLocator.lean`](../Blanc/ExecutionPathLocator.lean):
+`Exec.NinstOccurrence.exists_root_call_child` takes the root commit proof,
+the exact root-indexed occurrence and root-same-frame `ParentPrefix`, an actual
+some child slot, and its matching CALL-shaped spawn, clean `ProcessMessage`
+and successful resume. It returns committed child membership and an
+`EnteringOccurrence` whose parent is exactly the root and whose occurrence is
+the supplied one, with the exact slot and singleton child-index path. Its
+call-shaped premise is `Frame.ofCall`, not an instruction-label classification;
+the consumer must still identify the concrete source CALL. A clean
+child alone does not retain an uncommitted parent, and an immediate/no-code
+slot does not establish an entered child. The later source-route producer
+must supply that same-frame provenance; endpoint states cannot replace it.
+Existing discovery and suggestion facilities were checked. The existential
+membership goal alone does not identify the available occurrence, root-prefix,
+spawn and process witnesses; current matchers do not inspect this joint local
+context, so a broad existential trigger would not reliably select this route.
 
 ### E8. I need an exact ordered replay of world-state changes
 
@@ -691,10 +902,17 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `prefix_of_xor`, and `prefix_of_argCheckNonAddress`. These declarations are
   also registered with the
   `stack-prefix-transport` recipe.
-- `Devm.state` is preserved by `mstore`, `mload` and the register arithmetic
-  and comparison instructions (`show_hinv_state` builds those from
-  `Rinst.preserves_state`); `Devm.memory` likewise now covers the full binary
-  arithmetic family.  A walk that tracks a single account's balance states its
+  - `Devm.state` is preserved by `mstore`, `mload`, `swap`, and the register
+    instructions other than the two store forms — including the arithmetic,
+    bitwise, and comparison instructions and `sload`, `timestamp`, `caller`,
+    `gas`, and `pop` (`show_hinv_state` builds those from
+    `Rinst.preserves_state`); `Devm.memory` likewise now covers the full binary
+    arithmetic family. Import [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean)
+    for the lower-fanout `Rinst.xor`, `Rinst.addmod`, and `Rinst.mulmod` state
+    instances and the ternary arithmetic memory instances. The scoped
+    `LogOutputHinv` instances cover `callvalue`, `calldatasize`, `timestamp`,
+    `mul`, `div`, and `sub` beside the earlier arithmetic, stack, and
+    environment instructions. A walk that tracks a single account's balance states its
   invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A terminal `Linst.Inv` goal is discharged from its registered `Linst.Hinv`
@@ -702,6 +920,27 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `Devm.getCode` preservation for both `Linst.stop` and `Linst.revert`.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
+- For equality of EVM states modulo `gasLeft` across two successful runs of a
+  gas-free instruction or line, use
+  [`Blanc/GasErasure.lean`](../Blanc/GasErasure.lean).
+  `Devm.EqModGas` relates states agreeing on every `Devm.Rels` column except
+  `gasLeft`, with `refl`/`symm`/`trans`, the `of_burn`, `of_pop`, `of_push`,
+  `of_popBurn`, and `of_pushBurn` step adapters, update congruences
+  (`of_memWrite`, `of_addAccessedStorageKey`, `of_withRefundCounter`,
+  `of_setStorVal`, `of_withMemory`, `of_withStack`), and read congruences
+  (`extCost_congr`, `getStorVal_congr`, `memRead_congr`, `of_popToNat`).
+  `Rinst.gasFree` whitelists the `regularTransfer` opcode family minus `gas`;
+  `Ninst.gasFree` adds `push` and `Line.gasFree` covers lines.
+  `Rinst.run_eqModGas` replays two successful per-op runs against each other,
+  `Ninst.run_eqModGas` lifts that to instructions, and `Line.run_eqModGas`
+  to gas-free lines. The whitelist never contains `pc`, `gas`, or an
+  `Xinst`; adding `gas` makes the instruction theorem unprovable, since two
+  runs differing only in gas push different words. The identity is modulo
+  exactly the columns outside `Devm.Rels` as pinned: a Jaune bump adding
+  columns there widens it silently, so revisit `Devm.Rels` and the whitelist
+  at any such bump. Existing suggestion facilities were checked and no
+  registered trigger matches the two-run congruence goal shape, so discovery
+  remains in this registry.
 
 ### I2. The property concerns a complete execution or child frames
 
@@ -784,10 +1023,21 @@ If several updates form a familiar semantic post-state, continue to S2.
 
 ### S2. I need a reusable composite projection cut
 
+`Devm.getStorVal_of_state` in
+[`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) transports a
+persistent-storage word across account-state equality, without requiring
+equality of the whole machine or world. Import that primitive owner directly.
+For the entire storage map at one address, the corresponding adapter is
+`getStor_eq_of_state_eq` in `Blanc/Ladder.lean`.
+
 Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 
 - `Devm.addAccessedStorageKey_setMach_setMach` cancels an obsolete machine
   component across an access-key update followed by the final `setMach`.
+- `of_run_sload_state` and `of_run_sload_logs` expose the persistent-state
+  and log silence of a successful `SLOAD`, including its cold access-list
+  warming path.  Use these instead of widening the global `Ninst.Hinv`
+  instance set: access metadata changes even though these projections do not.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
 - `Devm.setStorVal_getCode` carries account code across a persistent storage
   write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
@@ -870,14 +1120,125 @@ laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
   growth of an address-prefix sum by the value credited including the wrapping
   case, and `transfer_does_not_increase_sum` is the paired-movement form.
   These are upper bounds; they do not establish that no wrap occurred.
+- For an exact observation of a finite coalition, import
+  [`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean) and use
+  `ledgerSumOn`. `ledgerSumOn_congr` transports pointwise agreement;
+  `ledgerSumOn_increase` needs the credited row's `B256.Nof`,
+  `ledgerSumOn_decrease` needs debit cover, and `ledgerSumOn_transfer` needs
+  pre-state `SumNof`. The transfer law already covers a self transfer and all
+  coalition-membership overlaps. These are local equations only: they neither
+  supply those guard facts nor establish an execution path or history. The
+  `finite-coalition-ledger` recipe reaches this branch from a target containing
+  `ledgerSumOn`.
 
 ### S6. I need a basic EVM-word identity
 
-Use the word/arithmetic declarations in
-[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before destructing a
-`B256`. In particular, `B256.and_comm` and `B256.xor_comm` provide the shared
-commutativity facts for bitwise conjunction and exclusive-or, while
-`B256.and_idem_right` removes a repeated identical mask.
+Use the primitive word facts in
+[`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
+destructing a `B256`: `B256.mul_comm` covers word multiplication, including
+wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
+comparison flag into the negated strict comparison. The latter does not
+assert that arithmetic producing either operand was overflow-free. Import
+this owner directly; CommonProofs and Ladder do not reexport it.
+
+Use the fixed-width arithmetic declarations in
+[`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
+identities in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before
+destructing a `B256`. `wordModulusN`, `maxWordN`, `wordModulusN_pos`,
+`maxWordN_lt_wordModulusN`, and `maxWord_toNat` name the standard `2^256`
+bounds. `div_two_div_pow`, `div_pow_div_two`,
+`one_and_toB256_eq_mod_two`, and `toB256_shiftRight_one` bridge recurring
+natural-number calculations to exact word operations. `Nat.xor_or_shiftLeft`,
+`B128.toNat_xor`, and `B256.toNat_xor` expose `xor`, while
+`Nat.or_or_shiftLeft`, `B128.toNat_or`, and `B256.toNat_or` expose `or`
+through the nested word representation. In `CommonProofs`,
+`B256.and_comm` and `B256.xor_comm` provide the shared commutativity facts for
+bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
+repeated identical mask.
+
+For exact two-word multiplication, `productLowWord`, `productScratchWord`,
+`productHighBeforeBorrowWord`, `productBorrowWord`, and `productHighWord` name
+the standard `MUL`/`MULMOD` staging and carry correction, while
+`productLowWord_toNat`, `productHighWord_toNat`, and
+`productHighWord_mul_add_productLowWord_toNat` recover the exact unbounded
+product without a single-word magnitude premise;
+`wideNumeratorN_productWords` packages the same fact through the shared
+high/low numerator representation. `productHighWord_eq_toB256_div_wordModulus`,
+`productLowWord_eq_zero_iff`, and
+`roundedProductHighWord_eq_toB256_ceilDiv` provide the floor and ceiling
+bridges for division by exactly `2^256`.
+
+For the first stage of exact two-word division,
+`wordModulusFactorWord` represents `2^256 mod denominator` and
+`wideRemainderWord` computes the remainder of `high * 2^256 + low` using
+`ADDMOD`/`MULMOD`; their corresponding `_toNat` theorems expose the exact
+natural-number values under only a nonzero-denominator premise.
+`wideNumeratorN`, `wideBorrowWord`, `wideSubLowWord`, and `wideSubHighWord`
+name the generic two-word subtraction stage;
+`wideSubWords_reconstruct` and
+`wideNumerator_sub_remainder_mod_eq_zero` recover its exact unbounded value
+and divisibility.
+
+For the factor-and-fold stage of full-width division, `Nat.lowestSetBit` and
+`Nat.lowestSetBit_spec` isolate the largest power of two dividing any nonzero
+bounded natural. `lowestSetBitWord`, `removeLowestSetBitWord`, and
+`wordModulusDivFactorWord` are the corresponding word operations; their
+`_toNat`, `_spec`, `_ne_zero`, and `_odd` theorems expose the positivity,
+divisibility, and odd-denominator facts needed downstream.
+`Nat.sub_mod_eq_div_mul`, `Nat.sub_mod_div_factor`, and
+`Nat.two_word_div_lt_modulus` provide the generic remainder-removal,
+factor-removal, and fitting quotient-width bounds;
+`Nat.pow_le_two_word_div_of_le_high` is the overflow-side companion when the
+denominator is no larger than the high word. `toB256_maxWordN` identifies the
+re-embedded largest natural word with `B256.max`.
+`wordAdd_eq_toB256_add` identifies
+wrapped word addition with natural addition re-embedded modulo `2^256`, while
+`wordSub_eq_toB256_sub_of_le` identifies non-underflowing word subtraction
+with the re-embedded natural difference. `wordAdd_lt_left_iff` is the
+companion overflow test: a compiled unsigned addition guarded by comparing its
+stored sum with one summand wraps exactly when the natural sum leaves the word
+domain. `wordDiv_eq_toB256_div` identifies
+ordinary EVM word division with re-embedded natural division, including the
+zero-divisor convention, while `wordMod_eq_zero_iff` identifies its exact-
+division test. `toB256_add_one` records the unconditional modular
+successor bridge; `toB256_add_one_of_lt` retains the bounded compatibility
+name used by older callers. `roundedQuotientWord_eq_toB256_ceilDiv` turns any
+staged floor quotient/remainder pair with the correct zero test into the
+re-embedded natural ceiling quotient. Under a positive dividend,
+`ceilPredQuotientWord_eq_toB256` similarly turns the capacity finisher into
+`ceilDiv - 1`, while `ceilDiv_sub_one_le_div` records its generic floor bound.
+`ceilDiv_lt_wordModulusN_of_floor_lt` upgrades a fitting floor quotient to a
+fitting ceiling quotient from the exact guard that forbids rounding the
+largest word upward.
+`minWord_eq_toB256_min` turns a word-level smaller-candidate branch into exact
+natural-number `min` when the natural candidate fits in one word.
+The generic
+`Nat.fold_divided_words` identity and `foldDividedWords_toNat` justify folding
+a divided high/low pair back into one word. `wideReducedLowWord`,
+`wideReducedHighWord`, `wideReducedNumeratorN`, and
+`wideFoldedDividendWord` compose that machinery with remainder subtraction;
+`wideReducedWords_reconstruct`, `denominator_dvd_wideReducedNumerator`,
+`lowestSetBitWord_dvd_wideReducedLow`, and
+`wideFoldedDividendWord_toNat` provide the exact reconstruction and
+divisibility interface. `wideRemainderWord_eq_zero_iff` exposes the analogous
+exact-division test for a two-word numerator.
+
+For modular inverses, `inverseSeedWord`, `inverseNewtonStepWord`, and
+`inverseNewtonIter` name the standard seed and word-ring refinement.
+`newtonStep_modEq_square` is its unbounded algebraic core;
+`b256_mul_modEq_wordModulus`, `b256_sub_modEq_wordModulus`, and
+`inverseNewtonStepWord_modEq_wordModulus` bridge wrapped word operations to
+`Int.ModEq`; `inverseNewtonStepWord_modEq_square` lifts one known inverse; and
+`inverseNewtonIter_six_modEq` turns any proved four-bit seed into an inverse
+modulo the full word modulus. For an odd denominator,
+`inverseSeedWord_modEq_sixteen` proves the standard seed correct and
+`inverseNewtonIter_six_seed_modEq_wordModulus` closes the complete refinement.
+Finally, `wideQuotientWord` composes reduction, folding, and refinement, while
+`wideQuotientWord_toNat` proves its exact floor-division result from the
+standard `high < denominator` branch guard, with no extra magnitude premise;
+`wideQuotientWord_eq_toB256` gives the corresponding word equality directly.
+These declarations are COMMON_API-only: an `Int.ModEq` goal is not reliably
+Newton-specific enough for an automatic proof recipe.
 
 For the halving and low-bit steps a compiled loop performs, use
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean): `div_two_div_pow`
@@ -888,6 +1249,13 @@ and `div_pow_div_two` collapse iterated `Nat` halving into one power,
 are the fixed-width halving bridges at the three widths.  Each carries its own
 `< 2 ^ 64` or `< 2 ^ 256` bound as a hypothesis; none of them establishes that
 bound for a caller.
+
+For three-operand word instructions, `applyTernary_def` and
+`Devm.diffBurn_of_applyTernary` expose the generic execution shape,
+`prefix_of_diffBurn_three` transports a known stack prefix, and
+`prefix_of_addmod` / `prefix_of_mulmod` are the direct compiled-instruction
+bridges. The latter two are registered with the `stack-prefix-transport`
+recipe.
 
 For the pause face specifically, `pauseInfiniteSentinel`, `pauseForProjection`,
 and `compact_pause_word_eq_projection` in
@@ -905,7 +1273,75 @@ predicate.  These adapters live beside the protocol in
 [`Blanc/PinnedPauseTarget.lean`](../Blanc/PinnedPauseTarget.lean); do not
 repeat their byte-slice normalization in a contract family.
 
+### S7. I need a token-ledger conservation invariant
+
+A token contract that keeps balances at address-shaped keys and a total
+supply at one reserved non-address key satisfies one invariant: the word at
+the supply slot is exactly the sum of the balances.  That invariant is
+`LedgerConserved` in
+[`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean), and
+everything it needs rests on the single bit fact `¬ ValidAdr slot`:
+`toB256_ne_of_not_validAdr` is the fact in the form the storage lemmas want,
+`rest_set_slot` says a supply write cannot move the sum, `get_slot_set` says
+a balance write cannot move the supply, and `rest_set_of_not_validAdr` says a
+write at any other non-address key is invisible to the balances.
+`transfer_of_debit_credit` is the two-`set` transfer step, and
+`LedgerConserved.transfer`/`mint`/`burn` (with the `mint_set`/`burn_set`
+`Stor.set` forms) carry the invariant across a booked movement.
+`LedgerConserved.sumNof` says the sum never overflows (it *is* a word),
+`le_supply` bounds every balance by the supply, and `of_empty`, `of_eq`,
+`of_get_eq`, and `of_rest_eq` seed and transport the invariant.  Nothing here
+names a contract; `Blanc/Conserved.lean` proves the same algebra for fmint's
+own supply slot and predates this module.
+
+### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
+
+Four modules carry the offset-priced proportional economics both PRORATA
+families share.  [`Blanc/OffsetPricing.lean`](../Blanc/OffsetPricing.lean)
+owns the virtual-offset arithmetic: `mintN`/`payN` price deposits and
+withdrawals, `mintN_never_overmints`/`payN_never_overpays` floor both in the
+ledger's favor, `depositResidueN`/`withdrawResidueN` name the exact floor
+residues, and `deposit_price_nondecreasing`/`withdraw_price_nondecreasing`
+say settlement never lowers the cross-multiplied share price.
+[`Blanc/ProrataAccounting.lean`](../Blanc/ProrataAccounting.lean) classifies
+one semantic step: `AccountingSnapshot` is the observed state,
+`ProrataAccountingKind` the four SF-frozen classes, `ProrataAccountingEffect`
+the exact state equation per class with `deposit_inv`/`withdraw_inv`/
+`externalCredit_inv`/`silent_inv` inversion at a known class, and
+`ProrataAccountingPath` chains steps with `snapshotAt`/`XAt`/`DAt`/`rhoAt`/
+`kappaAt` projections and the `prorata_dust_trace_exact` dust telescope.
+[`Blanc/ProrataAttackModel.lean`](../Blanc/ProrataAttackModel.lean) bounds one
+coalition move: `PriceLe` with `refl`/`trans` orders snapshots by virtual
+price, `ProrataAccountingEffect.priceLe` lifts every classified effect into
+it, `claimN` values a share balance with `claimN_le_balance`,
+`payN_mono_price`, and the per-move bounds `claimN_externalCredit_le`,
+`claimN_deposit_le`, and `claimN_withdraw_le`, closing in
+`victim_loss_le_ceil`/`victim_loss_le_div_add_one`.
+[`Blanc/ProrataAttackPath.lean`](../Blanc/ProrataAttackPath.lean) runs the
+whole attack: `ProrataAttackState.Invariant` conjoins `SharesPartition`,
+`FlowExact`, `ClaimBound`, and `VictimConsistent`, `genesis_invariant` seeds
+it, each `ProrataAttackEffect` preserves it (`preservesInvariant`), and a
+closed `ProrataAttackPath` yields `attacker_no_profit_of_attackPath` and
+`victim_loss_bound_of_attackPath`.  Nothing here names an asset, a contract,
+or a program; the WETH-backed vault is the second consumer of arithmetic
+first stated for PRORATA's ETH-denominated shares.
+
 ## M — bytes and memory
+
+For concrete RLP encoding and parsing, use
+[`Blanc/RlpConcrete.lean`](../Blanc/RlpConcrete.lean).
+`RlpConcrete.splitAt_append` retains an arbitrary payload and suffix;
+`encode_bytes_many` selects the ordinary length-prefixed byte encoder;
+`decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
+apply Jaune's actual parser equations while keeping payload bytes abstract.
+`decode_byte`, `decode_empty_bytes`, `decode_empty_list`, and
+`decode_bytes_three` cover the small field headers; `parse_cons` composes
+the actual first-item and remaining-list equations.
+`decode_hash` proves the fixed-width header-word roundtrip, including leading
+zero bytes. The list lemma requires the actual recursive child parse. These
+equations do not assert whole-envelope canonicality or strict transaction acceptance.
+Select by the known header and payload length; the common equality head also
+covers unrelated encode/decode goals, so this remains a manual registry route.
 
 ### M1. The goal is a `sliceD` normalization
 
@@ -993,6 +1429,36 @@ repeat their byte-slice normalization in a contract family.
   carries event chronology, `of_run_loadWordAt_logs` supplies the exact
   successful two-instruction log-silence fact; `MLOAD` deliberately has no
   broader `Ninst.Hinv` instance for logs.
+- When only one long-lived word must survive unrelated scratch traffic, import
+  [`Blanc/MemoryImage.lean`](../Blanc/MemoryImage.lean) and carry `MemWordAt`
+  instead of exposing the whole byte image. `MemWordAt.writeMiss`,
+  `.writeMissBytes`, `.extendsWrite`, `.acrossLine`, `.acrossLoadWord`, and
+  `.acrossMstoreAt` are the basic frame transports (including CALL-family
+  resume memory); `.acrossStaticcall` and `.acrossSuccessfulCall` cross an
+  external call whose selected word lies at or above the end of its output
+  window, the latter under an explicit status-one premise that rules out the
+  failing branch; `Bytes.WordFrameFrom` composes the untouched suffix of exact
+  trace images, `.slice_eq`, `.of_preserved_memImage`, and `.of_wordFrame`
+  bridge those images, and `prefix_of_loadWord_window` reads the selected word
+  back.
+- `Blanc.WordArithmetic.minWord_eq_toB256_min` bridges a compiled comparison
+  between a fitting natural and a word to natural-number `min`;
+  `toNat_toB256_min_maxWord` is the matching exact round-trip for results
+  saturated at `B256.max`.
+- `Blanc.ProrataWethVaultCapacities` owns the family-local supply/amount
+  staging routes and full-width `maxMint`/`maxDeposit`/`maxWithdraw` seams.
+  `Blanc.Composition.ProrataWethVaultCapacities` is the downstream owner that
+  carries those selected words through the exact configured WETH balance
+  query. Its unconditional `maxWithdraw` theorem states the real word
+  saturation; `maxWithdraw_compiled_effect_exact` removes it only from the
+  ledger fact `balance ≤ supply`.
+- `Blanc.Composition.ProrataWethVaultAccounting` is the local accounting
+  adapter for the exact four ERC-4626 quote directions. It records the local
+  price recurrences, exposes the compiled inverse-quote mint and withdraw
+  effects, and keeps a self-receiver outbound asset term distinct from an
+  ordinary WETH debit. It does not yet supply compiled inbound or
+  self-receiver snapshot projection, the configured history/provenance
+  transport, or a coalition accounting theorem.
 - For creation-code guards, `of_run_codesize` exposes the complete code-image
   length pushed by `CODESIZE`.
 - For creation-code copies, `of_run_codecopy_mem` and
@@ -1080,6 +1546,27 @@ that a contract's scratch region sits below a window, and it supplies no
 multi-region layout, footprint or staging algebra.  For goals about the
 primitive update itself, stay in
 [M2](#m2-the-goal-is-an-evm-memory-update-or-read).
+
+One rung above those, `transferFromLog_effect_frame` proves the complete effect
+of the shared `transferFromLog` fragment — the ERC-20 `Transfer` tail that
+WETH, WETH10, and the PRORATA WETH vault's asset child all reach.  It returns
+the residual stack prefix, the exact appended `transferLogEntry`, storage,
+balance, code and output preservation, and the concrete post-log memory image,
+so a following fragment can reuse the word written for the event data without
+replaying the LOG walk.  WETH10's `emitTransfer_effect_frame` states the same
+fact under its own qualified name and is a candidate for folding into this one;
+that fold belongs to the WETH10 family rather than to a consumer.
+
+`logTransfer_effect` is its sibling for the *direct* `transfer(dst, wad)` tail
+reached through `transferCore`.  The two fragments differ in where the event's
+three components come from: `transferFromLog` takes its source from the stack
+and its data word from a stack word, while `logTransfer` takes its source from
+the executing frame's caller and copies its data word straight out of calldata.
+It returns the surviving stack prefix — the fragment is stack-neutral, so any
+prefix, `nil_pref` included, passes through — and the exact appended
+`transferLogEntry` naming the caller, ABI word zero and ABI word one.  WETH10's
+`of_run_argCopy011` covers the calldata-copy step alone and is likewise a
+candidate for folding into this walk, again as WETH10 family work.
 
 ## T — settlement
 
@@ -1217,7 +1704,10 @@ consumer needs canonical interpreter ingress as one conjunct:
 
 - `Exec.rawFrameDescendants` and `Exec.rawFrameRoots` are the unfiltered
   entered-frame traversal below both the invariant ladder and the richer
-  occurrence APIs.
+  occurrence APIs. `Exec.mem_rawFrameDescendants_of_mem_descendantFrames` and
+  `Exec.mem_rawFrameRoots_of_mem_committedFrames` carry a retained committed
+  invocation root back to that traversal; they do not supply same-frame
+  prefix/suffix or full storage chronology.
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
@@ -1250,6 +1740,47 @@ This layer does not manufacture environment, storage, routing, delegation, or
 precompile facts, constrain an execution's result, or filter by settlement.
 A consumer must derive every independent admission from its actual trace and
 use the retained/committed APIs when rollback matters.
+
+### T2b. I need a contract's own ledger replay across retained settlement
+
+A contract that reads one account and reports an *ordered* replay of the moves
+it saw meets four obstacles that are about EVM settlement, not about its
+ledger.  Use
+[`Blanc/ExecutionAccountingReplay.lean`](../Blanc/ExecutionAccountingReplay.lean)
+rather than restating them:
+
+- `ExecutionAccountingReplay.ReplayCarrier ca` is the interface.  Supply your
+  own boundary type `Snap`, step type `Step`, credit provenance `Tag`, replay
+  relation `Replay`, the boundary `ofState` of an ordinary world state, the
+  boundary `frameEntry` at an entered instruction frame — which may sit
+  *before* a message's value credit and so need not be any world state's
+  boundary — and the five laws `nil`, `silent`, `credit` and
+  `entry_eq_ofState`.
+- `ReplayCarrier.processMessage_of_body` and
+  `ReplayCarrier.processCreateMessage_of_body` take the *committed body's*
+  replay to the whole retained CALL or CREATE, splitting on settlement: a
+  noncommitting child rolls the world back and contributes nothing, and
+  fresh-account preparation and code deposit are projection-silent.
+- `ReplayCarrier.xinstForeignSome` does the same for one filled executable slot
+  in a foreign frame, so CALL and CREATE share a single child replay and their
+  instruction prefixes and resumptions stay silent.
+- `ReplayCarrier.ofStorageEqBalanceMono` is the endpoint classifier: a
+  transition that fixes the account's storage and cannot lower its balance is
+  one positive credit or no step at all.  A foreign-opcode proof should expose
+  those two facts rather than restate the four-way split.
+- `ReplayCarrier.nilOfEq` and `ReplayCarrier.silentReplay` are the small
+  derived forms the seams themselves use.
+- `ExecutionAccountingReplay.balanceCarrier` is a second, deliberately
+  un-ledger-shaped instantiation whose boundary is a bare `Nat`; it reads no
+  storage and records no provenance.  `balanceEntry_eq_ofState`,
+  `ProcessMessage.targetBalanceCredits_of_body` and
+  `targetBalanceCredits_of_balance_mono` are its restated seams, and they are
+  what keeps the interface from quietly acquiring a ledger-shaped premise.
+
+`Blanc/ProrataRealizedAccounting.lean`'s `ProrataAccountingReplay.carrier` is
+the worked ledger-shaped example.  This module classifies no transition as a
+deposit, withdrawal or attack step, and produces no step of its own beyond what
+`credit` hands it; keep that interpretation in the contract-owned layer.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -1292,10 +1823,16 @@ Use
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the
-  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world.
+  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world,
+  while `_benv_stat` carries the complete static block environment.
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
-  `_getStor_eq`, `_bal_eq`) do the same across delegated-code resolution.
+  `_getStor_eq`, `_bal_eq`, `_benv_stat`) do the same across delegated-code
+  resolution.
+- `ExecutionTrace.TransactionTrace.exists_callRun_of_target` eliminates the
+  CREATE and collision constructors of an actual transaction message whose
+  target is a CALL, exposing that trace's exact delegation, resolved message,
+  core trace, and settlement equation for a consumer that must classify it.
 - `ExecutionTrace.benvAfterTransfer_getStor_eq`,
   `ProcessMessage.none_ok_getStor_eq`,
   `ProcessCreateMessage.none_ok_getStor_eq_of_empty`,
@@ -1339,6 +1876,14 @@ the body-level sibling of T3:
   `ExecutionTrace.benvInv_processWithdrawalsState` moves an arbitrary
   invariant across the whole credit fold.
 - Requests: `ExecutionTrace.RequestsTrace.stateInv_and_sum_le`.
+- Empty-withdrawal body balance: use
+  `ExecutionTrace.AppliedBodyTrace.sum_le_of_empty_withdrawals` to bound the
+  final total balance by the input total, without a contract invariant. It
+  composes both retained system prefixes, all transactions, and both request
+  calls. The withdrawal list must be `[]`; it does not bound a body with
+  consensus credits. This remains COMMON_API-only: a bare natural-number
+  inequality goal does not identify the retained body or its withdrawal list,
+  so the current goal matchers cannot select this route reliably.
 
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.
@@ -1449,6 +1994,8 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `directCreateMessageOutputOf` is the shared projection from a charged direct
   CREATE post-frame to its outer `MsgCallOutput`; contract owners may retain a
   thin historical wrapper name, but must not restate its six fields.
+  `benvAfterTransfer_stat` preserves the complete static block environment
+  across a successful message-entry transfer.
   The same module owns the shared receipt key, intrinsic/calldata gas
   projections, type-2 effective gas price and the
   `jauneListCompare_eq_compareLex` list-comparator bridge;
@@ -1690,6 +2237,22 @@ equation and therefore has `Eq` at its head; and `goal-head:LinkCertificate`
 matches certificate construction, which is the one goal in the flow whose head
 really is one of this module's declarations.  A `goal-head:resolve` trigger would
 never have fired.
+
+### C7. I need a storage-determined contract specification
+
+`ContractSpec` carries an invariant over storage, in-flight callvalue, and
+ETH balance, and a contract whose invariant reads only storage still owes the
+record's eight balance obligations.  `ContractSpec.ofStorageOnly` in
+[`Blanc/StorageOnlySpec.lean`](../Blanc/StorageOnlySpec.lean) packages that
+argument once: `getStor_addBal`/`getStor_subBal_addBal` say balance movement
+never moves storage, `ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
+reduce the frame invariants to the storage predicate, and
+`ofStorageOnly_funcSound` reduces each per-target obligation to the bare
+storage walk, declining the `nof`-class side condition a storage-determined
+invariant never needs.  The module's no-write and `STATICCALL` sections
+discharge targets that never write storage, and `ofStorageOnly_of_call`
+carries the invariant across a child `call` under the deeper-frame
+hypothesis.
 
 ## Common-library-first workflow
 

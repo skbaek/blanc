@@ -294,11 +294,24 @@
 # A row is pinned to the set its proof honestly achieves; the pin moves only
 # when the proof does, and never in order to make a red gate green.
 #
-# Usage: scripts/check.sh [--no-build]
+# Usage: scripts/check.sh [--no-build | --suggestions-only]
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
 # verdict line per audited theorem (listing the axioms found) plus a single
 # unambiguous summary line.
+#
+# --suggestions-only: ISOLATED recipe-dispatch controls, and nothing else.
+#
+# The default audit and `--no-build` elaborate `scripts/ProofRecipeSuggestions.lean`
+# and then `scripts/AxiomCheck.lean` in one gate, so the recipe-dispatch controls
+# can only be green when the WHOLE audited artifact set is present. An unrelated
+# missing object — `Conserved.olean`, `RootedExecution` — therefore denies the
+# dispatch controls a baseline, and a control campaign that cannot establish a
+# green baseline cannot show that anything bites. This mode elaborates the exact
+# committed suggestions file through the repository's ordinary `lake env lean`
+# path, builds nothing, audits no axioms, and carries its own verdict line so it
+# can never be mistaken for the axiom audit. The default and `--no-build` modes
+# are unchanged, and this mode is not a substitute for either.
 
 set -u
 
@@ -308,13 +321,46 @@ ROOT="$(dirname "$SCRIPT_DIR")"
 trap gate_semaphore_release EXIT
 
 BUILD=1
+SUGGESTIONS_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-build) BUILD=0 ;;
-    *) echo "usage: scripts/check.sh [--no-build]" >&2; exit 2 ;;
+    --suggestions-only) SUGGESTIONS_ONLY=1; BUILD=0 ;;
+    *) echo "usage: scripts/check.sh [--no-build | --suggestions-only]" >&2; exit 2 ;;
   esac
   shift
 done
+
+if [ "$SUGGESTIONS_ONLY" -eq 1 ]; then
+  # Counts are part of the criterion. Read them out of the exact committed file
+  # this mode is about to elaborate, and refuse a harness that has been emptied
+  # in either direction: a green run over no assertion is the vacuity this whole
+  # control exists to prevent.
+  SUGGEST_FILE="$SCRIPT_DIR/ProofRecipeSuggestions.lean"
+  NPOS="$(grep -c 'expect_recipe_trigger "' "$SUGGEST_FILE" || true)"
+  NNEG="$(grep -c 'expect_no_recipe_trigger "' "$SUGGEST_FILE" || true)"
+  NOFFERED="$(grep -c 'expect_recipe_offered "\|expect_no_recipe_offered "' "$SUGGEST_FILE" || true)"
+  NPRODUCTION="$(grep -c 'proofRecipeMatches' "$SUGGEST_FILE" || true)"
+  if [ "$NPOS" -eq 0 ] || [ "$NNEG" -eq 0 ] || [ "$NOFFERED" -eq 0 ]; then
+    echo "REGRESSION — recipe dispatch controls: the harness states $NPOS positive, $NNEG negative and $NOFFERED whole-recipe assertions; each population must be nonempty"
+    exit 1
+  fi
+  if [ "$NPRODUCTION" -eq 0 ]; then
+    echo "REGRESSION — recipe dispatch controls: the harness never names proofRecipeMatches, so it no longer decides anything through the production dispatch"
+    exit 1
+  fi
+  gate_semaphore_acquire "the committed recipe-dispatch controls in isolation" || exit 2
+  if ! SUGGEST_OUT="$(cd "$ROOT" && lake env lean scripts/ProofRecipeSuggestions.lean 2>&1)"; then
+    printf '%s\n' "$SUGGEST_OUT"
+    echo "REGRESSION — recipe dispatch controls: ProofRecipeSuggestions.lean failed to elaborate"
+    exit 1
+  fi
+  # The controls log one advisory block per case on success; the verdict, not
+  # the advice, is this mode's output. A failure prints the whole transcript
+  # above, which is where the diagnostic lives.
+  echo "OK — recipe dispatch controls: $NPOS positive, $NNEG negative and $NOFFERED whole-recipe assertions decided through Blanc.proofRecipeMatches"
+  exit 0
+fi
 
 gate_semaphore_acquire "the audited build, proof-recipe controls and axiom elaboration" 8 || exit 2
 
@@ -1290,6 +1336,90 @@ Blanc.Prorata.prorata_realized_dust_trace_exact|$STANDARD
 Blanc.Prorata.attacker_open_context|$STANDARD
 Blanc.Prorata.attacker_no_profit|$STANDARD
 Blanc.Prorata.victim_loss_bound|$STANDARD
+Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.totalAssetsResources_of_run|$STANDARD
+Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxMint_body_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxDeposit_body_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxWithdraw_body_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxMint_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable|$STANDARD
+Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable|$STANDARD
+Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.mint_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.withdraw_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.approve_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.transfer_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.transferFrom_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.roundtrip_loss_le|$STANDARD
+Blanc.ProrataWethVault.redemption_le_assets|propext, Quot.sound
+Blanc.ProrataWethVault.victim_loss_le|$STANDARD
+Blanc.ProrataWethVault.victim_loss_le_over_history|$STANDARD
+Blanc.ProrataWethVault.dust_trace_exact|$STANDARD
+Blanc.ProrataWethVault.depositStep|
+Blanc.ProrataWethVault.redeemStep|
+Blanc.ProrataWethVault.donationStep|
+Blanc.ProrataWethVault.two_le_offsetN|
+Blanc.ProrataWethVault.attacker_open_context|$STANDARD
+Blanc.ProrataWethVault.attacker_no_profit|$STANDARD
+Blanc.ProrataWethVault.victim_loss_bound|$STANDARD
+Blanc.ProrataWethVault.attack_carrier_inhabited|$STANDARD
+Blanc.ProrataWethVault.transferStaged_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.withdrawBurn_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.redeemBurn_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.finishInbound_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts|$STANDARD
+Blanc.ProrataWethVault.depositAfterQuote_not_static|$STANDARD
+Blanc.ProrataWethVault.mintAfterQuote_not_static|$STANDARD
+Blanc.ProrataWethVault.mint_never_overmints|propext, Quot.sound
+Blanc.ProrataWethVault.withdraw_never_overpays|propext, Quot.sound
+Blanc.Frame.enter_run_benvStat|$STANDARD
+Blanc.RunFrame.benvStat_eq|$STANDARD
+Blanc.genericCall.step_spawn_benvStat|$STANDARD
+Blanc.genericCreate.step_spawn_benvStat|$STANDARD
+Blanc.Xinst.step_spawn_benvStat|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_rely_preserves|$STANDARD
+Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.silent_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.transferEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.approveEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.silent_accountingStep_of_view|$STANDARD
+Blanc.Composition.ProrataWethVault.readOnlyEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.transferFromEffect_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_message_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_message_accountingStep|$STANDARD
+Blanc.Composition.ProrataWethVault.SteppedMessages.toPath|$STANDARD
+Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le|$STANDARD
+Blanc.Composition.ProrataWethVault.PairBacked.donation|$STANDARD
+Blanc.Prorata.ProrataAccountingPath.priceLe_first_last|propext, Quot.sound
+Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed|$STANDARD
+Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved|$STANDARD
+Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq|
+Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome|$STANDARD
+Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState|$STANDARD
+Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body|$STANDARD
+Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.branchFlagToward|$STANDARD
 Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero|$STANDARD
 Blanc.Func.localExecFree_iff|propext, Quot.sound
@@ -1436,7 +1566,38 @@ Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_cold_runtime_runCompiledTo
 Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause|$STANDARD
 Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause|$STANDARD
-Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel|$STANDARD"
+Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel|$STANDARD
+Blanc.Drip.sound_of_stepClosed|$STANDARD
+Blanc.Drip.accountingInv_stepClosed|$STANDARD
+Blanc.Drip.dripSpec_sound|$STANDARD
+Blanc.Drip.dripSpec_preserves|$STANDARD
+Blanc.Drip.monoInv_stepClosed|$STANDARD
+Blanc.Drip.dripMonoSpec_sound|$STANDARD
+Blanc.Drip.dripMonoSpec_preserves|$STANDARD
+Blanc.Drip.DeploymentRoot.monoStateInv|$STANDARD
+Blanc.Drip.DeploymentRoot.rho|$STANDARD
+Blanc.Drip.DeploymentRoot.reachable_chi_mono|$STANDARD
+Blanc.Drip.DeploymentRoot.reachable_rho_mono|$STANDARD
+Blanc.Drip.reach_chi_rho_mono|$STANDARD
+Blanc.Drip.rho_le_timestamp_at_boundary|$STANDARD
+Blanc.Drip.bodyOccurrence_mono|$STANDARD
+Blanc.Drip.exec_monoInv|$STANDARD
+Blanc.Drip.processMessage_mono|$STANDARD
+Blanc.Drip.message_error_mono|$STANDARD
+Blanc.Drip.transaction_mono|$STANDARD
+Blanc.Drip.transactionList_mono|$STANDARD
+Blanc.Drip.systemMessage_mono|$STANDARD
+Blanc.Drip.requests_mono|$STANDARD
+Blanc.Drip.withdrawals_mono|$STANDARD
+Blanc.Drip.body_mono|$STANDARD
+Blanc.Drip.configuredBlock_mono|$STANDARD
+Blanc.Drip.configuredHistory_mono|$STANDARD
+Blanc.Drip.drip_compiled_join|$STANDARD
+Blanc.Drip.drip_compiled_exit|$STANDARD
+Blanc.Drip.no_stale_index_success_callback_free|$STANDARD
+Blanc.Drip.no_stale_index_settlement_exit|$STANDARD
+Blanc.Drip.view_eq_same_timestamp_join|$STANDARD
+Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
