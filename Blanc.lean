@@ -153,6 +153,7 @@ import Blanc.AbstractStackTransfer
 import Blanc.GasErasure
 import Blanc.RunPrefix
 import Blanc.ReachDispatchPrefix
+import Blanc.PrefixTransport
 import Blanc.AbstractStackCertificate
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
@@ -347,6 +348,7 @@ import Blanc.DripIngress
 import Blanc.DripHistory
 import Blanc.DripRealizedHistory
 import Blanc.DripRealizedExec
+import Blanc.DripExitPreCallbackLocator
 import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripMonotone
