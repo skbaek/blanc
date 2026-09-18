@@ -28,18 +28,8 @@ theorem retainedTransactionListAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
-        (RealizedSnapshot.ofState ca finalBenv.state) := by
-  induction trace with
-  | nil => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
-  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail
-      ih =>
-      obtain ⟨headSteps, headReplay⟩ :=
-        retainedTransactionAccountingReplay head inv notCreated blockIndex
-          (some index)
-      have next : prorataSpec.BenvInv ca (benv.withState txState) :=
-        head.benvInv (prorataSpec_preserves ca) inv.side ⟨inv, notCreated⟩
-      obtain ⟨tailSteps, tailReplay⟩ := ih next.state next.ca
-      exact ⟨headSteps ++ tailSteps, headReplay.append tailReplay⟩
+        (RealizedSnapshot.ofState ca finalBenv.state) :=
+  (accountingLadder ca).transactionList trace inv notCreated inv.side blockIndex
 
 /-- Rung R4: a retained Jaune system message realizes one PRORATA accounting
 replay.
@@ -66,21 +56,9 @@ theorem retainedSystemMessageAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
-        (RealizedSnapshot.ofState ca state) := by
-  have msgInv : prorataSpec.MsgInv ca
-      (systemTransactionMessage benv target data) :=
-    systemTransactionMessage_msgInv inv notCreated
-  have ready : AccountingMessageReady ca
-      (systemTransactionMessage benv target data) := by
-    refine ⟨msgInv.runReady_of_call
-      (systemTransactionMessage_target_isNone benv target data), ?_⟩
-    intro current
-    rw [systemTransactionMessage_currentTarget] at current
-    rw [systemTransactionMessage_caller]
-    exact fun collide => systemNe (current.trans collide.symm)
-  have replay :=
-    retainedMessageCallAccountingReplay trace.message ready blockIndex none
-  rwa [systemTransactionMessage_benv_state] at replay
+        (RealizedSnapshot.ofState ca state) :=
+  (accountingLadder ca).systemMessage trace inv notCreated systemNe inv.side
+    blockIndex
 
 /-- Rung R5: the two checked request-system calls at the tail of `applyBody`
 realize one PRORATA accounting replay.  Both are rung R4, composed at the
@@ -96,19 +74,8 @@ theorem retainedRequestsAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
-        (RealizedSnapshot.ofState ca state) := by
-  obtain ⟨withdrawalSteps, withdrawalReplay⟩ :=
-    retainedSystemMessageAccountingReplay trace.withdrawal inv notCreated
-      (by decide) blockIndex
-  have withdrawalInv : prorataSpec.BenvInv ca
-      (benv.withState trace.withdrawalState) :=
-    trace.withdrawal.benvInv (prorataSpec_preserves ca) ⟨inv, notCreated⟩
-  obtain ⟨consolidationSteps, consolidationReplay⟩ :=
-    retainedSystemMessageAccountingReplay trace.consolidation
-      withdrawalInv.state withdrawalInv.ca (by decide) blockIndex
-  refine ⟨withdrawalSteps ++ consolidationSteps, ?_⟩
-  rw [RequestsTrace.state_eq_consolidationState trace]
-  exact withdrawalReplay.append consolidationReplay
+        (RealizedSnapshot.ofState ca state) :=
+  (accountingLadder ca).requests trace inv notCreated inv.side blockIndex
 
 /-- Rung R6: the block's direct consensus withdrawals realize one PRORATA
 accounting replay -- one `externalCredit` step per *positive* credit to
@@ -127,23 +94,8 @@ theorem retainedDirectWithdrawalAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre) steps
-        (RealizedSnapshot.ofState ca (processWithdrawalsState pre wds)) := by
-  induction wds generalizing pre with
-  | nil => exact ⟨[], ProrataAccountingReplay.nil_of_eq rfl⟩
-  | cons wd wds ih =>
-      obtain ⟨headBound, tailBound⟩ := withdrawalCredit_bounds bound
-      let provenance : ProrataAccountingProvenance :=
-        { blockIndex := blockIndex
-          transactionIndex := none
-          framePath := []
-          actor := none }
-      obtain ⟨headSteps, headReplay⟩ :=
-        ProrataAccountingReplay.of_addBal (ca := ca) (target := wd.recipient)
-          provenance headBound
-      obtain ⟨tailSteps, tailReplay⟩ := ih _ tailBound
-      refine ⟨headSteps ++ tailSteps, ?_⟩
-      rw [processWithdrawalsState_cons]
-      exact headReplay.append tailReplay
+        (RealizedSnapshot.ofState ca (processWithdrawalsState pre wds)) :=
+  (accountingLadder ca).directWithdrawal pre wds bound blockIndex
 
 /-- Rung R7: a whole successful block body realizes one PRORATA accounting
 replay, from the world the body opens on to the exact world `applyBody`
@@ -171,54 +123,8 @@ theorem retainedBodyAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
-        (RealizedSnapshot.ofState ca state) := by
-  -- (1) The beacon-roots system message.
-  obtain ⟨beaconSteps, beaconReplay⟩ :=
-    retainedSystemMessageAccountingReplay trace.beacon inv notCreated
-      (by decide) blockIndex
-  have beaconMeta :=
-    trace.beacon.stateInv_and_sum_le (c := prorataSpec)
-      (prorataSpec_preserves ca) ⟨inv, notCreated⟩
-  have beaconInv : prorataSpec.BenvInv ca (benv.withState trace.beaconState) :=
-    ⟨beaconMeta.1, by simpa [Benv.withState] using notCreated⟩
-  -- (2) The history-storage system message.
-  obtain ⟨historySteps, historyReplay⟩ :=
-    retainedSystemMessageAccountingReplay trace.history beaconInv.state
-      beaconInv.ca (by decide) blockIndex
-  have historyMeta :=
-    trace.history.stateInv_and_sum_le (prorataSpec_preserves ca) beaconInv
-  have historyInv : prorataSpec.BenvInv ca
-      ((benv.withState trace.beaconState).withState trace.historyState) :=
-    ⟨historyMeta.1, by simpa [Benv.withState] using beaconInv.ca⟩
-  -- (3) The decoded transaction list, by rung R3.
-  obtain ⟨txSteps, txReplay⟩ :=
-    retainedTransactionListAccountingReplay trace.transactions
-      historyInv.state historyInv.ca blockIndex
-  have txInv : prorataSpec.BenvInv ca trace.transactionBenv :=
-    trace.transactions.benvInv (prorataSpec_preserves ca) historyMeta.1.side
-      historyInv
-  -- (4) The direct consensus withdrawals, by rung R6.  Their bound is the
-  -- block bound transported through the balance-nonincreasing prefix.
-  have txBound :
-      sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
-    have hbeacon := beaconMeta.2
-    have hhistory : sum trace.historyState.bal ≤ sum trace.beaconState.bal := by
-      simpa [Benv.withState] using historyMeta.2
-    have htx : sum trace.transactionBenv.state.bal ≤
-        sum trace.historyState.bal := by
-      simpa [Benv.withState] using trace.transactions.sum_le
-    omega
-  obtain ⟨wdSteps, wdReplay⟩ :=
-    retainedDirectWithdrawalAccountingReplay (ca := ca)
-      trace.transactionBenv.state wds txBound blockIndex
-  have wdInv := benvInv_processWithdrawalsState txInv txBound
-  -- (5) The two request system calls, by rung R5.
-  obtain ⟨requestSteps, requestReplay⟩ :=
-    retainedRequestsAccountingReplay trace.requests wdInv.state wdInv.ca
-      blockIndex
-  exact ⟨beaconSteps ++ (historySteps ++ (txSteps ++ (wdSteps ++ requestSteps))),
-    beaconReplay.append (historyReplay.append
-      (txReplay.append (wdReplay.append requestReplay)))⟩
+        (RealizedSnapshot.ofState ca state) :=
+  (accountingLadder ca).body trace inv notCreated bound blockIndex
 
 end Prorata
 
