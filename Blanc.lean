@@ -39,6 +39,7 @@ import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionAccountingLadder
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
+import Blanc.ExecutionTraceFrames
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal
@@ -156,6 +157,7 @@ import Blanc.AbstractStackTransfer
 import Blanc.GasErasure
 import Blanc.RunPrefix
 import Blanc.ReachDispatchPrefix
+import Blanc.FuncMainPrefix
 import Blanc.PrefixTransport
 import Blanc.AbstractStackCertificate
 import Blanc.Weth10Redeemable
@@ -346,6 +348,9 @@ import Blanc.Composition.ProrataWethVaultPairHistory
 import Blanc.Composition.ProrataWethVaultAccountingHistory
 import Blanc.Composition.ProrataWethVaultCoalitionHistory
 import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
+import Blanc.Composition.ProrataWethVaultLedgerVisits
+import Blanc.Composition.ProrataWethVaultWithdrawLocator
+import Blanc.Composition.ProrataWethVaultLedgerFaithful
 
 import Blanc.Drip
 import Blanc.DripAccounting
