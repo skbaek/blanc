@@ -102,6 +102,107 @@ theorem Ninst.stepRun_codePreserve
     Devm.CodePreserve pre inter :=
   Ninst.codePreserve_effectRec n child run
 
+/-! ## Transport of the frame invariant across a foreign frame's steps
+
+The vault half discharges the four foreign-frame obligations that
+`vault_rely_preserves_conserved` discharges inline. -/
+
+/-- A childless step of a frame foreign to the vault keeps the vault's frame invariant. -/
+theorem VaultFrameInv.ninst_none {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
+    {n : Ninst} (h_run : Ninst.StepRun pc sevm pre n .none (.ok inter))
+    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
+    VaultFrameInv vault sevm inter := by
+  refine ⟨⟨?_, fun h => absurd h h_ne⟩,
+    inv.config.of_codePreserve rfl
+      (Ninst.stepRun_codePreserve (xl := .none) trivial h_run),
+    inv.code⟩
+  have hσ' := inv.preWf.pre
+  cases n with
+  | push xs le =>
+    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
+    rcases Except.bind_eq_ok h_run.2.symm with ⟨devm1, h_charge, h_push⟩
+    exact hσ'.state_eq
+      (((Devm.burn_of_chargeGas h_charge).state).trans
+        ((Devm.push_of_push h_push).state)).symm
+  | reg r =>
+    have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
+      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
+      exact h_run.2.symm
+    by_cases h_ss : r = Rinst.sstore
+    · subst h_ss
+      have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
+      rw [h_reg] at h_frame
+      refine ContractSpec.Pre.of_eqs hσ' (h_frame.getCode_eq vault).symm ?_
+        (sstore_preserves_getStor_ne h_reg h_ne)
+      funext b
+      exact (h_frame.getBal_eq b).symm
+    · exact ContractSpec.Pre.of_eqs hσ' (Rinst.preserves_getCode h_reg vault)
+        (Rinst.preserves_bal h_reg).symm
+        (congr_fun (Rinst.preserves_stor h_ss h_reg) vault).symm
+  | exec x =>
+    refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne hσ'
+    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
+      using h_run
+
+/-- A spawning step of a frame foreign to the vault hands the vault's frame invariant to the
+child, and gets it back once the child's outcome satisfies the vault postcondition. -/
+theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
+    {x : Xinst} {evm' : Evm} {out' : Execution}
+    (h_run : Ninst.StepRun pc sevm pre (.exec x) (.some ⟨evm', out'⟩) (.ok inter))
+    (child : Exec evm'.pc evm'.sta evm'.dyna out')
+    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
+    VaultFrameInv vault evm'.sta evm'.dyna ∧
+      (ifOk (Blanc.ProrataWethVault.vaultSpec.Post vault evm'.sta) out' →
+        VaultFrameInv vault sevm inter) := by
+  have hx : Xinst.Run sevm pre x (.some ⟨evm', out'⟩) (.ok inter) := by
+    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
+      using h_run
+  obtain ⟨h_child, h_back⟩ :=
+    ContractSpec.Xinst.some_preserves_precond (x := x) hx child h_ne inv.preWf.pre
+  obtain ⟨f, rsm, hstep, henter, -⟩ := XStep.Run.some_inv hx
+  have childCode : Devm.CodePreserve pre evm'.dyna := by
+    intro a _
+    rw [Frame.enter_run_getCode henter a]
+    exact Xinst.step_spawn_getCode hstep a
+  have childStat : evm'.sta.benvStat = sevm.benvStat := by
+    rw [Frame.enter_run_benvStat henter]
+    exact _root_.Blanc.Xinst.step_spawn_benvStat hstep
+  have childOwnCode : evm'.sta.currentTarget = vault →
+      some evm'.sta.code.toList = Prog.compile Blanc.ProrataWethVault.vault := by
+    intro childTarget
+    have targetEq := Frame.enter_run_currentTarget henter
+    rw [Frame.enter_run_code henter]
+    rw [childTarget] at targetEq
+    rcases Xinst.step_spawn_source hstep with hempty | hsame | hsrc
+    · rw [← targetEq] at hempty
+      exact absurd hempty (not_empty_of_compile inv.preWf.pre.code)
+    · rw [← targetEq] at hsame
+      exact absurd hsame.symm h_ne
+    · rw [← targetEq] at hsrc
+      rw [hsrc (not_delegation_of_compile inv.preWf.pre.code)]
+      exact inv.preWf.pre.code
+  refine ⟨⟨⟨h_child, fun _ => Xinst.some_child_wf hx⟩,
+    inv.config.of_codePreserve childStat childCode, childOwnCode⟩, ?_⟩
+  intro h_if
+  have wholeStep : Devm.CodePreserve pre inter :=
+    Ninst.stepRun_codePreserve (xl := .some ⟨evm', out'⟩)
+      (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+        Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+        Linst.codePreserve_effect child) h_run
+  exact ⟨⟨h_back h_if, fun h => absurd h h_ne⟩,
+    inv.config.of_codePreserve rfl wholeStep, inv.code⟩
+
+/-- A jump of a frame foreign to the vault keeps the vault's frame invariant. -/
+theorem VaultFrameInv.jinst {vault : Adr} {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
+    {j : Jinst} (h_run : Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩))
+    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
+    VaultFrameInv vault sevm inter := by
+  have state := Jinst.preserves_state h_run
+  refine ⟨⟨inv.preWf.pre.state_eq state, fun h => absurd h h_ne⟩,
+    inv.config.of_codePreserve rfl ?_, inv.code⟩
+  intro a _
+  exact getCode_eq_of_state_eq state a
+
 /-! ## The rung -/
 
 /-- **The rely rung.**  Any successful execution — at any target, from any
@@ -136,37 +237,7 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
         compiled conserved)
   -- a childless step at a foreign frame
   · intro pc sevm pre n inter h_at h_run h_ne inv
-    refine ⟨⟨?_, fun h => absurd h h_ne⟩,
-      inv.config.of_codePreserve rfl
-        (Ninst.stepRun_codePreserve (xl := .none) trivial h_run),
-      inv.code⟩
-    have hσ' := inv.preWf.pre
-    cases n with
-    | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-      rcases Except.bind_eq_ok h_run.2.symm with ⟨devm1, h_charge, h_push⟩
-      exact hσ'.state_eq
-        (((Devm.burn_of_chargeGas h_charge).state).trans
-          ((Devm.push_of_push h_push).state)).symm
-    | reg r =>
-      have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-        simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
-        exact h_run.2.symm
-      by_cases h_ss : r = Rinst.sstore
-      · subst h_ss
-        have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
-        rw [h_reg] at h_frame
-        refine ContractSpec.Pre.of_eqs hσ' (h_frame.getCode_eq vault).symm ?_
-          (sstore_preserves_getStor_ne h_reg h_ne)
-        funext b
-        exact (h_frame.getBal_eq b).symm
-      · exact ContractSpec.Pre.of_eqs hσ' (Rinst.preserves_getCode h_reg vault)
-          (Rinst.preserves_bal h_reg).symm
-          (congr_fun (Rinst.preserves_stor h_ss h_reg) vault).symm
-    | exec x =>
-      refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne hσ'
-      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-        using h_run
+    exact VaultFrameInv.ninst_none h_run h_ne inv
   -- a spawning step at a foreign frame
   · intro pc sevm pre n evm' out' inter h_at h_run child h_ne inv
     cases n with
@@ -177,52 +248,10 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
       cases h_run.1
     | exec x =>
-      have hx : Xinst.Run sevm pre x (.some ⟨evm', out'⟩) (.ok inter) := by
-        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-          using h_run
-      obtain ⟨h_child, h_back⟩ :=
-        ContractSpec.Xinst.some_preserves_precond (x := x) hx child h_ne inv.preWf.pre
-      obtain ⟨f, rsm, hstep, henter, -⟩ := XStep.Run.some_inv hx
-      -- the child inherits the world's code and the block statics
-      have childCode : Devm.CodePreserve pre evm'.dyna := by
-        intro a _
-        rw [Frame.enter_run_getCode henter a]
-        exact Xinst.step_spawn_getCode hstep a
-      have childStat : evm'.sta.benvStat = sevm.benvStat := by
-        rw [Frame.enter_run_benvStat henter]
-        exact _root_.Blanc.Xinst.step_spawn_benvStat hstep
-      -- a child at the vault runs the vault's installed code
-      have childOwnCode : evm'.sta.currentTarget = vault →
-          some evm'.sta.code.toList = Prog.compile Blanc.ProrataWethVault.vault := by
-        intro childTarget
-        have targetEq := Frame.enter_run_currentTarget henter
-        rw [Frame.enter_run_code henter]
-        rw [childTarget] at targetEq
-        rcases Xinst.step_spawn_source hstep with hempty | hsame | hsrc
-        · rw [← targetEq] at hempty
-          exact absurd hempty (not_empty_of_compile inv.preWf.pre.code)
-        · rw [← targetEq] at hsame
-          exact absurd hsame.symm h_ne
-        · rw [← targetEq] at hsrc
-          rw [hsrc (not_delegation_of_compile inv.preWf.pre.code)]
-          exact inv.preWf.pre.code
-      refine ⟨⟨⟨h_child, fun _ => Xinst.some_child_wf hx⟩,
-        inv.config.of_codePreserve childStat childCode, childOwnCode⟩, ?_⟩
-      intro h_if
-      have wholeStep : Devm.CodePreserve pre inter :=
-        Ninst.stepRun_codePreserve (xl := .some ⟨evm', out'⟩)
-          (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-            Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-            Linst.codePreserve_effect child) h_run
-      exact ⟨⟨h_back h_if, fun h => absurd h h_ne⟩,
-        inv.config.of_codePreserve rfl wholeStep, inv.code⟩
+      exact VaultFrameInv.xinst_some h_run child h_ne inv
   -- a jump at a foreign frame
   · intro pc sevm pre j pc' inter h_at h_run h_ne inv
-    have state := Jinst.preserves_state h_run
-    refine ⟨⟨inv.preWf.pre.state_eq state, fun h => absurd h h_ne⟩,
-      inv.config.of_codePreserve rfl ?_, inv.code⟩
-    intro a _
-    exact getCode_eq_of_state_eq state a
+    exact VaultFrameInv.jinst h_run h_ne inv
   -- a terminal instruction at a foreign frame
   · intro pc sevm pre l post h_at h_run h_ne inv
     exact ContractSpec.Linst.inv_postcond h_run h_ne inv.preWf.pre

@@ -13,7 +13,9 @@ open Jaune
 /-- The pair's replay boundary: the two storages the pair reads.  Balances are not in it; WETH
 solvency rides in the frame invariant, not in the replay. -/
 structure PairBoundary where
+  /-- The vault's storage. -/
   vault : Stor
+  /-- WETH's storage, at `wethAccount`. -/
   weth : Stor
 
 /-- The pair boundary of an ordinary world state. -/
@@ -23,8 +25,10 @@ def PairBoundary.ofState (vault : Adr) (w : State) : PairBoundary :=
 /-- One classified pair step.  Emitted only by a frame at the vault or at WETH; a foreign
 instruction segment moves no boundary and emits nothing.  `silent` is a WETH-frame class. -/
 inductive PairStep (vault : Adr) : State → State → Type
+  /-- A vault-frame share operation: a four-quote transition with its share evidence. -/
   | operation {before after : State} (t : FourQuote.FourQuoteTransition vault before after)
       (evidence : FourQuote.FourQuoteShareEvidence t.operation) : PairStep vault before after
+  /-- A WETH spend of the vault's allowance by a caller other than the vault: the vault's WETH row moves by `Transfer` and vault storage is unchanged. -/
   | authorizedDebit {before after : State} (call : WethAllowanceInvocation)
       (foreign : call.sevm.caller ≠ vault)
       (owner : Sevm.argWord call.sevm 0 = vault.toB256)
@@ -33,6 +37,7 @@ inductive PairStep (vault : Adr) : State → State → Type
         (Sevm.argWord call.sevm 2) (Sevm.argWord call.sevm 1).toAdr
         (Stor.rest (after.getStor wethAccount)))
       (vaultKept : after.getStor vault = before.getStor vault) : PairStep vault before after
+  /-- A WETH-frame step by `caller` that leaves vault storage and the vault's WETH row unchanged. -/
   | silent {before after : State} (caller : Adr)
       (vaultKept : after.getStor vault = before.getStor vault)
       (rowKept : Stor.rest (after.getStor wethAccount) vault =
@@ -48,18 +53,27 @@ def PairStep.caller {vault : Adr} {before after : State} : PairStep vault before
 (`own`), that invocation's storage links, the non-address silence of a step that is none, and
 its provenance, whose actor is the emitting frame's caller. -/
 structure PairStepRecord (vault : Adr) where
+  /-- The state where the step starts. -/
   before : State
+  /-- The state where the step ends. -/
   after : State
+  /-- The classified step between `before` and `after`. -/
   step : PairStep vault before after
+  /-- The WETH allowance invocation the step is or contains, if any. -/
   own : Option WethAllowanceInvocation
+  /-- An owned invocation's WETH storage matches the record's endpoints, and a vault-called one carries vault-staged calldata. -/
   linked : ∀ call, own = some call →
     call.pre.state.getStor wethAccount = before.getStor wethAccount ∧
     call.post.state.getStor wethAccount = after.getStor wethAccount ∧
     (call.sevm.caller = vault → VaultStagedCalldata call)
+  /-- A step owning no invocation leaves every non-address WETH storage key unchanged. -/
   quiet : own = none → ∀ key, ¬ ValidAdr key →
     (after.getStor wethAccount).get key = (before.getStor wethAccount).get key
+  /-- An `authorizedDebit` step owns its own invocation. -/
   debitOwn : ∀ call f o p m k, step = .authorizedDebit call f o p m k → own = some call
+  /-- The step's accounting provenance. -/
   provenance : Blanc.Prorata.ProrataAccountingProvenance
+  /-- The provenance actor is the emitting frame's caller. -/
   actor : provenance.actor = some step.caller
 
 /-- The allowance ledger of a history: the invocations its records own, in order. -/
@@ -68,7 +82,9 @@ def PairStepRecord.ledger (steps : List (PairStepRecord vault)) : List WethAllow
 
 /-- A connected pair history: consecutive records meet at equal pair boundaries. -/
 inductive PairReplay (vault : Adr) : PairBoundary → List (PairStepRecord vault) → PairBoundary → Prop
+  /-- The empty history replays a boundary to itself. -/
   | nil (b : PairBoundary) : PairReplay vault b [] b
+  /-- Prepend a record whose endpoint boundaries are `pre` and `mid` to a history from `mid` to `post`. -/
   | cons {pre mid post : PairBoundary} (record : PairStepRecord vault) {steps}
       (preEq : PairBoundary.ofState vault record.before = pre)
       (postEq : PairBoundary.ofState vault record.after = mid)
@@ -723,104 +739,8 @@ def pairCarrier (vault : Adr) (blockIndex : Nat) (transactionIndex : Option Nat)
 
 /-! ## Transport of the frame invariant across a foreign frame's steps
 
-The vault half discharges the four foreign-frame obligations that
-`vault_rely_preserves_conserved` discharges inline. -/
-
-/-- A childless step of a frame foreign to the vault keeps the vault's frame invariant. -/
-theorem VaultFrameInv.ninst_none {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
-    {n : Ninst} (h_run : Ninst.StepRun pc sevm pre n .none (.ok inter))
-    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
-    VaultFrameInv vault sevm inter := by
-  refine ⟨⟨?_, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve rfl
-      (Ninst.stepRun_codePreserve (xl := .none) trivial h_run),
-    inv.code⟩
-  have hσ' := inv.preWf.pre
-  cases n with
-  | push xs le =>
-    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-    rcases Except.bind_eq_ok h_run.2.symm with ⟨devm1, h_charge, h_push⟩
-    exact hσ'.state_eq
-      (((Devm.burn_of_chargeGas h_charge).state).trans
-        ((Devm.push_of_push h_push).state)).symm
-  | reg r =>
-    have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
-      exact h_run.2.symm
-    by_cases h_ss : r = Rinst.sstore
-    · subst h_ss
-      have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
-      rw [h_reg] at h_frame
-      refine ContractSpec.Pre.of_eqs hσ' (h_frame.getCode_eq vault).symm ?_
-        (sstore_preserves_getStor_ne h_reg h_ne)
-      funext b
-      exact (h_frame.getBal_eq b).symm
-    · exact ContractSpec.Pre.of_eqs hσ' (Rinst.preserves_getCode h_reg vault)
-        (Rinst.preserves_bal h_reg).symm
-        (congr_fun (Rinst.preserves_stor h_ss h_reg) vault).symm
-  | exec x =>
-    refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne hσ'
-    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-      using h_run
-
-/-- A spawning step of a frame foreign to the vault hands the vault's frame invariant to the
-child, and gets it back once the child's outcome satisfies the vault postcondition. -/
-theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
-    {x : Xinst} {evm' : Evm} {out' : Execution}
-    (h_run : Ninst.StepRun pc sevm pre (.exec x) (.some ⟨evm', out'⟩) (.ok inter))
-    (child : Exec evm'.pc evm'.sta evm'.dyna out')
-    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
-    VaultFrameInv vault evm'.sta evm'.dyna ∧
-      (ifOk (Blanc.ProrataWethVault.vaultSpec.Post vault evm'.sta) out' →
-        VaultFrameInv vault sevm inter) := by
-  have hx : Xinst.Run sevm pre x (.some ⟨evm', out'⟩) (.ok inter) := by
-    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-      using h_run
-  obtain ⟨h_child, h_back⟩ :=
-    ContractSpec.Xinst.some_preserves_precond (x := x) hx child h_ne inv.preWf.pre
-  obtain ⟨f, rsm, hstep, henter, -⟩ := XStep.Run.some_inv hx
-  have childCode : Devm.CodePreserve pre evm'.dyna := by
-    intro a _
-    rw [Frame.enter_run_getCode henter a]
-    exact Xinst.step_spawn_getCode hstep a
-  have childStat : evm'.sta.benvStat = sevm.benvStat := by
-    rw [Frame.enter_run_benvStat henter]
-    exact _root_.Blanc.Xinst.step_spawn_benvStat hstep
-  have childOwnCode : evm'.sta.currentTarget = vault →
-      some evm'.sta.code.toList = Prog.compile Blanc.ProrataWethVault.vault := by
-    intro childTarget
-    have targetEq := Frame.enter_run_currentTarget henter
-    rw [Frame.enter_run_code henter]
-    rw [childTarget] at targetEq
-    rcases Xinst.step_spawn_source hstep with hempty | hsame | hsrc
-    · rw [← targetEq] at hempty
-      exact absurd hempty (not_empty_of_compile inv.preWf.pre.code)
-    · rw [← targetEq] at hsame
-      exact absurd hsame.symm h_ne
-    · rw [← targetEq] at hsrc
-      rw [hsrc (not_delegation_of_compile inv.preWf.pre.code)]
-      exact inv.preWf.pre.code
-  refine ⟨⟨⟨h_child, fun _ => Xinst.some_child_wf hx⟩,
-    inv.config.of_codePreserve childStat childCode, childOwnCode⟩, ?_⟩
-  intro h_if
-  have wholeStep : Devm.CodePreserve pre inter :=
-    Ninst.stepRun_codePreserve (xl := .some ⟨evm', out'⟩)
-      (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-        Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-        Linst.codePreserve_effect child) h_run
-  exact ⟨⟨h_back h_if, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve rfl wholeStep, inv.code⟩
-
-/-- A jump of a frame foreign to the vault keeps the vault's frame invariant. -/
-theorem VaultFrameInv.jinst {vault : Adr} {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {j : Jinst} (h_run : Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩))
-    (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
-    VaultFrameInv vault sevm inter := by
-  have state := Jinst.preserves_state h_run
-  refine ⟨⟨inv.preWf.pre.state_eq state, fun h => absurd h h_ne⟩,
-    inv.config.of_codePreserve rfl ?_, inv.code⟩
-  intro a _
-  exact getCode_eq_of_state_eq state a
+The vault half's foreign-frame transports (`VaultFrameInv.ninst_none`, `.xinst_some`,
+`.jinst`) live in `ProrataWethVaultRely.lean`, where the rely rung consumes them. -/
 
 /-- Both installed programs at a frame that runs neither. -/
 theorem PairFrameInv.programsAt {vault : Adr} {sevm : Sevm} {pre : Devm} (pc : Nat)

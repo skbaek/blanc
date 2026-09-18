@@ -254,29 +254,6 @@ but is silent about the balance there.  The exit prefix is a gas-free walk,
 and no gas-free instruction moves ETH, so the prefix form of the settlement
 theorem recovers it. -/
 
-/-- A gas-free walk prefix never moves ETH. -/
-theorem runPrefix_getBal_eq {fs : List Func} {e : Sevm}
-    {path target : Prog.SourcePath} {s t : Devm} {body rest : Func}
-    (walk : Func.RunPrefix fs e path s body target t rest) :
-    Devm.getBal t = Devm.getBal s := by
-  induction walk with
-  | refl => rfl
-  | @next k steps s i s' f target t rest free step _ ih =>
-      have stepEq : Devm.getBal s = Devm.getBal s' := by
-        cases i with
-        | reg r => exact (inferInstance : Ninst.Hinv Devm.getBal (.reg r)).inv step
-        | push xs p =>
-            exact (inferInstance : Ninst.Hinv Devm.getBal (.push xs p)).inv step
-        | exec x => simp [Ninst.gasFree] at free
-      exact ih.trans stepEq.symm
-  | zero pop _ ih =>
-      exact ih.trans (funext fun a => getBal_eq_of_state_eq pop.state.symm a)
-  | succ _ pop burn _ ih =>
-      exact ih.trans (funext fun a =>
-        getBal_eq_of_state_eq (pop.state.trans burn.state).symm a)
-  | call _ burn _ ih =>
-      exact ih.trans (funext fun a => getBal_eq_of_state_eq burn.state.symm a)
-
 /-- The accepted `exit` boundary *with its balance*: the same call-boundary
 witnesses as `ExitPaysExactlyFull`, re-derived from the prefix form of the
 settlement theorem so that the walk from the body entry to the CALL is
@@ -313,7 +290,7 @@ theorem exit_run_boundary {fs : List Func} (hlookup : AuxLookup fs)
       target, hfresh, hcodeStart, hpStart, -, -, hstorStart, walk, suffix⟩
   subst freshChi
   have hbalStart : Devm.getBal callStart = Devm.getBal s :=
-    runPrefix_getBal_eq walk
+    Func.RunPrefix.getBal_eq walk
   let payout :=
     ((B256.rpow scale half rate
       (sevm.benvStat.time - Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
