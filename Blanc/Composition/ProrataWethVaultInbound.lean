@@ -51,13 +51,9 @@ def InboundEffect (sevm : Sevm) (receiver assets shares returned : B256)
         Blanc.ProrataWethVault.mintTransferLog sevm receiver shares,
         Blanc.ProrataWethVault.depositLogEntry sevm receiver assets shares]
 
-/-- Exact effect of an inbound flow from its auxiliary continuation onward.
-
-The two word parameters are the operation words each flow settles with:
-`deposit` supplies `(quote, amount)` and `mint` supplies `(amount, quote)`.
-Everything after the quote is shared, including the exact WETH `transferFrom`
-child, so both flows reach this one theorem. -/
-theorem inboundAfterQuote_effect
+/-- `inboundAfterQuote_effect` together with the exact WETH `transferFrom`
+child the flow crossed, linked at the flow entry and at its exit. -/
+theorem inboundAfterQuote_effect_linked
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {image : Bytes}
     {sharesWord assetsSourceWord : B256}
     {receiver quote supply shares assets : B256}
@@ -104,6 +100,9 @@ theorem inboundAfterQuote_effect
       receiver ≠ 0 ∧
       shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
       InboundEffect sevm receiver assets shares quote entry post ∧
+      LinkedWethChild sevm.currentTarget
+        (transferFromCalldata sevm.caller sevm.currentTarget assets)
+        entry post ∧
       ∃ bodyPre,
         Func.RunCompiledTo fs sevm bodyPre
           (Blanc.ProrataWethVault.finishInbound
@@ -231,8 +230,8 @@ theorem inboundAfterQuote_effect
     rw [← congrFun (guardCode.trans (childCode.trans stagingCode)) wethAccount]
     exact config.code
   obtain ⟨tailPre, movement, childForeign, childLogged, -, tailWf,
-      tailWindow, tailRun⟩ :=
-    callWethTransferFrom_worldEffect callConfig ⟨childWf, childReads⟩
+      tailWindow, tailRun, linked⟩ :=
+    callWethTransferFrom_worldEffect_linked callConfig ⟨childWf, childReads⟩
       (sliceBytes_of_toB256 assetsAt) (by omega) staging dynamic crossing suffix
   have stagingStorage : Devm.getStor childEntry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by
@@ -296,7 +295,7 @@ theorem inboundAfterQuote_effect
     change (Devm.getStor tailPre sevm.currentTarget).get k =
       (Devm.getStor entry sevm.currentTarget).get k
     rw [vaultStorage]
-  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, ?_, ?_⟩
+  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, ?_, ?_, ?_⟩
   · refine ⟨returned, ?_, ?_, ?_, ?_⟩
     · rw [congrFun entryToCall wethAccount,
         tailForeign wethAccount (Ne.symm vaultNe)]
@@ -307,7 +306,75 @@ theorem inboundAfterQuote_effect
       rw [tailForeign account vaultAccountNe, entryToTail account wethNe]
     · rw [tailLogged, childLogged, ← entryLogs, List.append_assoc]
       rfl
+  · exact linked.of_weth_eq (congrFun entryToCall wethAccount)
+      (tailForeign wethAccount (Ne.symm vaultNe))
   · exact ⟨guardPre, guardRun⟩
+
+/-- Exact effect of an inbound flow from its auxiliary continuation onward.
+
+The two word parameters are the operation words each flow settles with:
+`deposit` supplies `(quote, amount)` and `mint` supplies `(amount, quote)`.
+Everything after the quote is shared, including the exact WETH `transferFrom`
+child, so both flows reach this one theorem. -/
+theorem inboundAfterQuote_effect
+    {fs : List Func} {sevm : Sevm} {entry post : Devm} {image : Bytes}
+    {sharesWord assetsSourceWord : B256}
+    {receiver quote supply shares assets : B256}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (memoryReads : Mem.Reads entry.memory image)
+    (receiverAt : Bytes.toB256
+      (image.sliceD (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) =
+        receiver)
+    (supplyAt : Bytes.toB256
+      (image.sliceD (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) =
+        supply)
+    (sharesAt : Bytes.toB256
+      ((Bytes.writeAt image
+          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
+        (sharesWord * 32).toNat 32 0) = shares)
+    (assetsAt : Bytes.toB256
+      ((Bytes.writeAt image
+          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
+        (assetsSourceWord * 32).toNat 32 0) = assets)
+    (sharesAbove : 896 ≤ (sharesWord * 32).toNat)
+    (sharesBelow : (sharesWord * 32).toNat + 32 ≤
+      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
+    (assetsAbove : 896 ≤ (assetsSourceWord * 32).toNat)
+    (assetsBelow : (assetsSourceWord * 32).toNat + 32 ≤
+      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
+    (supplyStorage :
+      supply = Devm.getStorVal entry sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (stack : quote :: [] <<+ entry.stack)
+    (run : Func.RunCompiledTo fs sevm entry
+      (mstoreAt Blanc.ProrataWethVault.quoteWord +++
+        Blanc.ProrataWethVault.nonzeroCaller
+          (Blanc.ProrataWethVault.nonzeroStagedAddress
+            Blanc.ProrataWethVault.receiverWord
+            (Blanc.ProrataWethVault.finishInbound
+              (Blanc.ProrataWethVault.loadWord sharesWord)
+              (Blanc.ProrataWethVault.loadWord assetsSourceWord)
+              (Blanc.ProrataWethVault.loadWord
+                Blanc.ProrataWethVault.quoteWord)))) (.ok post)) :
+    sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr receiver ∧
+      receiver ≠ 0 ∧
+      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm receiver assets shares quote entry post ∧
+      ∃ bodyPre,
+        Func.RunCompiledTo fs sevm bodyPre
+          (Blanc.ProrataWethVault.finishInbound
+            (Blanc.ProrataWethVault.loadWord sharesWord)
+            (Blanc.ProrataWethVault.loadWord assetsSourceWord)
+            (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord))
+          (.ok post) := by
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -,
+    finish⟩ := inboundAfterQuote_effect_linked config memoryWf memoryReads
+      receiverAt supplyAt sharesAt assetsAt sharesAbove sharesBelow assetsAbove
+      assetsBelow supplyStorage stable stack run
+  exact ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, finish⟩
 
 /-- Shared inbound prefix: stage the two ABI arguments, price the quote from
 the booked WETH balance *before* the transfer, stage the exact share supply,
@@ -439,6 +506,117 @@ theorem inboundEffect_preserves_conserved
   exact conserved.mint_set Blanc.ProrataWethVault.supplySlot_not_validAdr
     overflow
 
+/-- `inboundBody_effect` together with the flow's linked WETH child. -/
+theorem inboundBody_effect_linked
+    {fs : List Func} {sevm : Sevm} {entry quotePre afterPre post : Devm}
+    {image afterImage : Bytes}
+    {sharesWord assetsSourceWord receiver quote supply shares assets : B256}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
+    (entryLogs : entry.logs = quotePre.logs)
+    (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
+    (supplyProjection :
+      Devm.getStorVal entry sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot =
+      Devm.getStorVal quotePre sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot)
+    (supplyEq : supply = Devm.getStorVal entry sevm.currentTarget
+      Blanc.ProrataWethVault.supplySlot)
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (receiverAt : Bytes.toB256
+      (image.sliceD (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) =
+        receiver)
+    (supplyAt : Bytes.toB256
+      (image.sliceD (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) =
+        supply)
+    (afterMemImage : MemImage afterPre afterImage)
+    (afterFrame : Bytes.WordFrameFrom image afterImage
+      Blanc.ProrataWethVault.arithmeticScratchEnd)
+    (quoteFrame : Devm.QuietFrame quotePre afterPre)
+    (afterStack : quote :: [] <<+ afterPre.stack)
+    (sharesAt : Bytes.toB256
+      ((Bytes.writeAt afterImage
+          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
+        (sharesWord * 32).toNat 32 0) = shares)
+    (assetsAt : Bytes.toB256
+      ((Bytes.writeAt afterImage
+          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
+        (assetsSourceWord * 32).toNat 32 0) = assets)
+    (sharesAbove : 896 ≤ (sharesWord * 32).toNat)
+    (sharesBelow : (sharesWord * 32).toNat + 32 ≤
+      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
+    (assetsAbove : 896 ≤ (assetsSourceWord * 32).toNat)
+    (assetsBelow : (assetsSourceWord * 32).toNat + 32 ≤
+      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
+    (afterRun : Func.RunCompiledTo fs sevm afterPre
+      (mstoreAt Blanc.ProrataWethVault.quoteWord +++
+        Blanc.ProrataWethVault.nonzeroCaller
+          (Blanc.ProrataWethVault.nonzeroStagedAddress
+            Blanc.ProrataWethVault.receiverWord
+            (Blanc.ProrataWethVault.finishInbound
+              (Blanc.ProrataWethVault.loadWord sharesWord)
+              (Blanc.ProrataWethVault.loadWord assetsSourceWord)
+              (Blanc.ProrataWethVault.loadWord
+                Blanc.ProrataWethVault.quoteWord)))) (.ok post)) :
+    sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr receiver ∧
+      receiver ≠ 0 ∧
+      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm receiver assets shares quote entry post ∧
+      LinkedWethChild sevm.currentTarget
+        (transferFromCalldata sevm.caller sevm.currentTarget assets)
+        entry post := by
+  have afterConfig :
+      DirectWethConfiguration sevm.currentTarget sevm afterPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← getCode_eq_of_state_eq quoteFrame.1 wethAccount, entryCode]
+    exact config.code
+  have carry : ∀ {offset : Nat} {w : B256},
+      Blanc.ProrataWethVault.arithmeticScratchEnd ≤ offset →
+      Bytes.toB256 (image.sliceD offset 32 0) = w →
+      Bytes.toB256 (afterImage.sliceD offset 32 0) = w := by
+    intro offset w above value
+    rw [afterFrame offset above]
+    exact value
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits,
+      ⟨returned, movement, vaultStorage, foreign, logged⟩, linked, -⟩ :=
+    inboundAfterQuote_effect_linked afterConfig afterMemImage.1 afterMemImage.2
+      (carry (by decide +kernel) receiverAt)
+      (carry (by decide +kernel) supplyAt)
+      sharesAt assetsAt sharesAbove sharesBelow assetsAbove assetsBelow
+      (by
+        rw [supplyEq, supplyProjection]
+        change (Devm.getStor quotePre sevm.currentTarget).get
+            Blanc.ProrataWethVault.supplySlot =
+          (Devm.getStor afterPre sevm.currentTarget).get
+            Blanc.ProrataWethVault.supplySlot
+        rw [funext (getStor_eq_of_state_eq quoteFrame.1)])
+      stable afterStack afterRun
+  have quoteStorage : Devm.getStor quotePre = Devm.getStor afterPre :=
+    funext (getStor_eq_of_state_eq quoteFrame.1)
+  have storValEq : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
+      Devm.getStorVal afterPre sevm.currentTarget k := by
+    intro k
+    change (Devm.getStor entry sevm.currentTarget).get k =
+      (Devm.getStor afterPre sevm.currentTarget).get k
+    rw [congrFun entryStorage sevm.currentTarget,
+      congrFun quoteStorage sevm.currentTarget]
+  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits,
+    ⟨returned, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · rw [congrFun entryStorage wethAccount, congrFun quoteStorage wethAccount]
+    exact movement
+  · rw [congrFun entryStorage sevm.currentTarget,
+      congrFun quoteStorage sevm.currentTarget, storValEq receiver,
+      storValEq Blanc.ProrataWethVault.supplySlot]
+    exact vaultStorage
+  · intro account wethNe vaultNe
+    rw [foreign account wethNe vaultNe, ← congrFun quoteStorage account,
+      ← congrFun entryStorage account]
+  · rw [logged, ← quoteFrame.2, ← entryLogs]
+  · exact linked.of_weth_eq
+      ((congrFun entryStorage wethAccount).trans
+        (congrFun quoteStorage wethAccount)) rfl
+
 /-- Join one flow's quote arithmetic to the shared settlement.
 
 `sharesWord` and `assetsSourceWord` are the operation words the flow settles
@@ -502,53 +680,87 @@ theorem inboundBody_effect
       receiver ≠ 0 ∧
       shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
       InboundEffect sevm receiver assets shares quote entry post := by
-  have afterConfig :
-      DirectWethConfiguration sevm.currentTarget sevm afterPre := by
-    refine ⟨config.distinct, config.nonprecompile, ?_⟩
-    rw [← getCode_eq_of_state_eq quoteFrame.1 wethAccount, entryCode]
-    exact config.code
-  have carry : ∀ {offset : Nat} {w : B256},
-      Blanc.ProrataWethVault.arithmeticScratchEnd ≤ offset →
-      Bytes.toB256 (image.sliceD offset 32 0) = w →
-      Bytes.toB256 (afterImage.sliceD offset 32 0) = w := by
-    intro offset w above value
-    rw [afterFrame offset above]
-    exact value
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits,
-      ⟨returned, movement, vaultStorage, foreign, logged⟩, -⟩ :=
-    inboundAfterQuote_effect afterConfig afterMemImage.1 afterMemImage.2
-      (carry (by decide +kernel) receiverAt)
-      (carry (by decide +kernel) supplyAt)
-      sharesAt assetsAt sharesAbove sharesBelow assetsAbove assetsBelow
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
+    inboundBody_effect_linked config entryStorage entryLogs entryCode
+      supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
+      afterFrame quoteFrame afterStack sharesAt assetsAt sharesAbove sharesBelow
+      assetsAbove assetsBelow afterRun
+  exact ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect⟩
+
+/-- `deposit_body_effect` together with the flow's linked WETH child. -/
+theorem deposit_body_effect_linked
+    {fs : List Func} {sevm : Sevm} {entry post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
+      some Blanc.ProrataWethVault.depositAfterQuote)
+    (stack : [] <<+ entry.stack)
+    (run : Func.RunCompiledTo fs sevm entry
+      Blanc.ProrataWethVault.deposit (.ok post)) :
+    ∃ supply,
+      supply = Devm.getStorVal entry sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      Sevm.argWord sevm 1 ≠ 0 ∧
+      (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+          (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
+        Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+          (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+          (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+        entry post ∧
+      LinkedWethChild sevm.currentTarget
+        (transferFromCalldata sevm.caller sevm.currentTarget
+          (Sevm.argWord sevm 0))
+        entry post := by
+  rw [Blanc.ProrataWethVault.deposit_shape] at run
+  obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
+      amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
+      quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
+    inboundQuoteStaging_effect config memoryWf stack run
+  obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
+      afterFrame, quoteFrame, afterRun⟩ :=
+    Blanc.ProrataWethVault.depositQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
+      amountAt assetsAt supplyAt stable quoteStack lookup quoteRun
+  rw [Blanc.ProrataWethVault.depositAfterQuote_shape] at afterRun
+  have amountAtAfter : Bytes.toB256
+      (afterImage.sliceD
+        (Blanc.ProrataWethVault.amountWord * 32).toNat 32 0) =
+        Sevm.argWord sevm 0 := by
+    rw [afterFrame _ (by decide +kernel)]
+    exact amountAt
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect,
+      linked⟩ :=
+    inboundBody_effect_linked config quoteStorage quoteLogs quoteCode
+      supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
+      afterFrame quoteFrame afterStack
+      (shares := Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+        (Sevm.argWord sevm 0).toNat
+        ((entry.state.getStor wethAccount).get
+          sevm.currentTarget.toB256).toNat supply.toNat))
+      (assets := Sevm.argWord sevm 0)
+      (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by
-        rw [supplyEq, supplyProjection]
-        change (Devm.getStor quotePre sevm.currentTarget).get
-            Blanc.ProrataWethVault.supplySlot =
-          (Devm.getStor afterPre sevm.currentTarget).get
-            Blanc.ProrataWethVault.supplySlot
-        rw [funext (getStor_eq_of_state_eq quoteFrame.1)])
-      stable afterStack afterRun
-  have quoteStorage : Devm.getStor quotePre = Devm.getStor afterPre :=
-    funext (getStor_eq_of_state_eq quoteFrame.1)
-  have storValEq : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
-      Devm.getStorVal afterPre sevm.currentTarget k := by
-    intro k
-    change (Devm.getStor entry sevm.currentTarget).get k =
-      (Devm.getStor afterPre sevm.currentTarget).get k
-    rw [congrFun entryStorage sevm.currentTarget,
-      congrFun quoteStorage sevm.currentTarget]
-  refine ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, returned,
-    ?_, ?_, ?_, ?_⟩
-  · rw [congrFun entryStorage wethAccount, congrFun quoteStorage wethAccount]
-    exact movement
-  · rw [congrFun entryStorage sevm.currentTarget,
-      congrFun quoteStorage sevm.currentTarget, storValEq receiver,
-      storValEq Blanc.ProrataWethVault.supplySlot]
-    exact vaultStorage
-  · intro account wethNe vaultNe
-    rw [foreign account wethNe vaultNe, ← congrFun quoteStorage account,
-      ← congrFun entryStorage account]
-  · rw [logged, ← quoteFrame.2, ← entryLogs]
+        rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _
+          (Or.inl (by decide +kernel))]
+        exact amountAtAfter)
+      (by decide +kernel) (by decide +kernel) (by decide +kernel)
+      (by decide +kernel) afterRun
+  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+    receiverNonzero, roomFits, effect, linked⟩
 
 /-- Exact compiled body effect of `deposit(assets, receiver)`.
 
@@ -591,40 +803,87 @@ theorem deposit_body_effect
           ((entry.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat))
         entry post := by
-  rw [Blanc.ProrataWethVault.deposit_shape] at run
+  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+      receiverNonzero, roomFits, effect, -⟩ :=
+    deposit_body_effect_linked config memoryWf lookup stack run
+  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+    receiverNonzero, roomFits, effect⟩
+
+/-- `mint_body_effect` together with the flow's linked WETH child. -/
+theorem mint_body_effect_linked
+    {fs : List Func} {sevm : Sevm} {entry post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (memoryWf : Mem.Wf entry.memory)
+    (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
+      some Blanc.ProrataWethVault.mintAfterQuote)
+    (stack : [] <<+ entry.stack)
+    (run : Func.RunCompiledTo fs sevm entry
+      Blanc.ProrataWethVault.mint (.ok post)) :
+    ∃ supply,
+      supply = Devm.getStorVal entry sevm.currentTarget
+        Blanc.ProrataWethVault.supplySlot ∧
+      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      Sevm.argWord sevm 1 ≠ 0 ∧
+      (Sevm.argWord sevm 0).toNat ≤
+        Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+      InboundEffect sevm (Sevm.argWord sevm 1)
+        (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+          (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+        (Sevm.argWord sevm 0)
+        (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+          (Sevm.argWord sevm 0).toNat
+          ((entry.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+        entry post ∧
+      LinkedWethChild sevm.currentTarget
+        (transferFromCalldata sevm.caller sevm.currentTarget
+          (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+            (Sevm.argWord sevm 0).toNat
+            ((entry.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat)))
+        entry post := by
+  rw [Blanc.ProrataWethVault.mint_shape] at run
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
       quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
     inboundQuoteStaging_effect config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.depositQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
+    Blanc.ProrataWethVault.mintQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
       amountAt assetsAt supplyAt stable quoteStack lookup quoteRun
-  rw [Blanc.ProrataWethVault.depositAfterQuote_shape] at afterRun
+  rw [Blanc.ProrataWethVault.mintAfterQuote_shape] at afterRun
   have amountAtAfter : Bytes.toB256
       (afterImage.sliceD
         (Blanc.ProrataWethVault.amountWord * 32).toNat 32 0) =
         Sevm.argWord sevm 0 := by
     rw [afterFrame _ (by decide +kernel)]
     exact amountAt
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect⟩ :=
-    inboundBody_effect config quoteStorage quoteLogs quoteCode
+  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect,
+      linked⟩ :=
+    inboundBody_effect_linked config quoteStorage quoteLogs quoteCode
       supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
       afterFrame quoteFrame afterStack
-      (shares := Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+      (shares := Sevm.argWord sevm 0)
+      (assets := Nat.toB256 (Blanc.ProrataWethVault.previewMintN
         (Sevm.argWord sevm 0).toNat
         ((entry.state.getStor wethAccount).get
           sevm.currentTarget.toB256).toNat supply.toNat))
-      (assets := Sevm.argWord sevm 0)
-      (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by
         rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _
           (Or.inl (by decide +kernel))]
         exact amountAtAfter)
+      (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
       (by decide +kernel) (by decide +kernel) (by decide +kernel)
       (by decide +kernel) afterRun
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-    receiverNonzero, roomFits, effect⟩
+    receiverNonzero, roomFits, effect, linked⟩
 
 /-- Exact compiled body effect of `mint(shares, receiver)`.
 
@@ -664,38 +923,9 @@ theorem mint_body_effect
           ((entry.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat))
         entry post := by
-  rw [Blanc.ProrataWethVault.mint_shape] at run
-  obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
-      amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
-      quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    inboundQuoteStaging_effect config memoryWf stack run
-  obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
-      afterFrame, quoteFrame, afterRun⟩ :=
-    Blanc.ProrataWethVault.mintQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
-      amountAt assetsAt supplyAt stable quoteStack lookup quoteRun
-  rw [Blanc.ProrataWethVault.mintAfterQuote_shape] at afterRun
-  have amountAtAfter : Bytes.toB256
-      (afterImage.sliceD
-        (Blanc.ProrataWethVault.amountWord * 32).toNat 32 0) =
-        Sevm.argWord sevm 0 := by
-    rw [afterFrame _ (by decide +kernel)]
-    exact amountAt
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect⟩ :=
-    inboundBody_effect config quoteStorage quoteLogs quoteCode
-      supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
-      afterFrame quoteFrame afterStack
-      (shares := Sevm.argWord sevm 0)
-      (assets := Nat.toB256 (Blanc.ProrataWethVault.previewMintN
-        (Sevm.argWord sevm 0).toNat
-        ((entry.state.getStor wethAccount).get
-          sevm.currentTarget.toB256).toNat supply.toNat))
-      (by
-        rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _
-          (Or.inl (by decide +kernel))]
-        exact amountAtAfter)
-      (toB256_of_sliceBytes (Bytes.sliceD_writeAt _ _ _))
-      (by decide +kernel) (by decide +kernel) (by decide +kernel)
-      (by decide +kernel) afterRun
+  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+      receiverNonzero, roomFits, effect, -⟩ :=
+    mint_body_effect_linked config memoryWf lookup stack run
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect⟩
 
@@ -757,6 +987,75 @@ private theorem mint_mem_vaultFuncs :
       Blanc.ProrataWethVault.vaultFuncs := by
   simp [Blanc.ProrataWethVault.vaultFuncs]
 
+/-- `deposit_compiled_effect` together with the flow's linked WETH child. -/
+theorem deposit_compiled_effect_linked
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
+          Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+        InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post ∧
+        LinkedWethChild sevm.currentTarget
+          (transferFromCalldata sevm.caller sevm.currentTarget
+            (Sevm.argWord sevm 0))
+          pre post := by
+  rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
+      run selectorEq deposit_mem_vaultFuncs with
+    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
+  have bodyConfig :
+      DirectWethConfiguration sevm.currentTarget sevm bodyPre := by
+    refine ⟨config.distinct, config.nonprecompile, ?_⟩
+    rw [← getCode_eq_of_state_eq entryState wethAccount]
+    exact config.code
+  have bodyWf : Mem.Wf bodyPre.memory := by
+    rw [← entryMemory]
+    exact memoryWf
+  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
+      receiverNonzero, roomFits, effect, linked⟩ :=
+    deposit_body_effect_linked bodyConfig bodyWf
+      depositAfterQuote_lookup nil_pref bodyRun
+  refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
+    receiverNonzero, ?_, ?_, ?_⟩
+  · rw [supplyEq]
+    change (Devm.getStor bodyPre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot =
+      (Devm.getStor pre sevm.currentTarget).get
+        Blanc.ProrataWethVault.supplySlot
+    rw [funext (getStor_eq_of_state_eq entryState)]
+  · rw [← entryState] at quoteFits
+    exact quoteFits
+  · rw [← entryState] at roomFits
+    exact roomFits
+  · rw [← entryState] at effect
+    exact inboundEffect_lift entryState entryLogs effect
+  · exact linked.of_weth_eq (getStor_eq_of_state_eq entryState wethAccount) rfl
+
 /-- Public compiled `deposit(assets, receiver)`.
 
 The vault acquires exactly `assets` WETH from the caller through the exact
@@ -798,8 +1097,53 @@ theorem deposit_compiled_effect
             ((pre.state.getStor wethAccount).get
               sevm.currentTarget.toB256).toNat supply.toNat))
           pre post := by
+  obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
+      receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
+    deposit_compiled_effect_linked config memoryWf run selectorEq
+  exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
+    receiverValid, receiverNonzero, roomFits, effect⟩
+
+/-- `mint_compiled_effect` together with the flow's linked WETH child. -/
+theorem mint_compiled_effect_linked
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "mint" [.uint256, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        (Sevm.argWord sevm 0).toNat ≤
+          Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+        InboundEffect sevm (Sevm.argWord sevm 1)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post ∧
+        LinkedWethChild sevm.currentTarget
+          (transferFromCalldata sevm.caller sevm.currentTarget
+            (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+              (Sevm.argWord sevm 0).toNat
+              ((pre.state.getStor wethAccount).get
+                sevm.currentTarget.toB256).toNat supply.toNat)))
+          pre post := by
   rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
-      run selectorEq deposit_mem_vaultFuncs with
+      run selectorEq mint_mem_vaultFuncs with
     ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyConfig :
       DirectWethConfiguration sevm.currentTarget sevm bodyPre := by
@@ -810,11 +1154,11 @@ theorem deposit_compiled_effect
     rw [← entryMemory]
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, roomFits, effect⟩ :=
-    deposit_body_effect bodyConfig bodyWf
-      depositAfterQuote_lookup nil_pref bodyRun
+      receiverNonzero, roomFits, effect, linked⟩ :=
+    mint_body_effect_linked bodyConfig bodyWf
+      mintAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
-    receiverNonzero, ?_, ?_⟩
+    receiverNonzero, roomFits, ?_, ?_⟩
   · rw [supplyEq]
     change (Devm.getStor bodyPre sevm.currentTarget).get
         Blanc.ProrataWethVault.supplySlot =
@@ -823,10 +1167,10 @@ theorem deposit_compiled_effect
     rw [funext (getStor_eq_of_state_eq entryState)]
   · rw [← entryState] at quoteFits
     exact quoteFits
-  · rw [← entryState] at roomFits
-    exact roomFits
   · rw [← entryState] at effect
     exact inboundEffect_lift entryState entryLogs effect
+  · rw [← entryState] at linked
+    exact linked.of_weth_eq (getStor_eq_of_state_eq entryState wethAccount) rfl
 
 /-- Public compiled `mint(shares, receiver)`. -/
 theorem mint_compiled_effect
@@ -860,34 +1204,11 @@ theorem mint_compiled_effect
             ((pre.state.getStor wethAccount).get
               sevm.currentTarget.toB256).toNat supply.toNat))
           pre post := by
-  rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
-      run selectorEq mint_mem_vaultFuncs with
-    ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
-  have bodyConfig :
-      DirectWethConfiguration sevm.currentTarget sevm bodyPre := by
-    refine ⟨config.distinct, config.nonprecompile, ?_⟩
-    rw [← getCode_eq_of_state_eq entryState wethAccount]
-    exact config.code
-  have bodyWf : Mem.Wf bodyPre.memory := by
-    rw [← entryMemory]
-    exact memoryWf
-  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, roomFits, effect⟩ :=
-    mint_body_effect bodyConfig bodyWf
-      mintAfterQuote_lookup nil_pref bodyRun
-  refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
-    receiverNonzero, roomFits, ?_⟩
-  · rw [supplyEq]
-    change (Devm.getStor bodyPre sevm.currentTarget).get
-        Blanc.ProrataWethVault.supplySlot =
-      (Devm.getStor pre sevm.currentTarget).get
-        Blanc.ProrataWethVault.supplySlot
-    rw [funext (getStor_eq_of_state_eq entryState)]
-  · rw [← entryState] at quoteFits
-    exact quoteFits
-  · rw [← entryState] at effect
-    exact inboundEffect_lift entryState entryLogs effect
-
+  obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
+      receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
+    mint_compiled_effect_linked config memoryWf run selectorEq
+  exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
+    receiverValid, receiverNonzero, roomFits, effect⟩
 
 /-! ## Conservation at the public inbound endpoints
 

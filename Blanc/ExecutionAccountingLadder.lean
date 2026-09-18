@@ -59,6 +59,58 @@ theorem processWithdrawalsState_sum_nof {pre : State} {wds : List Withdrawal}
       exact ih (withdrawalCredit_bounds bound).2
 -- the induction of ProrataAccountingBody.lean:123–146, keeping only the bound.
 
+/-- G+1.  A transaction's prepared message is sent by its checked sender. -/
+theorem TransactionTrace.msg_caller
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    trace.msg.caller = trace.sender := by
+  have prepared := trace.prepared
+  unfold prepareMessage at prepared
+  injection prepared with h
+  rw [← h]
+  rfl
+-- the `injection` of `prepareMessage_benv` (Ladder.lean:6347–6355); `prepareMessage` sets
+-- `caller := tenv.stat.origin` (Jaune Transaction.lean:846) and `transactionTenv` sets `origin := sender`.
+
+/-- G+2.  A transaction list threads its block environment by state alone. -/
+theorem ApplyTransactionsTrace.stat_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    finalBenv.stat = benv.stat := by
+  induction trace with
+  | nil => rfl
+  | cons head tail ih => simpa [Benv.withState] using ih
+-- `ApplyTransactionsTrace.createdAccounts_eq` (ExecutionBodyEffects.lean:135–143) line for line.
+
+/-- G+3.  The direct withdrawals move balances only. -/
+theorem processWithdrawalsState_getStor_eq (ca : Adr) (state : State)
+    (withdrawals : List Withdrawal) :
+    (processWithdrawalsState state withdrawals).getStor ca = state.getStor ca := by
+  induction withdrawals generalizing state with
+  | nil => rfl
+  | cons withdrawal withdrawals ih =>
+      rw [processWithdrawalsState_cons, ih]
+      show ((state.setBal withdrawal.recipient _).get ca).stor = (state.get ca).stor
+      rw [State.setBal_get_stor]
+-- hoisted from Weth10HolderFlowResult.lean:669–682 (a contract module, not importable here); the
+-- `addBal` step is the generic ladder's own `ofAddBal` storage line (G:80–84).
+
+/-- G+4.  The block's withdrawal bound survives the body prefix. -/
+theorem AppliedBodyTrace.transactionBound
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
+  have beacon := processMessageCall_sum_le trace.beacon.message.result
+  have history := processMessageCall_sum_le trace.history.message.result
+  have transactions := trace.transactions.sum_le
+  simp only [systemTransactionMessage_benv_state, Benv.withState] at beacon history transactions
+  omega
+-- AppliedBodyTrace.sum_le_of_empty_withdrawals (ExecutionBodyEffects.lean:229–240), first three lines;
+-- it is also the inline `txBound` of G:548–556 and PB:190–198, which may then use it.
+
 end ExecutionTrace
 
 namespace ExecutionAccountingReplay
