@@ -32,42 +32,10 @@ open _root_.Blanc.ExecutionTrace
 
 /-! ## 1. Replays with an admissibility predicate -/
 
-/-- A connected pair replay whose records all satisfy `ok`.  `PairReplayBetween b t fp` is the instance
-`ok = PairProvenanceOk b t fp`. -/
-def PairReplayWith (vault : Adr) (ok : PairStepRecord vault → Prop)
-    (pre post : PairBoundary) : Prop :=
-  ∃ steps, PairReplay vault pre steps post ∧ ∀ r ∈ steps, ok r
-
 /-- A record emitted inside block `blockIndex`. -/
 def PairInBlock {vault : Adr} (blockIndex : Nat) (r : PairStepRecord vault) : Prop :=
   r.provenance.blockIndex = blockIndex
 
-namespace PairReplayWith
-
-variable {vault : Adr} {ok ok' : PairStepRecord vault → Prop}
-
-theorem nil_of_eq {pre post : PairBoundary} (eq : post = pre) :
-    PairReplayWith vault ok pre post :=
-  ⟨[], PairReplay.nil_of_eq eq, by simp⟩
--- H:270–272 at a general predicate.
-
-theorem append {pre mid post : PairBoundary}
-    (first : PairReplayWith vault ok pre mid) (second : PairReplayWith vault ok mid post) :
-    PairReplayWith vault ok pre post := by
-  obtain ⟨left, leftReplay, leftOk⟩ := first
-  obtain ⟨right, rightReplay, rightOk⟩ := second
-  refine ⟨left ++ right, leftReplay.append rightReplay, fun r member => ?_⟩
-  rcases List.mem_append.mp member with inLeft | inRight
-  · exact leftOk r inLeft
-  · exact rightOk r inRight
--- H:274–283 at a general predicate (K1 note §9 D-d).
-
-theorem mono {pre post : PairBoundary} (weaken : ∀ r, ok r → ok' r)
-    (replay : PairReplayWith vault ok pre post) : PairReplayWith vault ok' pre post := by
-  obtain ⟨steps, stepsReplay, stepsOk⟩ := replay
-  exact ⟨steps, stepsReplay, fun r member => weaken r (stepsOk r member)⟩
-
-end PairReplayWith
 
 theorem PairReplayBetween.toWith {vault : Adr} {blockIndex : Nat}
     {transactionIndex : Option Nat} {framePath : List Nat} {pre post : PairBoundary}
