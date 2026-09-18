@@ -232,6 +232,244 @@ structure WethWithdrawSplit (sevm : Sevm) (pre post : Devm) where
   /-- After the `CALL` returns, the suffix writes no storage. -/
   after : Devm.getStor post = Devm.getStor callPost
 
+/-- Build the accepted-payout split from the common facts at WETH's value-bearing
+`CALL`.  Both the compiled source route and the retained execution-node route
+use this constructor; their only differing work is obtaining `callFacts`. -/
+/- The retained entered-call witnesses are named once so the locator can pin
+the payout trace to the exact `Xlot` selected by the CALL step. -/
+structure WethWithdrawCallFacts (sevm : Sevm) (callPre callPost : Devm) where
+  xl : Xlot
+  retained : ExecutionTrace.RetainedXlot xl
+  (parent child : Devm)
+  delegated : Bool
+  nextAddress : Adr
+  code : ByteArray
+  (avail pc : Nat)
+  step : Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost)
+  positive : 0 < sevm.depth
+  stack : callPre.stack = 0 :: sevm.caller.toB256 :: Sevm.argWord sevm 0 ::
+    0 :: 0 :: 0 :: 0 :: parent.stack
+  parentState : parent.state = callPre.state
+  parentMemory : parent.memory = callPre.memory.extends [(0, 0), (0, 0)]
+  parentLogs : parent.logs = callPre.logs
+  parentOutput : parent.output = callPre.output
+  delegation :
+    (getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = none ∧
+      nextAddress = sevm.caller.toB256.toAdr ∧
+      code = callPre.getCode sevm.caller.toB256.toAdr ∧ delegated = false) ∨
+    (∃ d, getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = some d ∧
+      nextAddress = d ∧ code = callPre.getCode d ∧ delegated = true)
+  filled : Xlot.Filled xl
+  processed : ProcessMessage
+    (callMsg sevm parent
+      (min (0 : Nat) (except64th avail) +
+        (if (Sevm.argWord sevm 0).toNat = 0 then 0 else gCallStipend))
+      (Sevm.argWord sevm 0) sevm.currentTarget sevm.caller.toB256.toAdr
+      nextAddress true false ((callPre.memory.read 0 0).1) code delegated)
+    xl (.ok child)
+  clean : child.error.isSome = false
+  resume : (Resume.call parent 0 0).run (.ok child) = .ok callPost
+  postState : callPost.state = child.state
+  postReturnData : callPost.returnData = child.output
+  postMemory : callPost.memory = parent.memory.write 0 (child.output.take 0)
+  postStack : callPost.stack = (1 : B256) :: parent.stack
+
+theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
+    {callPre callPost : Devm}
+    (target : sevm.currentTarget = wethAccount)
+    (callerNe : sevm.caller ≠ wethAccount)
+    (precondition : wethSpec.Pre wethAccount sevm pre)
+    (written : Devm.getStor callPre sevm.currentTarget =
+      (Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+        (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 -
+          Sevm.argWord sevm 0))
+    (foreignKept : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor callPre account = Devm.getStor pre account)
+    (facts : WethWithdrawCallFacts sevm callPre callPost)
+    (callBal : Devm.getBal callPre = Devm.getBal pre)
+    (callCode : Devm.getCode callPre = Devm.getCode pre)
+    (solvent : wethSpec.Pre sevm.currentTarget sevm pre →
+      Stor.Solvent (Devm.getStor callPre sevm.currentTarget) 0
+        (Devm.getBal callPre sevm.currentTarget - Sevm.argWord sevm 0))
+    (after : Devm.getStor post = Devm.getStor callPost)
+    :
+    ∃ split : WethWithdrawSplit sevm pre post,
+      split.callPre = callPre ∧ split.callPost = callPost ∧
+      split.payout.trace.slot = facts.xl ∧
+      HEq split.payout.trace.retained facts.retained ∧
+      HEq split.payout.trace.run facts.processed ∧
+      HEq split.payout.trace
+        (⟨facts.xl, facts.retained, facts.processed⟩ :
+          ExecutionTrace.ProcessMessageTrace _ _) := by
+  rcases facts with
+    ⟨xl, retained, parent, child, delegated, nextAddress, code, avail, pc,
+      step, positive, stack, parentState, parentMemory, parentLogs, parentOutput,
+      delegation, filled, processed, clean, resume, callPostState,
+      postReturnData, postMemory, postStack⟩
+  let wad := Sevm.argWord sevm 0
+  let childMsg :=
+    callMsg sevm parent
+      (min (0 : B256).toNat (except64th avail) +
+        (if wad.toNat = 0 then 0 else gCallStipend))
+      wad sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+      ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1) code delegated
+  change ProcessMessage childMsg xl (.ok child) at processed
+  have recipientNe : sevm.caller.toB256.toAdr ≠ sevm.currentTarget := by
+    rw [toAdr_toB256, target]
+    exact callerNe
+  obtain ⟨settledRaw, frameBody, settled⟩ := ProcessMessage.iff_body.mp processed
+  unfold FrameBody at frameBody
+  rcases transfer : childMsg.benvAfterTransfer with error | entry <;>
+    rw [transfer] at frameBody
+  · rw [frameBody.2, processMessage.settle_error] at settled
+    cases settled
+  rcases of_benvAfterTransfer (rfl : childMsg.shouldTransferValue = true) transfer with
+    ⟨debited, debit, entryEq⟩
+  change parent.state.subBal sevm.currentTarget wad = some debited at debit
+  rw [parentState] at debit
+  have entryState : entry.state = debited.addBal sevm.caller.toB256.toAdr wad := by
+    rw [entryEq]
+    rfl
+  have fields := of_state_transfer_fields (callee := sevm.caller.toB256.toAdr) debit
+  let payout : Blanc.Prorata.AcceptedPayoutTrace sevm wad callPre callPost :=
+    { childMsg := childMsg
+      entry := entry
+      child := child
+      trace := ⟨xl, retained, processed⟩
+      childClean := clean
+      messageState := parentState
+      shouldTransferValue := rfl
+      caller := rfl
+      value := rfl
+      target := rfl
+      targetNe := recipientNe
+      depth := by
+        change sevm.depth - 1 < sevm.depth
+        omega
+      entryTransfer := transfer
+      entryStor := by
+        rw [entryState]
+        exact fields.1 sevm.currentTarget
+      entryBalance := by
+        rw [entryState]
+        exact fields.2.2.2.2 recipientNe
+      callPostState := callPostState }
+  have atTarget : wethSpec.Pre sevm.currentTarget sevm pre := target ▸ precondition
+  refine ⟨⟨callPre, callPost, payout, written, foreignKept, ?_, ?_, ?_, after⟩,
+    rfl, rfl, ?_, ?_, ?_, ?_⟩
+  · intro account
+    change ((entry.state).get account).code = (pre.getAcct account).code
+    rw [entryState, fields.2.1 account]
+    exact congrFun callCode account
+  · change entry.stat = sevm.benvStat
+    rw [benvAfterTransfer_stat transfer]
+    rfl
+  · apply ContractSpec.Pre.child_of_outbound_transfer
+      (st := callPre.state) (st_mid := debited)
+      (target := sevm.caller.toB256.toAdr) (value := wad)
+    · have entryCode := atTarget.code
+      rw [← congrFun callCode sevm.currentTarget] at entryCode
+      exact entryCode
+    · have side := atTarget.side
+      rw [← callBal] at side
+      exact side
+    · exact solvent atTarget
+    · exact debit
+    · exact entryState
+    · rfl
+    · rfl
+  · change xl = xl
+    rfl
+  · exact HEq.rfl
+  · exact HEq.rfl
+  · exact HEq.rfl
+
+theorem WethWithdrawSplit.ofCallFacts {sevm : Sevm} {pre post : Devm}
+    {callPre callPost : Devm}
+    (target : sevm.currentTarget = wethAccount)
+    (callerNe : sevm.caller ≠ wethAccount)
+    (precondition : wethSpec.Pre wethAccount sevm pre)
+    (written : Devm.getStor callPre sevm.currentTarget =
+      (Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+        (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 -
+          Sevm.argWord sevm 0))
+    (foreignKept : ∀ account, sevm.currentTarget ≠ account →
+      Devm.getStor callPre account = Devm.getStor pre account)
+    (callFacts :
+      ∃ (parent child : Devm) (xl : Xlot) (delegated : Bool) (nextAddress : Adr)
+        (code : ByteArray) (avail pc : Nat),
+        Ninst.StepRun pc sevm callPre Ninst.call xl (.ok callPost) ∧
+        0 < sevm.depth ∧
+        callPre.stack = 0 :: sevm.caller.toB256 :: Sevm.argWord sevm 0 ::
+          0 :: 0 :: 0 :: 0 :: parent.stack ∧
+        parent.state = callPre.state ∧
+        parent.memory = callPre.memory.extends
+          [(0, 0), (0, 0)] ∧
+        parent.logs = callPre.logs ∧ parent.output = callPre.output ∧
+        ((getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = none ∧
+            nextAddress = sevm.caller.toB256.toAdr ∧ code = callPre.getCode sevm.caller.toB256.toAdr ∧
+            delegated = false) ∨
+          (∃ d, getDelegatedCodeAddress (callPre.getCode sevm.caller.toB256.toAdr) = some d ∧
+            nextAddress = d ∧ code = callPre.getCode d ∧ delegated = true)) ∧
+        Xlot.Filled xl ∧
+        ProcessMessage
+          (callMsg sevm parent
+            (min (0 : Nat) (except64th avail) +
+              (if (Sevm.argWord sevm 0).toNat = 0 then 0 else gCallStipend))
+            (Sevm.argWord sevm 0) sevm.currentTarget sevm.caller.toB256.toAdr
+            nextAddress true false
+            ((callPre.memory.read 0 0).1) code delegated)
+          xl (.ok child) ∧
+        child.error.isSome = false ∧
+        (Resume.call parent 0 0).run (.ok child) = .ok callPost ∧
+        callPost.state = child.state ∧ callPost.returnData = child.output ∧
+        callPost.memory = parent.memory.write 0 (child.output.take 0) ∧
+        callPost.stack = (1 : B256) :: parent.stack)
+    (callBal : Devm.getBal callPre = Devm.getBal pre)
+    (callCode : Devm.getCode callPre = Devm.getCode pre)
+    (solvent : wethSpec.Pre sevm.currentTarget sevm pre →
+      Stor.Solvent (Devm.getStor callPre sevm.currentTarget) 0
+        (Devm.getBal callPre sevm.currentTarget - Sevm.argWord sevm 0))
+    (after : Devm.getStor post = Devm.getStor callPost)
+    :
+    Nonempty (WethWithdrawSplit sevm pre post) := by
+  rcases callFacts with
+    ⟨parent, child, xl, delegated, nextAddress, code, avail, pc, step,
+      positive, stack, parentState, parentMemory, parentLogs, parentOutput,
+      delegation, filled, processed, clean, resume, callPostState,
+      postReturnData, postMemory, postStack⟩
+  obtain ⟨retained⟩ := ExecutionTrace.exists_retainedXlot_of_filled filled
+  let facts : WethWithdrawCallFacts sevm callPre callPost :=
+    { xl := xl
+      retained := retained
+      parent := parent
+      child := child
+      delegated := delegated
+      nextAddress := nextAddress
+      code := code
+      avail := avail
+      pc := pc
+      step := step
+      positive := positive
+      stack := stack
+      parentState := parentState
+      parentMemory := parentMemory
+      parentLogs := parentLogs
+      parentOutput := parentOutput
+      delegation := delegation
+      filled := filled
+      processed := processed
+      clean := clean
+      resume := resume
+      postState := callPostState
+      postReturnData := postReturnData
+      postMemory := postMemory
+      postStack := postStack }
+  obtain ⟨split, -, -, -, -, -⟩ :=
+    WethWithdrawSplit.ofCallFacts_pinned target callerNe precondition written
+      foreignKept facts callBal callCode solvent after
+  exact ⟨split⟩
+
 /-- **Segment hypothesis (WETH `withdraw`).**  Every committed compiled `withdraw` entered
 freshly under WETH's precondition by a caller other than WETH splits at its accepted payout. -/
 def WethWithdrawAcceptedPayout : Prop :=

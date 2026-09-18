@@ -15,6 +15,7 @@ import Blanc.RunPrefix
 import Blanc.ReachDispatchPrefix
 import Blanc.Ladder
 import Blanc.MessageExecution
+import Blanc.FuncMainPrefix
 
 namespace Blanc
 
@@ -36,56 +37,6 @@ DRIP endpoint crosses before its own body.  Both are stated as inversions: a
 *successful* run forces the guard's condition, because the rejecting arm is
 `Func.revert` and has no successful run at all. -/
 
-/-- Prefix twin of `of_run_exactCalldata`: the same guard inversion exposing
-the crossed length-check prefix. -/
-theorem of_run_exactCalldata_prefix {fs : List Func} {sevm : Sevm} {s r : Devm}
-    {size : B256} {body : Func} {path : Prog.SourcePath}
-    (run : Func.Run fs sevm s (exactCalldata size body) r) :
-    ∃ mid target, sevm.data.length.toB256 = size ∧
-      s.state = mid.state ∧ s.memory = mid.memory ∧
-      s.logs = mid.logs ∧ s.output = mid.output ∧
-      Func.RunPrefix fs sevm path s (exactCalldata size body) target mid body ∧
-      Func.Run fs sevm mid body r := by
-  unfold exactCalldata at run
-  rcases run_prefix_prepend (l := [pushB256 size, calldatasize, eq])
-    (path := path)
-    (by simp only [Line.gasFree, Ninst.pushB256, Ninst.gasFree, Rinst.gasFree,
-      Bool.true_and] : Line.gasFree [pushB256 size, calldatasize, eq] = true)
-    run with
-    ⟨s1, mid1, hline, hbranch, hpre1⟩
-  have hframe := hline
-  rcases Line.of_run_cons hline with ⟨a, hpush, htail⟩
-  rcases Line.of_run_cons htail with ⟨b, hsize, htail⟩
-  rcases Line.of_run_cons htail with ⟨c, heq, hnil⟩
-  cases hnil
-  have hp0 : size :: [] <<+ a.stack :=
-    prefix_of_push (of_run_pushB256 hpush) nil_pref
-  have hp1 : sevm.data.length.toB256 :: size :: [] <<+ b.stack :=
-    prefix_of_push (of_run_calldatasize hsize) hp0
-  have hp2 : (sevm.data.length.toB256 =? size) :: [] <<+ s1.stack :=
-    prefix_of_eq heq hp1
-  rcases run_prefix_branch (path := mid1) hbranch with
-    ⟨u, midU, hpop, hrev, hpreB⟩
-    | ⟨w, u, v, midV, hnz, hpop, hburn, hbody, hpreB⟩
-  · exact absurd hrev not_run_revert
-  · have hw : w = (sevm.data.length.toB256 =? size) :=
-      (popBurn_pref hpop hp2).1
-    have hsize' : sevm.data.length.toB256 = size := by
-      by_cases h : sevm.data.length.toB256 = size
-      · exact h
-      · exact absurd (by rw [hw, B256.eqCheck, if_neg h]) hnz
-    exact ⟨v, midV, hsize',
-      (Line.of_inv Devm.state (by line_inv) hframe).trans
-        (hpop.state.trans hburn.state),
-      (Line.of_inv Devm.memory (by line_inv) hframe).trans
-        (hpop.memory.trans hburn.memory),
-      (Line.of_inv Devm.logs (by line_inv) hframe).trans
-        (hpop.logs.trans hburn.logs),
-      (Line.of_inv Devm.output (by line_inv) hframe).trans
-        (hpop.output.trans hburn.output),
-      Func.RunPrefix.trans hpre1 hpreB, hbody⟩
-
-
 /-- A successful run through an exact-length guard forces the frozen calldata
 size and leaves world state, memory, logs and output untouched. -/
 theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
@@ -98,74 +49,8 @@ theorem of_run_exactCalldata {fs : List Func} {sevm : Sevm} {s r : Devm}
   obtain ⟨mid, _, hsize, hst, hmm, hlg, hou, _, hbody⟩ :=
     of_run_exactCalldata_prefix (path := ⟨0, []⟩) run
   exact ⟨mid, hsize, hst, hmm, hlg, hou, hbody⟩
-/-- Local prefix twin of `run_body_of_run_nonpayable_logs`: a successful run
-through `nonpayable` forces zero call value, preserves the log/output frame,
-and exposes the crossed guard prefix. Lives here (rather than next to the
-original) because this unit's CommonProofs scope is the dispatch pair only. -/
-private theorem run_body_of_run_nonpayable_logs_prefix {fs : List Func}
-    {sevm : Sevm} {s r : Devm} {body : Func} {path : Prog.SourcePath}
-    (run : Func.Run fs sevm s (nonpayable body) r) :
-    ∃ mid target, sevm.value = 0 ∧ s.state = mid.state ∧
-      s.memory = mid.memory ∧ s.logs = mid.logs ∧ s.output = mid.output ∧
-      Func.RunPrefix fs sevm path s (nonpayable body) target mid body ∧
-      Func.Run fs sevm mid body r := by
-  unfold nonpayable at run
-  rcases run_prefix_prepend (l := [callvalue, iszero]) (path := path)
-    (by decide : Line.gasFree [callvalue, iszero] = true) run with
-    ⟨s1, mid1, hline, hbranch, hpre1⟩
-  rcases Line.of_run_cons hline with ⟨s0, hcv, hline'⟩
-  rcases Line.of_run_cons hline' with ⟨s1', hiz, hnil⟩
-  cases hnil
-  have hpv : [sevm.value] <<+ s0.stack :=
-    prefix_of_push (of_run_callvalue hcv) nil_pref
-  have hpflag : [sevm.value =? 0] <<+ s1.stack :=
-    prefix_of_iszero hiz hpv
-  rcases run_prefix_branch (path := mid1) hbranch with
-    ⟨s2, mid2, hpop, hrev, hpreB⟩
-    | ⟨w, s2, s3, mid3, hnz, hpop, hburn, hbody, hpreB⟩
-  · exact absurd hrev not_run_revert
-  · have hpop' := hpop.stack
-    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
-    rw [hpop'] at hpflag
-    have hw : (sevm.value =? 0) = w :=
-      pref_head_unique hpflag (pref_append [w] s2.stack)
-    have hflag : (sevm.value =? 0) ≠ 0 := by
-      rw [hw]
-      exact hnz
-    have hv : sevm.value = 0 := by
-      by_cases hv : sevm.value = 0
-      · exact hv
-      · simp [B256.eqCheck, hv] at hflag
-    exact ⟨s3, mid3, hv,
-      (Line.of_inv Devm.state (by line_inv) hline).trans
-        (hpop.state.trans hburn.state),
-      (Line.of_inv Devm.memory (by line_inv) hline).trans
-        (hpop.memory.trans hburn.memory),
-      (Line.of_inv Devm.logs (by line_inv) hline).trans
-        (hpop.logs.trans hburn.logs),
-      (Line.of_inv Devm.output (by line_inv) hline).trans
-        (hpop.output.trans hburn.output),
-      Func.RunPrefix.trans hpre1 hpreB, hbody⟩
-
 /-- The four nonpayable endpoints: a successful run forces zero call value and
 the frozen calldata size together. -/
-theorem of_run_nonpayable_exactCalldata_prefix {fs : List Func} {sevm : Sevm}
-    {s r : Devm} {size : B256} {body : Func} {path : Prog.SourcePath}
-    (run : Func.Run fs sevm s (nonpayable (exactCalldata size body)) r) :
-    ∃ mid target, sevm.value = 0 ∧ sevm.data.length.toB256 = size ∧
-      s.state = mid.state ∧ s.memory = mid.memory ∧
-      s.logs = mid.logs ∧ s.output = mid.output ∧
-      Func.RunPrefix fs sevm path s (nonpayable (exactCalldata size body))
-        target mid body ∧
-      Func.Run fs sevm mid body r := by
-  rcases run_body_of_run_nonpayable_logs_prefix (path := path) run with
-    ⟨t, midT, hvalue, hst, hmm, hlg, hou, hpreN, hguarded⟩
-  rcases of_run_exactCalldata_prefix (path := midT) hguarded with
-    ⟨mid, midM, hsize, hst', hmm', hlg', hou', hpreE, hbody⟩
-  exact ⟨mid, midM, hvalue, hsize, hst.trans hst', hmm.trans hmm',
-    hlg.trans hlg', hou.trans hou',
-    Func.RunPrefix.trans hpreN hpreE, hbody⟩
-
 theorem of_run_nonpayable_exactCalldata {fs : List Func} {sevm : Sevm}
     {s r : Devm} {size : B256} {body : Func}
     (run : Func.Run fs sevm s (nonpayable (exactCalldata size body)) r) :
