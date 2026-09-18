@@ -2,6 +2,7 @@
 
 import Blanc.ProrataRealizedAccounting
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionAccountingLadder
 
 namespace Blanc
 
@@ -616,6 +617,25 @@ theorem Exec.prorataAccountingReplay_of_messageRoot
   exact core run committed installed precondition direct caller
     blockIndex transactionIndex [] 0
 
+/-- PRORATA's realized accounting as an `AccountingLadder`.  Its ladder-level
+steps carry root provenance: the block and transaction position, the empty
+frame path, and no actor. -/
+def accountingLadder (ca : Adr) :
+    ExecutionAccountingReplay.AccountingLadder prorataSpec ca where
+  carrier := ProrataAccountingReplay.carrier ca
+  append := fun before after => ProrataAccountingReplay.append before after
+  tag blockIndex transactionIndex :=
+    { blockIndex := blockIndex
+      transactionIndex := transactionIndex
+      framePath := []
+      actor := none }
+  root := by
+    intro blockIndex transactionIndex msg entry pc sevm pre out run transfer
+      evmEq committed runReady callerNe _
+    exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
+      committed ⟨runReady, callerNe⟩ blockIndex transactionIndex
+  preserves := prorataSpec_preserves ca
+
 /-- A retained raw message realizes a complete PRORATA accounting replay from
 the wrapper's pre-transfer world to its settled post-state.  A no-slot message
 is classified directly; an interpreted slot consumes the generic recursive
@@ -628,31 +648,9 @@ theorem retainedProcessMessageAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  rcases trace with ⟨slot, retained, process⟩
-  cases retained with
-  | none =>
-      let provenance : ProrataAccountingProvenance :=
-        { blockIndex := blockIndex
-          transactionIndex := transactionIndex
-          framePath := []
-          actor := none }
-      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-        (congrFun
-          (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
-            process) ca)
-        (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
-          ready.runReady.ready.ne ready.runReady.ready.state.side)
-  | @some pc sevm pre out run =>
-      apply ProcessMessage.accountingReplay_of_body process
-        ready.runReady.ready.ne ready.runReady.ready.val0
-        ready.runReady.ready.state.side
-      intro committed
-      have enter := (RunFrame.some_inv process).1
-      rcases Frame.enter_run_inv enter with
-        ⟨entry, transfer, evmEq⟩
-      exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
-        committed ready blockIndex transactionIndex
+        (RealizedSnapshot.ofState ca post.state) :=
+  (accountingLadder ca).processMessage trace ready.runReady ready.caller_ne
+    ready.runReady.ready.state.side blockIndex transactionIndex
 
 /-- CREATE counterpart of `retainedProcessMessageAccountingReplay`.  Fresh
 account preparation and code-deposit settlement are interpreted once around
@@ -669,42 +667,10 @@ theorem retainedProcessCreateMessageAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) := by
-  rcases trace with ⟨slot, retained, process⟩
-  cases retained with
-  | none =>
-      let provenance : ProrataAccountingProvenance :=
-        { blockIndex := blockIndex
-          transactionIndex := transactionIndex
-          framePath := []
-          actor := none }
-      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-        (congrFun
-          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
-            process fresh) ca)
-        (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
-          ready.runReady.ready.ne ready.runReady.ready.state.side)
-  | @some pc sevm pre out run =>
-      apply ProcessCreateMessage.accountingReplay_of_body process
-        ready.runReady.ready.ne ready.runReady.ready.val0 fresh
-        ready.runReady.ready.state.side
-      intro committed
-      have preparedInv :=
-        ready.runReady.ready.processCreateMessage_msg targetNone targetNe
-      have preparedTargetNe :
-          (processCreateMessage.msg msg).currentTarget ≠ ca := by
-        intro target
-        exact targetNe (by
-          simpa [processCreateMessage.msg, Msg.withBenv] using target)
-      have preparedReady : AccountingMessageReady ca
-          (processCreateMessage.msg msg) :=
-        ⟨preparedInv.runReady_of_foreign preparedTargetNe,
-          fun target => absurd target preparedTargetNe⟩
-      have enter := (RunFrame.some_inv process).1
-      rcases Frame.enter_run_inv enter with
-        ⟨entry, transfer, evmEq⟩
-      exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
-        committed preparedReady blockIndex transactionIndex
+        (RealizedSnapshot.ofState ca post.state) :=
+  (accountingLadder ca).processCreateMessage trace ready.runReady
+    ready.runReady.ready.state.side targetNone targetNe fresh blockIndex
+    transactionIndex
 
 open _root_.Blanc.ExecutionTrace in
 /-- The settled message-call wrapper realizes a complete PRORATA accounting
@@ -722,61 +688,9 @@ theorem retainedMessageCallAccountingReplay
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca state) := by
-  cases trace with
-  | createCollision targetNone collision result =>
-      have stateEq :=
-        processMessageCall_createCollision_state_eq targetNone collision result
-      let provenance : ProrataAccountingProvenance :=
-        { blockIndex := blockIndex
-          transactionIndex := transactionIndex
-          framePath := []
-          actor := none }
-      exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-        (by rw [stateEq]) (by rw [stateEq])
-  | createRun targetNone collision evm core inner result =>
-      have targetNe : msg.currentTarget ≠ ca := by
-        rcases ready.runReady.codeOrForeign with call | foreign
-        · exact Bool.noConfusion (targetNone.symm.trans call)
-        · exact foreign
-      have fresh := messageCreateCollision_false_getStor_eq_empty collision
-      have stateEq :=
-        processMessageCall_createRun_state_eq targetNone collision core result
-      rw [stateEq]
-      exact retainedProcessCreateMessageAccountingReplay inner ready
-        targetNone targetNe fresh blockIndex transactionIndex
-  | callRun targetSome delegated refund delegation execMsg execMsgEq evm
-      core inner result =>
-      subst execMsgEq
-      have stateEq :=
-        processMessageCall_callRun_state_eq targetSome delegation rfl core
-          result
-      have delegatedInv :=
-        ready.runReady.ready.of_messageCallDelegation delegation
-      have execReady : AccountingMessageReady ca
-          (messageCallExecutionMessage delegated) := by
-        refine ⟨⟨delegatedInv.messageCallExecutionMessage, Or.inl ?_⟩, ?_⟩
-        · rw [messageCallExecutionMessage_target_eq,
-            messageCallDelegation_target_eq delegation]
-          exact targetSome
-        · intro target
-          rw [messageCallExecutionMessage_currentTarget_eq,
-            messageCallDelegation_currentTarget_eq delegation] at target
-          rw [messageCallExecutionMessage_caller_eq,
-            messageCallDelegation_caller_eq delegation]
-          exact ready.caller_ne target
-      have snapshotEq :
-          RealizedSnapshot.ofState ca
-              (messageCallExecutionMessage delegated).benv.state =
-            RealizedSnapshot.ofState ca msg.benv.state := by
-        unfold RealizedSnapshot.ofState
-        rw [messageCallExecutionMessage_getStor_eq,
-          messageCallExecutionMessage_bal_eq,
-          messageCallDelegation_getStor_eq delegation,
-          messageCallDelegation_bal_eq delegation]
-      rw [stateEq, ← snapshotEq]
-      exact retainedProcessMessageAccountingReplay inner execReady
-        blockIndex transactionIndex
+        (RealizedSnapshot.ofState ca state) :=
+  (accountingLadder ca).messageCall trace ready.runReady ready.caller_ne
+    ready.runReady.ready.state.side blockIndex transactionIndex
 
 end Prorata
 
