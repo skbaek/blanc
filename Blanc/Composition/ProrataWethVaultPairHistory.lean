@@ -373,3 +373,309 @@ theorem PairReplay.priceLe_or_debit {vault : Adr} {pre post : PairBoundary}
     exact .inr ⟨r, member, Nat.pos_of_ne_zero positive⟩
 
 end Blanc.Composition.ProrataWethVault
+
+namespace Blanc.Composition.ProrataWethVault
+
+open Jaune
+open _root_.Blanc.ExecutionTrace
+
+/-! ## 6. The raw allowance ledger is a rooted chronology -/
+
+/-- The machine the rooted chronology's root constructor is stated at, for a pair root: WETH is no
+precompile because this rule set activates none.  Only its inhabitation is used; the chronology's own root
+indices are `Stor.empty`, and `PairRoot.wethEmpty` supplies the continuity. -/
+def pairRootSevm : Sevm :=
+  { (default : Sevm) with
+    benvStat := { (default : Sevm).benvStat with
+      rules := { (default : ForkRules) with precompiles := [] } } }
+
+/-- The machine state at a world: the world, and defaults elsewhere. -/
+def pairRootDevm (w : State) : Devm :=
+  { (default : Devm) with world := { (default : Devm).world with state := w } }
+
+/-- A pair root is an allowance root: both runtimes installed, the vault untouched, WETH empty. -/
+theorem AllowanceRoot.of_pairRoot {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault) :
+    AllowanceRoot vault pairRootSevm (pairRootDevm deployed.state) where
+  configured :=
+    { configured :=
+        { distinct := root.distinct
+          nonprecompile := by simp [pairRootSevm, ForkRules.isPrecomp]
+          code := by
+            show (deployed.state.getCode wethAccount).toList = Blanc.wethCode
+            exact root.wethInstalled }
+      installed := by
+        show some (deployed.state.getCode vault).toList = _
+        exact root.vaultInstalled
+      untouched := fun key => by
+        show (deployed.state.getStor vault).get key = 0
+        rw [root.vaultEmpty]
+        rfl }
+  wethEmpty := by
+    show deployed.state.getStor wethAccount = Stor.empty
+    exact root.wethEmpty
+-- new; field shapes: R:647–653 (`AllowanceRoot`), Message.lean:526–535 (`ConfiguredRoot`),
+-- Boundary.lean:40–44; the `show … getCode` pattern is Pair.lean:175 (`PairStable.configuration`).
+
+/-- **A pair replay extends a rooted chronology by its own ledger.**  A record that owns an invocation is an
+`invoked` step, by its `linked` field; a record that owns none is a `silent` step, by its `quiet` field and
+the non-address shape of every touched allowance key. -/
+theorem PairReplay.rootedAllowanceHistory {vault : Adr} {full : List WethAllowanceInvocation}
+    {pre post : PairBoundary} {steps : List (PairStepRecord vault)}
+    (replay : PairReplay vault pre steps post) :
+    ∀ {done : List WethAllowanceInvocation} {s : Stor},
+      RootedAllowanceHistory vault full done s pre.weth →
+      (∀ call ∈ PairStepRecord.ledger steps, call ∈ full) →
+      RootedAllowanceHistory vault full (done ++ PairStepRecord.ledger steps) s post.weth := by
+  induction replay with
+  | nil boundary =>
+      intro done s chain _
+      simpa [PairStepRecord.ledger] using chain
+  | @cons pre mid post record steps preEq postEq tail ih =>
+      intro done s chain sub
+      subst preEq
+      subst postEq
+      cases hown : record.own with
+      | none =>
+          have ledgerEq : PairStepRecord.ledger (record :: steps) =
+              PairStepRecord.ledger steps := by
+            simp [PairStepRecord.ledger, hown]
+          rw [ledgerEq] at sub ⊢
+          refine ih (.silent done s _ _ chain ?_) sub
+          intro p touched _
+          exact record.quiet hown _ (touchedWethAllowancePairs_keys_nonaddress touched)
+      | some call =>
+          obtain ⟨preLink, postLink, staged⟩ := record.linked call hown
+          have ledgerEq : PairStepRecord.ledger (record :: steps) =
+              call :: PairStepRecord.ledger steps := by
+            simp [PairStepRecord.ledger, hown]
+          rw [ledgerEq] at sub ⊢
+          have step : RootedAllowanceHistory vault full (done ++ [call]) s
+              (record.after.getStor wethAccount) :=
+            .invoked done s _ _ call chain (sub call (by simp)) preLink postLink.symm staged
+          have tailChain := ih step (fun c member => sub c (by simp [member]))
+          simpa only [List.append_assoc, List.singleton_append] using tailChain
+-- constructors R:809–830; key shape R:435.  Induction shape L:113–124.
+
+/-! ## 7. R10: the realized history carrier -/
+
+/-- **R10.**  A realized pair history: in chain order, one retained configured block per imported block,
+each with its own connected pair replay whose records carry that block's header number. -/
+inductive PairTraceRealizes {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault) :
+    List (PairStepRecord vault) → BlockChain → Prop where
+  | refl : PairTraceRealizes root [] deployed
+  | step {current future : BlockChain} {priorSteps blockSteps : List (PairStepRecord vault)}
+      (prior : PairTraceRealizes root priorSteps current)
+      (block : ConfiguredBlockTrace cfg current future)
+      (replay : PairReplay vault (PairBoundary.ofState vault current.state) blockSteps
+        (PairBoundary.ofState vault future.state))
+      (tagged : ∀ r ∈ blockSteps, PairInBlock block.block.header.number r) :
+      PairTraceRealizes root (priorSteps ++ blockSteps) future
+-- PH:96–107 / G:625–634; `tagged` is new (§8 item 3).
+
+namespace PairTraceRealizes
+
+variable {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+  {root : PairRoot cfg deployed vault}
+
+/-- Every realized trace projects to the configured reach it replays. -/
+theorem toReachUsing {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future) :
+    BlockChain.ReachUsing cfg deployed future := by
+  induction realizes with
+  | refl => exact root.reflReach
+  | step prior block replay tagged ih => exact .step ih block.bound block.transition
+-- PH:116–123 / G:640–648.
+
+/-- The realized steps are one connected pair replay from the root to the continuation. -/
+theorem toReplay {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future) :
+    PairReplay vault (PairBoundary.ofState vault deployed.state) steps
+      (PairBoundary.ofState vault future.state) := by
+  induction realizes with
+  | refl => exact .nil _
+  | step prior block replay tagged ih => exact ih.append replay
+-- PH:128–137 / G:652–660.
+
+/-- Every realized continuation carries the pair's unconditional invariant. -/
+theorem worldInv {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future) : PairWorldInv vault future.state := by
+  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing with ⟨history⟩
+  exact PairWorldInv.of_history root history
+
+/-- The supply cap holds at every realized continuation, unconditionally. -/
+theorem capped {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future) :
+    supplyN (future.state.getStor vault) ≤ Blanc.ProrataWethVault.maxSupplyN := by
+  apply realizes.toReplay.capped
+  show supplyN (deployed.state.getStor vault) ≤ _
+  rw [root.vaultEmpty]
+  have zero : supplyN Stor.empty = 0 := rfl
+  rw [zero]
+  exact Nat.zero_le _
+
+/-- **SF §7 clause 8.**  The raw allowance ledger of a realized trace is a rooted chronology from the pair
+root's empty WETH storage to the continuation's. -/
+theorem rootedAllowanceHistory {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future) :
+    RootedAllowanceHistory vault (PairStepRecord.ledger steps) (PairStepRecord.ledger steps)
+      Stor.empty (future.state.getStor wethAccount) := by
+  have start : RootedAllowanceHistory vault (PairStepRecord.ledger steps) [] Stor.empty
+      (PairBoundary.ofState vault deployed.state).weth := by
+    show RootedAllowanceHistory vault _ [] Stor.empty (deployed.state.getStor wethAccount)
+    rw [root.wethEmpty]
+    exact .root (AllowanceRoot.of_pairRoot root)
+  have chain := realizes.toReplay.rootedAllowanceHistory start (fun _ member => member)
+  simpa only [List.nil_append, PairBoundary.ofState] using chain
+
+/-- The rooted foreign-debit exclusion over a realized trace (cell altitude). -/
+theorem foreign_debit_excluded {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    (call : WethAllowanceInvocation) (member : call ∈ PairStepRecord.ledger steps)
+    (foreign : call.sevm.caller ≠ vault)
+    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs (PairStepRecord.ledger steps))
+    (owner : p.1 = vault.toB256) :
+    call.post.getStorVal wethAccount (wethAllowanceKey p.1 p.2) =
+      call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) :=
+  foreign_debit_excluded_rooted realizes.rootedAllowanceHistory collision call member foreign
+    p touched owner
+-- R:957–969 at the realized ledger.
+
+/-- **Hardened no-foreign-debit at row altitude** (goal control 4; SF §6).  Under D9, every
+runtime-authorized debit step of a realized trace has amount zero and leaves the vault's WETH row exactly
+where it was. -/
+theorem authorizedDebit_zero {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    {r : PairStepRecord vault} (member : r ∈ steps)
+    {call : WethAllowanceInvocation} {foreign : call.sevm.caller ≠ vault}
+    {owner : Sevm.argWord call.sevm 0 = vault.toB256}
+    {pair : call.pair? = some (vault.toB256, call.sevm.caller.toB256)}
+    {moved : Transfer (Stor.rest (r.before.getStor wethAccount)) vault
+      (Sevm.argWord call.sevm 2) (Sevm.argWord call.sevm 1).toAdr
+      (Stor.rest (r.after.getStor wethAccount))}
+    {vaultKept : r.after.getStor vault = r.before.getStor vault}
+    (debit : r.step = .authorizedDebit call foreign owner pair moved vaultKept) :
+    Sevm.argWord call.sevm 2 = 0 ∧
+      Stor.rest (r.after.getStor wethAccount) vault =
+        Stor.rest (r.before.getStor wethAccount) vault := by
+  have own : r.own = some call := r.debitOwn call foreign owner pair moved vaultKept debit
+  have callMember : call ∈ PairStepRecord.ledger steps :=
+    List.mem_filterMap.mpr ⟨r, member, own⟩
+  have touched : (vault.toB256, call.sevm.caller.toB256) ∈
+      touchedWethAllowancePairs (PairStepRecord.ledger steps) :=
+    List.mem_filterMap.mpr ⟨call, callMember, pair⟩
+  have quiet := (realizes.rootedAllowanceHistory.all_quiet collision).2 call callMember
+    _ touched rfl
+  have wad0 := call.vaultDebit_wad_eq_zero foreign pair quiet
+  refine ⟨wad0, ?_⟩
+  have zeroMoved := moved
+  rw [wad0] at zeroMoved
+  exact transfer_src_row_of_zero zeroMoved
+-- `quiet` at the call's own pre-state: R:832 (`all_quiet`'s second conjunct); membership projections
+-- Effects:865 / H:65; the rest is §3.
+
+/-- Under D9 no step of a realized trace debits anything. -/
+theorem debitAmount_eq_zero {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    ∀ r ∈ steps, r.step.debitAmount = 0 := by
+  rintro ⟨before, after, step, own, linked, quiet, debitOwn, provenance, actor⟩ member
+  cases step with
+  | operation t evidence => rfl
+  | silent caller vaultKept rowKept => rfl
+  | authorizedDebit call foreign owner pair moved vaultKept =>
+      have zero := (realizes.authorizedDebit_zero collision member rfl).1
+      show (Sevm.argWord call.sevm 2).toNat = 0
+      rw [zero]
+      rfl
+
+/-- The backing number under D9: the price never falls from genesis. -/
+theorem backing {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    supplyN (future.state.getStor vault) ≤
+      Blanc.ProrataWethVault.offsetN *
+        (Stor.rest (future.state.getStor wethAccount) vault).toNat := by
+  have price := realizes.toReplay.priceLe (realizes.debitAmount_eq_zero collision)
+  rw [PairBoundary.snapshot_ofState, PairBoundary.snapshot_ofState,
+    root.genesisSnapshot] at price
+  exact Blanc.Prorata.backed_of_priceLe_genesis price
+-- A:2329–2337 (`FourQuotePath.supply_le_offset_mul_balance`) over the replay.
+
+end PairTraceRealizes
+
+/-- Every retained configured history from the pair root is realized. -/
+theorem pairTraceRealizes_of_configuredHistoryTrace {cfg : ChainConfig}
+    {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future) :
+    ∃ steps, PairTraceRealizes root steps future := by
+  induction history with
+  | refl hcfg hctx hid => exact ⟨[], .refl⟩
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorRealizes⟩ := ih
+      obtain ⟨blockSteps, blockReplay, blockTagged⟩ :=
+        retainedConfiguredBlockPairReplay block (PairWorldInv.of_history root prior)
+          (root.notPrecompile block.rulesAt).2 block.block.header.number
+      exact ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay blockTagged⟩
+-- PH:146–159 / G:664–677; `root.reachable_stateInv prior.toReachUsing` → `PairWorldInv.of_history root
+-- prior` (L:750 at last read); the rules fact is R9's `schedule block.rulesAt` (L:720 at last read).
+
+/-- **Non-vacuity.**  Configured reachability from the pair root is never more permissive than the
+carrier; with `PairTraceRealizes.toReachUsing` the carrier is pinned exactly onto chain reachability. -/
+theorem pairTraceRealizes_exists_of_reachUsing {cfg : ChainConfig}
+    {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
+    (reach : BlockChain.ReachUsing cfg deployed future) :
+    ∃ steps, PairTraceRealizes root steps future := by
+  rcases exists_configuredHistoryTrace_of_reachUsing reach with ⟨history⟩
+  exact pairTraceRealizes_of_configuredHistoryTrace root history
+-- PH:167–173 / G:682–690.
+
+/-! ## 8. The headlines -/
+
+/-- **Unconditional classification headline (no D9).**  Every configured continuation of the pair root is
+backed, or its realized trace retains a runtime-authorized debit of positive amount. -/
+theorem pair_reachable_backed_or_debit {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (reach : BlockChain.ReachUsing cfg deployed future) :
+    ∃ steps, PairTraceRealizes root steps future ∧
+      (PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∨
+        ∃ r ∈ steps, 0 < r.step.debitAmount) := by
+  obtain ⟨steps, realizes⟩ := pairTraceRealizes_exists_of_reachUsing root reach
+  refine ⟨steps, realizes, ?_⟩
+  rcases realizes.toReplay.priceLe_or_debit with price | debit
+  · rw [PairBoundary.snapshot_ofState, PairBoundary.snapshot_ofState,
+      root.genesisSnapshot] at price
+    exact .inl ⟨realizes.worldInv.conserved, realizes.capped,
+      Blanc.Prorata.backed_of_priceLe_genesis price⟩
+  · exact .inr debit
+
+/-- **The final backing corollary** (goal G6 last clause; SF §7 last bullet), limited exactly by D9. -/
+theorem pair_reachable_stable {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    PairStable vault rules future.state := by
+  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing with ⟨history⟩
+  exact PairStable.of_history root history rulesAt realizes.capped
+    (realizes.backing collision)
+
+/-- The backing corollary's two halves: the joint invariant and WETH's own state invariant. -/
+theorem pair_reachable_backed {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
+      State.Inv wethAccount future.state := by
+  obtain ⟨vaultInv, wethInv, -, -, -⟩ := realizes.worldInv
+  exact ⟨⟨vaultInv.inv, realizes.capped, realizes.backing collision⟩,
+    wethSpec_stateInv_iff.mp wethInv⟩
+-- rules-free projection: no `rulesAt` is needed for these two conjuncts (PairStable.wethInv,
+-- Pair.lean:122, would need one via `pair_reachable_stable`); `wethSpec_stateInv_iff` Solvent.lean:181.
+
+end Blanc.Composition.ProrataWethVault
