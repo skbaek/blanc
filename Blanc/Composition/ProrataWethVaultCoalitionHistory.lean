@@ -991,33 +991,46 @@ theorem pair_attacker_open_context {cfg : ChainConfig} {deployed future : BlockC
   have h := path.attacker_open_context_of_pairAttackPath two_le_offsetN
   omega
 
-/-- **`pair_attacker_no_profit`** (SF §9, P4).  No closed pair attack trace in which the victim gives the coalition
-no shares is profitable.  The share gift is named, not assumed absent. -/
+/-- **`pair_attacker_no_profit`** (SF §9, P4).  Every closed pair attack trace satisfies the coalition no-profit
+bound after identifying any victim share gifts explicitly; no no-gift premise is assumed. -/
 theorem pair_attacker_no_profit {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairAttackTrace root coalition victim steps future) :
+    outA victim coalitionCharge steps + sharesOut victim steps ≤
+      inA victim coalitionCharge steps + sharesIn victim steps := by
+  have h := pair_attacker_open_context trace
+  rw [outsideSubsidy_coalitionCharge] at h
+  omega
+
+/-- **`pair_attacker_no_profit_of_no_share_gifts`** (SF §9, P4).  If the identified victim share-gift quantity is
+zero, the closed pair attack trace satisfies the corresponding no-profit bound without a share-gift term. -/
+theorem pair_attacker_no_profit_of_no_share_gifts {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
     {steps : List (PairStepRecord vault)}
     (trace : PairAttackTrace root coalition victim steps future)
     (noShareGifts : sharesIn victim steps = 0) :
     outA victim coalitionCharge steps + sharesOut victim steps ≤ inA victim coalitionCharge steps := by
-  have h := pair_attacker_open_context trace
-  rw [outsideSubsidy_coalitionCharge, noShareGifts] at h
+  have h := pair_attacker_no_profit trace
+  rw [noShareGifts] at h
   omega
 
-/-- **`pair_victim_loss_bound`** (SF §9, P4).  If the victim's deposit saw pre-credit `(Sdep, Bdep)`, paid `v` and
-minted `m`, and its later exit burns that `m` and pays `p`, the shortfall is at most one virtual-asset quantum above
-the genesis-anchored price ratio, whatever non-victims did to the victim in between. -/
+/-- **`pair_victim_loss_bound`** (SF §9, P4).  For every realized pair history satisfying D9, if the victim's
+deposit saw pre-credit `(Sdep, Bdep)`, paid `v` and minted `m`, and its later exit burns that `m` and pays `p`, the
+shortfall is at most one virtual-asset quantum above the genesis-anchored price ratio, whatever non-victims did;
+no schedule or lock premise is assumed. -/
 theorem pair_victim_loss_bound {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
-    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
-    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {root : PairRoot cfg deployed vault} {victim : Adr}
     {steps : List (PairStepRecord vault)}
-    (trace : PairOpenAttackTrace root coalition victim charge steps future)
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
     {deposit exit : PairStepRecord vault} {v m p : Nat}
     (hmoves : victimMoves victim steps = [deposit, exit])
     (hdeposit : deposit.flow = .inbound victim victim v m true)
     (hexit : exit.flow = .outbound victim victim m p true false) :
     v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 := by
-  have replay := trace.realizes.toReplay
-  have zero := trace.realizes.debitAmount_eq_zero trace.collision
+  have replay := realizes.toReplay
+  have zero := realizes.debitAmount_eq_zero collision
   have hd := deposit.accounts (zero deposit (mem_of_mem_victimMoves (by rw [hmoves]; simp)))
   rw [hdeposit] at hd
   obtain ⟨hpost, -, hquote⟩ := hd
@@ -1028,6 +1041,20 @@ theorem pair_victim_loss_bound {cfg : ChainConfig} {deployed future : BlockChain
     replay.priceLe_of_filter_pair zero hmoves
   rw [hpost] at hprice
   exact Blanc.Prorata.victim_loss_le_div_add_one offsetN_ne_zero (hquote rfl) hprice (hpaid rfl)
+
+/-- **`pair_victim_loss_bound_of_trace`** (SF §9, P4).  The trace-shaped corollary supplies the realized pair
+history and D9 collision witness used by the premise-minimal victim loss bound. -/
+theorem pair_victim_loss_bound_of_trace {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairOpenAttackTrace root coalition victim charge steps future)
+    {deposit exit : PairStepRecord vault} {v m p : Nat}
+    (hmoves : victimMoves victim steps = [deposit, exit])
+    (hdeposit : deposit.flow = .inbound victim victim v m true)
+    (hexit : exit.flow = .outbound victim victim m p true false) :
+    v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 := by
+  exact pair_victim_loss_bound trace.realizes trace.collision hmoves hdeposit hexit
 -- T:736–757 (`victim_loss_bound`) line for line: `deposit_inv`/`withdraw_inv` → `accounts` at the two flows.
 
 
