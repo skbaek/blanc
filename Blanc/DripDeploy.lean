@@ -512,7 +512,9 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       post.gasLeft = G ∧ post.refundCounter = 0 ∧
       post.accountsToDelete = pre.accountsToDelete ∧
       (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) ∧
-      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget := by
+      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget ∧
+      post.state = (pre.state.setStorVal sevm.currentTarget chiSlot scale).setStorVal
+        sevm.currentTarget rhoSlot sevm.benvStat.time := by
   have hlen : code.length = 1762 := codeSize_exact
   have hsize : sevm.code.size = 2001 := by
     rw [ByteArray.size_eq_length_toList, hcode]
@@ -751,7 +753,11 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       s9, s8, s7, s6, s5, s4, s3, s2, s1, mid,
       getBal_setMach_eq, getBal_setStorVal_eq, getBal_withRefundCounter_eq,
       getBal_addAccessed_eq]
-  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩
+  have hstateW : postW.state =
+      (pre.state.setStorVal sevm.currentTarget chiSlot scale).setStorVal
+        sevm.currentTarget rhoSlot sevm.benvStat.time := by rfl
+  exact ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW,
+    hdeleteW, hpieW, hbalW, hstateW⟩
 
 theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
     (hcode : sevm.code.toList = creationCode)
@@ -780,8 +786,10 @@ theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
       post.gasLeft = G ∧ post.refundCounter = 0 ∧
       post.accountsToDelete = pre.accountsToDelete ∧
       (∀ k, k ≠ chiSlot → k ≠ rhoSlot → Devm.getStorVal post sevm.currentTarget k = 0) ∧
-      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget := by
-  obtain ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩ :=
+      post.getBal sevm.currentTarget = pre.getBal sevm.currentTarget ∧
+      post.state = (pre.state.setStorVal sevm.currentTarget chiSlot scale).setStorVal
+        sevm.currentTarget rhoSlot sevm.benvStat.time := by
+  obtain ⟨postW, hProg, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW, hstateW⟩ :=
     constructorProgram_runCompiled hcode hvalue hstatic htime hstack hmem hgas
       hlogs hrefund herror horigChi horigRho hcurChi hcurRho hcurAll hcoldChi hcoldRho
   have h_compile : some constructorInitPrefix = constructorProgram.compile :=
@@ -789,9 +797,20 @@ theorem constructorExec_of_walk {sevm : Sevm} {pre : Devm} {G : Nat}
   have h_code : sevm.code.toList = constructorInitPrefix ++ code := by
     rw [hcode, creationCode_eq_prefix_append_runtime]
   have hexec := Prog.exec_of_runCompiled_appended hProg h_compile h_code
-  exact ⟨postW, hexec, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩
+  exact ⟨postW, hexec, houtW, herrW, hlogsW, hrowChi, hrowRho, hgasW, hrefundW, hdeleteW, hpieW, hbalW, hstateW⟩
+
+/-- The constructor's exact two world-state writes. -/
+def constructorStoredState (state : State) (ca : Adr) (time : B256) : State :=
+  (state.setStorVal ca chiSlot scale).setStorVal ca rhoSlot time
+
+/-- The constructor writes followed by runtime installation. -/
+def constructorInstalledState (state : State) (ca : Adr) (time : B256) : State :=
+  (constructorStoredState state ca time).setCode ca ⟨⟨code⟩⟩
 
 structure DripInitCheckpoint (msg : Msg) (initPost : Devm) : Prop where
+  state : ∃ entry : Benv,
+    (processCreateMessage.msg msg).benvAfterTransfer = .ok entry ∧
+    initPost.state = constructorStoredState entry.state msg.currentTarget msg.benv.stat.time
   process : processMessage (processCreateMessage.msg msg) = .ok initPost
   output : initPost.output = code
   chi : Devm.getStorVal initPost msg.currentTarget chiSlot = scale
@@ -868,7 +887,7 @@ theorem processMessage_drip_checkpoint
     rfl
   have h_cchi : ⟨(initSevm seeded).currentTarget, chiSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldChi
   have h_crho : ⟨(initSevm seeded).currentTarget, rhoSlot⟩ ∉ (initDevm seeded).accessedStorageKeys := h_coldRho
-  obtain ⟨initPost, hexecW, houtW, herrW, hlogsW, hchiW, hrhoW, hgasW, hrefundW, hdeleteW, hpieW, hbalW⟩ :=
+  obtain ⟨initPost, hexecW, houtW, herrW, hlogsW, hchiW, hrhoW, hgasW, hrefundW, hdeleteW, hpieW, hbalW, hstateW⟩ :=
     constructorExec_of_walk (sevm := initSevm seeded) (pre := initDevm seeded)
       (G := msg.gas - 44611) h_seed_code h_seed_value h_seed_static h_seed_time
       h_seed_stack h_seed_mem h_seed_gas h_seed_logs h_seed_refund h_seed_error
@@ -903,7 +922,11 @@ theorem processMessage_drip_checkpoint
     show (initDevm seeded).getBal msg.currentTarget = 0
     exact h_initBal
   exact ⟨initPost,
-    { process := h_pm
+    { state := ⟨benv, h_transfer, by
+        change initPost.state = constructorStoredState benv.state msg.currentTarget benv.stat.time at hstateW
+        rw [h_stat] at hstateW
+        exact hstateW⟩
+      process := h_pm
       output := houtW
       chi := hchiW
       rho := h_rho
@@ -1007,6 +1030,9 @@ theorem chargeCodeGas_drip_checkpoint
   exact ⟨charged, hc, hout.trans h_output, hst, hlogs, herr, href, hdel, hgas⟩
 
 structure DripChargeCheckpoint (msg : Msg) (charged : Devm) : Prop where
+  state : ∃ entry : Benv,
+    (processCreateMessage.msg msg).benvAfterTransfer = .ok entry ∧
+    charged.state = constructorStoredState entry.state msg.currentTarget msg.benv.stat.time
   process :
     processCreateMessage msg =
       .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩)
@@ -1056,7 +1082,10 @@ theorem processCreateMessage_drip_charge_checkpoint
     rw [h]
     exact init.bal
   exact ⟨charged,
-    { process :=
+    { state := by
+        obtain ⟨entry, hentry, hstate⟩ := init.state
+        exact ⟨entry, hentry, checkpoint.state.trans hstate⟩
+      process :=
         processCreateMessage_ok_of_processMessage_and_charge msg
           init.process init.error checkpoint.charge
       output := checkpoint.output
@@ -1164,15 +1193,27 @@ theorem processCreateMessage_drip_success
       post.error = .none ∧
       post.refundCounter = 0 ∧
       post.accountsToDelete = .emptyWithCapacity ∧
-      post.getBal msg.currentTarget = 0 := by
+      post.getBal msg.currentTarget = 0 ∧
+      (∃ entry : Benv,
+        (processCreateMessage.msg msg).benvAfterTransfer = .ok entry ∧
+        post.state = constructorInstalledState entry.state msg.currentTarget msg.benv.stat.time) := by
   obtain ⟨initPost, init⟩ :=
     processMessage_drip_checkpoint msg h_value h_codeAddress h_code
       (by omega) h_static h_time h_origChi h_origRho h_coldChi h_coldRho h_bal
   obtain ⟨chargedPost, charged⟩ :=
     processCreateMessage_drip_charge_checkpoint msg init h_gas h_max
-  exact dripInstalledPost_certificate msg charged.process charged.output
-    charged.chi charged.rho charged.pie charged.logs charged.error charged.refundCounter
-    charged.accountsToDelete charged.gas charged.bal
+  obtain ⟨post, hrun, hcode, hchi, hrho, hpie, hlogs, houtput, hgas,
+      herror, hrefund, hdelete, hbal⟩ :=
+    dripInstalledPost_certificate msg charged.process charged.output
+      charged.chi charged.rho charged.pie charged.logs charged.error charged.refundCounter
+      charged.accountsToDelete charged.gas charged.bal
+  have hpost : post = chargedPost.setCode msg.currentTarget ⟨⟨chargedPost.output⟩⟩ :=
+    Except.ok.inj (hrun.symm.trans charged.process)
+  obtain ⟨entry, hentry, hstate⟩ := charged.state
+  refine ⟨post, hrun, hcode, hchi, hrho, hpie, hlogs, houtput, hgas,
+    herror, hrefund, hdelete, hbal, entry, hentry, ?_⟩
+  rw [hpost, Devm.setCode_state, hstate, charged.output]
+  rfl
 
 /-! ## F4c: schedule-parametric deployment root
 
@@ -1630,6 +1671,9 @@ structure CanonicalDeploymentMessageResult
     (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (out : MsgCallOutput) : Prop where
   run : processMessageCall ctx.msg = .ok (post, out)
+  state : ∃ entry : Benv,
+    (processCreateMessage.msg ctx.msg).benvAfterTransfer = .ok entry ∧
+    post = constructorInstalledState entry.state ca ctx.msg.benv.stat.time
   installed : post.getCode ca = ⟨⟨code⟩⟩
   chi : (post.getStor ca).get chiSlot = scale
   rho : (post.getStor ca).get rhoSlot = ctx.msg.benv.stat.time
@@ -1671,7 +1715,7 @@ theorem canonicalDeploymentMessage_succeeds
     rw [ctx.msg_rules_eq]
     exact henv.runtime_code_fits
   obtain ⟨post, hcreate, hinstalled, hchi, hrho, hpie, hlogs, houtput,
-      hgasLeft, herr, hrefund, hdelete, hbalPost⟩ :=
+      hgasLeft, herr, hrefund, hdelete, hbalPost, hstatePost⟩ :=
     processCreateMessage_drip_success ctx.msg ctx.msg_value_eq
       ctx.msg_codeAddress_eq ctx.msg_code_eq hgas ctx.msg_isStatic_eq
       ctx.msg_time_ne_zero ctx.msg_origChi ctx.msg_origRho
@@ -1737,8 +1781,9 @@ theorem canonicalDeploymentMessage_succeeds
     rw [hpreservedCode consolidationRequestPredeployAddress
       hbase.consolidationRequest_ne_target hbase.consolidationRequestCode]
     exact hbase.consolidationRequestCode
-  refine ⟨post.state, directCreateMessageOutputOf post, hrun, ?_, ?_, ?_, ?_,
+  refine ⟨post.state, directCreateMessageOutputOf post, hrun, ?_, ?_, ?_, ?_, ?_,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, hwithdrawalCode, hconsolidationCode⟩
+  · simpa only [ctx.target_eq] using hstatePost
   · rw [← ctx.target_eq]
     exact hinstalled
   · rw [← ctx.target_eq]
@@ -1767,6 +1812,11 @@ structure CanonicalDeploymentTransactionResult
     (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
     (post : State) (bout : BlockOutput) : Prop where
   run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout)
+  state : ∃ entry : Benv,
+    (processCreateMessage.msg ctx.msg).benvAfterTransfer = .ok entry ∧
+    post = deploymentFinalState ctx.txInput deploymentTx sender
+      (constructorInstalledState entry.state ca ctx.msg.benv.stat.time)
+      (deploymentTransactionGasBound deploymentTx)
   blockGasUsed : bout.blockGasUsed = deploymentTransactionGasBound deploymentTx
   blobGasUsed : bout.blobGasUsed = 0
   installed : post.getCode ca = ⟨⟨code⟩⟩
@@ -1961,8 +2011,17 @@ theorem canonicalDeploymentTransaction_succeeds
     change 0 + usedGas = _
     simpa only [Nat.zero_add] using hused
   have hblobGas : bout.blobGasUsed = 0 := rfl
-  exact ⟨post, bout, hrun, hblockGas, hblobGas, hcode, hchi, hrho, hpie, hbal, hblockLogs, hrequests,
-    hdeposit, hwithdrawalCode, hconsolidationCode, hreceipt⟩
+  have hstate : ∃ entry : Benv,
+      (processCreateMessage.msg ctx.msg).benvAfterTransfer = .ok entry ∧
+      post = deploymentFinalState ctx.txInput deploymentTx sender
+        (constructorInstalledState entry.state ca ctx.msg.benv.stat.time)
+        (deploymentTransactionGasBound deploymentTx) := by
+    obtain ⟨entry, hentry, hstate⟩ := hmessage.state
+    refine ⟨entry, hentry, ?_⟩
+    dsimp only [post]
+    rw [hstate, hused]
+  exact ⟨post, bout, hrun, hstate, hblockGas, hblobGas, hcode, hchi, hrho, hpie, hbal,
+    hblockLogs, hrequests, hdeposit, hwithdrawalCode, hconsolidationCode, hreceipt⟩
 
 /-! ## Exact post-transaction request suffix -/
 

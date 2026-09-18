@@ -130,7 +130,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecutionSettlement", "ExecutionPath",
           "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionBodyStateTrace", "ExecutionHistory",
+          "ExecutionTransactionStateTrace", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact",
           "ExecutionHistoryStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
           "ReachableExecFree", "ReachableExecFreeControl", "TransientSettlement", "SourceAttainment",
           "TransientInvariance", "PinnedPauseTarget"]
@@ -205,9 +205,9 @@ CONTRACTS = {
                        "BeaconDepositDeploymentRoot",
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
-    "drip": ["DripCore", "Drip", "DripCode", "DripStackSafetyData",
-             "DripStackSafety", "DripStackSafetyRegion214",
-             "DripStackSafetyRegion576", "DripStackSafetyRegion1022",
+    "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteReach", "DripCreationCode", 
+             "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripMachine", "DripEndpoints", "DripFresh", 
+             "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",

@@ -634,6 +634,16 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To identify the literal block in a retained configured transition, use
+`ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
+[`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
+Supply a successful transition with the same configuration and endpoints;
+the post-world last-block field identifies the retained block without
+reconstructing its body trace. This remains COMMON_API-only: the projected
+block equality alone does not identify an available successful-transition
+witness. Existing facilities were checked, but current matchers do not inspect
+that required local premise; a broad `Eq` trigger would not be selective.
+
 ### E7. I need stable paths to settlement-retained frames
 
 Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
@@ -1866,6 +1876,14 @@ the body-level sibling of T3:
   `ExecutionTrace.benvInv_processWithdrawalsState` moves an arbitrary
   invariant across the whole credit fold.
 - Requests: `ExecutionTrace.RequestsTrace.stateInv_and_sum_le`.
+- Empty-withdrawal body balance: use
+  `ExecutionTrace.AppliedBodyTrace.sum_le_of_empty_withdrawals` to bound the
+  final total balance by the input total, without a contract invariant. It
+  composes both retained system prefixes, all transactions, and both request
+  calls. The withdrawal list must be `[]`; it does not bound a body with
+  consensus credits. This remains COMMON_API-only: a bare natural-number
+  inequality goal does not identify the retained body or its withdrawal list,
+  so the current goal matchers cannot select this route reliably.
 
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.

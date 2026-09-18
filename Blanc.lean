@@ -25,6 +25,7 @@ import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
+import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
@@ -338,6 +339,7 @@ import Blanc.DripCore
 import Blanc.DripCreationCode
 import Blanc.DripDeploy
 import Blanc.DripConcreteHistory
+import Blanc.DripConcreteReach
 import Blanc.DripEndpoints
 import Blanc.DripFresh
 import Blanc.DripFunctional
