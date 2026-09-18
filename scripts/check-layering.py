@@ -406,6 +406,10 @@ COMPOSITION = [
     "Composition.ProrataWethVaultWithdrawPayout",
     "Composition.ProrataWethVaultPairReplay",
     "Composition.ProrataWethVaultPairLadder",
+    "Composition.ProrataWethVaultPairHistory",
+    "Composition.ProrataWethVaultAccountingHistory",
+    "Composition.ProrataWethVaultCoalitionHistory",
+    "Composition.ProrataWethVaultCoalitionInhabitant",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
