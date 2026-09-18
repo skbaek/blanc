@@ -118,6 +118,28 @@ example (storage : Stor) : balSum storage = balSum storage := by
   blanc_suggest
   rfl
 
+-- EXPECT: same-frame-stack-certificate
+example (pre : Devm) :
+    CompiledStackSafety.StepSafe (fun _ _ => True) (.halt (.ok pre)) := by
+  expect_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  blanc_suggest
+  intro err post impossible
+  cases impossible
+
+-- EXPECT: same-frame-stack-certificate
+example (parent : Devm) (room : parent.stack.length < 1024) :
+    CompiledStackSafety.ResumeSafe (fun _ _ => True) 0 (.call parent 0 0) := by
+  expect_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  blanc_suggest
+  exact CompiledStackSafety.resume_call_safe parent 0 0 room (by intros; trivial)
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.StepSafe"
+  expect_no_recipe_trigger "goal-head:CompiledStackSafety.ResumeSafe"
+  trivial
+
 -- EXPECT: tagged-storage-region-separation
 example {leftRegion rightRegion : Nat} {left right : B256}
     (hlr : leftRegion < 16) (hrr : rightRegion < 16)

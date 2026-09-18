@@ -27,6 +27,14 @@ def recipes : List Recipe := [
     boundary := "The encoder masks payload bits at and above bit 252, so unbounded payload injectivity is false; natural regions also wrap modulo the 256-bit word width, so unbounded region separation is false. This is logical key construction, not Solidity address-slot read or assignment semantics, and it proves no family hash/payload injectivity."
   },
   {
+    id := "same-frame-stack-certificate"
+    status := "active"
+    triggers := ["goal-head:CompiledStackSafety.StepSafe", "goal-head:CompiledStackSafety.ResumeSafe"]
+    preferredPath := "Use CompiledStackSafety.Certificate.at_parentPrefix for a checked certificate and an actual same-frame prefix, deriving the exact root entry invariant first. Use resume_call_safe to close an actual CALL resumption from parent headroom and its continuation stack invariant; call_resumes_of_room constructs the actual status-word result."
+    symbols := ["declaration:Blanc.CompiledStackSafety.Certificate", "declaration:Blanc.CompiledStackSafety.Certificate.parentStep", "declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix", "declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix", "declaration:Blanc.CompiledStackSafety.call_resumes_of_room", "declaration:Blanc.CompiledStackSafety.resume_call_safe"]
+    boundary := "The certificate requires local proofs for actual decoded steps; a symbolic PC/height table alone is insufficient. The theorem covers arbitrary raw parent outcomes but does not assert safety of arbitrary entered child code. Fatal child errors are distinguished from newly generated parent stack faults."
+  },
+  {
     id := "runcompiled-construction"
     status := "active"
     triggers := ["goal-head:Func.RunCompiled", "goal-head:Func.RunCompiledTo", "goal-head:Func.ExecTo", "goal-head:Func.ExecWitness"]

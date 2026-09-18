@@ -1,0 +1,442 @@
+#!/usr/bin/env python3
+"""Fail-closed static acceptance for committed DRIP BPO2 fixture evidence.
+
+This checker deliberately does not execute an EVM.  It authenticates only
+relationships visible in the committed JSON: schema-2 ownership, the frozen
+38-obligation map, exact DRIP literals, target placement, case/file inventory,
+and a block-ordered transaction/receipt bijection with observer recipe bindings.
+Receipt values remain structural declarations, not authenticated execution.
+Jaune replay, prefix execution,
+returndata, child traces, and the SF arithmetic evaluator remain separate.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import re
+import sys
+from pathlib import Path
+
+from drip_fixture_observers import observer_code, observer_expectations
+
+ROOT = Path(__file__).resolve().parents[1]
+TARGET = "0x000000000000000000000000000000000000d219"
+MATRIX_OBLIGATION = "receipt-returndata-log-matrix"
+# last20(keccak256(rlp([0x7e5f4552091a69125d5dfcb7b8c2659029395bdf, 0]))).
+# This is frozen independently of the runtime fixture generator.
+CREATE_TARGET = "0xf2e246bb76df876cef8b38ae84130f4f55de395b"
+OBLIGATIONS = (
+    "deployment-genesis", "drip-same-timestamp", "drip-local-under-k2",
+    "drip-local-over-k3", "drip-one-year", "drip-max-elapsed",
+    "drip-elapsed-overflow-revert", "drip-timestamp-regression-revert",
+    "drip-chi-below-scale-revert", "drip-chi-above-cap-revert",
+    "drip-post-chi-cap-boundary", "drip-post-chi-cap-revert", "join-zero-value",
+    "join-genesis-first", "join-future-auto-drip", "join-max-asset",
+    "join-over-max-asset-revert", "join-total-or-row-cap-revert",
+    "join-zero-unit-credit", "exit-zero-unit-call", "exit-partial", "exit-full",
+    "exit-future-auto-drip", "exit-insufficient-units-revert",
+    "exit-underfunded-call-rollback", "exit-rejecting-recipient-rollback",
+    "exit-successful-reentry", "view-units-fresh-consistency",
+    "view-assets-fresh-consistency", "view-arithmetic-cap-boundaries",
+    "receive-value-donation", "receive-zero-value", "unknown-selector-revert",
+    "short-and-trailing-calldata-revert", "value-bearing-nonpayable-revert",
+    "multi-participant-conservation", "segmentation-k3-versus-k1-k2",
+    "receipt-returndata-log-matrix",
+)
+PRIMARY_CASES = (
+    ("drip-same-timestamp", "drip-same-timestamp"),
+    ("drip-local-under-k2", "drip-local-under-k2"),
+    ("drip-local-over-k3", "drip-local-over-k3"),
+    ("drip-one-year", "drip-one-year"),
+    ("drip-max-elapsed", "drip-max-elapsed"),
+    ("drip-elapsed-overflow-revert", "drip-elapsed-overflow-revert"),
+    ("drip-timestamp-regression-revert", "drip-timestamp-regression-revert"),
+    ("drip-chi-below-scale-revert", "drip-chi-below-scale-revert"),
+    ("drip-chi-above-cap-revert", "drip-chi-above-cap-revert"),
+    ("drip-post-chi-cap-boundary", "drip-post-chi-cap-boundary"),
+    ("drip-post-chi-cap-revert", "drip-post-chi-cap-revert"),
+    ("join-zero-value", "join-zero-value"), ("join-genesis-first", "join-genesis-first"),
+    ("join-future-auto-drip", "join-future-auto-drip"), ("join-max-asset", "join-max-asset"),
+    ("join-over-max-asset-revert", "join-over-max-asset-revert"),
+    ("join-zero-unit-credit", "join-zero-unit-credit"),
+    ("join-cap-total-result", "join-total-or-row-cap-revert"),
+    ("join-cap-row-result", "join-total-or-row-cap-revert"),
+    ("join-cap-total-pre", "join-total-or-row-cap-revert"),
+    ("join-cap-row-pre", "join-total-or-row-cap-revert"),
+    ("exit-zero-unit-call", "exit-zero-unit-call"), ("exit-partial", "exit-partial"),
+    ("exit-full", "exit-full"), ("exit-future-auto-drip", "exit-future-auto-drip"),
+    ("exit-insufficient-units-revert", "exit-insufficient-units-revert"),
+    ("exit-underfunded-call-rollback", "exit-underfunded-call-rollback"),
+    ("view-units-fresh-consistency", "view-units-fresh-consistency"),
+    ("view-assets-fresh-consistency", "view-assets-fresh-consistency"),
+    ("view-cap-convertToUnits-0", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToUnits-340282366920938463463374607431768211455", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToUnits-340282366920938463463374607431768211456", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-0", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-340282366920938463463374607431768211455", "view-arithmetic-cap-boundaries"),
+    ("view-cap-convertToAssets-340282366920938463463374607431768211456", "view-arithmetic-cap-boundaries"),
+    ("receive-zero-value", "receive-zero-value"), ("receive-value-donation", "receive-value-donation"),
+    ("unknown-selector-revert", "unknown-selector-revert"),
+    ("short-and-trailing-calldata-revert", "short-and-trailing-calldata-revert"),
+    ("value-bearing-nonpayable-revert", "value-bearing-nonpayable-revert"),
+    ("multi-participant-conservation", "multi-participant-conservation"),
+    ("segmentation-one", "segmentation-k3-versus-k1-k2"),
+    ("segmentation-split", "segmentation-k3-versus-k1-k2"),
+)
+SPECIAL_OBSERVERS = (
+    ("exit-zero-unit-call-observer", "exit-zero-unit-call", "ordinary", 1, 0),
+    ("exit-successful-reentry-observer", "exit-successful-reentry", "reenter", 1, 2),
+    ("exit-nested-overdraw-observer", "exit-successful-reentry", "reenter", 2, 2),
+    ("exit-rejecting-recipient-rollback-observer", "exit-rejecting-recipient-rollback", "reject-after-reentry", 1, 2),
+)
+HEX = re.compile(r"^0x(?:[0-9a-fA-F]{2})*$")
+HELPERS = ["0x000000000000000000000000000000000000d220",
+           "0x000000000000000000000000000000000000d221"]
+BLOCK_COUNTS = {
+    "view-units-fresh-consistency": [2], "view-assets-fresh-consistency": [2],
+    "short-and-trailing-calldata-revert": [13],
+    "value-bearing-nonpayable-revert": [4],
+    "multi-participant-conservation": [3, 3], "segmentation-split": [1, 1],
+}
+# Frozen generation-time observation channels; these labels do not prove them.
+ASSERTIONS = ["complete target pre/post account and storage",
+              "receipt status and cumulative-gas differences"]
+
+
+def case_policy(name):
+    primary = dict(PRIMARY_CASES)
+    if name == "deployment-genesis":
+        return name, [1], [], None
+    if name in primary:
+        return primary[name], BLOCK_COUNTS.get(name, [1]), [], None
+    if name.startswith("observer-") and name[9:] in primary:
+        base = name[9:]
+        return primary[base], BLOCK_COUNTS.get(base, [1]), HELPERS, None
+    for special, obligation, mode, units, value in SPECIAL_OBSERVERS:
+        if name == special:
+            return obligation, [1], [], observer_expectations(
+                CREATE_TARGET, mode, nested_units=units, callback_value=value)
+    raise VerificationError(f"manifest: unknown frozen case {name}")
+
+
+class VerificationError(Exception):
+    pass
+
+
+def reject_duplicates(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise VerificationError(f"duplicate JSON key {key!r}")
+        value[key] = item
+    return value
+
+
+def read_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicates)
+    except (OSError, UnicodeError, json.JSONDecodeError, VerificationError) as exc:
+        raise VerificationError(f"{path}: invalid JSON: {exc}") from exc
+
+
+def require(condition, message):
+    if not condition:
+        raise VerificationError(message)
+
+
+def observer_name(name):
+    return name.startswith("observer-") or name.endswith("-observer")
+
+
+def quantity(value, label):
+    require(isinstance(value, str) and re.fullmatch(r"0x[0-9a-fA-F]+", value), f"{label}: invalid quantity")
+    return int(value, 16)
+
+
+def rlp(raw, at=0):
+    """Strict canonical RLP decoder for fixture headers and legacy bodies."""
+    require(at < len(raw), "RLP truncated")
+    first = raw[at]
+    if first < 0x80: return bytes([first]), at + 1
+    if first <= 0xb7:
+        size = first - 0x80; start = at + 1; end = start + size
+        require(end <= len(raw) and not (size == 1 and raw[start] < 0x80), "RLP noncanonical string")
+        return raw[start:end], end
+    if first <= 0xbf:
+        width = first - 0xb7; start = at + 1; end = start + width
+        require(end <= len(raw) and raw[start] != 0, "RLP long string length")
+        size = int.from_bytes(raw[start:end], "big"); body = end + size
+        require(size >= 56 and body <= len(raw), "RLP long string noncanonical")
+        return raw[end:body], body
+    list_mode = first <= 0xf7
+    if list_mode: size, start = first - 0xc0, at + 1
+    else:
+        width = first - 0xf7; start = at + 1; end = start + width
+        require(end <= len(raw) and raw[start] != 0, "RLP long list length")
+        size, start = int.from_bytes(raw[start:end], "big"), end
+        require(size >= 56, "RLP long list noncanonical")
+    end = start + size; require(end <= len(raw), "RLP list truncated")
+    values = []; cursor = start
+    while cursor < end:
+        item, cursor = rlp(raw, cursor); values.append(item)
+    require(cursor == end, "RLP list boundary")
+    return values, end
+
+
+def decode_block(encoded, label):
+    require(HEX.fullmatch(encoded or "") and encoded != "0x", f"{label}: block RLP absent")
+    value, end = rlp(bytes.fromhex(encoded[2:])); require(end == (len(encoded)-2)//2 and isinstance(value, list) and len(value) == 4, f"{label}: block RLP shape")
+    header, transactions, uncles, withdrawals = value
+    require(isinstance(header, list) and len(header) >= 12 and isinstance(transactions, list) and uncles == [] and withdrawals == [], f"{label}: block body shape")
+    return int.from_bytes(header[11], "big"), transactions
+
+
+def literals():
+    spec = importlib.util.spec_from_file_location("drip_literal_parser", ROOT / "scripts/check-runtime-bytes.py")
+    require(spec is not None and spec.loader is not None, "literal parser cannot load")
+    parser = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parser)
+    parse_lean_literal = parser.parse_lean_literal
+    runtime = parse_lean_literal(ROOT / "Blanc/DripCode.lean", "code")
+    creation = parse_lean_literal(ROOT / "Blanc/DripCreationCode.lean", "creationCodeLiteral")
+    require(len(creation) > len(runtime) and creation[-len(runtime):] == runtime,
+            "creation literal does not suffix-bind runtime")
+    return runtime, creation
+
+
+def account(alloc, address, runtime, label):
+    require(isinstance(alloc, dict), f"{label}: allocation is not an object")
+    matches = [(key, value) for key, value in alloc.items() if key.lower() == address]
+    require(len(matches) == 1 and isinstance(matches[0][1], dict), f"{label}: target account absent or duplicated")
+    value = matches[0][1]
+    require(set(value) == {"nonce", "balance", "code", "storage"}, f"{label}: target account keys differ")
+    require(value["code"] == "0x" + runtime.hex(), f"{label}: target runtime differs")
+    require(isinstance(value["storage"], dict), f"{label}: target storage malformed")
+    quantity(value["nonce"], label + " nonce"); quantity(value["balance"], label + " balance")
+    return value
+
+
+def observer_metadata(value, target, label):
+    """Validate metadata separately from the bytecode it describes."""
+    if value is None:
+        return "ordinary", 1
+    require(isinstance(value, dict), f"{label}: observer metadata malformed")
+    mode = value.get("mode")
+    units = value.get("nestedUnits")
+    callback = value.get("callback")
+    require(mode in ("ordinary", "reenter", "reject-after-reentry"), f"{label}: observer mode differs")
+    require(type(units) is int and units > 0, f"{label}: observer nested units differ")
+    require(isinstance(callback, dict) and type(callback.get("value")) is int, f"{label}: observer callback differs")
+    expected = observer_expectations(target, mode, nested_units=units, callback_value=callback["value"])
+    require(value == expected, f"{label}: observer metadata differs")
+    return mode, units
+
+
+def observer_account(alloc, address, expected_code, label):
+    require(isinstance(address, str) and re.fullmatch(r"0x[0-9a-f]{40}", address), f"{label}: observer helper malformed")
+    matches = [(key, value) for key, value in alloc.items() if key.lower() == address]
+    require(len(matches) == 1 and isinstance(matches[0][1], dict), f"{label}: observer helper absent or duplicated")
+    value = matches[0][1]
+    require(set(value) == {"nonce", "balance", "code", "storage"}, f"{label}: observer helper keys differ")
+    require(value["code"] == expected_code, f"{label}: observer code/target binding differs")
+    require(isinstance(value["storage"], dict), f"{label}: observer helper storage malformed")
+    quantity(value["nonce"], label + " nonce"); quantity(value["balance"], label + " balance")
+
+
+def fixture_case(path, expected_name, runtime, creation, deployment, target, helpers, observer,
+                 counts, receipts):
+    doc = read_json(path)
+    expected_key = f"blanc/drip::{expected_name}[fork_BPO2-blockchain_test]"
+    require(set(doc) == {expected_key}, f"{path.name}: exact case key differs")
+    case = doc[expected_key]
+    required = {"network", "genesisBlockHeader", "pre", "postState", "lastblockhash", "config", "genesisRLP", "blocks", "sealEngine"}
+    require(isinstance(case, dict) and set(case) == required, f"{path.name}: unsupported blockchain_test shape")
+    require(case["network"] == "BPO2" and case["config"].get("network") == "BPO2", f"{path.name}: non-BPO2 case")
+    require(case["sealEngine"] == "NoProof", f"{path.name}: seal engine differs")
+    require(HEX.fullmatch(case["genesisRLP"] or "") and case["genesisRLP"] != "0x", f"{path.name}: genesis RLP absent")
+    require(HEX.fullmatch(case["lastblockhash"] or "") and len(case["lastblockhash"]) == 66, f"{path.name}: tip hash malformed")
+    blocks = case["blocks"]
+    require(isinstance(blocks, list) and blocks, f"{path.name}: no checked blocks")
+    numbers = []; timestamps = []; bodies = []; actual_counts = []
+    for index, block in enumerate(blocks):
+        require(isinstance(block, dict) and set(block) == {"rlp", "blocknumber"}, f"{path.name}: block {index} shape differs")
+        timestamp, txs = decode_block(block["rlp"], f"{path.name}: block {index}")
+        require(isinstance(block["blocknumber"], str) and block["blocknumber"].isdigit(), f"{path.name}: block number malformed")
+        numbers.append(int(block["blocknumber"]))
+        timestamps.append(timestamp); bodies.extend(txs)
+        actual_counts.append(len(txs))
+        previous = 0
+        offset = len(bodies) - len(txs)
+        require(offset + len(txs) <= len(receipts), f"{path.name}: transaction/receipt count differs")
+        for tx_index, (tx, receipt) in enumerate(zip(txs, receipts[offset:])):
+            require(isinstance(tx, list) and len(tx) == 9 and all(isinstance(x, bytes) for x in tx),
+                    f"{path.name}: transaction {offset + tx_index} is not legacy signed RLP")
+            cumulative = quantity(receipt["cumulativeGasUsed"], path.name + " cumulative gas")
+            used = quantity(receipt["gasUsed"], path.name + " gas")
+            require(cumulative > previous and cumulative - previous == used,
+                    f"{path.name}: receipt cumulative gas delta differs")
+            require(used < int.from_bytes(tx[2], "big"), f"{path.name}: receipt gas exceeds finite transaction bound")
+            previous = cumulative
+    require(actual_counts == counts and len(bodies) == len(receipts),
+            f"{path.name}: frozen block transaction/receipt count differs")
+    require(numbers == sorted(numbers) and len(numbers) == len(set(numbers)), f"{path.name}: linked block numbers do not strictly increase")
+    require(timestamps == sorted(timestamps) and len(timestamps) == len(set(timestamps)), f"{path.name}: linked timestamps do not strictly increase")
+    require(bodies, f"{path.name}: no serialized transactions")
+    mode, nested_units = observer_metadata(observer, target, path.name)
+    expected_observer_code = observer_code(target, mode, nested_units=nested_units)
+    require(isinstance(helpers, list) and all(isinstance(x, str) and re.fullmatch(r"0x[0-9a-f]{40}", x)
+                                                for x in helpers), f"{path.name}: observer helpers malformed")
+    helper_addresses = {x.lower() for x in helpers}
+    require(len(helper_addresses) == len(helpers), f"{path.name}: duplicate observer helper")
+    if observer is not None and not helper_addresses:
+        # The special observer case records its recipe metadata but its schema
+        # predates observerHelpers. Bind its transaction to the sole account
+        # carrying that exact recipe rather than accepting a target call.
+        helper_addresses = {key.lower() for key, value in case["pre"].items()
+                            if isinstance(value, dict) and value.get("code") == expected_observer_code}
+        require(len(helper_addresses) == 1, f"{path.name}: observer helper cannot be bound")
+    allowed_destinations = ({bytes.fromhex(x[2:]) for x in helper_addresses}
+                            if helper_addresses else {bytes.fromhex(target[2:])})
+    for index, tx in enumerate(bodies):
+        require(isinstance(tx, list) and len(tx) == 9 and all(isinstance(field, bytes) for field in tx), f"{path.name}: transaction {index} is not legacy signed RLP")
+        nonce, gas_price, gas, destination, value, calldata, v, r, s = tx
+        require(len(destination) in (0, 20) and int.from_bytes(gas, "big") > 0 and int.from_bytes(gas_price, "big") > 0, f"{path.name}: transaction {index} envelope")
+        require(int.from_bytes(v, "big") >= 37 and int.from_bytes(r, "big") > 0 and int.from_bytes(s, "big") > 0, f"{path.name}: transaction {index} EIP-155 signature")
+        require((int.from_bytes(v, "big") - 35) // 2 == 1, f"{path.name}: transaction {index} chain id differs")
+        if deployment:
+            require(index == 0 and destination == b"" and calldata == creation, f"{path.name}: CREATE transaction binding")
+        else:
+            require(destination in allowed_destinations, f"{path.name}: transaction {index} destination differs")
+    if deployment:
+        require(not any(key.lower() == target for key in case["pre"]), f"{path.name}: CREATE target preallocated")
+    else:
+        account(case["pre"], target, runtime, f"{path.name} pre")
+    account(case["postState"], target, runtime, f"{path.name} post")
+    for helper in helper_addresses:
+        observer_account(case["pre"], helper, expected_observer_code, f"{path.name} pre")
+        observer_account(case["postState"], helper, expected_observer_code, f"{path.name} post")
+
+
+def verify(directory: Path):
+    runtime, creation = literals()
+    manifest_path = directory / "manifest.json"
+    manifest = read_json(manifest_path)
+    required = {"schema", "kind", "executionEvidence", "runtimeSha256", "creationSha256", "artifactSizes", "targetProfile", "obligations", "cases"}
+    require(isinstance(manifest, dict) and set(manifest) == required, "manifest: unsupported schema-2 shape")
+    require(manifest["schema"] == 2 and manifest["kind"] == "drip-bpo2-runtime-fixtures", "manifest: unsupported schema/kind")
+    require(manifest["executionEvidence"] is True, "manifest: executionEvidence is not true")
+    require(manifest["runtimeSha256"] == hashlib.sha256(runtime).hexdigest(), "manifest: runtime identity differs")
+    require(manifest["creationSha256"] == hashlib.sha256(creation).hexdigest(), "manifest: creation identity differs")
+    require(manifest["artifactSizes"] == {"runtime": len(runtime), "creation": len(creation)}, "manifest: artifact sizes differ")
+    profile = read_json(ROOT / "scripts/current-mainnet-target.json")
+    require(manifest["targetProfile"] == profile["target"]["checkoutCommit"], "manifest: target profile pin differs")
+    obligations = manifest["obligations"]
+    require(isinstance(obligations, list) and len(obligations) == len(OBLIGATIONS), "manifest: obligation count differs")
+    by_obligation = {}
+    for row in obligations:
+        require(isinstance(row, dict) and set(row) == {"name", "fixtures", "requiredAssertions"}, "manifest: obligation row malformed")
+        name = row["name"]
+        require(isinstance(name, str) and name not in by_obligation, "manifest: duplicate obligation")
+        require(isinstance(row["fixtures"], list) and row["fixtures"] and all(isinstance(x, str) and x.endswith(".json") for x in row["fixtures"]), f"manifest: {name} has no fixture references")
+        expected_assertions = ASSERTIONS + (["returndata bytes/size and ordered observer logs"]
+                                            if name == MATRIX_OBLIGATION else [])
+        require(row["requiredAssertions"] == expected_assertions, f"manifest: {name} observation channels differ")
+        require(len(row["fixtures"]) == len(set(row["fixtures"])), f"manifest: {name} duplicate fixture reference")
+        by_obligation[name] = row
+    require(tuple(by_obligation) == OBLIGATIONS, "manifest: frozen obligation names/order differ")
+    cases = manifest["cases"]
+    require(isinstance(cases, list) and cases, "manifest: empty case map")
+    case_by_file = {}
+    observer_obligations = set()
+    seen_names = set()
+    for row in cases:
+        require(isinstance(row, dict), "manifest: case row is not object")
+        required_case = {"name", "obligation", "steps", "executionEvidence", "fixture", "receiptGas"}
+        require(required_case <= set(row) <= required_case | {"target", "creationCodeSha256", "observer", "observerHelpers"}, "manifest: unsupported case fields")
+        name, obligation, filename = row["name"], row["obligation"], row["fixture"]
+        require(isinstance(name, str) and name and isinstance(filename, str) and filename.endswith(".json"), "manifest: case name/fixture malformed")
+        require(name not in seen_names, "manifest: duplicate case name")
+        seen_names.add(name)
+        require(filename == name + ".json", f"manifest: {name} filename differs")
+        expected_obligation, counts, expected_helpers, expected_observer = case_policy(name)
+        require(obligation == expected_obligation, f"manifest: {name} frozen primary obligation differs")
+        require(row.get("observerHelpers", []) == expected_helpers
+                and ("observerHelpers" in row) == bool(expected_helpers),
+                f"manifest: {name} frozen observer helpers differ")
+        require(row.get("observer") == expected_observer
+                and ("observer" in row) == (expected_observer is not None),
+                f"manifest: {name} frozen observer metadata differs")
+        require(("creationCodeSha256" in row) == (name == "deployment-genesis"),
+                f"manifest: {name} creation metadata ownership differs")
+        require(obligation in by_obligation and filename not in case_by_file, "manifest: unknown obligation or duplicate fixture")
+        require(row["executionEvidence"] is True and type(row["steps"]) is int
+                and row["steps"] == sum(counts), f"manifest: {name} frozen step count differs")
+        receipts = row["receiptGas"]
+        require(isinstance(receipts, list) and len(receipts) == row["steps"], f"manifest: {name} receipt observations unbound")
+        for receipt in receipts:
+            require(isinstance(receipt, dict) and set(receipt) == {"status", "cumulativeGasUsed", "gasUsed", "logs"}, f"manifest: {name} receipt shape differs")
+            require(quantity(receipt["gasUsed"], name + " gas") > 0 and isinstance(receipt["logs"], list), f"manifest: {name} has zero/malformed receipt observation")
+            require(quantity(receipt["status"], name + " status") in (0, 1), f"manifest: {name} receipt status differs")
+            quantity(receipt["cumulativeGasUsed"], name + " cumulative gas")
+            for log in receipt["logs"]:
+                require(isinstance(log, dict) and set(log) == {"address", "topics", "data"}, f"manifest: {name} log shape differs")
+                require(isinstance(log["address"], str) and re.fullmatch(r"0x[0-9a-fA-F]{40}", log["address"]), f"manifest: {name} log address differs")
+                require(isinstance(log["topics"], list) and len(log["topics"]) <= 4
+                        and all(isinstance(x, str) and re.fullmatch(r"0x[0-9a-fA-F]{64}", x) for x in log["topics"]),
+                        f"manifest: {name} log topics differ")
+                require(isinstance(log["data"], str) and HEX.fullmatch(log["data"]), f"manifest: {name} log data differs")
+        deployment = name == "deployment-genesis"
+        expected_target = CREATE_TARGET if deployment or name.endswith("-observer") else TARGET
+        require(isinstance(row.get("target", TARGET), str), f"manifest: {name} target malformed")
+        target = row.get("target", TARGET).lower()
+        if deployment:
+            require(row.get("creationCodeSha256") == hashlib.sha256(creation).hexdigest() and isinstance(row.get("target"), str), "manifest: CREATE binding absent")
+        require(target == expected_target, f"manifest: {name} target binding differs")
+        if "observer" in row or "observerHelpers" in row or name.startswith("observer-") or name.endswith("-observer"):
+            observer_obligations.add(obligation)
+        case_by_file[filename] = (name, deployment, target, row.get("observerHelpers", []), row.get("observer"))
+    for name, row in by_obligation.items():
+        declared = set(row["fixtures"])
+        require(declared <= set(case_by_file), f"manifest: {name} references unknown case file")
+        if name == MATRIX_OBLIGATION:
+            required_observers = {filename for filename, (case_name, _, _, _, _) in case_by_file.items()
+                                  if observer_name(case_name)}
+            require(declared == required_observers,
+                    "manifest: receipt-returndata-log-matrix observer population differs")
+            continue
+        primary = {case["fixture"] for case in cases if case["obligation"] == name}
+        require(declared == primary, f"manifest: {name} primary fixture membership differs")
+    names = {name for name, _, _, _, _ in case_by_file.values()}
+    frozen = {"deployment-genesis"} | {case_name for case_name, _ in PRIMARY_CASES}
+    frozen |= {"observer-" + case_name for case_name, _ in PRIMARY_CASES}
+    frozen |= {case_name for case_name, _, _, _, _ in SPECIAL_OBSERVERS}
+    require(names == frozen, "manifest: frozen case population differs")
+    # Returndata/log and exit callback requirements must have concrete observer cases.
+    for name in ("exit-zero-unit-call", "exit-successful-reentry", "exit-rejecting-recipient-rollback"):
+        require(name in observer_obligations, f"manifest: {name} lacks observer evidence")
+    disk = {path.name for path in directory.glob("*.json") if path.name != "manifest.json"}
+    require(disk == set(case_by_file), f"fixture population mismatch: missing={sorted(set(case_by_file)-disk)}, orphaned={sorted(disk-set(case_by_file))}")
+    rows_by_file = {row["fixture"]: row for row in cases}
+    for filename, (name, deployment, target, helpers, observer) in case_by_file.items():
+        fixture_case(directory / filename, name, runtime, creation, deployment, target, helpers, observer,
+                     case_policy(name)[1], rows_by_file[filename]["receiptGas"])
+    return len(case_by_file), sum(row["steps"] for row in cases)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fixtures-dir", type=Path, default=ROOT / "scripts/fixtures/drip")
+    args = parser.parse_args(argv)
+    try:
+        files, steps = verify(args.fixtures_dir)
+    except VerificationError as exc:
+        print(f"REGRESSION — DRIP committed fixtures: {exc}", file=sys.stderr)
+        return 1
+    print(f"OK — DRIP committed fixtures: {files} files, {steps} declared receipt references (not replay evidence)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

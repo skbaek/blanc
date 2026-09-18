@@ -53,6 +53,7 @@ JAUNE_PACKAGE_PARTS = (".lake", "packages", "jaune")
 JAUNE_LIBRARY_DIR = "Jaune"
 JAUNE_LIBRARY_AGGREGATE = "Jaune.lean"
 
+
 TOP_LEVEL_KEYS = {"schema_version", "generated_notice"}
 REQUIRED_RECIPE_KEYS = {
     "id",
@@ -447,6 +448,7 @@ def matcher_trigger_inventory(root: Path, relative: Path, declaration: str) -> D
     live declarations.
     """
     path = root / relative
+
     try:
         clean = strip_lean_comments(path.read_text(encoding="utf-8"), str(path))
     except OSError as exc:
@@ -677,10 +679,10 @@ CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne"})
 # them silently. It is checked in both directions: a listed recipe that gains a
 # case, or that leaves the registry, fails.
 UNWITNESSED_RECIPES: Dict[str, str] = {
-    # Empty: every registered recipe currently has a harness case. The
-    # table stays so the next recipe added without a case fails here
-    # instead of joining a silent gap; list it with what a case would
-    # have to exhibit.
+    # Recipes with no case in the suggestions harness, each with what a case
+    # would have to exhibit. Checked in both directions by
+    # validate_harness_coverage, so a listed recipe that gains a case, or that
+    # leaves the registry, fails here instead of joining a silent gap.
 }
 
 # Triggers whose reachability is *proved*: the harness states a real goal and
@@ -693,6 +695,8 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
+    "goal-head:CompiledStackSafety.StepSafe",
+    "goal-head:CompiledStackSafety.ResumeSafe",
     "goal-head:ContractSpec.PreservesAdmitted",
     "goal-head:Func.ExecSat",
     "goal-head:Func.Inv",
@@ -1335,6 +1339,15 @@ def validate_harness_coverage(
             f"an unrelated new one"
         )
     return len(expected_ids), len(positive)
+def proof_recipe_trigger_inventory(root: Path) -> Dict[str, str]:
+    """Union two fixed dispatch inventories; ambiguous duplicate ownership fails."""
+    core = matcher_trigger_inventory(root, TACTICS_PATH, "proofRecipeTriggerMatches")
+    leaf = matcher_trigger_inventory(root, LEAF_TACTICS_PATH, "proofRecipeLeafTriggerMatches")
+    duplicates = set(core) & set(leaf)
+    if duplicates:
+        raise RecipeError(f"duplicate trigger ownership across core and leaf matchers: {sorted(duplicates)}")
+    return {**core, **leaf}
+
 
 
 def validate_symbol(
@@ -2192,6 +2205,13 @@ def self_test(root: Path) -> None:
             '"goal-shape:finite-coalition-ledger-absent"',
             "unimplemented-leaf-trigger",
         ), "is not implemented by")
+        resume_trigger = '"goal-head:CompiledStackSafety.ResumeSafe"'
+        rejected_matcher("unimplemented-leaf-head", replace_once(
+            leaf_original,
+            resume_trigger,
+            '"goal-head:CompiledStackSafety.Absent"',
+            "unimplemented-leaf-head",
+        ), "is not implemented by")
         rejected_matcher("leaf-open-fallback", replace_once(
             leaf_original,
             "| _ => return false",
@@ -2283,6 +2303,7 @@ def coverage_phrase(registry: Registry) -> str:
     )
 
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -2310,6 +2331,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "matcher-ownership, trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
                 "controls live"
             )
+
             return 0
         registry = load_and_validate(root)
         surfaces = generated_surfaces(registry)

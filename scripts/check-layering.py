@@ -118,20 +118,22 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "CreationArtifact", "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "OffsetPricing", "ProrataAccounting", "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout", "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward", "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256", "StaticPrecompileMessage", "StaticStorage",
-          "ForwardNoRawSstore", "ForwardStorageEffects", "ForwardDispatchMiss", "ForwardLog",
-          "CompiledStackSafety", "AbstractStackSafety", "AbstractStackTransfer", "AbstractStackCertificate",
-          "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance",
-          "NonpayableInversion",
-          "LinearDispatch", "LinearDispatchCorrectness",
-          "ExecDeterminism", "ExecutionSettlement", "ExecutionPath", "ExecutionStateTrace", "ExecutionTrace",
-          "ExecutionMessageStateTrace", "ExecutionTransactionStateTrace",
-          "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryStateTrace",
-          "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree", "ReachableExecFree",
-          "ReachableExecFreeControl", "TransientSettlement",
-          "SourceAttainment", "TransientInvariance", "PinnedPauseTarget"]
-
+SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
+          "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "OffsetPricing", "ProrataAccounting",
+          "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout",
+          "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
+          "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
+          "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix",
+          "RevertPayload", "CompiledWalkInversion", "CompiledFixedInvariance", "NonpayableInversion",
+          "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecutionSettlement", "ExecutionPath",
+          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionMessageStateTrace",
+          "ExecutionTransactionStateTrace", "ExecutionBodyStateTrace", "ExecutionHistory",
+          "ExecutionHistoryStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
+          "ReachableExecFree", "ReachableExecFreeControl", "TransientSettlement", "SourceAttainment",
+          "TransientInvariance", "PinnedPauseTarget"]
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
