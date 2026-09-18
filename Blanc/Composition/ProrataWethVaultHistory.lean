@@ -232,10 +232,7 @@ structure WethWithdrawSplit (sevm : Sevm) (pre post : Devm) where
   /-- After the `CALL` returns, the suffix writes no storage. -/
   after : Devm.getStor post = Devm.getStor callPost
 
-/-- Build the accepted-payout split from the common facts at WETH's value-bearing
-`CALL`.  Both the compiled source route and the retained execution-node route
-use this constructor; their only differing work is obtaining `callFacts`. -/
-/- The retained entered-call witnesses are named once so the locator can pin
+/-- The retained entered-call witnesses are named once so the locator can pin
 the payout trace to the exact `Xlot` selected by the CALL step. -/
 structure WethWithdrawCallFacts (sevm : Sevm) (callPre callPost : Devm) where
   xl : Xlot
@@ -274,6 +271,7 @@ structure WethWithdrawCallFacts (sevm : Sevm) (callPre callPost : Devm) where
   postMemory : callPost.memory = parent.memory.write 0 (child.output.take 0)
   postStack : callPost.stack = (1 : B256) :: parent.stack
 
+/-- Build the split and also pin the constructed payout trace to the call's slot. -/
 theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
     {callPre callPost : Devm}
     (target : sevm.currentTarget = wethAccount)
@@ -384,6 +382,9 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
   · exact HEq.rfl
   · exact HEq.rfl
 
+/-- Build the accepted-payout split from the common facts at WETH's value-bearing
+`CALL`.  Both the compiled source route and the retained execution-node route
+use this constructor; their only differing work is obtaining `callFacts`. -/
 theorem WethWithdrawSplit.ofCallFacts {sevm : Sevm} {pre post : Devm}
     {callPre callPost : Devm}
     (target : sevm.currentTarget = wethAccount)

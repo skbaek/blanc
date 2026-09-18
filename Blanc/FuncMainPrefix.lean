@@ -23,9 +23,9 @@ theorem run_prefix_branch {fs : List Func} {e : Sevm} {s r : Devm}
     {f g : Func} {path : Prog.SourcePath}
     (h : Func.Run fs e s (.branch f g) r) :
     (∃ s' mid, Devm.PopBurn [0] s s' ∧ Func.Run fs e s' f r ∧
-      Func.RunPrefix fs e path s (.branch f g) mid s' f) ∨
-    (∃ w s' s'' mid, w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧
-      Devm.Burn s' s'' ∧ Func.Run fs e s'' g r ∧
+      Func.RunPrefix fs e path s (.branch f g) mid s' f)
+    ∨ (∃ w s' s'' mid, w ≠ 0 ∧ Devm.PopBurn [w] s s' ∧ Devm.Burn s' s'' ∧
+      Func.Run fs e s'' g r ∧
       Func.RunPrefix fs e path s (.branch f g) mid s'' g) := by
   cases path with
   | mk k steps =>

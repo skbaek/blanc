@@ -561,30 +561,6 @@ private theorem call_settle_clean_transport
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
     executeCode.handleError, processMessage.settle, rawClean]
 
-private theorem rawFrameDescendants_parentStep
-    {root next : Exec.Deriv} {d : Exec.Deriv}
-    (edge : Exec.Deriv.ParentStep next root)
-    (member : d ∈ Exec.rawFrameDescendants next.exc) :
-    d ∈ Exec.rawFrameDescendants root.exc := by
-  cases edge with
-  | cont hstep nextRun =>
-      simpa only [Exec.rawFrameDescendants] using member
-  | doneOk hstep henter hresume nextRun =>
-      simpa only [Exec.rawFrameDescendants] using member
-  | runOk hstep henter child hresume nextRun =>
-      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-      exact Or.inr (Or.inr member)
-
-private theorem rawFrameDescendants_parentPrefix
-    {root node : Exec.Deriv} {d : Exec.Deriv}
-    (hprefix : Exec.Deriv.ParentPrefix root node)
-    (member : d ∈ Exec.rawFrameDescendants node.exc) :
-    d ∈ Exec.rawFrameDescendants root.exc := by
-  induction hprefix with
-  | refl => exact member
-  | step head rest ih =>
-      exact rawFrameDescendants_parentStep head (ih member)
-
 private theorem retained_rawFrames_of_slot
     {xl : Xlot} {retained : ExecutionTrace.RetainedXlot xl}
     {frame : Exec.Frame}
@@ -614,32 +590,8 @@ private theorem rawChild_of_spawn
   have resumeRaw : rsm.run ((Frame.ofCall msg).settle raw) = .ok post := by
     rw [← settledEq]
     exact resumed
-  have nodeEq_all : ∃ next : Exec nextPc nodeSevm post nodeOut,
-      node = .runOk spawn entered childRun resumeRaw next := by
-    cases node with
-    | halt hstep => rw [spawn] at hstep; cases hstep
-    | cont hstep next' => rw [spawn] at hstep; cases hstep
-    | doneErr hstep henter hresume =>
-        rcases Step.spawn.inj (spawn.symm.trans hstep) with ⟨rfl, rfl, rfl⟩
-        rw [entered] at henter
-        cases henter
-    | doneOk hstep henter hresume next' =>
-        rcases Step.spawn.inj (spawn.symm.trans hstep) with ⟨rfl, rfl, rfl⟩
-        rw [entered] at henter
-        cases henter
-    | runErr hstep henter child' hresume =>
-        rcases Step.spawn.inj (spawn.symm.trans hstep) with ⟨rfl, rfl, rfl⟩
-        cases FrameEntry.run.inj (entered.symm.trans henter)
-        cases Exec.result_unique childRun child'
-        rw [resumeRaw] at hresume
-        cases hresume
-    | runOk hstep henter child' hresume next' =>
-        rcases Step.spawn.inj (spawn.symm.trans hstep) with ⟨rfl, rfl, rfl⟩
-        cases FrameEntry.run.inj (entered.symm.trans henter)
-        cases Exec.result_unique childRun child'
-        cases Except.ok.inj (resumeRaw.symm.trans hresume)
-        exact ⟨next', Exec.unique _ _⟩
-  obtain ⟨next, nodeEq⟩ := nodeEq_all
+  obtain ⟨next, nodeEq⟩ :=
+    Exec.exists_next_of_run_spawn node spawn entered childRun resumeRaw
   let childRoot : Exec.Deriv := ⟨cevm.pc, cevm.sta, cevm.dyna, raw, childRun⟩
   refine ⟨childRoot, ?_, ?_⟩
   · rw [nodeEq]
@@ -766,7 +718,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
       · obtain ⟨childRoot, childMember, retainedRoot⟩ :=
           rawChild_of_spawn node.node.exc spawn process resumed childRun
         have childDesc : childRoot ∈ Exec.rawFrameDescendants run :=
-          rawFrameDescendants_parentPrefix sameFrame childMember
+          Exec.mem_rawFrameDescendants_of_parentPrefix sameFrame childMember
         have childRaw : childRoot ∈ Exec.rawFrameRoots run := by
           simp only [Exec.rawFrameRoots, List.mem_cons]
           exact Or.inr childDesc
