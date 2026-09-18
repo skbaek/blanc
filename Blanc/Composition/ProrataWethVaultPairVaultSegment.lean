@@ -243,18 +243,26 @@ private theorem vaultRecord_segment {vault : Adr} {sevm : Sevm} {pre post : Devm
       (post.state.getStor wethAccount).get key =
         (pre.state.getStor wethAccount).get key}
     {provenance : Blanc.Prorata.ProrataAccountingProvenance}
-    {actor : provenance.actor = some sevm.caller} :
+    {actor : provenance.actor = some sevm.caller}
+    (owned : ∀ call, own = some call →
+      (Sevm.selector sevm = selector "deposit" [.uint256, .address] ∨
+        Sevm.selector sevm = selector "mint" [.uint256, .address]) ∧
+      call.visit = ⟨false, vault, sevm.caller.toB256, Devm.getStor pre wethAccount⟩) :
     ∃ steps : List (PairStepRecord vault),
       PairReplay vault (PairBoundary.ofState vault pre.state) steps
         (PairBoundary.ofState vault post.state) ∧
-      ∀ r ∈ steps, r.provenance = provenance := by
+      ∀ r ∈ steps, r.provenance = provenance ∧
+        ∀ call, r.own = some call →
+          (Sevm.selector sevm = selector "deposit" [.uint256, .address] ∨
+            Sevm.selector sevm = selector "mint" [.uint256, .address]) ∧
+          call.visit = ⟨false, vault, sevm.caller.toB256, Devm.getStor pre wethAccount⟩ := by
   have replay := PairReplay.singleton
     (vaultRecord op evidence own linked quiet provenance actor)
   refine ⟨_, replay, ?_⟩
   intro r member
   simp only [List.mem_singleton] at member
   subst member
-  rfl
+  exact ⟨rfl, owned⟩
 
 /-- A record that owns no invocation has nothing to link. -/
 private theorem linked_none {vault : Adr} {pre post : Devm} :
@@ -296,22 +304,31 @@ private theorem quiet_of_agree {pre post : Devm}
   exact (agree key notAdr).symm
 
 /-- The linked `transferFrom` child of an inbound flow is one owned allowance
-invocation, linked at both endpoints and staged by the vault. -/
+invocation, linked at both endpoints and staged by the vault, whose visit is the
+one the vault frame stages: caller the vault, owner the frame's caller, WETH's
+storage at the frame's entry. -/
 private theorem inbound_owned {vault : Adr} {sevm : Sevm} {pre post : Devm}
-    {assets : B256}
+    {assets : B256} (atVault : sevm.currentTarget = vault)
     (child : LinkedWethChild sevm.currentTarget
       (transferFromCalldata sevm.caller sevm.currentTarget assets) pre post) :
     ∃ call : WethAllowanceInvocation,
-      ∀ c, some call = some c →
+      (∀ c, some call = some c →
         c.pre.state.getStor wethAccount = pre.state.getStor wethAccount ∧
         c.post.state.getStor wethAccount = post.state.getStor wethAccount ∧
-        (c.sevm.caller = vault → VaultStagedCalldata c) := by
-  obtain ⟨childSevm, childPre, rawPost, target, -, dataEq, memoryEmpty, run,
+        (c.sevm.caller = vault → VaultStagedCalldata c)) ∧
+      call.visit = ⟨false, vault, sevm.caller.toB256, Devm.getStor pre wethAccount⟩ := by
+  obtain ⟨childSevm, childPre, rawPost, target, callerEq, dataEq, memoryEmpty, run,
     entryLinked, exitLinked⟩ := child
-  have selected := (transferFromCalldata_facts dataEq).1
-  obtain ⟨call, -, sevmEq, preEq, postEq⟩ :=
-    weth_run_mkTransferFromInvocation target memoryEmpty run selected
-  refine ⟨call, fun c same => ?_⟩
+  have facts := transferFromCalldata_facts dataEq
+  obtain ⟨call, approval, sevmEq, preEq, postEq⟩ :=
+    weth_run_mkTransferFromInvocation target memoryEmpty run facts.1
+  refine ⟨call, fun c same => ?_, ?_⟩
+  swap
+  · have owner : Sevm.argWord call.sevm 0 = sevm.caller.toB256 := by
+      rw [sevmEq]
+      exact facts.2.1
+    unfold WethAllowanceInvocation.visit
+    rw [approval, owner, sevmEq, callerEq, atVault, preEq, entryLinked]
   cases same
   refine ⟨?_, ?_, fun _ => ?_⟩
   · rw [preEq]
@@ -372,9 +389,10 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
     obtain ⟨_, _, _, _, evidence⟩ :=
       FourQuote.deposit_compiled_share_evidence target callerNotVault wethRowNof
         config memoryWf run isDeposit
-    obtain ⟨call, linked⟩ := inbound_owned (vault := vault) child
+    obtain ⟨call, linked, visit⟩ := inbound_owned target child
     exact vaultRecord_segment (evidence := evidence) (own := some call)
       (linked := linked) (quiet := quiet_some) (actor := actor)
+      (fun c same => by cases same; exact ⟨Or.inl isDeposit, visit⟩)
   by_cases isMint : Sevm.selector sevm = selector "mint" [.uint256, .address]
   · obtain ⟨-, supply, supplyEq, -, quoteFits, -, -, -, -, effect, child⟩ :=
       mint_compiled_effect_linked config memoryWf run isMint
@@ -408,9 +426,10 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
     obtain ⟨_, _, _, _, _, evidence⟩ :=
       FourQuote.mint_compiled_share_evidence target callerNotVault wethRowNof
         config memoryWf run isMint
-    obtain ⟨call, linked⟩ := inbound_owned (vault := vault) child
+    obtain ⟨call, linked, visit⟩ := inbound_owned target child
     exact vaultRecord_segment (evidence := evidence) (own := some call)
       (linked := linked) (quiet := quiet_some) (actor := actor)
+      (fun c same => by cases same; exact ⟨Or.inr isMint, visit⟩)
   by_cases isWithdraw : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, quiet⟩ :=
@@ -421,11 +440,13 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
           memoryWf run isWithdraw
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
+        (fun _ impossible => by cases impossible)
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.withdrawNormal_compiled_share_evidence target
           (fun h => self h.symm) config memoryWf run isWithdraw
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
+        (fun _ impossible => by cases impossible)
   by_cases isRedeem : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, quiet⟩ :=
@@ -436,11 +457,13 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
           memoryWf run isRedeem
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
+        (fun _ impossible => by cases impossible)
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.redeemNormal_compiled_share_evidence target
           (fun h => self h.symm) config memoryWf run isRedeem
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
+        (fun _ impossible => by cases impossible)
   have notWeth : sevm.currentTarget ≠ wethAccount := fun h => config.distinct h.symm
   by_cases isApprove :
       Sevm.selector sevm = selector "approve" [.address, .uint256]
@@ -451,6 +474,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
         memoryWf run isApprove)
       (own := none) (linked := linked_none)
       (quiet := quiet_of_eq (foreign wethAccount notWeth)) (actor := actor)
+      (fun _ impossible => by cases impossible)
   by_cases isTransfer :
       Sevm.selector sevm = selector "transfer" [.address, .uint256]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, foreign, -⟩ :=
@@ -460,6 +484,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
         memoryWf run isTransfer)
       (own := none) (linked := linked_none)
       (quiet := quiet_of_eq (foreign wethAccount notWeth)) (actor := actor)
+      (fun _ impossible => by cases impossible)
   by_cases isTransferFrom : Sevm.selector sevm =
       selector "transferFrom" [.address, .address, .uint256]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -,
@@ -471,6 +496,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
         memoryWf run isTransferFrom)
       (own := none) (linked := linked_none)
       (quiet := quiet_of_eq (foreign wethAccount notWeth)) (actor := actor)
+      (fun _ impossible => by cases impossible)
   have kept := view_message_getStor run isDeposit isMint isWithdraw isRedeem
     isApprove isTransfer isTransferFrom
   exact ⟨[], PairReplay.nil_of_eq

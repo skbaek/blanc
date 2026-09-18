@@ -150,7 +150,8 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingReplay",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
-           "SymbolicProgram"]
+           "SymbolicProgram",
+           "ExecutionTraceFrames", "FuncMainPrefix"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
@@ -410,6 +411,9 @@ COMPOSITION = [
     "Composition.ProrataWethVaultAccountingHistory",
     "Composition.ProrataWethVaultCoalitionHistory",
     "Composition.ProrataWethVaultCoalitionInhabitant",
+    "Composition.ProrataWethVaultLedgerVisits",
+    "Composition.ProrataWethVaultWithdrawLocator",
+    "Composition.ProrataWethVaultLedgerFaithful",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

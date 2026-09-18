@@ -64,22 +64,25 @@ private theorem weth_approve_compiled_foreign {sevm : Sevm} {pre post : Devm}
 
 /-- The one-record replay between a record's own endpoints, tagged with its
 provenance. -/
-private theorem wethRecord_segment {vault : Adr} {pre post : Devm}
+private theorem wethRecord_segment {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (record : PairStepRecord vault)
     (before : record.before = pre.state) (after : record.after = post.state)
     {provenance : Blanc.Prorata.ProrataAccountingProvenance}
-    (tag : record.provenance = provenance) :
+    (tag : record.provenance = provenance)
+    (owned : ∀ call, record.own = some call →
+      call.sevm = sevm ∧ call.pre = pre ∧ call.post = post) :
     ∃ steps : List (PairStepRecord vault),
       PairReplay vault (PairBoundary.ofState vault pre.state) steps
         (PairBoundary.ofState vault post.state) ∧
-      ∀ r ∈ steps, r.provenance = provenance := by
+      ∀ r ∈ steps, r.provenance = provenance ∧
+        ∀ call, r.own = some call → call.sevm = sevm ∧ call.pre = pre ∧ call.post = post := by
   have replay := PairReplay.singleton record
   rw [before, after] at replay
   refine ⟨_, replay, ?_⟩
   intro r member
   simp only [List.mem_singleton] at member
   subst member
-  exact tag
+  exact ⟨tag, owned⟩
 
 /-- An invocation over the frame's own endpoints is linked at both, and staged
 vacuously: its caller is not the vault. -/
@@ -255,6 +258,7 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
         (linked_self (call := call) rfl rfl callerNe) (fun impossible => nomatch impossible)
           provenance actor)
       rfl rfl rfl
+            (by intro c h; cases h; exact ⟨rfl, rfl, rfl⟩)
   by_cases isTransferFrom : Sevm.selector sevm =
       selector "transferFrom" [.address, .address, .uint256]
   · obtain ⟨move, foreignAll⟩ := weth_transferFrom_compiled_row_effect run isTransferFrom
@@ -276,15 +280,18 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
       exact wethRecord_segment
         (debitRecord call callerNe owner pair (debited ▸ move) vaultKept linked
           provenance actor) rfl rfl rfl
+            (by intro c h; cases h; exact ⟨rfl, rfl, rfl⟩)
     · by_cases credited : (Sevm.argWord sevm 1).toAdr = vault
       · have effect := credited ▸ move
         exact wethRecord_segment
           (creditRecord target _ _ debited
             (credit_rowNof inv.weth target rfl effect debited) effect vaultKept
             (some call) linked (fun impossible => nomatch impossible) provenance actor) rfl rfl rfl
+            (by intro c h; cases h; exact ⟨rfl, rfl, rfl⟩)
       · exact wethRecord_segment
           (silentRecord vaultKept (transfer_row_kept move debited credited)
             (some call) linked (fun impossible => nomatch impossible) provenance actor) rfl rfl rfl
+            (by intro c h; cases h; exact ⟨rfl, rfl, rfl⟩)
   by_cases isTransfer : Sevm.selector sevm = selector "transfer" [.address, .uint256]
   · obtain ⟨move, off, foreignAll⟩ := weth_transfer_compiled_effect run isTransfer
     rw [target] at move off
@@ -302,9 +309,11 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
         (creditRecord target _ _ callerNe
           (credit_rowNof inv.weth target rfl effect callerNe) effect vaultKept
           none (fun _ impossible => nomatch impossible) quiet provenance actor) rfl rfl rfl
+            (by intro c h; cases h)
     · exact wethRecord_segment
         (silentRecord vaultKept (transfer_row_kept move callerNe credited)
           none (fun _ impossible => nomatch impossible) quiet provenance actor) rfl rfl rfl
+            (by intro c h; cases h)
   by_cases isView : Sevm.selector sevm ∈ wethViewSelectors
   · have kept := weth_view_compiled_effect run isView
     exact ⟨[], PairReplay.nil_of_eq
@@ -346,5 +355,6 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
     (silentRecord vaultKept rowKept none (fun _ impossible => nomatch impossible)
       quiet provenance actor)
     rfl rfl rfl
+            (by intro c h; cases h)
 
 end Blanc.Composition.ProrataWethVault

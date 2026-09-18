@@ -2,6 +2,7 @@
 -- machine, checked Maker-shaped rpow, and checks-effects-interactions exit.
 
 import Blanc.DripCore
+import Blanc.FuncMainPrefix
 
 namespace Blanc
 
@@ -40,9 +41,6 @@ def roundedWord : B256 := 14
 
 def loadWord (word : B256) : Line :=
   [pushB256 (word * 32), mload]
-
-def exactCalldata (size : B256) (body : Func) : Func :=
-  pushB256 size ::: calldatasize ::: eq ::: (body <?> .revert)
 
 def stageRoute (route : B256) : Line :=
   [pushB256 route] ++ mstoreAt routeWord

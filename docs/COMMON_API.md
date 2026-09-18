@@ -63,6 +63,31 @@ registry has identified the likely vocabulary.
   rather than constructing or consuming a prefix, and no goal-head or
   goal-shape trigger names the prefix conclusion, so discovery remains in
   this registry.
+- For that prefix across a whole public entry — the `fsig` dispatcher head,
+  the tree dispatcher, and the standard guards — use
+  [`Blanc/FuncMainPrefix.lean`](../Blanc/FuncMainPrefix.lean).
+  `run_prefix_prepend` and `run_prefix_branch` are the path-agnostic forms of
+  `Func.RunPrefix.of_run_prepend` and `of_run_branch`: the start path is
+  arbitrary and the cut's path is hidden, so callers compose with
+  `Func.RunPrefix.trans` and never do path arithmetic.
+  `dispatch_entry_of_run_mainWith_prefix` walks a nonempty
+  `Func.mainWith k dt` run to its dispatch tree with the selector alone on the
+  stack and state, memory, logs and output unchanged;
+  `dispatchWith_run_prefix_of_sorted` and `dispatchWith_run_prefix_of_sorted_list`
+  continue through a sorted indexed-fallback `dispatchWith` tree to a member
+  selector's body, removing the selector and preserving state and memory.
+  For the guards, `Drip.run_prefix_nonpayable_logs` peels `nonpayable` (zero
+  call value; state, memory, logs and output unchanged),
+  `Drip.of_run_exactCalldata_prefix` peels the exact-calldata-length guard
+  `Drip.exactCalldata`, and `Drip.of_run_nonpayable_exactCalldata_prefix`
+  composes both. The `Drip.` names are historical: they were hoisted from
+  DRIP with their fully qualified names kept, and nothing in their
+  statements concerns DRIP. Each lemma returns a prefix plus the body run from
+  the cut, never a compiled walk; to place the cut on an actual execution use
+  `Exec.Deriv.SourceCursor.ofRunPrefix` (E5). Worked uses: the WETH `withdraw`
+  locator in `Blanc/Composition/ProrataWethVaultWithdrawLocator.lean` and
+  DRIP's exit locator. The same trigger check as `Func.RunPrefix` applies, so
+  there is no recipe.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
@@ -713,6 +738,14 @@ Existing discovery and suggestion facilities were checked. The existential
 membership goal alone does not identify the available occurrence, root-prefix,
 spawn and process witnesses; current matchers do not inspect this joint local
 context, so a broad existential trigger would not reliably select this route.
+
+To take apart an arbitrary run whose first step is a spawn,
+`Exec.exists_next_of_run_spawn` in the same module takes the step equation
+`Evm.step … = .spawn frame resume nextPc`, the entry
+`frame.enter = .run childEvm`, the entered child's `Exec` and a successful
+resume, and returns the continuation `next` together with the equation
+`run = .runOk spawn entered child resumed next`. Rewriting by that equation lets
+raw-frame membership facts about `next` and the child transfer to `run`.
 
 ### E8. I need an exact ordered replay of world-state changes
 
@@ -1752,6 +1785,28 @@ consumer needs canonical interpreter ingress as one conjunct:
   `Exec.mem_rawFrameRoots_of_mem_committedFrames` carry a retained committed
   invocation root back to that traversal; they do not supply same-frame
   prefix/suffix or full storage chronology.
+- For a retained trace carrier rather than a single `Exec`, the raw entered
+  roots are projected by
+  [`Blanc/ExecutionTraceFrames.lean`](../Blanc/ExecutionTraceFrames.lean):
+  `ExecutionTrace.RetainedXlot.rawFrames` and the `rawFrames` of
+  `ProcessMessageTrace`, `ProcessCreateMessageTrace`, `MessageCallTrace`,
+  `TransactionTrace`, `ApplyTransactionsTrace`, `SystemMessageTrace`,
+  `RequestsTrace`, `AppliedBodyTrace`, `ConfiguredBlockTrace` and
+  `ConfiguredHistoryTrace` (whose `.step prior block` case is
+  `prior.rawFrames ++ block.rawFrames`). No settlement or commitment filter is
+  applied: a frame whose effects were later rolled back is still listed, so a
+  predicate required over the whole list is a stronger premise than one over
+  retained frames. The same module closes the traversal: `Exec.rawFrameRoots_trans`
+  says a raw root of a raw root is a raw root, and
+  `Exec.mem_rawFrameDescendants_of_parentStep` and
+  `Exec.mem_rawFrameDescendants_of_parentPrefix` carry membership up an
+  `Exec.Deriv.ParentStep` or `ParentPrefix` to its root.
+  `Exec.rawFrameDescendants_sub_of_stepNone`, `_of_stepSome` and `_of_jump`
+  include a successful continuation's raw descendants, and a filled child's
+  raw roots, in the whole run's. Worked use: the vault's
+  `ConfiguredHistoryTrace.pairVisits` in
+  `Blanc/Composition/ProrataWethVaultLedgerVisits.lean`. Membership goals over
+  these lists have no distinguishing head, so there is no recipe.
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
