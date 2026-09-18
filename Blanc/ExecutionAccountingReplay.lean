@@ -15,8 +15,8 @@
 -- an abstract replay relation, and exactly the three laws the seams below
 -- consume.  Its silence law is stated over the whole world, because that is all
 -- a settlement seam ever knows, so a boundary may read any number of accounts.
--- `ReplayCarrier` extends it with the two account-local laws behind the
--- storage-fixed balance-monotone classifier.  A contract supplies the carrier
+-- `ReplayCarrier` is the account-local carrier, with the two laws behind the
+-- storage-fixed balance-monotone classifier, and maps into it.  A contract supplies the carrier
 -- and gets the seams back at its own vocabulary; nothing here names a contract,
 -- and nothing here needs to.
 
@@ -83,22 +83,36 @@ structure SettlementCarrier (ca : Adr) where
     frameEntry (initSevm (msg.withBenv entry)) entry.state =
       ofState msg.benv.state
 
-/-- The account-local replay interpretation: a `SettlementCarrier` whose
-boundary reads the single account `ca`, together with the one law that
-produces a step.
+/-- The account-local replay interpretation: a boundary that reads the single
+account `ca`, with the law that produces a step.  It presents itself to the
+settlement seams through `ReplayCarrier.toSettlementCarrier`.
+
+`Snap`, `Step`, `Replay`, `ofState`, `frameEntry`, `nil` and `entry_eq_ofState`
+are as in `SettlementCarrier`.  The two account-local laws:
 
 * `silent` — a transition that fixes this account's storage and balance moves
   no boundary, which is how a foreign instruction prefix leaves no trace.  It
-  implies the parent's `worldSilent`, which is therefore defaulted and never
-  supplied by an instance;
+  implies the whole-world law the seams consume;
 * `credit` — a storage-fixed strictly increasing balance is some replay, which
   is the only place a step is ever produced.
 
 `Tag` is whatever provenance a credit step must record.  A carrier that records
 none sets it to `Unit`. -/
-structure ReplayCarrier (ca : Adr) extends SettlementCarrier ca where
+structure ReplayCarrier (ca : Adr) where
+  /-- The contract's own boundary type. -/
+  Snap : Type
+  /-- The contract's own accounting step type. -/
+  Step : Type
   /-- Provenance a produced credit step must carry. -/
   Tag : Type
+  /-- The contract's own connected replay relation. -/
+  Replay : Snap → List Step → Snap → Prop
+  /-- The boundary of an ordinary world state. -/
+  ofState : State → Snap
+  /-- The boundary at an entered instruction frame. -/
+  frameEntry : Sevm → State → Snap
+  /-- A boundary replays to itself with no step. -/
+  nil : ∀ boundary : Snap, Replay boundary [] boundary
   /-- A transition invisible to this account moves no boundary. -/
   silent : ∀ {pre post : State},
     post.getStor ca = pre.getStor ca →
@@ -110,9 +124,30 @@ structure ReplayCarrier (ca : Adr) extends SettlementCarrier ca where
     (post.bal ca).toNat = (pre.bal ca).toNat + amount →
     0 < amount →
     ∃ steps, Replay (ofState pre) steps (ofState post)
+  /-- A successful message transfer connects the entered frame's boundary to
+  the ordinary boundary of the world the message opened on. -/
+  entry_eq_ofState : ∀ {msg : Msg} {entry : Benv},
+    (msg.shouldTransferValue = true → msg.caller ≠ ca) →
+    (msg.shouldTransferValue = false → msg.currentTarget = ca → msg.value = 0) →
+    msg.benvAfterTransfer = .ok entry →
+    sum msg.benv.state.bal < 2 ^ 256 →
+    frameEntry (initSevm (msg.withBenv entry)) entry.state =
+      ofState msg.benv.state
+
+/-- An account-local carrier as a settlement carrier: the whole-world silence
+law is the account-local one read at `ca`. -/
+def ReplayCarrier.toSettlementCarrier {ca : Adr} (C : ReplayCarrier ca) :
+    SettlementCarrier ca where
+  Snap := C.Snap
+  Step := C.Step
+  Replay := C.Replay
+  ofState := C.ofState
+  frameEntry := C.frameEntry
+  nil := C.nil
   worldSilent := fun storage_eq balance_eq =>
-    silent (congrFun storage_eq ca)
+    C.silent (congrFun storage_eq ca)
       (congrArg B256.toNat (congrFun balance_eq ca))
+  entry_eq_ofState := C.entry_eq_ofState
 
 namespace SettlementCarrier
 
@@ -364,8 +399,9 @@ consumers and the repository audit cite them at `ReplayCarrier`. -/
 
 /-- Equal boundaries contribute no step. -/
 theorem nilOfEq (C : ReplayCarrier ca) {pre post : C.Snap} (eq : post = pre) :
-    C.Replay pre [] post :=
-  C.toSettlementCarrier.nilOfEq eq
+    C.Replay pre [] post := by
+  rw [eq]
+  exact C.nil pre
 
 /-- `SettlementCarrier.processMessage_of_body` at an account-local carrier. -/
 theorem processMessage_of_body (C : ReplayCarrier ca)
