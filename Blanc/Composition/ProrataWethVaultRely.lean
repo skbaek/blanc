@@ -74,7 +74,7 @@ structure VaultFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
 /-! ## Transport of the configuration -/
 
 /-- The asset's installed code is nonempty. -/
-private theorem wethCode_toList_ne_nil {vault : Adr} {sevm : Sevm} {pre : Devm}
+theorem wethCode_toList_ne_nil {vault : Adr} {sevm : Sevm} {pre : Devm}
     (config : DirectWethConfiguration vault sevm pre) :
     (pre.getCode wethAccount).toList ≠ [] := by
   rw [config.code]
@@ -82,7 +82,7 @@ private theorem wethCode_toList_ne_nil {vault : Adr} {sevm : Sevm} {pre : Devm}
 
 /-- The configuration survives any step that preserves nonempty code and the
 frame's block statics. -/
-private theorem DirectWethConfiguration.of_codePreserve
+theorem DirectWethConfiguration.of_codePreserve
     {vault : Adr} {sevm sevm' : Sevm} {pre inter : Devm}
     (config : DirectWethConfiguration vault sevm pre)
     (stat : sevm'.benvStat = sevm.benvStat)
@@ -95,7 +95,7 @@ private theorem DirectWethConfiguration.of_codePreserve
     exact config.code
 
 /-- A same-frame `Ninst` step at any outcome preserves nonempty code. -/
-private theorem Ninst.stepRun_codePreserve
+theorem Ninst.stepRun_codePreserve
     {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst} {xl : Xlot}
     (child : Xlot.Rel Devm.CodePreserve xl)
     (run : Ninst.StepRun pc sevm pre n xl (.ok inter)) :

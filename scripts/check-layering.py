@@ -211,7 +211,7 @@ CONTRACTS = {
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate",
              "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
-             "DripExitPreCallbackLocator"],
+             "DripRealizedExec", "DripExitPreCallbackLocator"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
@@ -397,6 +397,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultPair",
     "Composition.ProrataWethVaultRely",
     "Composition.ProrataWethVaultEnvironment",
+    "Composition.ProrataWethVaultHistory",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
