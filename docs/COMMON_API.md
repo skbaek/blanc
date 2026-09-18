@@ -76,14 +76,13 @@ registry has identified the likely vocabulary.
   `dispatchWith_run_prefix_of_sorted` and `dispatchWith_run_prefix_of_sorted_list`
   continue through a sorted indexed-fallback `dispatchWith` tree to a member
   selector's body, removing the selector and preserving state and memory.
-  For the guards, `Drip.run_prefix_nonpayable_logs` peels `nonpayable` (zero
+  For the guards, `run_prefix_nonpayable_logs` peels `nonpayable` (zero
   call value; state, memory, logs and output unchanged),
-  `Drip.of_run_exactCalldata_prefix` peels the exact-calldata-length guard
-  `Drip.exactCalldata`, and `Drip.of_run_nonpayable_exactCalldata_prefix`
-  composes both. The `Drip.` names are historical: they were hoisted from
-  DRIP with their fully qualified names kept, and nothing in their
-  statements concerns DRIP. Each lemma returns a prefix plus the body run from
-  the cut, never a compiled walk; to place the cut on an actual execution use
+  `of_run_exactCalldata_prefix` peels the exact-calldata-length guard
+  `exactCalldata`, and `of_run_nonpayable_exactCalldata_prefix` composes both.
+  Nothing in their statements concerns DRIP. Each lemma returns a prefix plus
+  the body run from the cut, never a compiled walk; to place the cut on an
+  actual execution use
   `Exec.Deriv.SourceCursor.ofRunPrefix` (E5). Worked uses: the WETH `withdraw`
   locator in `Blanc/Composition/ProrataWethVaultWithdrawLocator.lean` and
   DRIP's exit locator. The same trigger check as `Func.RunPrefix` applies, so

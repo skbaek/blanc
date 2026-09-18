@@ -125,7 +125,7 @@ theorem weth_withdraw_callHead_prefix {sevm : Sevm} {pre post : Devm}
       Blanc.wethFuncs_sorted hmem
       hpfx hdispatch with
     ⟨s3, path3, -, hst3, hmm3, hpre3, hwrapped⟩
-  rcases Drip.run_prefix_nonpayable_logs (path := path3) hwrapped with
+  rcases run_prefix_nonpayable_logs (path := path3) hwrapped with
     ⟨s4, path4, -, hst4, hmm4, -, -, hpre4, hbody⟩
   simp only [Blanc.withdraw] at hbody
   rcases run_prefix_prepend (l := Blanc.withdrawLoadCheck) (path := path4)

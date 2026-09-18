@@ -133,7 +133,7 @@ private theorem Exec.rawFrameDescendants_trans
         · exact Or.inr (Or.inl (childIh childHd he))
         · exact Or.inr (Or.inr (nextIh nextHd he))
 
-/-/ A raw frame root of a raw frame root is a raw frame root. -/
+/-- A raw frame root of a raw frame root is a raw frame root. -/
 theorem Exec.rawFrameRoots_trans
     {run : Exec pc sevm pre out} {d e : Exec.Deriv}
     (hd : d ∈ Exec.rawFrameRoots run)

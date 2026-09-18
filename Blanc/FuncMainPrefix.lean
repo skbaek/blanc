@@ -238,8 +238,6 @@ theorem dispatchWith_run_prefix_of_sorted_list {funcs : List (B256 × Func)}
     (dispatchWith_run_prefix_of_sorted (n := funcs.length)
       (xs := funcs) h_sorted (by omega) h_mem h_pfx h_run)
 
-namespace Drip
-
 def exactCalldata (size : B256) (body : Func) : Func :=
   pushB256 size ::: calldatasize ::: eq ::: (body <?> .revert)
 
@@ -363,7 +361,5 @@ theorem of_run_nonpayable_exactCalldata_prefix {fs : List Func} {sevm : Sevm}
     ⟨mid, midM, hsize, hst', hmm', hlg', hou', hpreE, hbody⟩
   exact ⟨mid, midM, hvalue, hsize, hst.trans hst', hmm.trans hmm',
     hlg.trans hlg', hou.trans hou', Func.RunPrefix.trans hpreN hpreE, hbody⟩
-
-end Drip
 
 end Blanc
