@@ -593,6 +593,20 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   completed spawn, and the resumed child.
 - For a loose gas-free walk prefix with source-path accumulation, see E1 and
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
+- To place the cut of a loose gas-free `Func.RunPrefix` on the *actual*
+  execution, use `Exec.Deriv.SourceCursor.ofRunPrefix` in
+  [`Blanc/PrefixTransport.lean`](../Blanc/PrefixTransport.lean). From a source
+  cursor of a successful frame (`root.exn = .ok post`) whose state agrees with
+  the loose start under `Devm.EqModGas`, it returns the source cursor at the
+  prefix's target path and body, its state again equal modulo `gasLeft`, and a
+  same-frame `ParentPrefix` from the starting node. The forward cursor duals
+  `SourceCursor.mainForward`, `nextForward`, `branchForward`, and
+  `callForward` advance without a nominated target, and
+  `ParentStep.exists_of_ninstAt_ok`, `exists_of_pushAt_ok`, and
+  `exists_of_jinstAt_ok` supply the underlying continuation edges. They need
+  the successful outcome; for an arbitrary-outcome frame use the
+  target-directed `*Toward` family above. A word read from `gasLeft` is not
+  transported: stop the prefix before `gas` and cross it on the actual node.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 

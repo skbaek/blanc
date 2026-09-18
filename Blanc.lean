@@ -153,6 +153,7 @@ import Blanc.AbstractStackTransfer
 import Blanc.GasErasure
 import Blanc.RunPrefix
 import Blanc.ReachDispatchPrefix
+import Blanc.PrefixTransport
 import Blanc.AbstractStackCertificate
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
