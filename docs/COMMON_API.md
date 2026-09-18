@@ -601,7 +601,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   prefix's target path and body, its state again equal modulo `gasLeft`, and a
   same-frame `ParentPrefix` from the starting node. The forward cursor duals
   `SourceCursor.mainForward`, `nextForward`, `branchForward`, and
-  `callForward` advance without a nominated target, and
+  `callForward` advance without a nominated target (`mainForward` needs only
+  the entry counter and the compiled bytes), `SourceCursor.ninstAt` decodes
+  the instruction under a `.next` cursor, and
   `ParentStep.exists_of_ninstAt_ok`, `exists_of_pushAt_ok`, and
   `exists_of_jinstAt_ok` supply the underlying continuation edges. They need
   the successful outcome; for an arbitrary-outcome frame use the
