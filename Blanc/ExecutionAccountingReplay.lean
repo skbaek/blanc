@@ -360,7 +360,7 @@ variable {ca : Adr}
 
 /-! The seams restated at an account-local carrier.  They are the parent
 `SettlementCarrier` seams verbatim; they keep their names here because
-consumers and the axiom audit cite them at `ReplayCarrier`. -/
+consumers and the repository audit cite them at `ReplayCarrier`. -/
 
 /-- Equal boundaries contribute no step. -/
 theorem nilOfEq (C : ReplayCarrier ca) {pre post : C.Snap} (eq : post = pre) :
