@@ -20,7 +20,7 @@
   ],
   "frozenAssuranceFiles": {
     "Blanc/CycleWriteFree.lean": "6df69e846e5c165acb8ad12bedd7cb97503e9ee3eda8bee9553e3a8c8c706dac",
-    "Blanc/ExecutionFrames.lean": "94c8b18e7064909eb1b7b27d333f9dbb1c6038e34346c2af66bc9c4710da6431",
+    "Blanc/ExecutionFrames.lean": "29dabf3fb82dae7eeba47875e4b0a17ec28e12ef678c6a0b863a213d6b834afc",
     "Blanc/ExecutionOccurrence.lean": "6ff78af0d97e3349013e26f34225fe039aa6129fd4a58c081da868c1c7bf4344",
     "Blanc/ExecutionSettlement.lean": "0e01d0a0ce1a571af2af61bc2af4bf5405bbade4b792879fb199ce468e7a5582",
     "scripts/CycleWriteFreeRegression.lean": "4022d12d48c507273d8f6eef6b7f522a33db3c631d39904669122ab197779ffe",
