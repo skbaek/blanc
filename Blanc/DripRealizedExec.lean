@@ -1003,6 +1003,415 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
       · simp only [opTag, hempty, hsel, joinDrip, if_false, if_true]
         rfl
 
+/-! ## The interpreter recursion -/
+
+/-- T1.  Proof-indexed committed replay for one interpreter suffix.  The second
+conjunct is the exclusivity clause: a frame executing DRIP itself opens with
+exactly one step whose kind is the frame's computed tag. -/
+def _root_.Blanc.Exec.CoreDripAccounting (coalition : Finset Adr) (ca : Adr)
+    (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution) : Prop :=
+  ∀ (_run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true),
+    Prog.At runtime ca pc sevm pre →
+    dripEntrySpec.Pre ca sevm pre →
+    (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
+    (sevm.currentTarget = ca → sevm.caller ≠ ca) →
+    (sevm.currentTarget = ca → pre.memory = Mem.empty) →
+    ∃ steps : List RealizedStep,
+      RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
+        (snapshot coalition ca (Execution.committedPost out committed).state) ∧
+      (sevm.currentTarget = ca → ∃ op nested,
+        steps = op :: nested ∧ op.kind = opTag coalition sevm pre)
+
+end Drip
+
+open Drip
+
+/-- A failed raw execution cannot satisfy the committed replay premise. -/
+theorem Exec.CoreDripAccounting.error
+    {coalition : Finset Adr} {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {error : EvmError × Devm} :
+    Exec.CoreDripAccounting coalition ca pc sevm pre (.error error) := by
+  intro _ committed
+  simp [Execution.commits] at committed
+
+/-- T2.  The compiled DRIP frame handler.  Every route closes in one tagged
+head step; `exit` then recurses into exactly its settlement-retained payout
+child through `deeper`, and that child's replay is the nested tail. -/
+theorem Exec.CoreDripAccounting.atTarget
+    {coalition : Finset Adr} {ca : Adr} {sevm : Sevm} {pre post : Devm}
+    (_programRun : Prog.Run sevm pre runtime post)
+    (target : sevm.currentTarget = ca)
+    (deeper : ForallDeeperAt sevm.depth ca runtime
+      (fun pc childSevm childPre childOut _ =>
+        Exec.CoreDripAccounting coalition ca pc childSevm childPre childOut)) :
+    Exec.CoreDripAccounting coalition ca 0 sevm pre (.ok post) := by
+  subst ca
+  intro run committed installed precondition _ caller canonical
+  have hcode : sevm.code.toList = code := by
+    have compiled := (installed.2 rfl).1
+    rw [code_compile] at compiled
+    exact Option.some.inj compiled
+  have replay : TargetReplay coalition sevm.currentTarget sevm pre post := by
+    apply exec_targetReplay coalition run hcode (canonical rfl) precondition
+      (caller rfl)
+    rintro ⟨childMsg, hentry, child, xl, filled, process, childClean,
+      entryTransfer, targetNe, depth, childPreH, _, _⟩
+    dsimp only
+    rcases ExecutionTrace.exists_retainedXlot_of_filled filled with
+      ⟨retained⟩
+    cases retained with
+    | none =>
+        have childState :=
+          _root_.Blanc.ProcessMessage.none_ok_state_eq_entry_of_clean
+            process entryTransfer childClean
+        refine ⟨[], ?_⟩
+        rw [childState]
+        exact Chain.nil _
+    | @some childPc childSevm childPre childOut childRun =>
+        have settles :=
+          _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+            process childClean
+        have childCommitted :=
+          Frame.raw_commits_of_settlementCommits settles
+        have enter := (RunFrame.some_inv process).1
+        rcases Frame.enter_run_inv enter with ⟨entry, transfer, childEvmEq⟩
+        simp only [Frame.ofCall] at transfer childEvmEq
+        have entryEq : entry = hentry :=
+          Except.ok.inj (transfer.symm.trans entryTransfer)
+        subst entry
+        have childSevmEq : childSevm =
+            initSevm (childMsg.withBenv hentry) :=
+          congrArg (fun evm : Evm => evm.sta) childEvmEq
+        have childPreEq : childPre =
+            initDevm (childMsg.withBenv hentry) :=
+          congrArg (fun evm : Evm => evm.dyna) childEvmEq
+        have childTargetNe : childSevm.currentTarget ≠ sevm.currentTarget := by
+          rw [childSevmEq]
+          simpa [initSevm, Msg.withBenv] using targetNe
+        have childPrecondition :
+            dripEntrySpec.Pre sevm.currentTarget childSevm childPre := by
+          rw [childSevmEq, childPreEq]
+          exact childPreH
+        have childAt : Prog.At runtime sevm.currentTarget childPc
+            childSevm childPre :=
+          ⟨childPrecondition.code,
+            fun childTarget => (childTargetNe childTarget).elim⟩
+        have childDepth : childSevm.depth < sevm.depth := by
+          rw [childSevmEq]
+          exact depth
+        have childCore := deeper childPc childSevm childPre childOut childRun
+          childDepth childAt
+        rcases childCore childRun childCommitted childAt childPrecondition
+            (fun childTarget => (childTargetNe childTarget).elim)
+            (fun childTarget => (childTargetNe childTarget).elim)
+            (fun childTarget => (childTargetNe childTarget).elim) with
+          ⟨steps, chain, _⟩
+        have startEq :
+            execEntrySnapshot coalition sevm.currentTarget childSevm
+                childPre.state =
+              snapshot coalition sevm.currentTarget hentry.state := by
+          rw [execEntrySnapshot_of_target_ne childTargetNe, childPreEq]
+          rfl
+        have childPost :=
+          _root_.Blanc.ProcessMessage.ok_state_eq_committedPost
+            process childCommitted
+        refine ⟨steps, ?_⟩
+        rw [← startEq, childPost]
+        exact chain
+  rcases replay with ⟨op, nested, preEq, kindEq, tail⟩
+  exact ⟨op :: nested, Chain.cons preEq tail, fun _ => ⟨op, nested, rfl, kindEq⟩⟩
+
+/-- A foreign suffix's replay, stated at the ordinary projection. -/
+private theorem foreign_conclusion
+    {coalition : Finset Adr} {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {final : State} {steps : List RealizedStep}
+    (target_ne : sevm.currentTarget ≠ ca)
+    (chain : RealizedChain (snapshot coalition ca pre.state) steps
+      (snapshot coalition ca final)) :
+    ∃ steps : List RealizedStep,
+      RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
+        (snapshot coalition ca final) ∧
+      (sevm.currentTarget = ca → ∃ op nested,
+        steps = op :: nested ∧ op.kind = opTag coalition sevm pre) := by
+  refine ⟨steps, ?_, fun target => (target_ne target).elim⟩
+  rw [execEntrySnapshot_of_target_ne target_ne]
+  exact chain
+
+/-- T3.  Foreign nonrecursive execution prefixes its projected accounting
+change to the continuation replay. -/
+theorem Exec.CoreDripAccounting.nextNone
+    {coalition : Finset Adr} {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {n : Ninst} {inter : Devm} {out : Execution}
+    (_at : Ninst.At sevm.code pc n)
+    (step : Ninst.StepRun pc sevm pre n .none (.ok inter))
+    (next : Exec (pc + n.size) sevm inter out)
+    (target_ne : sevm.currentTarget ≠ ca)
+    (ih : Exec.CoreDripAccounting coalition ca (pc + n.size) sevm inter out) :
+    Exec.CoreDripAccounting coalition ca pc sevm pre out := by
+  intro _ committed installed precondition _ _ _
+  have interPre : dripEntrySpec.Pre ca sevm inter :=
+    _root_.Blanc.ContractSpec.Ninst.none_preserves_precond
+      (c := dripEntrySpec) step target_ne precondition
+  have installedInter : Prog.At runtime ca (pc + n.size) sevm inter :=
+    ⟨interPre.code, fun target => (target_ne target).elim⟩
+  have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
+  rcases (carrier coalition ca).ofStorageEqBalanceMono ()
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq step target_ne)
+      (_root_.Blanc.Ninst.targetBalanceMono_of_none step target_ne sumNof) with
+    ⟨headSteps, headReplay⟩
+  rcases ih next committed installedInter interPre
+      (fun target => (target_ne target).elim)
+      (fun target => (target_ne target).elim)
+      (fun target => (target_ne target).elim) with
+    ⟨tailSteps, tailReplay, _⟩
+  rw [execEntrySnapshot_of_target_ne target_ne] at tailReplay
+  exact foreign_conclusion target_ne (Chain.append headReplay tailReplay)
+
+/-- A foreign terminal instruction is the final projected accounting segment
+of its frame. -/
+theorem Exec.CoreDripAccounting.last
+    {coalition : Finset Adr} {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {l : Linst} {out : Execution}
+    (_at : Linst.At sevm.code pc l)
+    (step : Linst.Run sevm pre l out)
+    (target_ne : sevm.currentTarget ≠ ca) :
+    Exec.CoreDripAccounting coalition ca pc sevm pre out := by
+  intro _ committed _ precondition _ _ _
+  cases out with
+  | error error =>
+      simp [Execution.commits] at committed
+  | ok post =>
+      have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
+      rcases (carrier coalition ca).ofStorageEqBalanceMono ()
+          (congrFun (_root_.Blanc.Linst.getStor_eq step) ca)
+          (_root_.Blanc.Linst.targetBalanceMono_of_foreign step target_ne
+            sumNof) with
+        ⟨steps, replay⟩
+      exact foreign_conclusion target_ne replay
+
+/-- Jump execution is world-state silent, so only its continuation
+contributes accounting steps. -/
+theorem Exec.CoreDripAccounting.jump
+    {coalition : Finset Adr} {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {j : Jinst} {pc' : Nat} {inter : Devm} {out : Execution}
+    (_at : Jinst.At sevm.code pc j)
+    (step : Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩))
+    (next : Exec pc' sevm inter out)
+    (target_ne : sevm.currentTarget ≠ ca)
+    (ih : Exec.CoreDripAccounting coalition ca pc' sevm inter out) :
+    Exec.CoreDripAccounting coalition ca pc sevm pre out := by
+  intro _ committed _ precondition _ _ _
+  have stateEq : inter.state = pre.state := Jinst.preserves_state step
+  have interPre : dripEntrySpec.Pre ca sevm inter :=
+    precondition.state_eq stateEq
+  have installedInter : Prog.At runtime ca pc' sevm inter :=
+    ⟨interPre.code, fun target => (target_ne target).elim⟩
+  rcases ih next committed installedInter interPre
+      (fun target => (target_ne target).elim)
+      (fun target => (target_ne target).elim)
+      (fun target => (target_ne target).elim) with
+    ⟨steps, replay, _⟩
+  rw [execEntrySnapshot_of_target_ne target_ne, stateEq] at replay
+  exact foreign_conclusion target_ne replay
+
+/-- A foreign filled child is replayed recursively, transported through
+complete CALL/CREATE settlement by the shared seam, and followed by the parent
+continuation. -/
+theorem Exec.CoreDripAccounting.nextSome
+    {coalition : Finset Adr} {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {n : Ninst} {cevm : Evm} {raw : Execution} {inter : Devm} {out : Execution}
+    (hat : Ninst.At sevm.code pc n)
+    (step : Ninst.StepRun pc sevm pre n (.some ⟨cevm, raw⟩) (.ok inter))
+    (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (next : Exec (pc + n.size) sevm inter out)
+    (target_ne : sevm.currentTarget ≠ ca)
+    (ihChild : Exec.CoreDripAccounting coalition ca
+      cevm.pc cevm.sta cevm.dyna raw)
+    (ihNext : Exec.CoreDripAccounting coalition ca
+      (pc + n.size) sevm inter out) :
+    Exec.CoreDripAccounting coalition ca pc sevm pre out := by
+  cases n with
+  | reg r =>
+      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
+  | push xs length =>
+      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+  | exec x =>
+      intro _ committed installed precondition _ _ _
+      have xrun : Xinst.Run sevm pre x (.some ⟨cevm, raw⟩) (.ok inter) := by
+        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
+          Xinst.Run] using step
+      have hxrun := XStep.run_toStep.mp step
+      cases spawnEq : Xinst.step sevm pre x with
+      | done execution =>
+          simp [spawnEq, XStep.Run] at hxrun
+      | spawn frame resume =>
+          simp only [spawnEq, XStep.Run] at hxrun
+          obtain ⟨result, frameRun, resumeRun⟩ := hxrun
+          cases result with
+          | error error =>
+              cases resume <;>
+                simp [Resume.run, liftToExecution] at resumeRun
+          | ok settled =>
+              have enter := (RunFrame.some_inv frameRun).1
+              have evmStep : Evm.step ⟨pc, sevm, pre⟩ =
+                  .spawn frame resume (pc + 1) := by
+                rw [Evm.step_next hat]
+                simp only [Ninst.step_exec, spawnEq, XStep.toStep]
+              obtain ⟨childPcZero, childGetCode, childCodeSource⟩ :=
+                Evm.step_spawn_child evmStep enter
+              have childAt : Prog.At runtime ca cevm.pc cevm.sta cevm.dyna := by
+                refine ⟨?_, fun childTarget => ⟨?_, childPcZero⟩⟩
+                · rw [childGetCode ca]
+                  exact installed.1
+                · have parentTargetNe :
+                      sevm.currentTarget ≠ cevm.sta.currentTarget := by
+                    rw [childTarget]
+                    exact target_ne
+                  have codeEq := childCodeSource parentTargetNe
+                    (by rw [childTarget]
+                        exact not_empty_of_compile installed.1)
+                    (by rw [childTarget]
+                        exact not_delegation_of_compile installed.1)
+                  rw [codeEq, childTarget]
+                  exact installed.1
+              rcases Frame.enter_run_inv enter with
+                ⟨entry, transfer, childEvmEq⟩
+              have childDirect : cevm.sta.currentTarget = ca →
+                  cevm.sta.codeAddress = some ca := by
+                intro childTarget
+                have innerTarget : frame.inner.currentTarget = ca := by
+                  rw [← Frame.enter_run_currentTarget enter]
+                  exact childTarget
+                have parentTargetNe :
+                    sevm.currentTarget ≠ frame.inner.currentTarget := by
+                  rw [innerTarget]
+                  exact target_ne
+                have targetCodeNonempty :
+                    pre.getCode frame.inner.currentTarget ≠ .empty := by
+                  rw [innerTarget]
+                  exact not_empty_of_compile installed.1
+                have codeAddress :=
+                  _root_.Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
+                    spawnEq parentTargetNe targetCodeNonempty
+                    (by rw [innerTarget]
+                        dsimp only [getDelegatedCodeAddress]
+                        rw [if_neg
+                          (not_delegation_of_compile installed.1)])
+                have childCodeAddress :=
+                  congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq
+                dsimp [initEvm, initSevm, Msg.withBenv] at childCodeAddress
+                rw [childCodeAddress, codeAddress, innerTarget]
+              have childCaller : cevm.sta.currentTarget = ca →
+                  cevm.sta.caller ≠ ca := by
+                intro childTarget
+                have innerTarget : frame.inner.currentTarget = ca := by
+                  rw [← Frame.enter_run_currentTarget enter]
+                  exact childTarget
+                have callerNe :=
+                  _root_.Blanc.Xinst.step_spawn_caller_ne_of_target_eq
+                    spawnEq target_ne innerTarget
+                have childCallerEq :=
+                  congrArg (fun evm : Evm => evm.sta.caller) childEvmEq
+                dsimp [initEvm, initSevm, Msg.withBenv] at childCallerEq
+                rw [childCallerEq]
+                exact callerNe
+              have childCanonical : cevm.sta.currentTarget = ca →
+                  cevm.dyna.memory = Mem.empty := by
+                intro _
+                have childMemoryEq :=
+                  congrArg (fun evm : Evm => evm.dyna.memory) childEvmEq
+                exact childMemoryEq
+              obtain ⟨childPrecondition, continuationOfPost⟩ :=
+                _root_.Blanc.ContractSpec.Xinst.some_preserves_precond
+                  (c := dripEntrySpec) xrun child target_ne precondition
+              have childPost :
+                  ifOk (dripEntrySpec.Post ca cevm.sta) raw := by
+                cases raw with
+                | error error => trivial
+                | ok rawPost =>
+                    have childAtZero :
+                        Exec 0 cevm.sta cevm.dyna (.ok rawPost) := by
+                      rw [← childPcZero]
+                      exact child
+                    exact dripEntrySpec_preservesNoMem ca cevm.sta cevm.dyna
+                      rawPost childAtZero
+                      (fun childTarget => (childAt.2 childTarget).1)
+                      childPrecondition
+              have interPre : dripEntrySpec.Pre ca sevm inter :=
+                continuationOfPost childPost
+              have installedInter :
+                  Prog.At runtime ca (pc + 1) sevm inter :=
+                ⟨interPre.code, fun target => (target_ne target).elim⟩
+              have sumNof : sum pre.state.bal < 2 ^ 256 :=
+                precondition.side
+              have childBody :
+                  ∀ childCommitted : Execution.commits raw = true, ∃ steps,
+                    RealizedChain
+                      (execEntrySnapshot coalition ca cevm.sta cevm.dyna.state)
+                      steps
+                      (snapshot coalition ca
+                        (Execution.committedPost raw childCommitted).state) := by
+                intro childCommitted
+                rcases ihChild child childCommitted childAt childPrecondition
+                    childDirect childCaller childCanonical with
+                  ⟨steps, chain, _⟩
+                exact ⟨steps, chain⟩
+              rcases (carrier coalition ca).xinstForeignSome spawnEq frameRun
+                  resumeRun.symm target_ne sumNof childBody with
+                ⟨headSteps, headReplay⟩
+              rcases ihNext next committed installedInter interPre
+                  (fun target => (target_ne target).elim)
+                  (fun target => (target_ne target).elim)
+                  (fun target => (target_ne target).elim) with
+                ⟨tailSteps, tailReplay, _⟩
+              rw [execEntrySnapshot_of_target_ne target_ne] at tailReplay
+              exact foreign_conclusion target_ne
+                (Chain.append headReplay tailReplay)
+
+/-- The complete interpreter recursion for committed DRIP accounting.  Every
+at-target frame is discharged by the classified frame handler; all foreign
+instruction cases preserve and compose the exact replay. -/
+theorem Exec.coreDripAccounting (coalition : Finset Adr) {ca : Adr} :
+    Exec.Fa (Exec.Wkn ca runtime
+      (fun pc sevm pre out _ =>
+        Exec.CoreDripAccounting coalition ca pc sevm pre out)) := by
+  apply lift_core
+    (ε := fun pc sevm pre out =>
+      Exec.CoreDripAccounting coalition ca pc sevm pre out)
+    (π := fun sevm pre post =>
+      Exec.CoreDripAccounting coalition ca 0 sevm pre (.ok post))
+    (analog := fun h => h)
+    (ca := ca) (p := runtime)
+  · intro sevm pre post run target deeper
+    exact Exec.CoreDripAccounting.atTarget run target deeper
+  · intro pc sevm pre error post target
+    exact Exec.CoreDripAccounting.error
+  · intro pc sevm pre noneAt targetNe
+    exact Exec.CoreDripAccounting.error
+  · intro pc sevm pre n error post hat step targetNe
+    exact Exec.CoreDripAccounting.error
+  · intro pc sevm pre n childEvm childOut error post
+      hat step child targetNe ihChild
+    exact Exec.CoreDripAccounting.error
+  · intro pc sevm pre n inter out hat step next targetNe ihNext
+    exact Exec.CoreDripAccounting.nextNone
+      hat step next targetNe ihNext
+  · intro pc sevm pre n childEvm childOut inter out
+      hat step child next targetNe ihChild ihNext
+    exact Exec.CoreDripAccounting.nextSome
+      hat step child next targetNe ihChild ihNext
+  · intro pc sevm pre j error post hat step targetNe
+    exact Exec.CoreDripAccounting.error
+  · intro pc sevm pre j pc' inter out
+      hat step next targetNe ihNext
+    exact Exec.CoreDripAccounting.jump
+      hat step next targetNe ihNext
+  · intro pc sevm pre l out hat step targetNe
+    exact Exec.CoreDripAccounting.last hat step targetNe
+
+namespace Drip
+
 end Drip
 
 end Blanc
