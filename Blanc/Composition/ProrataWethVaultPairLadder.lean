@@ -49,6 +49,14 @@ theorem PairReplayBetween.inBlock {vault : Adr} {blockIndex : Nat}
     PairReplayWith vault (PairInBlock blockIndex) pre post :=
   replay.toWith.mono fun _ ok => ok.block
 
+/-- A faithful replay re-graded: weaken the admissibility half and enlarge the frame universe. -/
+theorem PairReplayWith.faithfulLift {vault : Adr} {p q : PairStepRecord vault → Prop}
+    {F G : List Exec.Deriv} {pre post : PairBoundary}
+    (weaken : ∀ r, p r → q r) (sub : ∀ d ∈ F, d ∈ G)
+    (replay : PairReplayWith vault (fun r => p r ∧ PairStepRecord.OwnIn vault F r) pre post) :
+    PairReplayWith vault (fun r => q r ∧ PairStepRecord.OwnIn vault G r) pre post :=
+  replay.mono fun r h => ⟨weaken r h.1, h.2.mono sub⟩
+
 /-! ## 2. The share ledger rides in the replay -/
 
 /-- Every classified step keeps the vault's share ledger conserved: an operation by its retained evidence,
@@ -298,9 +306,9 @@ theorem pair_root_caller_ne_vault {vault : Adr} {msg : Msg}
 
 /-! ## 5. The message root -/
 
-/-- **The message-root corollary.**  The pair core at the exact EVM root a successful message entry selects:
-every premise of `Exec.CorePairReplay` is discharged from the message's readiness. -/
-theorem Exec.pairReplay_of_messageRoot {vault : Adr} {msg : Msg} {entry : Benv}
+/-- **The message-root corollary, faithful.**  As `Exec.pairReplay_of_messageRoot`, and every owned
+allowance invocation is the visit of a raw frame root of the message's own derivation. -/
+theorem Exec.pairReplay_of_messageRootFaithful {vault : Adr} {msg : Msg} {entry : Benv}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (transfer : msg.benvAfterTransfer = .ok entry)
@@ -308,7 +316,9 @@ theorem Exec.pairReplay_of_messageRoot {vault : Adr} {msg : Msg} {entry : Benv}
     (committed : Execution.commits out = true)
     (ready : PairMessageReady vault msg)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
-    PairReplayBetween vault blockIndex transactionIndex []
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+        PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)
       (PairBoundary.ofState vault pre.state)
       (PairBoundary.ofState vault (Execution.committedPost out committed).state) := by
   have vaultPre := ContractSpec.Pre.of_inv_benvAfterTransfer
@@ -377,7 +387,55 @@ theorem Exec.pairReplay_of_messageRoot {vault : Adr} {msg : Msg} {entry : Benv}
 -- PX:560–621 (`prorataAccountingReplay_of_messageRoot`) with two programs; the configuration clause is
 -- Pair.lean:504–507; `wethFresh` is `Frame.enter_run_fresh`'s `⟨rfl, rfl⟩` (ExecutionFrameEntry:25).
 
-/-! ## 6. Rungs R1–R3: message, CREATE, message-call wrapper -/
+/-- **The message-root corollary.**  The pair core at the exact EVM root a successful message entry selects:
+every premise of `Exec.CorePairReplay` is discharged from the message's readiness. -/
+theorem Exec.pairReplay_of_messageRoot {vault : Adr} {msg : Msg} {entry : Benv}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (evmEq : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv entry))
+    (committed : Execution.commits out = true)
+    (ready : PairMessageReady vault msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault pre.state)
+      (PairBoundary.ofState vault (Execution.committedPost out committed).state) :=
+  (Exec.pairReplay_of_messageRootFaithful run transfer evmEq committed ready blockIndex
+    transactionIndex).mono fun _ h => h.1
+
+/-! ## 6. Rungs R1–R3: message, CREATE, message-call wrapper
+
+Each rung Rk has a faithful twin `…Faithful`: the same replay, whose records also witness every owned
+allowance invocation among the rung's own raw frames.  The published rung is its projection. -/
+
+/-- **R1, faithful.** -/
+theorem retainedProcessMessagePairReplayFaithful {vault : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessMessageTrace msg (.ok post))
+    (ready : PairMessageReady vault msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      have storage := _root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq process
+      exact PairReplayWith.nil_of_eq
+        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+  | @some pc sevm pre out run =>
+      show PairReplayWith vault
+        (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+          PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r) _ _
+      apply (pairCarrierWith vault
+        (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+          PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)).processMessage_of_body process
+        ready.weth.ne ready.weth.val0 ready.weth.state.side
+      intro committed
+      have enter := (RunFrame.some_inv process).1
+      rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+      exact Exec.pairReplay_of_messageRootFaithful run transfer evmEq committed ready
+        blockIndex transactionIndex
 
 /-- **R1.**  One retained CALL message. -/
 theorem retainedProcessMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
@@ -385,32 +443,22 @@ theorem retainedProcessMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
     (ready : PairMessageReady vault msg)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     PairReplayBetween vault blockIndex transactionIndex []
-      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) := by
-  rcases trace with ⟨slot, retained, process⟩
-  cases retained with
-  | none =>
-      have storage := _root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq process
-      exact PairReplayBetween.nil_of_eq
-        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
-  | @some pc sevm pre out run =>
-      apply (pairCarrier vault blockIndex transactionIndex []).processMessage_of_body process
-        ready.weth.ne ready.weth.val0 ready.weth.state.side
-      intro committed
-      have enter := (RunFrame.some_inv process).1
-      rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
-      exact Exec.pairReplay_of_messageRoot run transfer evmEq committed ready
-        blockIndex transactionIndex
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) :=
+  (retainedProcessMessagePairReplayFaithful trace ready blockIndex transactionIndex).mono
+    fun _ h => h.1
 -- PX:623–658 / G:150–176; the no-slot arm is whole-world storage silence (no credit law).
 
-/-- **R1c.**  One retained CREATE constructor at an address that is neither pair account. -/
-theorem retainedProcessCreateMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
+/-- **R1c, faithful.** -/
+theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessCreateMessageTrace msg (.ok post))
     (ready : PairMsgInv vault msg)
     (targetNone : msg.target.isNone = true)
     (vaultNe : msg.currentTarget ≠ vault) (wethNe : msg.currentTarget ≠ wethAccount)
     (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
-    PairReplayBetween vault blockIndex transactionIndex []
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) := by
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
@@ -418,10 +466,15 @@ theorem retainedProcessCreateMessagePairReplay {vault : Adr} {msg : Msg} {post :
       have storage :=
         _root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
           process fresh
-      exact PairReplayBetween.nil_of_eq
+      exact PairReplayWith.nil_of_eq
         (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
   | @some pc sevm pre out run =>
-      apply (pairCarrier vault blockIndex transactionIndex []).processCreateMessage_of_body
+      show PairReplayWith vault
+        (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+          PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r) _ _
+      apply (pairCarrierWith vault
+        (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+          PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)).processCreateMessage_of_body
         process ready.weth.ne ready.weth.val0 fresh ready.weth.state.side
       intro committed
       have preparedNe : ∀ {a : Adr}, msg.currentTarget ≠ a →
@@ -442,33 +495,49 @@ theorem retainedProcessCreateMessagePairReplay {vault : Adr} {msg : Msg} {post :
           codeOrForeign := Or.inr ⟨preparedNe vaultNe, preparedNe wethNe⟩ }
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
-      exact Exec.pairReplay_of_messageRoot run transfer evmEq committed preparedReady
+      exact Exec.pairReplay_of_messageRootFaithful run transfer evmEq committed preparedReady
         blockIndex transactionIndex
+
+/-- **R1c.**  One retained CREATE constructor at an address that is neither pair account. -/
+theorem retainedProcessCreateMessagePairReplay {vault : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessCreateMessageTrace msg (.ok post))
+    (ready : PairMsgInv vault msg)
+    (targetNone : msg.target.isNone = true)
+    (vaultNe : msg.currentTarget ≠ vault) (wethNe : msg.currentTarget ≠ wethAccount)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault post.state) :=
+  (retainedProcessCreateMessagePairReplayFaithful trace ready targetNone vaultNe wethNe fresh
+    blockIndex transactionIndex).mono fun _ h => h.1
 -- PX:660–714 / G:179–221; `processCreateMessage_msg` for both specs is exactly what keeps the vault's and
 -- WETH's storage out of the prepared message's `setStor currentTarget .empty`.
 
-/-- **R2.**  The settled message-call wrapper: create collision, CREATE run, EIP-7702-normalised call. -/
-theorem retainedMessageCallPairReplay {vault : Adr} {msg : Msg} {state : State}
+/-- **R2, faithful.** -/
+theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state : State}
     {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (ready : PairMsgInv vault msg)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
-    PairReplayBetween vault blockIndex transactionIndex []
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault state) := by
   cases trace with
   | createCollision targetNone collision result =>
       have stateEq :=
         processMessageCall_createCollision_state_eq targetNone collision result
-      exact PairReplayBetween.nil_of_eq (by rw [stateEq])
+      exact PairReplayWith.nil_of_eq (by rw [stateEq])
   | createRun targetNone collision evm core inner result =>
-      -- the CREATE-collision arm: a CREATE that did not collide is at neither pair account
       have vaultNe : msg.currentTarget ≠ vault := fun hit =>
         Bool.noConfusion ((ready.createCollision (.inl hit)).symm.trans collision)
       have wethNe : msg.currentTarget ≠ wethAccount := fun hit =>
         Bool.noConfusion ((ready.createCollision (.inr hit)).symm.trans collision)
       have fresh := messageCreateCollision_false_getStor_eq_empty collision
-      rw [processMessageCall_createRun_state_eq targetNone collision core result]
-      exact retainedProcessCreateMessagePairReplay inner ready targetNone vaultNe wethNe
+      have boundary := congrArg (PairBoundary.ofState vault)
+        (processMessageCall_createRun_state_eq targetNone collision core result)
+      rw [boundary]
+      exact retainedProcessCreateMessagePairReplayFaithful inner ready targetNone vaultNe wethNe
         fresh blockIndex transactionIndex
   | callRun targetSome delegated refund delegation execMsg execMsgEq evm core inner result =>
       subst execMsgEq
@@ -493,22 +562,34 @@ theorem retainedMessageCallPairReplay {vault : Adr} {msg : Msg} {state : State}
       have storEq : (messageCallExecutionMessage delegated).benv.state.getStor =
           msg.benv.state.getStor := by
         rw [messageCallExecutionMessage_getStor_eq, messageCallDelegation_getStor_eq delegation]
-      rw [stateEq, ← PairBoundary.ofState_eq (congrFun storEq vault)
+      have boundary := congrArg (PairBoundary.ofState vault) stateEq
+      rw [boundary, ← PairBoundary.ofState_eq (congrFun storEq vault)
         (congrFun storEq wethAccount)]
-      exact retainedProcessMessagePairReplay inner execReady blockIndex transactionIndex
+      exact retainedProcessMessagePairReplayFaithful inner execReady blockIndex transactionIndex
+
+/-- **R2.**  The settled message-call wrapper: create collision, CREATE run, EIP-7702-normalised call. -/
+theorem retainedMessageCallPairReplay {vault : Adr} {msg : Msg} {state : State}
+    {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (ready : PairMsgInv vault msg)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault msg.benv.state) (PairBoundary.ofState vault state) :=
+  (retainedMessageCallPairReplayFaithful trace ready blockIndex transactionIndex).mono
+    fun _ h => h.1
 -- PX:717–779 / G:225–295; the createRun arm replaces `codeOrForeign` by the collision derivation (§5).
 
 /-! ## 7. Rung R3: one transaction -/
 
-/-- **R3.**  One whole retained transaction.  It moves the pair's boundary only through its message: the
-nonce bump, fee debit, refund and coinbase credit move balances, and the deletion fold names neither pair
-account. -/
-theorem retainedTransactionPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutput}
+/-- **R3, faithful.** -/
+theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (inv : PairBenvInv vault benv)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
-    PairReplayBetween vault blockIndex transactionIndex []
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
   rcases trace.exists_stateChronology with ⟨chronology⟩
   -- (1) nonce bump and up-front debit: storage-silent everywhere
@@ -529,7 +610,7 @@ theorem retainedTransactionPairReplay {vault : Adr} {benv : Benv} {bout : BlockO
       callerNotVault := envelope.1
       callerNotWeth := envelope.2 }
   have messageReplay :=
-    retainedMessageCallPairReplay trace.message ready blockIndex transactionIndex
+    retainedMessageCallPairReplayFaithful trace.message ready blockIndex transactionIndex
   rw [debitBoundary] at messageReplay
   -- (3), (4) the two gas credits move balances only
   have settled : PairBoundary.ofState vault (trace.coinbaseState chronology.refundCounter) =
@@ -558,10 +639,40 @@ theorem retainedTransactionPairReplay {vault : Adr} {benv : Benv} {bout : BlockO
         (congrArg Acct.stor wethKept))).trans settled
   rw [finalBoundary]
   exact messageReplay
+
+/-- **R3.**  One whole retained transaction.  It moves the pair's boundary only through its message: the
+nonce bump, fee debit, refund and coinbase credit move balances, and the deletion fold names neither pair
+account. -/
+theorem retainedTransactionPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (inv : PairBenvInv vault benv)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    PairReplayBetween vault blockIndex transactionIndex []
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) :=
+  (retainedTransactionPairReplayFaithful trace inv blockIndex transactionIndex).mono
+    fun _ h => h.1
 -- PT:76–146 / G:333–393.  No `settlement_sum_bounds`, no `ofAddBal`: the boundary has no balance.  No
 -- G3' split: R2 owns the create-at-account case.
 
 /-! ## 8. Rungs R4–R7: transaction list, system message, requests, withdrawals, body -/
+
+/-- **R4, faithful.** -/
+theorem retainedTransactionListPairReplayFaithful {vault : Adr} {txs : List (Nat × Tx)}
+    {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayWith vault
+      (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault finalBenv.state) := by
+  induction trace with
+  | nil => exact PairReplayWith.nil_of_eq rfl
+  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
+      have headReplay := retainedTransactionPairReplayFaithful head inv blockIndex (some index)
+      exact (headReplay.faithfulLift (fun _ ok => ok.block)
+          (fun d member => List.mem_append.mpr (Or.inl member))).append
+        ((ih (inv.afterTransaction head headReplay)).faithfulLift (fun _ ok => ok)
+          (fun d member => List.mem_append.mpr (Or.inr member)))
 
 /-- **R4.**  A retained transaction list; each record keeps its own transaction position. -/
 theorem retainedTransactionListPairReplay {vault : Adr} {txs : List (Nat × Tx)}
@@ -569,21 +680,18 @@ theorem retainedTransactionListPairReplay {vault : Adr} {txs : List (Nat × Tx)}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (inv : PairBenvInv vault benv) (blockIndex : Nat) :
     PairReplayWith vault (PairInBlock blockIndex)
-      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault finalBenv.state) := by
-  induction trace with
-  | nil => exact PairReplayWith.nil_of_eq rfl
-  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
-      have headReplay := retainedTransactionPairReplay head inv blockIndex (some index)
-      exact headReplay.inBlock.append (ih (inv.afterTransaction head headReplay.toWith))
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault finalBenv.state) :=
+  (retainedTransactionListPairReplayFaithful trace inv blockIndex).mono fun _ h => h.1
 -- PB:21–45 / G:396–422.
 
-/-- **R5.**  One retained system message.  No `target ≠ systemAddress` side condition: the envelope is
-the two pair accounts' own separation from `systemAddress`. -/
-theorem retainedSystemMessagePairReplay {vault : Adr} {benv : Benv} {target : Adr}
+/-- **R5, faithful.** -/
+theorem retainedSystemMessagePairReplayFaithful {vault : Adr} {benv : Benv} {target : Adr}
     {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (inv : PairBenvInv vault benv) (blockIndex : Nat) :
-    PairReplayBetween vault blockIndex none []
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex none [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
   have envelope := pair_root_caller_ne_vault (.system target data inv)
   have ready : PairMsgInv vault (systemTransactionMessage benv target data) :=
@@ -593,9 +701,42 @@ theorem retainedSystemMessagePairReplay {vault : Adr} {benv : Benv} {target : Ad
       wethNonprecompile := inv.wethNonprecompile
       callerNotVault := envelope.1
       callerNotWeth := envelope.2 }
-  have replay := retainedMessageCallPairReplay trace.message ready blockIndex none
-  rwa [systemTransactionMessage_benv_state] at replay
+  have replay := retainedMessageCallPairReplayFaithful trace.message ready blockIndex none
+  rw [systemTransactionMessage_benv_state] at replay
+  exact replay
+
+/-- **R5.**  One retained system message.  No `target ≠ systemAddress` side condition: the envelope is
+the two pair accounts' own separation from `systemAddress`. -/
+theorem retainedSystemMessagePairReplay {vault : Adr} {benv : Benv} {target : Adr}
+    {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayBetween vault blockIndex none []
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) :=
+  (retainedSystemMessagePairReplayFaithful trace inv blockIndex).mono fun _ h => h.1
 -- PB:58–84 / G:425–451, minus `systemNe`.
+
+/-- **R6, faithful.** -/
+theorem retainedRequestsPairReplayFaithful {vault : Adr} {benv : Benv} {bout : BlockOutput}
+    {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (inv : PairBenvInv vault benv) (blockIndex : Nat) :
+    PairReplayWith vault
+      (fun r => PairProvenanceOk blockIndex none [] r ∧
+        PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  have withdrawalReplay :=
+    retainedSystemMessagePairReplayFaithful trace.withdrawal inv blockIndex
+  have withdrawalInv := inv.afterSystem trace.withdrawal withdrawalReplay
+  have consolidationReplay :=
+    retainedSystemMessagePairReplayFaithful trace.consolidation withdrawalInv blockIndex
+  have boundary := congrArg (PairBoundary.ofState vault)
+    (RequestsTrace.state_eq_consolidationState trace)
+  rw [boundary]
+  exact (withdrawalReplay.faithfulLift (fun _ ok => ok)
+      (fun d member => List.mem_append.mpr (Or.inl member))).append
+    (consolidationReplay.faithfulLift (fun _ ok => ok)
+      (fun d member => List.mem_append.mpr (Or.inr member)))
 
 /-- **R6.**  The two checked request calls. -/
 theorem retainedRequestsPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutput}
@@ -603,13 +744,8 @@ theorem retainedRequestsPairReplay {vault : Adr} {benv : Benv} {bout : BlockOutp
     (trace : RequestsTrace benv bout state bout')
     (inv : PairBenvInv vault benv) (blockIndex : Nat) :
     PairReplayBetween vault blockIndex none []
-      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
-  have withdrawalReplay := retainedSystemMessagePairReplay trace.withdrawal inv blockIndex
-  have withdrawalInv := inv.afterSystem trace.withdrawal withdrawalReplay.toWith
-  have consolidationReplay :=
-    retainedSystemMessagePairReplay trace.consolidation withdrawalInv blockIndex
-  rw [RequestsTrace.state_eq_consolidationState trace]
-  exact withdrawalReplay.append consolidationReplay
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) :=
+  (retainedRequestsPairReplayFaithful trace inv blockIndex).mono fun _ h => h.1
 -- PB:89–112 / G:454–480.
 
 /-- **R6w.**  The direct consensus withdrawals: balance credits only, so no record and no bound. -/
@@ -623,6 +759,55 @@ theorem retainedDirectWithdrawalPairReplay (vault : Adr) (pre : State)
     (processWithdrawalsState_getStor_eq wethAccount pre wds))
 -- replaces PB:123–146 / G:483–501 (per-credit `ofAddBal` induction) by one storage equation.
 
+/-- **R7, faithful.** -/
+theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (inv : PairBenvInv vault benv)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (blockIndex : Nat) :
+    PairReplayWith vault
+      (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
+  -- (1) beacon roots
+  have beaconReplay := retainedSystemMessagePairReplayFaithful trace.beacon inv blockIndex
+  have beaconInv := inv.afterSystem trace.beacon beaconReplay
+  -- (2) history storage
+  have historyReplay :=
+    retainedSystemMessagePairReplayFaithful trace.history beaconInv blockIndex
+  have historyInv := beaconInv.afterSystem trace.history historyReplay
+  -- (3) the transaction list, by R4
+  have txReplay :=
+    retainedTransactionListPairReplayFaithful trace.transactions historyInv blockIndex
+  have txInv := historyInv.afterTransactions trace.transactions txReplay
+  -- (4) direct withdrawals: no record
+  have wdReplay : PairReplayWith vault
+      (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault trace.transactionBenv.state)
+      (PairBoundary.ofState vault (processWithdrawalsState trace.transactionBenv.state wds)) :=
+    PairReplayWith.nil_of_eq (PairBoundary.ofState_eq
+      (processWithdrawalsState_getStor_eq vault trace.transactionBenv.state wds)
+      (processWithdrawalsState_getStor_eq wethAccount trace.transactionBenv.state wds))
+  have wdInv := txInv.afterWithdrawals (trace.transactionBound bound)
+  -- (5) request calls, by R6
+  have requestReplay := retainedRequestsPairReplayFaithful trace.requests wdInv blockIndex
+  have sub : ∀ {F : List Exec.Deriv}, (∀ d ∈ F, d ∈ trace.rawFrames) →
+      ∀ {p : PairStepRecord vault → Prop}, (∀ r, p r → PairInBlock blockIndex r) →
+      ∀ {pre post : PairBoundary},
+        PairReplayWith vault (fun r => p r ∧ PairStepRecord.OwnIn vault F r) pre post →
+        PairReplayWith vault
+          (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
+          pre post :=
+    fun {_} inside {_} weaken {_ _} replay => replay.faithfulLift weaken inside
+  exact (sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun _ ok => ok.block) beaconReplay).append
+    ((sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun _ ok => ok.block) historyReplay).append
+    ((sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun _ ok => ok) txReplay).append
+    (wdReplay.append
+      (sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+        (fun _ ok => ok.block) requestReplay))))
+
 /-- **R7.**  A whole successful block body, in `applyBody` order. -/
 theorem retainedBodyPairReplay {vault : Adr} {benv : Benv} {txs : List (Bytes ⊕ Tx)}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
@@ -630,27 +815,32 @@ theorem retainedBodyPairReplay {vault : Adr} {benv : Benv} {txs : List (Bytes �
     (inv : PairBenvInv vault benv)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (blockIndex : Nat) :
     PairReplayWith vault (PairInBlock blockIndex)
-      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
-  -- (1) beacon roots
-  have beaconReplay := retainedSystemMessagePairReplay trace.beacon inv blockIndex
-  have beaconInv := inv.afterSystem trace.beacon beaconReplay.toWith
-  -- (2) history storage
-  have historyReplay := retainedSystemMessagePairReplay trace.history beaconInv blockIndex
-  have historyInv := beaconInv.afterSystem trace.history historyReplay.toWith
-  -- (3) the transaction list, by R4
-  have txReplay := retainedTransactionListPairReplay trace.transactions historyInv blockIndex
-  have txInv := historyInv.afterTransactions trace.transactions txReplay
-  -- (4) direct withdrawals, by R6w; the bound only carries WETH's invariant across them
-  have wdReplay :=
-    retainedDirectWithdrawalPairReplay vault trace.transactionBenv.state wds blockIndex
-  have wdInv := txInv.afterWithdrawals (trace.transactionBound bound)
-  -- (5) request calls, by R6
-  have requestReplay := retainedRequestsPairReplay trace.requests wdInv blockIndex
-  exact beaconReplay.inBlock.append (historyReplay.inBlock.append
-    (txReplay.append (wdReplay.inBlock.append requestReplay.inBlock)))
+      (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) :=
+  (retainedBodyPairReplayFaithful trace inv bound blockIndex).mono fun _ h => h.1
 -- PB:163–222 / G:504–572; `transactionBound` is §4 (G+4), the inline `txBound` of PB:190–198 / G:548–556.
 
 /-! ## 9. Rungs R8–R9, the root, and the stable boundary of a history -/
+
+/-- **R8, faithful.** -/
+theorem retainedConfiguredBlockPairReplayFaithful {vault : Adr} {cfg : ChainConfig}
+    {pre post : BlockChain}
+    (trace : ConfiguredBlockTrace cfg pre post)
+    (inv : PairWorldInv vault pre.state)
+    (wethNonprecompile : trace.rules.isPrecomp wethAccount = false)
+    (blockIndex : Nat) :
+    PairReplayWith vault
+      (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
+      (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) := by
+  have benvInv : PairBenvInv vault (initBenv trace.rules pre trace.block.header) :=
+    ⟨trace.openingState ▸ inv, trace.not_mem_openingCreatedAccounts vault,
+      trace.not_mem_openingCreatedAccounts wethAccount, wethNonprecompile⟩
+  have replay :=
+    retainedBodyPairReplayFaithful trace.bodyTrace benvInv trace.openingBound blockIndex
+  have postBoundary := congrArg (PairBoundary.ofState vault) trace.postState
+  have openingBoundary := congrArg (PairBoundary.ofState vault) trace.openingState
+  rw [postBoundary]
+  rw [openingBoundary] at replay
+  exact replay
 
 /-- **R8.**  A whole configured block.  The rules fact is the schedule's, at the block's own rules. -/
 theorem retainedConfiguredBlockPairReplay {vault : Adr} {cfg : ChainConfig}
@@ -660,14 +850,31 @@ theorem retainedConfiguredBlockPairReplay {vault : Adr} {cfg : ChainConfig}
     (wethNonprecompile : trace.rules.isPrecomp wethAccount = false)
     (blockIndex : Nat) :
     PairReplayWith vault (PairInBlock blockIndex)
-      (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) := by
-  have benvInv : PairBenvInv vault (initBenv trace.rules pre trace.block.header) :=
-    ⟨trace.openingState ▸ inv, trace.not_mem_openingCreatedAccounts vault,
-      trace.not_mem_openingCreatedAccounts wethAccount, wethNonprecompile⟩
-  have replay := retainedBodyPairReplay trace.bodyTrace benvInv trace.openingBound blockIndex
-  rw [trace.postState]
-  rwa [trace.openingState] at replay
+      (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) :=
+  (retainedConfiguredBlockPairReplayFaithful trace inv wethNonprecompile blockIndex).mono
+    fun _ h => h.1
 -- PH:30–46 / G:576–589.
+
+/-- **R9, faithful.**  Each block's records carry that block's header number, and every owned
+allowance invocation is a visit of the history's own raw frames. -/
+theorem retainedConfiguredHistoryPairReplayFaithful {vault : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (inv : PairWorldInv vault checkpoint.state)
+    (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
+      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false) :
+    PairReplayWith vault (fun r => PairStepRecord.OwnIn vault history.rawFrames r)
+      (PairBoundary.ofState vault checkpoint.state)
+      (PairBoundary.ofState vault future.state) := by
+  induction history with
+  | refl hcfg hctx hid => exact PairReplayWith.nil_of_eq rfl
+  | step prior block ih =>
+      have current := inv.afterHistory prior ih
+      exact (ih.mono fun _ own => own.mono fun d member =>
+          List.mem_append.mpr (Or.inl member)).append
+        ((retainedConfiguredBlockPairReplayFaithful block current
+          (schedule block.rulesAt) block.block.header.number).mono fun _ h =>
+            h.2.mono fun d member => List.mem_append.mpr (Or.inr member))
 
 /-- **R9.**  A whole configured history.  The pair invariant is carried block to block by the generic
 transports and the replay itself; each block's records carry that block's header number. -/
@@ -679,13 +886,8 @@ theorem retainedConfiguredHistoryPairReplay {vault : Adr} {cfg : ChainConfig}
       cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false) :
     PairReplayWith vault (fun _ => True)
       (PairBoundary.ofState vault checkpoint.state)
-      (PairBoundary.ofState vault future.state) := by
-  induction history with
-  | refl hcfg hctx hid => exact PairReplayWith.nil_of_eq rfl
-  | step prior block ih =>
-      have current := inv.afterHistory prior ih
-      exact ih.append ((retainedConfiguredBlockPairReplay block current
-        (schedule block.rulesAt) block.block.header.number).mono fun _ _ => trivial)
+      (PairBoundary.ofState vault future.state) :=
+  (retainedConfiguredHistoryPairReplayFaithful history inv schedule).mono fun _ _ => trivial
 -- PH:63–80 / G:593–606.
 
 /-- The post-installation root carries the pair invariant. -/
