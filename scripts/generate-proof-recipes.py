@@ -2284,8 +2284,8 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 30:
-        raise RecipeError(f"self-test accounting: expected 30 controls, ran {controls}")
+    if controls != 31:
+        raise RecipeError(f"self-test accounting: expected 31 controls, ran {controls}")
 
 
 def coverage_phrase(registry: Registry) -> str:
@@ -2327,7 +2327,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.self_test:
             self_test(root)
             print(
-                "OK — proof recipes self-test: 30/30 drift, schema, trigger, "
+                "OK — proof recipes self-test: 31/31 drift, schema, trigger, "
                 "matcher-ownership, trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
                 "controls live"
             )
