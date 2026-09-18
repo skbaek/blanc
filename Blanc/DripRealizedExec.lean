@@ -1410,8 +1410,88 @@ theorem Exec.coreDripAccounting (coalition : Finset Adr) {ca : Adr} :
   · intro pc sevm pre l out hat step targetNe
     exact Exec.CoreDripAccounting.last hat step targetNe
 
+/-! ## Consumption interface for the wrapper ladder -/
+
 namespace Drip
 
+/-- The side spec's world invariant is `dripSpec`'s code fact plus the word
+bound on the world total; its ledger clause is vacuous. -/
+theorem dripEntrySpec_stateInv {ca : Adr} {world : State}
+    (inv : dripSpec.StateInv ca world) (sumNof : sum world.bal < 2 ^ 256) :
+    dripEntrySpec.StateInv ca world := by
+  refine ⟨inv.code, sumNof, ?_⟩
+  show (0 : B256).toNat ≤ _
+  rw [B256.toNat_zero]
+  exact Nat.zero_le _
+
+/-- Message readiness transfers from `dripSpec` to the side spec given the
+word bound every retained chronology already carries. -/
+theorem dripEntrySpec_messageRunReady {ca : Adr} {msg : Msg}
+    (ready : dripSpec.MessageRunReady ca msg)
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256) :
+    dripEntrySpec.MessageRunReady ca msg :=
+  ⟨⟨dripEntrySpec_stateInv ready.ready.state sumNof, ready.ready.nodel,
+      ready.ready.code, ready.ready.codeAddress, ready.ready.ne,
+      ready.ready.val0⟩,
+    ready.codeOrForeign⟩
+
 end Drip
+
+/-- Instantiate the recursive interpreter theorem at the exact EVM root
+selected by a successful message entry.  The result keeps the exclusivity
+clause, so a root DRIP call is known to open with its computed tag. -/
+theorem Exec.dripRealizedChain_of_messageRoot
+    (coalition : Finset Adr) {ca : Adr} {msg : Msg} {entry : Benv}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (evmEq : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv entry))
+    (committed : Execution.commits out = true)
+    (ready : dripEntrySpec.MessageRunReady ca msg)
+    (caller_ne : msg.currentTarget = ca → msg.caller ≠ ca) :
+    ∃ steps : List RealizedStep,
+      RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
+        (snapshot coalition ca (Execution.committedPost out committed).state) ∧
+      (sevm.currentTarget = ca → ∃ op nested,
+        steps = op :: nested ∧ op.kind = opTag coalition sevm pre) := by
+  have precondition :=
+    ContractSpec.Pre.of_inv_benvAfterTransfer
+      ready.ready.ne ready.ready.val0 transfer ready.ready.state
+  have pcEq := congrArg Evm.pc evmEq
+  have sevmEq := congrArg Evm.sta evmEq
+  have preEq := congrArg Evm.dyna evmEq
+  dsimp only [initEvm] at pcEq sevmEq preEq
+  subst pc
+  subst sevm
+  subst pre
+  have installed : Prog.At runtime ca 0
+      (initSevm (msg.withBenv entry))
+      (initDevm (msg.withBenv entry)) := by
+    refine ⟨precondition.code, ?_⟩
+    intro target
+    refine ⟨?_, rfl⟩
+    rcases ready.codeOrForeign with call | foreign
+    · exact ready.ready.code call
+        (by simpa [initSevm, Msg.withBenv] using target)
+    · exact False.elim (foreign
+        (by simpa [initSevm, Msg.withBenv] using target))
+  have direct :
+      (initSevm (msg.withBenv entry)).currentTarget = ca →
+        (initSevm (msg.withBenv entry)).codeAddress = some ca := by
+    intro target
+    rcases ready.codeOrForeign with call | foreign
+    · exact ready.ready.codeAddress call
+        (by simpa [initSevm, Msg.withBenv] using target)
+    · exact False.elim (foreign
+        (by simpa [initSevm, Msg.withBenv] using target))
+  have caller :
+      (initSevm (msg.withBenv entry)).currentTarget = ca →
+        (initSevm (msg.withBenv entry)).caller ≠ ca := by
+    intro target
+    exact caller_ne (by simpa [initSevm, Msg.withBenv] using target)
+  have all := Exec.coreDripAccounting coalition (ca := ca)
+  have core := all 0 (initSevm (msg.withBenv entry))
+    (initDevm (msg.withBenv entry)) out run installed
+  exact core run committed installed precondition direct caller (fun _ => rfl)
 
 end Blanc
