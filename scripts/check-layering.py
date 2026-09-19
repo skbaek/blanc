@@ -396,6 +396,8 @@ COMPOSITION = [
     "Composition.ProrataWethVaultInbound",
     "Composition.ProrataWethVaultOutbound",
     "Composition.ProrataWethVaultNonrevert",
+    "Composition.ProrataWethVaultTerminals",
+    "Composition.ProrataWethVaultRevertSteps",
     "Composition.ProrataWethVaultBacking",
     "Composition.ProrataWethVaultAccounting",
     "Composition.ProrataWethVaultCoalition",

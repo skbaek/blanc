@@ -334,6 +334,7 @@ import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultNonrevert
+import Blanc.Composition.ProrataWethVaultTerminals
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.Composition.ProrataWethVaultAccounting
 import Blanc.Composition.ProrataWethVaultCoalition

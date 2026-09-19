@@ -115,6 +115,12 @@ theorem noRevertOut_bind {α β : Type} {e : Except (EvmError × Devm) α}
   | error p => exact he
   | ok a => exact hf a
 
+theorem noRevertOut_toExcept {α : Type} {p : EvmError × Devm}
+    (h : p.1 ≠ .revert) (o : Option α) : NoRevertOut (o.toExcept p) := by
+  cases o
+  · exact h
+  · trivial
+
 theorem noRevertOut_ok {α : Type} (a : α) :
     NoRevertOut (.ok a : Except (EvmError × Devm) α) := trivial
 
@@ -791,5 +797,520 @@ theorem Prog.runCompiledTo_of_exec_revert {sevm : Sevm} {pre d : Devm}
   refine ⟨inter, Devm.BurnBy.of_burn burn h_gas, ?_⟩
   exact Func.runCompiledTo_of_exec_core p.main p.aux
     ⟨1, sevm, inter, _, exc'⟩ p.main h_pcf h_eq h_sub hro
+
+/-! ## Terminal inventory
+
+A revert-cause statement speaks only about `EvmError.revert`.  A guard coded
+as some other terminal (`STOP`, `SELFDESTRUCT`, a bare `REVERT` that halts on a
+garbage operand) would escape it.  `Func.TerminalsReturnOrRevert` is the
+structural companion: every terminal of the tree is `RETURN`, or is the
+`REVERT` of a `Func.revert` node.  `.call` leaves are table indices, checked
+where the table is. -/
+
+/-- Every `.last` terminal of `f` reached through `.next` and `.branch` is
+`RETURN`, or lies inside a `Func.revert` node. -/
+def Func.TerminalsReturnOrRevert : Func → Prop
+  | .last l => l = .return_
+  | .next n f => Func.next n f = Func.revert ∨ Func.TerminalsReturnOrRevert f
+  | .branch f g => Func.TerminalsReturnOrRevert f ∧ Func.TerminalsReturnOrRevert g
+  | .call _ => True
+
+/-- `PUSH0`, by shape. -/
+def Ninst.isPush0 : Ninst → Bool
+  | .push [] _ => true
+  | _ => false
+
+theorem Ninst.eq_pushB256_zero_of_isPush0 {n : Ninst}
+    (h : Ninst.isPush0 n = true) :
+    n = Ninst.pushB256 0 := by
+  unfold Ninst.isPush0 at h
+  split at h
+  · rfl
+  · cases h
+
+/-- Recognise `Func.revert` (`PUSH0 PUSH0 REVERT`) by shape.  The terminal is
+matched first, so a checker run over a whole program inspects push operands
+only at `REVERT` sites. -/
+def Func.isRevert : Func → Bool
+  | .next n (.next m (.last .revert)) => Ninst.isPush0 n && Ninst.isPush0 m
+  | _ => false
+
+theorem Func.eq_revert_of_isRevert {f : Func} (h : f.isRevert = true) :
+    f = Func.revert := by
+  unfold Func.isRevert at h
+  split at h
+  · rw [Bool.and_eq_true] at h
+    rw [Ninst.eq_pushB256_zero_of_isPush0 h.1,
+      Ninst.eq_pushB256_zero_of_isPush0 h.2]
+    rfl
+  · cases h
+
+/-- The executable checker for `Func.TerminalsReturnOrRevert`. -/
+def Func.terminalsReturnOrRevert : Func → Bool
+  | .last l => l == .return_
+  | .next n f => (Func.next n f).isRevert || f.terminalsReturnOrRevert
+  | .branch f g => f.terminalsReturnOrRevert && g.terminalsReturnOrRevert
+  | .call _ => true
+
+theorem Func.terminalsReturnOrRevert_sound :
+    ∀ {f : Func}, f.terminalsReturnOrRevert = true → f.TerminalsReturnOrRevert
+  | .last l, h => by
+    simpa [Func.terminalsReturnOrRevert, Func.TerminalsReturnOrRevert] using h
+  | .next n f, h => by
+    simp only [Func.terminalsReturnOrRevert, Bool.or_eq_true] at h
+    rcases h with h | h
+    · exact Or.inl (Func.eq_revert_of_isRevert h)
+    · exact Or.inr (Func.terminalsReturnOrRevert_sound h)
+  | .branch f g, h => by
+    simp only [Func.terminalsReturnOrRevert, Bool.and_eq_true] at h
+    exact ⟨Func.terminalsReturnOrRevert_sound h.1,
+      Func.terminalsReturnOrRevert_sound h.2⟩
+  | .call _, _ => trivial
+
+/-! ## Avoiding walks
+
+`Func.RunCompiledToVisiting` is proved by contradiction: a walk that visits no
+`P`-step is a `Func.RunCompiledToAvoiding` walk, whose inversions below keep the
+fact at every step they peel.  An instruction step peeled from an avoiding walk
+is itself not a `P`-step, and its tail is again avoiding.  Nothing here is
+specific to a contract or to `P`. -/
+
+/-- A gas-exact compiled walk that runs no `P`-step. -/
+def Func.RunCompiledToAvoiding (P : Sevm → Devm → Ninst → Devm → Prop)
+    (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func)
+    (ex : Execution) : Prop :=
+  Func.RunCompiledTo fs sevm devm f ex ∧
+    ¬ Func.RunCompiledToVisiting P fs sevm devm f ex
+
+namespace Func.RunCompiledToAvoiding
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func}
+  {sevm : Sevm}
+
+theorem next_inv {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}
+    (h : Func.RunCompiledToAvoiding P fs sevm devm (Func.next i f) ex) :
+    ∃ mid, Ninst.RunCompiled sevm devm i mid ∧ ¬ P sevm devm i mid ∧
+      Func.RunCompiledToAvoiding P fs sevm mid f ex := by
+  obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv h.1
+  exact ⟨mid, hn, fun hp => h.2 (.here hn hp hrest), hrest,
+    fun hv => h.2 (.next hn hv)⟩
+
+theorem branch_inv {devm : Devm} {f g : Func} {ex : Execution}
+    (h : Func.RunCompiledToAvoiding P fs sevm devm (Func.branch f g) ex) :
+    (∃ armPre, devm.stack = 0 :: armPre.stack ∧
+        Devm.PopBurnBy [0] (gVerylow + gHigh) devm armPre ∧
+        Func.RunCompiledToAvoiding P fs sevm armPre f ex) ∨
+      (∃ (w : B256) (armPre : Devm), w ≠ 0 ∧
+        devm.stack = w :: armPre.stack ∧
+        Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm armPre ∧
+        Func.RunCompiledToAvoiding P fs sevm armPre g ex) := by
+  rcases h with ⟨walk, avoid⟩
+  cases walk with
+  | zero hroom hpop harm =>
+    exact Or.inl ⟨_, hpop.stack, hpop, harm,
+      fun hv => avoid (.zero hroom hpop hv)⟩
+  | succ hne hroom hpop harm =>
+    exact Or.inr ⟨_, _, hne, hpop.stack, hpop, harm,
+      fun hv => avoid (.succ hne hroom hpop hv)⟩
+
+theorem call_inv {devm : Devm} {k : Nat} {f : Func} {ex : Execution}
+    (h_get : fs[k]? = some f)
+    (h : Func.RunCompiledToAvoiding P fs sevm devm (Func.call k) ex) :
+    ∃ mid, Devm.BurnBy (gVerylow + gMid + gJumpdest) devm mid ∧
+      Func.RunCompiledToAvoiding P fs sevm mid f ex := by
+  rcases h with ⟨walk, avoid⟩
+  cases walk with
+  | call hget hroom hburn hrest =>
+    cases Option.some.inj (hget.symm.trans h_get)
+    exact ⟨_, hburn, hrest, fun hv => avoid (.call hget hroom hburn hv)⟩
+
+theorem prepend_inv {l : Line} {f : Func} {ex : Execution} :
+    ∀ {devm : Devm}, Func.RunCompiledToAvoiding P fs sevm devm (l +++ f) ex →
+      ∃ mid, Line.Run sevm devm l mid ∧
+        Func.RunCompiledToAvoiding P fs sevm mid f ex := by
+  induction l with
+  | nil => exact fun h => ⟨_, Line.Run.nil, h⟩
+  | cons i l ih =>
+    intro devm h
+    obtain ⟨mid, hn, -, hrest⟩ := next_inv h
+    obtain ⟨fin, hline, hf⟩ := ih hrest
+    exact ⟨fin, Line.Run.cons (Ninst.Run.of_runCompiled hn) hline, hf⟩
+
+/-- A known zero stack head forces the fall-through arm. -/
+theorem zero_branch_of_prefix {pre : Devm} {left right : Func}
+    {ex : Execution} {xs : Stack}
+    (hp : (0 : B256) :: xs <<+ pre.stack)
+    (h : Func.RunCompiledToAvoiding P fs sevm pre (Func.branch left right) ex) :
+    ∃ armPre, Devm.PopBurnBy [0] (gVerylow + gHigh) pre armPre ∧
+      Func.RunCompiledToAvoiding P fs sevm armPre left ex ∧
+      xs <<+ armPre.stack := by
+  rcases branch_inv h with ⟨armPre, -, hpop, harm⟩ | ⟨w, armPre, hw, hstack, -, -⟩
+  · exact ⟨armPre, hpop, harm,
+      (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2⟩
+  · have pw : w :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    exact (hw (pref_head_unique hp pw).symm).elim
+
+/-- A known nonzero stack head forces the jumped arm. -/
+theorem succ_branch_of_prefix {pre : Devm} {left right : Func}
+    {ex : Execution} {w : B256} {xs : Stack}
+    (hw : w ≠ 0) (hp : w :: xs <<+ pre.stack)
+    (h : Func.RunCompiledToAvoiding P fs sevm pre (Func.branch left right) ex) :
+    ∃ armPre, Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) pre armPre ∧
+      Func.RunCompiledToAvoiding P fs sevm armPre right ex ∧
+      xs <<+ armPre.stack := by
+  rcases branch_inv h with ⟨armPre, hstack, -, -⟩ |
+      ⟨w', armPre, -, hstack, hpop, harm⟩
+  · have pzero : (0 : B256) :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    exact (hw (pref_head_unique hp pzero)).elim
+  · have pword : w' :: ([] : Stack) <<+ pre.stack :=
+      ⟨armPre.stack, by simpa [Split] using hstack⟩
+    obtain rfl : w' = w := pref_head_unique pword hp
+    exact ⟨armPre, hpop, harm,
+      (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2⟩
+
+end Func.RunCompiledToAvoiding
+
+/-- **Visiting by contradiction.**  A program walk whose every avoiding
+continuation is impossible visits a `P`-step. -/
+theorem Prog.RunCompiledToVisiting.of_not_avoiding
+    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {pre : Devm}
+    {p : Prog} {ex : Execution}
+    (walk : Prog.RunCompiledTo sevm pre p ex)
+    (impossible : ∀ mid, Devm.BurnBy gJumpdest pre mid →
+      Func.RunCompiledToAvoiding P (p.main :: p.aux) sevm mid p.main ex →
+        False) :
+    Prog.RunCompiledToVisiting P sevm pre p ex := by
+  obtain ⟨mid, burn, run⟩ := walk
+  by_contra notVisiting
+  exact impossible mid burn ⟨run, fun visiting => notVisiting ⟨mid, burn, visiting⟩⟩
+
+/-- With no step predicate at all, every walk avoids. -/
+theorem Func.RunCompiledToAvoiding.of_bot {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {f : Func} {ex : Execution}
+    (walk : Func.RunCompiledTo fs sevm devm f ex) :
+    Func.RunCompiledToAvoiding (fun _ _ _ _ => False) fs sevm devm f ex :=
+  ⟨walk, fun visiting => by
+    obtain ⟨_, _, _, _, impossible⟩ := visiting.exists_step
+    exact impossible⟩
+
+/-! ## Revert-free continuations
+
+A compiled walk can end in `REVERT` only at a `.last .revert`.  A body with no
+such terminal, whose table calls land only in entries of the same kind, has no
+reverting walk.  `STOP`, `RETURN` and `SELFDESTRUCT` raise only halts. -/
+
+/-- No `.last .revert` in `f`, and every `.call` index is in `safe`. -/
+def Func.revertFreeIn (safe : List Nat) : Func → Bool
+  | .last l => l != .revert
+  | .next _ f => Func.revertFreeIn safe f
+  | .branch f g => Func.revertFreeIn safe f && Func.revertFreeIn safe g
+  | .call k => safe.contains k
+
+theorem Linst.run_noRevert_of_ne {sevm : Sevm} {devm : Devm} {l : Linst}
+    (hl : l ≠ .revert) : NoRevertOut (Linst.run sevm devm l) := by
+  cases l
+  · trivial
+  · simp only [Linst.run]
+    repeat' (first
+      | with_reducible exact chargeGas_noRevert _ _
+      | with_reducible exact Devm.popToNat_noRevert _
+      | with_reducible exact noRevertOut_ok _
+      | (with_reducible refine noRevertOut_bind ?_ ?_)
+      | (rintro ⟨_, _⟩))
+  · exact (hl rfl).elim
+  · simp only [Linst.run]
+    repeat' (first
+      | with_reducible exact chargeGas_noRevert _ _
+      | with_reducible exact Devm.popToAdr_noRevert _
+      | with_reducible exact assertDynamic_noRevert _ _
+      | with_reducible exact noRevertOut_ok _
+      | with_reducible exact noRevertOut_halt _ _
+      | with_reducible exact noRevertOut_toExcept (fun h => nomatch h) _
+      | (with_reducible refine noRevertOut_bind ?_ ?_)
+      | (rintro ⟨_, _⟩)
+      | intro _
+      | split)
+
+theorem Linst.Run.not_revert_of_revertFreeIn {safe : List Nat} {sevm : Sevm}
+    {devm : Devm} {l : Linst} {ex : Execution}
+    (run : Linst.Run sevm devm l ex)
+    (free : Func.revertFreeIn safe (.last l) = true) :
+    ∀ d, ex ≠ .error (.revert, d) := by
+  intro d hex
+  have hl : l ≠ .revert := by
+    simpa [Func.revertFreeIn] using free
+  have hn := Linst.run_noRevert_of_ne (sevm := sevm) (devm := devm) hl
+  have run' : Linst.run sevm devm l = ex := run
+  rw [run', hex] at hn
+  exact hn rfl
+
+theorem Func.RunCompiledTo.not_revert_of_revertFreeIn {fs : List Func}
+    {safe : List Nat}
+    (tableSafe : ∀ k ∈ safe, ∀ g, fs[k]? = some g →
+      Func.revertFreeIn safe g = true)
+    {sevm : Sevm} {devm : Devm} {f : Func} {ex : Execution}
+    (walk : Func.RunCompiledTo fs sevm devm f ex)
+    (free : Func.revertFreeIn safe f = true) :
+    ∀ d, ex ≠ .error (.revert, d) := by
+  induction walk with
+  | zero _ _ _ ih =>
+    simp only [Func.revertFreeIn, Bool.and_eq_true] at free
+    exact ih free.1
+  | succ _ _ _ _ ih =>
+    simp only [Func.revertFreeIn, Bool.and_eq_true] at free
+    exact ih free.2
+  | last hrun =>
+    exact Linst.Run.not_revert_of_revertFreeIn hrun free
+  | next _ _ ih =>
+    exact ih (by simpa [Func.revertFreeIn] using free)
+  | call hget _ _ _ ih =>
+    exact ih (tableSafe _ (by simpa [Func.revertFreeIn] using free) _ hget)
+
+/-! ## Entry through the shared wrappers, for avoiding walks
+
+The shared nonpayable guard and the sorted binary dispatcher, peeled from an
+avoiding walk at an arbitrary outcome.  They follow
+`Func.RunCompiledTo.nonpayable_body_of_value_zero` and the vault family's
+compiled dispatch reach step for step; the difference is that each peeled
+tail is again avoiding, which is what lets a caller conclude a visiting walk
+of the whole frame. -/
+
+namespace Func.RunCompiledToAvoiding
+
+open Jaune.Ninst Ninst
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func}
+  {sevm : Sevm}
+
+theorem nonpayable_body_of_value_zero {pre : Devm} {out : Execution}
+    {body : Func} {tail : Stack}
+    (valueZero : sevm.value = 0)
+    (hp : tail <<+ pre.stack)
+    (run : Func.RunCompiledToAvoiding P fs sevm pre (nonpayable body) out) :
+    ∃ bodyPre,
+      Func.RunCompiledToAvoiding P fs sevm bodyPre body out ∧
+      tail <<+ bodyPre.stack ∧
+      pre.state = bodyPre.state ∧ pre.memory = bodyPre.memory := by
+  unfold nonpayable at run
+  obtain ⟨afterValue, qvalue, -, run⟩ := next_inv run
+  obtain ⟨testPre, qzero, -, branchRun⟩ := next_inv run
+  have rvalue := Ninst.Run.of_runCompiled qvalue
+  have rzero := Ninst.Run.of_runCompiled qzero
+  have pValue := prefix_of_push (of_run_callvalue rvalue) hp
+  have pTest := prefix_of_iszero rzero pValue
+  have pOne : (1 : B256) :: tail <<+ testPre.stack := by
+    simpa [valueZero, B256.eqCheck] using pTest
+  obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
+    succ_branch_of_prefix (by decide : (1 : B256) ≠ 0) pOne branchRun
+  exact ⟨bodyPre, bodyRun, pBody,
+    (Ninst.Hinv.inv (f := Devm.state) rvalue).trans
+      ((Ninst.Hinv.inv (f := Devm.state) rzero).trans hpop.state),
+    (Ninst.Hinv.inv (f := Devm.memory) rvalue).trans
+      ((Ninst.Hinv.inv (f := Devm.memory) rzero).trans hpop.memory)⟩
+
+private theorem reach_of_dispatchWith_leaf
+    {sig w : B256} {f p : Func} {k : Nat}
+    {s : Devm} {out : Execution} {tail : Stack}
+    (hmember : (sig, f) ∈ [(w, p)])
+    (hp : sig :: tail <<+ s.stack)
+    (run : Func.RunCompiledToAvoiding P fs sevm s
+      (dispatchWith k (DispatchTree.leaf w p)) out) :
+    ∃ bodyPre,
+      tail <<+ bodyPre.stack ∧ s.state = bodyPre.state ∧
+      s.memory = bodyPre.memory ∧
+      Func.RunCompiledToAvoiding P fs sevm bodyPre f out := by
+  have heq : (sig, f) = (w, p) := List.mem_singleton.mp hmember
+  injection heq with hsig hbody
+  subst hsig
+  subst hbody
+  change Func.RunCompiledToAvoiding P fs sevm s
+    ([pushB256 sig, eq] +++ (f <?> .call k)) out at run
+  obtain ⟨testPre, testRun, branchRun⟩ := prepend_inv run
+  rcases Line.of_run_cons testRun with ⟨afterPush, qpush, testRun⟩
+  rcases Line.of_run_cons testRun with ⟨afterEq, qeq, hnil⟩
+  cases hnil
+  have p1 : [sig, sig] ++ tail <<+ afterPush.stack := by
+    have pushed := prefix_of_push (of_run_pushB256 qpush) hp
+    simpa only [List.cons_append, List.nil_append] using pushed
+  have p2 : (1 : B256) :: tail <<+ testPre.stack := by
+    have compared := prefix_of_eq qeq p1
+    simpa [B256.eqCheck] using compared
+  obtain ⟨bodyPre, hpop, bodyRun, bodyStack⟩ :=
+    succ_branch_of_prefix (by decide : (1 : B256) ≠ 0) p2 branchRun
+  refine ⟨bodyPre, bodyStack, ?_, ?_, bodyRun⟩
+  · exact (Line.of_inv Devm.state (by line_inv)
+      (Line.Run.cons qpush (Line.Run.cons qeq Line.Run.nil))).trans hpop.state
+  · exact (Line.of_inv Devm.memory (by line_inv)
+      (Line.Run.cons qpush (Line.Run.cons qeq Line.Run.nil))).trans hpop.memory
+
+private theorem reach_of_dispatchWith_build :
+    ∀ {n : Nat} {entries : List (B256 × Func)} {sig : B256} {body : Func}
+      {k : Nat} {s : Devm} {out : Execution} {tail : Stack},
+      DispatchTree.sorted entries = true →
+      entries.length ≤ n + 1 →
+      (sig, body) ∈ entries →
+      (sig :: tail <<+ s.stack) →
+      Func.RunCompiledToAvoiding P fs sevm s
+        (dispatchWith k (DispatchTree.build n entries)) out →
+      ∃ bodyPre,
+        tail <<+ bodyPre.stack ∧ s.state = bodyPre.state ∧
+        s.memory = bodyPre.memory ∧
+        Func.RunCompiledToAvoiding P fs sevm bodyPre body out := by
+  intro n
+  induction n with
+  | zero =>
+    intro entries sig body k s out tail hsorted hlen hmember hp run
+    rcases entries with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases hmember
+    · exact reach_of_dispatchWith_leaf hmember hp run
+    · exfalso
+      simp only [List.length_cons] at hlen
+      omega
+  | succ n ih =>
+    intro entries sig body k s out tail hsorted hlen hmember hp run
+    rcases entries with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
+    · cases hmember
+    · exact reach_of_dispatchWith_leaf hmember hp run
+    · simp only [List.length_cons] at hlen
+      let all := (w, p) :: y :: ys
+      let split := (all.length + 1) / 2
+      have htakeLen : (all.take split).length ≤ n + 1 := by
+        simp only [all, split, List.length_take, List.length_cons]
+        omega
+      have hdropLen : (all.drop split).length ≤ n + 1 := by
+        simp only [all, split, List.length_drop, List.length_cons]
+        omega
+      obtain ⟨z, zs, hdrop⟩ : ∃ z zs, all.drop split = z :: zs := by
+        rcases hd : all.drop split with _ | ⟨z, zs⟩
+        · exfalso
+          have hl := congrArg List.length hd
+          simp only [all, split, List.length_drop, List.length_cons,
+            List.length_nil] at hl
+          omega
+        · exact ⟨z, zs, rfl⟩
+      have hsortedSplit :
+          DispatchTree.sorted (all.take split ++ all.drop split) = true := by
+        rw [List.take_append_drop]
+        exact hsorted
+      have hsortedTake := DispatchTree.sorted_append_left hsortedSplit
+      have hsortedDrop := DispatchTree.sorted_append_right hsortedSplit
+      have hmemberSplit :
+          (sig, body) ∈ all.take split ∨
+            (sig, body) ∈ all.drop split := by
+        apply List.mem_append.mp
+        rw [List.take_append_drop]
+        exact hmember
+      change Func.RunCompiledToAvoiding P fs sevm s
+        ([dup 0, pushB256 (leftmostFsig (DispatchTree.build n
+            (all.drop split))), gt] +++
+          (dispatchWith k (DispatchTree.build n (all.take split)) <?>
+            dispatchWith k (DispatchTree.build n (all.drop split)))) out at run
+      obtain ⟨branchPre, testRun, branchRun⟩ := prepend_inv run
+      have ptest :
+          (leftmostFsig (DispatchTree.build n (all.drop split)) >? sig) ::
+            sig :: tail <<+ branchPre.stack := by
+        generalize_line_prefix
+      rw [hdrop, DispatchTree.leftmostFsig_build] at ptest
+      have testState : s.state = branchPre.state :=
+        Line.of_inv Devm.state (by line_inv) testRun
+      have testMemory : s.memory = branchPre.memory :=
+        Line.of_inv Devm.memory (by line_inv) testRun
+      rcases branch_inv branchRun with hzero | hsucc
+      · rcases hzero with ⟨rightPre, -, hpop, rightRun⟩
+        have popped := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) ptest
+        have hle : z.fst ≤ sig := by
+          rw [← B256.not_lt]
+          intro hlt
+          have hgt : z.fst > sig := hlt
+          rw [B256.gtCheck, if_pos hgt] at popped
+          exact B256.zero_ne_one popped.1
+        have hmemberDrop : (sig, body) ∈ all.drop split := by
+          rcases hmemberSplit with hin | hin
+          · exfalso
+            have hz : z ∈ all.drop split := by
+              rw [hdrop]
+              exact List.mem_cons_self ..
+            have hlt :=
+              DispatchTree.fst_lt_of_sorted_append hsortedSplit hin hz
+            have h1 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat hlt
+            have h2 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat hle
+            omega
+          · exact hin
+        rcases ih hsortedDrop hdropLen hmemberDrop popped.2 rightRun with
+          ⟨bodyPre, bodyStack, bodyState, bodyMemory, bodyRun⟩
+        exact ⟨bodyPre, bodyStack, testState.trans (hpop.state.trans bodyState),
+          testMemory.trans (hpop.memory.trans bodyMemory), bodyRun⟩
+      · rcases hsucc with ⟨flag, leftPre, hflag, -, hpop, leftRun⟩
+        have popped := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) ptest
+        have hlt : sig < z.fst := by
+          by_contra hnlt
+          rw [B256.gtCheck, if_neg (fun hgt => hnlt hgt)] at popped
+          exact hflag popped.1
+        have hmemberTake : (sig, body) ∈ all.take split := by
+          rcases hmemberSplit with hin | hin
+          · exact hin
+          · exfalso
+            rw [hdrop] at hin
+            have hsortedZ : DispatchTree.sorted (z :: zs) = true := by
+              rw [← hdrop]
+              exact hsortedDrop
+            have hle := DispatchTree.fst_le_of_sorted_mem hsortedZ hin
+            have h1 : z.fst.toNat ≤ sig.toNat := B256.toNat_le_toNat hle
+            have h2 : sig.toNat < z.fst.toNat := B256.toNat_lt_toNat hlt
+            omega
+        rcases ih hsortedTake htakeLen hmemberTake popped.2 leftRun with
+          ⟨bodyPre, bodyStack, bodyState, bodyMemory, bodyRun⟩
+        exact ⟨bodyPre, bodyStack, testState.trans (hpop.state.trans bodyState),
+          testMemory.trans (hpop.memory.trans bodyMemory), bodyRun⟩
+
+/-- An avoiding walk of a sorted binary dispatcher, entered with the selector
+on the stack, reaches the selected body as an avoiding walk. -/
+theorem reach_of_dispatchWith
+    {entries : List (B256 × Func)} {sig : B256} {body : Func}
+    {k : Nat} {s : Devm} {out : Execution} {tail : Stack}
+    (hsorted : DispatchTree.sorted entries = true)
+    (hmember : (sig, body) ∈ entries)
+    (hp : sig :: tail <<+ s.stack)
+    (run : Func.RunCompiledToAvoiding P fs sevm s
+      (dispatchWith k (DispatchTree.ofSorted entries)) out) :
+    ∃ bodyPre,
+      tail <<+ bodyPre.stack ∧ s.state = bodyPre.state ∧
+      s.memory = bodyPre.memory ∧
+      Func.RunCompiledToAvoiding P fs sevm bodyPre body out :=
+  reach_of_dispatchWith_build hsorted (Nat.le_succ _) hmember hp run
+
+end Func.RunCompiledToAvoiding
+
+/-! ## Line facts through a `STOP`-terminated source run
+
+A `Func.WalkInv` trace of a line-prefixed body `l +++ body` may be read at any
+`Line.Run` of `l`: instantiate it at the source relation with `body := STOP`,
+build that run from the line, and identify the trace's continuation state with
+the line's end state through the `STOP`.  This lets a revert-aware walk reuse
+the family's proved line traces instead of restating them. -/
+
+theorem Func.Run.prepend_stop {fs : List Func} {sevm : Sevm} {pre mid : Devm}
+    {l : Line} (line : Line.Run sevm pre l mid) :
+    Func.Run fs sevm pre (l +++ Func.stop) mid := by
+  induction line with
+  | nil => exact Func.Run.last rfl
+  | cons step _ ih => exact Func.Run.next step ih
+
+theorem Func.Run.stop_inv {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (run : Func.Run fs sevm pre Func.stop post) : post = pre := by
+  cases run with
+  | last h =>
+    have h' : Linst.run sevm pre .stop = .ok post := h
+    simp only [Linst.run, Except.ok.injEq] at h'
+    exact h'.symm
+
+/-- `revertFreeIn` looks through a line prefix. -/
+theorem Func.revertFreeIn_prepend (safe : List Nat) (l : Line) (f : Func) :
+    Func.revertFreeIn safe (l +++ f) = Func.revertFreeIn safe f := by
+  induction l with
+  | nil => rfl
+  | cons i l ih => exact ih
 
 end Blanc
