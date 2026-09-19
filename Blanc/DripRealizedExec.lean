@@ -247,115 +247,6 @@ theorem Chain.append {scale : Nat} {fresh : Nat → Nat → Nat}
   | nil _ => exact second
   | cons entry _ ih => exact Chain.cons entry (ih second)
 
-/-! ## The exit boundary: balance up to the outbound CALL
-
-`ExitPaysExactlyFull` fixes the target storage and code at the call boundary
-but is silent about the balance there.  The exit prefix is a gas-free walk,
-and no gas-free instruction moves ETH, so the prefix form of the settlement
-theorem recovers it. -/
-
-/-- The accepted `exit` boundary *with its balance*: the same call-boundary
-witnesses as `ExitPaysExactlyFull`, re-derived from the prefix form of the
-settlement theorem so that the walk from the body entry to the CALL is
-available as a gas-free prefix. -/
-theorem exit_run_boundary {fs : List Func} (hlookup : AuxLookup fs)
-    {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs sevm s Drip.exit post) :
-    ∃ callPre callPost guardPost returnPre,
-      Devm.getStor callPre sevm.currentTarget =
-        ((((Devm.getStor entry sevm.currentTarget).set chiSlot
-            ((B256.rpow scale half rate
-                (sevm.benvStat.time -
-                  Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
-              Devm.getStorVal entry sevm.currentTarget chiSlot) / scale)).set
-            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
-            (Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256 -
-              Sevm.dataWord sevm (32 * 0 + 4))).set totalUnitsSlot
-          (Devm.getStorVal entry sevm.currentTarget totalUnitsSlot -
-            Sevm.dataWord sevm (32 * 0 + 4)) ∧
-      Devm.getCode callPre = Devm.getCode entry ∧
-      Devm.getBal callPre = Devm.getBal s ∧
-      AcceptedPayout sevm
-        (((B256.rpow scale half rate
-            (sevm.benvStat.time -
-              Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
-          Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
-          Sevm.dataWord sevm (32 * 0 + 4)) / scale)
-        callPre callPost guardPost returnPre ∧
-      Devm.getStor post = Devm.getStor callPost ∧
-      Devm.getBal post = Devm.getBal callPost := by
-  rcases of_run_exit_settles_full_prefix hlookup (path := ⟨0, []⟩) frame hp run with
-    ⟨-, -, -, -, -, -, -, -, -, -, -, -, callStart, freshChi, settledImage,
-      target, hfresh, hcodeStart, hpStart, -, -, hstorStart, walk, suffix⟩
-  subst freshChi
-  have hbalStart : Devm.getBal callStart = Devm.getBal s :=
-    Func.RunPrefix.getBal_eq walk
-  let payout :=
-    ((B256.rpow scale half rate
-      (sevm.benvStat.time - Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
-      Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
-      Sevm.dataWord sevm (32 * 0 + 4)) / scale
-  change sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout :: tail <<+
-    callStart.stack at hpStart
-  rcases of_run_prepend [gas] _ suffix with ⟨callPre, hgasLine, suffix⟩
-  have hstateGas : callStart.state = callPre.state :=
-    Line.of_inv Devm.state (by line_inv) hgasLine
-  rcases of_run_gas (of_run_singleton hgasLine) with ⟨gasWord, hgas⟩
-  have hstack : gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 ::
-      (payout :: tail) <<+ callPre.stack := by
-    simpa only [List.cons_append, List.nil_append] using
-      prefix_of_push hgas hpStart
-  rcases of_run_prepend [call] _ suffix with ⟨callPost, hcallLine, hbranch⟩
-  have hcall : Ninst.Run sevm callPre call callPost := of_run_singleton hcallLine
-  have hstorTail : Devm.getStor callPost = Devm.getStor post :=
-    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hbranch
-  have hbalTail : Devm.getBal callPost = Devm.getBal post :=
-    Func.of_inv Devm.getBal Devm.getBal (by func_inv) hbranch
-  rcases of_run_branch hbranch with
-    ⟨_, hzero, hrev⟩ |
-      ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
-  · exact (not_run_revert hrev).elim
-  rcases of_run_call_val_with_depth_frame hstack hcall with
-      hfailed | hentered
-  · exact (hw (popBurn_pref hpop hfailed.1).1).elim
-  rcases hentered with
-    ⟨parent, child, xl, delegated, nextAddress, code, avail, pc, hstep,
-      hdepth, hstackEq, hparentState, hparentMemory, hparentLogs,
-      hparentOutput, hdelegated, hfilled, hmessage, hclean, hresume,
-      hpostState, hpostReturnData, hpostMemory, hpostStack⟩
-  have hpostPrefix : (1 : B256) :: payout :: tail <<+ callPost.stack := by
-    rw [hpostStack]
-    apply pref_cons
-    rw [hstackEq] at hstack
-    exact cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
-      (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv
-        (cons_pref_cons_inv hstack))))))
-  have hpop1 : Devm.PopBurn [1] callPost guardPost := by
-    have hwone : w = 1 := (popBurn_pref hpop hpostPrefix).1
-    subst w
-    exact hpop
-  refine ⟨callPre, callPost, guardPost, returnPre, ?_, ?_, ?_, ?_,
-    hstorTail.symm, hbalTail.symm⟩
-  · exact (getStor_eq_of_state_eq hstateGas.symm sevm.currentTarget).trans
-      hstorStart
-  · calc
-      Devm.getCode callPre = Devm.getCode callStart := by
-        funext a
-        exact getCode_eq_of_state_eq hstateGas.symm a
-      _ = Devm.getCode entry := hcodeStart
-  · calc
-      Devm.getBal callPre = Devm.getBal callStart := by
-        funext a
-        exact getBal_eq_of_state_eq hstateGas.symm a
-      _ = Devm.getBal s := hbalStart
-  · unfold AcceptedPayout
-    exact ⟨gasWord, payout :: tail, parent, child, xl, delegated, nextAddress, code,
-      avail, pc, hstack, hcall, hpop1, hburn, hstep, hdepth, hstackEq,
-      hparentState, hparentMemory, hparentLogs, hparentOutput, hdelegated,
-      hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
-      hpostMemory, hpostStack⟩
-
 /-! ## Exit write lemmas -/
 
 /-- The actual exit's four writes change only the caller's holder row.  The
@@ -511,29 +402,9 @@ theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
   unfold ExitPaysExactlyFull at full
   dsimp only at full
   rcases full with
-    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi, -⟩
-  rcases exec_enters_exit exc hcode hsel hnonempty with
-    ⟨-, -, entry0, hst, hmm, -, -, hbody⟩
-  have hentryMemory : entry0.memory = Mem.empty := hmm.symm.trans hcanon
-  have hframe : Frame [] entry0 entry0 :=
-    ⟨by rw [hentryMemory]; exact Mem.wf_empty,
-      by rw [hentryMemory]; exact Mem.reads_empty, rfl, rfl⟩
-  have boundary := exit_run_boundary auxLookup_runtime hframe nil_pref hbody
-  have hgv : ∀ k, Devm.getStorVal entry0 sevm.currentTarget k =
-      Devm.getStorVal pre sevm.currentTarget k :=
-    fun k => Devm.getStorVal_of_state hst.symm _ k
-  have hg : Devm.getStor entry0 sevm.currentTarget =
-      Devm.getStor pre sevm.currentTarget :=
-    getStor_eq_of_state_eq hst.symm sevm.currentTarget
-  have hc : Devm.getCode entry0 = Devm.getCode pre :=
-    congrArg State.getCode hst.symm
-  have hb : Devm.getBal entry0 = Devm.getBal pre := by
-    funext a
-    exact getBal_eq_of_state_eq hst.symm a
-  simp only [hgv, hg, hc, hb] at boundary
-  rcases boundary with
-    ⟨callPre, callPost, guardPost, returnPre, storage, codePre, balPre, accepted,
-      postStor, postBal⟩
+    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi,
+      callPre, callPost, guardPost, returnPre, storage, codePre, balPre, accepted,
+      postStor, postBal, -⟩
   rcases accepted with
     ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
       -, -, -, -, -, hdepth, -, parentState, -, -, -, -, filled, process, clean,

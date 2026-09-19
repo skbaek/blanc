@@ -257,7 +257,7 @@ theorem drip_compiled_exit {e : Sevm} {entry s r : Devm} {image : Bytes}
   rcases hfull with
     ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
       helapsed, hguards, hnofm, hcapChi, callPre, callPost, guardPost,
-      returnPre, hstor, hcode, haccepted, hpost, hbal, hret⟩
+      returnPre, hstor, hcode, -, haccepted, hpost, hbal, hret⟩
   let postChi :=
     (B256.rpow scale half rate
       (e.benvStat.time - Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
@@ -435,7 +435,7 @@ theorem no_stale_index_settlement_exit {sevm : Sevm} {pre post : Devm}
   rcases hfull with
     ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
       helapsed, hguards, hnofm, hcapChi, callPre, callPost, guardPost,
-      returnPre, hstorCallPre, hcodeCallPre, haccepted, hstorFinal,
+      returnPre, hstorCallPre, hcodeCallPre, -, haccepted, hstorFinal,
       hbalFinal, hretFinal⟩
   refine ⟨le_of_not_gt hclock, callPre, callPost, guardPost, returnPre,
     ?_, ?_, haccepted, hstorFinal⟩

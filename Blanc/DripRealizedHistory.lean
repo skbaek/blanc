@@ -1545,7 +1545,7 @@ theorem BodyExecutionOccurrence.exit_preCallback
     nonempty canonicalEntry
   refine ⟨full, ?_⟩
   rcases full with ⟨-, -, -, -, -, -, -, -, -, -, -, -,
-    callPre, callPost, guardPost, returnPre, storage, codePre, accepted, -, -, -⟩
+    callPre, callPost, guardPost, returnPre, storage, codePre, -, accepted, -, -, -⟩
   refine ⟨callPre, callPost, guardPost, returnPre, storage, codePre, accepted, ?_⟩
   rcases accepted with
     ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,

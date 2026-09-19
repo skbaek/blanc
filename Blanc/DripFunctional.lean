@@ -891,7 +891,10 @@ theorem exit_exec_effect_full {sevm : Sevm} {pre post : Devm}
     congrArg State.getCode hst.symm
   unfold ExitPaysExactlyFull at heffect ⊢
   dsimp only at heffect ⊢
-  simp only [hgv, hg, hc] at heffect
+  have hb : Devm.getBal entry = Devm.getBal pre := by
+    funext a
+    exact getBal_eq_of_state_eq hst.symm a
+  simp only [hgv, hg, hc, hb] at heffect
   exact heffect
 
 /-- Deployed-byte `exit()`: a successful call settles the ledger at the call

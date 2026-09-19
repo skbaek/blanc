@@ -1944,8 +1944,8 @@ def ExitPaysExactly (sevm : Sevm) (entry post : Devm) : Prop :=
       ReturnsWord payout post
 
 /-- The full successful-source carrier for `exit`.  It retains the compiled
-fresh-index no-wrap/cap facts and the pre-callback code equality needed to
-apply the retained-execution induction hypothesis at the actual child call. -/
+fresh-index no-wrap/cap facts and the pre-callback code and balance equalities
+needed to apply the retained-execution induction hypothesis at the child call. -/
 def ExitPaysExactlyFull (sevm : Sevm) (entry post : Devm) : Prop :=
   let units := Sevm.dataWord sevm (32 * 0 + 4)
   let oldRow := Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256
@@ -1974,6 +1974,7 @@ def ExitPaysExactlyFull (sevm : Sevm) (entry post : Devm) : Prop :=
               rhoSlot sevm.benvStat.time).set sevm.caller.toB256
               (oldRow - units)).set totalUnitsSlot (oldTotal - units) ∧
       Devm.getCode callPre = Devm.getCode entry ∧
+      Devm.getBal callPre = Devm.getBal entry ∧
       AcceptedPayout sevm payout callPre callPost guardPost returnPre ∧
       Devm.getStor post = Devm.getStor callPost ∧
       Devm.getBal post = Devm.getBal callPost ∧
@@ -1986,10 +1987,10 @@ theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
     ExitPaysExactlyFull sevm entry post := by
   unfold ExitPaysExactlyFull
   dsimp only
-  rcases of_run_exit_settles_full hlookup frame hp run with
+  rcases of_run_exit_settles_full_prefix hlookup (path := ⟨0, []⟩) frame hp run with
     ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper, hclock,
       helapsed, hguards, hnofm, hcapChi, callStart, freshChi, settledImage,
-      hfresh, hcodeStart, hpStart, hwfStart, hreadsStart, hstorStart, suffix⟩
+      target, hfresh, hcodeStart, hpStart, -, -, hstorStart, walk, suffix⟩
   subst freshChi
   refine ⟨hargCap, hrowCap, htotalCap, hown, hfund, hlower, hupper,
     hclock, helapsed, hguards, hnofm, hcapChi, ?_⟩
@@ -1998,17 +1999,18 @@ theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
       (sevm.benvStat.time - Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
       Devm.getStorVal entry sevm.currentTarget chiSlot) / scale *
       Sevm.dataWord sevm (32 * 0 + 4)) / scale
-  change payout :: tail <<+ callStart.stack at hpStart
-  rcases of_run_prepend [dup 0] _ suffix with ⟨sendPre, hdup, suffix⟩
-  have hpSend : payout :: payout :: tail <<+ sendPre.stack :=
-    prefix_of_dup_val (of_run_singleton hdup) (by show_nth) hpStart
-  have hstateSend : callStart.state = sendPre.state :=
-    Line.of_inv Devm.state (by line_inv) hdup
-  rcases of_run_prepend sendToCaller _ suffix with
-    ⟨callPost, hsend, hbranch⟩
-  rcases exit_sendToCaller_frame hpSend hsend with
-    ⟨callPre, gasWord, hstack, hcall, hstorSend, hbalSend, hcodeSend,
-      hlogsSend, houtSend, hmemSend⟩
+  change sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout :: tail <<+
+    callStart.stack at hpStart
+  rcases of_run_prepend [gas] _ suffix with ⟨callPre, hgasLine, suffix⟩
+  have hstateGas : callStart.state = callPre.state :=
+    Line.of_inv Devm.state (by line_inv) hgasLine
+  rcases of_run_gas (of_run_singleton hgasLine) with ⟨gasWord, hgas⟩
+  have hstack : gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 ::
+      (payout :: tail) <<+ callPre.stack := by
+    simpa only [List.cons_append, List.nil_append] using
+      prefix_of_push hgas hpStart
+  rcases of_run_prepend [call] _ suffix with ⟨callPost, hcallLine, hbranch⟩
+  have hcall : Ninst.Run sevm callPre call callPost := of_run_singleton hcallLine
   have hstorTail : Devm.getStor callPost = Devm.getStor post :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) hbranch
   have hbalTail : Devm.getBal callPost = Devm.getBal post :=
@@ -2036,44 +2038,32 @@ theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
     have hwone : w = 1 := (popBurn_pref hpop hpostPrefix).1
     subst w
     exact hpop
-  have hguardPrefix : payout :: tail <<+ guardPost.stack :=
-    (popBurn_pref hpop1 hpostPrefix).2
   have hreturnPrefix : payout :: tail <<+ returnPre.stack := by
     rw [← hburn.stack]
-    exact hguardPrefix
-  have hstorCallPre :
-      Devm.getStor callPre sevm.currentTarget =
-        ((((Devm.getStor entry sevm.currentTarget).set chiSlot
-                ((B256.rpow scale half rate
-                      (sevm.benvStat.time -
-                        Devm.getStorVal entry sevm.currentTarget rhoSlot).toNat *
-                    Devm.getStorVal entry sevm.currentTarget chiSlot) /
-                  scale)).set rhoSlot sevm.benvStat.time).set
-            sevm.caller.toB256
-            (Devm.getStorVal entry sevm.currentTarget sevm.caller.toB256 -
-              Sevm.dataWord sevm (32 * 0 + 4))).set totalUnitsSlot
-          (Devm.getStorVal entry sevm.currentTarget totalUnitsSlot -
-            Sevm.dataWord sevm (32 * 0 + 4)) := by
-    rw [hstorSend,
-      ← congrFun (getStor_of_state hstateSend) sevm.currentTarget,
-      hstorStart]
-  have hcodeCallPre : Devm.getCode callPre = Devm.getCode entry := by
-    calc
-      Devm.getCode callPre = Devm.getCode sendPre := hcodeSend
-      _ = Devm.getCode callStart := by
+    exact (popBurn_pref hpop1 hpostPrefix).2
+  refine ⟨callPre, callPost, guardPost, returnPre, ?_, ?_, ?_, ?_,
+    hstorTail.symm, hbalTail.symm, (returnsWord_of_storeReturn hreturnPrefix hreturn).1⟩
+  · exact (getStor_eq_of_state_eq hstateGas.symm sevm.currentTarget).trans
+      hstorStart
+  · calc
+      Devm.getCode callPre = Devm.getCode callStart := by
         funext a
-        exact getCode_eq_of_state_eq hstateSend.symm a
+        exact getCode_eq_of_state_eq hstateGas.symm a
       _ = Devm.getCode entry := hcodeStart
-  refine ⟨callPre, callPost, guardPost, returnPre, hstorCallPre, hcodeCallPre, ?_,
-    hstorTail.symm, hbalTail.symm, ?_⟩
+  · calc
+      Devm.getBal callPre = Devm.getBal callStart := by
+        funext a
+        exact getBal_eq_of_state_eq hstateGas.symm a
+      _ = Devm.getBal s := Func.RunPrefix.getBal_eq walk
+      _ = Devm.getBal entry := by
+        funext a
+        exact getBal_eq_of_state_eq frame.state.symm a
   · unfold AcceptedPayout
     exact ⟨gasWord, payout :: tail, parent, child, xl, delegated, nextAddress, code,
       avail, pc, hstack, hcall, hpop1, hburn, hstep, hdepth, hstackEq,
       hparentState, hparentMemory, hparentLogs, hparentOutput, hdelegated,
       hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
       hpostMemory, hpostStack⟩
-  · exact (returnsWord_of_storeReturn hreturnPrefix hreturn).1
-
 /-- Compatibility projection of `exit_pays_exactly_full` for consumers whose
 claims do not require the derived no-wrap, cap, or call-preimage code facts. -/
 theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
@@ -2085,7 +2075,7 @@ theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
   dsimp only
   rcases exit_pays_exactly_full hlookup frame hp run with
     ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
-      hguards, -, -, callPre, callPost, guardPost, returnPre, hstor, -,
+      hguards, -, -, callPre, callPost, guardPost, returnPre, hstor, -, -,
       haccepted, hstorPost, hbalPost, hret⟩
   exact ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
     hguards, callPre, callPost, guardPost, returnPre, hstor, haccepted,
