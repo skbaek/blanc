@@ -100,4 +100,696 @@ theorem Prog.RunCompiledToVisiting.exec_eq
     exec ⟨0, sevm, pre⟩ = ex := by
   exact Prog.exec_of_runCompiledTo h.toRunCompiledTo h_eq
 
+/-! ## G1: the exec-to-walk inversion for reverting frames
+
+Jaune's `EvmError.revert` has exactly one producer, `Linst.run .revert`.  The
+lemmas below discharge that fact, by tag, for every other way an `Exec`
+derivation can end in an error: an `Rinst`, a `PUSH`, a jump, an `Xinst`
+step, and a child frame's resumption. -/
+
+theorem noRevertOut_bind {α β : Type} {e : Except (EvmError × Devm) α}
+    {f : α → Except (EvmError × Devm) β}
+    (he : NoRevertOut e) (hf : ∀ a, NoRevertOut (f a)) :
+    NoRevertOut (e >>= f) := by
+  cases e with
+  | error p => exact he
+  | ok a => exact hf a
+
+theorem noRevertOut_ok {α : Type} (a : α) :
+    NoRevertOut (.ok a : Except (EvmError × Devm) α) := trivial
+
+theorem noRevertOut_halt {α : Type} (r : ExceptionalHalt) (d : Devm) :
+    NoRevertOut (.error (.halt r, d) : Except (EvmError × Devm) α) := by
+  show EvmError.halt r ≠ .revert
+  exact fun h => nomatch h
+
+/-- The footprint-generic form of the tag obligation. -/
+def OutcomeNoRevert {σ α : Type} : Footprint.Outcome σ α → Prop
+  | .error q => q.1 ≠ .revert
+  | .ok _ => True
+
+theorem liftOutcome_noRevert {σ α : Type} {get : Devm → σ}
+    {set : Devm → σ → Devm} {core : σ → Footprint.Outcome σ α} {devm : Devm}
+    (h : OutcomeNoRevert (core (get devm))) :
+    NoRevertOut (Footprint.liftOutcome get set core devm) := by
+  unfold Footprint.liftOutcome
+  rcases hc : core (get devm) with ⟨e, v⟩ | ⟨a, v⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  · trivial
+
+theorem toExecution_noRevert {o : Except (EvmError × Devm) (Unit × Devm)}
+    (h : NoRevertOut o) : NoRevertOut (Footprint.toExecution o) := by
+  unfold Footprint.toExecution
+  rcases o with e | ⟨_, d⟩
+  · exact h
+  · trivial
+
+theorem noRevertOut_mapRev {α β : Type} {e : Except (EvmError × Devm) α}
+    (f : α → β) (h : NoRevertOut e) : NoRevertOut (e <&> f) := by
+  cases e with
+  | error p => exact h
+  | ok a => trivial
+
+theorem Mach.pushItem_noRevert (x : B256) (c : Nat) (mach : Mach) :
+    MachNoRevert (Mach.pushItem x c mach) := by
+  unfold Mach.pushItem
+  have h := Mach.chargeGas_noRevert c mach
+  rcases hc : Mach.chargeGas c mach with ⟨e, m⟩ | ⟨a, m⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  · exact Mach.push_noRevert _ _
+
+theorem Mach.applyUnary_noRevert (f : B256 → B256) (c : Nat) (mach : Mach) :
+    MachNoRevert (Mach.applyUnary f c mach) := by
+  unfold Mach.applyUnary
+  have h := Mach.pop_noRevert mach
+  rcases hc : mach.pop with ⟨e, m⟩ | ⟨a, m⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  · exact Mach.pushItem_noRevert _ _ _
+
+theorem Mach.applyBinary_noRevert (f : B256 → B256 → B256) (c : Nat)
+    (mach : Mach) : MachNoRevert (Mach.applyBinary f c mach) := by
+  unfold Mach.applyBinary
+  have h := Mach.pop_noRevert mach
+  rcases hc : mach.pop with ⟨e, m⟩ | ⟨a, m⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  have h' := Mach.pop_noRevert m
+  rcases hc' : m.pop with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+  · exact h'
+  · exact Mach.pushItem_noRevert _ _ _
+
+theorem Mach.applyTernary_noRevert (f : B256 → B256 → B256 → B256) (c : Nat)
+    (mach : Mach) : MachNoRevert (Mach.applyTernary f c mach) := by
+  unfold Mach.applyTernary
+  have h := Mach.pop_noRevert mach
+  rcases hc : mach.pop with ⟨e, m⟩ | ⟨a, m⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  have h' := Mach.pop_noRevert m
+  rcases hc' : m.pop with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+  · exact h'
+  have h'' := Mach.pop_noRevert m'
+  rcases hc'' : m'.pop with ⟨e'', m''⟩ | ⟨a'', m''⟩ <;> rw [hc''] at h'' <;> try dsimp only
+  · exact h''
+  · exact Mach.pushItem_noRevert _ _ _
+
+theorem Mach.popN_noRevert (mach : Mach) (n : Nat) :
+    MachNoRevert (mach.popN n) := by
+  induction n generalizing mach with
+  | zero => trivial
+  | succ n ih =>
+    unfold Mach.popN
+    have h := Mach.pop_noRevert mach
+    rcases hc : mach.pop with ⟨e, m⟩ | ⟨a, m⟩ <;> rw [hc] at h <;> try dsimp only
+    · exact h
+    have h' := ih m
+    rcases hc' : m.popN n with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+    · exact h'
+    · trivial
+
+theorem pushItem_noRevert (x : B256) (c : Nat) (devm : Devm) :
+    NoRevertOut (pushItem x c devm) :=
+  liftMachExecution_noRevert (Mach.pushItem_noRevert x c devm.mach)
+
+theorem applyUnary_noRevert (f : B256 → B256) (c : Nat) (devm : Devm) :
+    NoRevertOut (applyUnary f c devm) :=
+  liftMachExecution_noRevert (Mach.applyUnary_noRevert f c devm.mach)
+
+theorem applyBinary_noRevert (f : B256 → B256 → B256) (c : Nat) (devm : Devm) :
+    NoRevertOut (applyBinary f c devm) :=
+  liftMachExecution_noRevert (Mach.applyBinary_noRevert f c devm.mach)
+
+theorem applyTernary_noRevert (f : B256 → B256 → B256 → B256) (c : Nat)
+    (devm : Devm) : NoRevertOut (applyTernary f c devm) :=
+  liftMachExecution_noRevert (Mach.applyTernary_noRevert f c devm.mach)
+
+theorem Devm.popN_noRevert (devm : Devm) (n : Nat) :
+    NoRevertOut (devm.popN n) :=
+  liftMach_noRevert (Mach.popN_noRevert devm.mach n)
+
+theorem Rinst.balanceCore_noRevert (world : World) (mach : Mach) (view : Meta) :
+    OutcomeNoRevert (Rinst.balanceCore world mach view) := by
+  unfold Rinst.balanceCore
+  have h := Mach.pop_noRevert mach
+  rcases hc : mach.pop with ⟨e, m⟩ | ⟨x, m⟩ <;> rw [hc] at h <;> try dsimp only
+  · exact h
+  generalize (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
+    else gasColdAccountAccess) = cost
+  have h' := Mach.chargeGas_noRevert cost m
+  rcases hc' : Mach.chargeGas cost m with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+  · exact h'
+  have h'' := Mach.push_noRevert ((world.state.get x.toAdr).bal) m'
+  rcases hc'' : Mach.push ((world.state.get x.toAdr).bal) m' with
+    ⟨e'', m''⟩ | ⟨a'', m''⟩ <;> rw [hc''] at h'' <;> try dsimp only
+  · exact h''
+  · trivial
+
+theorem balance_noRevert (devm : Devm) :
+    NoRevertOut (liftMachMetaWorldExecution Rinst.balanceCore devm) :=
+  toExecution_noRevert (liftOutcome_noRevert (Rinst.balanceCore_noRevert _ _ _))
+
+theorem Rinst.runCore_noRevert (pc : Nat) (devm : Devm) (sevm : Sevm)
+    (r : Rinst) : NoRevertOut (Rinst.runCore pc devm sevm r) := by
+  cases r <;> simp only [Rinst.runCore]
+  all_goals
+    repeat' (first
+      | with_reducible exact pushItem_noRevert _ _ _
+      | with_reducible exact applyUnary_noRevert _ _ _
+      | with_reducible exact applyBinary_noRevert _ _ _
+      | with_reducible exact applyTernary_noRevert _ _ _
+      | with_reducible exact balance_noRevert _
+      | with_reducible exact chargeGas_noRevert _ _
+      | with_reducible exact Devm.push_noRevert _ _
+      | with_reducible exact Devm.pop_noRevert _
+      | with_reducible exact Devm.popToNat_noRevert _
+      | with_reducible exact Devm.popToAdr_noRevert _
+      | with_reducible exact Devm.popN_noRevert _ _
+      | with_reducible exact noRevertOut_mapRev _ (Devm.pop_noRevert _)
+      | with_reducible exact assertDynamic_noRevert _ _
+      | with_reducible exact noRevertOut_ok _
+      | with_reducible exact noRevertOut_halt _ _
+      | with_reducible exact assert_noRevert (fun h => nomatch h)
+      | (with_reducible refine noRevertOut_bind ?_ ?_)
+      | (rintro ⟨_, _⟩)
+      | intro _
+      | split)
+
+theorem Jinst.runCore_noRevert (pc : Nat) (devm : Devm) (sevm : Sevm)
+    (j : Jinst) : NoRevertOut (Jinst.runCore pc devm sevm j) := by
+  cases j <;> simp only [Jinst.runCore]
+  all_goals
+    repeat' (first
+      | with_reducible exact chargeGas_noRevert _ _
+      | with_reducible exact Devm.pop_noRevert _
+      | with_reducible exact noRevertOut_ok _
+      | with_reducible exact assert_noRevert (fun h => nomatch h)
+      | (with_reducible refine noRevertOut_bind ?_ ?_)
+      | (rintro ⟨_, _⟩)
+      | intro _
+      | split)
+
+/-- A settled child result that carries no `"Revert"` tag on its error
+channel. -/
+def SettledNoRevert : Except (EvmError × State × AdrSet × Tra) Devm → Prop
+  | .error p => p.1 ≠ .revert
+  | .ok _ => True
+
+theorem handleError_noRevert (raw : Execution) :
+    SettledNoRevert (executeCode.handleError raw) := by
+  rcases raw with ⟨e, d⟩ | d
+  · cases e <;> simp [executeCode.handleError, SettledNoRevert]
+  · trivial
+
+theorem processMessage.settle_noRevert (msg : Msg)
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : SettledNoRevert r) : SettledNoRevert (processMessage.settle msg r) := by
+  rcases r with p | d
+  · exact h
+  · unfold processMessage.settle
+    simp only [bind, Except.bind]
+    split <;> trivial
+
+theorem processCreateMessage.chargeCodeGas_noRevert (rules : ForkRules)
+    (devm : Devm) :
+    NoRevertOut (processCreateMessage.chargeCodeGas rules devm) := by
+  unfold processCreateMessage.chargeCodeGas
+  dsimp only
+  split
+  · exact noRevertOut_halt _ _
+  · refine noRevertOut_bind (chargeGas_noRevert _ _) fun _ => ?_
+    split
+    · exact noRevertOut_halt _ _
+    · trivial
+
+theorem processCreateMessage.settle_noRevert (msg : Msg)
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : SettledNoRevert r) :
+    SettledNoRevert (processCreateMessage.settle msg r) := by
+  rcases r with p | d
+  · exact h
+  · unfold processCreateMessage.settle
+    simp only [bind, Except.bind]
+    split
+    · have hc := processCreateMessage.chargeCodeGas_noRevert
+        msg.benv.stat.rules d
+      split <;> rename_i heq <;> rw [heq] at hc <;>
+        simp_all [SettledNoRevert, NoRevertOut]
+    · trivial
+
+theorem Frame.settleMsg_noRevert (f : Frame)
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : SettledNoRevert r) : SettledNoRevert (f.settleMsg r) := by
+  unfold Frame.settleMsg
+  have h' := processMessage.settle_noRevert f.inner h
+  split
+  · exact processCreateMessage.settle_noRevert f.outer h'
+  · exact h'
+
+theorem Frame.settle_noRevert (f : Frame) (raw : Execution) :
+    SettledNoRevert (f.settle raw) :=
+  Frame.settleMsg_noRevert f (handleError_noRevert raw)
+
+theorem Msg.benvAfterTransfer_noRevert (msg : Msg) {e}
+    (h : msg.benvAfterTransfer = .error e) : e.1 ≠ .revert := by
+  unfold Msg.benvAfterTransfer at h
+  split at h
+  · simp only [bind, Except.bind] at h
+    split at h
+    · rename_i heq
+      unfold Option.toExcept at heq
+      split at heq <;> cases heq
+      cases h
+      exact fun h => nomatch h
+    · cases h
+  · cases h
+
+theorem Frame.enter_done_noRevert {f : Frame} {r}
+    (h : f.enter = .done r) : SettledNoRevert r := by
+  unfold Frame.enter at h
+  split at h
+  · rename_i e he
+    cases h
+    exact Frame.settleMsg_noRevert f (Msg.benvAfterTransfer_noRevert _ he)
+  · split at h
+    · cases h
+    · cases h
+      exact Frame.settle_noRevert _ _
+
+theorem liftToExecution_noRevert (devm : Devm)
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : SettledNoRevert r) : NoRevertOut (liftToExecution devm r) := by
+  rcases r with ⟨e, st, ac, tra⟩ | d
+  · exact h
+  · trivial
+
+theorem Resume.run_noRevert (rsm : Resume)
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : SettledNoRevert r) : NoRevertOut (rsm.run r) := by
+  cases rsm with
+  | create parent newAddress =>
+    refine noRevertOut_bind (liftToExecution_noRevert parent h) fun child => ?_
+    split
+    · exact Devm.push_noRevert _ _
+    · exact Devm.push_noRevert _ _
+  | call parent outputIndex outputSize =>
+    refine noRevertOut_bind (liftToExecution_noRevert parent h) fun child => ?_
+    split
+    · exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
+    · exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
+
+theorem Resume.run_error_noRevert {rsm : Resume}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} {e : EvmError × Devm}
+    (h : SettledNoRevert r) (hr : rsm.run r = .error e) : e.1 ≠ .revert := by
+  have hn := Resume.run_noRevert rsm h
+  rw [hr] at hn
+  exact hn
+
+/-! ### The outcome class the inversion runs over -/
+
+/-- An outcome that is a success or a revert: the class of frame results whose
+every intermediate step succeeded. -/
+def RevertOrOk (ex : Execution) : Prop :=
+  ∀ e d, ex = .error (e, d) → e = .revert
+
+theorem RevertOrOk.not_noRevert_error {ex : Execution} {p : EvmError × Devm}
+    (h : RevertOrOk ex) (heq : ex = .error p) (hn : p.1 ≠ .revert) : False :=
+  hn (h p.1 p.2 heq)
+
+theorem Step.ofExecution_halt {pc : Nat} {x ex : Execution}
+    (h : Step.ofExecution pc x = .halt ex) : ∃ p, x = .error p ∧ ex = .error p := by
+  cases x with
+  | error p => cases h; exact ⟨p, rfl, rfl⟩
+  | ok d => cases h
+
+/-- Every halting step of an ordinary instruction halts with an error that is
+not a revert. -/
+theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
+    (h : Ninst.step evm n = .halt ex) : ∃ p, ex = .error p ∧ p.1 ≠ .revert := by
+  rcases n with r | x | ⟨xs, hxs⟩
+  · rw [Ninst.step_reg] at h
+    obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
+    have hn := Rinst.runCore_noRevert evm.pc evm.dyna evm.sta r
+    exact ⟨p, rfl, by
+      have : NoRevertOut (Rinst.run evm r) := hn
+      rw [hx] at this; exact this⟩
+  · rw [Ninst.step_exec] at h
+    have hn := Xinst.step_noRevert evm.sta evm.dyna x
+    revert hn h
+    generalize Xinst.step evm.sta evm.dyna x = s
+    intro h hn
+    cases s with
+    | done y =>
+      obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
+      refine ⟨p, rfl, ?_⟩
+      have : NoRevertOut y := hn
+      rw [hx] at this; exact this
+    | spawn f rsm => cases h
+  · rw [Ninst.step_push] at h
+    obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
+    refine ⟨p, rfl, ?_⟩
+    have := noRevertOut_bind (chargeGas_noRevert
+      (if xs = [] then gBase else gVerylow) evm.dyna)
+      (fun d => Devm.push_noRevert xs.toB256 d)
+    rw [hx] at this; exact this
+
+/-! ### The `Exec` inversion steps, for a revert-or-success outcome
+
+`Blanc/CommonCore.lean`'s `Ninst.run_of_at`/`Jinst.run_of_at` and
+`Blanc/Compiled.lean`'s `pushAt_exact`, `jumpdest_at_exact`, `jump_at_exact`
+and `jumpi_at_exact` are stated at `.ok post`.  Their siblings below take any
+`RevertOrOk` outcome: the only new cases are the halting and child-error
+ones, and each is refuted by the tag lemmas above. -/
+
+theorem Ninst.run_of_at_revertOrOk {pc sevm pre n exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (nat : Ninst.At sevm.code pc n) :
+    ∃ (inter : Devm) (exc' : Exec (pc + n.size) sevm inter exn),
+      Ninst.Run sevm pre n inter ∧
+      Exec.Deriv.Prec
+        ⟨(pc + n.size), sevm, inter, exn, exc'⟩
+        ⟨pc, sevm, pre, exn, exc⟩ := by
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ n :=
+    Evm.step_next nat
+  cases exc with
+  | halt h =>
+    obtain ⟨p, rfl, hn⟩ := Ninst.step_halt_noRevert (hstep.symm.trans h)
+    exact (hro.not_noRevert_error rfl hn).elim
+  | cont h exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_cont_pc hs
+    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩, Exec.Deriv.Prec.cont h exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
+    exact ⟨trivial, trivial⟩
+  | doneErr h henter hr =>
+    exact (hro.not_noRevert_error rfl
+      (Resume.run_error_noRevert (Frame.enter_done_noRevert henter) hr)).elim
+  | doneOk h henter hr exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_spawn_pc hs
+    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩,
+      Exec.Deriv.Prec.doneOk h henter hr exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
+    exact ⟨_, RunFrame.of_done henter, hr.symm⟩
+  | runErr h henter excChild hr =>
+    exact (hro.not_noRevert_error rfl
+      (Resume.run_error_noRevert (Frame.settle_noRevert _ _) hr)).elim
+  | runOk h henter excChild hr exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_spawn_pc hs
+    refine ⟨_, exc', ⟨.some ⟨_, _⟩, ⟨excChild⟩, pc, ?_⟩,
+      Exec.Deriv.Prec.runOkCont h henter excChild hr exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
+    exact ⟨_, RunFrame.of_run henter, hr.symm⟩
+
+theorem Step.ofJump_halt {j : Except (EvmError × Devm) (Nat × Devm)}
+    {ex : Execution} (h : Step.ofJump j = .halt ex) :
+    ∃ p, j = .error p ∧ ex = .error p := by
+  cases j with
+  | error p => cases h; exact ⟨p, rfl, rfl⟩
+  | ok v => cases h
+
+theorem Jinst.run_of_at_revertOrOk {pc sevm pre j exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (jat : Jinst.At sevm.code pc j) :
+    ∃ (pc' : Nat) (inter : Devm), ∃ (exc' : Exec pc' sevm inter exn),
+      Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) ∧
+      ⟨pc', sevm, inter, exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ = Step.ofJump (j.run ⟨pc, sevm, pre⟩) :=
+    Evm.step_jump jat
+  cases exc with
+  | halt h =>
+    obtain ⟨p, hj, rfl⟩ := Step.ofJump_halt (hstep.symm.trans h)
+    have hn : NoRevertOut (j.run ⟨pc, sevm, pre⟩) :=
+      Jinst.runCore_noRevert pc pre sevm j
+    rw [hj] at hn
+    exact (hro.not_noRevert_error rfl hn).elim
+  | cont h exc' =>
+    exact ⟨_, _, exc', Step.ofJump_cont (hstep.symm.trans h),
+      Exec.Deriv.Prec.cont h exc'⟩
+  | doneErr h _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
+  | doneOk h _ _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
+  | runErr h _ _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
+  | runOk h _ _ _ _ => cases Step.ofJump_ne_spawn (hstep.symm.trans h)
+
+theorem pushAt_exact_revertOrOk {pc sevm pre xs exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (h_at : PushAt sevm.code pc xs) (hne : xs ≠ []) :
+    ∃ (inter : Devm) (exc' : Exec (pc + xs.length + 1) sevm inter exn),
+      Devm.PushBurn [xs.toB256] pre inter ∧
+      pre.stack.length < 1024 ∧
+      pre.gasLeft = inter.gasLeft + gVerylow ∧
+      ⟨pc + xs.length + 1, sevm, inter, exn, exc'⟩ ≺
+        ⟨pc, sevm, pre, exn, exc⟩ := by
+  rcases h_at with ⟨le, h_at⟩
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ =
+      Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) := Evm.step_next h_at
+  cases exc with
+  | halt h =>
+    obtain ⟨p, rfl, hn⟩ := Ninst.step_halt_noRevert (hstep.symm.trans h)
+    exact (hro.not_noRevert_error rfl hn).elim
+  | cont h exc' =>
+    have hs := hstep.symm.trans h
+    rw [Ninst.step_push, if_neg hne] at hs
+    obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
+    cases hpc
+    rcases Devm.pushRun_exact hrun with ⟨hroom, hgas⟩
+    exact ⟨_, exc', Devm.pushBurn_of_run hrun, hroom, hgas,
+      Exec.Deriv.Prec.cont h exc'⟩
+  | doneErr h _ _ =>
+    have hs := hstep.symm.trans h
+    rw [Ninst.step_push] at hs
+    cases Step.ofExecution_ne_spawn hs
+  | doneOk h _ _ _ =>
+    have hs := hstep.symm.trans h
+    rw [Ninst.step_push] at hs
+    cases Step.ofExecution_ne_spawn hs
+  | runErr h _ _ _ =>
+    have hs := hstep.symm.trans h
+    rw [Ninst.step_push] at hs
+    cases Step.ofExecution_ne_spawn hs
+  | runOk h _ _ _ _ =>
+    have hs := hstep.symm.trans h
+    rw [Ninst.step_push] at hs
+    cases Step.ofExecution_ne_spawn hs
+
+theorem jumpdest_at_exact_revertOrOk {pc sevm pre exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (jat : Jinst.At sevm.code pc .jumpdest) :
+    ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter exn),
+      Devm.Burn pre inter ∧
+      pre.gasLeft = inter.gasLeft + gJumpdest ∧
+      ⟨pc + 1, sevm, inter, exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
+  rcases Jinst.run_of_at_revertOrOk exc hro jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jumpdest_run run
+  rcases of_jumpdest_run run with ⟨eq_pc, burn⟩
+  cases eq_pc
+  exact ⟨inter, exc', burn, hgas, prec⟩
+
+theorem jump_at_exact_revertOrOk {pc sevm pre exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (jat : Jinst.At sevm.code pc .jump) :
+    ∃ (x : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter exn),
+      Devm.PopBurn [x] pre inter ∧
+      pre.gasLeft = inter.gasLeft + gMid ∧
+      jumpable sevm.code x.toNat = true ∧
+      ⟨x.toNat, sevm, inter, exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
+  rcases Jinst.run_of_at_revertOrOk exc hro jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jump_run run
+  rcases of_jump_run run with ⟨x, eq_pc, pb, jp⟩
+  cases eq_pc
+  exact ⟨x, inter, exc', pb, hgas, jp, prec⟩
+
+theorem jumpi_at_exact_revertOrOk {pc sevm pre exn}
+    (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
+    (jat : Jinst.At sevm.code pc .jumpi) :
+    ( ∃ (x : B256) (inter : Devm) (exc' : Exec (pc + 1) sevm inter exn),
+        Devm.PopBurn [x, 0] pre inter ∧
+        pre.gasLeft = inter.gasLeft + gHigh ∧
+        ⟨pc + 1, sevm, inter, exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ ) ∨
+    ( ∃ (x y : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter exn),
+        Devm.PopBurn [x, y] pre inter ∧
+        pre.gasLeft = inter.gasLeft + gHigh ∧
+        jumpable sevm.code x.toNat = true ∧ y ≠ 0 ∧
+        ⟨x.toNat, sevm, inter, exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ ) := by
+  rcases Jinst.run_of_at_revertOrOk exc hro jat with ⟨pc', inter, exc', run, prec⟩
+  have hgas := Devm.gasLeft_of_jumpi_run run
+  rcases of_jumpi_run run with ⟨x, pc_eq, pb⟩ | ⟨x, y, pc_eq, pb, je, ne⟩
+  · left; cases pc_eq; exact ⟨x, inter, exc', pb, hgas, prec⟩
+  · right; cases pc_eq; exact ⟨x, y, inter, exc', pb, hgas, je, ne, prec⟩
+
+
+/-! ### The inversion
+
+`Blanc/Compiled.lean`'s `Func.runCompiled_of_exec_core` with the outcome
+generalised from `.ok post` to any `RevertOrOk` outcome.  The recursion
+(`Exec.Deriv.strongRec` over `Prec`), the `subcode` invariant and every
+structural step are that proof's; each `.ok` step lemma is replaced by its
+`RevertOrOk` sibling above, and `.last` closes with the outcome-generic
+`Linst.run_of_at`.  The audited `.ok` theorem is left as it stands, the same
+discipline `Blanc/Reverts.lean` states for its bridge. -/
+
+theorem Func.runCompiledTo_of_exec_core (f : Func) (fs : List Func) :
+    ∀ (pk : Exec.Deriv) (p : Func),
+      Func.pcFree (f :: fs) p = true →
+      some pk.sevm.code.toList = Prog.compile ⟨f, fs⟩ →
+      subcode pk.sevm.code.toList pk.pc (Func.compile (table 0 (f :: fs)) pk.pc p) →
+      RevertOrOk pk.exn →
+      Func.RunCompiledTo (f :: fs) pk.sevm pk.devm p pk.exn := by
+  apply Exec.Deriv.strongRec; intro pk ih p h_pcf h_eq sub hro
+  rcases pk with ⟨pc, sevm, pre, exn, exc⟩
+  simp only at hro ⊢
+  match p with
+  | .last l =>
+    exact Func.RunCompiledTo.last <| Linst.run_of_at exc <| Linst.at_of_slice sub
+  | .next n p =>
+    rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
+    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
+    simp [pure] at h_rw
+    rw [← h_rw] at h_slice
+    clear h_rw cd
+    have h_at : Ninst.At sevm.code pc n := by
+      apply Ninst.at_of_slice
+      apply List.slice_prefix h_slice
+    rcases Ninst.run_of_at_revertOrOk exc hro h_at with
+      ⟨inter, exc', h_run, h_prec⟩
+    rcases Func.pcFree_next h_pcf with ⟨h_n, h_p⟩
+    apply Func.RunCompiledTo.next (Ninst.runCompiled_of_run h_n h_run)
+    have quz :
+      subcode sevm.code.toList (pc + n.size)
+        (Func.compile (table 0 (f :: fs)) (pc + n.size) p) := by
+      rw [h_eq'']
+      simp only [subcode]
+      rw [Ninst.size_eq_length_toBytes]
+      apply List.slice_suffix h_slice
+    exact ih ⟨pc + n.size, sevm, inter, exn, exc'⟩
+      (Exec.Deriv.lt_of_prec h_prec) p h_p h_eq quz hro
+  | .branch p q =>
+    rcases subcode_compile_branch sub with
+      ⟨loc, h_loc, pushAt, h_jumpi, h_scp, h_jumpdest, h_scq⟩
+    rcases Func.pcFree_branch h_pcf with ⟨h_pp, h_pq⟩
+    have h :
+        ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' exn),
+          Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
+          pre.stack.length < 1024 ∧
+          pre.gasLeft = devm'.gasLeft + gVerylow ∧
+          ⟨pc + 3, sevm, devm', exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
+      simp at pushAt
+      rcases pushAt_exact_revertOrOk exc hro ⟨_, pushAt⟩ (by simp) with
+        ⟨s', cr', h, h_room, h_gas, h_prec⟩
+      rw [List.toB256_pair _ h_loc] at h
+      exact ⟨s', cr', h, h_room, h_gas, h_prec⟩
+    rcases h with ⟨devm', exc', pushBurn, h_room, h_gas1, h_prec⟩
+    rcases jumpi_at_exact_revertOrOk exc' hro h_jumpi with
+        ⟨x, devm'', exc'', popBurn, h_gas2, prec⟩
+      | ⟨x, y, devm'', exc'', popBurn, h_gas2, jumpable, ne, prec⟩ <;> clear h_jumpi
+    · clear h_scq h_jumpdest
+      have h_pop' : Devm.PopBurn [0] pre devm'' := by
+        rcases (Devm.pushBurn_cons_popBurn_cons pushBurn popBurn).right
+          with ⟨st, pushBurn', popBurn'⟩
+        apply Devm.popBurn_of_burn_of_popBurn _ popBurn'
+        apply Devm.burn_of_pushBurn_nil pushBurn'
+      apply Func.RunCompiledTo.zero h_room
+        (Devm.PopBurnBy.of_popBurn h_pop' (by omega))
+      have h_lt :
+          Exec.Deriv.lt ⟨pc + 4, sevm, devm'', exn, exc''⟩
+            ⟨pc, sevm, pre, exn, exc⟩ := by
+        refine' ⟨_, _, h_prec⟩
+        apply Exec.Deriv.le.step _ prec
+        apply Exec.Deriv.le.refl _
+      exact ih ⟨pc + 4, sevm, devm'', exn, exc''⟩ h_lt p h_pp h_eq h_scp hro
+    · clear h_scp
+      have h_loc' : loc < 2 ^ 256 := by
+        apply Nat.lt_trans h_loc
+        rw [Nat.pow_lt_pow_iff_right] <;> omega
+      have h : x.toNat = loc ∧ Devm.PopBurn [y] pre devm'' := by
+        rcases Devm.pushBurn_cons_popBurn_cons pushBurn popBurn
+          with ⟨hx, st, pushBurn', popBurn'⟩
+        have h_loc_toNat : loc.toB256.toNat = loc := by
+          rw [B256.toNat_toB256, Nat.lo_eq_of_lt h_loc']
+        rw [← congrArg B256.toNat hx, h_loc_toNat]
+        exact ⟨rfl, Devm.popBurn_of_burn_of_popBurn
+          (Devm.burn_of_pushBurn_nil pushBurn') popBurn'⟩
+      rcases h with ⟨hx, popBurn'⟩
+      rw [← hx] at h_jumpdest
+      rcases jumpdest_at_exact_revertOrOk exc'' hro h_jumpdest with
+        ⟨inter_jd, exc_jd, burn_jd, h_gas3, prec_jd⟩
+      have run : Func.RunCompiledTo (f :: fs) sevm inter_jd q exn := by
+        have h_lt :
+            Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, exn, exc_jd⟩
+              ⟨pc, sevm, pre, exn, exc⟩ := by
+          refine' ⟨_, _, h_prec⟩
+          apply Exec.Deriv.le.step _ prec
+          apply Exec.Deriv.le.step _ prec_jd
+          apply Exec.Deriv.le.refl _
+        rw [← hx] at h_scq
+        exact ih ⟨x.toNat + 1, sevm, inter_jd, exn, exc_jd⟩ h_lt q h_pq h_eq h_scq hro
+      exact Func.RunCompiledTo.succ ne h_room
+        (Devm.PopBurnBy.of_popBurn
+          (Devm.popBurn_of_popBurn_of_pop popBurn' burn_jd) (by omega)) run
+  | .call k =>
+    rcases subcode_compile_call sub with ⟨loc, p, h_get, h_loc, pushAt, h_jump⟩
+    have h_get' : (f :: fs)[k]? = some p := by
+      rw [← @Prog.get?_table 0 k (f :: fs), h_get]; rfl
+    have hd :
+      ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' exn),
+        Devm.PushBurn [loc.toB256] pre devm' ∧
+        pre.stack.length < 1024 ∧
+        pre.gasLeft = devm'.gasLeft + gVerylow ∧
+        ⟨pc + 3, sevm, devm', exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
+      rcases pushAt_exact_revertOrOk exc hro pushAt (by simp) with
+        ⟨inter, exc', h, h_room, h_gas, h_prec⟩
+      rw [List.toB256_pair _ h_loc] at h
+      exact ⟨inter, exc', h, h_room, h_gas, h_prec⟩
+    rcases hd with ⟨devm', exc', h_push, h_room, h_gas1, h_prec⟩
+    rcases jump_at_exact_revertOrOk exc' hro h_jump with
+      ⟨x, devm'', exc'', h_pop, h_gas2, h_jumpable, h_prec'⟩
+    rcases subcode_of_get?_eq_some h_eq h_get with ⟨h_jd, hp⟩; clear h_get
+    have h_loc' : loc < 2 ^ 256 := by
+      apply Nat.lt_trans h_loc
+      rw [Nat.pow_lt_pow_iff_right] <;> omega
+    have h_rw : loc = x.toNat ∧ Devm.Burn pre devm'' := by
+      rcases Devm.pushBurn_cons_popBurn_cons h_push h_pop
+        with ⟨hx, st, pushBurn', popBurn'⟩
+      have h_loc_toNat : loc.toB256.toNat = loc := by
+        rw [B256.toNat_toB256_of_lt h_loc']
+      rw [← congrArg B256.toNat hx, h_loc_toNat]
+      exact ⟨rfl, Devm.burn_trans (Devm.burn_of_pushBurn_nil pushBurn')
+        (Devm.burn_of_popBurn_nil popBurn')⟩
+    rcases h_rw with ⟨h_rw, h_burn⟩
+    rw [h_rw] at h_jd
+    rcases jumpdest_at_exact_revertOrOk exc'' hro h_jd with
+      ⟨inter_jd, exc''', burn_jd, h_gas3, h_prec''⟩
+    rw [h_rw] at hp
+    have h_lt :
+        Exec.Deriv.lt ⟨x.toNat + 1, sevm, inter_jd, exn, exc'''⟩
+          ⟨pc, sevm, pre, exn, exc⟩ := by
+      refine' ⟨_, _, h_prec⟩
+      apply Exec.Deriv.le.step _ h_prec'
+      apply Exec.Deriv.le.step _ h_prec''
+      apply Exec.Deriv.le.refl _
+    have run : Func.RunCompiledTo (f :: fs) sevm inter_jd p exn :=
+      ih ⟨x.toNat + 1, sevm, inter_jd, exn, exc'''⟩ h_lt p
+        (Func.pcFree_call h_pcf h_get') h_eq hp hro
+    exact Func.RunCompiledTo.call h_get' h_room
+      (Devm.BurnBy.of_burn (Devm.burn_trans h_burn burn_jd) (by omega)) run
+
+/-- **Inversion for reverting frames.**  If the total interpreter settles the
+compiled code of a pc-free program with `REVERT`, that frame has a gas-exact
+compiled walk settling at the same outcome.  Only `Linst.run .revert` raises
+`EvmError.revert`, so every step before the terminal one succeeded. -/
+theorem Prog.runCompiledTo_of_exec_revert {sevm : Sevm} {pre d : Devm}
+    {p : Prog}
+    (h_pcf : Prog.pcFree p = true)
+    (h_eq : some sevm.code.toList = p.compile)
+    (h_exec : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledTo sevm pre p (.error (.revert, d)) := by
+  have hro : RevertOrOk (.error (.revert, d)) := by
+    intro e d' h; cases h; rfl
+  obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre _).mpr h_exec
+  rcases @subcode_of_get?_eq_some p.main p.aux sevm.code 0 _ p.main h_eq rfl
+    with ⟨h_at, h_sub⟩
+  rcases jumpdest_at_exact_revertOrOk exc hro h_at with
+    ⟨inter, exc', burn, h_gas, prec⟩
+  refine ⟨inter, Devm.BurnBy.of_burn burn h_gas, ?_⟩
+  exact Func.runCompiledTo_of_exec_core p.main p.aux
+    ⟨1, sevm, inter, _, exc'⟩ p.main h_pcf h_eq h_sub hro
+
 end Blanc
