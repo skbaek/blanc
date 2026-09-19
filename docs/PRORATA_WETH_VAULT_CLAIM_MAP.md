@@ -7,8 +7,9 @@ carried only by finite evidence, and which are **not carried**.
 ## Audit status of the names below
 
 Every name below is audited: it appears in `scripts/AxiomCheck.lean` and is
-pinned at `$STANDARD` in `scripts/check.sh`, so `scripts/check.sh --no-build`
-fails if its axiom set moves. The map names nothing outside that set: the 89
+pinned in `scripts/check.sh` at the axiom set its proof achieves (`$STANDARD`,
+or for some `Nat` lemmas a strict subset of it), so
+`scripts/check.sh --no-build` fails if its axiom set moves. The map names nothing outside that set: the 89
 vault names pinned before 2026-09-19, plus the rows approved on 2026-09-19
 (decision `vault-axiom-audit-rows-20260919`), which are marked †. This map is
 merged only together with those † rows, never ahead of them. An axiom pin fixes
@@ -16,7 +17,8 @@ a theorem's axioms, not its statement; nothing here relies on a statement pin.
 
 Names are given unqualified. Those in `Blanc/ProrataWethVault*.lean` live in
 `Blanc.ProrataWethVault`; those in `Blanc/Composition/ProrataWethVault*.lean`
-live in `Blanc.Composition.ProrataWethVault`.
+live in `Blanc.Composition.ProrataWethVault`; the generic
+`Prog.runCompiledTo_of_exec_revert` lives in `Blanc` (`Blanc/RevertCause.lean`).
 
 ## Scope of every statement
 
@@ -68,7 +70,7 @@ These apply to every row below and to any sentence quoted from this map.
 | The `max*` views return the exact frozen formulas | `maxMint_compiled_effect`, `maxDeposit_compiled_effect`, `maxWithdraw_compiled_effect`, `maxRedeem_compiled_effect`†; at a stable state `maxMint_compiled_effect_stable`, `maxDeposit_compiled_effect_stable`, `maxWithdraw_compiled_effect_exact`; the body effects `maxMint_body_effect`, `maxDeposit_body_effect`, `maxWithdraw_body_effect`, `readTotalAssets_capacity_body_effect`; the resource discharge `Source.totalAssetsResources_of_run` |
 | P1 — exact operation rounding: each flow is the exact formula, never overmints, undercharges, underburns or overpays, with a strict one-quantum residue bound | the four flow effects above, which fix deposit's mint at `convertToSharesN`, mint's charge at `previewMintN`, withdraw's burn at `previewWithdrawN` and redeem's payout at `previewRedeemN`; with `convertToSharesN_floor_le`†, `convertToSharesN_lt_floor_add_one`†, `convertToAssetsN_floor_le`†, `convertToAssetsN_lt_floor_add_one`†, `previewMintN_covers`†, `previewMintN_lt_add_denominator`†, `previewWithdrawN_covers`†, `previewWithdrawN_lt_add_assetFactor`†; and the cross-direction bounds `mint_never_overmints`, `withdraw_never_overpays` |
 | P2, previews half — at the same state, each preview equals the successful actual | jointly, with no single named P2 theorem: each preview effect above and the matching flow effect return the same formula of the same pre-state `(A, S)`. The capacity half is the next row |
-| P2, capacity half — capacity is honest: each `max*` is nonreverting and reachable against the vault's own constraints | carried by <pending>. The partial-correctness `max*` effects above do not carry acceptance. The `Nat` characterisations `le_maxMintN_iff`†, `le_maxDepositN_iff`†, `convertToSharesN_maxDepositN_le_shareRoom`† and `maxWithdrawN_le_assets`† state only the arithmetic side |
+| P2, capacity half — capacity is honest: each `max*` is nonreverting and reachable against the vault's own constraints | Carried, as revert-cause statements about the actual execution, not as liveness. **Flows.** At a stable pair state (`PairStable`), with the named call-validity conditions (zero value, the static ABI head, a nonzero caller, a canonical nonzero receiver and owner, and for a delegated `withdraw`/`redeem` a collision-free allowance key and a covering allowance), if the frame's execution of the exact compiled vault code reverts on `deposit`/`mint`/`withdraw`/`redeem` of an amount at most the corresponding `max*` view's value, then its reverting walk ran a refused exact-WETH child: a `CALL`/`STATICCALL` to the configured WETH account that pushed status 0 — `deposit_exec_revert_visits_refused_weth_child`†, `mint_exec_revert_visits_refused_weth_child`†, `withdraw_exec_revert_visits_refused_weth_child`†, `redeem_exec_revert_visits_refused_weth_child`†. **Views.** Under the direct WETH configuration, `maxDeposit`/`maxMint`/`maxWithdraw` revert only through a refused `balanceOf` — `maxDeposit_exec_revert_visits_refused_weth_child`†, `maxMint_exec_revert_visits_refused_weth_child`†, `maxWithdraw_exec_revert_visits_refused_weth_child`† — and `maxRedeem` never reverts — `maxRedeem_exec_never_reverts`†. **Tightness.** Every successful flow is within `max*` — `deposit_success_within_maxDeposit`†, `mint_success_within_maxMint`†, `withdraw_success_within_maxWithdraw`†, `redeem_success_within_maxRedeem`† — so at the vault's own guards `max*` is exactly the largest accepted amount (`le_maxMintN_iff`†, `le_maxDepositN_iff`†, `le_maxWithdrawN_iff`†, `convertToSharesN_maxDepositN_le_shareRoom`†, with the stable-state view identities `maxDepositViewN_eq_of_stable`†, `maxMintViewN_eq_of_stable`†, `maxWithdrawViewN_eq_of_stable`†). The exec-level forms bind the total interpreter through `Prog.runCompiledTo_of_exec_revert`†; their walk-level cores are `deposit_revert_visits_refused_weth_child`†, `mint_revert_visits_refused_weth_child`†, `withdraw_revert_visits_refused_weth_child`†, `redeem_revert_visits_refused_weth_child`†, `maxDeposit_revert_visits_refused_weth_child`†, `maxMint_revert_visits_refused_weth_child`†, `maxWithdraw_revert_visits_refused_weth_child`† and `maxRedeem_no_reverting_walk`†. **What remains possible.** (1) The refused child itself: for the inbound `transferFrom`, the caller's WETH balance or allowance (external to the vault), and for any exact-WETH child the gas, the call-depth limit or a static context; the outbound payout's liquidity is proved only arithmetically (`maxWithdrawN_le_assets`†), not by a theorem about the WETH program. (2) An exceptional halt of the vault frame — out of gas, or a write in a static context — which is not a revert and which these theorems do not cover; `vault_terminals_return_or_revert`† shows every vault terminal is `RETURN` or a `Func.revert`, so no vault guard is coded as another kind of halt. No theorem here says that a call within `max*` succeeds: there is no liveness or gas-sufficiency claim |
 | The share surface has the stated allowance, return, event and rollback behaviour, and the allowance-key guard is a proved conclusion | `approve_compiled_effect`, `transfer_compiled_effect`, `transferFrom_compiled_effect` |
 | The share ledger is conserved by every vault message, and by every message that makes no external call without any premise about the asset | `vault_message_preserves_conserved` (all twenty-five targets), `vault_nonflow_message_preserves_conserved` |
 | The vault reaches WETH only through three exact child forms, and a failed child rolls back | `DirectWethConfiguration.installed`†, `exactWethCallOccurrence_of_runCompiled`†, `exactWethStatcallOccurrence_of_runCompiled`†, `ExactWethChildSuccess.worldProgramRun`†, `ExactWethChildSuccess.programRun`†, `SuccessfulWethWorldProgramRun.balanceOf_effect`†, `SuccessfulWethProgramRun.balanceOf_effect`†, `SuccessfulWethProgramRun.transfer_effect`†, `SuccessfulWethProgramRun.transferFrom_effect`†, `vault_externalWethCallSites_complete`†, `readTotalAssets_exactEffect`†, `callWethTransferFrom_exactEffect`†, `callWethTransfer_exactEffect`†, `balanceOfStaging_rollback`†, `transferFromStaging_rollback`†, `transferStaging_rollback`† |
@@ -120,7 +122,8 @@ carry none of the chain-level sentences above.
   `two_le_offsetN`.
 - `redemption_le_assets` and `roundtrip_loss_le`. `roundtrip_loss_le` bounds a
   truncated `Nat` difference, so it does not by itself say that a round trip
-  pays at most its input. P1 does not cite it.
+  pays at most its input. P1 does not cite it. The no-profit direction
+  `paid ≤ amount` is `roundtrip_no_profit`†.
 - `inboundEffect_accountingStep`, `outboundEffect_accountingStep`,
   `deposit_message_accountingStep`, `redeem_message_accountingStep`,
   `nonflow_message_accountingStep`, `silent_accountingStep`,
@@ -145,9 +148,7 @@ The 2026-09-04 gaps this map used to list are closed on the chain-level route:
 | Claim sentence | Evidence |
 |---|---|
 | "Finite OpenZeppelin/oracle evidence supports conformance" | Carried as finite evidence, never as a theorem: `scripts/check-prorata-weth-vault-oracle.sh` (12 property batteries over 63 boundary states; the offset-disabled control bites); `scripts/check-prorata-weth-vault-reference.sh` (the vendored OpenZeppelin v5.7.0 closure, compiler input/output and ABI surface identity-checked against the G1 hashes; its self-test's seven corruptions each fail with their own diagnostic and restore green when undone; the selected-wasm recompilation is an optional leg outside the ordered set); `scripts/check-prorata-weth-vault-differential.sh` (47 Jaune check groups over 129 declared cases, 125 implemented and 4 superseded, on the committed runtime and the constructor-patched reference, both agreeing with the oracle; sizes and gas recorded) |
-| `max*` attainability and boundary+1 refusal | Until the capacity row above is carried, only the oracle's tightness batteries and the differential's capacity cases evidence it, finitely |
-
-<!-- H2-CAPACITY-ROW: completed at integration -->
+| `max*` attainability as an actual successful call | The capacity row above proves that a call within `max*` takes no vault revert and that no successful flow exceeds `max*`; it does not prove that a call within `max*` succeeds. Only the oracle's tightness batteries and the differential's capacity cases evidence successful acceptance at the boundary, finitely |
 
 ## Not claimed
 
@@ -159,6 +160,8 @@ The 2026-09-04 gaps this map used to list are closed on the chain-level route:
   section above).
 - No claim that `max*` accounts for a caller's external WETH balance or
   allowance, or for future concurrent state.
+- No liveness or gas-sufficiency claim: a call within `max*` is proved to take
+  no vault revert, not to succeed.
 - No ERC-4626 certification. The standard is the source of the frozen
   statement, not a party to the proof.
 

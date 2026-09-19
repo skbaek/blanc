@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Lean-checked statement pins for common execution, WETH10, Lido, PRORATA,
-# and BeaconDeposit.
+# the PRORATA WETH vault (compiled, capacity, nonrevert, history and attack
+# headlines, and the reverting-walk vocabulary they rest on), and
+# BeaconDeposit.
 
 set -u
 
@@ -18,8 +20,8 @@ fi
 
 claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
   "$ROOT/scripts/ClaimCheck.lean")"
-if [[ "$claim_count" -ne 385 ]]; then
-  echo "REGRESSION — claim inventory: expected 385 pins, found $claim_count"
+if [[ "$claim_count" -ne 448 ]]; then
+  echo "REGRESSION — claim inventory: expected 448 pins, found $claim_count"
   exit 1
 fi
 

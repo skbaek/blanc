@@ -35,6 +35,20 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.BeaconDepositHistoryChain
+import Blanc.RevertCause
+import Blanc.ProrataWethVaultMaxArithmetic
+import Blanc.ProrataWethVaultShares
+import Blanc.ProrataWethVaultViews
+import Blanc.Composition.ProrataWethVaultConversions
+import Blanc.Composition.ProrataWethVaultMessage
+import Blanc.Composition.ProrataWethVaultEnvironment
+import Blanc.Composition.ProrataWethVaultPairHistory
+import Blanc.Composition.ProrataWethVaultAccountingHistory
+import Blanc.Composition.ProrataWethVaultCoalitionHistory
+import Blanc.Composition.ProrataWethVaultLedgerFaithful
+import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
+import Blanc.Composition.ProrataWethVaultNonrevert
+import Blanc.Composition.ProrataWethVaultCapacities
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -4990,6 +5004,1065 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
   victim_loss_bound trace hmoves hdeposit hexit
 
 end Prorata
+
+/-! ## Reverting-walk vocabulary (vault-max-design-v1).
+
+The visiting relation carries the meaning of every PRORATA WETH vault
+nonrevert headline below, so its definition and every constructor type are
+pinned, together with its anti-vacuity projection. -/
+
+example (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (devm : Devm)
+    (p : Prog) (ex : Execution) :
+    Prog.RunCompiledToVisiting P sevm devm p ex =
+      ∃ mid, Devm.BurnBy gJumpdest devm mid ∧
+        Func.RunCompiledToVisiting P (p.main :: p.aux) sevm mid p.main ex :=
+  rfl
+
+example {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {i : Ninst} {f : Func} {ex : Execution}
+    (step : Ninst.RunCompiled sevm devm i devm') (visited : P sevm devm i devm')
+    (tail : Func.RunCompiledTo fs sevm devm' f ex) :
+    Func.RunCompiledToVisiting P fs sevm devm (Func.next i f) ex :=
+  Func.RunCompiledToVisiting.here step visited tail
+
+example {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {i : Ninst} {f : Func} {ex : Execution}
+    (step : Ninst.RunCompiled sevm devm i devm')
+    (tail : Func.RunCompiledToVisiting P fs sevm devm' f ex) :
+    Func.RunCompiledToVisiting P fs sevm devm (Func.next i f) ex :=
+  Func.RunCompiledToVisiting.next step tail
+
+example {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {f g : Func} {ex : Execution}
+    (room : devm.stack.length < 1024)
+    (pop : Devm.PopBurnBy [0] (gVerylow + gHigh) devm devm')
+    (arm : Func.RunCompiledToVisiting P fs sevm devm' f ex) :
+    Func.RunCompiledToVisiting P fs sevm devm (Func.branch f g) ex :=
+  Func.RunCompiledToVisiting.zero room pop arm
+
+example {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {w : B256} {f g : Func} {ex : Execution}
+    (nonzero : w ≠ 0) (room : devm.stack.length < 1024)
+    (pop : Devm.PopBurnBy [w] (gVerylow + gHigh + gJumpdest) devm devm')
+    (arm : Func.RunCompiledToVisiting P fs sevm devm' g ex) :
+    Func.RunCompiledToVisiting P fs sevm devm (Func.branch f g) ex :=
+  Func.RunCompiledToVisiting.succ nonzero room pop arm
+
+example {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm devm' : Devm} {k : Nat} {f : Func} {ex : Execution}
+    (lookup : fs[k]? = some f) (room : devm.stack.length < 1024)
+    (burn : Devm.BurnBy (gVerylow + gMid + gJumpdest) devm devm')
+    (tail : Func.RunCompiledToVisiting P fs sevm devm' f ex) :
+    Func.RunCompiledToVisiting P fs sevm devm (Func.call k) ex :=
+  Func.RunCompiledToVisiting.call lookup room burn tail
+example
+    {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {devm : Devm} {f : Func} {ex : Execution}
+    (h : Func.RunCompiledToVisiting P fs sevm devm f ex) :
+    ∃ (stepPre : Devm) (instruction : Ninst) (stepPost : Devm),
+      Ninst.RunCompiled sevm stepPre instruction stepPost ∧
+        P sevm stepPre instruction stepPost :=
+  Func.RunCompiledToVisiting.exists_step h
+example {sevm : Sevm} {pre d : Devm}
+    {p : Prog}
+    (h_pcf : Prog.pcFree p = true)
+    (h_eq : some sevm.code.toList = p.compile)
+    (h_exec : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledTo sevm pre p (.error (.revert, d)) :=
+  Prog.runCompiledTo_of_exec_revert h_pcf h_eq h_exec
+
+namespace ProrataWethVault
+
+open Jaune.Ninst Ninst
+open scoped LogOutputHinv
+
+/-! ## PRORATA WETH vault — SF §9 P1 rounding statements, the exact capacity
+arithmetic, the round-trip no-profit twin, the ERC-20 share surface and the
+`maxRedeem` view (vault-max-design-v1). -/
+
+example (amount assets supply : Nat) :
+    assetFactorN assets * convertToSharesN amount assets supply ≤
+      amount * denominatorN supply :=
+  convertToSharesN_floor_le amount assets supply
+
+example (amount assets supply : Nat) :
+    amount * denominatorN supply <
+      assetFactorN assets * (convertToSharesN amount assets supply + 1) :=
+  convertToSharesN_lt_floor_add_one amount assets supply
+
+example (shares assets supply : Nat) :
+    denominatorN supply * convertToAssetsN shares assets supply ≤
+      shares * assetFactorN assets :=
+  convertToAssetsN_floor_le shares assets supply
+
+example (shares assets supply : Nat) :
+    shares * assetFactorN assets <
+      denominatorN supply * (convertToAssetsN shares assets supply + 1) :=
+  convertToAssetsN_lt_floor_add_one shares assets supply
+
+example (shares assets supply : Nat) :
+    shares * assetFactorN assets ≤
+      previewMintN shares assets supply * denominatorN supply :=
+  previewMintN_covers shares assets supply
+
+example (shares assets supply : Nat) :
+    previewMintN shares assets supply * denominatorN supply <
+      shares * assetFactorN assets + denominatorN supply :=
+  previewMintN_lt_add_denominator shares assets supply
+
+example (amount assets supply : Nat) :
+    amount * denominatorN supply ≤
+      previewWithdrawN amount assets supply * assetFactorN assets :=
+  previewWithdrawN_covers amount assets supply
+
+example (amount assets supply : Nat) :
+    previewWithdrawN amount assets supply * assetFactorN assets <
+      amount * denominatorN supply + assetFactorN assets :=
+  previewWithdrawN_lt_add_assetFactor amount assets supply
+
+example (amount balance assets supply : Nat) :
+    amount ≤ maxWithdrawN balance assets supply ↔
+      previewWithdrawN amount assets supply ≤ balance :=
+  le_maxWithdrawN_iff amount balance assets supply
+
+example (amount assets supply : Nat) :
+    convertToAssetsN (convertToSharesN amount assets supply)
+        (assets + amount)
+        (supply + convertToSharesN amount assets supply) ≤ amount :=
+  roundtrip_no_profit amount assets supply
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "approve" [.address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ¬ ValidAdr (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0)) ∧
+      allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0) ≠ supplySlot ∧
+      AbiReturnsTrue post ∧
+      Devm.getStor post sevm.currentTarget =
+        (Devm.getStor pre sevm.currentTarget).set
+          (allowanceKey sevm.caller.toB256 (Sevm.argWord sevm 0))
+          (Sevm.argWord sevm 1) ∧
+      (∀ account, sevm.currentTarget ≠ account →
+        Devm.getStor post account = Devm.getStor pre account) ∧
+      post.logs = pre.logs ++
+        [approvalLogEntry sevm (Sevm.argWord sevm 0)
+          (Sevm.argWord sevm 1)] :=
+  approve_compiled_effect memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "transfer" [.address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ ownerBalance receiverBalance,
+        ownerBalance =
+          Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 ∧
+        (Sevm.argWord sevm 1).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).get
+              (Sevm.argWord sevm 0) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 1).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
+            (ownerBalance - Sevm.argWord sevm 1)).set (Sevm.argWord sevm 0)
+              (receiverBalance + Sevm.argWord sevm 1) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm sevm.caller.toB256 (Sevm.argWord sevm 0)
+            (Sevm.argWord sevm 1)] :=
+  transfer_compiled_effect memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "transferFrom" [.address, .address, .uint256]) :
+    sevm.value = 0 ∧
+      sevm.caller.toB256 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Sevm.argWord sevm 0 ≠ 0 ∧
+      ValidAdr (Sevm.argWord sevm 1) ∧
+      Sevm.argWord sevm 1 ≠ 0 ∧
+      AbiReturnsTrue post ∧
+      ¬ ValidAdr (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+      allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256 ≠ supplySlot ∧
+      Devm.getStorVal post sevm.currentTarget supplySlot =
+        Devm.getStorVal pre sevm.currentTarget supplySlot ∧
+      ∃ allowance afterAllowance ownerBalance receiverBalance,
+        allowance = Devm.getStorVal pre sevm.currentTarget
+          (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256) ∧
+        (Sevm.argWord sevm 2).toNat ≤ allowance.toNat ∧
+        ((allowance = B256.max ∧
+            afterAllowance = Devm.getStor pre sevm.currentTarget) ∨
+          afterAllowance = (Devm.getStor pre sevm.currentTarget).set
+            (allowanceKey (Sevm.argWord sevm 0) sevm.caller.toB256)
+            (allowance - Sevm.argWord sevm 2)) ∧
+        ownerBalance = afterAllowance.get (Sevm.argWord sevm 0) ∧
+        (Sevm.argWord sevm 2).toNat ≤ ownerBalance.toNat ∧
+        receiverBalance =
+          (afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).get
+              (Sevm.argWord sevm 1) ∧
+        receiverBalance.toNat + (Sevm.argWord sevm 2).toNat < wordModulusN ∧
+        Devm.getStor post sevm.currentTarget =
+          ((afterAllowance.set (Sevm.argWord sevm 0)
+            (ownerBalance - Sevm.argWord sevm 2)).set (Sevm.argWord sevm 1)
+              (receiverBalance + Sevm.argWord sevm 2)) ∧
+        (∀ account, sevm.currentTarget ≠ account →
+          Devm.getStor post account = Devm.getStor pre account) ∧
+        post.logs = pre.logs ++
+          [transferLogEntry sevm (Sevm.argWord sevm 0) (Sevm.argWord sevm 1)
+            (Sevm.argWord sevm 2)] :=
+  transferFrom_compiled_effect memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (run : Prog.RunCompiled sevm pre vault post)
+    (hselector :
+      Sevm.selector sevm = selector "maxRedeem" [.address]) :
+    sevm.value = 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      WordViewEffect
+        (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 0))
+        pre post :=
+  maxRedeem_compiled_effect run hselector
+
+end ProrataWethVault
+
+namespace Composition.ProrataWethVault
+
+open Jaune.Ninst Ninst
+open scoped LogOutputHinv BigOperators
+open Source
+open _root_.Blanc.ExecutionTrace
+
+/-! ## PRORATA WETH vault — the claim map's compiled, capacity, nonrevert,
+history and attack headlines (vault-max-design-v1).
+
+Each pin carries the headline's exact type and uses the named declaration as
+its body, so a statement change breaks this file while a proof-only refactor
+does not.  The nonrevert pins are exec-level: they bind the frame's actual
+execution through `Prog.runCompiledTo_of_exec_revert`. -/
+
+example :
+    WethChildRefused = fun (_sevm : Sevm) (callPre : Devm) (instruction : Ninst)
+        (callPost : Devm) =>
+      (instruction = Ninst.call ∨ instruction = Ninst.staticcall) ∧
+        callPre.stack[1]? = some wethAccount.toB256 ∧
+        callPost.stack.head? = some (0 : B256) :=
+  rfl
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
+          Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+        InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post :=
+  deposit_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "mint" [.uint256, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        (Sevm.argWord sevm 0).toNat ≤
+          Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
+        InboundEffect sevm (Sevm.argWord sevm 1)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
+            (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post :=
+  mint_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 2) ∧
+        Sevm.argWord sevm 2 ≠ 0 ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 2)).toNat ∧
+        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤ supply.toNat ∧
+        OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post :=
+  withdraw_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    sevm.value = 0 ∧
+      ∃ supply,
+        supply = Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot ∧
+        supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
+        Blanc.ProrataWethVault.previewRedeemN (Sevm.argWord sevm 0).toNat
+            ((pre.state.getStor wethAccount).get
+              sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
+        sevm.caller.toB256 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 1) ∧
+        Sevm.argWord sevm 1 ≠ 0 ∧
+        ValidAdr (Sevm.argWord sevm 2) ∧
+        Sevm.argWord sevm 2 ≠ 0 ∧
+        (Sevm.argWord sevm 0).toNat ≤
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 2)).toNat ∧
+        (Sevm.argWord sevm 0).toNat ≤ supply.toNat ∧
+        OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          (Sevm.argWord sevm 0)
+          (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
+          (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat supply.toNat))
+          pre post :=
+  redeem_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "convertToShares" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  convertToShares_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "convertToAssets" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.convertToAssetsN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.convertToAssetsN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  convertToAssets_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "previewDeposit" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.previewDepositN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.previewDepositN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  previewDeposit_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "previewRedeem" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.previewRedeemN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  previewRedeem_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm = selector "previewMint" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  previewMint_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "previewWithdraw" [.uint256]) :
+    sevm.value = 0 ∧
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN ∧
+      Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  previewWithdraw_compiled_effect config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
+    (stable :
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "maxDeposit" [.address]) :
+    sevm.value = 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Blanc.ProrataWethVault.maxDepositN
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.maxDepositN
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  maxDeposit_compiled_effect_stable config memoryWf receiverNonzero stable run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
+    (stable :
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "maxMint" [.address]) :
+    sevm.value = 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Blanc.ProrataWethVault.maxMintN
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.maxMintN
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  maxMint_compiled_effect_stable config memoryWf receiverNonzero stable run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (stable :
+      (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
+        Blanc.ProrataWethVault.maxSupplyN)
+    (balanceLe :
+      (Devm.getStorVal pre sevm.currentTarget
+          (Sevm.argWord sevm 0)).toNat ≤
+        (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "maxWithdraw" [.address]) :
+    sevm.value = 0 ∧
+      ValidAdr (Sevm.argWord sevm 0) ∧
+      Blanc.ProrataWethVault.maxWithdrawN
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 0)).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat <
+        wordModulusN ∧
+      Blanc.ProrataWethVault.WordViewEffect
+        (Nat.toB256 (Blanc.ProrataWethVault.maxWithdrawN
+          (Devm.getStorVal pre sevm.currentTarget
+            (Sevm.argWord sevm 0)).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
+        pre post :=
+  maxWithdraw_compiled_effect_exact config memoryWf stable balanceLe run selectorEq
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 2)) = 0)
+    (callerNonzero : sevm.caller.toB256 ≠ 0)
+    (receiverValid : ValidAdr (Sevm.argWord sevm 1))
+    (receiverNonzero : Sevm.argWord sevm 1 ≠ 0)
+    (withinMax :
+      (Sevm.argWord sevm 0).toNat ≤
+        Blanc.ProrataWethVault.maxDepositViewN (Sevm.argWord sevm 1).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget
+            Blanc.ProrataWethVault.supplySlot).toNat)
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  deposit_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq :
+      Sevm.selector sevm = selector "mint" [.uint256, .address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 2)) = 0)
+    (callerNonzero : sevm.caller.toB256 ≠ 0)
+    (receiverValid : ValidAdr (Sevm.argWord sevm 1))
+    (receiverNonzero : Sevm.argWord sevm 1 ≠ 0)
+    (withinMax :
+      (Sevm.argWord sevm 0).toNat ≤
+        Blanc.ProrataWethVault.maxMintViewN (Sevm.argWord sevm 1).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget
+            Blanc.ProrataWethVault.supplySlot).toNat)
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  mint_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 3)) = 0)
+    (callerNonzero : sevm.caller.toB256 ≠ 0)
+    (receiverValid : ValidAdr (Sevm.argWord sevm 1))
+    (receiverNonzero : Sevm.argWord sevm 1 ≠ 0)
+    (ownerValid : ValidAdr (Sevm.argWord sevm 2))
+    (ownerNonzero : Sevm.argWord sevm 2 ≠ 0)
+    (withinMax :
+      (Sevm.argWord sevm 0).toNat ≤
+        Blanc.ProrataWethVault.maxWithdrawViewN
+          (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat
+          ((pre.state.getStor wethAccount).get
+            sevm.currentTarget.toB256).toNat
+          (Devm.getStorVal pre sevm.currentTarget
+            Blanc.ProrataWethVault.supplySlot).toNat)
+    (authorized :
+      sevm.caller.toB256 = Sevm.argWord sevm 2 ∨
+        (¬ ValidAdr (Blanc.ProrataWethVault.allowanceKey
+            (Sevm.argWord sevm 2) sevm.caller.toB256) ∧
+          Blanc.ProrataWethVault.allowanceKey (Sevm.argWord sevm 2)
+              sevm.caller.toB256 ≠ Blanc.ProrataWethVault.supplySlot ∧
+          Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
+              ((pre.state.getStor wethAccount).get
+                sevm.currentTarget.toB256).toNat
+              (Devm.getStorVal pre sevm.currentTarget
+                Blanc.ProrataWethVault.supplySlot).toNat ≤
+            (Devm.getStorVal pre sevm.currentTarget
+              (Blanc.ProrataWethVault.allowanceKey (Sevm.argWord sevm 2)
+                sevm.caller.toB256)).toNat))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  withdraw_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax authorized reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 3)) = 0)
+    (callerNonzero : sevm.caller.toB256 ≠ 0)
+    (receiverValid : ValidAdr (Sevm.argWord sevm 1))
+    (receiverNonzero : Sevm.argWord sevm 1 ≠ 0)
+    (ownerValid : ValidAdr (Sevm.argWord sevm 2))
+    (ownerNonzero : Sevm.argWord sevm 2 ≠ 0)
+    (withinMax :
+      (Sevm.argWord sevm 0).toNat ≤
+        Blanc.ProrataWethVault.maxRedeemN
+          (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat)
+    (authorized :
+      sevm.caller.toB256 = Sevm.argWord sevm 2 ∨
+        (¬ ValidAdr (Blanc.ProrataWethVault.allowanceKey
+            (Sevm.argWord sevm 2) sevm.caller.toB256) ∧
+          Blanc.ProrataWethVault.allowanceKey (Sevm.argWord sevm 2)
+              sevm.caller.toB256 ≠ Blanc.ProrataWethVault.supplySlot ∧
+          (Sevm.argWord sevm 0).toNat ≤
+            (Devm.getStorVal pre sevm.currentTarget
+              (Blanc.ProrataWethVault.allowanceKey (Sevm.argWord sevm 2)
+                sevm.caller.toB256)).toNat))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  redeem_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax authorized reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxDeposit" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  maxDeposit_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxMint" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  maxMint_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+
+example
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxWithdraw" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
+  maxWithdraw_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+
+example
+    {sevm : Sevm} {pre : Devm}
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxRedeem" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (d : Devm) :
+    exec ⟨0, sevm, pre⟩ ≠ .error (.revert, d) :=
+  maxRedeem_exec_never_reverts codeEq selectorEq valueZero argsPresent argValid d
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
+    (Sevm.argWord sevm 0).toNat ≤
+      Blanc.ProrataWethVault.maxDepositViewN (Sevm.argWord sevm 1).toNat
+        ((pre.state.getStor wethAccount).get
+          sevm.currentTarget.toB256).toNat
+        (Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot).toNat :=
+  deposit_success_within_maxDeposit config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq :
+      Sevm.selector sevm = selector "mint" [.uint256, .address]) :
+    (Sevm.argWord sevm 0).toNat ≤
+      Blanc.ProrataWethVault.maxMintViewN (Sevm.argWord sevm 1).toNat
+        ((pre.state.getStor wethAccount).get
+          sevm.currentTarget.toB256).toNat
+        (Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot).toNat :=
+  mint_success_within_maxMint config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "withdraw" [.uint256, .address, .address]) :
+    (Sevm.argWord sevm 0).toNat ≤
+      Blanc.ProrataWethVault.maxWithdrawViewN
+        (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat
+        ((pre.state.getStor wethAccount).get
+          sevm.currentTarget.toB256).toNat
+        (Devm.getStorVal pre sevm.currentTarget
+          Blanc.ProrataWethVault.supplySlot).toNat :=
+  withdraw_success_within_maxWithdraw config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (selectorEq : Sevm.selector sevm =
+      selector "redeem" [.uint256, .address, .address]) :
+    (Sevm.argWord sevm 0).toNat ≤
+      Blanc.ProrataWethVault.maxRedeemN
+        (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat :=
+  redeem_success_within_maxRedeem config memoryWf run selectorEq
+
+example
+    {sevm : Sevm} {pre post : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
+      (Devm.getStor pre sevm.currentTarget)) :
+    LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post sevm.currentTarget) :=
+  vault_message_preserves_conserved config memoryWf run conserved
+
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (reach : BlockChain.ReachUsing cfg deployed future) :
+    ∃ steps, PairTraceRealizes root steps future ∧
+      (PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∨
+        ∃ r ∈ steps, 0 < r.step.debitAmount) :=
+  pair_reachable_backed_or_debit root reach
+
+example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    PairStable vault rules future.state :=
+  pair_reachable_stable root realizes collision rulesAt
+
+example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    {steps : List (PairStepRecord vault)} {future : BlockChain}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
+      State.Inv wethAccount future.state :=
+  pair_reachable_backed root realizes collision
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
+      State.Inv wethAccount future.state :=
+  pair_history_backed root history collision
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    PairStable vault rules future.state :=
+  pair_history_stable root history collision rulesAt
+
+example (vault : Adr) (frame : Exec.Frame)
+    (weth : frame.exactInvocation Blanc.weth wethAccount wethAccount)
+    (fresh : Exec.FreshEntry frame.sevm frame.pre)
+    (callerNotVault : frame.sevm.caller ≠ vault) :
+    (Stor.rest (Devm.getStor frame.post wethAccount) vault =
+        Stor.rest (Devm.getStor frame.pre wethAccount) vault) ∨
+      (∃ (source : Adr) (wad : B256), source ≠ vault ∧ 0 < wad.toNat ∧
+        Transfer (Stor.rest (Devm.getStor frame.pre wethAccount)) source wad
+          vault (Stor.rest (Devm.getStor frame.post wethAccount))) ∨
+      (∃ call : WethAllowanceInvocation, call.approval = false ∧
+        call.sevm = frame.sevm ∧ call.pre = frame.pre ∧
+        call.post = frame.post ∧
+        Sevm.argWord call.sevm 0 = vault.toB256 ∧
+        call.pair? = some (vault.toB256, call.sevm.caller.toB256)) ∨
+      (∃ callPre callPost : Devm,
+        Stor.rest (Devm.getStor callPre wethAccount) vault =
+            Stor.rest (Devm.getStor frame.pre wethAccount) vault ∧
+          Ninst.Run frame.sevm callPre Ninst.call callPost ∧
+          Devm.getStor frame.post = Devm.getStor callPost) :=
+  wethFrame_vaultRow_classified vault frame weth fresh callerNotVault
+
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault) {steps : List (PairStepRecord vault)}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    ∃ path : FourQuote.RealizedPath vault,
+      path.steps = PairStepRecord.fourQuoteSteps steps ∧
+      path.snapshotAt 0 = ⟨0, 0⟩ ∧
+      path.snapshotAt path.steps.length = FourQuote.stateSnapshot vault future.state ∧
+      path.xAt 0 = 1 ∧
+      path.dAt 0 = Blanc.ProrataWethVault.offsetN ∧
+      path.xAt path.steps.length * (∏ j ∈ Finset.range path.steps.length, path.dAt j) =
+        (∏ j ∈ Finset.Icc 1 path.steps.length, path.dAt j) +
+          (∑ i ∈ Finset.range path.steps.length,
+            path.roundingAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j)) +
+          (∑ i ∈ Finset.range path.steps.length,
+            path.retainedAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j)) +
+          ∑ i ∈ Finset.range path.steps.length,
+            path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j) :=
+  pair_realized_dust_trace_exact root realizes collision
+
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
+    ∃ path : FourQuote.RealizedPath vault,
+      path.steps = PairStepRecord.fourQuoteSteps steps ∧
+      path.snapshotAt 0 = ⟨0, 0⟩ ∧
+      path.snapshotAt path.steps.length = FourQuote.stateSnapshot vault future.state ∧
+      path.xAt 0 = 1 ∧
+      path.dAt 0 = Blanc.ProrataWethVault.offsetN ∧
+      path.xAt path.steps.length * (∏ j ∈ Finset.range path.steps.length, path.dAt j) =
+        (∏ j ∈ Finset.Icc 1 path.steps.length, path.dAt j) +
+          (∑ i ∈ Finset.range path.steps.length,
+            path.roundingAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j)) +
+          (∑ i ∈ Finset.range path.steps.length,
+            path.retainedAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j)) +
+          ∑ i ∈ Finset.range path.steps.length,
+            path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
+              (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j) :=
+  pair_history_realized_dust_trace_exact root history collision
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairOpenAttackTrace root coalition victim charge steps future) :
+    outA victim charge steps + sharesOut victim steps ≤
+      inA victim charge steps + outsideSubsidy victim charge steps + sharesIn victim steps :=
+  pair_attacker_open_context trace
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
+    {steps : List (PairStepRecord vault)}
+    (trace : PairAttackTrace root coalition victim steps future) :
+    outA victim coalitionCharge steps + sharesOut victim steps ≤
+      inA victim coalitionCharge steps + sharesIn victim steps :=
+  pair_attacker_no_profit trace
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    {root : PairRoot cfg deployed vault} {victim : Adr}
+    {steps : List (PairStepRecord vault)}
+    (realizes : PairTraceRealizes root steps future)
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    {deposit exit : PairStepRecord vault} {v m p : Nat}
+    (hmoves : victimMoves victim steps = [deposit, exit])
+    (hdeposit : deposit.flow = .inbound victim victim v m true)
+    (hexit : exit.flow = .outbound victim victim m p true false) :
+    v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + Blanc.ProrataWethVault.offsetN) + 1 :=
+  pair_victim_loss_bound realizes collision hmoves hdeposit hexit
+
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
+      ∀ (coalition : Finset Adr) (victim : Adr)
+        (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution),
+        victim ∉ coalition →
+        (∀ r ∈ steps, ∀ x : Adr, r.provenance.actor = some x → x ≠ victim → x ∈ coalition) →
+        VictimSchedule victim steps →
+        outA victim charge steps + sharesOut victim steps ≤
+          inA victim charge steps + outsideSubsidy victim charge steps + sharesIn victim steps :=
+  pair_history_attacker_open_context root history collision
+
+example {cfg : ChainConfig} {deployed future : BlockChain}
+    {vault : Adr} (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
+      ∀ (victim : Adr) (deposit exit : PairStepRecord vault) (v m p : Nat),
+        victimMoves victim steps = [deposit, exit] →
+        deposit.flow = .inbound victim victim v m true →
+        exit.flow = .outbound victim victim m p true false →
+        v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + Blanc.ProrataWethVault.offsetN) + 1 :=
+  pair_history_victim_loss_bound root history collision
+
+example :
+    ∃ state : PairAttackState Blanc.ProrataWethVault.offsetN,
+      PairAttackPath Blanc.ProrataWethVault.offsetN state ∧
+        state.inA = 1000001 ∧ state.outA = 500125 ∧ state.outsideSubsidy = 0 ∧
+        state.sharesIn = 0 ∧ state.sharesOut = 0 :=
+  pair_attack_carrier_inhabited
+
+end Composition.ProrataWethVault
 
 namespace BeaconDeposit
 
