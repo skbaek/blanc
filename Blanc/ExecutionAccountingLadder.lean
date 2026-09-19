@@ -19,6 +19,7 @@ import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistoryEffects
+import Blanc.ExecutionTraceSettledFrames
 
 namespace Blanc
 
@@ -121,19 +122,19 @@ namespace ReplayCarrier
 
 variable {ca : Adr}
 
-/-- A direct world-state balance credit is one positive credit at `ca` or no
-step at all. -/
-theorem ofAddBal (C : ReplayCarrier ca) (tag : C.Tag)
+/-- `ofAddBal`, observed: the credit it may produce is observed as nothing. -/
+theorem ofAddBal_observed (C : ReplayCarrier ca) (V : ReplayObservation C)
+    (tag : C.Tag)
     {target : Adr} {pre : State} {value : B256}
     (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
     ∃ steps, C.Replay (C.ofState pre) steps
-      (C.ofState (pre.addBal target value)) := by
+      (C.ofState (pre.addBal target value)) ∧ V.obs steps = [] := by
   have storage_eq :
       (pre.addBal target value).getStor ca = pre.getStor ca := by
     show ((pre.setBal target (pre.bal target + value)).get ca).stor =
       (pre.get ca).stor
     rw [State.setBal_get_stor]
-  apply C.ofStorageEqBalanceMono tag storage_eq
+  apply C.ofStorageEqBalanceMono_observed V tag storage_eq
   by_cases target_eq : target = ca
   · subst target
     have nof : B256.Nof (pre.bal ca) value := by
@@ -153,6 +154,17 @@ theorem ofAddBal (C : ReplayCarrier ca) (tag : C.Tag)
     exact le_of_eq (congrArg B256.toNat balance_eq.symm)
 -- mirrors ProrataRealizedAccounting.lean:1052–1106; the positive/zero split is
 -- delegated to `ofStorageEqBalanceMono` (ExecutionAccountingReplay.lean:473).
+
+
+/-- A direct world-state balance credit is one positive credit at `ca` or no
+step at all. -/
+theorem ofAddBal (C : ReplayCarrier ca) (tag : C.Tag)
+    {target : Adr} {pre : State} {value : B256}
+    (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
+    ∃ steps, C.Replay (C.ofState pre) steps
+      (C.ofState (pre.addBal target value)) := by
+  exact (C.ofAddBal_observed (ReplayObservation.trivial C) tag sum_nof).imp
+    fun _ replay => replay.1
 
 end ReplayCarrier
 
@@ -192,14 +204,66 @@ structure AccountingLadder (S : ContractSpec) (ca : Adr) where
       (carrier.ofState (Execution.committedPost out committed).state)
   preserves : S.Preserves ca
 
+/-! ## 2.3' The observed ladder
+
+An `Observed` ladder is a ladder together with an observation of its carrier's
+step lists and a root law that observes exactly the root's committed frames.
+Every rung below is proved once, observed; the unobserved rungs of §2.4 are the
+observed ones read through `Observed.trivial`, which observes nothing. -/
+
+open _root_.Blanc.ExecutionTrace in
+/-- A colliding CREATE wrapper runs no frame. -/
+theorem _root_.Blanc.ExecutionTrace.MessageCallTrace.settledFrames_eq_nil_of_collision
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (receiver : msg.target.isNone = true)
+    (collision : messageCreateCollision msg = true) :
+    trace.settledFrames = [] := by
+  cases trace with
+  | createCollision => rfl
+  | createRun _ noCollision => simp_all
+  | callRun noTarget => simp_all
+
 namespace AccountingLadder
 
-variable {S : ContractSpec} {ca : Adr}
+/-- A ladder with an observation of its steps whose root replay observes
+exactly the root's committed frames. -/
+structure Observed {S : ContractSpec} {ca : Adr} (L : AccountingLadder S ca) where
+  view : ReplayObservation L.carrier
+  root : ∀ (_blockIndex : Nat) (_transactionIndex : Option Nat)
+    {msg : Msg} {entry : Benv} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out),
+    msg.benvAfterTransfer = .ok entry →
+    (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv entry) →
+    ∀ committed : Execution.commits out = true,
+    S.MessageRunReady ca msg →
+    (msg.currentTarget = ca → msg.caller ≠ ca) →
+    sum msg.benv.state.bal < 2 ^ 256 →
+    ∃ steps, L.carrier.Replay (L.carrier.frameEntry sevm pre.state) steps
+      (L.carrier.ofState (Execution.committedPost out committed).state) ∧
+      view.obs steps = (Exec.committedFrames run).flatMap view.frameObs
 
-/-! ## 2.4 The rungs -/
+namespace Observed
 
-/-- G1.  One retained CALL message. -/
-theorem processMessage (L : AccountingLadder S ca)
+variable {S : ContractSpec} {ca : Adr} {L : AccountingLadder S ca}
+
+/-- Every ladder is observed by the observation that sees nothing. -/
+def trivial (L : AccountingLadder S ca) : L.Observed where
+  view := ReplayObservation.trivial L.carrier
+  root := by
+    intro blockIndex transactionIndex msg entry pc sevm pre out run transfer
+      evmEq committed runReady callerNe sumNof
+    exact (L.root blockIndex transactionIndex run transfer evmEq committed
+      runReady callerNe sumNof).imp fun _ replay =>
+        ⟨replay, by simp [ReplayObservation.trivial]⟩
+
+private theorem ite_flatMap {α β : Type} (c : Prop) [Decidable c]
+    (l : List α) (f : α → List β) :
+    (if c then l else []).flatMap f = if c then l.flatMap f else [] := by
+  split <;> simp
+
+/-- G1, observed. -/
+theorem processMessage (O : L.Observed)
     {msg : Msg} {post : Devm}
     (trace : ExecutionTrace.ProcessMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
@@ -207,28 +271,36 @@ theorem processMessage (L : AccountingLadder S ca)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
-      (L.carrier.ofState post.state) := by
+      (L.carrier.ofState post.state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
   | none =>
-      exact L.carrier.ofStorageEqBalanceMono (L.tag blockIndex transactionIndex)
-        (congrFun
-          (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
-            process) ca)
-        (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
-          runReady.ready.ne sumNof)
+      obtain ⟨steps, replay, observed⟩ :=
+        L.carrier.ofStorageEqBalanceMono_observed O.view
+          (L.tag blockIndex transactionIndex)
+          (congrFun
+            (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
+              process) ca)
+          (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
+            runReady.ready.ne sumNof)
+      exact ⟨steps, replay, by simp [observed]⟩
   | @some pc sevm pre out run =>
-      apply L.carrier.processMessage_of_body process runReady.ready.ne
-        runReady.ready.val0 sumNof
-      intro committed
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
-      exact L.root blockIndex transactionIndex run transfer evmEq committed
-        runReady callerNe sumNof
+      obtain ⟨steps, replay, observed⟩ :=
+        L.carrier.toSettlementCarrier.processMessage_of_body_observed
+          O.view.obs O.view.obs_nil process runReady.ready.ne
+          runReady.ready.val0 sumNof fun committed =>
+            O.root blockIndex transactionIndex run transfer evmEq committed
+              runReady callerNe sumNof
+      refine ⟨steps, replay, ?_⟩
+      rw [observed]
+      simp only [ExecutionTrace.ProcessMessageTrace.settledFrames, ite_flatMap]
 -- mirrors ProrataAccountingExec.lean:632–655.
 
-/-- G2.  One retained CREATE constructor at a fresh foreign address. -/
-theorem processCreateMessage (L : AccountingLadder S ca)
+/-- G2, observed. -/
+theorem processCreateMessage (O : L.Observed)
     {msg : Msg} {post : Devm}
     (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
@@ -238,20 +310,21 @@ theorem processCreateMessage (L : AccountingLadder S ca)
     (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
-      (L.carrier.ofState post.state) := by
+      (L.carrier.ofState post.state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
   | none =>
-      exact L.carrier.ofStorageEqBalanceMono (L.tag blockIndex transactionIndex)
-        (congrFun
-          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
-            process fresh) ca)
-        (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
-          runReady.ready.ne sumNof)
+      obtain ⟨steps, replay, observed⟩ :=
+        L.carrier.ofStorageEqBalanceMono_observed O.view
+          (L.tag blockIndex transactionIndex)
+          (congrFun
+            (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
+              process fresh) ca)
+          (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
+            runReady.ready.ne sumNof)
+      exact ⟨steps, replay, by simp [observed]⟩
   | @some pc sevm pre out run =>
-      apply L.carrier.processCreateMessage_of_body process runReady.ready.ne
-        runReady.ready.val0 fresh sumNof
-      intro committed
       have preparedInv :=
         runReady.ready.processCreateMessage_msg targetNone targetNe
       have preparedTargetNe :
@@ -265,16 +338,23 @@ theorem processCreateMessage (L : AccountingLadder S ca)
         exact sumNof
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
-      exact L.root blockIndex transactionIndex run transfer evmEq committed
-        (preparedInv.runReady_of_foreign preparedTargetNe)
-        (fun target => absurd target preparedTargetNe) preparedSum
+      obtain ⟨steps, replay, observed⟩ :=
+        L.carrier.toSettlementCarrier.processCreateMessage_of_body_observed
+          O.view.obs O.view.obs_nil process runReady.ready.ne
+          runReady.ready.val0 fresh sumNof fun committed =>
+            O.root blockIndex transactionIndex run transfer evmEq committed
+              (preparedInv.runReady_of_foreign preparedTargetNe)
+              (fun target => absurd target preparedTargetNe) preparedSum
+      refine ⟨steps, replay, ?_⟩
+      rw [observed]
+      simp only [ExecutionTrace.ProcessCreateMessageTrace.settledFrames,
+        ite_flatMap]
 -- mirrors ProrataAccountingExec.lean:673–707.  The root caller clause is
 -- vacuous at a foreign prepared target, so G2 takes no `callerNe`.
 
 open _root_.Blanc.ExecutionTrace in
-/-- G3.  The settled message-call wrapper (create collision, CREATE run, and
-EIP-7702-normalized call). -/
-theorem messageCall (L : AccountingLadder S ca)
+/-- G3, observed. -/
+theorem messageCall (O : L.Observed)
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (runReady : S.MessageRunReady ca msg)
@@ -282,22 +362,30 @@ theorem messageCall (L : AccountingLadder S ca)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
-      (L.carrier.ofState state) := by
+      (L.carrier.ofState state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   cases trace with
   | createCollision targetNone collision result =>
       have stateEq :=
         processMessageCall_createCollision_state_eq targetNone collision result
-      exact L.carrier.ofStorageEqBalanceMono (L.tag blockIndex transactionIndex)
-        (by rw [stateEq]) (by rw [stateEq])
+      obtain ⟨steps, replay, observed⟩ :=
+        L.carrier.ofStorageEqBalanceMono_observed O.view
+          (L.tag blockIndex transactionIndex)
+          (pre := msg.benv.state) (post := state)
+          (by rw [stateEq]) (by rw [stateEq])
+      exact ⟨steps, replay, by simp [observed]⟩
   | createRun targetNone collision evm core inner result =>
       have targetNe : msg.currentTarget ≠ ca := by
         rcases runReady.codeOrForeign with call | foreign
         · exact Bool.noConfusion (targetNone.symm.trans call)
         · exact foreign
       have fresh := messageCreateCollision_false_getStor_eq_empty collision
+      obtain ⟨steps, replay, observed⟩ :=
+        O.processCreateMessage inner runReady sumNof targetNone targetNe
+          fresh blockIndex transactionIndex
+      refine ⟨steps, ?_, by simpa using observed⟩
       rw [processMessageCall_createRun_state_eq targetNone collision core result]
-      exact L.processCreateMessage inner runReady sumNof targetNone targetNe
-        fresh blockIndex transactionIndex
+      exact replay
   | callRun targetSome delegated refund delegation execMsg execMsgEq evm
       core inner result =>
       subst execMsgEq
@@ -340,15 +428,17 @@ theorem messageCall (L : AccountingLadder S ca)
             2 ^ 256 := by
         rw [balEq]
         exact sumNof
+      obtain ⟨steps, replay, observed⟩ :=
+        O.processMessage inner execReady execCallerNe execSum
+          blockIndex transactionIndex
+      refine ⟨steps, ?_, by simpa using observed⟩
       rw [stateEq, ← snapshotEq]
-      exact L.processMessage inner execReady execCallerNe execSum
-        blockIndex transactionIndex
+      exact replay
 -- mirrors ProrataAccountingExec.lean:726–779.
 
 open _root_.Blanc.ExecutionTrace in
-/-- G3'.  A transaction's prepared message, including the create-at-`ca` case,
-which the collision test turns into a no-op. -/
-theorem transactionMessage (L : AccountingLadder S ca)
+/-- G3', observed. -/
+theorem transactionMessage (O : L.Observed)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
@@ -356,13 +446,15 @@ theorem transactionMessage (L : AccountingLadder S ca)
     (sumNof : sum trace.msg.benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState trace.msg.benv.state) steps
-      (L.carrier.ofState trace.messageState) := by
+      (L.carrier.ofState trace.messageState) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   have transfer : trace.msg.shouldTransferValue = true :=
     trace.msg_shouldTransferValue
+  simp only [TransactionTrace.settledFrames]
   by_cases target : trace.msg.currentTarget = ca
   · cases receiver : trace.msg.target.isNone with
     | false =>
-        exact L.messageCall trace.message (msgInv.runReady_of_call receiver)
+        exact O.messageCall trace.message (msgInv.runReady_of_call receiver)
           (fun _ => msgInv.ne transfer) sumNof blockIndex transactionIndex
     | true =>
         have collision : messageCreateCollision trace.msg = true := by
@@ -375,14 +467,16 @@ theorem transactionMessage (L : AccountingLadder S ca)
         have stateEq : trace.messageState = trace.msg.benv.state :=
           processMessageCall_createCollision_state_eq receiver collision
             trace.message.result
-        exact ⟨[], L.carrier.nilOfEq (congrArg L.carrier.ofState stateEq)⟩
-  · exact L.messageCall trace.message (msgInv.runReady_of_foreign target)
+        refine ⟨[], L.carrier.nilOfEq (congrArg L.carrier.ofState stateEq), ?_⟩
+        rw [trace.message.settledFrames_eq_nil_of_collision receiver collision]
+        simpa using O.view.obs_nil
+  · exact O.messageCall trace.message (msgInv.runReady_of_foreign target)
       (fun current => absurd current target) sumNof blockIndex transactionIndex
 -- mirrors ProrataAccountingTransaction.lean:37–61.
 
 open _root_.Blanc.ExecutionTrace in
-/-- G4.  One whole retained transaction. -/
-theorem transaction (L : AccountingLadder S ca)
+/-- G4, observed: the two gas credits are observed as nothing. -/
+theorem transaction (O : L.Observed)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
@@ -391,7 +485,8 @@ theorem transaction (L : AccountingLadder S ca)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
-      (L.carrier.ofState state) := by
+      (L.carrier.ofState state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   rcases trace.exists_stateChronology with ⟨chronology⟩
   have senderNe : trace.sender ≠ ca := trace.sender_ne inv notCreated
   -- (1) nonce bump and fee debit: invisible at `ca`
@@ -403,19 +498,19 @@ theorem transaction (L : AccountingLadder S ca)
     exact L.carrier.silent trace.debitState_getStor_eq
       (congrArg B256.toNat (trace.debitState_bal_eq senderNe))
   -- (2) the prepared message, by G3'
-  obtain ⟨messageSteps, messageReplay⟩ :=
-    L.transactionMessage trace (trace.msgInv inv notCreated)
+  obtain ⟨messageSteps, messageReplay, messageObserved⟩ :=
+    O.transactionMessage trace (trace.msgInv inv notCreated)
       (trace.msg_sum_nof sumNof) blockIndex transactionIndex
   rw [debitSnapshot] at messageReplay
   -- (3), (4) the two gas credits, funded by the transaction's own debit
   obtain ⟨refundBound, tipBound⟩ :=
     trace.settlement_sum_bounds chronology.refundCounter sumNof
-  obtain ⟨refundSteps, refundReplay⟩ :=
-    L.carrier.ofAddBal (L.tag blockIndex transactionIndex)
+  obtain ⟨refundSteps, refundReplay, refundObserved⟩ :=
+    L.carrier.ofAddBal_observed O.view (L.tag blockIndex transactionIndex)
       (target := trace.sender) (pre := trace.messageState)
       (value := trace.refundValue chronology.refundCounter) refundBound
-  obtain ⟨tipSteps, tipReplay⟩ :=
-    L.carrier.ofAddBal (L.tag blockIndex transactionIndex)
+  obtain ⟨tipSteps, tipReplay, tipObserved⟩ :=
+    L.carrier.ofAddBal_observed O.view (L.tag blockIndex transactionIndex)
       (target := benv.stat.coinbase)
       (pre := trace.refundedState chronology.refundCounter)
       (value := trace.coinbaseValue chronology.refundCounter) tipBound
@@ -439,9 +534,331 @@ theorem transaction (L : AccountingLadder S ca)
         tipSteps (L.carrier.ofState state) := by
     rw [finalSnapshot]
     exact tipReplay
-  exact ⟨messageSteps ++ (refundSteps ++ tipSteps),
-    L.append messageReplay (L.append refundReplay' tipReplay')⟩
+  refine ⟨messageSteps ++ (refundSteps ++ tipSteps),
+    L.append messageReplay (L.append refundReplay' tipReplay'), ?_⟩
+  rw [O.view.obs_append, O.view.obs_append, messageObserved, refundObserved,
+    tipObserved]
+  simp
 -- mirrors ProrataAccountingTransaction.lean:86–146; `inv.side` → `sumNof`.
+
+open _root_.Blanc.ExecutionTrace in
+/-- G5, observed. -/
+theorem transactionList (O : L.Observed)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (inv : S.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
+      (L.carrier.ofState finalBenv.state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
+  induction trace with
+  | nil =>
+      exact ⟨[], L.carrier.nilOfEq rfl, by simpa using O.view.obs_nil⟩
+  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail
+      ih =>
+      obtain ⟨headSteps, headReplay, headObserved⟩ :=
+        O.transaction head inv notCreated sumNof blockIndex (some index)
+      have next : S.BenvInv ca (benv.withState txState) :=
+        head.benvInv L.preserves sumNof ⟨inv, notCreated⟩
+      have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 :=
+        Nat.lt_of_le_of_lt
+          (by simpa [Benv.withState] using processTransaction_sum_le head.result)
+          sumNof
+      obtain ⟨tailSteps, tailReplay, tailObserved⟩ :=
+        ih next.state next.ca nextSum
+      refine ⟨headSteps ++ tailSteps, L.append headReplay tailReplay, ?_⟩
+      rw [O.view.obs_append, headObserved, tailObserved]
+      simp
+-- mirrors ProrataAccountingBody.lean:31–45; the successor bound is
+-- DripRealizedHistory.lean:147–149.
+
+open _root_.Blanc.ExecutionTrace in
+/-- G6, observed. -/
+theorem systemMessage (O : L.Observed)
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (inv : S.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (systemNe : target ≠ systemAddress)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
+      (L.carrier.ofState state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
+  have msgInv : S.MsgInv ca (systemTransactionMessage benv target data) :=
+    systemTransactionMessage_msgInv inv notCreated
+  have callerNe :
+      (systemTransactionMessage benv target data).currentTarget = ca →
+        (systemTransactionMessage benv target data).caller ≠ ca := by
+    intro current
+    rw [systemTransactionMessage_currentTarget] at current
+    rw [systemTransactionMessage_caller]
+    exact fun collide => systemNe (current.trans collide.symm)
+  obtain ⟨steps, replay, observed⟩ := O.messageCall trace.message
+    (msgInv.runReady_of_call
+      (systemTransactionMessage_target_isNone benv target data))
+    callerNe sumNof blockIndex none
+  rw [systemTransactionMessage_benv_state] at replay
+  exact ⟨steps, replay, by simpa using observed⟩
+-- mirrors ProrataAccountingBody.lean:68–84.
+
+open _root_.Blanc.ExecutionTrace in
+/-- G7, observed. -/
+theorem requests (O : L.Observed)
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (inv : S.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
+      (L.carrier.ofState state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
+  obtain ⟨withdrawalSteps, withdrawalReplay, withdrawalObserved⟩ :=
+    O.systemMessage trace.withdrawal inv notCreated (by decide) sumNof
+      blockIndex
+  have withdrawalInv : S.BenvInv ca (benv.withState trace.withdrawalState) :=
+    trace.withdrawal.benvInv L.preserves ⟨inv, notCreated⟩
+  have withdrawalSum :
+      sum (benv.withState trace.withdrawalState).state.bal < 2 ^ 256 :=
+    Nat.lt_of_le_of_lt
+      (trace.withdrawal.stateInv_and_sum_le L.preserves ⟨inv, notCreated⟩).2
+      sumNof
+  obtain ⟨consolidationSteps, consolidationReplay, consolidationObserved⟩ :=
+    O.systemMessage trace.consolidation withdrawalInv.state withdrawalInv.ca
+      (by decide) withdrawalSum blockIndex
+  refine ⟨withdrawalSteps ++ consolidationSteps, ?_, ?_⟩
+  · rw [RequestsTrace.state_eq_consolidationState trace]
+    exact L.append withdrawalReplay consolidationReplay
+  · rw [O.view.obs_append, withdrawalObserved, consolidationObserved]
+    simp
+-- mirrors ProrataAccountingBody.lean:99–112.
+
+open _root_.Blanc.ExecutionTrace in
+/-- G8, observed: direct withdrawals are observed as nothing. -/
+theorem directWithdrawal (O : L.Observed)
+    (pre : State) (wds : List Withdrawal)
+    (bound : sum pre.bal + wdsum wds < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState pre) steps
+      (L.carrier.ofState (processWithdrawalsState pre wds)) ∧
+      O.view.obs steps = [] := by
+  induction wds generalizing pre with
+  | nil => exact ⟨[], L.carrier.nilOfEq rfl, O.view.obs_nil⟩
+  | cons wd wds ih =>
+      obtain ⟨headBound, tailBound⟩ := withdrawalCredit_bounds bound
+      obtain ⟨headSteps, headReplay, headObserved⟩ :=
+        L.carrier.ofAddBal_observed O.view (L.tag blockIndex none)
+          (target := wd.recipient) headBound
+      obtain ⟨tailSteps, tailReplay, tailObserved⟩ := ih _ tailBound
+      refine ⟨headSteps ++ tailSteps, ?_, ?_⟩
+      · rw [processWithdrawalsState_cons]
+        exact L.append headReplay tailReplay
+      · rw [O.view.obs_append, headObserved, tailObserved]
+        rfl
+-- mirrors ProrataAccountingBody.lean:130–146.
+
+open _root_.Blanc.ExecutionTrace in
+/-- G9, observed: the segments are observed in `applyBody` order. -/
+theorem body (O : L.Observed)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (inv : S.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
+      (L.carrier.ofState state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
+  have openSum : sum benv.state.bal < 2 ^ 256 := by omega
+  -- (1) beacon roots
+  obtain ⟨beaconSteps, beaconReplay, beaconObserved⟩ :=
+    O.systemMessage trace.beacon inv notCreated (by decide) openSum blockIndex
+  have beaconMeta :=
+    trace.beacon.stateInv_and_sum_le L.preserves ⟨inv, notCreated⟩
+  have beaconInv : S.BenvInv ca (benv.withState trace.beaconState) :=
+    ⟨beaconMeta.1, by simpa [Benv.withState] using notCreated⟩
+  have beaconSum :
+      sum (benv.withState trace.beaconState).state.bal < 2 ^ 256 := by
+    have le := beaconMeta.2
+    simp only [Benv.withState] at le ⊢
+    omega
+  -- (2) history storage
+  obtain ⟨historySteps, historyReplay, historyObserved⟩ :=
+    O.systemMessage trace.history beaconInv.state beaconInv.ca (by decide)
+      beaconSum blockIndex
+  have historyMeta := trace.history.stateInv_and_sum_le L.preserves beaconInv
+  have historyInv : S.BenvInv ca
+      ((benv.withState trace.beaconState).withState trace.historyState) :=
+    ⟨historyMeta.1, by simpa [Benv.withState] using beaconInv.ca⟩
+  have historySum :
+      sum ((benv.withState trace.beaconState).withState
+        trace.historyState).state.bal < 2 ^ 256 := by
+    have le := historyMeta.2
+    simp only [Benv.withState] at le beaconSum ⊢
+    omega
+  -- (3) the transaction list, by G5
+  obtain ⟨txSteps, txReplay, txObserved⟩ :=
+    O.transactionList trace.transactions historyInv.state historyInv.ca
+      historySum blockIndex
+  have txInv : S.BenvInv ca trace.transactionBenv :=
+    trace.transactions.benvInv L.preserves historySum historyInv
+  -- (4) direct withdrawals, by G8
+  have txBound :
+      sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
+    have hbeacon := beaconMeta.2
+    have hhistory : sum trace.historyState.bal ≤ sum trace.beaconState.bal := by
+      simpa [Benv.withState] using historyMeta.2
+    have htx : sum trace.transactionBenv.state.bal ≤
+        sum trace.historyState.bal := by
+      simpa [Benv.withState] using trace.transactions.sum_le
+    omega
+  obtain ⟨wdSteps, wdReplay, wdObserved⟩ :=
+    O.directWithdrawal trace.transactionBenv.state wds txBound blockIndex
+  have wdInv := benvInv_processWithdrawalsState txInv txBound
+  have wdSum :
+      sum (trace.transactionBenv.withState (processWithdrawalsState
+        trace.transactionBenv.state wds)).state.bal < 2 ^ 256 :=
+    processWithdrawalsState_sum_nof txBound
+  -- (5) request calls, by G7
+  obtain ⟨requestSteps, requestReplay, requestObserved⟩ :=
+    O.requests trace.requests wdInv.state wdInv.ca wdSum blockIndex
+  refine ⟨beaconSteps ++ (historySteps ++ (txSteps ++ (wdSteps ++ requestSteps))),
+    L.append beaconReplay (L.append historyReplay
+      (L.append txReplay (L.append wdReplay requestReplay))), ?_⟩
+  simp only [O.view.obs_append, beaconObserved, historyObserved, txObserved,
+    wdObserved, requestObserved, AppliedBodyTrace.settledFrames,
+    List.flatMap_append, List.nil_append, List.append_assoc]
+-- mirrors ProrataAccountingBody.lean:174–222; the three `.side` reads become
+-- `openSum`/`beaconSum`/`historySum`, and the request-entry bound is the new
+-- `processWithdrawalsState_sum_nof`.
+
+/-- G10, observed. -/
+theorem configuredBlock (O : L.Observed)
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
+    (inv : S.StateInv ca pre.state)
+    (blockIndex : Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState pre.state) steps
+      (L.carrier.ofState post.state) ∧
+      O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
+  obtain ⟨steps, replay, observed⟩ :=
+    O.body trace.bodyTrace (trace.openingState ▸ inv)
+      (trace.not_mem_openingCreatedAccounts ca) trace.openingBound blockIndex
+  refine ⟨steps, ?_, by simpa using observed⟩
+  rw [trace.postState]
+  rwa [trace.openingState] at replay
+-- mirrors ProrataAccountingHistory.lean:37–46.
+
+/-- G11, observed: a whole configured history replays with exactly the
+observations of its settled frames, in chain order. -/
+theorem configuredHistory (O : L.Observed) {cfg : ChainConfig}
+    {checkpoint future : BlockChain}
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
+    (inv : S.StateInv ca checkpoint.state) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
+        (L.carrier.ofState future.state) ∧
+      O.view.obs steps = history.settledFrames.flatMap O.view.frameObs := by
+  induction history with
+  | refl hcfg hctx hid =>
+      exact ⟨[], L.carrier.nilOfEq rfl, by simpa using O.view.obs_nil⟩
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorReplay, priorObserved⟩ := ih
+      obtain ⟨blockSteps, blockReplay, blockObserved⟩ :=
+        O.configuredBlock block (prior.stateInv L.preserves inv)
+          block.block.header.number
+      refine ⟨priorSteps ++ blockSteps, L.append priorReplay blockReplay, ?_⟩
+      rw [O.view.obs_append, priorObserved, blockObserved]
+      simp
+-- mirrors ProrataAccountingHistory.lean:70–80.
+
+end Observed
+
+end AccountingLadder
+
+namespace AccountingLadder
+
+variable {S : ContractSpec} {ca : Adr}
+
+/-! ## 2.4 The rungs -/
+
+/-- G1.  One retained CALL message. -/
+theorem processMessage (L : AccountingLadder S ca)
+    {msg : Msg} {post : Devm}
+    (trace : ExecutionTrace.ProcessMessageTrace msg (.ok post))
+    (runReady : S.MessageRunReady ca msg)
+    (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
+      (L.carrier.ofState post.state) := by
+  exact ((Observed.trivial L).processMessage trace runReady callerNe sumNof blockIndex transactionIndex).imp
+    fun _ replay => replay.1
+
+/-- G2.  One retained CREATE constructor at a fresh foreign address. -/
+theorem processCreateMessage (L : AccountingLadder S ca)
+    {msg : Msg} {post : Devm}
+    (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
+    (runReady : S.MessageRunReady ca msg)
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (targetNone : msg.target.isNone = true)
+    (targetNe : msg.currentTarget ≠ ca)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
+      (L.carrier.ofState post.state) := by
+  exact ((Observed.trivial L).processCreateMessage trace runReady sumNof targetNone targetNe fresh blockIndex transactionIndex).imp
+    fun _ replay => replay.1
+
+open _root_.Blanc.ExecutionTrace in
+/-- G3.  The settled message-call wrapper (create collision, CREATE run, and
+EIP-7702-normalized call). -/
+theorem messageCall (L : AccountingLadder S ca)
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (runReady : S.MessageRunReady ca msg)
+    (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
+      (L.carrier.ofState state) := by
+  exact ((Observed.trivial L).messageCall trace runReady callerNe sumNof blockIndex transactionIndex).imp
+    fun _ replay => replay.1
+
+open _root_.Blanc.ExecutionTrace in
+/-- G3'.  A transaction's prepared message, including the create-at-`ca` case,
+which the collision test turns into a no-op. -/
+theorem transactionMessage (L : AccountingLadder S ca)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (msgInv : S.MsgInv ca trace.msg)
+    (sumNof : sum trace.msg.benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState trace.msg.benv.state) steps
+      (L.carrier.ofState trace.messageState) := by
+  exact ((Observed.trivial L).transactionMessage trace msgInv sumNof blockIndex transactionIndex).imp
+    fun _ replay => replay.1
+
+open _root_.Blanc.ExecutionTrace in
+/-- G4.  One whole retained transaction. -/
+theorem transaction (L : AccountingLadder S ca)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (inv : S.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (blockIndex : Nat) (transactionIndex : Option Nat) :
+    ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
+      (L.carrier.ofState state) := by
+  exact ((Observed.trivial L).transaction trace inv notCreated sumNof blockIndex transactionIndex).imp
+    fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in
 /-- G5.  A retained transaction list. -/
@@ -455,22 +872,8 @@ theorem transactionList (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState finalBenv.state) := by
-  induction trace with
-  | nil => exact ⟨[], L.carrier.nilOfEq rfl⟩
-  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail
-      ih =>
-      obtain ⟨headSteps, headReplay⟩ :=
-        L.transaction head inv notCreated sumNof blockIndex (some index)
-      have next : S.BenvInv ca (benv.withState txState) :=
-        head.benvInv L.preserves sumNof ⟨inv, notCreated⟩
-      have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 :=
-        Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using processTransaction_sum_le head.result)
-          sumNof
-      obtain ⟨tailSteps, tailReplay⟩ := ih next.state next.ca nextSum
-      exact ⟨headSteps ++ tailSteps, L.append headReplay tailReplay⟩
--- mirrors ProrataAccountingBody.lean:31–45; the successor bound is
--- DripRealizedHistory.lean:147–149.
+  exact ((Observed.trivial L).transactionList trace inv notCreated sumNof blockIndex).imp
+    fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in
 /-- G6.  One retained system message. -/
@@ -485,21 +888,8 @@ theorem systemMessage (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) := by
-  have msgInv : S.MsgInv ca (systemTransactionMessage benv target data) :=
-    systemTransactionMessage_msgInv inv notCreated
-  have callerNe :
-      (systemTransactionMessage benv target data).currentTarget = ca →
-        (systemTransactionMessage benv target data).caller ≠ ca := by
-    intro current
-    rw [systemTransactionMessage_currentTarget] at current
-    rw [systemTransactionMessage_caller]
-    exact fun collide => systemNe (current.trans collide.symm)
-  have replay := L.messageCall trace.message
-    (msgInv.runReady_of_call
-      (systemTransactionMessage_target_isNone benv target data))
-    callerNe sumNof blockIndex none
-  rwa [systemTransactionMessage_benv_state] at replay
--- mirrors ProrataAccountingBody.lean:68–84.
+  exact ((Observed.trivial L).systemMessage trace inv notCreated systemNe sumNof blockIndex).imp
+    fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in
 /-- G7.  The two checked request calls. -/
@@ -512,23 +902,8 @@ theorem requests (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) := by
-  obtain ⟨withdrawalSteps, withdrawalReplay⟩ :=
-    L.systemMessage trace.withdrawal inv notCreated (by decide) sumNof
-      blockIndex
-  have withdrawalInv : S.BenvInv ca (benv.withState trace.withdrawalState) :=
-    trace.withdrawal.benvInv L.preserves ⟨inv, notCreated⟩
-  have withdrawalSum :
-      sum (benv.withState trace.withdrawalState).state.bal < 2 ^ 256 :=
-    Nat.lt_of_le_of_lt
-      (trace.withdrawal.stateInv_and_sum_le L.preserves ⟨inv, notCreated⟩).2
-      sumNof
-  obtain ⟨consolidationSteps, consolidationReplay⟩ :=
-    L.systemMessage trace.consolidation withdrawalInv.state withdrawalInv.ca
-      (by decide) withdrawalSum blockIndex
-  refine ⟨withdrawalSteps ++ consolidationSteps, ?_⟩
-  rw [RequestsTrace.state_eq_consolidationState trace]
-  exact L.append withdrawalReplay consolidationReplay
--- mirrors ProrataAccountingBody.lean:99–112.
+  exact ((Observed.trivial L).requests trace inv notCreated sumNof blockIndex).imp
+    fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in
 /-- G8.  The direct consensus withdrawals. -/
@@ -538,18 +913,8 @@ theorem directWithdrawal (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre) steps
       (L.carrier.ofState (processWithdrawalsState pre wds)) := by
-  induction wds generalizing pre with
-  | nil => exact ⟨[], L.carrier.nilOfEq rfl⟩
-  | cons wd wds ih =>
-      obtain ⟨headBound, tailBound⟩ := withdrawalCredit_bounds bound
-      obtain ⟨headSteps, headReplay⟩ :=
-        L.carrier.ofAddBal (L.tag blockIndex none) (target := wd.recipient)
-          headBound
-      obtain ⟨tailSteps, tailReplay⟩ := ih _ tailBound
-      refine ⟨headSteps ++ tailSteps, ?_⟩
-      rw [processWithdrawalsState_cons]
-      exact L.append headReplay tailReplay
--- mirrors ProrataAccountingBody.lean:130–146.
+  exact ((Observed.trivial L).directWithdrawal pre wds bound blockIndex).imp
+    fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in
 /-- G9.  A whole successful block body, in `applyBody` order. -/
@@ -563,65 +928,8 @@ theorem body (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) := by
-  have openSum : sum benv.state.bal < 2 ^ 256 := by omega
-  -- (1) beacon roots
-  obtain ⟨beaconSteps, beaconReplay⟩ :=
-    L.systemMessage trace.beacon inv notCreated (by decide) openSum blockIndex
-  have beaconMeta :=
-    trace.beacon.stateInv_and_sum_le L.preserves ⟨inv, notCreated⟩
-  have beaconInv : S.BenvInv ca (benv.withState trace.beaconState) :=
-    ⟨beaconMeta.1, by simpa [Benv.withState] using notCreated⟩
-  have beaconSum :
-      sum (benv.withState trace.beaconState).state.bal < 2 ^ 256 := by
-    have le := beaconMeta.2
-    simp only [Benv.withState] at le ⊢
-    omega
-  -- (2) history storage
-  obtain ⟨historySteps, historyReplay⟩ :=
-    L.systemMessage trace.history beaconInv.state beaconInv.ca (by decide)
-      beaconSum blockIndex
-  have historyMeta := trace.history.stateInv_and_sum_le L.preserves beaconInv
-  have historyInv : S.BenvInv ca
-      ((benv.withState trace.beaconState).withState trace.historyState) :=
-    ⟨historyMeta.1, by simpa [Benv.withState] using beaconInv.ca⟩
-  have historySum :
-      sum ((benv.withState trace.beaconState).withState
-        trace.historyState).state.bal < 2 ^ 256 := by
-    have le := historyMeta.2
-    simp only [Benv.withState] at le beaconSum ⊢
-    omega
-  -- (3) the transaction list, by G5
-  obtain ⟨txSteps, txReplay⟩ :=
-    L.transactionList trace.transactions historyInv.state historyInv.ca
-      historySum blockIndex
-  have txInv : S.BenvInv ca trace.transactionBenv :=
-    trace.transactions.benvInv L.preserves historySum historyInv
-  -- (4) direct withdrawals, by G8
-  have txBound :
-      sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
-    have hbeacon := beaconMeta.2
-    have hhistory : sum trace.historyState.bal ≤ sum trace.beaconState.bal := by
-      simpa [Benv.withState] using historyMeta.2
-    have htx : sum trace.transactionBenv.state.bal ≤
-        sum trace.historyState.bal := by
-      simpa [Benv.withState] using trace.transactions.sum_le
-    omega
-  obtain ⟨wdSteps, wdReplay⟩ :=
-    L.directWithdrawal trace.transactionBenv.state wds txBound blockIndex
-  have wdInv := benvInv_processWithdrawalsState txInv txBound
-  have wdSum :
-      sum (trace.transactionBenv.withState (processWithdrawalsState
-        trace.transactionBenv.state wds)).state.bal < 2 ^ 256 :=
-    processWithdrawalsState_sum_nof txBound
-  -- (5) request calls, by G7
-  obtain ⟨requestSteps, requestReplay⟩ :=
-    L.requests trace.requests wdInv.state wdInv.ca wdSum blockIndex
-  exact ⟨beaconSteps ++ (historySteps ++ (txSteps ++ (wdSteps ++ requestSteps))),
-    L.append beaconReplay (L.append historyReplay
-      (L.append txReplay (L.append wdReplay requestReplay)))⟩
--- mirrors ProrataAccountingBody.lean:174–222; the three `.side` reads become
--- `openSum`/`beaconSum`/`historySum`, and the request-entry bound is the new
--- `processWithdrawalsState_sum_nof`.
+  exact ((Observed.trivial L).body trace inv notCreated bound blockIndex).imp
+    fun _ replay => replay.1
 
 /-- G10.  A whole configured block.  The word bound comes from the block's own
 `openingBound`, so the rung asks only for the state invariant. -/
@@ -632,13 +940,8 @@ theorem configuredBlock (L : AccountingLadder S ca)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre.state) steps
       (L.carrier.ofState post.state) := by
-  obtain ⟨steps, replay⟩ :=
-    L.body trace.bodyTrace (trace.openingState ▸ inv)
-      (trace.not_mem_openingCreatedAccounts ca) trace.openingBound blockIndex
-  refine ⟨steps, ?_⟩
-  rw [trace.postState]
-  rwa [trace.openingState] at replay
--- mirrors ProrataAccountingHistory.lean:37–46.
+  exact ((Observed.trivial L).configuredBlock trace inv blockIndex).imp
+    fun _ replay => replay.1
 
 /-- G11.  A whole configured history; each block is tagged with its header
 number. -/
@@ -648,15 +951,8 @@ theorem configuredHistory (L : AccountingLadder S ca)
     (inv : S.StateInv ca checkpoint.state) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
       (L.carrier.ofState future.state) := by
-  induction history with
-  | refl hcfg hctx hid => exact ⟨[], L.carrier.nilOfEq rfl⟩
-  | step prior block ih =>
-      obtain ⟨priorSteps, priorReplay⟩ := ih
-      obtain ⟨blockSteps, blockReplay⟩ :=
-        L.configuredBlock block (prior.stateInv L.preserves inv)
-          block.block.header.number
-      exact ⟨priorSteps ++ blockSteps, L.append priorReplay blockReplay⟩
--- mirrors ProrataAccountingHistory.lean:70–80.
+  exact ((Observed.trivial L).configuredHistory history inv).imp
+    fun _ replay => replay.1
 
 end AccountingLadder
 
@@ -685,6 +981,27 @@ inductive TraceRealizes (L : AccountingLadder S ca) (cfg : ChainConfig)
         (L.carrier.ofState future.state)) :
       TraceRealizes L cfg root (priorSteps ++ blockSteps) future
 -- mirrors ProrataAccountingHistory.lean:96–107.
+
+/-- Every retained configured history from an invariant-satisfying root is
+realized, with exactly the observations of its settled frames in chain order. -/
+theorem Observed.traceRealizes_of_configuredHistoryTrace
+    {L : AccountingLadder S ca} (O : L.Observed)
+    {cfg : ChainConfig} {root future : BlockChain}
+    (inv : S.StateInv ca root.state)
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg root future) :
+    ∃ steps, L.TraceRealizes cfg root steps future ∧
+      O.view.obs steps = history.settledFrames.flatMap O.view.frameObs := by
+  induction history with
+  | refl hcfg hctx hid => exact ⟨[], .refl, by simpa using O.view.obs_nil⟩
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorRealizes, priorObserved⟩ := ih
+      obtain ⟨blockSteps, blockReplay, blockObserved⟩ :=
+        O.configuredBlock block (prior.stateInv L.preserves inv)
+          block.block.header.number
+      refine ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay, ?_⟩
+      rw [O.view.obs_append, priorObserved, blockObserved]
+      simp
+-- mirrors ProrataAccountingHistory.lean:146–159, carrying the observation.
 
 namespace TraceRealizes
 
@@ -718,16 +1035,8 @@ theorem of_configuredHistoryTrace (L : AccountingLadder S ca)
     (inv : S.StateInv ca root.state)
     (history : _root_.Blanc.ExecutionTrace.ConfiguredHistoryTrace cfg root future) :
     ∃ steps, L.TraceRealizes cfg root steps future := by
-  induction history with
-  | refl hcfg hctx hid => exact ⟨[], .refl⟩
-  | step prior block ih =>
-      obtain ⟨priorSteps, priorRealizes⟩ := ih
-      obtain ⟨blockSteps, blockReplay⟩ :=
-        L.configuredBlock block (prior.stateInv L.preserves inv)
-          block.block.header.number
-      exact ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay⟩
--- mirrors ProrataAccountingHistory.lean:146–159; `root.reachable_stateInv
--- prior.toReachUsing` → `prior.stateInv L.preserves inv` (as G11, :604).
+  exact ((Observed.trivial L).traceRealizes_of_configuredHistoryTrace inv
+    history).imp fun _ realizes => realizes.1
 
 /-- Configured reachability from an invariant-satisfying root is never more
 permissive than the carrier. -/

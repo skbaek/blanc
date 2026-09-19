@@ -187,6 +187,15 @@ registry has identified the likely vocabulary.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
+- A compiled walk that designates the step that caused a revert
+  (`Func.RunCompiledToVisiting`, `Prog.RunCompiledToVisiting`):
+  [`Blanc/RevertCause.lean`](../Blanc/RevertCause.lean).  The same module
+  inverts a reverting frame into its gas-exact walk
+  (`Prog.runCompiledTo_of_exec_revert`), proves a visiting walk by
+  contradiction through `Func.RunCompiledToAvoiding` (with its step, branch,
+  call, line, nonpayable and sorted-dispatch inversions), rules out a reverting
+  walk of a `Func.revertFreeIn` body, and checks a program's terminals with
+  `Func.TerminalsReturnOrRevert`.
 - Carry an observable through a successful compiled walk with a fixed
   function table using `Func.CompiledInv` in
   [`Blanc/CompiledFixedInvariance.lean`](../Blanc/CompiledFixedInvariance.lean).
@@ -654,6 +663,21 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   the successful outcome; for an arbitrary-outcome frame use the
   target-directed `*Toward` family above. A word read from `gasLeft` is not
   transported: stop the prefix before `gas` and cross it on the actual node.
+- To show that such a walk spawns no child frame, use the spine lemma
+  `Exec.Deriv.SourceCursor.ofRunPrefix_sameFrame_gasFree` in the same module.
+  It returns `Exec.Deriv.ExecFreeUntil cursor.node cursor'.node`: every
+  same-frame node from the start lies at or after the landing node or decodes
+  no `Xinst`. `mainForwardFree`, `branchForwardFree`, and `callForwardFree`
+  are the matching duals (the plain forms are their projections). Compose
+  spans with `ExecFreeUntil.trans`; when the walk lands on a `.last` cursor
+  (`Linst.at_of_slice cursor.codeSlice`), `ExecFreeUntil.noExec_of_linstAt`
+  covers the whole frame and `Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt`
+  concludes `Exec.descendantFrames run = []`. For a span that ends at a
+  spawning node instead, `ExecFreeUntil.descendantFrames_eq` moves the
+  descendant frames from its start to its end. A straight-line gas-free
+  function body (`Func.straightGasFree`, no table call) turns any successful
+  `Func.Run` into such a walk to a terminal instruction with
+  `Func.RunPrefix.toLast_of_run`.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 
@@ -1813,6 +1837,25 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.pairVisits` in
   `Blanc/Composition/ProrataWethVaultLedgerVisits.lean`. Membership goals over
   these lists have no distinguishing head, so there is no recipe.
+- When a retained trace consumer needs only frames whose message roots and
+  descendants survive settlement, import
+  [`Blanc/ExecutionTraceSettledFrames.lean`](../Blanc/ExecutionTraceSettledFrames.lean)
+  and use its `settledFrames` projections instead of `rawFrames`; it mirrors
+  the same trace-carrier route and concatenation order while applying the
+  message and CREATE settlement tests at their roots.
+- When a consumer needs every entered frame's block environment (timestamp,
+  number, …) to be the execution root's, import
+  [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):
+  `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
+  by every admitted frame from the execution root; use it with
+  `Exec.FrameAdmitted.root` when lifting a root `benvStat` fact.
+  For retained traces, `ExecutionTrace.ProcessMessageTrace.frameAdmitted_benvStat`
+  admits every retained frame at the message's `benv.stat`, and
+  `ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time` admits every frame of
+  a configured block at `block.header.timestamp.toB256`.  The same module fixes
+  the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
+  block strictly after its parent from Jaune's header validation
+  (`ConfiguredBlockTrace.parent_timestamp_lt`).
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
@@ -1963,6 +2006,35 @@ T2b seams and these wrapper facts and keeps its own ladder, as
 `Blanc/Composition/ProrataWethVaultPairLadder.lean` does for the vault/WETH
 pair.  It is a proof-cost
 facility only: no rung changes an execution or a gas charge.
+
+When the consumer must also know which executed frames the steps came from,
+import
+[`Blanc/ExecutionAccountingObserved.lean`](../Blanc/ExecutionAccountingObserved.lean):
+
+- `ExecutionAccountingReplay.ReplayObservation C` reads a carrier's step lists
+  homomorphically (`obs`, `obs_nil`, `obs_append`), says what one settled frame
+  contributes (`frameObs`), and restates the carrier's credit law with the
+  produced steps observed as nothing (`credit`).
+- `AccountingLadder.Observed L` adds the root law: a committed root's replay
+  observes exactly `(Exec.committedFrames run).flatMap view.frameObs`.
+- Every rung has an observed twin, `AccountingLadder.Observed.processMessage`
+  … `configuredBlock`, with the original's hypotheses and the extra conclusion
+  `O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs`
+  (`directWithdrawal`: `= []`); the history headlines are
+  `Observed.configuredHistory` and
+  `Observed.traceRealizes_of_configuredHistoryTrace`.
+- Seam twins take a `V : ReplayObservation C`:
+  `ReplayCarrier.processMessage_of_body_observed`,
+  `processCreateMessage_of_body_observed`, `xinstForeignSome_observed` (the
+  child segment of a foreign CALL/CREATE slot), `silentReplay_observed`,
+  `ofStorageEqBalanceMono_observed` and `ofAddBal_observed`.
+
+The observed statements are the proofs: `ReplayObservation`, the
+`SettlementCarrier.*_observed` engines, `ofStorageEqBalanceMono_observed` and
+`ofAddBal_observed` live in the replay and ladder modules, whose unobserved
+seams and rungs are the observed ones read through `ReplayObservation.trivial`
+and `Observed.trivial` (observing nothing).  Do not restate an unobserved rung
+to carry a projection; instantiate an observation.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -2434,7 +2506,10 @@ storage walk, declining the `nof`-class side condition a storage-determined
 invariant never needs.  The module's no-write and `STATICCALL` sections
 discharge targets that never write storage, and `ofStorageOnly_of_call`
 carries the invariant across a child `call` under the deeper-frame
-hypothesis.
+hypothesis.  `ofStorageOnly_of_call_sameBenv` is its general form: the
+deeper-frame hypothesis need only cover frames at the caller's `benvStat`,
+which is what a trace-admitted consumer whose entry condition reads the block
+environment can discharge (DRIP's `soundAdmitted_of_stepClosedAt`).
 
 ## Common-library-first workflow
 

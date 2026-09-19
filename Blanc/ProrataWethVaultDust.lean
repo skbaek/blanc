@@ -37,12 +37,14 @@ open Jaune
 
 namespace ProrataWethVault
 
-/-- **Immediate round trip does not profit.** Depositing `amount` and redeeming
-the shares it minted, against the same snapshot, returns at most `amount`, and
-the shortfall is at most the pre-deposit price rounded up.
-
-This is the rounding-favours-the-vault property the offset exists to guarantee,
-in its exact form rather than as an inequality with slack. -/
+/-- **Immediate round-trip shortfall is at most one pre-deposit quantum.**
+Depositing `amount` against the snapshot `(assets, supply)` mints
+`m = convertToSharesN amount assets supply`; redeeming those `m` shares at the
+post-deposit snapshot `(assets + amount, supply + m)` pays `paid`.  This bounds
+the **truncated** shortfall `amount - paid` by `ceil(assets / (supply + offsetN))`.
+Because `Nat` subtraction truncates, the statement also holds when `paid`
+exceeds `amount` and says nothing about profit; the no-profit direction
+`paid ≤ amount` is `roundtrip_no_profit`. -/
 theorem roundtrip_loss_le
     {amount assets supply : Nat} :
     amount -
@@ -232,8 +234,9 @@ coalition seeds one wei, donates a million, the victim deposits a million and
 is minted 1999 shares, and the coalition's exit pays it 500125 against the
 1000001 it put in — a loss, not a profit, which is what the offset buys. -/
 
-/-- The coalition seeds the vault, donates, the victim deposits, the coalition
-exits, and the victim exits.
+/-- The coalition seeds the vault, donates, the victim deposits, and the
+coalition exits.  The path ends at the coalition's exit: it has no victim exit
+step.
 
 Built one step at a time rather than as a single nested term: each `have` fully
 elaborates before the next, so every side condition sees the concrete state its

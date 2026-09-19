@@ -23,11 +23,13 @@ reproduce the frozen artifacts.  `--recompile-wasm` does the corresponding
 check with the SF-selected `emscripten-wasm32` artifact named by `$SOLJSON`.
 The ordinary gate does not need a compiler.
 
-`--self-test` copies the repository slice into a temporary tree, corrupts one
-input at a time (a vendored source byte, the lock's runtime identity, the
-committed output's bytecode, an extra source in the tree, a dropped source,
-drifted optimizer settings) and requires the gate to fail every time.  A gate
-that has not been shown to fail is not evidence.
+`--self-test` copies the repository slice into a temporary tree and applies
+seven corruptions one at a time (a vendored source byte, the lock's harness
+identity, the committed output's bytecode, an extra source in the tree, a
+dropped source, drifted optimizer settings, a selector added to `vaultFuncs`).
+Each must make the gate fail with its own named diagnostic -- a failure for any
+other reason is not a bite -- and undoing only that corruption must restore
+green.  A gate that has not been shown to fail is not evidence.
 
 CLI contract: exit 0 if and only if the gate passes; output ends with one
 unambiguous verdict line.
@@ -491,10 +493,38 @@ def report(lock: dict | None = None, native_leg: str = "", wasm_leg: str = "") -
 
 
 def self_test() -> int:
+    """Corrupt one input at a time, require its own diagnostic, then restore.
+
+    Each corruption must make the gate exit 1 (not crash) with a
+    `REGRESSION` line matching that corruption's expected diagnostic, and the
+    same copy with only that corruption undone must pass again.  A nonzero
+    exit for some other reason is therefore not counted as a bite, and a
+    corruption the restore does not undo is caught too.
+    """
     root = HERE.parent
     missed: list[str] = []
+    prefix = "REGRESSION — PRORATA WETH vault reference: "
 
-    def mutate(label: str, action) -> None:
+    def run_copy(copy: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "-B", str(copy / "scripts" / "check-prorata-weth-vault-reference.py"),
+             "--root", str(copy)],
+            capture_output=True, text=True, check=False,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+
+    def snapshot(copy: Path) -> dict[Path, bytes]:
+        return {path: path.read_bytes() for path in copy.rglob("*") if path.is_file()}
+
+    def restore(copy: Path, before: dict[Path, bytes]) -> None:
+        for path in [p for p in copy.rglob("*") if p.is_file()]:
+            if path not in before:
+                path.unlink()
+        for path, data in before.items():
+            if not path.is_file() or path.read_bytes() != data:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+
+    def mutate(label: str, action, expected: str) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "blanc"
             (copy / "scripts").mkdir(parents=True)
@@ -504,14 +534,28 @@ def self_test() -> int:
                          "prorata-weth-vault-reference.json"):
                 shutil.copy(root / "scripts" / name, copy / "scripts" / name)
             shutil.copy(root / SOURCE_RELATIVE, copy / SOURCE_RELATIVE)
+            before = snapshot(copy)
             action(copy)
-            result = subprocess.run(
-                [sys.executable, "-B", str(copy / "scripts" / "check-prorata-weth-vault-reference.py"),
-                 "--root", str(copy)],
-                capture_output=True, text=True, check=False,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+            if snapshot(copy) == before:
+                missed.append(f"{label}: the corruption changed nothing")
+                return
+            result = run_copy(copy)
+            lines = result.stdout.splitlines()
             if result.returncode == 0:
                 missed.append(f"{label}: corrupted, and the gate still passed")
+            elif result.returncode != 1 or "Traceback" in result.stderr:
+                missed.append(f"{label}: the gate exited {result.returncode} instead of reporting "
+                              f"a regression: {result.stderr.strip()[-200:]}")
+            elif not any(line.startswith(prefix) and re.search(expected, line[len(prefix):])
+                         for line in lines):
+                missed.append(f"{label}: the gate failed, but not with the diagnostic "
+                              f"/{expected}/; it said: {' | '.join(lines)[:400]}")
+            restore(copy, before)
+            restored = run_copy(copy)
+            if restored.returncode != 0 or not restored.stdout.splitlines()[-1:] or \
+                    not restored.stdout.splitlines()[-1].startswith("OK — PRORATA WETH vault reference: "):
+                missed.append(f"{label}: undoing only this corruption did not restore green "
+                              f"(exit {restored.returncode}): {restored.stdout.strip()[-300:]}")
 
     def flip_source(copy: Path) -> None:
         path = copy / INPUTS_RELATIVE / "source" / "openzeppelin-contracts/contracts/token/ERC20/extensions/ERC4626.sol"
@@ -543,28 +587,44 @@ def self_test() -> int:
         path = copy / INPUTS_RELATIVE / "standard-json-input.json"
         path.write_text(path.read_text().replace('"runs": 1', '"runs": 200', 1))
 
-    def drop_selector(copy: Path) -> None:
+    def add_selector(copy: Path) -> None:
         path = copy / SOURCE_RELATIVE
         path.write_text(path.read_text().replace(
             '    (selector "previewDeposit" [.uint256], routed 1 previewDeposit) ]',
             '    (selector "previewDeposit" [.uint256], routed 1 previewDeposit),\n'
             '    (selector "permit" [.address, .address, .uint256], routed 3 previewDeposit) ]', 1))
 
-    for label, action in [("a vendored source byte", flip_source),
-                          ("the lock's harness identity", flip_lock),
-                          ("the committed output's bytecode", flip_output),
-                          ("an extra source in the vendored tree", extra_source),
-                          ("a dropped source", drop_source),
-                          ("drifted optimizer settings", drift_settings),
-                          ("a selector added to vaultFuncs", drop_selector)]:
-        mutate(label, action)
+    # Each expected diagnostic is a message that, among these seven, only its
+    # own corruption produces; the other messages a corruption also triggers
+    # (a moved file hash, for instance) are allowed but not required.
+    corruptions = [
+        ("a vendored source byte", flip_source,
+         r"^openzeppelin-contracts/contracts/token/ERC20/extensions/ERC4626\.sol: SHA-256 [0-9a-f]{64} "
+         r"is not the frozen c3d57303"),
+        ("the lock's harness identity", flip_lock,
+         r"^lock identity for contracts/ProrataWethVaultReference\.sol is not the SF's$"),
+        ("the committed output's bytecode", flip_output,
+         r"^committed output: runtime template is 4347 bytes / [0-9a-f]{64}, frozen 4347 / "),
+        ("an extra source in the vendored tree", extra_source,
+         r"^unexpected file in the vendored tree: contracts/Extra\.sol$"),
+        ("a dropped source", drop_source,
+         r"^vendored file missing: openzeppelin-contracts/contracts/utils/Panic\.sol$"),
+        ("drifted optimizer settings", drift_settings,
+         r"^standard-json-input\.json settings\.optimizer is \{'enabled': True, 'runs': 200\}"),
+        ("a selector added to vaultFuncs", add_selector,
+         r"^reference ABI surface differs from the vault's: missing \['permit\(address,address,uint256\)'\], "
+         r"extra \[\]$"),
+    ]
+    for label, action, expected in corruptions:
+        mutate(label, action, expected)
 
     if missed:
         for message in missed:
             print(f"REGRESSION — PRORATA WETH vault reference self-test: {message}")
         return 1
-    print("OK — PRORATA WETH vault reference self-test: 7 corruptions of the vendored "
-          "closure, lock, output, tree membership, settings and vault surface are all caught")
+    print(f"OK — PRORATA WETH vault reference self-test: {len(corruptions)} corruptions of the vendored "
+          "closure, lock, output, tree membership, settings and vault surface each fail with their "
+          "own named diagnostic, and undoing each restores green")
     return 0
 
 

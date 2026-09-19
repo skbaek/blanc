@@ -240,15 +240,14 @@ smaller. The two roundings compose in the pool's favour: the inverse quote
 rounds the charge up, the forward quote rounds the mint down, so a minter
 never receives more shares than the assets they paid would have bought.
 
-This is the quantitative content of the `mint`/`withdraw` carrier gap.
-`ProrataAccountingEffect.deposit` pins `minted = mintN o amount supply balance`
-by *equality*, so a `mint` step whose round trip is strict cannot be exhibited
-as one, and closing that needs either an inverse-quoted class or an explicit
-slack term — a change to a model `Blanc/ProrataAccounting.lean` shares with
-PRORATA, and so an owner's decision rather than a missing proof. What does not
-need deciding is the direction of the slack, which is what this records: it
-falls on the safe side, so the gap is a modelling incompleteness and not an
-unsoundness. -/
+This bound was first recorded for a `mint`/`withdraw` carrier gap in the
+PRORATA-shared model, whose `ProrataAccountingEffect.deposit` pins
+`minted = mintN o amount supply balance` by equality. That gap is closed on the
+chain-level route: the vault's exact four-quote accounting
+(`Blanc/Composition/ProrataWethVaultAccounting.lean`) carries `mint` and
+`withdraw` as their own inverse-quoted steps, which P3 and P4 use. What this
+lemma still records is the direction of the cross-quote slack: it falls on the
+pool's side. -/
 theorem mint_never_overmints (shares assets supply : Nat) :
     shares ≤ convertToSharesN (previewMintN shares assets supply) assets supply := by
   unfold convertToSharesN

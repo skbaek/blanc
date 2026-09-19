@@ -117,6 +117,21 @@ import Blanc.Composition.ProrataWethVaultAccountingHistory
 import Blanc.Composition.ProrataWethVaultCoalitionHistory
 import Blanc.Composition.ProrataWethVaultLedgerFaithful
 import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
+import Blanc.DripRpow
+import Blanc.DripEndpoints
+import Blanc.DripInvariant
+import Blanc.DripDeploy
+import Blanc.DripStackSafetyCertificate
+import Blanc.DripTranscript
+import Blanc.DripTranscriptExec
+import Blanc.DripTranscriptHistory
+import Blanc.DripClock
+import Blanc.DripClockHistory
+import Blanc.ExecutionAccountingLadder
+import Blanc.ExecutionFrameTime
+import Blanc.RevertCause
+import Blanc.ProrataWethVaultMaxArithmetic
+import Blanc.Composition.ProrataWethVaultNonrevert
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1349,3 +1364,279 @@ import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
 #print axioms Blanc.Drip.no_stale_index_settlement_exit
 #print axioms Blanc.Drip.view_eq_same_timestamp_join
 #print axioms Blanc.Drip.chain_drips_eq_segmentIndex
+#print axioms Blanc.Drip.drip_compiled_drip
+#print axioms Blanc.Drip.drip_compiled_factorNat
+#print axioms Blanc.Drip.drip_rpow_certified_band
+#print axioms Blanc.Drip.drip_rpow_exact_telescope
+#print axioms Blanc.Drip.drip_segment_certified
+#print axioms Blanc.Drip.segment_spread_witness
+#print axioms Blanc.Drip.rpow_under_witness
+#print axioms Blanc.Drip.rpow_over_witness
+#print axioms Blanc.Drip.drip_rpow_runtime_ops_exact
+#print axioms Blanc.Drip.exit_pays_exactly_full
+#print axioms Blanc.Drip.DeploymentRoot.accountingInv
+#print axioms Blanc.Drip.canonicalDeploymentStep_establishes_root
+#print axioms Blanc.Drip.StackSafety.actual_entry_safe
+#print axioms Blanc.Drip.Chain.transcriptTally_eq
+#print axioms Blanc.Drip.dripTraceRealizes_transcript
+#print axioms Blanc.Drip.history_transcript_accounting_exact
+#print axioms Blanc.Drip.history_transcript_balance_exact
+#print axioms Blanc.Drip.history_transcript_entitlement
+#print axioms Blanc.Drip.realized_segment_certified
+#print axioms Blanc.Drip.dripCalls_ne_nil_of_totalUnits
+#print axioms Blanc.Drip.concreteHistory_dripCalls_ne_nil
+#print axioms Blanc.Drip.dripClockSpec_preservesAdmitted
+#print axioms Blanc.Drip.history_clockInv
+#print axioms Blanc.Drip.configuredHistory_has_head_timestamp
+#print axioms Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace
+#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time
+#print axioms Blanc.Exec.frameAdmitted_benvStat
+#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt
+#print axioms Blanc.Composition.ProrataWethVault.convertToShares_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.convertToAssets_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.previewDeposit_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.previewRedeem_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.previewMint_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.previewWithdraw_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.totalAssets_compiled_effect
+#print axioms Blanc.ProrataWethVault.asset_compiled_effect
+#print axioms Blanc.ProrataWethVault.maxRedeem_compiled_effect
+#print axioms Blanc.ProrataWethVault.name_compiled_effect
+#print axioms Blanc.ProrataWethVault.symbol_compiled_effect
+#print axioms Blanc.ProrataWethVault.decimals_compiled_effect
+#print axioms Blanc.ProrataWethVault.totalSupply_compiled_effect
+#print axioms Blanc.ProrataWethVault.balanceOf_compiled_effect
+#print axioms Blanc.ProrataWethVault.allowance_compiled_effect
+#print axioms Blanc.Composition.ProrataWethVault.PairStable.of_root
+#print axioms Blanc.Composition.ProrataWethVault.PairStable.totalAssets
+#print axioms Blanc.Composition.ProrataWethVault.PairStable.redeemable_and_solvent
+#print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_backed
+#print axioms Blanc.Composition.ProrataWethVault.vault_processMessage_preserves_stable
+#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_mint
+#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_outboundSettled
+#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_child
+#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_inbound_child
+#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_outbound_child
+#print axioms Blanc.Composition.ProrataWethVault.inbound_stage_witnesses
+#print axioms Blanc.Composition.ProrataWethVault.outbound_stage_witnesses
+#print axioms Blanc.Composition.ProrataWethVault.DirectWethConfiguration.installed
+#print axioms Blanc.Composition.ProrataWethVault.exactWethCallOccurrence_of_runCompiled
+#print axioms Blanc.Composition.ProrataWethVault.exactWethStatcallOccurrence_of_runCompiled
+#print axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.worldProgramRun
+#print axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.programRun
+#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethWorldProgramRun.balanceOf_effect
+#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.balanceOf_effect
+#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transfer_effect
+#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transferFrom_effect
+#print axioms Blanc.Composition.ProrataWethVault.Source.vault_externalWethCallSites_complete
+#print axioms Blanc.Composition.ProrataWethVault.Source.readTotalAssets_exactEffect
+#print axioms Blanc.Composition.ProrataWethVault.Source.callWethTransferFrom_exactEffect
+#print axioms Blanc.Composition.ProrataWethVault.Source.callWethTransfer_exactEffect
+#print axioms Blanc.Composition.ProrataWethVault.Source.balanceOfStaging_rollback
+#print axioms Blanc.Composition.ProrataWethVault.Source.transferFromStaging_rollback
+#print axioms Blanc.Composition.ProrataWethVault.Source.transferStaging_rollback
+#print axioms Blanc.ProrataWethVault.convertToSharesN_floor_le
+#print axioms Blanc.ProrataWethVault.convertToSharesN_lt_floor_add_one
+#print axioms Blanc.ProrataWethVault.convertToAssetsN_floor_le
+#print axioms Blanc.ProrataWethVault.convertToAssetsN_lt_floor_add_one
+#print axioms Blanc.ProrataWethVault.previewMintN_covers
+#print axioms Blanc.ProrataWethVault.previewMintN_lt_add_denominator
+#print axioms Blanc.ProrataWethVault.previewWithdrawN_covers
+#print axioms Blanc.ProrataWethVault.previewWithdrawN_lt_add_assetFactor
+#print axioms Blanc.ProrataWethVault.le_maxMintN_iff
+#print axioms Blanc.ProrataWethVault.le_maxDepositN_iff
+#print axioms Blanc.ProrataWethVault.convertToSharesN_maxDepositN_le_shareRoom
+#print axioms Blanc.ProrataWethVault.maxWithdrawN_le_assets
+#print axioms Blanc.Func.RunCompiledToVisiting.toRunCompiledTo
+#print axioms Blanc.Func.RunCompiledToVisiting.exists_step
+#print axioms Blanc.Prog.RunCompiledToVisiting.toRunCompiledTo
+#print axioms Blanc.Prog.RunCompiledToVisiting.exec_eq
+#print axioms Blanc.Prog.runCompiledTo_of_exec_revert
+#print axioms Blanc.ProrataWethVault.le_maxWithdrawN_iff
+#print axioms Blanc.ProrataWethVault.previewWithdrawN_maxWithdrawN_le
+#print axioms Blanc.ProrataWethVault.maxDepositViewN_eq_of_stable
+#print axioms Blanc.ProrataWethVault.maxMintViewN_eq_of_stable
+#print axioms Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable
+#print axioms Blanc.ProrataWethVault.roundtrip_no_profit
+#print axioms Blanc.Composition.ProrataWethVault.deposit_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.mint_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.withdraw_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.redeem_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxRedeem_no_reverting_walk
+#print axioms Blanc.Composition.ProrataWethVault.deposit_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.mint_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.withdraw_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.redeem_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxMint_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_exec_revert_visits_refused_weth_child
+#print axioms Blanc.Composition.ProrataWethVault.maxRedeem_exec_never_reverts
+#print axioms Blanc.Composition.ProrataWethVault.deposit_success_within_maxDeposit
+#print axioms Blanc.Composition.ProrataWethVault.mint_success_within_maxMint
+#print axioms Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw
+#print axioms Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem
+#print axioms Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert
+
+/-! ## From-scratch cross-check of the rows pinned below the standard set
+
+Lean v4.32.1's `#print axioms` on an imported constant reads the per-module
+result that `exportedAxiomsExt` precomputed when the olean was written. That
+precomputation shares one cache across the module and breaks the
+inductive/constructor cycle with an empty sentinel entry, so an inductive
+reached first through its own constructor can be recorded as axiom-free, and
+every constant that reaches the constructor only through that inductive inherits
+the empty set. The result depends on hash iteration order; it under-reported
+`ReplayCarrier.nilOfEq` as axiom-free until an unrelated declaration reordered
+its module.
+
+`#full_axioms` recomputes a constant's axiom closure from the environment's
+declarations alone, with a fresh visited set per constant and no precomputed
+entries. `scripts/check.sh` runs it for every row whose pin is a strict subset
+of `propext, Classical.choice, Quot.sound` (an under-report can make such a pin
+pass while a standard axiom is really used) and fails a row whose recomputed set
+differs from its pin. The list below must equal exactly those rows. -/
+
+open Lean Elab Command in
+/-- Every axiom reachable from `c` through declaration types, values and the
+constructors of inductives, walked without any cached per-module result. -/
+private partial def auditFullAxioms (env : Environment) (c : Name) :
+    StateM (NameSet × NameSet) Unit := do
+  let (seen, axs) ← get
+  if seen.contains c then return
+  set (seen.insert c, axs)
+  let walk (e : Expr) : StateM (NameSet × NameSet) Unit :=
+    e.getUsedConstants.forM (auditFullAxioms env)
+  match env.find? c with
+  | some (.axiomInfo v) =>
+      modify fun (seen, axs) => (seen, axs.insert c)
+      walk v.type
+  | some (.defnInfo v) => walk v.type *> walk v.value
+  | some (.thmInfo v) => walk v.type *> walk v.value
+  | some (.opaqueInfo v) => walk v.type *> walk v.value
+  | some (.ctorInfo v) => walk v.type
+  | some (.recInfo v) => walk v.type
+  | some (.inductInfo v) => walk v.type *> v.ctors.forM (auditFullAxioms env)
+  | _ => pure ()
+
+open Lean Elab Command in
+elab "#full_axioms " id:ident : command => do
+  let env ← getEnv
+  let c := id.getId
+  unless env.contains c do
+    throwError "#full_axioms: unknown constant {c}"
+  let (_, (_, axs)) := (auditFullAxioms env c).run ({}, {})
+  let names := (axs.toList.map toString).toArray.qsort (· < ·)
+  logInfo (MessageData.ofFormat (.text
+    s!"FULL-AXIOMS '{c}': [{", ".intercalate names.toList}]"))
+
+#full_axioms Blanc.Func.localSstoreFree_iff
+#full_axioms Blanc.Prog.componentSstoreFree_iff
+#full_axioms Blanc.Prog.entrySstoreFree_iff
+#full_axioms Blanc.Prog.entrySstoreFree_sound
+#full_axioms Blanc.Func.CompileShape.byteSize_compileShape
+#full_axioms Blanc.Func.length_emitByShape
+#full_axioms Blanc.Func.getD_emitByShape
+#full_axioms Blanc.Func.emitByShape_compileShape
+#full_axioms Blanc.Func.CompileShape.locations_compileShapes
+#full_axioms Blanc.Table.emitByShape_compileShapes
+#full_axioms Blanc.Prog.emitByShape_compileShape
+#full_axioms Blanc.Weth10.redemptionRuntimeCeiling_eq
+#full_axioms Blanc.Weth10.viewReadFrame_sameCaller_not_authorizing
+#full_axioms Blanc.Weth10.mainnet_rulesAt_eq_named
+#full_axioms Blanc.Weth10.mainnet_rulesAt_eq_bpo2_of_ge
+#full_axioms Blanc.Weth10.pragueRules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.osakaRules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.bpo1Rules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.bpo2Rules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.mainnet_checkTransactionGasCap_of_le
+#full_axioms Blanc.Weth10.weth10CurrentMainnetCreation_rulesAt
+#full_axioms Blanc.LidoCircuitBreaker.emptyWitness
+#full_axioms Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length
+#full_axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
+#full_axioms Blanc.LidoCircuitBreaker.setPauser_sourceTrace_refines_model
+#full_axioms Blanc.jauneListCompare_eq_compareLex
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory
+#full_axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_memory
+#full_axioms Blanc.ProxyPair.implBodyGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedSuccessGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedRevertGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedSuccessEntryGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedRevertEntryGas_eq
+#full_axioms Blanc.ProxyPair.proxyAdr_ne_implAdr
+#full_axioms Blanc.ProxyPair.successData_length
+#full_axioms Blanc.ProxyPair.revertData_length
+#full_axioms Blanc.ProxyPair.proxy_call_gas_split
+#full_axioms Blanc.ProxyPair.forwardBudgetWitness_27224
+#full_axioms Blanc.ProxyPair.forwardBudget_27224
+#full_axioms Blanc.ProxyPair.ossifiableCreateMessageGas_eq
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas_eq
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
+#full_axioms Blanc.Prorata.mintN_never_overmints
+#full_axioms Blanc.Prorata.payN_never_overpays
+#full_axioms Blanc.Prorata.payN_le_balance
+#full_axioms Blanc.Prorata.deposit_price_nondecreasing
+#full_axioms Blanc.Prorata.withdraw_price_nondecreasing
+#full_axioms Blanc.Prorata.withdraw_ceil_shares_covers_assets
+#full_axioms Blanc.Prorata.mintN_residue_eq
+#full_axioms Blanc.Prorata.payN_residue_eq
+#full_axioms Blanc.Prorata.roundtrip_dust_eq
+#full_axioms Blanc.ProrataWethVault.redemption_le_assets
+#full_axioms Blanc.ProrataWethVault.depositStep
+#full_axioms Blanc.ProrataWethVault.redeemStep
+#full_axioms Blanc.ProrataWethVault.donationStep
+#full_axioms Blanc.ProrataWethVault.two_le_offsetN
+#full_axioms Blanc.ProrataWethVault.mint_never_overmints
+#full_axioms Blanc.ProrataWethVault.withdraw_never_overpays
+#full_axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
+#full_axioms Blanc.Func.localExecFree_iff
+#full_axioms Blanc.Prog.componentExecFree_iff
+#full_axioms Blanc.Prog.reachableExecFree_iff
+#full_axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
+#full_axioms Blanc.BeaconDeposit.div_mul_eq_sub_mod
+#full_axioms Blanc.BeaconDeposit.pred_div_eq
+#full_axioms Blanc.BeaconDeposit.pred_mod_of_pos
+#full_axioms Blanc.BeaconDeposit.pred_mod_eq
+#full_axioms Blanc.BeaconDeposit.pred_div_pow_eq
+#full_axioms Blanc.BeaconDeposit.rootAt_nil
+#full_axioms Blanc.BeaconDeposit.rootAt_short
+#full_axioms Blanc.BeaconDeposit.rootAtE_eq
+#full_axioms Blanc.BeaconDeposit.rootAt_append
+#full_axioms Blanc.BeaconDeposit.div_two_div_pow
+#full_axioms Blanc.BeaconDeposit.div_pow_div_two
+#full_axioms Blanc.BeaconDeposit.walk_eq_none_iff
+#full_axioms Blanc.BeaconDeposit.take_drop_append
+#full_axioms Blanc.BeaconDeposit.le64_length
+#full_axioms Blanc.BeaconDeposit.zeros_length
+#full_axioms Blanc.BeaconDeposit.le64_zero
+#full_axioms Blanc.BeaconDeposit.hashPair_input_length
+#full_axioms Blanc.BeaconDeposit.mixIn_input_length
+#full_axioms Blanc.BeaconDeposit.pubkeyRoot_input_length
+#full_axioms Blanc.BeaconDeposit.signatureRoot_input_lengths
+#full_axioms Blanc.BeaconDeposit.depositDataNode_input_lengths
+#full_axioms Blanc.Drip.chain_drips_eq_segmentIndex
+#full_axioms Blanc.Drip.drip_rpow_certified_band
+#full_axioms Blanc.Drip.drip_rpow_exact_telescope
+#full_axioms Blanc.Drip.drip_segment_certified
+#full_axioms Blanc.Drip.segment_spread_witness
+#full_axioms Blanc.Drip.rpow_under_witness
+#full_axioms Blanc.Drip.rpow_over_witness
+#full_axioms Blanc.Drip.drip_rpow_runtime_ops_exact
+#full_axioms Blanc.Drip.Chain.transcriptTally_eq
+#full_axioms Blanc.ProrataWethVault.convertToSharesN_floor_le
+#full_axioms Blanc.ProrataWethVault.convertToSharesN_lt_floor_add_one
+#full_axioms Blanc.ProrataWethVault.convertToAssetsN_floor_le
+#full_axioms Blanc.ProrataWethVault.convertToAssetsN_lt_floor_add_one
+#full_axioms Blanc.ProrataWethVault.previewMintN_covers
+#full_axioms Blanc.ProrataWethVault.previewMintN_lt_add_denominator
+#full_axioms Blanc.ProrataWethVault.previewWithdrawN_covers
+#full_axioms Blanc.ProrataWethVault.previewWithdrawN_lt_add_assetFactor
+#full_axioms Blanc.ProrataWethVault.maxWithdrawN_le_assets
+#full_axioms Blanc.ProrataWethVault.maxDepositViewN_eq_of_stable
+#full_axioms Blanc.ProrataWethVault.maxMintViewN_eq_of_stable
+#full_axioms Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable
+#full_axioms Blanc.ProrataWethVault.roundtrip_no_profit

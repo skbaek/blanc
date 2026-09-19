@@ -390,12 +390,13 @@ private theorem spawnedMessage_executes_weth
 /-! ## CALL and STATICCALL boundary adapters -/
 
 /-- A successful raw CALL edge with the vault's canonical target and a pinned
-input window yields one exact retained WETH occurrence.
-
-The explicit affordability premise is a resource fact about this opcode, not
-a callee-behaviour assumption.  It keeps this composition-local adapter on the
-existing public forward CALL seam and makes no universal gas claim. -/
-theorem exactWethCallOccurrence_of_runCompiled
+input window yields one exact retained WETH occurrence, in a frame of either
+static flag: the retained child message carries the parent's own flag.  A
+revert-cause walk cannot rule out a static frame before its first storage
+write, so it needs the occurrence there too; nothing about the child's
+behaviour in a static frame is assumed.  `exactWethCallOccurrence_of_runCompiled`
+below is its dynamic-frame instance. -/
+theorem exactWethCallOccurrence_of_runCompiled_anyStatic
     {sevm : Sevm} {pre post : Devm}
     {gasWord inputOffset inputSize outputOffset outputSize : B256}
     {rest : List B256} {calldata : Bytes}
@@ -406,7 +407,6 @@ theorem exactWethCallOccurrence_of_runCompiled
     (h_window :
       (pre.memory.read inputOffset.toNat inputSize.toNat).1 = calldata)
     (h_depth : sevm.depth ≠ 0)
-    (h_dynamic : sevm.isStatic = false)
     (h_gas :
       let base := addAccessedAddress
         (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
@@ -418,7 +418,8 @@ theorem exactWethCallOccurrence_of_runCompiled
       (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
         base.gasLeft)
     (run : Ninst.RunCompiled sevm pre Ninst.call post) :
-    ExactWethChildOccurrence sevm pre post Ninst.call calldata false := by
+    ExactWethChildOccurrence sevm pre post Ninst.call calldata
+      sevm.isStatic := by
   obtain ⟨xl, hfill, hrun⟩ := run
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
@@ -515,9 +516,41 @@ theorem exactWethCallOccurrence_of_runCompiled
     hspawn, hfill, hframe, hrun 0, Resume.call_state hres',
     Resume.call_returnData hres', postLogs, parent.stack,
     Resume.call_stack_flag hres', trivial⟩
-  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, ?_, rfl⟩
-  show sevm.isStatic = false
-  exact h_dynamic
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- A successful raw CALL edge with the vault's canonical target and a pinned
+input window yields one exact retained WETH occurrence.
+
+The explicit affordability premise is a resource fact about this opcode, not
+a callee-behaviour assumption.  It keeps this composition-local adapter on the
+existing public forward CALL seam and makes no universal gas claim. -/
+theorem exactWethCallOccurrence_of_runCompiled
+    {sevm : Sevm} {pre post : Devm}
+    {gasWord inputOffset inputSize outputOffset outputSize : B256}
+    {rest : List B256} {calldata : Bytes}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (h_stk : pre.stack =
+      gasWord :: wethAccount.toB256 :: 0 :: inputOffset :: inputSize ::
+        outputOffset :: outputSize :: rest)
+    (h_window :
+      (pre.memory.read inputOffset.toNat inputSize.toNat).1 = calldata)
+    (h_depth : sevm.depth ≠ 0)
+    (h_dynamic : sevm.isStatic = false)
+    (h_gas :
+      let base := addAccessedAddress
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
+      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+        [⟨inputOffset.toNat, inputSize.toNat⟩,
+          ⟨outputOffset.toNat, outputSize.toNat⟩]
+      let acc := accessCost wethAccount
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+      (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
+        base.gasLeft)
+    (run : Ninst.RunCompiled sevm pre Ninst.call post) :
+    ExactWethChildOccurrence sevm pre post Ninst.call calldata false := by
+  have occurrence := exactWethCallOccurrence_of_runCompiled_anyStatic
+    config h_stk h_window h_depth h_gas run
+  rwa [h_dynamic] at occurrence
 
 /-- The STATICCALL sibling used by `totalAssets`: the exact input window is
 read by an actual retained child whose code is the configured WETH runtime. -/

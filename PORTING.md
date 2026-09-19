@@ -315,6 +315,57 @@ block as a separate finite channel. It is no Lean premise, and neither it nor
 the finite differential manifest enlarges the Lean theorems or the
 port-conformance claim.
 
+The PRORATA WETH vault, an ERC-4626 share vault over WETH, has an exact
+Blanc-only boundary of the same kind. Its theorems are about the compiled Blanc
+vault and the exact inherited Blanc WETH runtime, installed directly at
+configured distinct accounts; they cover no CREATE transaction, no WETH9, and
+no deployed code. Every successful call to each of the vault's 25 functions has
+its stated exact effect: the flows quote before the WETH transfer, call the
+exact WETH child, mint or burn, pay, return, and log by the frozen floor/ceil
+formulas, and the views, converters, previews and `max*` return their frozen
+formulas. These are statements about successful runs. Capacity is stated
+about the actual execution instead: at a stable pair state (`PairStable`,
+proved at the configured root and, at a state the real chain reaches from it,
+only under the key-noncollision premise below, `pair_history_stable`), with the
+vault's own call-validity conditions, a `deposit`, `mint`, `withdraw` or
+`redeem` of at most its advertised `max*` value that reverts has run a refused
+exact-WETH child call — for the inbound transfer, the caller's WETH balance or
+allowance, and for any WETH child, gas, the call-depth limit or a static context
+(`deposit_exec_revert_visits_refused_weth_child` and its three siblings);
+with the views' own call-validity conditions — zero call value, calldata
+covering the one-word argument head, and a canonical address argument
+(`ValidAdr`) — `maxDeposit`, `maxMint` and `maxWithdraw` revert only through a
+refused `balanceOf`, and `maxRedeem` never reverts
+(`maxRedeem_exec_never_reverts`);
+and every successful flow stays within `max*`
+(`deposit_success_within_maxDeposit` and its three siblings). An exceptional
+halt of the vault frame — out of gas, or a write in a static context — is not a
+revert and is not covered, and no theorem says that a call within `max*`
+succeeds: there is no liveness or gas-sufficiency claim. From
+a configured root, every configured continuation is backed, or a realization of
+it retains a positive runtime-authorized debit of the vault's WETH row
+(`pair_reachable_backed_or_debit`). Under an explicit finite, trace-local
+premise — no vault-owned WETH allowance key collides with another written key
+among the allowance pairs that the history's frames visit, including frames
+later rolled back — the state reached keeps the share ledger conserved, keeps
+the supply within the offset-weighted WETH row, and keeps WETH solvent
+(`pair_history_backed`, `pair_history_stable`). Under the same premise, the
+whole-history rounding equality and the inflation-attack open-context and
+victim-loss bounds hold for some realization of the history that is faithful to
+the chain (`pair_history_realized_dust_trace_exact`,
+`pair_history_attacker_open_context`, `pair_history_victim_loss_bound`), not
+for the executed operations as such. Faithfulness there is membership only:
+each realized record's allowance visit occurs among the history's visits, and
+inbound records are matched by visits induced from the vault's own frames. The
+no-profit bound (`pair_attacker_no_profit`) attributes coalition input by
+actor, not by the account a credit came from. The attack carrier's inhabitant
+is model-level; no executed chain history satisfying the attack premises is
+exhibited. Agreement with OpenZeppelin v5.7.0 rests on finite evidence — the
+vendored-reference, oracle and differential gates — and on
+`PRORATA_WETH_VAULT_DEVIATIONS.md`; none of it enters a theorem, and nothing
+here certifies ERC-4626 conformance. `docs/PRORATA_WETH_VAULT_CLAIM_MAP.md`
+maps each sentence to its theorems.
+
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
 not covered, this property is not attempted — bounds the claim and asserts

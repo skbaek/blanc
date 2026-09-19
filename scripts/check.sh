@@ -1439,7 +1439,7 @@ Blanc.Drip.dripTraceRealizes_exists_of_reachUsing|$STANDARD
 Blanc.Drip.DripTraceRealizes.toReachUsing|$STANDARD
 Blanc.Drip.concreteHistory_not_draftedKinds|$STANDARD
 Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited|$STANDARD
-Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq|
+Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq|$STANDARD
 Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay|$STANDARD
 Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono|$STANDARD
 Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body|$STANDARD
@@ -1625,7 +1625,122 @@ Blanc.Drip.drip_compiled_exit|$STANDARD
 Blanc.Drip.no_stale_index_success_callback_free|$STANDARD
 Blanc.Drip.no_stale_index_settlement_exit|$STANDARD
 Blanc.Drip.view_eq_same_timestamp_join|$STANDARD
-Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound"
+Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound
+Blanc.Drip.drip_compiled_drip|$STANDARD
+Blanc.Drip.drip_compiled_factorNat|$STANDARD
+Blanc.Drip.drip_rpow_certified_band|propext, Quot.sound
+Blanc.Drip.drip_rpow_exact_telescope|propext, Quot.sound
+Blanc.Drip.drip_segment_certified|propext, Quot.sound
+Blanc.Drip.segment_spread_witness|propext, Quot.sound
+Blanc.Drip.rpow_under_witness|propext, Quot.sound
+Blanc.Drip.rpow_over_witness|propext, Quot.sound
+Blanc.Drip.drip_rpow_runtime_ops_exact|propext, Quot.sound
+Blanc.Drip.exit_pays_exactly_full|$STANDARD
+Blanc.Drip.DeploymentRoot.accountingInv|$STANDARD
+Blanc.Drip.canonicalDeploymentStep_establishes_root|$STANDARD
+Blanc.Drip.StackSafety.actual_entry_safe|$STANDARD
+Blanc.Drip.Chain.transcriptTally_eq|propext
+Blanc.Drip.dripTraceRealizes_transcript|$STANDARD
+Blanc.Drip.history_transcript_accounting_exact|$STANDARD
+Blanc.Drip.history_transcript_balance_exact|$STANDARD
+Blanc.Drip.history_transcript_entitlement|$STANDARD
+Blanc.Drip.realized_segment_certified|$STANDARD
+Blanc.Drip.dripCalls_ne_nil_of_totalUnits|$STANDARD
+Blanc.Drip.concreteHistory_dripCalls_ne_nil|$STANDARD
+Blanc.Drip.dripClockSpec_preservesAdmitted|$STANDARD
+Blanc.Drip.history_clockInv|$STANDARD
+Blanc.Drip.configuredHistory_has_head_timestamp|$STANDARD
+Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace|$STANDARD
+Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time|$STANDARD
+Blanc.Exec.frameAdmitted_benvStat|$STANDARD
+Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt|$STANDARD
+Blanc.Composition.ProrataWethVault.convertToShares_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.convertToAssets_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.previewDeposit_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.previewRedeem_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.previewMint_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.previewWithdraw_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.totalAssets_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.asset_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.maxRedeem_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.name_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.symbol_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.decimals_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.totalSupply_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.balanceOf_compiled_effect|$STANDARD
+Blanc.ProrataWethVault.allowance_compiled_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.PairStable.of_root|$STANDARD
+Blanc.Composition.ProrataWethVault.PairStable.totalAssets|$STANDARD
+Blanc.Composition.ProrataWethVault.PairStable.redeemable_and_solvent|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_message_preserves_backed|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_processMessage_preserves_stable|$STANDARD
+Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_mint|$STANDARD
+Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_outboundSettled|$STANDARD
+Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_child|$STANDARD
+Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_inbound_child|$STANDARD
+Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_outbound_child|$STANDARD
+Blanc.Composition.ProrataWethVault.inbound_stage_witnesses|$STANDARD
+Blanc.Composition.ProrataWethVault.outbound_stage_witnesses|$STANDARD
+Blanc.Composition.ProrataWethVault.DirectWethConfiguration.installed|$STANDARD
+Blanc.Composition.ProrataWethVault.exactWethCallOccurrence_of_runCompiled|$STANDARD
+Blanc.Composition.ProrataWethVault.exactWethStatcallOccurrence_of_runCompiled|$STANDARD
+Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.worldProgramRun|$STANDARD
+Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.programRun|$STANDARD
+Blanc.Composition.ProrataWethVault.SuccessfulWethWorldProgramRun.balanceOf_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.balanceOf_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transfer_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transferFrom_effect|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.vault_externalWethCallSites_complete|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.readTotalAssets_exactEffect|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.callWethTransferFrom_exactEffect|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.callWethTransfer_exactEffect|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.balanceOfStaging_rollback|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.transferFromStaging_rollback|$STANDARD
+Blanc.Composition.ProrataWethVault.Source.transferStaging_rollback|$STANDARD
+Blanc.ProrataWethVault.convertToSharesN_floor_le|propext
+Blanc.ProrataWethVault.convertToSharesN_lt_floor_add_one|propext, Quot.sound
+Blanc.ProrataWethVault.convertToAssetsN_floor_le|propext
+Blanc.ProrataWethVault.convertToAssetsN_lt_floor_add_one|propext, Quot.sound
+Blanc.ProrataWethVault.previewMintN_covers|propext, Quot.sound
+Blanc.ProrataWethVault.previewMintN_lt_add_denominator|propext, Quot.sound
+Blanc.ProrataWethVault.previewWithdrawN_covers|propext, Quot.sound
+Blanc.ProrataWethVault.previewWithdrawN_lt_add_assetFactor|propext, Quot.sound
+Blanc.ProrataWethVault.le_maxMintN_iff|$STANDARD
+Blanc.ProrataWethVault.le_maxDepositN_iff|$STANDARD
+Blanc.ProrataWethVault.convertToSharesN_maxDepositN_le_shareRoom|$STANDARD
+Blanc.ProrataWethVault.maxWithdrawN_le_assets|propext, Quot.sound
+Blanc.Func.RunCompiledToVisiting.toRunCompiledTo|$STANDARD
+Blanc.Func.RunCompiledToVisiting.exists_step|$STANDARD
+Blanc.Prog.RunCompiledToVisiting.toRunCompiledTo|$STANDARD
+Blanc.Prog.RunCompiledToVisiting.exec_eq|$STANDARD
+Blanc.Prog.runCompiledTo_of_exec_revert|$STANDARD
+Blanc.ProrataWethVault.le_maxWithdrawN_iff|$STANDARD
+Blanc.ProrataWethVault.previewWithdrawN_maxWithdrawN_le|$STANDARD
+Blanc.ProrataWethVault.maxDepositViewN_eq_of_stable|propext
+Blanc.ProrataWethVault.maxMintViewN_eq_of_stable|propext
+Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable|propext, Quot.sound
+Blanc.ProrataWethVault.roundtrip_no_profit|propext, Quot.sound
+Blanc.Composition.ProrataWethVault.deposit_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.mint_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.withdraw_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxDeposit_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxMint_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxWithdraw_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxRedeem_no_reverting_walk|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.mint_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.withdraw_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxDeposit_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxMint_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxWithdraw_exec_revert_visits_refused_weth_child|$STANDARD
+Blanc.Composition.ProrataWethVault.maxRedeem_exec_never_reverts|$STANDARD
+Blanc.Composition.ProrataWethVault.deposit_success_within_maxDeposit|$STANDARD
+Blanc.Composition.ProrataWethVault.mint_success_within_maxMint|$STANDARD
+Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw|$STANDARD
+Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem|$STANDARD
+Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
@@ -1683,6 +1798,64 @@ while IFS= read -r ROW; do
     echo "$LINE"
   fi
 done <<< "$ROWS"
+
+# From-scratch cross-check. Lean v4.32.1's `#print axioms` reads a per-module
+# result precomputed at olean export with a shared cache whose cycle sentinel
+# can record an inductive as axiom-free (see the note above `#full_axioms` in
+# AxiomCheck.lean); that under-report let `ReplayCarrier.nilOfEq` pass a "no
+# axioms" pin. A row pinned to a strict subset of $STANDARD is the one an
+# under-report can turn green, so every such row is recomputed by
+# `#full_axioms`, which ignores the precomputed entries, and must equal its pin.
+# The walked list in AxiomCheck.lean must be exactly those rows.
+STANDARD_SORTED="$(printf '%s\n' "$STANDARD" | tr ',' '\n' \
+  | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
+NFULL=0
+NFULLOK=0
+SUBSET_ROWS=""
+while IFS= read -r ROW; do
+  [ -n "$ROW" ] || continue
+  THM="${ROW%%|*}"
+  EXPECTED_SORTED="$(printf '%s\n' "${ROW#*|}" | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
+  [ "$EXPECTED_SORTED" = "$STANDARD_SORTED" ] && continue
+  if [ -n "$(LC_ALL=C comm -23 <(printf '%s\n' "$EXPECTED_SORTED" | grep -v '^$') \
+      <(printf '%s\n' "$STANDARD_SORTED"))" ]; then
+    continue
+  fi
+  SUBSET_ROWS="$SUBSET_ROWS$THM
+"
+  NFULL=$((NFULL + 1))
+  FULL="$(printf '%s\n' "$OUT" | awk -v marker="FULL-AXIOMS '$THM': " '
+    index($0, marker) == 1 { print substr($0, length(marker) + 1); exit }')"
+  if [ -z "$FULL" ]; then
+    echo "FAIL — $THM: no from-scratch axiom report (#full_axioms) found in Lean output"
+    continue
+  fi
+  FULL_SORTED="$(printf '%s\n' "$FULL" | tr -d '[]' | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
+  if [ "$FULL_SORTED" = "$EXPECTED_SORTED" ]; then
+    NFULLOK=$((NFULLOK + 1))
+  else
+    echo "FAIL — $THM: from-scratch axioms $FULL differ from the pinned [${ROW#*|}]"
+  fi
+done <<< "$ROWS"
+WALKED="$(grep -oE '^#full_axioms[[:space:]]+[A-Za-z0-9_.?]+' \
+  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $2}' | LC_ALL=C sort)"
+SUBSET_SORTED="$(printf '%s' "$SUBSET_ROWS" | grep -v '^$' | LC_ALL=C sort)"
+if [ "$WALKED" != "$SUBSET_SORTED" ]; then
+  UNWALKED="$(LC_ALL=C comm -13 <(printf '%s\n' "$WALKED") <(printf '%s\n' "$SUBSET_SORTED") | xargs)"
+  EXTRAWALK="$(LC_ALL=C comm -23 <(printf '%s\n' "$WALKED") <(printf '%s\n' "$SUBSET_SORTED") | xargs)"
+  LINE="REGRESSION — axiom audit: the #full_axioms list in scripts/AxiomCheck.lean is not exactly the rows pinned below the standard set"
+  [ -n "$UNWALKED" ] && LINE="$LINE; pinned below standard but not walked: $UNWALKED"
+  [ -n "$EXTRAWALK" ] && LINE="$LINE; walked but not pinned below standard: $EXTRAWALK"
+  echo "$LINE"
+  exit 1
+fi
+if [ "$NFULL" -eq 0 ] || [ "$NFULLOK" -ne "$NFULL" ]; then
+  echo "REGRESSION — axiom audit: only $NFULLOK/$NFULL rows pinned below the standard set match a from-scratch axiom walk"
+  exit 1
+fi
+echo "OK — axiom audit cross-check: $NFULLOK/$NFULL rows pinned below the standard set match a from-scratch axiom walk"
 
 # Belt and braces: AxiomCheck.lean prints nothing but the audited axiom sets,
 # so a forbidden name anywhere in the output is a failure even if the
