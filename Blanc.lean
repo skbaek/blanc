@@ -375,6 +375,7 @@ import Blanc.DripExitPreCallbackLocator
 import Blanc.DripFrameSpawns
 import Blanc.DripRealizedLadder
 import Blanc.DripTraceRealizes
+import Blanc.DripTranscriptExec
 import Blanc.DripConcreteRealized
 import Blanc.DripInvariant
 import Blanc.DripMachine

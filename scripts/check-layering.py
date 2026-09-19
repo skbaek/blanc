@@ -215,7 +215,8 @@ CONTRACTS = {
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate",
              "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
              "DripRealizedExec", "DripExitPreCallbackLocator", "DripFrameSpawns",
-             "DripRealizedLadder", "DripTraceRealizes", "DripConcreteRealized"],
+             "DripRealizedLadder", "DripTraceRealizes", "DripConcreteRealized",
+             "DripTranscriptExec"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",
