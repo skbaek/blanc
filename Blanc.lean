@@ -372,6 +372,7 @@ import Blanc.DripHistory
 import Blanc.DripRealizedHistory
 import Blanc.DripRealizedExec
 import Blanc.DripExitPreCallbackLocator
+import Blanc.DripFrameSpawns
 import Blanc.DripRealizedLadder
 import Blanc.DripTraceRealizes
 import Blanc.DripConcreteRealized
