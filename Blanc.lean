@@ -377,6 +377,7 @@ import Blanc.DripRealizedLadder
 import Blanc.DripTraceRealizes
 import Blanc.DripTranscriptExec
 import Blanc.DripConcreteRealized
+import Blanc.DripTranscriptHistory
 import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripMonotone
