@@ -280,6 +280,7 @@ CONTRACTS = {
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
                             "ProrataWethVaultMaxArithmetic",
+                            "ProrataWethVaultArithmeticRevert",
                             "ProrataWethVaultArithmeticExec",
                             "ProrataWethVaultCapacities",
                             "ProrataWethVaultConversions",
