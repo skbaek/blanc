@@ -658,4 +658,131 @@ theorem withdrawSelector_not_allowed :
     selector "withdraw" [.uint256] ∉ allowedWethSelectors := by
   decide +kernel
 
+/-- `exactWethCallOccurrence_of_runCompiled` in a frame of either static flag:
+the retained child message carries the parent's own flag.  A revert-cause
+walk cannot rule out a static frame before its first storage write, so it
+needs the occurrence there too; nothing about the child's behaviour in a
+static frame is assumed. -/
+theorem exactWethCallOccurrence_of_runCompiled_anyStatic
+    {sevm : Sevm} {pre post : Devm}
+    {gasWord inputOffset inputSize outputOffset outputSize : B256}
+    {rest : List B256} {calldata : Bytes}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (h_stk : pre.stack =
+      gasWord :: wethAccount.toB256 :: 0 :: inputOffset :: inputSize ::
+        outputOffset :: outputSize :: rest)
+    (h_window :
+      (pre.memory.read inputOffset.toNat inputSize.toNat).1 = calldata)
+    (h_depth : sevm.depth ≠ 0)
+    (h_gas :
+      let base := addAccessedAddress
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
+      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+        [⟨inputOffset.toNat, inputSize.toNat⟩,
+          ⟨outputOffset.toNat, outputSize.toNat⟩]
+      let acc := accessCost wethAccount
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+      (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
+        base.gasLeft)
+    (run : Ninst.RunCompiled sevm pre Ninst.call post) :
+    ExactWethChildOccurrence sevm pre post Ninst.call calldata
+      sevm.isStatic := by
+  obtain ⟨xl, hfill, hrun⟩ := run
+  have hx := hrun 0
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
+  have hta : wethAccount.toB256.toAdr = wethAccount := toAdr_toB256 wethAccount
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  let base := addAccessedAddress popped wethAccount
+  have hcode : base.state.getCode wethAccount = pre.getCode wethAccount := by
+    rfl
+  have hnone : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
+    unfold getDelegatedCodeAddress
+    rw [if_neg config.notDelegated]
+  have hdel : accessDelegation base wethAccount =
+      ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
+    simp only [accessDelegation, hcode, hnone]
+  let ext := popped.extCost
+    [⟨inputOffset.toNat, inputSize.toNat⟩,
+      ⟨outputOffset.toNat, outputSize.toNat⟩]
+  let acc := accessCost wethAccount popped.accessedAddresses
+  rcases hsplit : calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc with
+    ⟨mcc, mcs⟩
+  have hga : mcc + ext ≤ base.gasLeft := by
+    simpa only [popped, base, ext, acc, hsplit] using h_gas
+  have hdel' : accessDelegation
+      (addAccessedAddress
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩)
+          wethAccount.toB256.toAdr) wethAccount.toB256.toAdr =
+      ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
+    simpa only [hta, popped, base] using hdel
+  obtain ⟨hstep, -, -, -, -, -, -, -⟩ :=
+    directCall_zero_spawn h_stk (ext := ext) (acc := acc) (mcc := mcc)
+      (mcs := mcs) (d1 := base) (dp := false) (dadr := wethAccount)
+      (code := pre.getCode wethAccount) (dgc := 0)
+      (by rfl) hdel' (by rfl) hsplit hga h_depth
+  rw [hta] at hstep
+  let parent := callSpawnParent base (mcc + ext)
+    inputOffset.toNat inputSize.toNat outputOffset.toNat outputSize.toNat
+  have hpmem : parent.memory = pre.memory.extends
+      [⟨inputOffset.toNat, inputSize.toNat⟩,
+        ⟨outputOffset.toNat, outputSize.toNat⟩] := by
+    rfl
+  have hdata : parent.memory.data.sliceD inputOffset.toNat
+      inputSize.toNat 0 = calldata := by
+    rw [hpmem]
+    exact h_window
+  have hmsgeq : callSpawnMsg sevm parent mcs wethAccount wethAccount
+      inputOffset.toNat inputSize.toNat (pre.getCode wethAccount) false =
+      callMsg sevm parent mcs 0 sevm.currentTarget wethAccount wethAccount
+        true false calldata (pre.getCode wethAccount) false := by
+    show callMsg sevm parent mcs 0 sevm.currentTarget wethAccount wethAccount
+      true false
+      (parent.memory.data.sliceD inputOffset.toNat inputSize.toNat 0)
+      (pre.getCode wethAccount) false = _
+    rw [hdata]
+  rw [hstep] at hx
+  obtain ⟨r, hframe, hres⟩ := hx
+  rcases r with ⟨e, st, ca, tra⟩ | child
+  · rw [Resume.run_call_fatal] at hres
+    cases hres
+  rw [hmsgeq] at hframe
+  have hres' :
+      (Resume.call parent outputOffset.toNat outputSize.toNat).run
+        (.ok child) = .ok post := hres.symm
+  let msg := callMsg sevm parent mcs 0 sevm.currentTarget wethAccount
+    wethAccount true false calldata (pre.getCode wethAccount) false
+  have hxspawn : Xinst.step sevm pre .call =
+      .spawn (Jaune.Frame.ofCall msg)
+        (.call parent outputOffset.toNat outputSize.toNat) := by
+    rw [hstep, hmsgeq]
+  have executes : MessageExecutesProgram msg xl Blanc.weth := by
+    apply spawnedMessage_executes_weth config (msg := msg) (child := child)
+      (resume := .call parent outputOffset.toNat outputSize.toNat)
+      (x := .call)
+    · rfl
+    · rfl
+    · rfl
+    · rfl
+    · rfl
+    · exact hxspawn
+    · exact hfill
+    · exact hframe
+  have hspawn : Ninst.step ⟨0, sevm, pre⟩ Ninst.call =
+      .spawn (Jaune.Frame.ofCall msg)
+        (.call parent outputOffset.toNat outputSize.toNat) 1 := by
+    simp only [Ninst.call, Ninst.step_exec]
+    change XStep.toStep 1 (Xinst.step sevm pre .call) = _
+    rw [hxspawn]
+    rfl
+  have postLogs : post.logs = if child.error.isSome then pre.logs
+      else pre.logs ++ child.logs := by
+    rw [Resume.call_logs hres']
+    rfl
+  refine ⟨msg, xl, child, 0, 1,
+    .call parent outputOffset.toNat outputSize.toNat, ?_, executes, rfl, rfl,
+    hspawn, hfill, hframe, hrun 0, Resume.call_state hres',
+    Resume.call_returnData hres', postLogs, parent.stack,
+    Resume.call_stack_flag hres', trivial⟩
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
 end Blanc.Composition.ProrataWethVault

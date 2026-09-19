@@ -187,6 +187,15 @@ registry has identified the likely vocabulary.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
+- A compiled walk that designates the step that caused a revert
+  (`Func.RunCompiledToVisiting`, `Prog.RunCompiledToVisiting`):
+  [`Blanc/RevertCause.lean`](../Blanc/RevertCause.lean).  The same module
+  inverts a reverting frame into its gas-exact walk
+  (`Prog.runCompiledTo_of_exec_revert`), proves a visiting walk by
+  contradiction through `Func.RunCompiledToAvoiding` (with its step, branch,
+  call, line, nonpayable and sorted-dispatch inversions), rules out a reverting
+  walk of a `Func.revertFreeIn` body, and checks a program's terminals with
+  `Func.TerminalsReturnOrRevert`.
 - Carry an observable through a successful compiled walk with a fixed
   function table using `Func.CompiledInv` in
   [`Blanc/CompiledFixedInvariance.lean`](../Blanc/CompiledFixedInvariance.lean).

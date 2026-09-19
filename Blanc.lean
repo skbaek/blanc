@@ -138,6 +138,7 @@ import Blanc.DeploymentMessage
 import Blanc.Forward
 import Blanc.ForwardMstore8
 import Blanc.Reverts
+import Blanc.RevertCause
 import Blanc.RevertPayload
 import Blanc.CompiledWalkInversion
 import Blanc.CompiledFixedInvariance
@@ -316,9 +317,11 @@ import Blanc.ProrataWethVault
 import Blanc.ProrataWethVaultCode
 import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
+import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultCapacities
+import Blanc.ProrataWethVaultArithmeticRevert
 import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultOutbound
 import Blanc.ProrataWethVaultShares
@@ -334,6 +337,12 @@ import Blanc.Composition.ProrataWethVaultConversions
 import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.Composition.ProrataWethVaultRevertSteps
+import Blanc.Composition.ProrataWethVaultNonrevertViews
+import Blanc.Composition.ProrataWethVaultNonrevertInbound
+import Blanc.Composition.ProrataWethVaultNonrevertOutbound
+import Blanc.Composition.ProrataWethVaultNonrevert
+import Blanc.Composition.ProrataWethVaultTerminals
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.Composition.ProrataWethVaultAccounting
 import Blanc.Composition.ProrataWethVaultCoalition

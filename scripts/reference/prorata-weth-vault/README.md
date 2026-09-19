@@ -19,16 +19,26 @@ differential referent: OpenZeppelin Contracts `v5.7.0` at commit
   `evmVersion = prague`, `bytecodeHash = none`, `appendCBOR = false`).
 - `inputs/standard-json-output.json` is the output of `solc 0.8.36+commit.8a079791`
   on that input. It was produced with the native macOS build of that commit
-  (SHA-256 `d4abcf0b…`, the build the SF records for dossier reconnaissance);
-  the SF's selected platform-independent `emscripten-wasm32` artifact
-  (SHA-256 `704877a5…`) is not vendored and has not been executed here. Both
-  are the same compiler commit; the output's identities are the SF's own
-  template identities, which is the check that matters.
+  (SHA-256 `d4abcf0b…`, the build the SF records for dossier reconnaissance).
+  The SF's selected platform-independent `emscripten-wasm32` artifact
+  (SHA-256 `704877a5…`) is not vendored, but it has been executed against
+  this tree. The latest run: `SOLJSON=<that artifact> scripts/check-prorata-weth-vault-reference.sh
+  --recompile-wasm` at Blanc `f86e4d7`, 2026-09-19, exit 0, verdict ending
+  "selected-wasm recompile leg: ran" (raw output: Plans `54030b9c`,
+  `evidence/prorata-erc4626-closure-v1/r6-wasm/02-recompile-wasm.txt`). The
+  gate hash-checked the artifact before running it, and the fresh output
+  carried the frozen creation/runtime template identities. Because `$SOLJSON`
+  is not vendored, that leg stays optional and outside the ordered gate set;
+  the ordinary gate checks the committed output's identities, not that the
+  input compiles to it.
 
 The lock `scripts/prorata-weth-vault-reference.json` pins all of the above.
 `scripts/check-prorata-weth-vault-reference.sh` verifies the tree against it
 offline; `--recompile` with `$SOLC` pointing at the recorded native binary
-reproduces the artifacts from source, and `--self-test` shows the gate bites.
+reproduces the artifacts from source, `--recompile-wasm` does the same with
+the selected wasm artifact, and `--self-test` shows the gate bites: seven
+corruptions, each failing with its own named diagnostic and each restoring
+green when undone.
 
 The constructor-patched runtime — the creation input with the configured asset
 word `0x…1000` executed against Blanc's WETH — is derived and identity-checked
