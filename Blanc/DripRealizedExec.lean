@@ -774,22 +774,32 @@ private theorem selector_facts :
     convertToUnitsSelector ≠ exitSelector := by
   decide +kernel
 
-/-- Every successful frame of the deployed runtime is one tagged head step
-followed by the replay of its accepted exit callback, if it has one.  The
-callback's replay is the only premise: it is supplied by the deeper-frame
-induction hypothesis of the recursion below, never assumed of the child. -/
-theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
+/-- One head step from a single effect. -/
+private theorem head_of_effect {coalition : Finset Adr} {ca : Adr}
+    {sevm : Sevm} {pre post : Devm}
+    (effect : Effect scale.toNat freshNat
+      (execEntrySnapshot coalition ca sevm pre.state) (opTag coalition sevm pre)
+      (snapshot coalition ca post.state)) :
+    ∃ op : RealizedStep,
+      op.pre = execEntrySnapshot coalition ca sevm pre.state ∧
+      op.kind = opTag coalition sevm pre ∧
+      op.post = snapshot coalition ca post.state :=
+  ⟨⟨_, _, _, effect⟩, rfl, rfl, rfl⟩
+
+/-- Every successful non-exit route of the deployed runtime is exactly one head
+step from the pre-credit entry boundary to the frame's end, carrying the
+frame's computed tag. -/
+theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
     {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code.toList = code)
     (hcanon : pre.memory = Mem.empty)
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
-    (caller_ne : sevm.caller ≠ sevm.currentTarget)
-    (exitNested : ∀ handoff : ExitHandoff coalition sevm pre post,
-      ∃ nested, RealizedChain
-        (snapshot coalition sevm.currentTarget handoff.entry.state) nested
-        (snapshot coalition sevm.currentTarget handoff.child.state)) :
-    TargetReplay coalition sevm.currentTarget sevm pre post := by
+    (hnotExit : sevm.data.length.toB256 = 0 ∨ Sevm.selector sevm ≠ exitSelector) :
+    ∃ op : RealizedStep,
+      op.pre = execEntrySnapshot coalition sevm.currentTarget sevm pre.state ∧
+      op.kind = opTag coalition sevm pre ∧
+      op.post = snapshot coalition sevm.currentTarget post.state := by
   have credited : sevm.value.toNat ≤ (pre.state.bal sevm.currentTarget).toNat :=
     precondition.inv.1 rfl
   obtain ⟨joinDrip, exitDrip, exitJoin, assetsDrip, assetsJoin, assetsExit,
@@ -797,9 +807,9 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
   by_cases hempty : sevm.data.length.toB256 = 0
   · have stateEq := (exec_receive exc hcode hempty).1
     by_cases hvalue : sevm.value = 0
-    · apply TargetReplay.single
-      have tag : opTag coalition sevm pre = .silent := by
+    · have tag : opTag coalition sevm pre = .silent := by
         simp only [opTag, hempty, hvalue, if_true]
+      apply head_of_effect
       rw [tag, execEntrySnapshot_of_value_zero hvalue, stateEq]
       exact .silent _
     · have tag : opTag coalition sevm pre = .externalCredit sevm.value.toNat := by
@@ -815,15 +825,12 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
           (by rw [precreditState_getStor, stateEq])
           (by rw [← stateEq, precreditState_bal credited]; omega)
           positive with ⟨op, kindEq, preEq, postEq⟩
-      refine ⟨op, [], ?_, kindEq.trans tag.symm, ?_⟩
-      · rw [preEq, execEntrySnapshot_of_target rfl credited]
-      · rw [postEq]
-        exact Chain.nil _
+      refine ⟨op, ?_, kindEq.trans tag.symm, postEq⟩
+      rw [preEq, execEntrySnapshot_of_target rfl credited]
   · have member := exec_selector_mem exc hcode hempty
     simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with hsel | hsel | hsel | hsel | hsel
     · -- convertToAssets
-      apply TargetReplay.single
       have tag : opTag coalition sevm pre = .silent := by
         simp only [opTag, hempty, hsel, assetsDrip, assetsJoin, assetsExit,
           if_false]
@@ -831,23 +838,17 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
       have storage := (convertToAssets_exec_effect exc hcode hsel hempty
         hcanon).2.2.2.2.2.2.1
       have balance := view_exec_balance_eq exc hcode (Or.inl hsel) hempty hcanon
+      apply head_of_effect
       rw [tag, execEntrySnapshot_of_value_zero hvalue,
         ← snapshot_eq_of_getStor_bal
           (congrFun storage.symm sevm.currentTarget)
           (congrFun balance sevm.currentTarget)]
       exact .silent _
     · -- exit
-      have hvalue := (exec_enters_exit exc hcode hsel hempty).1
-      obtain ⟨handoff⟩ := exit_exec_handoff coalition exc hcode hsel hempty
-        hcanon precondition caller_ne
-      rcases exitNested handoff with ⟨nested, chain⟩
-      refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_⟩
-      · exact (execEntrySnapshot_of_value_zero hvalue).symm
-      · simp only [opTag, hempty, hsel, exitDrip, exitJoin, if_false, if_true]
-      · rw [handoff.postSnapshot]
-        exact chain
+      rcases hnotExit with hnil | hne
+      · exact absurd hnil hempty
+      · exact absurd hsel hne
     · -- convertToUnits
-      apply TargetReplay.single
       have tag : opTag coalition sevm pre = .silent := by
         simp only [opTag, hempty, hsel, unitsDrip, unitsJoin, unitsExit,
           if_false]
@@ -855,6 +856,7 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
       have storage := (convertToUnits_exec_effect exc hcode hsel hempty
         hcanon).2.2.2.2.2.2.1
       have balance := view_exec_balance_eq exc hcode (Or.inr hsel) hempty hcanon
+      apply head_of_effect
       rw [tag, execEntrySnapshot_of_value_zero hvalue,
         ← snapshot_eq_of_getStor_bal
           (congrFun storage.symm sevm.currentTarget)
@@ -863,8 +865,8 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
     · -- drip
       have hvalue := (exec_enters_drip exc hcode hsel hempty).1
       refine ⟨⟨_, _, _,
-        drip_exec_realized_effect coalition exc hcode hsel hempty hcanon⟩, [],
-        ?_, ?_, Chain.nil _⟩
+        drip_exec_realized_effect coalition exc hcode hsel hempty hcanon⟩,
+        ?_, ?_, rfl⟩
       · exact (execEntrySnapshot_of_value_zero hvalue).symm
       · simp only [opTag, hempty, hsel, if_false, if_true]
     · -- join
@@ -909,10 +911,111 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
             (pre.state.bal sevm.currentTarget).toNat at this
           omega)
       rw [quote] at effect
-      refine ⟨⟨_, _, _, effect⟩, [], ?_, ?_, Chain.nil _⟩
+      refine ⟨⟨_, _, _, effect⟩, ?_, ?_, rfl⟩
       · exact (execEntrySnapshot_of_target rfl credited).symm
       · simp only [opTag, hempty, hsel, joinDrip, if_false, if_true]
         rfl
+
+/-- Every successful frame of the deployed runtime is one tagged head step
+followed by the replay of its accepted exit callback, if it has one.  The
+callback's replay is the only premise: it is supplied by the deeper-frame
+induction hypothesis of the recursion below, never assumed of the child. -/
+theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
+    {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hcanon : pre.memory = Mem.empty)
+    (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
+    (caller_ne : sevm.caller ≠ sevm.currentTarget)
+    (exitNested : ∀ handoff : ExitHandoff coalition sevm pre post,
+      ∃ nested, RealizedChain
+        (snapshot coalition sevm.currentTarget handoff.entry.state) nested
+        (snapshot coalition sevm.currentTarget handoff.child.state)) :
+    TargetReplay coalition sevm.currentTarget sevm pre post := by
+  by_cases hexit : sevm.data.length.toB256 ≠ 0 ∧ Sevm.selector sevm = exitSelector
+  · obtain ⟨hempty, hsel⟩ := hexit
+    obtain ⟨joinDrip, exitDrip, exitJoin, -, -, -, -, -, -⟩ := selector_facts
+    have hvalue := (exec_enters_exit exc hcode hsel hempty).1
+    obtain ⟨handoff⟩ := exit_exec_handoff coalition exc hcode hsel hempty
+      hcanon precondition caller_ne
+    rcases exitNested handoff with ⟨nested, chain⟩
+    refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_⟩
+    · exact (execEntrySnapshot_of_value_zero hvalue).symm
+    · simp only [opTag, hempty, hsel, exitDrip, exitJoin, if_false, if_true]
+    · rw [handoff.postSnapshot]
+      exact chain
+  · have hnotExit : sevm.data.length.toB256 = 0 ∨ Sevm.selector sevm ≠ exitSelector := by
+      by_cases hnil : sevm.data.length.toB256 = 0
+      · exact Or.inl hnil
+      · exact Or.inr fun hsel => hexit ⟨hnil, hsel⟩
+    rcases exec_nonexit_head coalition exc hcode hcanon precondition hnotExit with
+      ⟨op, preEq, kindEq, postEq⟩
+    refine ⟨op, [], preEq, kindEq, ?_⟩
+    rw [postEq]
+    exact Chain.nil _
+
+/-- The recursion facts of an exit frame's filled payout child: it commits, is
+foreign, keeps the side precondition and the installed code, is strictly
+deeper, and starts and ends at the handoff's entry and child worlds. -/
+theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
+    {childMsg : Msg} {hentry : Benv} {child : Devm}
+    {childPc : Nat} {childSevm : Sevm} {childPre : Devm} {childOut : Execution}
+    (process : ProcessMessage childMsg
+      (.some ⟨⟨childPc, childSevm, childPre⟩, childOut⟩) (.ok child))
+    (childClean : child.error.isSome = false)
+    (entryTransfer : childMsg.benvAfterTransfer = .ok hentry)
+    (targetNe : childMsg.currentTarget ≠ sevm.currentTarget)
+    (depth : (initSevm (childMsg.withBenv hentry)).depth < sevm.depth)
+    (childPreH : dripEntrySpec.Pre sevm.currentTarget
+      (initSevm (childMsg.withBenv hentry)) (initDevm (childMsg.withBenv hentry))) :
+    ∃ childCommitted : Execution.commits childOut = true,
+      childSevm.currentTarget ≠ sevm.currentTarget ∧
+      dripEntrySpec.Pre sevm.currentTarget childSevm childPre ∧
+      Prog.At runtime sevm.currentTarget childPc childSevm childPre ∧
+      childSevm.depth < sevm.depth ∧
+      execEntrySnapshot coalition sevm.currentTarget childSevm childPre.state =
+        snapshot coalition sevm.currentTarget hentry.state ∧
+      child.state = (Execution.committedPost childOut childCommitted).state := by
+  have settles :=
+    _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+      process childClean
+  have childCommitted :=
+    Frame.raw_commits_of_settlementCommits settles
+  have enter := (RunFrame.some_inv process).1
+  rcases Frame.enter_run_inv enter with ⟨entry, transfer, childEvmEq⟩
+  simp only [Frame.ofCall] at transfer childEvmEq
+  have entryEq : entry = hentry :=
+    Except.ok.inj (transfer.symm.trans entryTransfer)
+  subst entry
+  have childSevmEq : childSevm =
+      initSevm (childMsg.withBenv hentry) :=
+    congrArg (fun evm : Evm => evm.sta) childEvmEq
+  have childPreEq : childPre =
+      initDevm (childMsg.withBenv hentry) :=
+    congrArg (fun evm : Evm => evm.dyna) childEvmEq
+  have childTargetNe : childSevm.currentTarget ≠ sevm.currentTarget := by
+    rw [childSevmEq]
+    simpa [initSevm, Msg.withBenv] using targetNe
+  have childPrecondition :
+      dripEntrySpec.Pre sevm.currentTarget childSevm childPre := by
+    rw [childSevmEq, childPreEq]
+    exact childPreH
+  have childAt : Prog.At runtime sevm.currentTarget childPc
+      childSevm childPre :=
+    ⟨childPrecondition.code,
+      fun childTarget => (childTargetNe childTarget).elim⟩
+  have childDepth : childSevm.depth < sevm.depth := by
+    rw [childSevmEq]
+    exact depth
+  have startEq :
+      execEntrySnapshot coalition sevm.currentTarget childSevm
+          childPre.state =
+        snapshot coalition sevm.currentTarget hentry.state := by
+    rw [execEntrySnapshot_of_target_ne childTargetNe, childPreEq]
+    rfl
+  exact ⟨childCommitted, childTargetNe, childPrecondition, childAt, childDepth,
+    startEq,
+    _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process childCommitted⟩
 
 /-! ## The interpreter recursion -/
 
@@ -980,53 +1083,16 @@ theorem Exec.CoreDripAccounting.atTarget
         rw [childState]
         exact Chain.nil _
     | @some childPc childSevm childPre childOut childRun =>
-        have settles :=
-          _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
-            process childClean
-        have childCommitted :=
-          Frame.raw_commits_of_settlementCommits settles
-        have enter := (RunFrame.some_inv process).1
-        rcases Frame.enter_run_inv enter with ⟨entry, transfer, childEvmEq⟩
-        simp only [Frame.ofCall] at transfer childEvmEq
-        have entryEq : entry = hentry :=
-          Except.ok.inj (transfer.symm.trans entryTransfer)
-        subst entry
-        have childSevmEq : childSevm =
-            initSevm (childMsg.withBenv hentry) :=
-          congrArg (fun evm : Evm => evm.sta) childEvmEq
-        have childPreEq : childPre =
-            initDevm (childMsg.withBenv hentry) :=
-          congrArg (fun evm : Evm => evm.dyna) childEvmEq
-        have childTargetNe : childSevm.currentTarget ≠ sevm.currentTarget := by
-          rw [childSevmEq]
-          simpa [initSevm, Msg.withBenv] using targetNe
-        have childPrecondition :
-            dripEntrySpec.Pre sevm.currentTarget childSevm childPre := by
-          rw [childSevmEq, childPreEq]
-          exact childPreH
-        have childAt : Prog.At runtime sevm.currentTarget childPc
-            childSevm childPre :=
-          ⟨childPrecondition.code,
-            fun childTarget => (childTargetNe childTarget).elim⟩
-        have childDepth : childSevm.depth < sevm.depth := by
-          rw [childSevmEq]
-          exact depth
-        have childCore := deeper childPc childSevm childPre childOut childRun
-          childDepth childAt
-        rcases childCore childRun childCommitted childAt childPrecondition
+        obtain ⟨childCommitted, childTargetNe, childPrecondition, childAt,
+            childDepth, startEq, childPost⟩ :=
+          exitChild_facts coalition process childClean entryTransfer targetNe
+            depth childPreH
+        rcases deeper childPc childSevm childPre childOut childRun
+            childDepth childAt childRun childCommitted childAt childPrecondition
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim) with
           ⟨steps, chain, _⟩
-        have startEq :
-            execEntrySnapshot coalition sevm.currentTarget childSevm
-                childPre.state =
-              snapshot coalition sevm.currentTarget hentry.state := by
-          rw [execEntrySnapshot_of_target_ne childTargetNe, childPreEq]
-          rfl
-        have childPost :=
-          _root_.Blanc.ProcessMessage.ok_state_eq_committedPost
-            process childCommitted
         refine ⟨steps, ?_⟩
         rw [← startEq, childPost]
         exact chain
