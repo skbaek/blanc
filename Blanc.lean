@@ -40,6 +40,7 @@ import Blanc.ExecutionAccountingLadder
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
+import Blanc.ExecutionTraceSettledFrames
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
 import Blanc.ExecutionTerminal
