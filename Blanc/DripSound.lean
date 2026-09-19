@@ -189,7 +189,7 @@ private theorem exit_funcSound {P : Stor → Prop} (hP : StepClosed P) (ca : Adr
   rcases exit_pays_exactly_full auxLookup_runtime frame nil_pref hrun with
     ⟨-, -, -, hrowCover, htotalCover, -, -, hclock, -, hguards, hnof, hcap,
       callPre, callPost, guardPost, returnPre, hstorCallPre, hcodeCallPre,
-      haccepted, hstorFinal, -, -⟩
+      -, haccepted, hstorFinal, -, -⟩
   have hsettled : P (Devm.getStor callPre sevm.currentTarget) := by
     rw [hstorCallPre]
     exact hP.exit hinv hclock hguards hnof rfl hcap hrowCover htotalCover
