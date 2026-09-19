@@ -1819,7 +1819,10 @@ consumer needs canonical interpreter ingress as one conjunct:
   and use its `settledFrames` projections instead of `rawFrames`; it mirrors
   the same trace-carrier route and concatenation order while applying the
   message and CREATE settlement tests at their roots.
-- `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
+- When a consumer needs every entered frame's block environment (timestamp,
+  number, …) to be the execution root's, import
+  [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):
+  `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
   by every admitted frame from the execution root; use it with
   `Exec.FrameAdmitted.root` when lifting a root `benvStat` fact.
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
