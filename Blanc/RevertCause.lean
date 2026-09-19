@@ -1313,4 +1313,95 @@ theorem Func.revertFreeIn_prepend (safe : List Nat) (l : Line) (f : Func) :
   | nil => rfl
   | cons i l ih => exact ih
 
+/-! ## Source runs cut at one continuation call
+
+A revert-cause walk often reaches a known continuation `call k` after a
+stretch whose success traces are stated for `Func.WalkInv` relations.  The
+stretch is replayed as a source run in `Func.stopTable k`, where entry `k` is
+`STOP`: the source run ends exactly where the walk entered the continuation,
+and any family trace instantiated at `Func.Run` over that table reads the
+stretch without restating it.  The walk itself continues, still avoiding, in
+the real table. -/
+
+/-- A table whose entry `k` (and every earlier one) is `STOP`. -/
+def Func.stopTable (k : Nat) : List Func := List.replicate (k + 1) Func.stop
+
+theorem Func.stopTable_get (k : Nat) :
+    (Func.stopTable k)[k]? = some Func.stop := by
+  simp [Func.stopTable]
+
+/-- The straight-line prefix of a body that ends in one `call`. -/
+def Func.lineCall : Func → Option (Line × Nat)
+  | .next i f => (Func.lineCall f).map fun p => (i :: p.1, p.2)
+  | .call k => some ([], k)
+  | _ => none
+
+theorem Func.eq_of_lineCall {f : Func} :
+    ∀ {l : Line} {k : Nat}, f.lineCall = some (l, k) → f = l +++ .call k := by
+  induction f with
+  | next i f ih =>
+    intro l k h
+    simp only [Func.lineCall, Option.map_eq_some_iff] at h
+    obtain ⟨⟨l', k'⟩, h', hp⟩ := h
+    simp only [Prod.mk.injEq] at hp
+    obtain ⟨rfl, rfl⟩ := hp
+    rw [ih h']
+    rfl
+  | call k =>
+    intro l k' h
+    simp only [Func.lineCall, Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    rfl
+  | last _ => intro l k h; simp [Func.lineCall] at h
+  | branch _ _ _ _ => intro l k h; simp [Func.lineCall] at h
+
+theorem Func.lineCall_prepend (l : Line) (f : Func) :
+    (l +++ f).lineCall = f.lineCall.map fun p => (l ++ p.1, p.2) := by
+  induction l with
+  | nil => cases h : f.lineCall <;> simp [prepend, h]
+  | cons i l ih =>
+    change ((l +++ f).lineCall).map _ = _
+    rw [ih, Option.map_map]
+    rfl
+
+theorem Func.Run.prepend_line {fs : List Func} {sevm : Sevm}
+    {pre mid post : Devm} {l : Line} {f : Func}
+    (line : Line.Run sevm pre l mid) (run : Func.Run fs sevm mid f post) :
+    Func.Run fs sevm pre (l +++ f) post := by
+  induction line with
+  | nil => exact run
+  | cons step _ ih => exact Func.Run.next step (ih run)
+
+theorem Func.Run.zero_of_popBurnBy {fs : List Func} {sevm : Sevm}
+    {pre mid post : Devm} {cost : Nat} {f g : Func}
+    (pop : Devm.PopBurnBy [0] cost pre mid) (run : Func.Run fs sevm mid f post) :
+    Func.Run fs sevm pre (Func.branch f g) post :=
+  Func.Run.zero (Devm.PopBurn.of_popBurnBy pop) run
+
+theorem Func.Run.succ_of_popBurnBy {fs : List Func} {sevm : Sevm}
+    {pre mid post : Devm} {cost : Nat} {w : B256} {f g : Func}
+    (hw : w ≠ 0) (pop : Devm.PopBurnBy [w] cost pre mid)
+    (run : Func.Run fs sevm mid g post) :
+    Func.Run fs sevm pre (Func.branch f g) post :=
+  Func.Run.succ hw (Devm.PopBurn.of_popBurnBy pop) Devm.Burn.refl run
+
+/-- A straight-line stretch ending in `call k`, peeled from an avoiding walk:
+the stretch is a source run in the `STOP` table, and the walk continues,
+still avoiding, in the continuation body. -/
+theorem Func.RunCompiledToAvoiding.lineCall_inv
+    {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List Func} {sevm : Sevm}
+    {pre : Devm} {out : Execution} {f body : Func} {l : Line} {k : Nat}
+    (shape : f.lineCall = some (l, k))
+    (lookup : fs[k]? = some body)
+    (run : Func.RunCompiledToAvoiding P fs sevm pre f out) :
+    ∃ mid, Func.Run (Func.stopTable k) sevm pre f mid ∧
+      Func.RunCompiledToAvoiding P fs sevm mid body out := by
+  rw [Func.eq_of_lineCall shape] at run ⊢
+  obtain ⟨callPre, line, callRun⟩ := Func.RunCompiledToAvoiding.prepend_inv run
+  obtain ⟨mid, burn, bodyRun⟩ :=
+    Func.RunCompiledToAvoiding.call_inv lookup callRun
+  exact ⟨mid, Func.Run.prepend_line line
+    (Func.Run.call (Func.stopTable_get k) (Devm.Burn.of_burnBy burn)
+      (Func.Run.last rfl)), bodyRun⟩
+
 end Blanc
