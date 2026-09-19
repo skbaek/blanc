@@ -3,6 +3,8 @@
 import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.Composition.ProrataWethVaultNonrevertViews
+import Blanc.Composition.ProrataWethVaultTerminals
 
 namespace Blanc.Composition.ProrataWethVault
 
@@ -126,5 +128,78 @@ theorem redeem_success_within_maxRedeem
   obtain ⟨-, -, -, -, -, -, -, -, -, -, burnable, -⟩ :=
     redeem_compiled_effect config memoryWf run selectorEq
   simpa [Blanc.ProrataWethVault.maxRedeemN] using burnable
+
+/-! ## Exec-level revert cause of the capacity views
+
+The walk-level cores in `…NonrevertViews.lean`, applied to the reverting
+frame's own gas-exact walk (`Prog.runCompiledTo_of_exec_revert`).  So these
+are statements about the total interpreter's actual outcome. -/
+
+theorem maxDeposit_exec_revert_visits_refused_weth_child
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxDeposit" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
+  exact maxDeposit_revert_visits_refused_weth_child config memoryWf selectorEq
+    valueZero argsPresent argValid
+    (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
+
+theorem maxMint_exec_revert_visits_refused_weth_child
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxMint" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
+  exact maxMint_revert_visits_refused_weth_child config memoryWf selectorEq
+    valueZero argsPresent argValid
+    (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
+
+theorem maxWithdraw_exec_revert_visits_refused_weth_child
+    {sevm : Sevm} {pre d : Devm}
+    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (memoryWf : Mem.Wf pre.memory)
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxWithdraw" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
+    Prog.RunCompiledToVisiting WethChildRefused sevm pre
+      Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
+  exact maxWithdraw_revert_visits_refused_weth_child config memoryWf
+    selectorEq valueZero argsPresent argValid
+    (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
+
+/-- **The deployed `maxRedeem` view never reverts.**  Only an exceptional
+halt (out of gas) remains. -/
+theorem maxRedeem_exec_never_reverts
+    {sevm : Sevm} {pre : Devm}
+    (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
+    (selectorEq : Sevm.selector sevm = selector "maxRedeem" [.address])
+    (valueZero : sevm.value = 0)
+    (argsPresent :
+      B256.ltCheck sevm.data.length.toB256 (Nat.toB256 (4 + 32 * 1)) = 0)
+    (argValid : ValidAdr (Sevm.argWord sevm 0))
+    (d : Devm) :
+    exec ⟨0, sevm, pre⟩ ≠ .error (.revert, d) := by
+  intro reverted
+  exact maxRedeem_no_reverting_walk selectorEq valueZero argsPresent argValid
+    (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
 
 end Blanc.Composition.ProrataWethVault

@@ -318,6 +318,7 @@ import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultCapacities
+import Blanc.ProrataWethVaultArithmeticRevert
 import Blanc.ProrataWethVaultInbound
 import Blanc.ProrataWethVaultOutbound
 import Blanc.ProrataWethVaultShares
@@ -333,6 +334,8 @@ import Blanc.Composition.ProrataWethVaultConversions
 import Blanc.Composition.ProrataWethVaultCapacities
 import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
+import Blanc.Composition.ProrataWethVaultRevertSteps
+import Blanc.Composition.ProrataWethVaultNonrevertViews
 import Blanc.Composition.ProrataWethVaultNonrevert
 import Blanc.Composition.ProrataWethVaultTerminals
 import Blanc.Composition.ProrataWethVaultBacking

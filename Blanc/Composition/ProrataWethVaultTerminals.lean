@@ -1,8 +1,8 @@
--- ProrataWethVaultTerminals.lean : the vault's terminal inventory, the
--- structural companion of the revert-cause headlines.
+-- ProrataWethVaultTerminals.lean : whole-program static checks of the vault
+-- used by the revert-cause headlines: its terminal inventory and pc-freedom.
 --
 -- Kept in its own leaf so that no language-server session elaborates the
--- whole-program kernel check while the neighbouring proof modules are edited.
+-- whole-program kernel checks while the neighbouring proof modules are edited.
 
 import Blanc.RevertCause
 import Blanc.ProrataWethVault
@@ -32,5 +32,11 @@ theorem vault_terminals_return_or_revert :
     decide +kernel
   intro f member
   exact Func.terminalsReturnOrRevert_sound (List.all_eq_true.mp checked f member)
+
+/-- The vault program contains no `PC`, so its reverting frames invert to
+gas-exact walks (`Prog.runCompiledTo_of_exec_revert`). -/
+theorem vault_prog_pcFree :
+    Prog.pcFree Blanc.ProrataWethVault.vault = true := by
+  decide +kernel
 
 end Blanc.Composition.ProrataWethVault
