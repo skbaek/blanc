@@ -1749,7 +1749,7 @@ while IFS= read -r ROW; do
   if [ "$FULL_SORTED" = "$EXPECTED_SORTED" ]; then
     NFULLOK=$((NFULLOK + 1))
   else
-    echo "FAIL — $THM: from-scratch axioms $FULL differ from the pinned [${ROW#*|}] (#print axioms under-reported)"
+    echo "FAIL — $THM: from-scratch axioms $FULL differ from the pinned [${ROW#*|}]"
   fi
 done <<< "$ROWS"
 WALKED="$(grep -oE '^#full_axioms[[:space:]]+[A-Za-z0-9_.?]+' \
