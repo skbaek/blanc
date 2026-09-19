@@ -159,10 +159,12 @@ theorem nilOfEq (C : SettlementCarrier ca) {pre post : C.Snap} (eq : post = pre)
   rw [eq]
   exact C.nil pre
 
-/-- Settlement-aware accounting replay for one retained CALL message.  A
-committing child contributes its recursively proved body; a noncommitting child
-rolls back to the message's pre-transfer world and contributes nothing. -/
-theorem processMessage_of_body (C : SettlementCarrier ca)
+/-- Settlement-aware accounting replay for one retained CALL message, observed.
+A committing child contributes its recursively proved body together with that
+body's observation; a noncommitting child rolls back to the message's
+pre-transfer world and contributes nothing, which `obs` sees as nothing. -/
+theorem processMessage_of_body_observed (C : SettlementCarrier ca)
+    {O : Type} (obs : List C.Step → List O) (obs_nil : obs [] = [])
     {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (process : ProcessMessage msg
@@ -171,11 +173,15 @@ theorem processMessage_of_body (C : SettlementCarrier ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    {settled : List O}
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       C.Replay (C.frameEntry sevm pre.state) steps
-        (C.ofState (Execution.committedPost out committed).state)) :
+        (C.ofState (Execution.committedPost out committed).state) ∧
+      obs steps = settled) :
     ∃ steps,
-      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) ∧
+      obs steps = if Frame.settlementCommits (Frame.ofCall msg) out = true
+        then settled else [] := by
   by_cases settles :
       Frame.settlementCommits (Frame.ofCall msg) out = true
   · have committed := Frame.raw_commits_of_settlementCommits settles
@@ -194,8 +200,8 @@ theorem processMessage_of_body (C : SettlementCarrier ca)
     have postState : post.state =
         (Execution.committedPost out committed).state :=
       _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process committed
-    rcases body committed with ⟨steps, replay⟩
-    refine ⟨steps, ?_⟩
+    rcases body committed with ⟨steps, replay, observed⟩
+    refine ⟨steps, ?_, by rw [if_pos settles]; exact observed⟩
     rw [← prefixEq, postState]
     exact replay
   · have settledEq := (RunFrame.some_inv process).2
@@ -209,13 +215,36 @@ theorem processMessage_of_body (C : SettlementCarrier ca)
       cases errorEq : post.error <;> simp_all
     have rollback :=
       (_root_.Blanc.ProcessMessage.rollback_of_error process postError).1
-    exact ⟨[], C.nilOfEq (congrArg C.ofState rollback)⟩
+    exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
+      by rw [if_neg settles]; exact obs_nil⟩
 
-/-- Settlement-aware accounting replay for one retained CREATE constructor.
-Fresh-account preparation is silent in any account-local projection; clean code
-deposit preserves the constructor endpoint, while every failed settlement rolls
-back to the outer CREATE-message world. -/
-theorem processCreateMessage_of_body (C : SettlementCarrier ca)
+/-- Settlement-aware accounting replay for one retained CALL message.  A
+committing child contributes its recursively proved body; a noncommitting child
+rolls back to the message's pre-transfer world and contributes nothing. -/
+theorem processMessage_of_body (C : SettlementCarrier ca)
+    {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (value_zero : msg.shouldTransferValue = false →
+      msg.currentTarget = ca → msg.value = 0)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits out = true, ∃ steps,
+      C.Replay (C.frameEntry sevm pre.state) steps
+        (C.ofState (Execution.committedPost out committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
+  exact (C.processMessage_of_body_observed (fun _ => ([] : List Unit)) rfl process
+    caller_ne value_zero sum_nof (settled := [])
+    fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
+    fun _ replay => replay.1
+
+/-- Settlement-aware accounting replay for one retained CREATE constructor,
+observed.  A settling constructor's observation is its body's, because a
+settled CREATE's raw execution commits and so its inner CALL settles. -/
+theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
+    {O : Type} (obs : List C.Step → List O) (obs_nil : obs [] = [])
     {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (process : ProcessCreateMessage msg
@@ -225,11 +254,15 @@ theorem processCreateMessage_of_body (C : SettlementCarrier ca)
       msg.currentTarget = ca → msg.value = 0)
     (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    {settled : List O}
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       C.Replay (C.frameEntry sevm pre.state) steps
-        (C.ofState (Execution.committedPost out committed).state)) :
+        (C.ofState (Execution.committedPost out committed).state) ∧
+      obs steps = settled) :
     ∃ steps,
-      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) ∧
+      obs steps = if Frame.settlementCommits (Frame.ofCreate msg) out = true
+        then settled else [] := by
   by_cases settles :
       Frame.settlementCommits (Frame.ofCreate msg) out = true
   · have clean : post.error.isSome = false := by
@@ -261,10 +294,16 @@ theorem processCreateMessage_of_body (C : SettlementCarrier ca)
         sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
       rw [preparedBalance]
       exact sum_nof
-    have innerReplay := C.processMessage_of_body
-      innerProcess caller_ne value_zero innerSum body
-    rcases innerReplay with ⟨steps, replay⟩
-    refine ⟨steps, ?_⟩
+    have innerSettles :
+        Frame.settlementCommits
+          (Frame.ofCall (processCreateMessage.msg msg)) out = true :=
+      Frame.settlementCommits_ofCall_of_raw_commits
+        (Frame.raw_commits_of_settlementCommits settles)
+    rcases C.processMessage_of_body_observed obs obs_nil
+        innerProcess caller_ne value_zero innerSum body with
+      ⟨steps, replay, observed⟩
+    rw [if_pos innerSettles] at observed
+    refine ⟨steps, ?_, by rw [if_pos settles]; exact observed⟩
     rw [← preparedSnapshot, postSnapshot]
     exact replay
   · have settledEq := (RunFrame.some_inv process).2
@@ -278,12 +317,38 @@ theorem processCreateMessage_of_body (C : SettlementCarrier ca)
       cases errorEq : post.error <;> simp_all
     have rollback :=
       _root_.Blanc.ProcessCreateMessage.rollback_of_error process postError
-    exact ⟨[], C.nilOfEq (congrArg C.ofState rollback)⟩
+    exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
+      by rw [if_neg settles]; exact obs_nil⟩
+
+/-- Settlement-aware accounting replay for one retained CREATE constructor.
+Fresh-account preparation is silent in any account-local projection; clean code
+deposit preserves the constructor endpoint, while every failed settlement rolls
+back to the outer CREATE-message world. -/
+theorem processCreateMessage_of_body (C : SettlementCarrier ca)
+    {msg : Msg} {post : Devm}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (process : ProcessCreateMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
+    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
+    (value_zero : msg.shouldTransferValue = false →
+      msg.currentTarget = ca → msg.value = 0)
+    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits out = true, ∃ steps,
+      C.Replay (C.frameEntry sevm pre.state) steps
+        (C.ofState (Execution.committedPost out committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
+  exact (C.processCreateMessage_of_body_observed (fun _ => ([] : List Unit)) rfl
+    process caller_ne value_zero fresh sum_nof (settled := [])
+    fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
+    fun _ replay => replay.1
 
 /-- Recursive accounting transport for one actual filled executable slot in a
-foreign frame.  CALL and CREATE share the same settlement-aware child replay;
-their distinct instruction prefixes and resumptions are projection-silent. -/
-theorem xinstForeignSome (C : SettlementCarrier ca)
+foreign frame, observed: the slot contributes its child's observation exactly
+when the spawned frame settles. -/
+theorem xinstForeignSome_observed (C : SettlementCarrier ca)
+    {O : Type} (obs : List C.Step → List O) (obs_nil : obs [] = [])
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
     {frame : Frame} {resume : Resume}
     {cevm : Evm} {raw : Execution} {settled : Devm}
@@ -292,11 +357,15 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
+    {child : List O}
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
-        (C.ofState (Execution.committedPost raw committed).state)) :
+        (C.ofState (Execution.committedPost raw committed).state) ∧
+      obs steps = child) :
     ∃ steps,
-      C.Replay (C.ofState pre.state) steps (C.ofState post.state) := by
+      C.Replay (C.ofState pre.state) steps (C.ofState post.state) ∧
+      obs steps = if Frame.settlementCommits frame raw = true
+        then child else [] := by
   rcases Xinst.step_shape sevm pre x with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
@@ -341,11 +410,11 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
       change sum createPre.state.bal < 2 ^ 256
       rw [preparedBalance]
       exact dSum
-    rcases C.processCreateMessage_of_body process callerNe
-        valueZero fresh msgSum body with ⟨steps, replay⟩
+    rcases C.processCreateMessage_of_body_observed obs obs_nil process callerNe
+        valueZero fresh msgSum body with ⟨steps, replay, observed⟩
     have postState : post.state = settled.state :=
       Resume.create_state resumeRun
-    refine ⟨steps, ?_⟩
+    refine ⟨steps, ?_, observed⟩
     rw [hprefix.state, ← preparedSnapshot, postState]
     exact replay
   · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
@@ -379,15 +448,69 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
       change sum d.state.bal < 2 ^ 256
       exact dSum
-    rcases C.processMessage_of_body process msgCallerNe
-        msgValueZero msgSum body with ⟨steps, replay⟩
+    rcases C.processMessage_of_body_observed obs obs_nil process msgCallerNe
+        msgValueZero msgSum body with ⟨steps, replay, observed⟩
     have postState : post.state = settled.state :=
       Resume.call_state resumeRun
-    refine ⟨steps, ?_⟩
+    refine ⟨steps, ?_, observed⟩
     rw [hprefix.state, postState]
     exact replay
 
+/-- Recursive accounting transport for one actual filled executable slot in a
+foreign frame.  CALL and CREATE share the same settlement-aware child replay;
+their distinct instruction prefixes and resumptions are projection-silent. -/
+theorem xinstForeignSome (C : SettlementCarrier ca)
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume}
+    {cevm : Evm} {raw : Execution} {settled : Devm}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
+    (resumeRun : resume.run (.ok settled) = .ok post)
+    (target_ne : sevm.currentTarget ≠ ca)
+    (sum_nof : sum pre.state.bal < 2 ^ 256)
+    (body : ∀ committed : Execution.commits raw = true, ∃ steps,
+      C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
+        (C.ofState (Execution.committedPost raw committed).state)) :
+    ∃ steps,
+      C.Replay (C.ofState pre.state) steps (C.ofState post.state) := by
+  exact (C.xinstForeignSome_observed (fun _ => ([] : List Unit)) rfl spawn frameRun
+    resumeRun target_ne sum_nof (child := [])
+    fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
+    fun _ replay => replay.1
+
 end SettlementCarrier
+
+/-- A monoid-homomorphic observation of a carrier's step lists, with what one
+settled frame contributes and a credit law observed as nothing.
+
+`obs` reads a replay's step list as a list of observations, turning `++` into
+`++`; `frameObs` is what one settled frame is expected to contribute; `credit`
+is the carrier's own credit law with the produced steps observed as nothing.
+`ReplayObservation.trivial` observes nothing at all, and every seam and rung
+without an observation is the observed one read through it. -/
+structure ReplayObservation {ca : Adr} (C : ReplayCarrier ca) where
+  O : Type
+  obs : List C.Step → List O
+  obs_nil : obs [] = []
+  obs_append : ∀ left right, obs (left ++ right) = obs left ++ obs right
+  frameObs : Exec.Frame → List O
+  credit : ∀ (_tag : C.Tag) {pre post : State} {amount : Nat},
+    post.getStor ca = pre.getStor ca →
+    (post.bal ca).toNat = (pre.bal ca).toNat + amount →
+    0 < amount →
+    ∃ steps, C.Replay (C.ofState pre) steps (C.ofState post) ∧ obs steps = []
+
+/-- The observation that sees nothing: the carrier's own credit law suffices. -/
+def ReplayObservation.trivial {ca : Adr} (C : ReplayCarrier ca) :
+    ReplayObservation C where
+  O := Unit
+  obs := fun _ => []
+  obs_nil := rfl
+  obs_append := fun _ _ => rfl
+  frameObs := fun _ => []
+  credit := fun tag _ _ _ storage_eq balance_eq positive =>
+    (C.credit tag storage_eq balance_eq positive).imp
+      fun _ replay => ⟨replay, rfl⟩
 
 namespace ReplayCarrier
 
@@ -466,6 +589,24 @@ theorem silentReplay (C : ReplayCarrier ca) {pre post : State}
     C.Replay (C.ofState pre) [] (C.ofState post) :=
   C.nilOfEq (C.silent storage_eq balance_eq)
 
+/-- `ofStorageEqBalanceMono`, observed: the one credit it may produce is
+observed as nothing. -/
+theorem ofStorageEqBalanceMono_observed (C : ReplayCarrier ca)
+    (V : ReplayObservation C) (tag : C.Tag) {pre post : State}
+    (storage_eq : post.getStor ca = pre.getStor ca)
+    (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
+    ∃ steps, C.Replay (C.ofState pre) steps (C.ofState post) ∧
+      V.obs steps = [] := by
+  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
+  have balance_eq :
+      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
+    dsimp only [amount]
+    omega
+  by_cases positive : 0 < amount
+  · exact V.credit tag storage_eq balance_eq positive
+  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
+    exact ⟨[], C.silentReplay storage_eq (by omega), V.obs_nil⟩
+
 /-- Any projected transition that fixes this account's storage and cannot lower
 its balance is either one positive credit or no step at all.  This endpoint
 lemma lets a foreign-opcode proof expose only its two relevant facts instead of
@@ -475,15 +616,8 @@ theorem ofStorageEqBalanceMono (C : ReplayCarrier ca) (tag : C.Tag)
     (storage_eq : post.getStor ca = pre.getStor ca)
     (balance_mono : (pre.bal ca).toNat ≤ (post.bal ca).toNat) :
     ∃ steps, C.Replay (C.ofState pre) steps (C.ofState post) := by
-  let amount := (post.bal ca).toNat - (pre.bal ca).toNat
-  have balance_eq :
-      (post.bal ca).toNat = (pre.bal ca).toNat + amount := by
-    dsimp only [amount]
-    omega
-  by_cases positive : 0 < amount
-  · exact C.credit tag storage_eq balance_eq positive
-  · have zero : amount = 0 := Nat.eq_zero_of_not_pos positive
-    exact ⟨[], C.silentReplay storage_eq (by omega)⟩
+  exact (C.ofStorageEqBalanceMono_observed (ReplayObservation.trivial C) tag
+    storage_eq balance_mono).imp fun _ replay => replay.1
 
 end ReplayCarrier
 
