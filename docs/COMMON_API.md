@@ -1823,6 +1823,18 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.pairVisits` in
   `Blanc/Composition/ProrataWethVaultLedgerVisits.lean`. Membership goals over
   these lists have no distinguishing head, so there is no recipe.
+- When a retained trace consumer needs only frames whose message roots and
+  descendants survive settlement, import
+  [`Blanc/ExecutionTraceSettledFrames.lean`](../Blanc/ExecutionTraceSettledFrames.lean)
+  and use its `settledFrames` projections instead of `rawFrames`; it mirrors
+  the same trace-carrier route and concatenation order while applying the
+  message and CREATE settlement tests at their roots.
+- When a consumer needs every entered frame's block environment (timestamp,
+  number, …) to be the execution root's, import
+  [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):
+  `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
+  by every admitted frame from the execution root; use it with
+  `Exec.FrameAdmitted.root` when lifting a root `benvStat` fact.
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
