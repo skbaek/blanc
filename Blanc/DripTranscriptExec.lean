@@ -66,18 +66,6 @@ theorem frameCall_of_target_ne {coalition : Finset Adr} {ca : Adr}
   unfold frameCall
   rw [if_neg fun both => target_ne both.1]
 
-/-- A frame executing `ca` contributes its computed tag exactly when that tag
-is a call. -/
-theorem frameCall_of_target {coalition : Finset Adr} {ca : Adr}
-    {frame : Exec.Frame} (target : frame.sevm.currentTarget = ca) :
-    frameCall coalition ca frame =
-      if (opTag coalition frame.sevm frame.pre).isCall = true
-      then [opTag coalition frame.sevm frame.pre] else [] := by
-  unfold frameCall
-  by_cases call : (opTag coalition frame.sevm frame.pre).isCall = true
-  · rw [if_pos ⟨target, call⟩, if_pos call]
-  · rw [if_neg fun both => call both.2, if_neg call]
-
 /-- A committed foreign root's transcript is that of its descendants. -/
 theorem committedFrames_flatMap_of_target_ne {coalition : Finset Adr}
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -395,10 +383,15 @@ theorem Exec.CoreDripTranscript.atTarget
   rcases replay with ⟨op, nested, preEq, kindEq, tail, kinds⟩
   refine ⟨op :: nested, Chain.cons preEq tail, ?_⟩
   simp only [Exec.committedFrames, dif_pos committed, List.flatMap_cons]
-  rw [callKinds_cons, kinds, kindEq,
-    frameCall_of_target (ca := sevm.currentTarget)
-      (frame := Exec.Frame.ofRun run committed) rfl]
-  rfl
+  rw [callKinds_cons, kinds, kindEq]
+  congr 1
+  -- The frame's own transcript entry is its computed tag, since it runs `ca`.
+  show _ = if sevm.currentTarget = sevm.currentTarget ∧
+      (opTag coalition sevm pre).isCall = true
+    then [opTag coalition sevm pre] else []
+  by_cases call : (opTag coalition sevm pre).isCall = true
+  · rw [if_pos call, if_pos ⟨rfl, call⟩]
+  · rw [if_neg call, if_neg fun both => call both.2]
 
 /-- Foreign nonrecursive execution contributes no call, so the suffix's
 transcript is its continuation's. -/
