@@ -29,6 +29,7 @@ import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
+import Blanc.ExecutionFrameTime
 import Blanc.ExecutionMessageAdmission
 import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionBodyAdmission
