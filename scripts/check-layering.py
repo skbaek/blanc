@@ -151,7 +151,8 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceSettledFrames", "FuncMainPrefix"]
+           "ExecutionTraceFrames", "ExecutionTraceSettledFrames",
+           "ExecutionAccountingObserved", "FuncMainPrefix"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",

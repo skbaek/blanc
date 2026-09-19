@@ -1976,6 +1976,35 @@ T2b seams and these wrapper facts and keeps its own ladder, as
 pair.  It is a proof-cost
 facility only: no rung changes an execution or a gas charge.
 
+When the consumer must also know which executed frames the steps came from,
+import
+[`Blanc/ExecutionAccountingObserved.lean`](../Blanc/ExecutionAccountingObserved.lean):
+
+- `ExecutionAccountingReplay.ReplayObservation C` reads a carrier's step lists
+  homomorphically (`obs`, `obs_nil`, `obs_append`), says what one settled frame
+  contributes (`frameObs`), and restates the carrier's credit law with the
+  produced steps observed as nothing (`credit`).
+- `AccountingLadder.Observed L` adds the root law: a committed root's replay
+  observes exactly `(Exec.committedFrames run).flatMap view.frameObs`.
+- Every rung has an observed twin, `AccountingLadder.Observed.processMessage`
+  … `configuredBlock`, with the original's hypotheses and the extra conclusion
+  `O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs`
+  (`directWithdrawal`: `= []`); the history headlines are
+  `Observed.configuredHistory` and
+  `Observed.traceRealizes_of_configuredHistoryTrace`.
+- Seam twins take a `V : ReplayObservation C`:
+  `ReplayCarrier.processMessage_of_body_observed`,
+  `processCreateMessage_of_body_observed`, `xinstForeignSome_observed` (the
+  child segment of a foreign CALL/CREATE slot), `silentReplay_observed`,
+  `ofStorageEqBalanceMono_observed` and `ofAddBal_observed`.
+
+The observed statements are the proofs: `ReplayObservation`, the
+`SettlementCarrier.*_observed` engines, `ofStorageEqBalanceMono_observed` and
+`ofAddBal_observed` live in the replay and ladder modules, whose unobserved
+seams and rungs are the observed ones read through `ReplayObservation.trivial`
+and `Observed.trivial` (observing nothing).  Do not restate an unobserved rung
+to carry a projection; instantiate an observation.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
