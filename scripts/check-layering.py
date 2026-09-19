@@ -216,7 +216,7 @@ CONTRACTS = {
              "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
              "DripRealizedExec", "DripExitPreCallbackLocator", "DripFrameSpawns",
              "DripRealizedLadder", "DripTraceRealizes", "DripConcreteRealized", "DripTranscriptHistory",
-             "DripTranscriptExec"],
+             "DripTranscriptExec", "DripClock", "DripClockHistory"],
     "lido-twg": [
         "LidoTriggerableWithdrawalsGatewayCore",
         "LidoTriggerableWithdrawalsGatewayTrigger",

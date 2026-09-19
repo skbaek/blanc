@@ -382,6 +382,8 @@ import Blanc.DripInvariant
 import Blanc.DripMachine
 import Blanc.DripMonotone
 import Blanc.DripMonotoneHistory
+import Blanc.DripClock
+import Blanc.DripClockHistory
 import Blanc.DripPreservation
 import Blanc.DripRpow
 import Blanc.DripSound

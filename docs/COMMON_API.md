@@ -1840,6 +1840,13 @@ consumer needs canonical interpreter ingress as one conjunct:
   `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
   by every admitted frame from the execution root; use it with
   `Exec.FrameAdmitted.root` when lifting a root `benvStat` fact.
+  For retained traces, `ExecutionTrace.ProcessMessageTrace.frameAdmitted_benvStat`
+  admits every retained frame at the message's `benv.stat`, and
+  `ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time` admits every frame of
+  a configured block at `block.header.timestamp.toB256`.  The same module fixes
+  the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
+  block strictly after its parent from Jaune's header validation
+  (`ConfiguredBlockTrace.parent_timestamp_lt`).
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
@@ -2490,7 +2497,10 @@ storage walk, declining the `nof`-class side condition a storage-determined
 invariant never needs.  The module's no-write and `STATICCALL` sections
 discharge targets that never write storage, and `ofStorageOnly_of_call`
 carries the invariant across a child `call` under the deeper-frame
-hypothesis.
+hypothesis.  `ofStorageOnly_of_call_sameBenv` is its general form: the
+deeper-frame hypothesis need only cover frames at the caller's `benvStat`,
+which is what a trace-admitted consumer whose entry condition reads the block
+environment can discharge (DRIP's `soundAdmitted_of_stepClosedAt`).
 
 ## Common-library-first workflow
 

@@ -166,29 +166,19 @@ section ChildCall
 
 open Jaune.Ninst Ninst
 
-/-- **A child call, under the deeper-frame hypothesis.**  Any successful `call`
-made from the contract's own frame preserves a storage-determined invariant,
-provided every deeper frame does — which is exactly what `Exec.InvDepth`
-supplies.  A re-entrant target is the only kind that consumes it.
-
-The operands are arbitrary: a storage-determined invariant cannot see a value
-transfer, so the lemma does not need to know one happened.  The parent's stack
-shape comes back too, because a caller that keeps executing after the call
-returns needs its own operands.
-
-The induction hypothesis is applied at the child's initial machine: the value
-transfer touches only balances, so the child enters with the parent's storage
-and code at the contract address, and `Prog.At` needs the delegation argument —
-a compiled program is never a delegation designator, so `accessDelegation`
-resolves to the code itself.
-
-Hoisted from fmint's `conserved_of_call`, which is now this lemma at
-`Stor.Conserved`.  The second consumer is the WETH-backed PRORATA vault, whose
-four ERC-4626 flows each call WETH. -/
-theorem ContractSpec.ofStorageOnly_of_call {p : Prog} {P : Stor → Prop}
+/-- **A child call, under the same-block deeper-frame hypothesis.**  The
+general form of `ContractSpec.ofStorageOnly_of_call`: the deeper-frame
+hypothesis need only cover frames that run at the caller's block statics,
+because the child a `call` enters inherits them (`initSevm` of a message whose
+block environment is the caller's `benvStat`; the value transfer moves
+balances only).  A trace-admitted consumer whose entry condition reads only
+`benvStat` discharges this hypothesis from its admitted one. -/
+theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Prop}
     {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget p
-      ((ContractSpec.ofStorageOnly p P).PreWf sevm.currentTarget) ((ContractSpec.ofStorageOnly p P).Post sevm.currentTarget))
+      (fun sevm' pre' => sevm'.benvStat = sevm.benvStat ∧
+        (ContractSpec.ofStorageOnly p P).PreWf sevm.currentTarget sevm' pre')
+      ((ContractSpec.ofStorageOnly p P).Post sevm.currentTarget))
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile p)
     (h_cons : P (Devm.getStor s sevm.currentTarget))
@@ -354,13 +344,14 @@ theorem ContractSpec.ofStorageOnly_of_call {p : Prog} {P : Stor → Prop}
       rcases h_run with ⟨ex', run_pm₀, h_split⟩
       -- name the child message and keep only the projections we need
       obtain ⟨childMsg, run_pm, hc_stv, hc_state, hc_caller, hc_value, hc_ct,
-          hc_ca, hc_code, hc_depth⟩ :
+          hc_ca, hc_code, hc_depth, hc_stat⟩ :
           ∃ m : Msg, ProcessMessage m xl ex' ∧
             m.shouldTransferValue = true ∧ m.benv.state = s.state ∧
             m.caller = sevm.currentTarget ∧ m.value = value ∧
             m.currentTarget = callee ∧ m.codeAddress = some na ∧
-            m.code = code0 ∧ m.depth = sevm.depth - 1 :=
-        ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl⟩
+            m.code = code0 ∧ m.depth = sevm.depth - 1 ∧
+            m.benv.stat = sevm.benvStat :=
+        ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       clear run_pm₀
       -- the sub-message result must be ok
       rcases ex' with err' | child
@@ -486,11 +477,45 @@ theorem ContractSpec.ofStorageOnly_of_call {p : Prog} {P : Stor → Prop}
         have hpost : (ContractSpec.ofStorageOnly p P).Post sevm.currentTarget
             (initSevm (childMsg.withBenv benv')) child :=
           ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            (.ok child) ex_sub h_depth_lt h_at ⟨h_precond, fun _ => Mem.wf_empty⟩
+            (.ok child) ex_sub h_depth_lt h_at
+            ⟨(benvAfterTransfer_stat eq_bt).trans hc_stat,
+              h_precond, fun _ => Mem.wf_empty⟩
         have h_post_cons : P (Devm.getStor child sevm.currentTarget) :=
           ContractSpec.ofStorageOnly_postInv_iff.mp hpost.inv
         rw [getStor_eq_of_state_eq h_sf_state sevm.currentTarget]
         exact h_post_cons
+
+/-- **A child call, under the deeper-frame hypothesis.**  Any successful `call`
+made from the contract's own frame preserves a storage-determined invariant,
+provided every deeper frame does — which is exactly what `Exec.InvDepth`
+supplies.  A re-entrant target is the only kind that consumes it.
+
+The operands are arbitrary: a storage-determined invariant cannot see a value
+transfer, so the lemma does not need to know one happened.  The parent's stack
+shape comes back too, because a caller that keeps executing after the call
+returns needs its own operands.
+
+The induction hypothesis is applied at the child's initial machine: the value
+transfer touches only balances, so the child enters with the parent's storage
+and code at the contract address, and `Prog.At` needs the delegation argument —
+a compiled program is never a delegation designator, so `accessDelegation`
+resolves to the code itself.
+
+Hoisted from fmint's `conserved_of_call`, which is now this lemma at
+`Stor.Conserved`.  The second consumer is the WETH-backed PRORATA vault, whose
+four ERC-4626 flows each call WETH. -/
+theorem ContractSpec.ofStorageOnly_of_call {p : Prog} {P : Stor → Prop}
+    {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {xs : Stack}
+    (ih : Exec.InvDepth sevm.depth sevm.currentTarget p
+      ((ContractSpec.ofStorageOnly p P).PreWf sevm.currentTarget) ((ContractSpec.ofStorageOnly p P).Post sevm.currentTarget))
+    (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile p)
+    (h_cons : P (Devm.getStor s sevm.currentTarget))
+    (h_run : Ninst.Run sevm s call sf) :
+    P (Devm.getStor sf sevm.currentTarget) ∧ ∃ b, ((b :: xs) <<+ sf.stack) :=
+  ContractSpec.ofStorageOnly_of_call_sameBenv
+    (fun pc sevm' pre' exn ex depth at_ h => ih pc sevm' pre' exn ex depth at_ h.2)
+    hp h_code h_cons h_run
 
 end ChildCall
 
