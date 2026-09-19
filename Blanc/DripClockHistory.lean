@@ -11,22 +11,6 @@ namespace Drip
 
 open ExecutionTrace
 
-private theorem retained_frameAdmitted_benvStat_of_runFrame
-    {frame : Jaune.Frame} {slot : Xlot}
-    {out : Except (EvmError × State × AdrSet × Tra) Devm}
-    {Q : BenvStat → Prop} (retained : RetainedXlot slot)
-    (hrun : RunFrame frame slot out)
-    (hQ : Q frame.inner.benv.stat) (ca : Adr) :
-    retained.FrameAdmitted ca (fun sevm _ => Q sevm.benvStat) := by
-  unfold RetainedXlot.FrameAdmitted
-  cases retained with
-  | none => trivial
-  | @some pc sevm pre execution run =>
-      intro root member target
-      rw [(Exec.frameAdmitted_benvStat run ca root member target).trans
-        (RunFrame.benvStat_eq hrun)]
-      exact hQ
-
 private theorem exec_clock_admitted
     {T : Nat} {ca : Adr} {pc : Nat} {sevm : Sevm}
     {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
@@ -44,7 +28,7 @@ private theorem processMessage_clock_admitted
     (htime : msg.benv.stat.time.toNat ≤ T) :
     trace.FrameAdmitted ca (ClockEntry T) := by
   rcases trace with ⟨slot, retained, run⟩
-  exact retained_frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
+  exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
     stat.time.toNat ≤ T) retained run (by
       simpa [Jaune.Frame.ofCall, Msg.withBenv] using htime) ca
 
@@ -54,7 +38,7 @@ private theorem processCreateMessage_clock_admitted
     (htime : msg.benv.stat.time.toNat ≤ T) :
   trace.FrameAdmitted ca (ClockEntry T) := by
   change trace.retained.FrameAdmitted ca (ClockEntry T)
-  exact retained_frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
+  exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
     stat.time.toNat ≤ T) trace.retained trace.run (by
       simpa [Jaune.Frame.ofCreate, processCreateMessage.msg, Msg.withBenv,
         addCreatedAccount, Benv.setStor, Benv.incrNonce]
@@ -68,7 +52,7 @@ private theorem messageCall_clock_admitted
   cases trace with
   | createCollision => trivial
   | createRun target collision evm core coreTrace result =>
-      exact retained_frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
+      exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
         stat.time.toNat ≤ T) coreTrace.retained coreTrace.run (by
           simpa [Jaune.Frame.ofCreate, processCreateMessage.msg, Msg.withBenv,
             addCreatedAccount, Benv.setStor, Benv.incrNonce]
@@ -350,7 +334,10 @@ theorem DeploymentRoot.rho_le_head_timestamp
   simp only [Nat.lo]
   exact Nat.mod_le _ _
 
-private theorem configuredHistory_has_head_timestamp
+/-- Anti-vacuity of `history_clockInv`: every configured history from a
+deployment root has a head block, so that theorem's antecedent
+`future.blocks.getLast?.map (·.header.timestamp) = some t` is satisfiable. -/
+theorem configuredHistory_has_head_timestamp
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca)
     (history : ConfiguredHistoryTrace cfg deployed future) :

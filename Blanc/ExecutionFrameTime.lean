@@ -84,7 +84,7 @@ namespace ExecutionTrace
 
 /-- A retained recursive slot entered by a frame whose inner message's block
 statics satisfy `Q` runs every entered frame under statics satisfying `Q`. -/
-private theorem RetainedXlot.frameAdmitted_benvStat_of_runFrame
+theorem RetainedXlot.frameAdmitted_benvStat_of_runFrame
     {frame : Frame} {slot : Xlot}
     {out : Except (EvmError × State × AdrSet × Tra) Devm} {Q : BenvStat → Prop}
     (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)

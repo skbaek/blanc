@@ -1384,7 +1384,156 @@ import Blanc.ExecutionFrameTime
 #print axioms Blanc.Drip.concreteHistory_dripCalls_ne_nil
 #print axioms Blanc.Drip.dripClockSpec_preservesAdmitted
 #print axioms Blanc.Drip.history_clockInv
+#print axioms Blanc.Drip.configuredHistory_has_head_timestamp
 #print axioms Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace
 #print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time
 #print axioms Blanc.Exec.frameAdmitted_benvStat
 #print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt
+
+/-! ## From-scratch cross-check of the rows pinned below the standard set
+
+Lean v4.32.1's `#print axioms` on an imported constant reads the per-module
+result that `exportedAxiomsExt` precomputed when the olean was written. That
+precomputation shares one cache across the module and breaks the
+inductive/constructor cycle with an empty sentinel entry, so an inductive
+reached first through its own constructor can be recorded as axiom-free, and
+every constant that reaches the constructor only through that inductive inherits
+the empty set. The result depends on hash iteration order; it under-reported
+`ReplayCarrier.nilOfEq` as axiom-free until an unrelated declaration reordered
+its module.
+
+`#full_axioms` recomputes a constant's axiom closure from the environment's
+declarations alone, with a fresh visited set per constant and no precomputed
+entries. `scripts/check.sh` runs it for every row whose pin is a strict subset
+of `propext, Classical.choice, Quot.sound` (an under-report can make such a pin
+pass while a standard axiom is really used) and fails a row whose recomputed set
+differs from its pin. The list below must equal exactly those rows. -/
+
+open Lean Elab Command in
+/-- Every axiom reachable from `c` through declaration types, values and the
+constructors of inductives, walked without any cached per-module result. -/
+private partial def auditFullAxioms (env : Environment) (c : Name) :
+    StateM (NameSet × NameSet) Unit := do
+  let (seen, axs) ← get
+  if seen.contains c then return
+  set (seen.insert c, axs)
+  let walk (e : Expr) : StateM (NameSet × NameSet) Unit :=
+    e.getUsedConstants.forM (auditFullAxioms env)
+  match env.find? c with
+  | some (.axiomInfo v) =>
+      modify fun (seen, axs) => (seen, axs.insert c)
+      walk v.type
+  | some (.defnInfo v) => walk v.type *> walk v.value
+  | some (.thmInfo v) => walk v.type *> walk v.value
+  | some (.opaqueInfo v) => walk v.type *> walk v.value
+  | some (.ctorInfo v) => walk v.type
+  | some (.recInfo v) => walk v.type
+  | some (.inductInfo v) => walk v.type *> v.ctors.forM (auditFullAxioms env)
+  | _ => pure ()
+
+open Lean Elab Command in
+elab "#full_axioms " id:ident : command => do
+  let env ← getEnv
+  let c := id.getId
+  unless env.contains c do
+    throwError "#full_axioms: unknown constant {c}"
+  let (_, (_, axs)) := (auditFullAxioms env c).run ({}, {})
+  let names := (axs.toList.map toString).toArray.qsort (· < ·)
+  logInfo (MessageData.ofFormat (.text
+    s!"FULL-AXIOMS '{c}': [{", ".intercalate names.toList}]"))
+
+#full_axioms Blanc.Func.localSstoreFree_iff
+#full_axioms Blanc.Prog.componentSstoreFree_iff
+#full_axioms Blanc.Prog.entrySstoreFree_iff
+#full_axioms Blanc.Prog.entrySstoreFree_sound
+#full_axioms Blanc.Func.CompileShape.byteSize_compileShape
+#full_axioms Blanc.Func.length_emitByShape
+#full_axioms Blanc.Func.getD_emitByShape
+#full_axioms Blanc.Func.emitByShape_compileShape
+#full_axioms Blanc.Func.CompileShape.locations_compileShapes
+#full_axioms Blanc.Table.emitByShape_compileShapes
+#full_axioms Blanc.Prog.emitByShape_compileShape
+#full_axioms Blanc.Weth10.redemptionRuntimeCeiling_eq
+#full_axioms Blanc.Weth10.viewReadFrame_sameCaller_not_authorizing
+#full_axioms Blanc.Weth10.mainnet_rulesAt_eq_named
+#full_axioms Blanc.Weth10.mainnet_rulesAt_eq_bpo2_of_ge
+#full_axioms Blanc.Weth10.pragueRules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.osakaRules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.bpo1Rules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.bpo2Rules_redemptionRuntimeCeiling_gasCap
+#full_axioms Blanc.Weth10.mainnet_checkTransactionGasCap_of_le
+#full_axioms Blanc.Weth10.weth10CurrentMainnetCreation_rulesAt
+#full_axioms Blanc.LidoCircuitBreaker.emptyWitness
+#full_axioms Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length
+#full_axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
+#full_axioms Blanc.LidoCircuitBreaker.setPauser_sourceTrace_refines_model
+#full_axioms Blanc.jauneListCompare_eq_compareLex
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory
+#full_axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_memory
+#full_axioms Blanc.ProxyPair.implBodyGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedSuccessGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedRevertGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedSuccessEntryGas_eq
+#full_axioms Blanc.ProxyPair.implGuardedRevertEntryGas_eq
+#full_axioms Blanc.ProxyPair.proxyAdr_ne_implAdr
+#full_axioms Blanc.ProxyPair.successData_length
+#full_axioms Blanc.ProxyPair.revertData_length
+#full_axioms Blanc.ProxyPair.proxy_call_gas_split
+#full_axioms Blanc.ProxyPair.forwardBudgetWitness_27224
+#full_axioms Blanc.ProxyPair.forwardBudget_27224
+#full_axioms Blanc.ProxyPair.ossifiableCreateMessageGas_eq
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas_eq
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
+#full_axioms Blanc.Prorata.mintN_never_overmints
+#full_axioms Blanc.Prorata.payN_never_overpays
+#full_axioms Blanc.Prorata.payN_le_balance
+#full_axioms Blanc.Prorata.deposit_price_nondecreasing
+#full_axioms Blanc.Prorata.withdraw_price_nondecreasing
+#full_axioms Blanc.Prorata.withdraw_ceil_shares_covers_assets
+#full_axioms Blanc.Prorata.mintN_residue_eq
+#full_axioms Blanc.Prorata.payN_residue_eq
+#full_axioms Blanc.Prorata.roundtrip_dust_eq
+#full_axioms Blanc.ProrataWethVault.redemption_le_assets
+#full_axioms Blanc.ProrataWethVault.depositStep
+#full_axioms Blanc.ProrataWethVault.redeemStep
+#full_axioms Blanc.ProrataWethVault.donationStep
+#full_axioms Blanc.ProrataWethVault.two_le_offsetN
+#full_axioms Blanc.ProrataWethVault.mint_never_overmints
+#full_axioms Blanc.ProrataWethVault.withdraw_never_overpays
+#full_axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
+#full_axioms Blanc.Func.localExecFree_iff
+#full_axioms Blanc.Prog.componentExecFree_iff
+#full_axioms Blanc.Prog.reachableExecFree_iff
+#full_axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
+#full_axioms Blanc.BeaconDeposit.div_mul_eq_sub_mod
+#full_axioms Blanc.BeaconDeposit.pred_div_eq
+#full_axioms Blanc.BeaconDeposit.pred_mod_of_pos
+#full_axioms Blanc.BeaconDeposit.pred_mod_eq
+#full_axioms Blanc.BeaconDeposit.pred_div_pow_eq
+#full_axioms Blanc.BeaconDeposit.rootAt_nil
+#full_axioms Blanc.BeaconDeposit.rootAt_short
+#full_axioms Blanc.BeaconDeposit.rootAtE_eq
+#full_axioms Blanc.BeaconDeposit.rootAt_append
+#full_axioms Blanc.BeaconDeposit.div_two_div_pow
+#full_axioms Blanc.BeaconDeposit.div_pow_div_two
+#full_axioms Blanc.BeaconDeposit.walk_eq_none_iff
+#full_axioms Blanc.BeaconDeposit.take_drop_append
+#full_axioms Blanc.BeaconDeposit.le64_length
+#full_axioms Blanc.BeaconDeposit.zeros_length
+#full_axioms Blanc.BeaconDeposit.le64_zero
+#full_axioms Blanc.BeaconDeposit.hashPair_input_length
+#full_axioms Blanc.BeaconDeposit.mixIn_input_length
+#full_axioms Blanc.BeaconDeposit.pubkeyRoot_input_length
+#full_axioms Blanc.BeaconDeposit.signatureRoot_input_lengths
+#full_axioms Blanc.BeaconDeposit.depositDataNode_input_lengths
+#full_axioms Blanc.Drip.chain_drips_eq_segmentIndex
+#full_axioms Blanc.Drip.drip_rpow_certified_band
+#full_axioms Blanc.Drip.drip_rpow_exact_telescope
+#full_axioms Blanc.Drip.drip_segment_certified
+#full_axioms Blanc.Drip.segment_spread_witness
+#full_axioms Blanc.Drip.rpow_under_witness
+#full_axioms Blanc.Drip.rpow_over_witness
+#full_axioms Blanc.Drip.drip_rpow_runtime_ops_exact
+#full_axioms Blanc.Drip.Chain.transcriptTally_eq

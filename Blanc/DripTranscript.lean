@@ -11,7 +11,7 @@ def Kind.isCall : Kind → Bool
   | .externalCredit _ => false
   | .silent => false
 
-/- The call projection of a ledger, in ledger order. -/
+/-- The call projection of a ledger, in ledger order. -/
 def callKinds {scale : Nat} {fresh : Nat → Nat → Nat}
     (steps : List (Step scale fresh)) : List Kind :=
   (steps.map Step.kind).filter Kind.isCall
@@ -80,7 +80,7 @@ def transcriptState (scale : Nat) (fresh : Nat → Nat → Nat) :
       transcriptState scale fresh (kind.advance scale fresh chi cu).1
         (kind.advance scale fresh chi cu).2 rest
 
-/- Every ledger sum except `giftSum` is a function of the call projection. -/
+/-- Every ledger sum except `giftSum` is a function of the call projection. -/
 theorem Chain.transcriptTally_eq {scale : Nat} {fresh : Nat → Nat → Nat}
     {s t : Snapshot} {steps : List (Step scale fresh)}
     (chain : Chain scale fresh s steps t) :
@@ -116,7 +116,7 @@ theorem Chain.transcriptState_eq {scale : Nat} {fresh : Nat → Nat → Nat}
       cases effect <;>
         simp_all [callKinds, Kind.isCall, transcriptState, Kind.advance]
 
-/- Non-call steps never move the total supply. -/
+/-- Non-call steps never move the total supply. -/
 theorem Chain.totalUnits_eq_of_callKinds_nil {scale : Nat}
     {fresh : Nat → Nat → Nat} {s t : Snapshot} {steps : List (Step scale fresh)}
     (chain : Chain scale fresh s steps t) (none : callKinds steps = []) :
