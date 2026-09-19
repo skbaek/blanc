@@ -313,6 +313,7 @@ import Blanc.ProrataWethVault
 import Blanc.ProrataWethVaultCode
 import Blanc.ProrataWethVaultArtifact
 import Blanc.ProrataWethVaultArithmetic
+import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultConversions
 import Blanc.ProrataWethVaultCapacities

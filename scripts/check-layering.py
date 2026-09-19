@@ -279,6 +279,7 @@ CONTRACTS = {
     "prorata-weth-vault": ["ProrataWethVault", "ProrataWethVaultCode",
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
+                            "ProrataWethVaultMaxArithmetic",
                             "ProrataWethVaultArithmeticExec",
                             "ProrataWethVaultCapacities",
                             "ProrataWethVaultConversions",
