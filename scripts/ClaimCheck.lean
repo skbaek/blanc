@@ -35,6 +35,11 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.BeaconDepositHistoryChain
+import Blanc.DripFresh
+import Blanc.DripRpow
+import Blanc.DripTranscriptHistory
+import Blanc.DripClockHistory
+import Blanc.DripTraceRealizes
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -5777,5 +5782,187 @@ example :
   Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
 
 end Composition.LidoCircuitBreakerTwgSentinel
+
+namespace Drip
+
+/-! ## DRIP — the R1–R4 headline statements.
+
+The frozen DRIP completion design (`drip-etude-completion-design.md` §4 row P2)
+names one statement pin per R-headline.  Each pin below carries the headline's
+exact type and uses the named declaration as its body, so a statement change
+breaks this file while a proof-only refactor does not. -/
+
+-- R1: one compiled `drip()` call rescales the index by the runtime's
+-- fixed-point `rpow` factor over the elapsed time and stamps the clock.
+example {e : Sevm} {entry s r : Devm} {image : Bytes}
+    {tail : Stack}
+    (frame : Frame image entry s) (hp : tail <<+ s.stack)
+    (run : Func.Run (runtime.main :: runtime.aux) e s Drip.drip r) :
+    ∃ postChi ret,
+      Devm.getStor r e.currentTarget =
+        ((Devm.getStor entry e.currentTarget).set chiSlot postChi).set rhoSlot
+          e.benvStat.time ∧
+      postChi.toNat =
+        (Devm.getStorVal entry e.currentTarget chiSlot).toNat *
+          Jaune.rpow scale.toNat half.toNat rate.toNat
+            (e.benvStat.time -
+              Devm.getStorVal entry e.currentTarget rhoSlot).toNat /
+          scale.toNat ∧
+      ReturnsWord ret r ∧ ret = postChi :=
+  drip_compiled_drip frame hp run
+
+-- R1: the certified two-sided error band of the deployed `rpow` tree.
+example (k : Nat) :
+    scale.toNat ^ (rpowTree half.toNat k).nodes * factorNat k ≤
+        rate.toNat ^ k *
+            scale.toNat ^ (rpowTree half.toNat k).scaleCount +
+          (rpowTree half.toNat k).upperError scale.toNat rate.toNat 0 ∧
+      rate.toNat ^ k *
+            scale.toNat ^ (rpowTree half.toNat k).scaleCount ≤
+        scale.toNat ^ (rpowTree half.toNat k).nodes * factorNat k +
+          (rpowTree half.toNat k).lowerError scale.toNat rate.toNat 0 :=
+  drip_rpow_certified_band k
+
+-- R1: the exact rounding telescope behind that band.
+example (k : Nat) :
+    scale.toNat ^ (rpowTree half.toNat k).nodes * factorNat k +
+        (rpowTree half.toNat k).exactUnder scale.toNat rate.toNat 0 =
+      rate.toNat ^ k *
+          scale.toNat ^ (rpowTree half.toNat k).scaleCount +
+        (rpowTree half.toNat k).exactOver scale.toNat rate.toNat 0 :=
+  drip_rpow_exact_telescope k
+
+-- R2: every configured history of the deployed DRIP is realized by an
+-- accounting trace whose call projection is the history's own DRIP calls.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    ∃ steps, DripTraceRealizes root coalition steps future ∧
+      callKinds steps = history.dripCalls coalition ca :=
+  dripTraceRealizes_transcript root coalition history
+
+-- R2: the executed-flow accounting identity, every term a function of the
+-- actual history's DRIP calls.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
+        (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).joinResidue +
+        scale.toNat * (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).paid +
+        (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).exitResidue =
+      (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).accrual +
+        scale.toNat * (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).joined :=
+  history_transcript_accounting_exact root coalition history
+
+-- R2: the executed-flow balance identity.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca) {coalition : Finset Adr}
+    {steps : List RealizedStep}
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (realizes : DripTraceRealizes root coalition steps future)
+    (faithful : callKinds steps = history.dripCalls coalition ca) :
+    (future.state.bal ca).toNat +
+        (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).allPaid =
+      (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).allJoined + Chain.giftSum steps :=
+  history_transcript_balance_exact root history realizes faithful
+
+-- R3: a successful `drip()` or `join()` leaves no stale index: the clock is
+-- stamped to the block time and the index is the fresh value.
+example {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (hsel : Sevm.selector sevm = dripSelector ∨
+      Sevm.selector sevm = joinSelector) :
+    Devm.getStorVal pre sevm.currentTarget rhoSlot ≤ sevm.benvStat.time ∧
+      Devm.getStorVal post sevm.currentTarget rhoSlot = sevm.benvStat.time ∧
+      (Devm.getStorVal post sevm.currentTarget chiSlot).toNat =
+        freshNat (Devm.getStorVal pre sevm.currentTarget chiSlot).toNat
+          (sevm.benvStat.time -
+            Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat :=
+  no_stale_index_success_callback_free exc hcode hnonempty hcanon hsel
+
+-- R3: a successful `exit()` holds the same two equations at its settlement
+-- boundary, with the accepted payout the only remaining distance.
+example {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    Devm.getStorVal pre sevm.currentTarget rhoSlot ≤ sevm.benvStat.time ∧
+      ∃ callPre callPost guardPost returnPre,
+        (Devm.getStor callPre sevm.currentTarget).get rhoSlot =
+            sevm.benvStat.time ∧
+          ((Devm.getStor callPre sevm.currentTarget).get chiSlot).toNat =
+            freshNat (Devm.getStorVal pre sevm.currentTarget chiSlot).toNat
+              (sevm.benvStat.time -
+                Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat ∧
+          AcceptedPayout sevm
+            ((B256.rpow scale half rate
+                  (sevm.benvStat.time -
+                    Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+                Devm.getStorVal pre sevm.currentTarget chiSlot / scale) *
+              Sevm.dataWord sevm (32 * 0 + 4) / scale)
+            callPre callPost guardPost returnPre ∧
+          Devm.getStor post = Devm.getStor callPost :=
+  no_stale_index_settlement_exit exc hcode hsel hnonempty hcanon
+
+-- R3: the executed-flow entitlement bound.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (transcriptTally scale.toNat freshNat scale.toNat 0
+        (history.dripCalls coalition ca)).paid ≤
+      (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).joined +
+        (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).accrual / scale.toNat :=
+  history_transcript_entitlement root coalition history
+
+-- R3: two realized histories of pure `drip()` segments with the same total
+-- elapsed time end with indices within the certified segment drift.
+example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
+    {futureL futureR : BlockChain}
+    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
+    (historyL : ExecutionTrace.ConfiguredHistoryTrace cfg deployed futureL)
+    (historyR : ExecutionTrace.ConfiguredHistoryTrace cfg deployed futureR)
+    {left right : List Nat}
+    (callsL : historyL.dripCalls coalition ca = left.map Kind.drip)
+    (callsR : historyR.dripCalls coalition ca = right.map Kind.drip)
+    (sameElapsed : left.sum = right.sum) :
+    natDistance (chiN (futureL.state.getStor ca)) (chiN (futureR.state.getStor ca)) ≤
+      max (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat left right)
+          (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat right left) :=
+  realized_segment_certified root coalition historyL historyR callsL callsR sameElapsed
+
+-- R4: every configured history keeps the clock-paired invariant at its last
+-- block's timestamp.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    ∀ t, future.blocks.getLast?.map (·.header.timestamp) = some t →
+      ClockInv (chiN (deployed.state.getStor ca)) (rhoN (deployed.state.getStor ca))
+        t (future.state.getStor ca) :=
+  history_clockInv root history
+
+-- R4: the index and the clock never fall along a realized trace.
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (root : DeploymentRoot cfg base deployed ca)
+    {coalition : Finset Adr} {steps : List RealizedStep}
+    (realizes : DripTraceRealizes root coalition steps future) :
+    chiN (deployed.state.getStor ca) ≤ chiN (future.state.getStor ca) ∧
+      rhoN (deployed.state.getStor ca) ≤ rhoN (future.state.getStor ca) :=
+  history_chi_rho_mono root realizes
+
+end Drip
 
 end Blanc

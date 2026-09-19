@@ -1625,7 +1625,34 @@ Blanc.Drip.drip_compiled_exit|$STANDARD
 Blanc.Drip.no_stale_index_success_callback_free|$STANDARD
 Blanc.Drip.no_stale_index_settlement_exit|$STANDARD
 Blanc.Drip.view_eq_same_timestamp_join|$STANDARD
-Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound"
+Blanc.Drip.chain_drips_eq_segmentIndex|propext, Quot.sound
+Blanc.Drip.drip_compiled_drip|$STANDARD
+Blanc.Drip.drip_compiled_factorNat|$STANDARD
+Blanc.Drip.drip_rpow_certified_band|propext, Quot.sound
+Blanc.Drip.drip_rpow_exact_telescope|propext, Quot.sound
+Blanc.Drip.drip_segment_certified|propext, Quot.sound
+Blanc.Drip.segment_spread_witness|propext, Quot.sound
+Blanc.Drip.rpow_under_witness|propext, Quot.sound
+Blanc.Drip.rpow_over_witness|propext, Quot.sound
+Blanc.Drip.drip_rpow_runtime_ops_exact|propext, Quot.sound
+Blanc.Drip.exit_pays_exactly_full|$STANDARD
+Blanc.Drip.DeploymentRoot.accountingInv|$STANDARD
+Blanc.Drip.canonicalDeploymentStep_establishes_root|$STANDARD
+Blanc.Drip.StackSafety.actual_entry_safe|$STANDARD
+Blanc.Drip.Chain.transcriptTally_eq|propext
+Blanc.Drip.dripTraceRealizes_transcript|$STANDARD
+Blanc.Drip.history_transcript_accounting_exact|$STANDARD
+Blanc.Drip.history_transcript_balance_exact|$STANDARD
+Blanc.Drip.history_transcript_entitlement|$STANDARD
+Blanc.Drip.realized_segment_certified|$STANDARD
+Blanc.Drip.dripCalls_ne_nil_of_totalUnits|$STANDARD
+Blanc.Drip.concreteHistory_dripCalls_ne_nil|$STANDARD
+Blanc.Drip.dripClockSpec_preservesAdmitted|$STANDARD
+Blanc.Drip.history_clockInv|$STANDARD
+Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace|$STANDARD
+Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time|$STANDARD
+Blanc.Exec.frameAdmitted_benvStat|$STANDARD
+Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

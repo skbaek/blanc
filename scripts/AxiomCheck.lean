@@ -117,6 +117,18 @@ import Blanc.Composition.ProrataWethVaultAccountingHistory
 import Blanc.Composition.ProrataWethVaultCoalitionHistory
 import Blanc.Composition.ProrataWethVaultLedgerFaithful
 import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
+import Blanc.DripRpow
+import Blanc.DripEndpoints
+import Blanc.DripInvariant
+import Blanc.DripDeploy
+import Blanc.DripStackSafetyCertificate
+import Blanc.DripTranscript
+import Blanc.DripTranscriptExec
+import Blanc.DripTranscriptHistory
+import Blanc.DripClock
+import Blanc.DripClockHistory
+import Blanc.ExecutionAccountingLadder
+import Blanc.ExecutionFrameTime
 
 #print axioms Blanc.weth_preserves_solvent
 #print axioms Blanc.stateTransition_preserves_solvent
@@ -1349,3 +1361,30 @@ import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
 #print axioms Blanc.Drip.no_stale_index_settlement_exit
 #print axioms Blanc.Drip.view_eq_same_timestamp_join
 #print axioms Blanc.Drip.chain_drips_eq_segmentIndex
+#print axioms Blanc.Drip.drip_compiled_drip
+#print axioms Blanc.Drip.drip_compiled_factorNat
+#print axioms Blanc.Drip.drip_rpow_certified_band
+#print axioms Blanc.Drip.drip_rpow_exact_telescope
+#print axioms Blanc.Drip.drip_segment_certified
+#print axioms Blanc.Drip.segment_spread_witness
+#print axioms Blanc.Drip.rpow_under_witness
+#print axioms Blanc.Drip.rpow_over_witness
+#print axioms Blanc.Drip.drip_rpow_runtime_ops_exact
+#print axioms Blanc.Drip.exit_pays_exactly_full
+#print axioms Blanc.Drip.DeploymentRoot.accountingInv
+#print axioms Blanc.Drip.canonicalDeploymentStep_establishes_root
+#print axioms Blanc.Drip.StackSafety.actual_entry_safe
+#print axioms Blanc.Drip.Chain.transcriptTally_eq
+#print axioms Blanc.Drip.dripTraceRealizes_transcript
+#print axioms Blanc.Drip.history_transcript_accounting_exact
+#print axioms Blanc.Drip.history_transcript_balance_exact
+#print axioms Blanc.Drip.history_transcript_entitlement
+#print axioms Blanc.Drip.realized_segment_certified
+#print axioms Blanc.Drip.dripCalls_ne_nil_of_totalUnits
+#print axioms Blanc.Drip.concreteHistory_dripCalls_ne_nil
+#print axioms Blanc.Drip.dripClockSpec_preservesAdmitted
+#print axioms Blanc.Drip.history_clockInv
+#print axioms Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace
+#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time
+#print axioms Blanc.Exec.frameAdmitted_benvStat
+#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt
