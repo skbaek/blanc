@@ -337,6 +337,7 @@ import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultRevertSteps
 import Blanc.Composition.ProrataWethVaultNonrevertViews
 import Blanc.Composition.ProrataWethVaultNonrevertInbound
+import Blanc.Composition.ProrataWethVaultNonrevertOutbound
 import Blanc.Composition.ProrataWethVaultNonrevert
 import Blanc.Composition.ProrataWethVaultTerminals
 import Blanc.Composition.ProrataWethVaultBacking
