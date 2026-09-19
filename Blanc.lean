@@ -354,6 +354,7 @@ import Blanc.Composition.ProrataWethVaultLedgerFaithful
 
 import Blanc.Drip
 import Blanc.DripAccounting
+import Blanc.DripTranscript
 import Blanc.DripCode
 import Blanc.DripCore
 import Blanc.DripCreationCode

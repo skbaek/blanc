@@ -209,7 +209,7 @@ CONTRACTS = {
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteReach", "DripCreationCode", 
-             "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripMachine", "DripEndpoints", "DripFresh", 
+             "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
              "DripStackSafetyRegion1459", "DripStackSafetyCertificate",
              "DripSound", "DripInvariant", "DripPreservation", "DripHistory", "DripMonotone", "DripMonotoneHistory", "DripRealizedHistory",
