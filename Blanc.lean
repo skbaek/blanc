@@ -135,6 +135,7 @@ import Blanc.DeploymentMessage
 import Blanc.Forward
 import Blanc.ForwardMstore8
 import Blanc.Reverts
+import Blanc.RevertCause
 import Blanc.RevertPayload
 import Blanc.CompiledWalkInversion
 import Blanc.CompiledFixedInvariance

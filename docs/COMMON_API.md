@@ -187,6 +187,9 @@ registry has identified the likely vocabulary.
   This remains COMMON_API-only: the same `Func.RunCompiledTo` head is also the
   reliable trigger for construction recipes, so an automatic recipe would
   conflate constructing and inverting a walk.
+- A compiled walk that designates the step that caused a revert
+  (`Func.RunCompiledToVisiting`, `Prog.RunCompiledToVisiting`):
+  [`Blanc/RevertCause.lean`](../Blanc/RevertCause.lean).
 - Carry an observable through a successful compiled walk with a fixed
   function table using `Func.CompiledInv` in
   [`Blanc/CompiledFixedInvariance.lean`](../Blanc/CompiledFixedInvariance.lean).
