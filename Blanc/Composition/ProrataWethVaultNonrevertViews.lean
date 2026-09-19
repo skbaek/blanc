@@ -24,11 +24,6 @@ continuation with no `REVERT`.  The exec-level headlines in
 `…Nonrevert.lean` add only the inversion `Prog.runCompiledTo_of_exec_revert`.
 -/
 
-private theorem vaultFuncs_member {i : Nat} {entry : B256 × Func}
-    (lookup : Blanc.ProrataWethVault.vaultFuncs[i]? = some entry) :
-    entry ∈ Blanc.ProrataWethVault.vaultFuncs :=
-  List.mem_of_getElem? lookup
-
 private theorem vault_returnWord_lookup :
     (Blanc.ProrataWethVault.vault.main ::
         Blanc.ProrataWethVault.vault.aux)[
@@ -47,16 +42,6 @@ private theorem reads_self (devm : Devm) :
   intro index
   simp
 
-/-- The WETH configuration depends only on the world, so it travels along any
-state-preserving prefix. -/
-private theorem DirectWethConfiguration.of_state_eq {sevm : Sevm}
-    {a b : Devm} (config : DirectWethConfiguration sevm.currentTarget sevm a)
-    (state : a.state = b.state) :
-    DirectWethConfiguration sevm.currentTarget sevm b := by
-  refine ⟨config.distinct, config.nonprecompile, ?_⟩
-  rw [← getCode_eq_of_state_eq state wethAccount]
-  exact config.code
-
 /-- **The `maxDeposit` view reverts only through a refused `balanceOf`.**  No
 stable-state premise: an unstable supply or zero receiver returns 0 before
 any arithmetic. -/
@@ -73,7 +58,7 @@ theorem maxDeposit_revert_visits_refused_weth_child
       (.error (.revert, d))) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  refine vault_revert_visits_of_body selectorEq (vaultFuncs_member (i := 9) rfl)
+  refine vault_revert_visits_of_body selectorEq (List.mem_of_getElem? (i := 9) rfl)
     valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.maxDeposit at run
@@ -93,7 +78,7 @@ theorem maxDeposit_revert_visits_refused_weth_child
     Blanc.ProrataWethVault.stableCapacityBranch_revert supplyWindow
       branchStack branchRun
   have readSupplyWindow := readPreserves supplyWindow
-  have readConfig := config.of_state_eq (entryState.trans
+  have readConfig := config.of_state_eq' (entryState.trans
     (receiverState.trans (supplyState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
@@ -118,7 +103,7 @@ theorem maxMint_revert_visits_refused_weth_child
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 19) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 19) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.maxMint at run
   obtain ⟨receiverPre, receiverStack, receiverState, receiverMemory,
@@ -137,7 +122,7 @@ theorem maxMint_revert_visits_refused_weth_child
     Blanc.ProrataWethVault.stableCapacityBranch_revert supplyWindow
       branchStack branchRun
   have readSupplyWindow := readPreserves supplyWindow
-  have readConfig := config.of_state_eq (entryState.trans
+  have readConfig := config.of_state_eq' (entryState.trans
     (receiverState.trans (supplyState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
@@ -162,7 +147,7 @@ theorem maxWithdraw_revert_visits_refused_weth_child
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 21) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 21) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.maxWithdraw at run
   obtain ⟨ownerPre, ownerStack, ownerState, ownerMemory, ownerRun⟩ :=
@@ -185,7 +170,7 @@ theorem maxWithdraw_revert_visits_refused_weth_child
       branchStack branchRun
   have readSupplyWindow := readPreserves supplyWindow
   have readAmountWindow := readPreserves branchAmountWindow
-  have readConfig := config.of_state_eq (entryState.trans
+  have readConfig := config.of_state_eq' (entryState.trans
     (ownerState.trans (amountState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
@@ -210,7 +195,7 @@ theorem maxRedeem_no_reverting_walk
     False := by
   obtain ⟨entry, -, run⟩ := walk
   obtain ⟨bodyPre, -, -, bodyRun⟩ :=
-    vault_endpoint_avoiding selectorEq (vaultFuncs_member (i := 22) rfl)
+    vault_endpoint_avoiding selectorEq (List.mem_of_getElem? (i := 22) rfl)
       valueZero argsPresent (Func.RunCompiledToAvoiding.of_bot run)
   unfold Blanc.ProrataWethVault.maxRedeem at bodyRun
   obtain ⟨readPre, -, -, -, readRun⟩ :=

@@ -235,8 +235,10 @@ def run_falsifiers(errors: list[str]) -> None:
             "FalseAccepted.lean",
             replace_once(
                 staging,
-                "calldata\n        (1 : B256).toBytes false ∧",
-                "calldata\n        (0 : B256).toBytes false ∧",
+                "calldata\n        (1 : B256).toBytes false ∧\n"
+                "      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by",
+                "calldata\n        (0 : B256).toBytes false ∧\n"
+                "      Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by",
                 "false return",
             ),
             ("callPost.returnData = B256.toBytes 1",),

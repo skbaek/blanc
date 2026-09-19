@@ -818,11 +818,6 @@ theorem outboundGuardedTail_revert {entry d : Devm}
 
 end
 
-private theorem vaultFuncs_member {i : Nat} {entry : B256 × Func}
-    (lookup : Blanc.ProrataWethVault.vaultFuncs[i]? = some entry) :
-    entry ∈ Blanc.ProrataWethVault.vaultFuncs :=
-  List.mem_of_getElem? lookup
-
 private theorem vault_withdrawAfterQuote_lookup :
     (Blanc.ProrataWethVault.vault.main ::
         Blanc.ProrataWethVault.vault.aux)[
@@ -1039,7 +1034,7 @@ theorem withdraw_revert_visits_refused_weth_child
         Blanc.ProrataWethVault.supplySlot).toNat < wordModulusN :=
     Nat.lt_of_le_of_lt covered (B256.toNat_lt _)
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 17) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 17) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.withdraw at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, ownerWindow,
@@ -1164,7 +1159,7 @@ theorem redeem_revert_visits_refused_weth_child
       (Blanc.ProrataWethVault.maxWithdrawN_le_assets balanceLe))
       (B256.toNat_lt _)
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 18) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 18) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.redeem at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, ownerWindow,

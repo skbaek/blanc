@@ -301,11 +301,6 @@ theorem inboundGuardedTail_revert {fs : List Func} {sevm : Sevm}
   exact Func.RunCompiledTo.not_revert_of_revertFreeIn (safe := [])
     (fun _ member => absurd member List.not_mem_nil) run.1 free d rfl
 
-private theorem vaultFuncs_member {i : Nat} {entry : B256 × Func}
-    (lookup : Blanc.ProrataWethVault.vaultFuncs[i]? = some entry) :
-    entry ∈ Blanc.ProrataWethVault.vaultFuncs :=
-  List.mem_of_getElem? lookup
-
 private theorem vault_depositAfterQuote_lookup :
     (Blanc.ProrataWethVault.vault.main ::
         Blanc.ProrataWethVault.vault.aux)[
@@ -451,7 +446,7 @@ theorem deposit_revert_visits_refused_weth_child
   have quoteFits := Nat.lt_of_le_of_lt roomFits
     (Blanc.ProrataWethVault.shareRoomN_lt_wordModulusN _)
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 11) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 11) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.deposit at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, assetsWindow,
@@ -539,7 +534,7 @@ theorem mint_revert_visits_refused_weth_child
     have := wordModulusN_pos
     omega
   refine vault_revert_visits_of_body selectorEq
-    (vaultFuncs_member (i := 13) rfl) valueZero argsPresent walk ?_
+    (List.mem_of_getElem? (i := 13) rfl) valueZero argsPresent walk ?_
   intro bodyPre entryState entryMemory run
   unfold Blanc.ProrataWethVault.mint at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, assetsWindow,

@@ -324,14 +324,19 @@ its stated exact effect: the flows quote before the WETH transfer, call the
 exact WETH child, mint or burn, pay, return, and log by the frozen floor/ceil
 formulas, and the views, converters, previews and `max*` return their frozen
 formulas. These are statements about successful runs. Capacity is stated
-about the actual execution instead: at a stable pair state, with the vault's
-own call-validity conditions, a `deposit`, `mint`, `withdraw` or `redeem` of at
-most its advertised `max*` value that reverts has run a refused exact-WETH
-child call — for the inbound transfer, the caller's WETH balance or allowance,
-and for any WETH child, gas, the call-depth limit or a static context
+about the actual execution instead: at a stable pair state (`PairStable`,
+proved at the configured root and, at a state the real chain reaches from it,
+only under the key-noncollision premise below, `pair_history_stable`), with the
+vault's own call-validity conditions, a `deposit`, `mint`, `withdraw` or
+`redeem` of at most its advertised `max*` value that reverts has run a refused
+exact-WETH child call — for the inbound transfer, the caller's WETH balance or
+allowance, and for any WETH child, gas, the call-depth limit or a static context
 (`deposit_exec_revert_visits_refused_weth_child` and its three siblings);
-`maxDeposit`, `maxMint` and `maxWithdraw` revert only through a refused
-`balanceOf`, and `maxRedeem` never reverts (`maxRedeem_exec_never_reverts`);
+with the views' own call-validity conditions — zero call value, calldata
+covering the one-word argument head, and a canonical address argument
+(`ValidAdr`) — `maxDeposit`, `maxMint` and `maxWithdraw` revert only through a
+refused `balanceOf`, and `maxRedeem` never reverts
+(`maxRedeem_exec_never_reverts`);
 and every successful flow stays within `max*`
 (`deposit_success_within_maxDeposit` and its three siblings). An exceptional
 halt of the vault frame — out of gas, or a write in a static context — is not a

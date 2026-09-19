@@ -16,8 +16,8 @@ open Jaune
 The revert-cause statements speak only about `EvmError.revert`.  This is their
 structural companion: every terminal of the vault's source tree is `RETURN` or
 the `REVERT` of a `Func.revert` node, so no vault guard is coded as some other
-halt (`STOP`, `SELFDESTRUCT`, or a bare `REVERT` whose garbage operands could
-halt instead) that a revert-only statement would not see. -/
+terminal (`STOP`, `SELFDESTRUCT`, or a bare `REVERT` whose garbage operands
+could halt instead) that a revert-only statement would not see. -/
 
 /-- **Every vault terminal is `RETURN` or a `Func.revert`.**  Checked over the
 whole table `vault.main :: vault.aux`; a `.call` leaf is a table index and is
