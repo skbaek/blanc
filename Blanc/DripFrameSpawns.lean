@@ -1,5 +1,6 @@
 import Blanc.DripExitPreCallbackLocator
 import Blanc.DripRealizedExec
+import Blanc.ExecutionTraceSettledFrames
 
 /-!
 DRIP frames spawn only their payout child.
@@ -9,6 +10,10 @@ prefix from the entry to a terminal instruction. Replayed onto the actual
 execution with `Exec.Deriv.SourceCursor.ofRunPrefix_sameFrame_gasFree`, its
 same-frame chain decodes no frame-entering instruction, so the frame retains no
 descendant frame (`nonexit_descendantFrames_nil`).
+
+A successful `exit` frame's same-frame chain enters exactly one frame, at its
+payout `CALL`: `exit_exec_handoffAt` carries the actual child slot and proves
+the frame's descendant frames are that slot's settled frames.
 -/
 
 namespace Blanc
@@ -21,54 +26,18 @@ namespace Drip
 
 /-! ## Straight-line gas-free tails -/
 
-/-- Every instruction gas-free and no table call: the shape of DRIP's
-post-route tails. -/
-def straightGasFree : Func → Bool
-  | .last _ => true
-  | .next i f => Ninst.gasFree i && straightGasFree f
-  | .branch f g => straightGasFree f && straightGasFree g
-  | .call _ => false
-
-/-- A successful run of a straight-line gas-free function is a gas-free prefix
-ending at one of its terminal instructions. -/
-theorem runPrefix_toLast_of_run {fs : List Func} {e : Sevm} :
-    ∀ {f : Func} {path : Prog.SourcePath} {s r : Devm},
-      straightGasFree f = true → Func.Run fs e s f r →
-      ∃ target t l, Func.RunPrefix fs e path s f target t (.last l)
-  | .last l, path, s, _, _, _ => ⟨path, s, l, .refl⟩
-  | .next i f, ⟨k, steps⟩, s, r, free, run => by
-      simp only [straightGasFree, Bool.and_eq_true] at free
-      cases run with
-      | next step rest =>
-          rcases runPrefix_toLast_of_run (path := ⟨k, steps ++ [.rest]⟩)
-              free.2 rest with ⟨target, t, l, walk⟩
-          exact ⟨target, t, l, .next free.1 step walk⟩
-  | .branch f g, ⟨k, steps⟩, s, r, free, run => by
-      simp only [straightGasFree, Bool.and_eq_true] at free
-      cases run with
-      | zero pop rest =>
-          rcases runPrefix_toLast_of_run (path := ⟨k, steps ++ [.branchLeft]⟩)
-              free.1 rest with ⟨target, t, l, walk⟩
-          exact ⟨target, t, l, .zero pop walk⟩
-      | succ nonzero pop burn rest =>
-          rcases runPrefix_toLast_of_run
-              (path := ⟨k, steps ++ [.branchRight]⟩) free.2 rest with
-            ⟨target, t, l, walk⟩
-          exact ⟨target, t, l, .succ nonzero pop burn walk⟩
-  | .call _, _, _, _, free, _ => by cases free
-
-theorem straightGasFree_afterDrip : straightGasFree afterDrip = true := by
+theorem straightGasFree_afterDrip : Func.straightGasFree afterDrip = true := by
   decide
 
-theorem straightGasFree_afterJoin : straightGasFree afterJoin = true := by
+theorem straightGasFree_afterJoin : Func.straightGasFree afterJoin = true := by
   decide
 
 theorem straightGasFree_afterConvertToAssets :
-    straightGasFree afterConvertToAssets = true := by
+    Func.straightGasFree afterConvertToAssets = true := by
   decide
 
 theorem straightGasFree_afterConvertToUnits :
-    straightGasFree afterConvertToUnits = true := by
+    Func.straightGasFree afterConvertToUnits = true := by
   decide
 
 /-! ## Route prefixes to a terminal instruction -/
@@ -107,17 +76,17 @@ theorem of_run_freshTail_terminal_prefix {fs : List Func}
   have head := hpre1.trans (hpre2.trans hpre3)
   rcases hroute with ⟨-, hpre4, run⟩ | ⟨htagE, -, -⟩ | ⟨-, hpre4, run⟩ |
     ⟨-, hpre4, run⟩ | ⟨-, hpre4, run⟩
-  · rcases runPrefix_toLast_of_run (path := target4)
+  · rcases Func.RunPrefix.toLast_of_run (path := target4)
         straightGasFree_afterConvertToAssets run with ⟨target, t, l, walk⟩
     exact ⟨target, t, l, head.trans (hpre4.trans walk)⟩
   · exact (notExit (htag.symm.trans htagE)).elim
-  · rcases runPrefix_toLast_of_run (path := target4)
+  · rcases Func.RunPrefix.toLast_of_run (path := target4)
         straightGasFree_afterConvertToUnits run with ⟨target, t, l, walk⟩
     exact ⟨target, t, l, head.trans (hpre4.trans walk)⟩
-  · rcases runPrefix_toLast_of_run (path := target4)
+  · rcases Func.RunPrefix.toLast_of_run (path := target4)
         straightGasFree_afterDrip run with ⟨target, t, l, walk⟩
     exact ⟨target, t, l, head.trans (hpre4.trans walk)⟩
-  · rcases runPrefix_toLast_of_run (path := target4)
+  · rcases Func.RunPrefix.toLast_of_run (path := target4)
         straightGasFree_afterJoin run with ⟨target, t, l, walk⟩
     exact ⟨target, t, l, head.trans (hpre4.trans walk)⟩
 
@@ -368,6 +337,169 @@ theorem nonexit_descendantFrames_nil {sevm : Sevm} {pre post : Devm}
   exact Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt exc
     ((mainFree.trans endFree).noExec_of_linstAt
       (Linst.at_of_slice endCursor.codeSlice))
+
+/-! ## T4a: the exit frame's descendants are its payout child's -/
+
+/-- One same-frame step whose retained slot is `retained` contributes exactly
+that slot's settled frames, provided a spawned child's settlement commits. -/
+theorem Exec.Deriv.descendantFrames_eq_of_stepRun {node next : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next node) {xl : Xlot}
+    (stepRun : Step.Run (Evm.step ⟨node.pc, node.sevm, node.devm⟩) xl
+      (.ok next.devm))
+    (settles : ∀ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat)
+      (evm : Evm) (raw : Execution),
+      Evm.step ⟨node.pc, node.sevm, node.devm⟩ = .spawn frame resume nextPc →
+      xl = .some ⟨evm, raw⟩ → Frame.settlementCommits frame raw = true)
+    (retained : ExecutionTrace.RetainedXlot xl) :
+    Exec.descendantFrames node.exc =
+      retained.settledFrames ++ Exec.descendantFrames next.exc := by
+  cases edge with
+  | cont hstep next =>
+      rw [hstep] at stepRun
+      obtain ⟨hxl, -⟩ := stepRun
+      subst hxl
+      cases retained
+      simp [Exec.descendantFrames]
+  | doneOk hstep henter hresume next =>
+      rw [hstep] at stepRun
+      obtain ⟨r, frameRun, -⟩ := stepRun
+      unfold RunFrame at frameRun
+      rw [henter] at frameRun
+      obtain ⟨hxl, -⟩ := frameRun
+      subst hxl
+      cases retained
+      simp [Exec.descendantFrames]
+  | runOk hstep henter child hresume next =>
+      have stepRun' := stepRun
+      rw [hstep] at stepRun'
+      obtain ⟨r, frameRun, -⟩ := stepRun'
+      unfold RunFrame at frameRun
+      rw [henter] at frameRun
+      obtain ⟨raw', hxl, -⟩ := frameRun
+      have commits := settles _ _ _ _ raw' hstep hxl
+      subst hxl
+      cases retained with
+      | some run =>
+          have rawEq := Exec.result_unique run child
+          subst rawEq
+          have runEq : run = child := Exec.unique _ _
+          subst runEq
+          have hraw := Frame.raw_commits_of_settlementCommits commits
+          simp [commits, Exec.committedFrames, hraw]
+
+/-- The retained accepted callback of one successful `exit` frame, carried by
+the frame's actual `CALL` child: the actual-child twin of `ExitHandoff`. -/
+structure ExitHandoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post)) where
+  childMsg : Msg
+  entry : Benv
+  child : Devm
+  xl : Xlot
+  retained : ExecutionTrace.RetainedXlot xl
+  process : ProcessMessage childMsg xl (.ok child)
+  childClean : child.error.isSome = false
+  entryTransfer : childMsg.benvAfterTransfer = .ok entry
+  targetNe : childMsg.currentTarget ≠ sevm.currentTarget
+  depth : (initSevm (childMsg.withBenv entry)).depth < sevm.depth
+  childPre : dripEntrySpec.Pre sevm.currentTarget
+    (initSevm (childMsg.withBenv entry)) (initDevm (childMsg.withBenv entry))
+  effect : Effect scale.toNat freshNat
+    (snapshot coalition sevm.currentTarget pre.state)
+    (.exit (decide (sevm.caller ∈ coalition)) sevm.caller
+      (Sevm.dataWord sevm (32 * 0 + 4)).toNat
+      (exitPayoutOf scale.toNat (Sevm.dataWord sevm (32 * 0 + 4)).toNat
+        (freshNat (chiN (Devm.getStor pre sevm.currentTarget))
+          (sevm.benvStat.time -
+            Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat))
+      (sevm.benvStat.time -
+        Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat)
+    (snapshot coalition sevm.currentTarget entry.state)
+  postSnapshot : snapshot coalition sevm.currentTarget post.state =
+    snapshot coalition sevm.currentTarget child.state
+  frames : Exec.descendantFrames exc = retained.settledFrames
+
+theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
+    (caller_ne : sevm.caller ≠ sevm.currentTarget) :
+    Nonempty (ExitHandoffAt coalition exc) := by
+  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  unfold ExitPaysExactlyFull at full
+  dsimp only at full
+  rcases full with
+    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi, -⟩
+  have spine := exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon
+  dsimp only at spine
+  rcases spine with
+    ⟨node, -, isCall, -, sameFrame, storEq, codeEq, -, -, nodeFree, balEq,
+      callPost, guardPost, returnPre, stepEq, accepted, postStor, postBal,
+      afterNode, afterDevm, afterEdge, afterClean⟩
+  rcases accepted with
+    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail,
+      acceptedPc, -, -, -, -, acceptedStep, hdepth, acceptedStack, parentState,
+      -, -, -, -, filled, process, clean, -, callPostState, -, -, -⟩
+  obtain ⟨handoff, handoffXl, handoffChild, handoffMsg⟩ :=
+    exit_handoff_of_components coalition precondition caller_ne hargCap hown
+      hfund hclock hguards hnofm hcapChi storEq codeEq balEq postStor postBal
+      hdepth parentState filled process clean callPostState
+  obtain ⟨retained⟩ := ExecutionTrace.exists_retainedXlot_of_filled filled
+  have sevmEq : node.node.sevm = sevm := sameFrame.sevm_eq
+  have nodeStep : Step.Run
+      (Evm.step ⟨node.node.pc, node.node.sevm, node.node.devm⟩) xl
+      (.ok afterNode.devm) := by
+    have evmStep := Evm.step_next (devm := node.node.devm) node.decoded
+    rw [isCall] at evmStep
+    rw [evmStep, afterDevm, sevmEq]
+    exact Ninst.stepRun_pc_irrel (n := call) rfl (pc' := node.node.pc)
+      acceptedStep
+  have settles : ∀ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat)
+      (evm : Evm) (raw : Execution),
+      Evm.step ⟨node.node.pc, node.node.sevm, node.node.devm⟩ =
+        .spawn frame resume nextPc →
+      xl = .some ⟨evm, raw⟩ → Frame.settlementCommits frame raw = true := by
+    intro frame resume nextPc evm raw spawn slotEq
+    have evmStep := Evm.step_next (devm := node.node.devm) node.decoded
+    rw [isCall, sevmEq] at evmStep
+    rw [sevmEq, evmStep] at spawn
+    rcases Ninst.step_call_spawn_exact spawn acceptedStack with
+      ⟨spawnParent, spawnDelegated, spawnAddress, spawnCode, spawnAvail,
+        -, -, -, -, -, frameEq, -⟩
+    subst frameEq
+    subst slotEq
+    obtain ⟨-, settled⟩ := RunFrame.some_inv process
+    unfold Frame.settlementCommits
+    rw [ofCall_settle_of_clean _ _ settled.symm clean]
+    cases hError : child.error <;> simp_all
+  have frames : Exec.descendantFrames exc = retained.settledFrames := by
+    have head := nodeFree.descendantFrames_eq
+    have step := Exec.Deriv.descendantFrames_eq_of_stepRun afterEdge nodeStep
+      settles retained
+    have tail : Exec.descendantFrames afterNode.exc = [] :=
+      Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt afterNode.exc
+        afterClean
+    change Exec.descendantFrames exc = Exec.descendantFrames node.node.exc at head
+    rw [head, step, tail, List.append_nil]
+  subst handoffXl
+  subst handoffChild
+  exact ⟨{
+    childMsg := handoff.childMsg
+    entry := handoff.entry
+    child := handoff.child
+    xl := handoff.xl
+    retained := retained
+    process := handoff.process
+    childClean := handoff.childClean
+    entryTransfer := handoff.entryTransfer
+    targetNe := handoff.targetNe
+    depth := handoff.depth
+    childPre := handoff.childPre
+    effect := handoff.effect
+    postSnapshot := handoff.postSnapshot
+    frames := frames }⟩
 
 end Drip
 

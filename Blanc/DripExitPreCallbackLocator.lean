@@ -124,11 +124,11 @@ theorem runtime_call_site_pc {site : Prog.SourceSite}
   rw [isCall] at checked
   simpa [isCallInstruction] using checked
 
-/-- **Exit payout identity.** A successful `exit` of the installed runtime has
-an actual same-frame `CALL` node whose storage, code, payout stack words and
-memory well-formedness are the settled ones. The `gas` word is existential and
-is the actual node's own. -/
-theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
+/-- Spine twin of `exit_callNode_identity_of_exec`: the same actual `CALL`
+node, with the whole same-frame chain before it and after its resume free of
+frame-entering instructions, its balance column equal to the entry's, and the
+frame's end storage and balance equal to the resumed call's. -/
+theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
@@ -154,22 +154,30 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
       (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
         [] <<+ node.node.devm.stack) ∧
       Mem.Wf node.node.devm.memory ∧
+      Exec.Deriv.ExecFreeUntil ⟨0, sevm, pre, .ok post, exc⟩ node.node ∧
+      Devm.getBal node.node.devm = Devm.getBal pre ∧
       ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
         AcceptedPayout sevm payout node.node.devm callPost guardPost
-          returnPre := by
+          returnPre ∧
+        Devm.getStor post = Devm.getStor callPost ∧
+        Devm.getBal post = Devm.getBal callPost ∧
+        ∃ afterNode : Exec.Deriv, afterNode.devm = callPost ∧
+          Exec.Deriv.ParentStep afterNode node.node ∧
+          ∀ later, Exec.Deriv.ParentPrefix afterNode later →
+            ∀ x : Xinst, ¬ Ninst.At later.sevm.code later.pc (.exec x) := by
   dsimp only
   rcases exit_gasHead_prefix exc hcode hsel hnonempty hcanon with
     ⟨entry, t, target, burn, hcodeT, hpT, hwfT, hstorT, walk, -⟩
   have compiled : some sevm.code.toList = runtime.compile :=
     installed_compile hcode
-  rcases Exec.Deriv.SourceCursor.mainForward
+  rcases Exec.Deriv.SourceCursor.mainForwardFree
       (root := ⟨0, sevm, pre, .ok post, exc⟩) (program := runtime)
       rfl compiled rfl with
-    ⟨mainCursor, mainReached, actualBurn⟩
+    ⟨mainCursor, mainFree, actualBurn⟩
   have seed : Devm.EqModGas entry mainCursor.pre :=
     (Devm.EqModGas.refl pre).of_burn burn actualBurn
-  rcases mainCursor.ofRunPrefix compiled rfl walk seed with
-    ⟨gasCursor, agree, gasReached⟩
+  rcases mainCursor.ofRunPrefix_sameFrame_gasFree compiled rfl walk seed with
+    ⟨gasCursor, agree, gasFree⟩
   unfold exitCallSuffix at gasCursor
   rcases gasCursor.nextForward rfl with ⟨callCursor, gasEdge, gasRun⟩
   rcases of_run_gas gasRun with ⟨gasWord, gasPush⟩
@@ -182,9 +190,18 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
   rcases callRun with ⟨slot, filled, anyPc, stepRun⟩
   have stepRun' := Ninst.stepRun_pc_irrel (n := call) rfl
     (pc' := callCursor.pc) stepRun
-  have sameFrame : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, exc⟩
+  have gasNoExec : ∀ x : Xinst,
+      ¬ Ninst.At gasCursor.node.sevm.code gasCursor.node.pc (.exec x) := by
+    intro x execAt
+    have both : (some (Inst.next gas) : Option Inst) =
+        some (.next (.exec x)) := gasCursor.ninstAt.symm.trans execAt
+    cases both
+  have nodeFree : Exec.Deriv.ExecFreeUntil ⟨0, sevm, pre, .ok post, exc⟩
       callCursor.node :=
-    (mainReached.trans gasReached).snoc gasEdge
+    (mainFree.trans gasFree).trans
+      (Exec.Deriv.ExecFreeUntil.ofStep gasEdge gasNoExec)
+  have sameFrame : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, exc⟩
+      callCursor.node := nodeFree.1
   have reached : callCursor.node ∈ Exec.rawNodes exc :=
     (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix exc _).mpr
       ⟨_, Exec.mem_rawFrameRoots_self exc, sameFrame⟩
@@ -221,9 +238,30 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
     have hwone : w = 1 := (popBurn_pref hpop hpostPrefix).1
     subst w
     exact hpop
+  have restFree : Func.straightGasFree
+      ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> Func.revert) = true := by
+    decide
+  rcases Func.RunPrefix.toLast_of_run
+      (path := ⟨target.functionIndex, (target.steps ++ [.rest]) ++ [.rest]⟩)
+      restFree restRun with ⟨endTarget, endPre, endInstruction, restWalk⟩
+  rcases afterCursor.ofRunPrefix_sameFrame_gasFree compiled rfl restWalk
+      (Devm.EqModGas.refl _) with ⟨endCursor, -, endFree⟩
+  have afterClean := endFree.noExec_of_linstAt
+    (Linst.at_of_slice endCursor.codeSlice)
+  have storTail : Devm.getStor afterCursor.pre = Devm.getStor post :=
+    Func.of_inv Devm.getStor Devm.getStor (by func_inv) restRun
+  have balTail : Devm.getBal afterCursor.pre = Devm.getBal post :=
+    Func.of_inv Devm.getBal Devm.getBal (by func_inv) restRun
+  have balCall : Devm.getBal callCursor.pre = Devm.getBal pre := by
+    funext a
+    rw [← getBal_eq_of_state_eq stateCall a,
+      congrFun (Func.RunPrefix.getBal_eq walk) a]
+    exact getBal_eq_of_state_eq burn.state.symm a
   refine ⟨⟨callCursor.node, call, slot, .ok afterCursor.pre, reached,
     callCursor.ninstAt, filled, stepRun'⟩, gasWord, rfl, sitePc, sameFrame,
-    ?_, ?_, hstack, ?_, afterCursor.pre, guardPost, returnPre, rfl, ?_⟩
+    ?_, ?_, hstack, ?_, nodeFree, balCall, afterCursor.pre, guardPost,
+    returnPre, rfl, ?_, storTail.symm, balTail.symm, afterCursor.node, rfl,
+    callEdge, afterClean⟩
   · exact (getStor_eq_of_state_eq stateCall.symm sevm.currentTarget).trans
       hstorT
   · exact (congrArg State.getCode stateCall.symm).trans hcodeT
@@ -235,6 +273,45 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
       hparentState, hparentMemory, hparentLogs, hparentOutput, hdelegated,
       hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
       hpostMemory, hpostStack⟩
+
+/-- **Exit payout identity.** A successful `exit` of the installed runtime has
+an actual same-frame `CALL` node whose storage, code, payout stack words and
+memory well-formedness are the settled ones. The `gas` word is existential and
+is the actual node's own. -/
+theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty) :
+    let units := Sevm.dataWord sevm (32 * 0 + 4)
+    let freshChi := (B256.rpow scale half rate
+      (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
+      Devm.getStorVal pre sevm.currentTarget chiSlot) / scale
+    let payout := (freshChi * units) / scale
+    ∃ (node : Exec.NinstOccurrence ⟨0, sevm, pre, .ok post, exc⟩)
+      (gasWord : B256),
+      node.instruction = call ∧
+      node.node.pc = exitCallSitePc ∧
+      Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, exc⟩ node.node ∧
+      Devm.getStor node.node.devm sevm.currentTarget =
+        ((((Devm.getStor pre sevm.currentTarget).set chiSlot freshChi).set
+            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+            (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 - units)).set
+          totalUnitsSlot
+            (Devm.getStorVal pre sevm.currentTarget totalUnitsSlot - units) ∧
+      Devm.getCode node.node.devm = Devm.getCode pre ∧
+      (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
+        [] <<+ node.node.devm.stack) ∧
+      Mem.Wf node.node.devm.memory ∧
+      ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
+        AcceptedPayout sevm payout node.node.devm callPost guardPost
+          returnPre := by
+  rcases exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon with
+    ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
+      memWf, -, -, callPost, guardPost, returnPre, stepEq, accepted, -⟩
+  exact ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
+    memWf, callPost, guardPost, returnPre, stepEq, accepted⟩
 
 /-- The selected body's compiled exit has an actual same-frame `CALL` node in
 its own retained execution, carrying the settled ledger, the exact payout
@@ -281,9 +358,9 @@ theorem BodyExecutionOccurrence.exit_callNode_identity
   exit_callNode_identity_of_exec occurrence.execution.run codeEq selector
     nonempty canonicalEntry
 
-/-- A clean call-frame settlement does not read the message: an `.ok` result
-without an error flag is the handled raw machine itself. -/
-private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
+/-- Public twin of the private clean-settlement lemma below: a clean call-frame
+settlement does not read the message. -/
+theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
     (left right : Msg)
     (settled : (Frame.ofCall left).settle raw = .ok child)
     (clean : child.error.isSome = false) :
@@ -304,6 +381,15 @@ private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
         simp [Devm.error, clean] at flagged
       · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
         exact settled
+
+/-- A clean call-frame settlement does not read the message: an `.ok` result
+without an error flag is the handled raw machine itself. -/
+private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
+    (left right : Msg)
+    (settled : (Frame.ofCall left).settle raw = .ok child)
+    (clean : child.error.isSome = false) :
+    (Frame.ofCall right).settle raw = .ok child :=
+  ofCall_settle_of_clean left right settled clean
 
 /-- **Exit payout child, located.** The exit `CALL` node of
 `exit_callNode_identity`, with every conjunct kept, whose filled child slot is

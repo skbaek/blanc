@@ -663,7 +663,12 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   spans with `ExecFreeUntil.trans`; when the walk lands on a `.last` cursor
   (`Linst.at_of_slice cursor.codeSlice`), `ExecFreeUntil.noExec_of_linstAt`
   covers the whole frame and `Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt`
-  concludes `Exec.descendantFrames run = []`.
+  concludes `Exec.descendantFrames run = []`. For a span that ends at a
+  spawning node instead, `ExecFreeUntil.descendantFrames_eq` moves the
+  descendant frames from its start to its end. A straight-line gas-free
+  function body (`Func.straightGasFree`, no table call) turns any successful
+  `Func.Run` into such a walk to a terminal instruction with
+  `Func.RunPrefix.toLast_of_run`.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 

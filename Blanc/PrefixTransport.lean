@@ -582,4 +582,100 @@ theorem Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt
       rw [raw] at member
       cases member
 
+/-! ## Same-frame spans carry no descendant frame -/
+
+private theorem Exec.Deriv.le_trans' {a b c : Exec.Deriv}
+    (left : Exec.Deriv.le a b) (right : Exec.Deriv.le b c) :
+    Exec.Deriv.le a c := by
+  induction right with
+  | refl => exact left
+  | step _ prec ih => exact .step ih prec
+
+private theorem Exec.Deriv.ParentPrefix.le' {root tail : Exec.Deriv}
+    (reached : Exec.Deriv.ParentPrefix root tail) : Exec.Deriv.le tail root := by
+  induction reached with
+  | refl => exact .refl _
+  | step head _ ih => exact .step ih head.prec
+
+private theorem Exec.Deriv.lt_irrefl' (node : Exec.Deriv) :
+    ¬ Exec.Deriv.lt node node := by
+  have acc := Exec.Deriv.lt.well_founded.apply node
+  induction acc with
+  | intro current _ ih => exact fun self => ih current self self
+
+/-- A same-frame chain never returns to a node it has left. -/
+theorem Exec.Deriv.ParentStep.not_parentPrefix_back
+    {root next node : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep next root)
+    (forward : Exec.Deriv.ParentPrefix next node)
+    (back : Exec.Deriv.ParentPrefix node root) : False :=
+  Exec.Deriv.lt_irrefl' root
+    ⟨next, Exec.Deriv.le_trans' back.le' forward.le', edge.prec⟩
+
+/-- A frame-entry-free span retains no descendant frame of its own: the
+descendant frames of its start are those of its end. -/
+theorem Exec.Deriv.ExecFreeUntil.descendantFrames_eq {start stop : Exec.Deriv}
+    (free : Exec.Deriv.ExecFreeUntil start stop) :
+    Exec.descendantFrames start.exc = Exec.descendantFrames stop.exc := by
+  rcases free with ⟨reached, clean⟩
+  induction reached with
+  | refl => rfl
+  | @step root next tail edge rest ih =>
+      have rootClean : ∀ x : Xinst,
+          ¬ Ninst.At root.sevm.code root.pc (.exec x) := by
+        rcases clean root (.refl _) with back | rootClean
+        · exact (edge.not_parentPrefix_back rest back).elim
+        · exact rootClean
+      have nextClean : ∀ node, Exec.Deriv.ParentPrefix next node →
+          Exec.Deriv.ParentPrefix tail node ∨
+            ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) :=
+        fun node reached => clean node (.step edge reached)
+      rw [← ih nextClean]
+      cases edge with
+      | cont hstep next => simp [Exec.descendantFrames]
+      | doneOk hstep henter hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+      | runOk hstep henter child hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+
+/-! ## Straight-line gas-free functions -/
+
+/-- Every instruction gas-free and no table call. -/
+def Func.straightGasFree : Func → Bool
+  | .last _ => true
+  | .next i f => Ninst.gasFree i && Func.straightGasFree f
+  | .branch f g => Func.straightGasFree f && Func.straightGasFree g
+  | .call _ => false
+
+/-- A successful run of a straight-line gas-free function is a gas-free prefix
+ending at one of its terminal instructions. -/
+theorem Func.RunPrefix.toLast_of_run {fs : List Func} {e : Sevm} :
+    ∀ {f : Func} {path : Prog.SourcePath} {s r : Devm},
+      Func.straightGasFree f = true → Func.Run fs e s f r →
+      ∃ target t l, Func.RunPrefix fs e path s f target t (.last l)
+  | .last l, path, s, _, _, _ => ⟨path, s, l, .refl⟩
+  | .next i f, ⟨k, steps⟩, s, r, free, run => by
+      simp only [Func.straightGasFree, Bool.and_eq_true] at free
+      cases run with
+      | next step rest =>
+          rcases Func.RunPrefix.toLast_of_run (path := ⟨k, steps ++ [.rest]⟩)
+              free.2 rest with ⟨target, t, l, walk⟩
+          exact ⟨target, t, l, .next free.1 step walk⟩
+  | .branch f g, ⟨k, steps⟩, s, r, free, run => by
+      simp only [Func.straightGasFree, Bool.and_eq_true] at free
+      cases run with
+      | zero pop rest =>
+          rcases Func.RunPrefix.toLast_of_run
+              (path := ⟨k, steps ++ [.branchLeft]⟩) free.1 rest with
+            ⟨target, t, l, walk⟩
+          exact ⟨target, t, l, .zero pop walk⟩
+      | succ nonzero pop burn rest =>
+          rcases Func.RunPrefix.toLast_of_run
+              (path := ⟨k, steps ++ [.branchRight]⟩) free.2 rest with
+            ⟨target, t, l, walk⟩
+          exact ⟨target, t, l, .succ nonzero pop burn walk⟩
+  | .call _, _, _, _, free, _ => by cases free
+
 end Blanc

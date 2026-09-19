@@ -388,27 +388,62 @@ structure ExitHandoff (coalition : Finset Adr) (sevm : Sevm) (pre post : Devm) w
   postSnapshot : snapshot coalition sevm.currentTarget post.state =
     snapshot coalition sevm.currentTarget child.state
 
-theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
-    {pre post : Devm}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code.toList = code)
-    (hsel : Sevm.selector sevm = exitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty)
+/-- Component form of `exit_exec_handoff`: the handoff built from any call
+boundary `callPre` carrying the settled ledger, the entry code and balance, and
+the destructured accepted payout. The returned handoff keeps the supplied
+slot, child and message, so an actual `CALL` node can be matched against it. -/
+theorem exit_handoff_of_components (coalition : Finset Adr) {sevm : Sevm}
+    {pre post callPre callPost parent child : Devm} {xl : Xlot}
+    {gasWord : B256} {delegated : Bool} {nextAddress : Adr}
+    {childCode : ByteArray} {avail : Nat}
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
     (caller_ne : sevm.caller ≠ sevm.currentTarget) :
-    Nonempty (ExitHandoff coalition sevm pre post) := by
-  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
-  unfold ExitPaysExactlyFull at full
-  dsimp only at full
-  rcases full with
-    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi,
-      callPre, callPost, guardPost, returnPre, storage, codePre, balPre, accepted,
-      postStor, postBal, -⟩
-  rcases accepted with
-    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
-      -, -, -, -, -, hdepth, -, parentState, -, -, -, -, filled, process, clean,
-      -, callPostState, -, -, -⟩
+    let units := Sevm.dataWord sevm (32 * 0 + 4)
+    let elapsed :=
+      sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot
+    let freshChi := (B256.rpow scale half rate elapsed.toNat *
+      Devm.getStorVal pre sevm.currentTarget chiSlot) / scale
+    let payout := (freshChi * units) / scale
+    ¬ maxUnits < units →
+    ¬ Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 < units →
+    ¬ Devm.getStorVal pre sevm.currentTarget totalUnitsSlot < units →
+    ¬ sevm.benvStat.time < Devm.getStorVal pre sevm.currentTarget rhoSlot →
+    B256.RPowGuards scale half rate elapsed.toNat →
+    B256.Nofm (Devm.getStorVal pre sevm.currentTarget chiSlot)
+      (B256.rpow scale half rate elapsed.toNat) →
+    ¬ maxChi < freshChi →
+    Devm.getStor callPre sevm.currentTarget =
+      ((((Devm.getStor pre sevm.currentTarget).set chiSlot freshChi).set
+            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
+            (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 -
+              units)).set totalUnitsSlot
+        (Devm.getStorVal pre sevm.currentTarget totalUnitsSlot - units) →
+    Devm.getCode callPre = Devm.getCode pre →
+    Devm.getBal callPre = Devm.getBal pre →
+    Devm.getStor post = Devm.getStor callPost →
+    Devm.getBal post = Devm.getBal callPost →
+    0 < sevm.depth →
+    parent.state = callPre.state →
+    Xlot.Filled xl →
+    ProcessMessage
+      (callMsg sevm parent
+        (min gasWord.toNat (except64th avail) +
+          (if payout.toNat = 0 then 0 else gCallStipend))
+        payout sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+        ((callPre.memory.read 0 0).1) childCode delegated)
+      xl (.ok child) →
+    child.error.isSome = false →
+    callPost.state = child.state →
+    ∃ handoff : ExitHandoff coalition sevm pre post,
+      handoff.xl = xl ∧ handoff.child = child ∧
+      handoff.childMsg = callMsg sevm parent
+        (min gasWord.toNat (except64th avail) +
+          (if payout.toNat = 0 then 0 else gCallStipend))
+        payout sevm.currentTarget sevm.caller.toB256.toAdr nextAddress true false
+        ((callPre.memory.read 0 0).1) childCode delegated := by
+  intro units elapsedWord freshChiWord payoutWord hargCap hown hfund hclock
+    hguards hnofm hcapChi storage codePre balPre postStor postBal hdepth
+    parentState filled process clean callPostState
   set elapsed := (sevm.benvStat.time -
     Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat with elapsedDef
   set freshChi := (B256.rpow scale half rate elapsed *
@@ -528,7 +563,35 @@ theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
       omega
     childPre := childPre
     effect := effect
-    postSnapshot := postSnapshot }⟩
+    postSnapshot := postSnapshot }, rfl, rfl, rfl⟩
+
+
+theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
+    {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code.toList = code)
+    (hsel : Sevm.selector sevm = exitSelector)
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hcanon : pre.memory = Mem.empty)
+    (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
+    (caller_ne : sevm.caller ≠ sevm.currentTarget) :
+    Nonempty (ExitHandoff coalition sevm pre post) := by
+  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  unfold ExitPaysExactlyFull at full
+  dsimp only at full
+  rcases full with
+    ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi,
+      callPre, callPost, guardPost, returnPre, storage, codePre, balPre, accepted,
+      postStor, postBal, -⟩
+  rcases accepted with
+    ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, childCode, avail, pc,
+      -, -, -, -, -, hdepth, -, parentState, -, -, -, -, filled, process, clean,
+      -, callPostState, -, -, -⟩
+  obtain ⟨handoff, -, -, -⟩ := exit_handoff_of_components coalition
+    precondition caller_ne hargCap hown hfund hclock hguards hnofm hcapChi
+    storage codePre balPre postStor postBal hdepth parentState filled process
+    clean callPostState
+  exact ⟨handoff⟩
 
 /-! ## The exclusive head tag
 
