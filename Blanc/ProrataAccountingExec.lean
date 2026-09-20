@@ -381,16 +381,14 @@ theorem Exec.CoreProrataAccounting.nextSome
     Exec.CoreProrataAccounting ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
+      cases (Step.run_ofExecution.mp step).1
   | push xs length =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+      cases (Step.run_ofExecution.mp step).1
   | exec x =>
       intro _ committed installed precondition _ _
         blockIndex transactionIndex framePath nextChild
       have xrun : Xinst.Run sevm pre x (.some ⟨cevm, raw⟩)
-          (.ok inter) := by
-        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
-          Xinst.Run] using step
+          (.ok inter) := XStep.run_toStep.mp step
       have hxrun := XStep.run_toStep.mp step
       cases spawnEq : Xinst.step sevm pre x with
       | done execution =>

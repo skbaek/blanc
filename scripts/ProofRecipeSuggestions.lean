@@ -349,6 +349,53 @@ example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
   blanc_suggest
   rfl
 
+-- EXPECT: compiler-structural-composition
+example (entries : List (Nat × Func)) (n : Nat) (xs : Line) (f : Func)
+    (bs : Bytes) (h : Func.compile entries (n + CompiledShape.prefixByteSize xs) f = some bs) :
+    Func.compile entries n (xs +++ f) = some (xs.flatMap Ninst.toBytes ++ bs) := by
+  expect_recipe_trigger "goal-shape:compile-prepend"
+  expect_no_recipe_trigger "goal-shape:compile-branch"
+  blanc_suggest
+  exact CompiledShape.compile_prepend_of h
+
+-- EXPECT: compiler-structural-composition
+example (entries : List (Nat × Func)) (n loc : Nat) (p q : Func) (pbs qbs : Bytes)
+    (hp : Func.compile entries (n + 4) p = some pbs)
+    (hloc : n + pbs.length + 4 = loc) (hbound : loc < 2 ^ 16)
+    (hq : Func.compile entries (loc + 1) q = some qbs) :
+    Func.compile entries n (.branch p q) =
+      some (([0x61, (loc >>> 8).toUInt8, loc.toUInt8, 0x57] : Bytes) ++
+        pbs ++ [0x5b] ++ qbs) := by
+  expect_recipe_trigger "goal-shape:compile-branch"
+  expect_no_recipe_trigger "goal-shape:compile-prepend"
+  blanc_suggest
+  exact CompiledShape.compile_branch entries n loc p q pbs qbs hp hloc hbound hq
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (entries : List (Nat × Func)) (n k : Nat) (bs : Bytes)
+    (h : Func.compile entries n (.call k) = some bs) :
+    Func.compile entries n (.call k) = some bs := by
+  expect_no_recipe_trigger "goal-shape:compile-prepend"
+  expect_no_recipe_trigger "goal-shape:compile-branch"
+  blanc_suggest
+  exact h
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (entries : List (Nat × Func)) (n : Nat) (f : Func) (bs : Bytes)
+    (h : Func.compile entries n f = some bs) : Func.compile entries n f = some bs := by
+  expect_no_recipe_trigger "goal-shape:compile-prepend"
+  expect_no_recipe_trigger "goal-shape:compile-branch"
+  blanc_suggest
+  exact h
+
+-- EXPECT-NO-MATCH: docs/COMMON_API.md
+example (entries : List (Nat × Func)) (n : Nat) (xs : Line) (f : Func) (bs : Bytes)
+    (_h : Func.compile entries n (xs +++ f) = some bs) : True := by
+  expect_no_recipe_trigger "goal-shape:compile-prepend"
+  expect_no_recipe_trigger "goal-shape:compile-branch"
+  blanc_suggest
+  trivial
+
 -- EXPECT: compiled-shape-byte-navigation
 example (locations : List Nat) (n i : Nat) (d : UInt8)
     (leftShape rightShape : Func.CompileShape) (left right : Func) :

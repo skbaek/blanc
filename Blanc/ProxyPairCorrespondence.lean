@@ -1073,11 +1073,18 @@ private theorem proxy_success_tail
           implReturnWord.toBytes := by
       decide +kernel
     func_run [6]
+    all_goals try
+      (rw [Devm.gasLeft_setMach]
+       dsimp only
+       have e1 : gBase = 2 := rfl
+       have e2 : gVerylow = 3 := rfl
+       have e3 : gHigh = 10 := rfl
+       have e4 : gJumpdest = 1 := rfl
+       have e5 : proxySuccessTailGas32 = 33 := rfl
+       omega)
     all_goals simp_all [Devm.returnData_setMach, B256.length_toBytes,
-      proxySuccessTailGas32, gBase, gVerylow, gHigh, gJumpdest,
-      gReturnDataCopy, ceilDiv]
+      proxySuccessTailGas32, gVerylow, gReturnDataCopy, ceilDiv]
     all_goals try decide
-    all_goals try omega
     case h_cost =>
       simp only [show Nat.toB256 32 = (32 : B256) by decide,
         show (B256.toNat (32 : B256)) = 32 by decide,

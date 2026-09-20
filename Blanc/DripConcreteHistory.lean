@@ -2078,13 +2078,15 @@ theorem concreteJoin_runtime (G : Nat) :
       main (concreteJoinRuntimePost G) := by
   rw [show G + 55079 = G + 45830 + 96 + 114 + 104 + 34 + 122 + 2166 + 70 + 2103 + 4327 + 113 by omega]
   apply concreteJoin_dispatch
+    (G := G + 45830 + 96 + 114 + 104 + 34 + 122 + 2166 + 70 + 2103 + 4327)
   · rfl
   apply concreteJoin_stage
+    (G := G + 45830 + 96 + 114 + 104 + 34 + 122 + 2166 + 70 + 2103)
   · exact concreteJoinDevm_pie _ (by decide +kernel) (by decide +kernel)
   · exact concreteJoinDevm_pie _ (by decide +kernel) (by decide +kernel)
   · exact concreteJoinDevm_cold _
   · exact concreteJoinDevm_cold _
-  apply concreteJoin_freshStart
+  apply concreteJoin_freshStart (G := G + 45830 + 96 + 114 + 104)
   · exact concreteJoinDevm_chi
   · exact concreteJoinDevm_rho
   · change (concreteCreateTarget, chiSlot) ∉

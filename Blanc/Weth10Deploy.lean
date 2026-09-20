@@ -2886,9 +2886,7 @@ theorem weth10PatchedRuntime_eq_code (chainId domainSeparator : B256) :
 theorem weth10InitPrefix_length : weth10InitPrefix.length = 177 := by
   unfold weth10InitPrefix
   rw [weth10RuntimeTemplate_length]
-  simp [deploymentPrefix, patchChainWords, patchStackWord, initPush2, initPush32,
-    align32, deploymentChainIdWordOffsets, cachedDomainSeparatorWordOffsets,
-    B256.length_toBytes]
+  decide +kernel
 
 /-- The complete generic creation bytecode is 6,490 bytes. -/
 theorem weth10InitCode_length : weth10InitCode.length = 6490 := by
@@ -2978,35 +2976,13 @@ def weth10InitFunc : Func :=
     (weth10InitSuccess 6313 177 <?>
       Func.revert)
 
-private def lineByteSize (xs : Line) : Nat :=
-  (xs.map Ninst.size).sum
-
-private lemma Func.compile_prepend_of {entries : List (Nat × Func)}
-    {n : Nat} {xs : Line} {f : Func} {bs : Bytes}
-    (h : Func.compile entries (n + lineByteSize xs) f = some bs) :
-    Func.compile entries n (xs +++ f) =
-      some (xs.flatMap Ninst.toBytes ++ bs) := by
-  induction xs generalizing n with
-  | nil =>
-      change Func.compile entries n f = some bs
-      change Func.compile entries (n + 0) f = some bs at h
-      simpa only [Nat.add_zero] using h
-  | cons i is ih =>
-      change Func.compile entries
-        (n + (i.size + lineByteSize is)) f = some bs at h
-      simp only [prepend, Func.compile]
-      rw [ih (n := n + i.size) (by
-        simpa only [Nat.add_assoc] using h)]
-      simp only [bind, Option.bind, pure, List.flatMap_cons,
-        List.append_assoc]
-
 private lemma deploymentSuccess_compile
     (entries : List (Nat × Func)) (n : Nat) :
     Func.compile entries n (weth10InitSuccess 6313 177) =
       some ((deploymentSuccessLine 6313 177).flatMap Ninst.toBytes ++
         [Linst.toUInt8 .return_]) := by
   unfold weth10InitSuccess
-  apply Func.compile_prepend_of
+  apply CompiledShape.compile_prepend_of
   rfl
 
 private lemma deploymentReject_compile
@@ -3043,7 +3019,7 @@ theorem weth10InitFunc_compile :
     0
     ([Ninst.callvalue, Ninst.iszero] +++
       (weth10InitSuccess 6313 177 <?> Func.revert)) = some weth10InitPrefix
-  rw [Func.compile_prepend_of
+  rw [CompiledShape.compile_prepend_of
     (xs := [Ninst.callvalue, Ninst.iszero])
     (f := weth10InitSuccess 6313 177 <?> Func.revert)
     (deploymentBranch_compile _)]

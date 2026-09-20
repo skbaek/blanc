@@ -152,7 +152,8 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
         simp only [henter] at hframe
       · exact ⟨.doneOk hstep' henter (hframe.2 ▸ hex.symm) tail,
           fun node hn => by
-            simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+            rw [Exec.rawNodes.eq_def]; simp only [List.mem_cons]
+            exact Or.inr hn,
           fun node hn =>
             .step (.doneOk hstep' henter (hframe.2 ▸ hex.symm) tail) hn⟩
       · rcases hframe with ⟨raw, hxl, hr⟩
@@ -164,7 +165,8 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
           exact hex.symm
         exact ⟨.runOk hstep' henter excChild hresume tail,
           fun node hn => by
-            simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
+            rw [Exec.rawNodes.eq_def]
+            simp only [List.mem_cons, List.mem_append]
             exact Or.inr (Or.inr hn),
           fun node hn =>
             .step (.runOk hstep' henter excChild hresume tail) hn⟩

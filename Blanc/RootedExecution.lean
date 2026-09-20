@@ -83,13 +83,9 @@ theorem ninstAllChildRoots_of_not_exec
       have step := stepRun 0
       cases n with
       | reg r =>
-          simp only [Ninst.StepRun, Ninst.step_reg,
-            Step.run_ofExecution] at step
-          cases step.1
+          cases (Step.run_ofExecution.mp step).1
       | push xs le =>
-          simp only [Ninst.StepRun, Ninst.step_push,
-            Step.run_ofExecution] at step
-          cases step.1
+          cases (Step.run_ofExecution.mp step).1
       | exec x =>
           exact (notExec x rfl).elim
 
@@ -220,7 +216,8 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
               simp only [henter] at frameRun
           · refine ⟨Exec.doneOk hspawn henter (frameRun.2 ▸ resultEq.symm)
                 next, ?_⟩
-            simpa only [Exec.rawFrameDescendants]
+            rw [Exec.rawFrameDescendants.eq_def]
+            exact nextRoots
           · rcases frameRun with ⟨raw, slotEq, settleEq⟩
             subst slotEq
             obtain ⟨child⟩ :
@@ -234,8 +231,9 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
               Exec.runOk hspawn henter child resumeOk next
             refine ⟨run, ?_⟩
             intro root member
-            simp only [run, Exec.rawFrameDescendants, List.mem_cons,
-              List.mem_append] at member
+            simp only [run] at member
+            rw [Exec.rawFrameDescendants.eq_def] at member
+            simp only [List.mem_cons, List.mem_append] at member
             rcases member with rfl | member
             · exact h_roots child _ (Exec.mem_rawFrameRoots_self child)
             · rcases member with childMember | nextMember

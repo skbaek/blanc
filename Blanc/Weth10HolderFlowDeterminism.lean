@@ -170,10 +170,30 @@ theorem TransactionTrace.eq_of_same
     {state : State} {bout' : BlockOutput}
     (left right : TransactionTrace benv bout tx index state bout') :
     left = right := by
-  cases left
-  cases right
-  simp_all
-  aesop (add safe forward MessageCallTrace.index_eq_and_heq_of_same_input)
+  obtain ⟨li, lc, ls, lp, lb, lt, ld, lm, lms, lmo,
+    lval, lchk, ldeb, lprep, lmsg, lres⟩ := left
+  obtain ⟨ri, rc, rs, rp, rb, rt, rd, rm, rms, rmo,
+    rval, rchk, rdeb, rprep, rmsg, rres⟩ := right
+  injection Except.ok.inj (lval.symm.trans rval) with hi hc
+  subst hi
+  subst hc
+  injection Except.ok.inj (lchk.symm.trans rchk) with hs hrest
+  injection hrest with hp hrest'
+  injection hrest' with hb ht
+  subst hs
+  subst hp
+  subst hb
+  subst ht
+  have hd := Option.some.inj (ldeb.symm.trans rdeb)
+  subst hd
+  have hm := Except.ok.inj (lprep.symm.trans rprep)
+  subst hm
+  obtain ⟨hms, hmo, hheq⟩ :=
+    MessageCallTrace.index_eq_and_heq_of_same_input lmsg rmsg
+  subst hms
+  subst hmo
+  cases eq_of_heq hheq
+  rfl
 
 theorem TransactionTrace.index_eq_and_heq_of_same_input
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}

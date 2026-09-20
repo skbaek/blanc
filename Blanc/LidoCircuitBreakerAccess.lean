@@ -1739,13 +1739,19 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
     setHeartbeatIntervalStoreTailGasWarmSet
   apply Exists.intro
   constructor
-  · func_run [20000]
-    case h_cost =>
-      simpa only [Devm.getStorVal_setMach, horig, hold, harg] using
+  · func_run (3)
+    refine Func.RunCompiled.next
+      (Ninst.runCompiled_sstore_warm (G := G) (c := 20000) rfl hwarm ?_
+        hstatic ?_ rfl ?_)
+      (Func.RunCompiled.last rfl)
+    · simp only [Devm.gasLeft_setMach, gCallStipend]
+      omega
+    · simpa only [Devm.getStorVal_setMach, horig, hold, harg] using
         hsstoreCost
-    case a => exact Func.RunCompiled.last rfl
+    · simp only [Devm.gasLeft_setMach]
+      omega
   · simp only [Devm.gasLeft_setMach]
-    refine ⟨by omega, ?_, rfl, ?_⟩
+    refine ⟨trivial, ?_, rfl, ?_⟩
     · rw [Devm.getStorVal_setMach]
       show (Devm.getStor _ sevm.currentTarget).get heartbeatIntervalSlot =
         newInterval
@@ -1842,10 +1848,16 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_generic
     unfold setHeartbeatIntervalStoreTail
     apply Exists.intro
     constructor
-    · func_run [20000]
-      case h_cost =>
-        simpa only [Devm.getStorVal_setMach, horig, hold, harg] using hcost
-      case a => exact Func.RunCompiled.last rfl
+    · func_run (3)
+      refine Func.RunCompiled.next
+        (Ninst.runCompiled_sstore_warm (G := G) (c := 20000) rfl hwarm ?_
+          hstatic ?_ rfl ?_)
+        (Func.RunCompiled.last rfl)
+      · simp only [Devm.gasLeft_setMach, gCallStipend]
+        omega
+      · simpa only [Devm.getStorVal_setMach, horig, hold, harg] using hcost
+      · simp only [Devm.gasLeft_setMach]
+        omega
     · simp only [Devm.gasLeft_setMach]
       refine ⟨?_, ?_, rfl, ?_⟩
       · simp [hset, gasStorageSet]
@@ -2883,7 +2895,6 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
-        omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -2921,7 +2932,6 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_below_min
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
-        omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -2963,7 +2973,6 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
-        omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -3678,7 +3687,6 @@ theorem heartbeat_body_runCompiledTo_error_of_count_zero
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
-        omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -3732,7 +3740,6 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
         norm_num [gVerylow, gBase, gMemory]
-        omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k

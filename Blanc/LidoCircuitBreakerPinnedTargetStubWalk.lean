@@ -106,14 +106,25 @@ theorem stubPause_cold_runCompiledTo
   unfold stubPause stubPauseLine arg cdl
   apply Exists.intro
   constructor
-  · func_run [~~~(0 : B256), pauseInfiniteSentinel =? duration,
+  · func_run (11) [~~~(0 : B256), pauseInfiniteSentinel =? duration,
       (pauseInfiniteSentinel =? duration) =? 0,
       sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)),
-      sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration,
-      22100]
+      sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration]
     case h_val =>
       rw [show (32 * (0 : B256) + 4) = 4 by decide, harg]
       rfl
+    case a =>
+      refine Func.RunCompiledTo.next
+        (Ninst.runCompiled_sstore_cold (G := G) (c := 22100) rfl hcold ?_
+          hdynamic ?_ rfl ?_)
+        (Func.RunCompiledTo.last rfl)
+      · simp only [Devm.gasLeft_setMach, gCallStipend]
+        omega
+      · have hcost' := hcost
+        rw [← compact_pause_word_eq_projection] at hcost'
+        simpa only [Devm.getStorVal_setMach] using hcost'
+      · simp only [Devm.gasLeft_setMach]
+        omega
     all_goals try {
       simp [show (32 * (0 : B256) + 4) = 4 by decide, harg,
         pauseInfiniteSentinel, B256.eqCheck] }
@@ -131,7 +142,6 @@ theorem stubPause_cold_runCompiledTo
       rw [setStorVal_getStor_self, Stor.get_set_self]
       rw [compact_pause_word_eq_projection]
     · simp only [Devm.gasLeft_setMach]
-      omega
     · rw [compact_pause_word_eq_projection]
       rfl
     · rw [compact_pause_word_eq_projection]

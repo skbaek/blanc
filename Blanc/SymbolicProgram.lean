@@ -315,7 +315,7 @@ theorem Func.isSome_toSymbolic (Label : Type) (f : Func) :
   | call n => rfl
 
 /-- Lift a call-free `Func` into `SymbolicFunc Label`. Fails at compile time if `f` contains calls. -/
-def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSome = true := by rfl) :
+def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSome = true := by decide) :
     SymbolicFunc Label :=
   (f.toSymbolic? Label).get h
 

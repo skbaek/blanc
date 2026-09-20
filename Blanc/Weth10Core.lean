@@ -67,7 +67,8 @@ private lemma B128.and_max' (x : B128) : x &&& B128.max = x := by
 theorem nonceKey_formula (a : Adr) :
     nonceKey a = Nat.toB256 (2 ^ 254) ||| a.toB256 := by
   have htag : Nat.toB256 (2 ^ 254) = (⟨⟨nonceTag, 0⟩, 0⟩ : B256) := by
-    decide +kernel
+    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, nonceTag]
+    rfl
   rw [htag]
   change (⟨⟨nonceTag, a.1.toUInt64⟩, a.2⟩ : B256) =
     (⟨⟨nonceTag ||| 0, 0 ||| a.1.toUInt64⟩, (0 : B128) ||| a.2⟩ : B256)
@@ -78,7 +79,8 @@ theorem low254_formula (w : B256) :
     low254 w = w &&& Nat.toB256 (2 ^ 254 - 1) := by
   have hmask : Nat.toB256 (2 ^ 254 - 1) =
       (⟨⟨payloadMask, UInt64.max⟩, B128.max⟩ : B256) := by
-    decide +kernel
+    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, payloadMask]
+    rfl
   rw [hmask]
   change (⟨⟨w.1.1 &&& payloadMask, w.1.2⟩, w.2⟩ : B256) =
     (⟨⟨w.1.1 &&& payloadMask, w.1.2 &&& UInt64.max⟩, w.2 &&& B128.max⟩ : B256)
@@ -90,7 +92,8 @@ theorem allowanceKey_formula (owner spender : Adr) :
       Nat.toB256 (2 ^ 255) ||| low254 (allowanceHash owner spender) := by
   have htag : Nat.toB256 (2 ^ 255) =
       (⟨⟨allowanceTag, 0⟩, 0⟩ : B256) := by
-    decide +kernel
+    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, allowanceTag]
+    rfl
   rw [htag]
   change
     (⟨⟨allowanceTag ||| ((allowanceHash owner spender).1.1 &&& payloadMask),

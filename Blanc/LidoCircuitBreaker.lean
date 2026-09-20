@@ -1049,8 +1049,8 @@ theorem erase_symbolicAux :
     symbolicHeartbeatBelowMinError, symbolicHeartbeatAboveMaxError, symbolicHeartbeatExpiredError,
     symbolicPauseFailedError, symbolicReentrantCallError, symbolicEmptyRevert,
     symbolicBubbleRevert, symbolicArithmeticPanic]
-  simp only [Func.erase_liftCallFree]
-  rfl
+  simp [Func.erase_liftCallFree]
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem erase_symbolicRuntimeMain (dp : DeployParams) :
     (symbolicRuntimeMain dp).erase slotOf = runtimeMain dp :=

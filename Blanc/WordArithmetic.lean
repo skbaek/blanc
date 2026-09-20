@@ -1038,7 +1038,7 @@ theorem toB128_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
   rw [hnword, hhword]
   change B128.shiftRight ((0 : UInt64), n.toUInt64) 1 =
     ((0 : UInt64), (n / 2).toUInt64)
-  simp only [B128.shiftRight, if_false, if_true, Nat.one_ne_zero,
+  simp only [B128.shiftRight, reduceIte, Nat.one_ne_zero,
     Nat.reduceLT]
   apply Prod.ext
   · rfl
@@ -1062,7 +1062,7 @@ theorem toB256_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
   rw [hnword, hhword]
   change B256.shiftRight ((0 : B128), Nat.toB128 n) 1 =
     ((0 : B128), Nat.toB128 (n / 2))
-  simp only [B256.shiftRight, if_false, if_true, Nat.one_ne_zero,
+  simp only [B256.shiftRight, reduceIte, Nat.one_ne_zero,
     Nat.reduceLT]
   apply Prod.ext
   · rfl
@@ -1070,6 +1070,7 @@ theorem toB256_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
       change B128.shiftLeft ((0 : UInt64), (0 : UInt64)) 127 =
         ((0 : UInt64), (0 : UInt64))
       norm_num [B128.shiftLeft]
+      rfl
     rw [show 128 - 1 = 127 by omega, hzeroShift, B128.zero_or]
     exact toB128_shiftRight_one n hn
 
@@ -1170,7 +1171,7 @@ theorem Nat.fold_divided_words
         simpa [modulus] using factorDvdModulus)
   have lowQuotientLtFactor : lowQuotient < factor := by
     exact (Nat.div_lt_div_right (Nat.ne_of_gt twosPositive)
-      twosDvdLow twosDvdModulus).2 lowBound
+      twosDvdModulus).2 lowBound
   let shifted := high * factor % modulus
   have factorDvdShifted : factor ∣ shifted := by
     apply (Nat.dvd_mod_iff factorDvdModulus).2

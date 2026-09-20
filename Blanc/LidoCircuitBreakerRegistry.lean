@@ -7877,8 +7877,8 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
         let spare := gasStorageSet - c
         have htailGas : storeTailGas =
             G + spare + finishCost + callCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + finishCost + callCost + gasStorageSet = storeTailGas + c := hstoreGasEq
           dsimp only [spare]
           omega
         let callPre := base.setMach ⟨stack, M, storeTailGas⟩
@@ -8079,8 +8079,8 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
           haddresses hlogs hbound hstoreGasEq
         let spare := gasStorageSet - c
         have htailGas : storeTailGas = G + spare + suffixCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + suffixCost + gasStorageSet = storeTailGas + c := hstoreGasEq
           dsimp only [spare]
           omega
         let suffixPre := base.setMach ⟨stack, M, storeTailGas⟩
@@ -8313,8 +8313,8 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
           haddresses hlogs hbound hstoreGasEq
         let spare := gasStorageSet - c
         have htailGas : storeTailGas = G + spare + suffixCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + suffixCost + gasStorageSet = storeTailGas + c := hstoreGasEq
           dsimp only [spare]
           omega
         let suffixPre := base.setMach ⟨stack, M, storeTailGas⟩
@@ -8547,8 +8547,8 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
           haddresses hlogs hbound hstoreGasEq
         let spare := gasStorageSet - c
         have htailGas : storeTailGas = G + spare + suffixCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + suffixCost + gasStorageSet = storeTailGas + c := hstoreGasEq
           dsimp only [spare]
           omega
         let suffixPre := base.setMach ⟨stack, M₂, storeTailGas⟩
@@ -8806,8 +8806,8 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
           haddresses hlogs hbound hstoreGasEq
         let spare := gasStorageSet - c
         have htailGas : storeTailGas = G + spare + suffixCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + suffixCost + gasStorageSet = storeTailGas + c := hstoreGasEq
           dsimp only [spare]
           omega
         let suffixPre := base.setMach ⟨stack, M₂, storeTailGas⟩
@@ -10854,8 +10854,8 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
           haddresses hlogs hstoreBound hstoreGasEq
         let storeSpare := gasStorageSet - storeCost
         have hstoreTailGas : storeTailGas = G + storeSpare + suffixCost := by
-          dsimp only [storePre, storeGas] at hstoreGasEq
-          simp only [Devm.gasLeft_setMach] at hstoreGasEq
+          have hstoreGasEq' :
+              G + suffixCost + gasStorageSet = storeTailGas + storeCost := hstoreGasEq
           dsimp only [storeSpare]
           omega
         let suffixPre := storeBase.setMach

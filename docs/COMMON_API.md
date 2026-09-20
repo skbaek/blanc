@@ -2359,6 +2359,17 @@ The owner imports only `Blanc.Forward` and `Mathlib.Tactic.IntervalCases`.
 The WETH deployment, domain-slice and upper-slice proofs show the direct import
 and application pattern while keeping their contract-specific facts local.
 
+For an actual `Func.compile` equality, the same module provides
+`CompiledShape.compile_prepend` and `compile_prepend_of` to compile a prefix
+while retaining its continuation, and `compile_branch` to combine checked
+children with an explicit jump location and its 16-bit bound.
+`dispatchLeaf_size` sizes a selector leaf from its push width and body size;
+`prefixByteSize_fsig` supplies the standard selector-prefix size.
+The `compiler-structural-composition` recipe recognizes only an explicit
+`prepend` or `Func.branch` argument of a direct compiler equality. It does not
+unfold a closed function or prove table entries, child bytes, or jump bounds.
+Contract-specific source decompositions and frozen byte slices stay local.
+
 ### C5. I need to preserve a compile-shape equality under a known prefix
 
 Import [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) and apply

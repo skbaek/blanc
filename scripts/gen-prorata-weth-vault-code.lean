@@ -36,7 +36,7 @@ private def renderByteChunkDef
   | some earlier => renderByteChunkAlias pair.fst earlier.fst
   | none => renderByteChunk pair.fst pair.snd
 
-private def renderModule (bs : Bytes) : String :=
+private def renderModule (bs : Bytes) (proof : String) : String :=
   let byteChunks := chunks 256 (bs.map hexByte)
   let indexedChunks := List.zip (List.range byteChunks.length) byteChunks
   let chunkDefs := String.intercalate "\n\n"
@@ -52,12 +52,15 @@ private def renderModule (bs : Bytes) : String :=
     , "--     lake env lean scripts/gen-prorata-weth-vault-code.lean"
     , ""
     , "import Blanc.ProrataWethVault"
+    , "import Blanc.CompiledShape"
     , ""
     , "namespace Blanc"
     , ""
     , "open Jaune"
     , ""
     , chunkDefs
+    , ""
+    , proof
     , ""
     , "/-- The " ++ toString bs.length ++ "-byte compiled EVM runtime. -/"
     , "def prorataWethVaultCode : Bytes :="
@@ -67,7 +70,12 @@ private def renderModule (bs : Bytes) : String :=
     [ "/-- Kernel-checked identity between the family program and committed bytes. -/"
     , "theorem prorataWethVaultCode_compile :"
     , "    Prog.compile ProrataWethVault.vault = some prorataWethVaultCode := by"
-    , "  decide +kernel"
+    , "  change Table.compile ProrataWethVaultCodeProof.vaultTable"
+    , "    ProrataWethVaultCodeProof.vaultTable = some prorataWethVaultCode"
+    , "  conv_lhs => arg 2; rw [ProrataWethVaultCodeProof.vaultTable_source]"
+    , "  rw [ProrataWethVaultCodeProof.vaultEntries, ProrataWethVaultCodeProof.vaultTableTail0_compile]"
+    , "  rw [ProrataWethVaultCodeProof.vaultFinalChunk_take]"
+    , "  rfl"
     , ""
     , "end Blanc"
     , "" ]
@@ -81,7 +89,8 @@ private def outPath : System.FilePath :=
       throw (IO.userError
         "Prog.compile ProrataWethVault.vault = none -- refusing to generate")
   | some bs => do
-      IO.FS.writeFile outPath (renderModule bs)
+      let proof ← IO.FS.readFile ("scripts" / "prorata-weth-vault-code-proof.lean.in")
+      IO.FS.writeFile outPath (renderModule bs proof)
       IO.println s!"wrote {outPath} ({bs.length} bytes)"
 
 end Blanc

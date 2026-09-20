@@ -327,9 +327,8 @@ private theorem stageMask_complete
       hsize2 (by omega) (by decide) hcode hruntimeLength
       hruntimeNonempty (by omega)
   · rfl
-  · simp only [Devm.withOutput_gasLeft, Devm.memRead_gasLeft,
-      Devm.gasLeft_setMach]
-    omega
+  · rw [Devm.withOutput_gasLeft, Devm.memRead_gasLeft,
+      Devm.gasLeft_setMach, Nat.sub_sub]
   · rfl
 
 private theorem stageMask_dirtyCovered_complete

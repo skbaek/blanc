@@ -173,6 +173,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/CompiledShape.lean`, `declaration:Blanc.CompiledShape.byteAt_next_to_tail`, `declaration:Blanc.CompiledShape.byteAt_prepend_to_tail`, `declaration:Blanc.CompiledShape.byteAt_branch_to_right`, `declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath`, `declaration:Blanc.CompiledShape.pushFullWord_opcode_eq`
 - Review: `proof-infrastructure` on `2026-09-09`
 
+## `compiler-structural-composition`
+
+- Status: `active`
+- Triggers: `goal-shape:compile-prepend`, `goal-shape:compile-branch`
+- Preferred path: Import `Blanc.CompiledShape`. Use `CompiledShape.compile_prepend` or `compile_prepend_of` to retain an opaque continuation, and `compile_branch` to assemble already checked child compilations and a bounded jump target. Use `dispatchLeaf_size` and `prefixByteSize_fsig` for the corresponding shared size facts.
+- Boundary: Matches only a direct compiler equality with an explicit `prepend` or `Func.branch` function argument. It does not unfold wrappers, traverse a closed function, search hypotheses, prove child compilations, establish table entries, or discharge jump bounds. Expose one source constructor and supply its checked children and coordinates.
+- Owner module: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean)
+- Canonical example: [Blanc/CompiledShape.lean](../Blanc/CompiledShape.lean) — `compile_prepend_of`
+- Registered symbols: `declaration:Blanc.CompiledShape.compile_prepend`, `declaration:Blanc.CompiledShape.compile_prepend_of`, `declaration:Blanc.CompiledShape.compile_branch`, `declaration:Blanc.CompiledShape.dispatchLeaf_size`, `declaration:Blanc.CompiledShape.prefixByteSize_fsig`
+- Review: `proof-infrastructure` on `2026-09-20`
+
 ## `compile-shape-prepend-congruence`
 
 - Status: `active`

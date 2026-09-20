@@ -3234,10 +3234,8 @@ theorem Ninst.targetBalanceMono_of_none
     (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
   cases n with
   | reg regular =>
-      simp only [Ninst.StepRun, Ninst.step_reg,
-        Step.run_ofExecution] at run
       have regularRun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
-        run.2.symm
+        ((Step.run_ofExecution (xl := (.none : Xlot))).mp run).2.symm
       exact Nat.le_of_eq (congrArg B256.toNat
         (congrFun (Rinst.preserves_bal regularRun) ca))
   | exec executable =>
@@ -3259,10 +3257,8 @@ theorem Ninst.foreignNone_getStor_eq
     Devm.getStor post ca = Devm.getStor pre ca := by
   cases n with
   | reg regular =>
-      simp only [Ninst.StepRun, Ninst.step_reg,
-        Step.run_ofExecution] at run
       have regularRun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
-        run.2.symm
+        ((Step.run_ofExecution (xl := (.none : Xlot))).mp run).2.symm
       by_cases store : regular = .sstore
       · subst regular
         exact sstore_preserves_getStor_ne regularRun target_ne
@@ -3657,8 +3653,11 @@ theorem genericCreate_step_spawn_getStor_empty
     rw [storageEq] at atCreate
     exact atCreate
   apply Jaune.Std.TreeMap.eq_empty_iff_isEmpty.mpr
-  rw [Std.TreeMap.isEmpty_eq_size_eq_zero]
-  simp [sizeZero]
+  calc
+    (Devm.getStor devm newAddress).isEmpty =
+        ((Devm.getStor devm newAddress).size == 0) :=
+      Std.TreeMap.isEmpty_eq_size_eq_zero
+    _ = true := by simp [sizeZero]
 
 /-! ### What a spawned child frame starts with in memory
 
@@ -3931,18 +3930,15 @@ lemma Ninst.none_preserves_precond
     c.Pre wa sevm inter := by
   cases n with
   | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push,
-        Step.run_ofExecution] at run
-      rcases Except.bind_eq_ok run.2.symm with
+      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp run
+      rcases Except.bind_eq_ok hrun.2.symm with
         ⟨charged, charge, pushed⟩
       exact precondition.state_eq
         (((Devm.burn_of_chargeGas charge).state).trans
           ((Devm.push_of_push pushed).state)).symm
   | reg r =>
       have registerRun : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-        simp only [Ninst.StepRun, Ninst.step_reg,
-          Step.run_ofExecution] at run
-        exact run.2.symm
+        exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp run).2.symm
       by_cases store : r = Rinst.sstore
       · subst store
         have frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
@@ -3957,8 +3953,7 @@ lemma Ninst.none_preserves_precond
           (congrFun (Rinst.preserves_stor store registerRun) wa).symm
   | exec x =>
       apply Xinst.none_preserves_precond (x := x) _ target_ne precondition
-      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
-        Xinst.Run] using run
+      exact XStep.run_toStep.mp run
 
 
 
@@ -4720,15 +4715,14 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
     replace h_pc' := σ_pre h_pc'
     cases n' with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
-      rcases Except.bind_eq_ok h_run'.2.symm with ⟨devm1, h_charge, h_push⟩
+      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
+      rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
       exact h_pc'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
-        simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
-        exact h_run'.2.symm
+        exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp h_run').2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
@@ -4741,19 +4735,20 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
           (congr_fun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
       refine Xinst.none_preserves_precond (x := x) ?_ h_ne' h_pc'
-      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using h_run'
+      exact XStep.run_toStep.mp h_run'
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
     cases n' with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
-      cases h_run'.1
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
     | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
-      cases h_run'.1
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
     | exec x =>
       have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', exn''⟩) (.ok inter') := by
-        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-          using h_run'
+        exact XStep.run_toStep.mp h_run'
       obtain ⟨h_child, h_back⟩ :=
         Xinst.some_preserves_precond (x := x) hx ex_sub' h_ne' (σ_pre h_pc')
       exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,

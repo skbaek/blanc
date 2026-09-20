@@ -362,9 +362,10 @@ def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
 
 lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
   (st.setBal adr val).getCode a = st.getCode a := by
-  dsimp [State.setBal, State.set, State.getCode, State.get]
+  dsimp [State.setBal, State.set, State.getCode]
   split_ifs with h_if
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
@@ -373,7 +374,8 @@ lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
       simp [h]
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_insert]
@@ -535,9 +537,10 @@ lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Ad
 
 lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
   dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world, Devm.state,
-    Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode, State.get]
+    Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode]
   split_ifs with h_if
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
@@ -546,7 +549,8 @@ lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
       simp [h]
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_insert]
@@ -558,9 +562,10 @@ lemma addCreatedAccount_getCode {benv : Benv} {adr a : Adr} : (addCreatedAccount
   rfl
 
 lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.setStor adr stor).state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.setStor, Benv.state, State.setStor, State.set, State.getCode, State.get]
+  dsimp [Benv.setStor, Benv.state, State.setStor, State.set, State.getCode]
   split_ifs with h_if
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
@@ -569,7 +574,8 @@ lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.set
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
       simp [h]
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_insert]
@@ -578,9 +584,10 @@ lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.set
       simp [h]
 
 lemma Benv.incrNonce_getCode {benv : Benv} {adr a : Adr} : (benv.incrNonce adr).state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.incrNonce, Benv.state, State.incrNonce, State.set, State.getCode, State.get]
+  dsimp [Benv.incrNonce, Benv.state, State.incrNonce, State.set, State.getCode]
   split_ifs with h_if
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_erase]
@@ -589,7 +596,8 @@ lemma Benv.incrNonce_getCode {benv : Benv} {adr a : Adr} : (benv.incrNonce adr).
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
       simp [h]
-  · by_cases h : compare adr a = Ordering.eq
+  · unfold State.get
+    by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_insert]
@@ -1915,7 +1923,7 @@ lemma Rinst.swap_runCore_instructionFrame
   apply Execution.Rel.bind Devm.instructionFrame_trans
     (chargeGas_instructionFrame gVerylow pre)
   intro d
-  cases h : d.stack.swap n with
+  cases h : Jaune.List.swap d.stack n with
   | none =>
       simp only
       exact Devm.instructionFrame_refl d
@@ -2868,13 +2876,15 @@ lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) 
   (evm.setCode a code).getCode b = evm.getCode b := by
   dsimp [Devm.setCode, Devm.withState, Devm.setWorld, Devm.world,
     Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set,
-    State.getCode, State.get]
+    State.getCode]
   split_ifs with h_if
-  · by_cases hc : compare a b = Ordering.eq
+  · unfold State.get
+    by_cases hc : compare a b = Ordering.eq
     · exact False.elim (h (compare_eq_iff_eq.mp hc))
     · rw [Std.TreeMap.getD_erase]
       simp [hc]
-  · by_cases hc : compare a b = Ordering.eq
+  · unfold State.get
+    by_cases hc : compare a b = Ordering.eq
     · exact False.elim (h (compare_eq_iff_eq.mp hc))
     · rw [Std.TreeMap.getD_insert]
       simp [hc]
@@ -4844,7 +4854,7 @@ lemma of_run_dup {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (dup n
     rw [hb.stack]; exact hx
 
 lemma of_run_swap {e : Sevm} {s s' : Devm} {n : Fin 16} (h : Ninst.Run e s (swap n) s') :
-    List.swap s.stack n.val = some s'.stack := by
+    Jaune.List.swap s.stack n.val = some s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
@@ -5197,14 +5207,14 @@ lemma Stack.swapCore_getElem_set {x y : B256} {n : Nat} {xs xs' : Stack}
       rw [h2]
 
 lemma Stack.prefix_of_swap {n} {xs xs' stk stk' : Stack} :
-    Swap n xs xs' → List.swap stk n = some stk' → (xs <<+ stk) → (xs' <<+ stk') := by
+    Swap n xs xs' → Jaune.List.swap stk n = some stk' → (xs <<+ stk) → (xs' <<+ stk') := by
   intro h0 h1 h2
   rcases swapCore_of_swap h0 with ⟨x, y, xs₀, ys₀, hxs, hys, hc⟩
   subst hxs; subst hys
   rcases h2 with ⟨t, h2⟩
   rw [show stk = (x :: xs₀) ++ t from h2] at h1
   rcases swapCore_getElem_set hc t with ⟨hget, hset⟩
-  simp only [List.cons_append, List.swap, hget, hset] at h1
+  simp only [List.cons_append, Jaune.List.swap, hget, hset] at h1
   injection h1 with h1
   refine ⟨t, ?_⟩
   rw [← h1]
@@ -10057,16 +10067,15 @@ lemma validAdr_iff {w : B256} :
     ValidAdr w ↔ addressMask &&& w = 0 := by
   constructor <;> intro h
   · rcases h with ⟨⟨a32, a128⟩, ⟨_⟩⟩
-    simp [Adr.toB256, addressMask]
-    rw [B256.and_eq_and_prod_and]
-    simp [B128.zero_and]
-    rw [B128.and_eq_and_prod_and]
-    simp
-    apply Prod.ext
-    · apply Prod.ext
-      · rfl
-      · apply UInt64.mask_and_eq_zero
-    · rfl
+    change (B128.and (UInt64.max, 0xffffffff00000000) (0, a32.toUInt64),
+      B128.and 0 a128) = (0 : B256)
+    have h_high : B128.and (UInt64.max, 0xffffffff00000000) (0, a32.toUInt64) = 0 := by
+      change (UInt64.max &&& 0, (0xffffffff00000000 : UInt64) &&& a32.toUInt64) = (0, 0)
+      simp [UInt64.mask_and_eq_zero]
+    have h_low : B128.and 0 a128 = 0 := by exact B128.zero_and
+    rw [h_high, h_low]
+    change ((0 : B128), (0 : B128)) = ((0 : B128), (0 : B128))
+    rfl
   · refine' ⟨w.toAdr, _⟩
     rcases w with ⟨⟨wz, wh⟩, wl⟩
     simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
@@ -10081,6 +10090,7 @@ lemma validAdr_iff {w : B256} :
     have h_wh : wh.toUInt32.toUInt64 = wh := by
       exact UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero hm
     simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
+    rfl
 
 lemma addressMask_eq_shl :
     addressMask = (~~~ (0 : B256)) <<< (160 : Nat).toB256.toNat := by

@@ -129,8 +129,12 @@ theorem setupMain_runCompiledTo
           (sevm.currentTarget, adminSlotLit) := by
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · unfold setupMain setupBodyGas push1Zero
+  · unfold setupMain push1Zero
     func_run [100, 22100]
+    all_goals try
+      (rw [Devm.gasLeft_setMach]
+       dsimp only [setupBodyGas, gCallStipend]
+       omega)
     · simp only [Devm.getStorVal_setMach]
       rw [himplementationOriginal, himplementationCurrent]
       decide
@@ -144,7 +148,8 @@ theorem setupMain_runCompiledTo
         (e := 0) (G := G) (out := [])
       · rfl
       · exact Devm.extCost_empty_window
-      · simp only [Devm.gasLeft_setMach]
+      · rw [Devm.gasLeft_setMach]
+        dsimp only [setupBodyGas]
         omega
       · rw [show B256.toNat (0 : B256) = 0 by decide]
         exact congrArg Prod.fst Devm.memRead_zero

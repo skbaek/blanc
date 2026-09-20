@@ -81,11 +81,7 @@ private theorem staticStep_cont_getStor
                 rw [static] at dynamic
                 exact Bool.noConfusion dynamic
               · have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
-                  have equal : (.ok post : Execution) =
-                      Rinst.run ⟨pc, sevm, pre⟩ regular := by
-                    simpa [Ninst.StepRun, Ninst.step_reg,
-                      Step.run_ofExecution] using nrun
-                  exact equal.symm
+                  exact (Step.run_ofExecution.mp nrun).2.symm
                 exact (Rinst.preserves_stor store rrun).symm
 
 /-- A committing halted node ends in a successful last instruction, which

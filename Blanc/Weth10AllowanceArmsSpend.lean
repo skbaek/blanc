@@ -526,7 +526,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
                 ⟨0, e, pre, .ok post, run, committed⟩]
               key
           rw [applyAllowanceLedger_singleton, hown]
-          simp only [AllowanceEvent.key, AllowanceVisit.written?]
+          unfold AllowanceEvent.key
+          simp only [AllowanceVisit.written?]
           rw [← htarget, transferFromCore_allowanceKey dp hkey hto' hcore,
             hstorSet]
           by_cases hpk :

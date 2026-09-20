@@ -416,6 +416,7 @@ theorem Exec.CoreDripTranscript.nextNone
       (_root_.Blanc.Ninst.foreignNone_getStor_eq step target_ne)
       (_root_.Blanc.Ninst.targetBalanceMono_of_none step target_ne sumNof) with
     ⟨headSteps, headReplay, headKinds⟩
+  change List RealizedStep at headSteps
   rcases ih next committed installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
@@ -519,6 +520,7 @@ theorem Exec.CoreDripTranscript.nextSome
           (fun childCommitted => ihChild child childCommitted childAt
             childPrecondition childDirect childCaller childCanonical) with
         ⟨headSteps, headReplay, headKinds⟩
+      change List RealizedStep at headSteps
       rcases ihNext next committed installedInter interPre
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim)

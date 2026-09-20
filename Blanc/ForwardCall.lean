@@ -94,7 +94,7 @@ lemma Ninst.runCompiled_exec_run {sevm : Sevm} {devm : Devm} {x : Xinst}
     (h_res : rsm.run (f.settle (exec cevm)) = .ok devm') :
     Ninst.RunCompiled sevm devm (.exec x) devm' := by
   refine ⟨.some ⟨cevm, exec cevm⟩, Xlot.filled_exec cevm, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm devm x) _ _
   rw [h_step]
   exact ⟨_, RunFrame.of_run h_enter, h_res.symm⟩
@@ -145,7 +145,7 @@ theorem Ninst.childlessRunCompiled_exec_doneFrame
     (resumeOk : resume.run settled = .ok post) :
     Ninst.ChildlessRunCompiled sevm pre (.exec operation) post := by
   intro pc
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm pre operation) _ _
   rw [step]
   exact ⟨settled, RunFrame.of_done enter, resumeOk.symm⟩
@@ -160,7 +160,7 @@ lemma Ninst.runCompiled_exec_doneFrame {sevm : Sevm} {devm : Devm} {x : Xinst}
     (h_enter : f.enter = .done r) (h_res : rsm.run r = .ok devm') :
     Ninst.RunCompiled sevm devm (.exec x) devm' := by
   refine ⟨.none, trivial, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm devm x) _ _
   rw [h_step]
   exact ⟨r, RunFrame.of_done h_enter, h_res.symm⟩
@@ -187,7 +187,7 @@ lemma Ninst.runCompiled_exec_done {sevm : Sevm} {devm : Devm} {x : Xinst}
     {devm' : Devm} (h_step : Xinst.step sevm devm x = .done (.ok devm')) :
     Ninst.RunCompiled sevm devm (.exec x) devm' := by
   refine ⟨.none, trivial, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm devm x) _ _
   rw [h_step]
   exact ⟨rfl, rfl⟩
@@ -1167,9 +1167,11 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
   -- static-context assertion, on their right disjuncts.  `simp only` rather
   -- than `rw` for `h_del`: the new-account `if` carries a `Decidable` instance
   -- that depends on the term being rewritten.
-  simp only [if_pos (Or.inr trivial), if_pos trivial, Nat.add_zero,
+  simp only [h_del]
+  simp only [if_pos (show ¬(d1.getAcct cw.toAdr).Empty ∨ True from Or.inr trivial),
+    if_pos trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
-  simp only [h_del, h_split]
+  simp only [h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
   simp only [Except.assert, if_pos (Or.inr trivial)]
   -- The balance short-circuit tests `senderBal < 0`, which no `B256` satisfies:
@@ -2678,7 +2680,7 @@ lemma Ninst.stepRun_exec_run_error {sevm : Sevm} {devm : Devm} {x : Xinst}
     ∃ xl : Xlot, xl.Filled ∧
       ∀ pc, Ninst.StepRun pc sevm devm (.exec x) xl (.error e) := by
   refine ⟨.some ⟨cevm, exec cevm⟩, Xlot.filled_exec cevm, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm devm x) _ _
   rw [h_step]
   exact ⟨_, RunFrame.of_run h_enter, h_res.symm⟩
@@ -2693,7 +2695,7 @@ lemma Ninst.stepRun_exec_doneFrame_error {sevm : Sevm} {devm : Devm} {x : Xinst}
     ∃ xl : Xlot, xl.Filled ∧
       ∀ pc, Ninst.StepRun pc sevm devm (.exec x) xl (.error e) := by
   refine ⟨.none, trivial, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+  apply XStep.run_toStep.mpr
   show XStep.Run (Xinst.step sevm devm x) _ _
   rw [h_step]
   exact ⟨r, RunFrame.of_done h_enter, h_res.symm⟩

@@ -564,9 +564,15 @@ storage effects; retained effects resume at the same-frame tail. -/
     Exec.retainedStorageEffectTriples
         (.doneOk step entered resumed tail) =
       Exec.retainedStorageEffectTriples tail := by
-  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
-    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
-    Exec.Deriv.successfulSstore?]
+  rw [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
+    Exec.retainedNodes_eq_of_commits _ committed,
+    Exec.retainedNodesOfCommits]
+  rw [List.filterMap_cons]
+  rw [← Exec.retainedNodes_eq_of_commits tail committed]
+  have hnone : Exec.Deriv.successfulSstore?
+      (⟨pc, sevm, pre, out, Exec.doneOk step entered resumed tail⟩ :
+        Exec.Deriv) = none := rfl
+  simp [hnone, Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites]
 
 /-- A committed halt has no retained SSTORE driver node. -/
 @[simp] theorem Exec.retainedStorageEffectTriples_halt
@@ -1377,8 +1383,9 @@ private theorem Exec.storageReplay_cont_head
               have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
                 have equal : (.ok post : Execution) =
                     Rinst.run ⟨pc, sevm, pre⟩ regular := by
-                  simpa [Ninst.StepRun, Ninst.step_reg,
-                    Step.run_ofExecution] using nrun
+                  have nrunStep := nrun
+                  simp only [Ninst.StepRun, Ninst.step_reg] at nrunStep
+                  exact (Step.run_ofExecution.mp nrunStep).2
                 exact equal.symm
               by_cases store : regular = .sstore
               · subst regular
@@ -1489,8 +1496,11 @@ theorem Exec.storageReplay_committedPost
       (Exec.retainedStorageWrites run) := by
   induction run with
   | halt step =>
-      simpa [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
-        Exec.retainedNodesOfCommits, Exec.Deriv.successfulSstore?] using
+      have hnone : Exec.Deriv.successfulSstore?
+          (⟨_, _, _, _, Exec.halt step⟩ : Exec.Deriv) = none := rfl
+      simpa [Exec.retainedStorageWrites,
+        Exec.retainedNodes_eq_of_commits _ committed,
+        Exec.retainedNodesOfCommits, List.filterMap_cons, hnone] using
         Exec.StorageReplay.of_getStor_eq
           (Exec.halt_getStor_eq step committed)
   | cont step next ih =>
@@ -1506,8 +1516,12 @@ theorem Exec.storageReplay_committedPost
       have head := Exec.StorageReplay.of_getStor_eq
         (Exec.doneOk_getStor_eq step enter resume)
       have tail := ih committed
-      simpa [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
-        Exec.retainedNodesOfCommits, Exec.Deriv.successfulSstore?] using
+      have hnone : Exec.Deriv.successfulSstore?
+          (⟨_, _, _, _, Exec.doneOk step enter resume next⟩ :
+            Exec.Deriv) = none := rfl
+      simpa [Exec.retainedStorageWrites,
+        Exec.retainedNodes_eq_of_commits _ committed,
+        Exec.retainedNodesOfCommits, List.filterMap_cons, hnone] using
         head.append tail
   | runErr step enter child resume ih =>
       simp [Execution.commits] at committed
@@ -1519,15 +1533,21 @@ theorem Exec.storageReplay_committedPost
       convert throughChild.append throughTail using 1
       split
       · rename_i settles
-        have rawCommits := Frame.raw_commits_of_settlementCommits settles
-        simp [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
-          settles, rawCommits,
-          Exec.retainedNodesOfCommits, List.filterMap_append,
-          Exec.Deriv.successfulSstore?]
+        have hnone : Exec.Deriv.successfulSstore?
+            (⟨_, _, _, _, Exec.runOk step enter child resume next⟩ :
+              Exec.Deriv) = none := rfl
+        simp only [Exec.retainedStorageWrites,
+          Exec.retainedNodes_runOk_of_settlementCommits _ _ _ _ _
+            committed settles,
+          List.filterMap_append, List.filterMap_cons, hnone]
       · rename_i settles
-        simp_all [Exec.retainedStorageWrites, Exec.retainedNodes,
-          Exec.retainedNodesOfCommits,
-          Exec.Deriv.successfulSstore?]
+        have hnone : Exec.Deriv.successfulSstore?
+            (⟨_, _, _, _, Exec.runOk step enter child resume next⟩ :
+              Exec.Deriv) = none := rfl
+        simp only [Exec.retainedStorageWrites,
+          Exec.retainedNodes_runOk_of_not_settlementCommits _ _ _ _ _
+            committed settles,
+          List.filterMap_cons, List.nil_append, hnone]
 
 /-- Any committed persistent-storage change has an exact last retained
 successful SSTORE witness at the same owner and raw key, recording the final

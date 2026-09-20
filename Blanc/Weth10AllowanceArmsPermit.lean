@@ -1441,7 +1441,8 @@ private theorem Exec.Frame.allowanceRegionEffect_ownRecord_of_permit
           [CountedFrame.ofFrame dp ca ⟨0, e, pre, .ok post, run, committed⟩]
           key
       rw [applyAllowanceLedger_singleton, hown]
-      simp only [AllowanceEvent.key, AllowanceVisit.written?]
+      unfold AllowanceEvent.key
+      simp only [AllowanceVisit.written?]
       rw [← htarget]
       show (Devm.getStor post e.currentTarget).get key = _
       rw [hstor key hkey, show projectedAllowanceKey (Sevm.argWord e 0)

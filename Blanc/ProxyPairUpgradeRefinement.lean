@@ -422,7 +422,7 @@ private theorem sharedValueMessage_transfer (state : State) :
     (sharedValueMessage state).benvAfterTransfer =
       .ok (sharedValueAfterTransfer state) := by
   unfold Msg.benvAfterTransfer sharedValueAfterTransfer
-  simp only [sharedValueMessage, if_true, Benv.subBal, State.subBal]
+  dsimp only [sharedValueMessage, Benv.subBal, State.subBal]
   rw [if_neg]
   · rfl
   · intro insufficient

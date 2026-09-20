@@ -814,18 +814,615 @@ theorem weth10_compileShape_eq_zero (dp : DeployParams) :
   weth10_compileShape_eq dp
 
 /-- The zero-parameter template's direct full kernel evaluation of the WETH10
-compiler.  The generated mainnet artifact witness in `Blanc/Weth10Code.lean`
-performs a separate direct evaluation.  `weth10CompilesZero` below and
-`weth10RuntimeTemplate`'s identity in `Blanc/Weth10Deploy.lean` both derive
-from this template witness instead of re-running the compiler. -/
-theorem weth10TemplateCode_compile :
-    Prog.compile (weth10 ⟨0, 0⟩) = some weth10TemplateCode := by
-  decide +kernel
-
+compiler.  The structural success witness below decides compilation without
+constructing bytes; `weth10RuntimeTemplate`'s identity in
+`Blanc/Weth10Deploy.lean` derives from this template witness. -/
 private theorem weth10CompilesZero :
     Prog.compiles (weth10 ⟨0, 0⟩) = true := by
-  rw [← Prog.isSome_compile, weth10TemplateCode_compile]
+  decide +kernel
+
+private theorem weth10TemplateCode_compile_of_emit
+    (h : (weth10 ⟨0, 0⟩).emitUnchecked = weth10TemplateCode) :
+    Prog.compile (weth10 ⟨0, 0⟩) = some weth10TemplateCode := by
+  have hc := Prog.compile_eq_some_getD_of_compiles
+    (weth10 ⟨0, 0⟩) weth10CompilesZero
+  exact hc.trans
+    (congrArg some ((Prog.compile_eq_emitUnchecked hc).trans h))
+
+private def weth10ZeroTable : List (Nat × Func) :=
+  table 0 ((weth10 ⟨0, 0⟩).main :: (weth10 ⟨0, 0⟩).aux)
+
+private theorem weth10ZeroTable_locations :
+    weth10ZeroTable.map Prod.fst =
+      [0, 4001, 4005, 4115, 4261, 4403, 4513, 4655,
+       4801, 4911, 5021, 5167, 5277, 5387, 5395, 5433,
+       5607, 5852, 5962, 6070] := by
+  decide +kernel
+
+private theorem boolReturn_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5396 boolReturn =
+      (weth10TemplateCode.drop 5396).take 37 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem permitRecover_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 6071 permitRecover =
+      (weth10TemplateCode.drop 6071).take 242 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem weth10Main_size : compsize (weth10Main ⟨0, 0⟩) = 4000 := by
+  decide +kernel
+
+private theorem weth10Aux_sizes :
+    weth10Aux.map compsize = [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107, 242] := by
+  decide +kernel
+
+private theorem revert_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4002 Func.revert =
+      (weth10TemplateCode.drop 4002).take 3 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem flashTokenError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4006 flashTokenError =
+      (weth10TemplateCode.drop 4006).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem individualLimitError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4116 individualLimitError =
+      (weth10TemplateCode.drop 4116).take 145 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem totalLimitError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4262 totalLimitError =
+      (weth10TemplateCode.drop 4262).take 141 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem flashFailedError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4404 flashFailedError =
+      (weth10TemplateCode.drop 4404).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem allowanceError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4514 allowanceError =
+      (weth10TemplateCode.drop 4514).take 141 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem burnBalanceError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4656 burnBalanceError =
+      (weth10TemplateCode.drop 4656).take 145 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem expiredPermitError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4802 expiredPermitError =
+      (weth10TemplateCode.drop 4802).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem invalidPermitError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4912 invalidPermitError =
+      (weth10TemplateCode.drop 4912).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem transferBalanceError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5022 transferBalanceError =
+      (weth10TemplateCode.drop 5022).take 145 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem ethTransferError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5168 ethTransferError =
+      (weth10TemplateCode.drop 5168).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem etherTransferError_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5278 etherTransferError =
+      (weth10TemplateCode.drop 5278).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem bubbleRevert_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5388 bubbleRevert =
+      (weth10TemplateCode.drop 5388).take 7 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem flashSettle_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5434 flashSettle =
+      (weth10TemplateCode.drop 5434).take 173 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem transferFromCore_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5608 transferFromCore =
+      (weth10TemplateCode.drop 5608).take 244 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem withdrawFromCore_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5853 withdrawFromCore =
+      (weth10TemplateCode.drop 5853).take 109 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem flashBurn_emit_zero :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5963 flashBurn =
+      (weth10TemplateCode.drop 5963).take 107 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem weth10ZeroTable_eq :
+    weth10ZeroTable =
+      [(0, weth10Main ⟨0, 0⟩),
+      (4001, Func.revert),
+      (4005, flashTokenError),
+      (4115, individualLimitError),
+      (4261, totalLimitError),
+      (4403, flashFailedError),
+      (4513, allowanceError),
+      (4655, burnBalanceError),
+      (4801, expiredPermitError),
+      (4911, invalidPermitError),
+      (5021, transferBalanceError),
+      (5167, ethTransferError),
+      (5277, etherTransferError),
+      (5387, bubbleRevert),
+      (5395, boolReturn),
+      (5433, flashSettle),
+      (5607, transferFromCore),
+      (5852, withdrawFromCore),
+      (5962, flashBurn),
+      (6070, permitRecover)] := by
+  have hs := weth10Aux_sizes
+  simp only [weth10Aux, List.map_cons, List.map_nil, List.cons.injEq] at hs
+  rcases hs with ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11,
+    h12, h13, h14, h15, h16, h17, h18, _⟩
+  simp only [weth10ZeroTable, weth10, weth10Aux, table, weth10Main_size,
+    h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
+    h14, h15, h16, h17, Nat.reduceAdd]
+
+private def weth10TreeSlice (fuel start count : Nat) : DispatchTree :=
+  DispatchTree.build fuel (((weth10Funcs ⟨0, 0⟩).drop start).take count)
+
+private theorem weth10Tree_quarters :
+    weth10Tree ⟨0, 0⟩ =
+      .fork (.fork (weth10TreeSlice 25 0 7) (weth10TreeSlice 25 7 7))
+        (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6)) := by
   rfl
+
+private theorem dispatch0_7_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 3112
+      (dispatchWith fallbackSlot (weth10TreeSlice 25 0 7)) =
+      (weth10TemplateCode.drop 3112).take 839 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem dispatch7_7_size :
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 7 7)) = 1307 := by
+  decide +kernel
+
+private theorem dispatch7_7_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 1804
+      (dispatchWith fallbackSlot (weth10TreeSlice 25 7 7)) =
+      (weth10TemplateCode.drop 1804).take 1307 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem dispatch14_7_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 970
+      (dispatchWith fallbackSlot (weth10TreeSlice 25 14 7)) =
+      (weth10TemplateCode.drop 970).take 822 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem dispatch21_6_size :
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 21 6)) = 935 := by
+  decide +kernel
+
+private theorem dispatch21_6_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 34
+      (dispatchWith fallbackSlot (weth10TreeSlice 25 21 6)) =
+      (weth10TemplateCode.drop 34).take 935 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem dispatchLeft_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 1793
+      (dispatchWith fallbackSlot
+        (.fork (weth10TreeSlice 25 0 7) (weth10TreeSlice 25 7 7))) =
+      (weth10TemplateCode.drop 1793).take 2158 := by
+  rw [dispatchWith, Func.emitUnchecked, Func.emitUnchecked,
+    Func.emitUnchecked, Func.emitUnchecked]
+  have hp : (pushB256 (leftmostFsig (weth10TreeSlice 25 7 7))).size = 5 := by
+    decide +kernel
+  rw [hp]
+  simp only [Ninst.size, dispatch7_7_size, Nat.reduceAdd]
+  rw [dispatch7_7_emit, dispatch0_7_emit]
+  decide +kernel
+
+private theorem dispatchRight_size :
+    compsize (dispatchWith fallbackSlot
+      (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6))) = 1769 := by
+  decide +kernel
+
+private theorem dispatchRight_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 23
+      (dispatchWith fallbackSlot
+        (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6))) =
+      (weth10TemplateCode.drop 23).take 1769 := by
+  rw [dispatchWith, Func.emitUnchecked, Func.emitUnchecked,
+    Func.emitUnchecked, Func.emitUnchecked]
+  have hp : (pushB256 (leftmostFsig (weth10TreeSlice 25 21 6))).size = 5 := by
+    decide +kernel
+  rw [hp]
+  simp only [Ninst.size, dispatch21_6_size, Nat.reduceAdd]
+  rw [dispatch21_6_emit, dispatch14_7_emit]
+  decide +kernel
+
+private theorem dispatchFull_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 12
+      (dispatchWith fallbackSlot (weth10Tree ⟨0, 0⟩)) =
+      (weth10TemplateCode.drop 12).take 3939 := by
+  rw [weth10Tree_quarters, dispatchWith, Func.emitUnchecked, Func.emitUnchecked,
+    Func.emitUnchecked, Func.emitUnchecked]
+  have hp : (pushB256 (leftmostFsig (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6)))).size = 5 := by
+    decide +kernel
+  rw [hp]
+  simp only [Ninst.size, dispatchRight_size, Nat.reduceAdd]
+  rw [dispatchRight_emit, dispatchLeft_emit]
+  decide +kernel
+
+private theorem receiveEther_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 3952 receiveEther =
+      (weth10TemplateCode.drop 3952).take 49 := by
+  rw [weth10ZeroTable_locations]
+  decide +kernel
+
+private theorem dispatchPrefixed_size :
+    compsize (fsig +++ dispatchWith fallbackSlot (weth10Tree ⟨0, 0⟩)) = 3944 := by
+  decide +kernel
+
+private theorem dispatchPrefixed_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 7
+      (fsig +++ dispatchWith fallbackSlot (weth10Tree ⟨0, 0⟩)) =
+      (weth10TemplateCode.drop 7).take 3944 := by
+  change ([0x5f, 0x35, 0x60, 0xe0, 0x1c] : Bytes) ++
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 12
+      (dispatchWith fallbackSlot (weth10Tree ⟨0, 0⟩)) = _
+  rw [dispatchFull_emit]
+  decide +kernel
+
+private theorem weth10Main_emit :
+    Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 1 (weth10Main ⟨0, 0⟩) =
+      (weth10TemplateCode.drop 1).take 4000 := by
+  rw [weth10Main, Func.emitUnchecked, Func.emitUnchecked, Func.emitUnchecked]
+  simp only [Ninst.size, dispatchPrefixed_size, Nat.reduceAdd]
+  rw [dispatchPrefixed_emit, receiveEther_emit]
+  decide +kernel
+
+private theorem template_join_19 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 6071).take 242) ++
+      weth10TemplateCode.drop 6313 = weth10TemplateCode.drop 6070 := by
+  have hj : (weth10TemplateCode.drop 6071).take 242 ++
+      weth10TemplateCode.drop 6313 = weth10TemplateCode.drop 6071 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 242 (weth10TemplateCode.drop 6071)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 6070).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 6070)
+
+private theorem template_join_18 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5963).take 107) ++
+      weth10TemplateCode.drop 6070 = weth10TemplateCode.drop 5962 := by
+  have hj : (weth10TemplateCode.drop 5963).take 107 ++
+      weth10TemplateCode.drop 6070 = weth10TemplateCode.drop 5963 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 107 (weth10TemplateCode.drop 5963)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5962).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5962)
+
+private theorem template_join_17 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5853).take 109) ++
+      weth10TemplateCode.drop 5962 = weth10TemplateCode.drop 5852 := by
+  have hj : (weth10TemplateCode.drop 5853).take 109 ++
+      weth10TemplateCode.drop 5962 = weth10TemplateCode.drop 5853 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 5853)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5852).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5852)
+
+private theorem template_join_16 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5608).take 244) ++
+      weth10TemplateCode.drop 5852 = weth10TemplateCode.drop 5607 := by
+  have hj : (weth10TemplateCode.drop 5608).take 244 ++
+      weth10TemplateCode.drop 5852 = weth10TemplateCode.drop 5608 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 244 (weth10TemplateCode.drop 5608)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5607).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5607)
+
+private theorem template_join_15 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5434).take 173) ++
+      weth10TemplateCode.drop 5607 = weth10TemplateCode.drop 5433 := by
+  have hj : (weth10TemplateCode.drop 5434).take 173 ++
+      weth10TemplateCode.drop 5607 = weth10TemplateCode.drop 5434 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 173 (weth10TemplateCode.drop 5434)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5433).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5433)
+
+private theorem template_join_14 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5396).take 37) ++
+      weth10TemplateCode.drop 5433 = weth10TemplateCode.drop 5395 := by
+  have hj : (weth10TemplateCode.drop 5396).take 37 ++
+      weth10TemplateCode.drop 5433 = weth10TemplateCode.drop 5396 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 37 (weth10TemplateCode.drop 5396)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5395).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5395)
+
+private theorem template_join_13 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5388).take 7) ++
+      weth10TemplateCode.drop 5395 = weth10TemplateCode.drop 5387 := by
+  have hj : (weth10TemplateCode.drop 5388).take 7 ++
+      weth10TemplateCode.drop 5395 = weth10TemplateCode.drop 5388 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 7 (weth10TemplateCode.drop 5388)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5387).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5387)
+
+private theorem template_join_12 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5278).take 109) ++
+      weth10TemplateCode.drop 5387 = weth10TemplateCode.drop 5277 := by
+  have hj : (weth10TemplateCode.drop 5278).take 109 ++
+      weth10TemplateCode.drop 5387 = weth10TemplateCode.drop 5278 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 5278)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5277).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5277)
+
+private theorem template_join_11 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5168).take 109) ++
+      weth10TemplateCode.drop 5277 = weth10TemplateCode.drop 5167 := by
+  have hj : (weth10TemplateCode.drop 5168).take 109 ++
+      weth10TemplateCode.drop 5277 = weth10TemplateCode.drop 5168 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 5168)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5167).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5167)
+
+private theorem template_join_10 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 5022).take 145) ++
+      weth10TemplateCode.drop 5167 = weth10TemplateCode.drop 5021 := by
+  have hj : (weth10TemplateCode.drop 5022).take 145 ++
+      weth10TemplateCode.drop 5167 = weth10TemplateCode.drop 5022 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 145 (weth10TemplateCode.drop 5022)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 5021).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 5021)
+
+private theorem template_join_9 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4912).take 109) ++
+      weth10TemplateCode.drop 5021 = weth10TemplateCode.drop 4911 := by
+  have hj : (weth10TemplateCode.drop 4912).take 109 ++
+      weth10TemplateCode.drop 5021 = weth10TemplateCode.drop 4912 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 4912)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4911).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4911)
+
+private theorem template_join_8 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4802).take 109) ++
+      weth10TemplateCode.drop 4911 = weth10TemplateCode.drop 4801 := by
+  have hj : (weth10TemplateCode.drop 4802).take 109 ++
+      weth10TemplateCode.drop 4911 = weth10TemplateCode.drop 4802 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 4802)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4801).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4801)
+
+private theorem template_join_7 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4656).take 145) ++
+      weth10TemplateCode.drop 4801 = weth10TemplateCode.drop 4655 := by
+  have hj : (weth10TemplateCode.drop 4656).take 145 ++
+      weth10TemplateCode.drop 4801 = weth10TemplateCode.drop 4656 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 145 (weth10TemplateCode.drop 4656)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4655).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4655)
+
+private theorem template_join_6 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4514).take 141) ++
+      weth10TemplateCode.drop 4655 = weth10TemplateCode.drop 4513 := by
+  have hj : (weth10TemplateCode.drop 4514).take 141 ++
+      weth10TemplateCode.drop 4655 = weth10TemplateCode.drop 4514 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 141 (weth10TemplateCode.drop 4514)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4513).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4513)
+
+private theorem template_join_5 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4404).take 109) ++
+      weth10TemplateCode.drop 4513 = weth10TemplateCode.drop 4403 := by
+  have hj : (weth10TemplateCode.drop 4404).take 109 ++
+      weth10TemplateCode.drop 4513 = weth10TemplateCode.drop 4404 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 4404)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4403).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4403)
+
+private theorem template_join_4 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4262).take 141) ++
+      weth10TemplateCode.drop 4403 = weth10TemplateCode.drop 4261 := by
+  have hj : (weth10TemplateCode.drop 4262).take 141 ++
+      weth10TemplateCode.drop 4403 = weth10TemplateCode.drop 4262 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 141 (weth10TemplateCode.drop 4262)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4261).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4261)
+
+private theorem template_join_3 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4116).take 145) ++
+      weth10TemplateCode.drop 4261 = weth10TemplateCode.drop 4115 := by
+  have hj : (weth10TemplateCode.drop 4116).take 145 ++
+      weth10TemplateCode.drop 4261 = weth10TemplateCode.drop 4116 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 145 (weth10TemplateCode.drop 4116)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4115).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4115)
+
+private theorem template_join_2 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4006).take 109) ++
+      weth10TemplateCode.drop 4115 = weth10TemplateCode.drop 4005 := by
+  have hj : (weth10TemplateCode.drop 4006).take 109 ++
+      weth10TemplateCode.drop 4115 = weth10TemplateCode.drop 4006 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 109 (weth10TemplateCode.drop 4006)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4005).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4005)
+
+private theorem template_join_1 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 4002).take 3) ++
+      weth10TemplateCode.drop 4005 = weth10TemplateCode.drop 4001 := by
+  have hj : (weth10TemplateCode.drop 4002).take 3 ++
+      weth10TemplateCode.drop 4005 = weth10TemplateCode.drop 4002 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 3 (weth10TemplateCode.drop 4002)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 4001).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 4001)
+
+private theorem template_join_0 :
+    ((0x5b : UInt8) :: (weth10TemplateCode.drop 1).take 4000) ++
+      weth10TemplateCode.drop 4001 = weth10TemplateCode.drop 0 := by
+  have hj : (weth10TemplateCode.drop 1).take 4000 ++
+      weth10TemplateCode.drop 4001 = weth10TemplateCode.drop 1 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4000 (weth10TemplateCode.drop 1)
+  rw [List.cons_append, hj]
+  have hm : (weth10TemplateCode.drop 0).take 1 = [(0x5b : UInt8)] := by
+    decide +kernel
+  simpa only [hm, List.drop_drop, Nat.reduceAdd, List.cons_append, List.nil_append]
+    using List.take_append_drop 1 (weth10TemplateCode.drop 0)
+
+private theorem weth10TemplateCode_emit :
+    (weth10 ⟨0, 0⟩).emitUnchecked = weth10TemplateCode := by
+  change Table.emitUnchecked (weth10ZeroTable.map Prod.fst) weth10ZeroTable = _
+  conv_lhs => arg 2; rw [weth10ZeroTable_eq]
+  simp only [Table.emitUnchecked, Nat.reduceAdd]
+  rw [weth10Main_emit,
+    revert_emit_zero,
+    flashTokenError_emit_zero,
+    individualLimitError_emit_zero,
+    totalLimitError_emit_zero,
+    flashFailedError_emit_zero,
+    allowanceError_emit_zero,
+    burnBalanceError_emit_zero,
+    expiredPermitError_emit_zero,
+    invalidPermitError_emit_zero,
+    transferBalanceError_emit_zero,
+    ethTransferError_emit_zero,
+    etherTransferError_emit_zero,
+    bubbleRevert_emit_zero,
+    boolReturn_emit_zero,
+    flashSettle_emit_zero,
+    transferFromCore_emit_zero,
+    withdrawFromCore_emit_zero,
+    flashBurn_emit_zero,
+    permitRecover_emit_zero]
+  have hmarker : Jinst.jumpdest.toUInt8 = (0x5b : UInt8) := by decide +kernel
+  simp only [hmarker]
+  have he : weth10TemplateCode.drop 6313 = [] := by decide +kernel
+  rw [← he]
+  rw [template_join_19,
+    template_join_18,
+    template_join_17,
+    template_join_16,
+    template_join_15,
+    template_join_14,
+    template_join_13,
+    template_join_12,
+    template_join_11,
+    template_join_10,
+    template_join_9,
+    template_join_8,
+    template_join_7,
+    template_join_6,
+    template_join_5,
+    template_join_4,
+    template_join_3,
+    template_join_2,
+    template_join_1,
+    template_join_0]
+  rfl
+
+theorem weth10TemplateCode_compile :
+    Prog.compile (weth10 ⟨0, 0⟩) = some weth10TemplateCode := by
+  exact weth10TemplateCode_compile_of_emit weth10TemplateCode_emit
 
 /-- Fixed-width deployment words do not affect compiler success. -/
 theorem weth10_compiles (dp : DeployParams) :

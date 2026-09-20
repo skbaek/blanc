@@ -1772,7 +1772,7 @@ private lemma permit_normalizeAddress_owner (owner : Adr) :
     apply Prod.ext <;> apply u64_and_max
   have hm : (~~~ addressMask) =
       (⟨⟨0, 0x00000000ffffffff⟩, B128.max⟩ : B256) := by
-    decide +kernel
+    rfl
   rw [hm]
   rcases owner with ⟨ahi, alo⟩
   simp only [Adr.toB256, B256.and_eq_and_prod_and,
