@@ -2522,6 +2522,26 @@ deeper-frame hypothesis need only cover frames at the caller's `benvStat`,
 which is what a trace-admitted consumer whose entry condition reads the block
 environment can discharge (DRIP's `soundAdmitted_of_stepClosedAt`).
 
+### C8. A `decide +kernel` over a committed artifact reports kernel deep recursion
+
+Cut the equality rather than raising a ceiling. `eq_of_take_drop_eq` in
+[`Blanc/ChunkedDecide.lean`](../Blanc/ChunkedDecide.lean) takes a cut point `n`
+and reduces `l = r` to `l.take n = r.take n` and `l.drop n = r.drop n`, each of
+which is decided on its own; nest it for more than two chunks. A closed
+`decide +kernel` over a `List` equality unfolds `List.decEq` once per element,
+so the cost is the list's length and nothing else, and the length is what
+predicts the failure: on Lean 4.34, measured by A/B over one committed
+artifact, a list of 3,813 elements is checked and one of 4,200 is not. Blanc's
+call sites cut at 2,200, roughly half that cliff, so margin rather than the
+fewest cuts is the chunk-size rule. An `Option`-valued compile equation is not
+directly chunkable — move through the module's own compiler witness first to
+turn `Prog.compile … = some X` into the underlying `Bytes` equality, then cut
+that. Several cut chunks decided in one tactic block can exhaust the heartbeat
+budget instead; split the conjunction into one declaration per chunk, because
+both budgets are per-declaration. The lemma changes no statement, emits no
+byte, and needs neither `native_decide` nor a `maxRecDepth`/`maxHeartbeats`
+raise.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when

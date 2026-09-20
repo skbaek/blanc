@@ -5,6 +5,7 @@
 -- from kernel-checked compiler equations and list algebra.  No byte literal,
 -- evaluator result, manifest row, or Python verdict enters a Lean premise.
 
+import Blanc.ChunkedDecide
 import Blanc.DeploymentCompiled
 import Blanc.LidoCircuitBreakerDeploy
 
@@ -220,14 +221,10 @@ private def patchAtOffsets
     (code : Bytes) (word : B256) (offsets : List Nat) : Bytes :=
   offsets.foldl (fun bs offset => Bytes.writeAt bs offset word.toBytes) code
 
-/-- Decide a list equality one bounded chunk at a time.  A whole 4,282-byte
-compiler artifact exceeds the Lean 4.34 kernel's recursion budget in a single
-`decide +kernel`, while either half of it is far inside that budget.  Cutting
-the equality changes no statement and no emitted byte. -/
-private theorem eq_of_take_drop_eq {α : Type _} (n : Nat) {l r : List α}
-    (htake : l.take n = r.take n) (hdrop : l.drop n = r.drop n) : l = r :=
-  (List.take_append_drop n l).symm.trans
-    (by rw [htake, hdrop]; exact List.take_append_drop n r)
+-- A whole 4,282-byte compiler artifact exceeds the Lean 4.34 kernel's
+-- recursion budget in a single `decide +kernel`, while either half of it is
+-- far inside that budget.  `Blanc.eq_of_take_drop_eq` cuts the equality,
+-- changing no statement and no emitted byte.
 
 private lemma Bytes.writeAt_append_middle
     {pre old suffix replacement : Bytes}

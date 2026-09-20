@@ -1040,14 +1040,10 @@ theorem officialConstructorFinalMemory_reads :
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceRuntime.lean`. -/
 
-/-- Decide a list equality one bounded chunk at a time.  A whole 4,282-byte
-runtime image exceeds the Lean 4.34 kernel's recursion budget in a single
-`decide +kernel`, while either half of it is far inside that budget.  Cutting
-the equality changes no statement and no emitted byte. -/
-private theorem eq_of_take_drop_eq {α : Type _} (n : Nat) {l r : List α}
-    (htake : l.take n = r.take n) (hdrop : l.drop n = r.drop n) : l = r :=
-  (List.take_append_drop n l).symm.trans
-    (by rw [htake, hdrop]; exact List.take_append_drop n r)
+-- A whole 4,282-byte runtime image exceeds the Lean 4.34 kernel's recursion
+-- budget in a single `decide +kernel`, while either half of it is far inside
+-- that budget.  `Blanc.eq_of_take_drop_eq` cuts the equality, changing no
+-- statement and no emitted byte.
 
 private theorem officialConstructorFinalImage_runtime :
     officialConstructorFinalImage.sliceD constructorRuntimeBaseForProof 4282 0 =
