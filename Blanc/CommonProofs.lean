@@ -1410,6 +1410,14 @@ lemma Devm.addLog_instructionFrame (d : Devm) (log : Log) :
     Devm.InstructionFrame d (Devm.addLog d log) := by
   exact liftMachMetaPure_instructionFrame _ d ⟨rfl, rfl⟩
 
+lemma Devm.emitTransferLog_instructionFrame (d : Devm) (sender recipient : Adr)
+    (amount : B256) :
+    Devm.InstructionFrame d (Devm.emitTransferLog d sender recipient amount) := by
+  unfold Devm.emitTransferLog
+  split
+  · exact Devm.instructionFrame_refl _
+  · exact Devm.addLog_instructionFrame _ _
+
 lemma Devm.memRead_instructionFrame (d : Devm) (index size : Nat) :
     Devm.InstructionFrame d (Devm.memRead d index size).2 := by
   unfold Devm.memRead
@@ -5125,6 +5133,9 @@ lemma Evm.step_spawn_child {pc : Nat} {sevm : Sevm} {devm : Devm}
 
 lemma chargeGas_getCode_err {cost devm err} (h : chargeGas cost devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_error h).getCode a |>.symm
+
+lemma chargeStateGas_getCode_err {amount devm err} (h : chargeStateGas amount devm = .error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
+  exact (chargeStateGas_worldEq_of_error h).getCode a |>.symm
 
 lemma Devm.push_getCode_err {v devm err} (h : Devm.push v devm = Except.error err) (a : Adr) : err.2.getCode a = devm.getCode a := by
   exact (liftMachExecution_worldEq_of_error (core := Mach.push v) h).getCode a |>.symm
@@ -9861,6 +9872,12 @@ lemma chargeGas_delSets_err {cost devm err} (h : chargeGas cost devm = .error er
   simp only [chargeGas_def] at h
   split at h <;> try contradiction
   cases h; rfl
+
+lemma chargeStateGas_delSets_eq {amount devm devm'} (h : chargeStateGas amount devm = .ok devm') : Devm.delSets devm' = Devm.delSets devm := by
+  exact liftMachExecution_delSets_of_ok (core := Mach.chargeStateGas amount) h
+
+lemma chargeStateGas_delSets_err {amount devm err} (h : chargeStateGas amount devm = .error err) : Devm.delSets err.2 = Devm.delSets devm := by
+  exact liftMachExecution_delSets_of_error (core := Mach.chargeStateGas amount) h
 
 lemma Devm.push_delSets_err {v devm err} (h : Devm.push v devm = Except.error err) : Devm.delSets err.2 = Devm.delSets devm := by
   exact liftMachExecution_delSets_of_error (core := Mach.push v) h
