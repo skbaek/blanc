@@ -303,6 +303,27 @@ def GenericCall
       output_index output_size code disablePrecompiles)
     xl ex
 
+def GenericCreateAmsterdam (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (endowment : B256) (newAddress : Adr) (memoryIndex memorySize : Nat)
+    (xl : Xlot) (ex : Execution) : Prop :=
+  XStep.Run
+    (genericCreateAmsterdam.step sevm state devm endowment newAddress
+      memoryIndex memorySize)
+    xl ex
+
+def GenericCallAmsterdam (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (gas reservoir : Nat) (value : B256)
+    (caller target codeAddress : Adr) (shouldTransferValue isStaticcall : Bool)
+    (input_index input_size output_index output_size : Nat) (code : ByteArray)
+    (disablePrecompiles newAccountCharged insufficientBalance : Bool)
+    (xl : Xlot) (ex : Execution) : Prop :=
+  XStep.Run
+    (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue isStaticcall input_index
+      input_size output_index output_size code disablePrecompiles
+      newAccountCharged insufficientBalance)
+    xl ex
+
 def Xinst.Run (sevm : Sevm) (devm : Devm) :
     Xinst → Xlot → Execution → Prop :=
   fun x xl ex => XStep.Run (Xinst.step sevm devm x) xl ex
