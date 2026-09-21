@@ -1640,3 +1640,5 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.ProrataWethVault.maxMintViewN_eq_of_stable
 #full_axioms Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable
 #full_axioms Blanc.ProrataWethVault.roundtrip_no_profit
+#full_axioms Blanc.ProrataWethVault.attack_carrier_inhabited
+#full_axioms Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited
