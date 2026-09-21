@@ -462,6 +462,17 @@ lemma liftMach_worldEq_of_error {core : Mach → Footprint.Outcome Mach α}
     exact Devm.worldEq_setMach d out.2
   | ok out => simp [hc] at h
 
+lemma liftMach_error_of_ok {core : Mach → Footprint.Outcome Mach α}
+    {d d' : Devm} {x : α} (h : liftMach core d = .ok (x, d')) :
+    d'.error = d.error := by
+  unfold liftMach Footprint.liftOutcome at h
+  cases hc : core d.mach with
+  | error err => simp [hc] at h
+  | ok out =>
+    simp [hc] at h
+    rcases h with ⟨_, rfl⟩
+    exact Devm.setMach_error d out.2
+
 lemma liftMachExecution_worldEq_of_ok {core : Mach → Footprint.Outcome Mach Unit}
     {d d' : Devm} (h : liftMachExecution core d = .ok d') :
     Devm.WorldEq d d' := by
@@ -542,6 +553,19 @@ lemma Devm.popToAdr_getCode {devm devm' : Devm} {val : Adr} {a : Adr}
 lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Adr} :
     (devm.memExtends ranges).getCode a = devm.getCode a := by
   exact (liftMachPure_worldEq (Mach.memExtends · ranges) devm).getCode a |>.symm
+
+lemma Devm.withReturnData_getCode {devm : Devm} {data : Bytes} {a : Adr} :
+    (devm.withReturnData data).getCode a = devm.getCode a := rfl
+
+lemma Devm.balReadAccount_getCode {rules : ForkRules} {adr : Adr}
+    {devm : Devm} {a : Adr} :
+    (Devm.balReadAccount rules adr devm).getCode a = devm.getCode a := rfl
+
+lemma Devm.withholdCreateGas_getCode {devm : Devm} {a : Adr} :
+    (devm.withholdCreateGas.2).getCode a = devm.getCode a := rfl
+
+lemma Devm.drainStateGasReservoir_getCode {devm : Devm} {a : Adr} :
+    (devm.drainStateGasReservoir.2).getCode a = devm.getCode a := rfl
 
 lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
   dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world, Devm.state,
@@ -668,17 +692,13 @@ lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm
 lemma chargeStateGas_getCode_eq {amount devm devm'} (h : chargeStateGas amount devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (chargeStateGas_worldEq_of_ok h).getCode a |>.symm
 
-lemma chargeStateGas_getCode_gen {amount devm exn} (h : chargeStateGas amount devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
-  cases exn with
-  | error err => exact (chargeStateGas_worldEq_of_error h).getCode a |>.symm
-  | ok devm' => exact (chargeStateGas_worldEq_of_ok h).getCode a |>.symm
-
 lemma chargeStateGas_error_eq {amount devm devm'} (h : chargeStateGas amount devm = .ok devm') : devm'.error = devm.error := by
   unfold chargeStateGas liftMachExecution Footprint.toExecution at h
   split at h
   · cases h
-  · cases h
-    rfl
+  · rename_i heq
+    cases h
+    exact liftMach_error_of_ok heq
 
 lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) h).getCode a |>.symm
@@ -1319,6 +1339,39 @@ lemma accessDelegation_instructionFrame (d : Devm) (adr : Adr) :
   cases getDelegatedCodeAddress (d.state.getCode adr)
   · exact Devm.instructionFrame_refl d
   · exact addAccessedAddress_instructionFrame d _
+
+/-- Schedule-parameterized access-delegation resolves an EOA delegation without
+    touching the world or the deletion sets, so it stays inside the instruction
+    frame. -/
+lemma GasSchedule.accessDelegation_instructionFrame (gas : GasSchedule)
+    (d : Devm) (adr : Adr) :
+    Devm.InstructionFrame d (gas.accessDelegation d adr).2.2.2.2 := by
+  rw [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (d.state.getCode adr)
+  · exact Devm.instructionFrame_refl d
+  · exact addAccessedAddress_instructionFrame d _
+
+/-- Draining the state-gas reservoir only reorganizes `Mach` gas fields, so it
+    stays inside the instruction frame. -/
+lemma Devm.drainStateGasReservoir_instructionFrame (d : Devm) :
+    Devm.InstructionFrame d (d.drainStateGasReservoir.2) := by
+  have h : d.drainStateGasReservoir.2
+      = d.setMach (d.mach.drainStateGasReservoir.2) := by
+    unfold Devm.drainStateGasReservoir
+    cases h : d.mach.drainStateGasReservoir with
+    | mk r m => rfl
+  rw [h]
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.machFrame_setMach d (d.mach.drainStateGasReservoir.2))
+
+/-- Amsterdam delegation completion at most warms one address, so it stays
+    inside the instruction frame. -/
+lemma completeDelegationAccess_instructionFrame (d : Devm) (dp : Bool)
+    (adr : Adr) :
+    Devm.InstructionFrame d (completeDelegationAccess d dp adr).2 := by
+  cases dp
+  · exact Devm.instructionFrame_refl d
+  · exact addAccessedAddress_instructionFrame d adr
 
 lemma addAccessedStorageKey_instructionFrame
     (d : Devm) (a : Adr) (k : B256) :
@@ -2787,6 +2840,11 @@ def Execution.getCode : Execution → Adr → ByteArray
   | Except.error ⟨_, devm⟩, adr => devm.getCode adr
   | Except.ok devm, adr => devm.getCode adr
 
+lemma chargeStateGas_getCode_gen {amount devm exn} (h : chargeStateGas amount devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
+  cases exn with
+  | error err => exact (chargeStateGas_worldEq_of_error h).getCode a |>.symm
+  | ok devm' => exact (chargeStateGas_worldEq_of_ok h).getCode a |>.symm
+
 lemma chargeGas_getCode_gen {cost devm exn} (h : chargeGas cost devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
   cases exn with
   | error err => exact (chargeGas_worldEq_of_error h).getCode a |>.symm
@@ -3613,21 +3671,44 @@ def Xinst.Shape (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
       ( target = sevm.currentTarget ∨
         ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target ) ) ∧
       s = genericCall.step sevm d gas value caller target codeAddress stv isSt
-            ii isz oi osz code dp)
+            ii isz oi osz code dp) ∨
+  (∃ d state endowment newAddress mi ms,
+      Devm.InstructionFrame devm d ∧
+      s = genericCreateAmsterdam.step sevm state d endowment newAddress
+            mi ms) ∨
+  (∃ d d₀ state gas reservoir value caller target codeAddress stv isSt ii isz
+      oi osz code dp nac ib,
+      Devm.InstructionFrame devm d ∧
+      Devm.InstructionFrame devm d₀ ∧
+      ( (stv = true ∧ caller = sevm.currentTarget) ∨
+        (stv = false ∧ target = sevm.currentTarget) ) ∧
+      ( target = sevm.currentTarget ∨
+        ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target ) ) ∧
+      s = genericCallAmsterdam.step sevm state d gas reservoir value caller
+            target codeAddress stv isSt ii isz oi osz code dp nac ib)
 
 lemma Xinst.Shape.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
     (hab : Devm.InstructionFrame a b) (h : Xinst.Shape sevm b s) :
     Xinst.Shape sevm a s := by
   rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hcal, hsrc, rfl⟩
+      hf, hf₀, hcal, hsrc, rfl⟩ |
+    ⟨d, st, e, na, mi, ms, hf, rfl⟩ |
+    ⟨d, d₀, st, g, r, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      nac, ib, hf, hf₀, hcal, hsrc, rfl⟩
   · exact Or.inl ⟨ex, rfl,
       Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
   · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
       Devm.instructionFrame_trans hab hf, rfl⟩)
-  · exact Or.inr (Or.inr ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz,
-      code, dp, Devm.instructionFrame_trans hab hf,
-      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)
+  · exact Or.inr (Or.inr (Or.inl ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
+      oi, osz, code, dp, Devm.instructionFrame_trans hab hf,
+      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨d, st, e, na, mi, ms,
+      Devm.instructionFrame_trans hab hf, rfl⟩)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨d, d₀, st, g, r, v, c, t, cadr, stv,
+      isSt, ii, isz, oi, osz, code, dp, nac, ib,
+      Devm.instructionFrame_trans hab hf,
+      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)))
 
 lemma Xinst.shape_done {sevm : Sevm} {devm : Devm} {ex : Execution}
     (h : Execution.Rel Devm.InstructionFrame devm ex) :
@@ -3654,8 +3735,32 @@ lemma Xinst.shape_call {sevm : Sevm} {devm d d₀ : Devm} {gas : Nat} {value : B
     Xinst.Shape sevm devm
       (genericCall.step sevm d gas value caller target codeAddress stv isSt
         ii isz oi osz code dp) :=
-  Or.inr (Or.inr ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
-    ii, isz, oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩)
+  Or.inr (Or.inr (Or.inl ⟨d, d₀, gas, value, caller, target, codeAddress, stv,
+    isSt, ii, isz, oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩))
+
+lemma Xinst.shape_createAmsterdam {sevm : Sevm} {devm d : Devm}
+    {state : StateGasRules} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} (hf : Devm.InstructionFrame devm d) :
+    Xinst.Shape sevm devm
+      (genericCreateAmsterdam.step sevm state d endowment newAddress mi ms) :=
+  Or.inr (Or.inr (Or.inr (Or.inl ⟨d, state, endowment, newAddress, mi, ms, hf,
+    rfl⟩)))
+
+lemma Xinst.shape_callAmsterdam {sevm : Sevm} {devm d d₀ : Devm}
+    {state : StateGasRules} {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp nac ib : Bool}
+    (hf : Devm.InstructionFrame devm d) (hf₀ : Devm.InstructionFrame devm d₀)
+    (hcal : (stv = true ∧ caller = sevm.currentTarget) ∨
+      (stv = false ∧ target = sevm.currentTarget))
+    (hsrc : target = sevm.currentTarget ∨
+      ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target )) :
+    Xinst.Shape sevm devm
+      (genericCallAmsterdam.step sevm state d gas reservoir value caller target
+        codeAddress stv isSt ii isz oi osz code dp nac ib) :=
+  Or.inr (Or.inr (Or.inr (Or.inr ⟨d, d₀, state, gas, reservoir, value, caller,
+    target, codeAddress, stv, isSt, ii, isz, oi, osz, code, dp, nac, ib,
+    hf, hf₀, hcal, hsrc, rfl⟩)))
 
 lemma Xinst.shape_bind {sevm : Sevm} {devm d : Devm} {α : Type}
     {x : Except (EvmError × Devm) (α × Devm)}
@@ -3689,6 +3794,14 @@ lemma Xinst.shape_assert {sevm : Sevm} {devm : Devm} {p : Prop} [Decidable p]
   split
   · exact hf
   · exact Xinst.shape_error herr
+
+lemma Xinst.shape_assertDynamic {sevm : Sevm} {devm : Devm}
+    {f : Unit → Except (EvmError × Devm) XStep}
+    (hf : Xinst.Shape sevm devm (XStep.ofExcept (f ()))) :
+    Xinst.Shape sevm devm
+      (XStep.ofExcept (assertDynamic sevm devm >>= f)) := by
+  simp only [assertDynamic]
+  exact Xinst.shape_assert (Devm.instructionFrame_refl devm) hf
 
 /-- The early exit taken when the caller cannot cover the transferred value:
 a push onto a machine whose world is untouched. -/
@@ -3728,133 +3841,432 @@ lemma accessDelegation_of_not_delegation {d : Devm} {adr : Adr}
   rw [hnone]
   rfl
 
+/-- Delegation resolution is the identity when the callee is not a delegating
+EOA, so the child's code is exactly the callee's own code (schedule version). -/
+lemma GasSchedule.accessDelegation_of_not_delegation {gas : GasSchedule}
+    {d : Devm} {adr : Adr} (h : ¬ isValidDelegation (d.getCode adr)) :
+    gas.accessDelegation d adr = ⟨false, adr, d.getCode adr, 0, d⟩ := by
+  have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+  dsimp only [GasSchedule.accessDelegation]
+  rw [hnone]
+  rfl
+
+/-- Without a valid EIP-7702 designator there is no delegation to price. -/
+lemma GasSchedule.delegationCost_of_not_delegation {gas : GasSchedule} {d : Devm}
+    {adr : Adr} (h : ¬ isValidDelegation (d.getCode adr)) :
+    gas.delegationCost d adr = (false, adr, 0) := by
+  unfold GasSchedule.delegationCost
+  have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
+    dsimp only [getDelegatedCodeAddress]
+    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+  simp only [hnone]
+
+/-- Undelegated Amsterdam completion reads the target's own code. -/
+lemma completeDelegationAccess_code_of_not_delegated {d : Devm} {adr : Adr} :
+    (completeDelegationAccess d false adr).1 = d.state.getCode adr := by
+  simp [completeDelegationAccess]
+
+/-- Amsterdam call code resolution under no delegation: the completed code is
+    the target's own code. -/
+lemma amsterdamCallCode_of_not_delegation {rules : ForkRules} {d₀ : Devm}
+    {tgt : Adr} (hnd : ¬ isValidDelegation (d₀.getCode tgt)) :
+    (completeDelegationAccess
+      (Devm.balReadAccount rules
+        (rules.gas.delegationCost d₀ tgt).2.1
+        (Devm.balReadAccount rules tgt d₀))
+      (rules.gas.delegationCost d₀ tgt).1
+      (rules.gas.delegationCost d₀ tgt).2.1).1
+      = d₀.getCode tgt := by
+  have hdc := GasSchedule.delegationCost_of_not_delegation
+    (gas := rules.gas) (d := d₀) (adr := tgt) hnd
+  have hdp : (rules.gas.delegationCost d₀ tgt).1 = false := by
+    rw [hdc]
+  have hnac : (rules.gas.delegationCost d₀ tgt).2.1 = tgt := by
+    rw [hdc]
+  rw [hdp, hnac, completeDelegationAccess_code_of_not_delegated]
+  have hB : (Devm.balReadAccount rules tgt
+      (Devm.balReadAccount rules tgt d₀)).getCode tgt = d₀.getCode tgt := by
+    rw [Devm.balReadAccount_getCode, Devm.balReadAccount_getCode]
+  exact hB
+
 lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
     Xinst.Shape sevm devm (Xinst.step sevm devm x) := by
   cases x with
   | create =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bindE h3 (chargeGas_instructionFrame _ d3) fun d4 h4 => ?_
-    exact Xinst.shape_create
-      (Devm.instructionFrame_trans h4 (Devm.memExtends_instructionFrame d4 _))
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bindE h3 (chargeGas_instructionFrame _ d3) fun d4 h4 => ?_
+      exact Xinst.shape_create
+        (Devm.instructionFrame_trans h4 (Devm.memExtends_instructionFrame d4 _))
+    | some state =>
+      refine Xinst.shape_assertDynamic ?_
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bindE h3 (chargeGas_instructionFrame _ d3) fun d4 h4 => ?_
+      refine Xinst.shape_assert h4 ?_
+      exact Xinst.shape_createAmsterdam
+        (Devm.instructionFrame_trans h4 (Devm.memExtends_instructionFrame d4 _))
   | create2 =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
-    refine Xinst.shape_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
-    exact Xinst.shape_create
-      (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
+      exact Xinst.shape_create
+        (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
+    | some state =>
+      refine Xinst.shape_assertDynamic ?_
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
+      refine Xinst.shape_assert h5 ?_
+      exact Xinst.shape_createAmsterdam
+        (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
   | call =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
-      fun callee d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
-    refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
-    refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
-    refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
-    have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 callee) :=
-      Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 callee)
-    have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d7 callee) callee
-    rcases hdel : accessDelegation (addAccessedAddress d7 callee) callee with
-      ⟨dpv, na, cd, dagc, d8⟩
-    rw [hdel] at hacc
-    have h8 : Devm.InstructionFrame devm d8 :=
-      Devm.instructionFrame_trans h7' hacc
-    refine Xinst.shape_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
-    refine Xinst.shape_assert h9 ?_
-    split
-    · exact Xinst.shape_shortfall
-        (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
-    · refine Xinst.shape_call
-        (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
-        h7' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
-      rw [accessDelegation_of_not_delegation hnd] at hdel
-      exact (congrArg (fun t => t.2.2.1) hdel).symm
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun callee d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      dsimp only
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 callee) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 callee)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d7 callee) callee
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d7 callee) callee with
+        ⟨dpv, na, cd, dagc, d8⟩
+      rw [hdel] at hacc
+      have h8 : Devm.InstructionFrame devm d8 :=
+        Devm.instructionFrame_trans h7' hacc
+      refine Xinst.shape_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
+      refine Xinst.shape_assert h9 ?_
+      split
+      · exact Xinst.shape_shortfall
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+      · refine Xinst.shape_call
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+          h7' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
+        rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
+        exact (congrArg (fun t => t.2.2.1) hdel).symm
+    | some state =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun callee d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 callee) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 callee)
+      have hB1 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules callee
+            (addAccessedAddress d7 callee)) :=
+        Devm.instructionFrame_trans h7'
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      refine Xinst.shape_assert h7 ?_
+      refine Xinst.shape_assert h7 ?_
+      refine Xinst.shape_assert hB1 ?_
+      have hB2 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 callee)
+              callee).2.1
+            (Devm.balReadAccount sevm.benvStat.rules callee
+              (addAccessedAddress d7 callee))) :=
+        Devm.instructionFrame_trans hB1
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      have hC : Devm.InstructionFrame devm
+          (completeDelegationAccess
+            (Devm.balReadAccount sevm.benvStat.rules
+              (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 callee)
+                callee).2.1
+              (Devm.balReadAccount sevm.benvStat.rules callee
+                (addAccessedAddress d7 callee)))
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 callee)
+              callee).1
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 callee)
+              callee).2.1).2 :=
+        Devm.instructionFrame_trans hB2
+          (completeDelegationAccess_instructionFrame _ _ _)
+      refine Xinst.shape_bindE hC (chargeGas_instructionFrame _ _) fun dc hc => ?_
+      split
+      · refine Xinst.shape_bindE hc (chargeStateGas_instructionFrame _ _)
+          fun d1' h1' => ?_
+        refine Xinst.shape_bindE h1' (chargeGas_instructionFrame _ _)
+          fun d2' h2' => ?_
+        refine Xinst.shape_callAmsterdam
+          (Devm.instructionFrame_trans h2'
+            (Devm.instructionFrame_trans
+              (Devm.drainStateGasReservoir_instructionFrame _)
+              (Devm.memExtends_instructionFrame _ _)))
+          h7' (Or.inl ⟨rfl, rfl⟩)
+          (Or.inr fun hnd => amsterdamCallCode_of_not_delegation hnd)
+      · simp only [Except.bind_ok]
+        refine Xinst.shape_bindE hc (chargeGas_instructionFrame _ _)
+          fun d2' h2' => ?_
+        refine Xinst.shape_callAmsterdam
+          (Devm.instructionFrame_trans h2'
+            (Devm.instructionFrame_trans
+              (Devm.drainStateGasReservoir_instructionFrame _)
+              (Devm.memExtends_instructionFrame _ _)))
+          h7' (Or.inl ⟨rfl, rfl⟩)
+          (Or.inr fun hnd => amsterdamCallCode_of_not_delegation hnd)
   | callcode =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
-      fun cadr d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
-    refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
-    refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
-    refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
-    have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 cadr) :=
-      Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 cadr)
-    have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d7 cadr) cadr
-    rcases hdel : accessDelegation (addAccessedAddress d7 cadr) cadr with
-      ⟨dpv, na, cd, dagc, d8⟩
-    rw [hdel] at hacc
-    have h8 : Devm.InstructionFrame devm d8 :=
-      Devm.instructionFrame_trans h7' hacc
-    refine Xinst.shape_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
-    split
-    · exact Xinst.shape_shortfall'
-        (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
-    · exact Xinst.shape_call
-        (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      dsimp only
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 cadr) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 cadr)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d7 cadr) cadr
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d7 cadr) cadr with
+        ⟨dpv, na, cd, dagc, d8⟩
+      rw [hdel] at hacc
+      have h8 : Devm.InstructionFrame devm d8 :=
+        Devm.instructionFrame_trans h7' hacc
+      refine Xinst.shape_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
+      split
+      · exact Xinst.shape_shortfall'
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+      · exact Xinst.shape_call
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+          h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
+    | some state =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shape_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 cadr) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 cadr)
+      have hB1 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules cadr
+            (addAccessedAddress d7 cadr)) :=
+        Devm.instructionFrame_trans h7'
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      refine Xinst.shape_assert h7 ?_
+      refine Xinst.shape_assert hB1 ?_
+      have hB2 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 cadr)
+              cadr).2.1
+            (Devm.balReadAccount sevm.benvStat.rules cadr
+              (addAccessedAddress d7 cadr))) :=
+        Devm.instructionFrame_trans hB1
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      have hC : Devm.InstructionFrame devm
+          (completeDelegationAccess
+            (Devm.balReadAccount sevm.benvStat.rules
+              (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 cadr)
+                cadr).2.1
+              (Devm.balReadAccount sevm.benvStat.rules cadr
+                (addAccessedAddress d7 cadr)))
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 cadr)
+              cadr).1
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d7 cadr)
+              cadr).2.1).2 :=
+        Devm.instructionFrame_trans hB2
+          (completeDelegationAccess_instructionFrame _ _ _)
+      refine Xinst.shape_bindE hC (chargeGas_instructionFrame _ _) fun dc hc => ?_
+      refine Xinst.shape_callAmsterdam
+        (Devm.instructionFrame_trans hc
+          (Devm.instructionFrame_trans
+            (Devm.drainStateGasReservoir_instructionFrame _)
+            (Devm.memExtends_instructionFrame _ _)))
         h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
   | delegatecall =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
-      fun cadr d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
-    refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
-    refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
-    have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 cadr) :=
-      Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 cadr)
-    have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d6 cadr) cadr
-    rcases hdel : accessDelegation (addAccessedAddress d6 cadr) cadr with
-      ⟨dpv, na, cd, dagc, d7⟩
-    rw [hdel] at hacc
-    have h7 : Devm.InstructionFrame devm d7 :=
-      Devm.instructionFrame_trans h6' hacc
-    refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
-    exact Xinst.shape_call
-      (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
-      h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      dsimp only
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 cadr) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 cadr)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d6 cadr) cadr
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d6 cadr) cadr with
+        ⟨dpv, na, cd, dagc, d7⟩
+      rw [hdel] at hacc
+      have h7 : Devm.InstructionFrame devm d7 :=
+        Devm.instructionFrame_trans h6' hacc
+      refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
+      exact Xinst.shape_call
+        (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
+        h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
+    | some state =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 cadr) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 cadr)
+      have hB1 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules cadr
+            (addAccessedAddress d6 cadr)) :=
+        Devm.instructionFrame_trans h6'
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      refine Xinst.shape_assert h6 ?_
+      refine Xinst.shape_assert hB1 ?_
+      have hB2 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 cadr)
+              cadr).2.1
+            (Devm.balReadAccount sevm.benvStat.rules cadr
+              (addAccessedAddress d6 cadr))) :=
+        Devm.instructionFrame_trans hB1
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      have hC : Devm.InstructionFrame devm
+          (completeDelegationAccess
+            (Devm.balReadAccount sevm.benvStat.rules
+              (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 cadr)
+                cadr).2.1
+              (Devm.balReadAccount sevm.benvStat.rules cadr
+                (addAccessedAddress d6 cadr)))
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 cadr)
+              cadr).1
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 cadr)
+              cadr).2.1).2 :=
+        Devm.instructionFrame_trans hB2
+          (completeDelegationAccess_instructionFrame _ _ _)
+      refine Xinst.shape_bindE hC (chargeGas_instructionFrame _ _) fun dc hc => ?_
+      exact Xinst.shape_callAmsterdam
+        (Devm.instructionFrame_trans hc
+          (Devm.instructionFrame_trans
+            (Devm.drainStateGasReservoir_instructionFrame _)
+            (Devm.memExtends_instructionFrame _ _)))
+        h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
   | staticcall =>
     simp only [Xinst.step]
-    refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
-      (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-    refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
-      fun tgt d2 h2 => ?_
-    refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
-    refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
-    refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
-    refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
-    have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 tgt) :=
-      Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 tgt)
-    have hacc :=
-      accessDelegation_instructionFrame (addAccessedAddress d6 tgt) tgt
-    rcases hdel : accessDelegation (addAccessedAddress d6 tgt) tgt with
-      ⟨dpv, na, cd, dagc, d7⟩
-    rw [hdel] at hacc
-    have h7 : Devm.InstructionFrame devm d7 :=
-      Devm.instructionFrame_trans h6' hacc
-    refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
-    refine Xinst.shape_call
-      (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
-      h6' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
-    rw [accessDelegation_of_not_delegation hnd] at hdel
-    exact (congrArg (fun t => t.2.2.1) hdel).symm
+    cases sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun tgt d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      dsimp only
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 tgt) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 tgt)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d6 tgt) tgt
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d6 tgt) tgt with
+        ⟨dpv, na, cd, dagc, d7⟩
+      rw [hdel] at hacc
+      have h7 : Devm.InstructionFrame devm d7 :=
+        Devm.instructionFrame_trans h6' hacc
+      refine Xinst.shape_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
+      refine Xinst.shape_call
+        (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
+        h6' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
+      rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
+      exact (congrArg (fun t => t.2.2.1) hdel).symm
+    | some state =>
+      refine Xinst.shape_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shape_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun tgt d2 h2 => ?_
+      refine Xinst.shape_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shape_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shape_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shape_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 tgt) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 tgt)
+      have hB1 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules tgt
+            (addAccessedAddress d6 tgt)) :=
+        Devm.instructionFrame_trans h6'
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      refine Xinst.shape_assert h6 ?_
+      refine Xinst.shape_assert hB1 ?_
+      have hB2 : Devm.InstructionFrame devm
+          (Devm.balReadAccount sevm.benvStat.rules
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 tgt)
+              tgt).2.1
+            (Devm.balReadAccount sevm.benvStat.rules tgt
+              (addAccessedAddress d6 tgt))) :=
+        Devm.instructionFrame_trans hB1
+          (Devm.balReadAccount_instructionFrame _ _ _)
+      have hC : Devm.InstructionFrame devm
+          (completeDelegationAccess
+            (Devm.balReadAccount sevm.benvStat.rules
+              (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 tgt)
+                tgt).2.1
+              (Devm.balReadAccount sevm.benvStat.rules tgt
+                (addAccessedAddress d6 tgt)))
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 tgt)
+              tgt).1
+            (sevm.benvStat.rules.gas.delegationCost (addAccessedAddress d6 tgt)
+              tgt).2.1).2 :=
+        Devm.instructionFrame_trans hB2
+          (completeDelegationAccess_instructionFrame _ _ _)
+      refine Xinst.shape_bindE hC (chargeGas_instructionFrame _ _) fun dc hc => ?_
+      refine Xinst.shape_callAmsterdam
+        (Devm.instructionFrame_trans hc
+          (Devm.instructionFrame_trans
+            (Devm.drainStateGasReservoir_instructionFrame _)
+            (Devm.memExtends_instructionFrame _ _)))
+        h6' (Or.inl ⟨rfl, rfl⟩)
+        (Or.inr fun hnd => amsterdamCallCode_of_not_delegation hnd)
 
 /-! ### What a spawned child frame starts from
 
@@ -3939,16 +4351,101 @@ lemma genericCall.step_spawn_frame
   all_goals obtain ⟨rfl, -⟩ := hs
   exact ⟨fun _ => rfl, rfl, rfl⟩
 
+lemma genericCallAmsterdam.step_spawn_frame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress stv isSt ii isz oi osz code dp nac ib
+      = .spawn f rsm) :
+    (∀ a : Adr, f.inner.benv.state.getCode a = devm.getCode a) ∧
+      f.inner.currentTarget = target ∧ f.inner.code = code := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  exact ⟨fun _ => rfl, rfl, rfl⟩
+
+lemma genericCreateAmsterdam.step_spawn_frame
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreateAmsterdam.step sevm state devm endowment newAddress
+      mi ms = .spawn f rsm) :
+    (∀ a : Adr, f.inner.benv.state.getCode a = devm.getCode a) ∧
+      f.inner.currentTarget = newAddress ∧
+      devm.getCode newAddress = .empty := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  · rename_i v heq h_coll
+    have hpar : ∀ b : Adr,
+        (v.withholdCreateGas.2.drainStateGasReservoir.2.incrNonce
+          sevm.currentTarget).getCode b = devm.getCode b := by
+      intro b
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode, chargeStateGas_getCode_eq heq,
+        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+        Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+    have hcode : (v.withholdCreateGas.2).getCode newAddress
+        = devm.getCode newAddress := by
+      rw [Devm.withholdCreateGas_getCode, chargeStateGas_getCode_eq heq,
+        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+        Devm.balReadAccount_getCode, Devm.withReturnData_getCode]
+    refine ⟨fun a => ?_, rfl, ?_⟩
+    · simp only [Frame.ofCreate]
+      rw [processCreateMessage.msg_getCode, createMsg_benv_state_getCode]
+      exact hpar a
+    · push Not at h_coll
+      rw [← hcode]
+      exact ByteArray.eq_empty_of_size_eq_zero h_coll.2.1
+  · rename_i h_coll
+    have hpar : ∀ b : Adr,
+        ((Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+            sevm.currentTarget (devm.withReturnData [])) newAddress)
+          ).withholdCreateGas.2.drainStateGasReservoir.2.incrNonce
+          sevm.currentTarget).getCode b = devm.getCode b := by
+      intro b
+      rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+        Devm.withholdCreateGas_getCode, Devm.balReadAccount_getCode,
+        addAccessedAddress_getCode, Devm.balReadAccount_getCode,
+        Devm.withReturnData_getCode]
+    have hcode : ((Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+            sevm.currentTarget (devm.withReturnData [])) newAddress)
+          ).withholdCreateGas.2).getCode newAddress
+        = devm.getCode newAddress := by
+      rw [Devm.withholdCreateGas_getCode, Devm.balReadAccount_getCode,
+        addAccessedAddress_getCode, Devm.balReadAccount_getCode,
+        Devm.withReturnData_getCode]
+    refine ⟨fun a => ?_, rfl, ?_⟩
+    · simp only [Frame.ofCreate]
+      rw [processCreateMessage.msg_getCode, createMsg_benv_state_getCode]
+      exact hpar a
+    · push Not at h_coll
+      rw [← hcode]
+      exact ByteArray.eq_empty_of_size_eq_zero h_coll.2.1
+
 lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm)
     (a : Adr) : f.inner.benv.state.getCode a = devm.getCode a := by
   rcases Xinst.step_shape sevm devm x with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
+      hf, -, -, -, hsh⟩ |
+    ⟨d, st, e, na, mi, ms, hf, hsh⟩ |
+    ⟨d, d₀, st, g, r, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      nac, ib, hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
   · cases hs
   · rw [(genericCreate.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCall.step_spawn_frame hs).1 a, hf.getCode a]
+  · rw [(genericCreateAmsterdam.step_spawn_frame hs).1 a, hf.getCode a]
+  · rw [(genericCallAmsterdam.step_spawn_frame hs).1 a, hf.getCode a]
 
 /-- Delegation resolution is the identity on an address whose code carries no
 EIP-7702 designator, so the resolved code address is the queried address. -/
