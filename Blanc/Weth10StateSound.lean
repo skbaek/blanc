@@ -6997,17 +6997,14 @@ theorem flashFloors_lift
     apply h_rel floor
     cases n with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-      rcases Except.bind_eq_ok h_run.2.symm with
+      rcases Except.bind_eq_ok (Step.run_ofExecution.mp h_run).2.symm with
         ⟨devm1, h_charge, h_push⟩
       exact h_pre.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-        simp only [Ninst.StepRun, Ninst.step_reg,
-          Step.run_ofExecution] at h_run
-        exact h_run.2.symm
+        exact (Step.run_ofExecution.mp h_run).2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
@@ -7023,24 +7020,18 @@ theorem flashFloors_lift
           (congrFun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
       refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne h_pre
-      simpa only [Ninst.StepRun, Ninst.step_exec,
-        XStep.run_toStep, Xinst.Run] using h_run
+      exact XStep.run_toStep.mp h_run
   · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _
       h_ne h_child h_rel
     intro floor h_pre
     cases n with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push,
-        Step.run_ofExecution] at h_run
-      cases h_run.1
+      cases (Step.run_ofExecution.mp h_run).1
     | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg,
-        Step.run_ofExecution] at h_run
-      cases h_run.1
+      cases (Step.run_ofExecution.mp h_run).1
     | exec x =>
-      rcases ContractSpec.Xinst.some_preserves_precond (x := x) (by
-          simpa only [Ninst.StepRun, Ninst.step_exec,
-            XStep.run_toStep, Xinst.Run] using h_run)
+      rcases ContractSpec.Xinst.some_preserves_precond (x := x)
+          (XStep.run_toStep.mp h_run)
           ex_sub h_ne h_pre with
         ⟨h_pre_child, h_resume⟩
       apply h_rel floor
@@ -7272,17 +7263,14 @@ theorem flashExactSpecs_lift
     apply h_rel flash
     cases n with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-      rcases Except.bind_eq_ok h_run.2.symm with
+      rcases Except.bind_eq_ok (Step.run_ofExecution.mp h_run).2.symm with
         ⟨devm1, h_charge, h_push⟩
       exact h_pre.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-        simp only [Ninst.StepRun, Ninst.step_reg,
-          Step.run_ofExecution] at h_run
-        exact h_run.2.symm
+        exact (Step.run_ofExecution.mp h_run).2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
@@ -7298,23 +7286,17 @@ theorem flashExactSpecs_lift
           (congrFun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
       refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne h_pre
-      simpa only [Ninst.StepRun, Ninst.step_exec,
-        XStep.run_toStep, Xinst.Run] using h_run
+      exact XStep.run_toStep.mp h_run
   · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _
       h_ne h_child h_rel flash h_pre
     cases n with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push,
-        Step.run_ofExecution] at h_run
-      cases h_run.1
+      cases (Step.run_ofExecution.mp h_run).1
     | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg,
-        Step.run_ofExecution] at h_run
-      cases h_run.1
+      cases (Step.run_ofExecution.mp h_run).1
     | exec x =>
-      rcases ContractSpec.Xinst.some_preserves_precond (x := x) (by
-          simpa only [Ninst.StepRun, Ninst.step_exec,
-            XStep.run_toStep, Xinst.Run] using h_run)
+      rcases ContractSpec.Xinst.some_preserves_precond (x := x)
+          (XStep.run_toStep.mp h_run)
           ex_sub h_ne h_pre with
         ⟨h_pre_child, h_resume⟩
       apply h_rel flash

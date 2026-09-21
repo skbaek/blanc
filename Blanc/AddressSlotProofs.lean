@@ -38,7 +38,7 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     apply Prod.ext <;> apply andMax
   have hmask : (~~~ addressMask) =
       (⟨⟨0, 0x00000000ffffffff⟩, B128.max⟩ : B256) := by
-    decide +kernel
+    rfl
   unfold addressSlotReadWord
   rw [hmask]
   rcases raw with ⟨⟨high, middle⟩, low⟩
@@ -46,7 +46,7 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     B128.and_eq_and_prod_and, UInt64.zero_and]
   apply Prod.ext
   · apply Prod.ext
-    · rfl
+    · exact UInt64.zero_and
     · exact lowMask middle
   · exact b128AndMax low
 

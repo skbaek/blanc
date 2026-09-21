@@ -377,5 +377,63 @@ theorem dispatchNodeByteAt_eq_jumpdest
   rw [dispatchNodeByteAt_jumpdest locations n selector off0 on0 off on hpush,
     dispatchNodeByteAt_jumpdest locations n selector off0 on0 off0 on0 hpush]
 
+/-- Compile one instruction prefix while keeping its continuation separate. -/
+theorem compile_prepend
+    (l : List (Nat × Func)) (n : Nat) (xs : Line) (p : Func) :
+    Func.compile l n (xs +++ p) =
+      (do
+        let bs ← Func.compile l (n + CompiledShape.prefixByteSize xs) p
+        pure (xs.flatMap Ninst.toBytes ++ bs)) := by
+  induction xs generalizing n with
+  | nil => simp [prepend, CompiledShape.prefixByteSize]
+  | cons i xs ih =>
+      simp only [prepend, Func.compile, ih, CompiledShape.prefixByteSize,
+        List.flatMap_cons, Nat.add_assoc]
+      cases Func.compile l (n + (i.size + CompiledShape.prefixByteSize xs)) p <;>
+        simp [List.append_assoc]
+
+/-- A successful continuation compiles after any instruction prefix. -/
+theorem compile_prepend_of {entries : List (Nat × Func)}
+    {n : Nat} {xs : Line} {f : Func} {bs : Bytes}
+    (h : Func.compile entries (n + prefixByteSize xs) f = some bs) :
+    Func.compile entries n (xs +++ f) =
+      some (xs.flatMap Ninst.toBytes ++ bs) := by
+  rw [compile_prepend, h]
+  rfl
+
+/-- Assemble a branch from checked child bytes and its bounded jump target. -/
+theorem compile_branch
+    (l : List (Nat × Func)) (n loc : Nat) (p q : Func) (pbs qbs : Bytes)
+    (hp : Func.compile l (n + 4) p = some pbs)
+    (hloc : n + pbs.length + 4 = loc) (hbound : loc < 2 ^ 16)
+    (hq : Func.compile l (loc + 1) q = some qbs) :
+    Func.compile l n (.branch p q) =
+      some (([0x61, (loc >>> 8).toUInt8, loc.toUInt8, 0x57] : Bytes) ++
+        pbs ++ [0x5b] ++ qbs) := by
+  rw [Func.compile, hp]
+  dsimp only [bind, Option.bind]
+  rw [hloc, hq]
+  simp only [guard, hbound, ite_true, pure, Pure.pure]
+  rfl
+
+/-- Size a selector leaf with a four-byte selector and an auxiliary fallback. -/
+theorem dispatchLeaf_size (s : B256) (k n : Nat) (p : Func)
+    (hpush : (Ninst.pushB256 s).size = 5)
+    (hbody : p.compileShape.byteSize = n) :
+    (Ninst.pushB256 s ::: Ninst.eq ::: (p <?> Func.call k)).compileShape.byteSize = n + 15 := by
+  have hbody' : compsize p = n := by
+    rw [← Func.CompileShape.byteSize_compileShape]
+    exact hbody
+  have hpushBytes : (Ninst.toBytes (Ninst.pushB256 s)).length = 5 := by
+    rw [← Ninst.size_eq_length_toBytes]
+    exact hpush
+  have heqBytes : (Ninst.toBytes Ninst.eq).length = 1 := rfl
+  rw [Func.CompileShape.byteSize_compileShape]
+  simp [compsize, hbody', hpushBytes, heqBytes]
+  omega
+
+/-- The standard function-selector prefix occupies five bytes. -/
+theorem prefixByteSize_fsig : prefixByteSize fsig = 5 := by rfl
+
 end CompiledShape
 end Blanc

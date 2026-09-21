@@ -139,6 +139,14 @@ def recipes : List Recipe := [
     boundary := "These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `byteAt_next_to_tail` uses the reference instruction's size for the supplied lower bound and offset; it does not assert that the reference and executed instructions have equal bytes or widths. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again."
   },
   {
+    id := "compiler-structural-composition"
+    status := "active"
+    triggers := ["goal-shape:compile-prepend", "goal-shape:compile-branch"]
+    preferredPath := "Import `Blanc.CompiledShape`. Use `CompiledShape.compile_prepend` or `compile_prepend_of` to retain an opaque continuation, and `compile_branch` to assemble already checked child compilations and a bounded jump target. Use `dispatchLeaf_size` and `prefixByteSize_fsig` for the corresponding shared size facts."
+    symbols := ["declaration:Blanc.CompiledShape.compile_prepend", "declaration:Blanc.CompiledShape.compile_prepend_of", "declaration:Blanc.CompiledShape.compile_branch", "declaration:Blanc.CompiledShape.dispatchLeaf_size", "declaration:Blanc.CompiledShape.prefixByteSize_fsig"]
+    boundary := "Matches only a direct compiler equality with an explicit `prepend` or `Func.branch` function argument. It does not unfold wrappers, traverse a closed function, search hypotheses, prove child compilations, establish table entries, or discharge jump bounds. Expose one source constructor and supply its checked children and coordinates."
+  },
+  {
     id := "compile-shape-prepend-congruence"
     status := "active"
     triggers := ["goal-shape:compile-shape-prepend-congruence"]

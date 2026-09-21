@@ -220,6 +220,7 @@ private theorem
     initialize_addAccessedStorageKey_getStorVal,
     initialize_addAccessedAddress_getStorVal, himplementationRaw,
     himplementationOriginal]
+  rw [show G + 23252 - 22120 = G + 1132 from by omega]
   unfold initializeLog
   func_run (4) [1125]
   · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -285,7 +286,6 @@ theorem
       decide
     · simp only [Devm.gasLeft_setMach]
       norm_num [gVerylow, gHigh, gJumpdest]
-      omega
     · apply Func.runCompiled_call' (G := G) hsetup
       · simp only [Devm.stack_setMach, List.length_nil]
         decide
@@ -480,6 +480,8 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
       himplementationOriginal]
+    obtain ⟨k, hk⟩ : ∃ k, (24750 : Nat) = k := ⟨_, rfl⟩
+    rw [hk]
     unfold initializeLog
     func_run (4) [1125]
     · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -499,6 +501,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     unfold initializeAfterSetupCall
     func_run (1)
     rw [hrefund]
+    rw [show G - k - 1163 = G - 25913 from by omega]
     change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
       (initializedBase.setMach ⟨[], memory, G - 25913⟩)
       (ossifiableConstructorAfterSetup 1249 2188) post

@@ -626,7 +626,7 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · exact hstatic
     · simp only [horigChi, hc9, hvcS]
     · simp only [horigChi, hc9, hrefund9, hrcS]
-    · simp only [s9, Devm.gasLeft_setMach, gasColdSload, gasStorageSet]
+    · simp only [s9, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h11 : Ninst.RunCompiled sevm s10 timestamp s11 := by
     simpa only [s11, s10, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s10) (r := .timestamp) (x := sevm.benvStat.time) (cost := gBase) (G := G + 22461) (by rintro ⟨⟩) rfl (by simp only [s10, Devm.gasLeft_setMach, gBase]) (by simp only [s10, Devm.stack_setMach, List.length_nil]; omega))
@@ -657,7 +657,7 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · exact hstatic
     · simp only [horigRho, hcur12, hvcT]
     · simp only [horigRho, hcur12, hrefund12, hrcT]
-    · simp only [s12, Devm.gasLeft_setMach, gasColdSload, gasStorageSet]
+    · simp only [s12, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h14 : Ninst.RunCompiled sevm s13 (pushCreationCoordinate 1762) s14 := by
     simpa only [s14, s13, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach] using
       (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s13) (w := Nat.toB256 1762) (G := G + 355) (by simp only [s13, Devm.gasLeft_setMach, gVerylow]) (by simp only [s13, Devm.stack_setMach, List.length_nil]; omega))
@@ -1999,7 +1999,7 @@ theorem canonicalDeploymentTransaction_succeeds
   have hused : usedGas = deploymentTransactionGasBound deploymentTx := by
     dsimp only [usedGas, deploymentUsedGasFromMessage]
     rw [hmessage.gasLeft, ctx.msg_gas_eq, hmessage.refundCounter]
-    simp only [Int.toNat_zero, Nat.min_zero, Nat.sub_zero]
+    rw [Int.toNat_zero, Nat.min_zero, Nat.sub_zero]
     have hcharge : deploymentTx.gas -
         (deploymentTx.gas - deploymentIntrinsicGas deploymentTx - 44611 - 352400) =
         deploymentIntrinsicGas deploymentTx + dripCreateMessageGasAccounting := by

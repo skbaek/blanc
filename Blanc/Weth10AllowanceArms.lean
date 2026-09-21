@@ -146,7 +146,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
           [CountedFrame.ofFrame dp ca ⟨0, e, pre, .ok post, run, committed⟩]
           key
       rw [applyAllowanceLedger_singleton, hown]
-      simp only [AllowanceEvent.key, AllowanceVisit.written?]
+      unfold AllowanceEvent.key
+      simp only [AllowanceVisit.written?]
       rw [hset]
       by_cases hkey :
           projectedAllowanceKey e.caller.toB256 (Sevm.argWord e 0) = key

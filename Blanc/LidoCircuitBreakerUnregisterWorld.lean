@@ -880,15 +880,16 @@ theorem unregWorld_bodyGasEq :
         unregWorldResetCost gasWarmAccess gasWarmAccess unregWorldResetCost
         unregWorldResetCost unregWorldResetCost unregWorldResetCost =
       unregWorldBodyGas := by
-  show 221 + (4131 +
-      temporalSloadCost unregWorldSevm unregWorldPre
-        (assignmentSlot unregWorldTarget) + unregWorldResetCost +
-      temporalSloadCost unregWorldSevm
-        (assignmentPost unregWorldSevm unregWorldPre unregWorldTarget 0)
-        (countSlot unregWorldPauser) + unregWorldResetCost + gasWarmAccess +
-      gasWarmAccess + unregWorldResetCost + unregWorldResetCost +
-      unregWorldResetCost + unregWorldResetCost) = unregWorldBodyGas
-  rw [unregWorld_warmCost unregWorld_accessed unregWorld_warmAssignment,
+  have hunfold : ∀ (sevm : Sevm) (base : Devm) (target oldPauser : B256)
+      (c₁ c₂ c₃ c₄ c₅ c₆ c₇ c₈ : Nat),
+      foundZeroOldLastRegisterBodyGas sevm base target oldPauser
+        c₁ c₂ c₃ c₄ c₅ c₆ c₇ c₈ =
+      221 + (4131 +
+        temporalSloadCost sevm base (assignmentSlot target) + c₁ +
+        temporalSloadCost sevm (assignmentPost sevm base target 0)
+          (countSlot oldPauser) + c₂ + c₃ + c₄ + c₅ + c₆ + c₇ + c₈) :=
+    fun _ _ _ _ _ _ _ _ _ _ _ _ => rfl
+  rw [hunfold,unregWorld_warmCost unregWorld_accessed unregWorld_warmAssignment,
     unregWorld_warmCost unregWorld_assignmentPost_accessed
       unregWorld_warmCount]
   norm_num [unregWorldBodyGas, unregWorldResetCost, gasWarmAccess,

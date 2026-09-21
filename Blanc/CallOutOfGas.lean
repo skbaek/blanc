@@ -87,7 +87,7 @@ lemma Xinst.step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  simp only [if_pos (Or.inr trivial), if_pos trivial, Nat.add_zero,
+  simp only [or_true, if_pos trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
   simp only [h_del, h_split]
   rw [chargeGas_eq_outOfGas (devm := d1) h_gas]

@@ -1368,7 +1368,7 @@ Blanc.ProrataWethVault.two_le_offsetN|
 Blanc.ProrataWethVault.attacker_open_context|$STANDARD
 Blanc.ProrataWethVault.attacker_no_profit|$STANDARD
 Blanc.ProrataWethVault.victim_loss_bound|$STANDARD
-Blanc.ProrataWethVault.attack_carrier_inhabited|$STANDARD
+Blanc.ProrataWethVault.attack_carrier_inhabited|propext
 Blanc.ProrataWethVault.transferStaged_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.withdrawBurn_storesOrHalts|$STANDARD
 Blanc.ProrataWethVault.redeemBurn_storesOrHalts|$STANDARD
@@ -1438,7 +1438,7 @@ Blanc.Composition.ProrataWethVault.pair_history_victim_loss_bound|$STANDARD
 Blanc.Drip.dripTraceRealizes_exists_of_reachUsing|$STANDARD
 Blanc.Drip.DripTraceRealizes.toReachUsing|$STANDARD
 Blanc.Drip.concreteHistory_not_draftedKinds|$STANDARD
-Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited|$STANDARD
+Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited|propext
 Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq|$STANDARD
 Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay|$STANDARD
 Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono|$STANDARD

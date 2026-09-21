@@ -1301,9 +1301,12 @@ private theorem proxy_revert_tail (childPost : Devm)
   · simp only [final, Devm.withOutput_state, Devm.setMach_state]
     change childPost.state = pairState
     exact hstate
-  · simp only [final, Devm.withOutput_transientStorage]
-    unfold base incorporateChildOnError
-    simp only [Devm.setWorld_transientStorage, Devm.setMach_transientStorage]
+  · simp only [final, Devm.withOutput_transientStorage, Devm.setMach_transientStorage]
+    have hproj : ∀ (p c : Devm) (rd : Bytes),
+        (incorporateChildOnError p c rd).transientStorage = c.transientStorage :=
+      fun _ _ _ => rfl
+    dsimp only [base]
+    rw [hproj]
     exact htra
   · simp only [final, Devm.withOutput_logs, Devm.setMach_logs]
     change (incorporateChildOnError proxyRevertParent childPost
@@ -1326,7 +1329,8 @@ private theorem proxy_revert_func_run :
       _hstack, _hmemory, _hcallgas, _hreturnData⟩ := proxy_revert_delegatecall
   obtain ⟨final, htail, hfout, hfgas, hfstate, hftra, hflogs⟩ :=
     proxy_revert_tail childPost hout hstate htra
-  rw [hpost] at hcall
+  rw [hpost, hout, hgas] at hcall
+  rw [show proxyRevertParent.gasLeft + 22117 = 22468 from by decide] at hcall
   have rooted : proxyRootedRun [proxyFallback] (initSevm proxyMsgRevert)
       ((initDevm proxyMsgRevert).setMach ⟨[], Mem.empty, 27223⟩)
       proxyFallback (.error (.revert, final)) := by

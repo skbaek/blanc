@@ -1164,6 +1164,7 @@ private theorem pauseFiniteWrite_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
   simp only [Devm.setMach_setMach]
+  rw [show G + 21025 = G + 1025 + 20000 from by omega]
   apply Func.RunCompiledTo.next
   · exact pauseFiniteSstore_runCompiled
       (memory := staged3)
@@ -1206,6 +1207,7 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
   simp only [Devm.setMach_setMach]
+  rw [show G + 21025 = G + 1025 + 20000 from by omega]
   apply Func.RunCompiledTo.next
   · exact pauseFiniteSstore_runCompiled
       (memory := staged3)
@@ -1980,6 +1982,7 @@ private theorem pauseForSentinel_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
   simp only [Devm.setMach_setMach]
+  rw [show G + 21022 = G + 1022 + 20000 from by omega]
   apply Func.RunCompiledTo.next
   · exact pauseFiniteSstore_runCompiled
       (G := G + 1022) hresume horiginal hwarm hstatic
@@ -2023,6 +2026,7 @@ private theorem pauseForSentinel_exact_runCompiledTo
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
   simp only [Devm.setMach_setMach]
+  rw [show G + 21022 = G + 1022 + 20000 from by omega]
   apply Func.RunCompiledTo.next
   · exact pauseFiniteSstore_runCompiled
       (G := G + 1022) hresume horiginal hwarm hstatic

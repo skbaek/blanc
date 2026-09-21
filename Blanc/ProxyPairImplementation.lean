@@ -139,7 +139,6 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implSuccess mstoreAt
-    rw [implBodyGas_eq]
     func_run [22100, 3]
     case h_cost =>
       rw [Devm.getStorVal_setMach, h_orig, h_cur]
@@ -155,12 +154,22 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
           show ((32 : B256)).toNat = 32 by decide,
           show ((0 : B256) * 32).toNat = 0 by decide]
         exact Devm.extCost_word_word Mem.size_write_word
-      · show G + 22122 - 22122 = G + 0
+      · rw [Devm.gasLeft_setMach]
+        dsimp only
+        have hbody : implBodyGas = 22122 := implBodyGas_eq
         omega
       · rw [show ((0 : B256)).toNat = 0 by decide,
           show ((32 : B256)).toNat = 32 by decide]
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
+    all_goals
+      rw [Devm.gasLeft_setMach]
+      dsimp only
+      have hbody : implBodyGas = 22122 := implBodyGas_eq
+      have hverylow : gVerylow = 3 := rfl
+      have hhigh : gHigh = 10 := rfl
+      have hstipend : gCallStipend = 2300 := rfl
+      omega
   · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
       Devm.setMach_error, Devm.sstoreBase_error, Devm.setMach_error]
   · rfl
@@ -204,7 +213,6 @@ theorem implGuarded_runCompiledTo_nonzero
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl
-    rw [implGuardedSuccessGas_eq]
     func_run [0, 22100, 3]
     all_goals try {simp [B256.eqCheck, h_data]}
     all_goals try {rw [Devm.getStorVal_setMach, h_orig, h_cur]; decide}
@@ -219,12 +227,22 @@ theorem implGuarded_runCompiledTo_nonzero
           show ((32 : B256)).toNat = 32 by decide,
           show ((0 : B256) * 32).toNat = 0 by decide]
         exact Devm.extCost_word_word Mem.size_write_word
-      · simp only [Devm.gasLeft_setMach]
+      · rw [Devm.gasLeft_setMach]
+        dsimp only
+        have hbody : implGuardedSuccessGas = 22143 := implGuardedSuccessGas_eq
         omega
       · rw [show ((0 : B256)).toNat = 0 by decide,
           show ((32 : B256)).toNat = 32 by decide]
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
+    all_goals
+      rw [Devm.gasLeft_setMach]
+      dsimp only
+      have hbody : implGuardedSuccessGas = 22143 := implGuardedSuccessGas_eq
+      have hverylow : gVerylow = 3 := rfl
+      have hhigh : gHigh = 10 := rfl
+      have hstipend : gCallStipend = 2300 := rfl
+      omega
   · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
       Devm.setMach_error, Devm.sstoreBase_error, Devm.setMach_error]
   · rfl
@@ -365,8 +383,7 @@ private lemma static_sstore_step
   obtain ⟨post, hrun, hstate, htrans, hlogs⟩ :=
     static_sstore_run pc sevm d h_static h_stack h_stipend h_cost h_cold h_orig h_cur
   refine ⟨post, ?_, hstate, htrans, hlogs⟩
-  rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution]
-  exact ⟨rfl, hrun.symm⟩
+  exact Step.run_ofExecution.mpr ⟨rfl, hrun.symm⟩
 
 theorem implGuarded_static_sstore_halt
     (pc : Nat) (sevm : Sevm) (d : Devm)
@@ -571,7 +588,11 @@ theorem implGuarded_static_halt_exec
       12 sevm d12 hsstore h_static
       (by rfl)
       (by simp [d12, gCallStipend])
-      (by simp [d12, gasColdSload, gasStorageSet])
+      (by
+        have h1 : gasColdSload = 2100 := rfl
+        have h2 : gasStorageSet = 20000 := rfl
+        show gasColdSload + gasStorageSet ≤ G + 22116
+        omega)
       (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
         Devm.setMach_accessedStorageKeys] using h_cold)
       (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry] using h_orig)

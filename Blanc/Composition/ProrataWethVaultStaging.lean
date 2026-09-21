@@ -2946,7 +2946,8 @@ private theorem runCompiled_of_spawn
     (resumed : resume.run (frame.settle raw) = .ok post) :
     Ninst.RunCompiled sevm pre (.exec x) post := by
   refine ⟨.some ⟨childEvm, raw⟩, ⟨child⟩, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, spawn]
+  refine XStep.run_toStep.mpr ?_
+  rw [spawn]
   exact ⟨_, RunFrame.of_run entered, resumed.symm⟩
 
 /-- Any padded 32-byte window of a concrete image is the image word of the

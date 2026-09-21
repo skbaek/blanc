@@ -1036,7 +1036,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
             withdrawFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
-        simp only [AllowanceEvent.key, AllowanceVisit.written?]
+        unfold AllowanceEvent.key
+        simp only [AllowanceVisit.written?]
         rw [hstorSet]
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
@@ -1226,7 +1227,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
             transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
-        simp only [AllowanceEvent.key, AllowanceVisit.written?]
+        unfold AllowanceEvent.key
+        simp only [AllowanceVisit.written?]
         rw [hstorSet]
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
@@ -1777,7 +1779,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
             withdrawFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
-        simp only [AllowanceEvent.key, AllowanceVisit.written?]
+        unfold AllowanceEvent.key
+        simp only [AllowanceVisit.written?]
         rw [hstorSet]
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
@@ -1971,7 +1974,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
             transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
         rw [htarget] at hstorSet
         rw [hown]
-        simp only [AllowanceEvent.key, AllowanceVisit.written?]
+        unfold AllowanceEvent.key
+        simp only [AllowanceVisit.written?]
         rw [hstorSet]
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)

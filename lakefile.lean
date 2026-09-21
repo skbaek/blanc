@@ -9,10 +9,10 @@ package «blanc» where
   ]
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.32.1"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.34.0"
 
 require jaune from git
-  "https://github.com/skbaek/jaune.git" @ "0cc7f56aa5159aec57424a04f8c3731618e91441"
+  "https://github.com/skbaek/jaune.git" @ "423fbc1b8643a8849a510e355fd3f940b1764af2"
 
 @[default_target]
 lean_lib «Blanc» where

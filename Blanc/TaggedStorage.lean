@@ -42,6 +42,7 @@ private theorem toB256_or (a b : Nat) :
     Nat.toB256 (a ||| b) =
       B256.or (Nat.toB256 a) (Nat.toB256 b) := by
   simp only [Nat.toB256, B256.or, Nat.shiftRight_or_distrib, toB128_or]
+  rfl
 
 /-- Numeric form of a bounded tag/payload encoding. -/
 theorem encode_toNat_of_bounds

@@ -804,7 +804,6 @@ private theorem enumLoop_done_runCompiled
     rfl
   · change G + 49 - 36 = G + 49 - 41 + gLow
     norm_num [gLow]
-    omega
   · simp only [h32, enumPrefixMemory_read_length_snd,
       enumPrefixMemory_read_length_fst, B256.toB256_toBytes,
       hw.enumeration_total_word_arithmetic]
@@ -963,7 +962,6 @@ theorem enumLoop_runCompiled
         ?_ ?_
       · simp only [Devm.gasLeft_setMach]
         norm_num [gVerylow, gMid, gJumpdest]
-        omega
       · have hsplit' : entries = (done ++ [entry]) ++ rest := by
           simpa [List.append_assoc] using hsplit
         simpa only [Devm.setMach_setMach, Devm.stack_setMach,
@@ -1219,13 +1217,15 @@ theorem canonicalAddress_mask_zero {word : B256}
     (h : canonicalAddress word) : addressMask &&& word = 0 := by
   rw [← validAdr_iff]
   rcases word with ⟨⟨wz, wh⟩, wl⟩
+  have hword := B256.toNat_eq ((wz, wh), wl)
+  have hhigh := B128.toNat_eq (wz, wh)
+  have hlt : B256.toNat ((wz, wh), wl) < 2 ^ 160 := h
+  dsimp only at hword hhigh
   have hzNat : wz.toNat = 0 := by
-    simp only [canonicalAddress, B256.toNat_eq, B128.toNat_eq] at h
     have hwh := UInt64.toNat_lt wh
     have hwl := B128.toNat_lt (x := wl)
     omega
   have hwhLt : wh.toNat < 2 ^ 32 := by
-    simp only [canonicalAddress, B256.toNat_eq, B128.toNat_eq] at h
     have hwz := UInt64.toNat_lt wz
     have hwl := B128.toNat_lt (x := wl)
     omega
@@ -1236,7 +1236,7 @@ theorem canonicalAddress_mask_zero {word : B256}
     apply UInt64.toNat_inj.mp
     simp only [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32]
     rw [Nat.mod_eq_of_lt hwhLt]
-  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]⟩
+  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]; rfl⟩
 
 def registryScalarBodyGasWarm : Nat := 179
 

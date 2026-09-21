@@ -455,20 +455,20 @@ private lemma Ninst.exists_exec_noRawSstore
   have stepRun := instructionRun pc
   cases instruction with
   | reg operation =>
-      rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at stepRun
+      replace stepRun := Step.run_ofExecution.mp stepRun
       have step : Evm.step ⟨pc, sevm, pre⟩ = .cont (pc + 1) post := by
         rw [evmStep, Ninst.step_reg, ← stepRun.2]
         rfl
       exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
   | push bytes length =>
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
+      replace stepRun := Step.run_ofExecution.mp stepRun
       have step : Evm.step ⟨pc, sevm, pre⟩ =
           .cont (pc + Ninst.size (.push bytes length)) post := by
         rw [evmStep, Ninst.step_push, ← stepRun.2]
         rfl
       exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
   | exec operation =>
-      rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
+      replace stepRun := XStep.run_toStep.mp stepRun
       cases operationStep : Xinst.step sevm pre operation with
       | done result =>
           rw [operationStep] at stepRun

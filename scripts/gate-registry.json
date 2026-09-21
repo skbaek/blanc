@@ -3225,7 +3225,9 @@
     "files": [
      "scripts/check-prorata-weth-vault-artifact.sh",
      "scripts/check-prorata-weth-vault-artifact.py",
-     "scripts/gen-prorata-weth-vault-code.lean"
+     "scripts/test-prorata-weth-vault-artifact.py",
+     "scripts/gen-prorata-weth-vault-code.lean",
+     "scripts/prorata-weth-vault-code-proof.lean.in"
     ],
     "lean_entries": [
      "Blanc/ProrataWethVaultArtifact.lean"
@@ -3340,7 +3342,7 @@
      {
       "id": "drip-jaune-runner",
       "path": ".lake/packages/jaune",
-      "pin": "0cc7f56aa5159aec57424a04f8c3731618e91441"
+      "pin": "423fbc1b8643a8849a510e355fd3f940b1764af2"
      }
     ],
     "lean_entries": [

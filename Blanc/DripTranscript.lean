@@ -95,7 +95,7 @@ theorem Chain.transcriptTally_eq {scale : Nat} {fresh : Nat → Nat → Nat}
       subst s
       rcases step with ⟨pre, kind, post, effect⟩
       cases effect <;>
-        simp_all [callKinds, Kind.isCall, transcriptTally, Kind.callTally, Kind.advance,
+        simp_all [callKinds, List.filter, Kind.isCall, transcriptTally, Kind.callTally, Kind.advance,
           CallTally.add, Step.accrual, Step.joined, Step.joinResidue,
           Step.paid, Step.exitResidue, Step.allJoined, Step.allPaid,
           Chain.accrualSum, Chain.joinedSum, Chain.joinResidueSum,
@@ -114,7 +114,7 @@ theorem Chain.transcriptState_eq {scale : Nat} {fresh : Nat → Nat → Nat}
       subst s
       rcases step with ⟨pre, kind, post, effect⟩
       cases effect <;>
-        simp_all [callKinds, Kind.isCall, transcriptState, Kind.advance]
+        simp_all [callKinds, List.filter, Kind.isCall, transcriptState, Kind.advance]
 
 /-- Non-call steps never move the total supply. -/
 theorem Chain.totalUnits_eq_of_callKinds_nil {scale : Nat}

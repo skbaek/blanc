@@ -297,6 +297,24 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-09"
 
 [[recipe]]
+id = "compiler-structural-composition"
+status = "active"
+triggers = ["goal-shape:compile-prepend", "goal-shape:compile-branch"]
+preferred_path = "Import `Blanc.CompiledShape`. Use `CompiledShape.compile_prepend` or `compile_prepend_of` to retain an opaque continuation, and `compile_branch` to assemble already checked child compilations and a bounded jump target. Use `dispatchLeaf_size` and `prefixByteSize_fsig` for the corresponding shared size facts."
+boundary = "Matches only a direct compiler equality with an explicit `prepend` or `Func.branch` function argument. It does not unfold wrappers, traverse a closed function, search hypotheses, prove child compilations, establish table entries, or discharge jump bounds. Expose one source constructor and supply its checked children and coordinates."
+owner_module = "Blanc/CompiledShape.lean"
+canonical_example = "Blanc/CompiledShape.lean:compile_prepend_of"
+symbols = [
+  "declaration:Blanc.CompiledShape.compile_prepend",
+  "declaration:Blanc.CompiledShape.compile_prepend_of",
+  "declaration:Blanc.CompiledShape.compile_branch",
+  "declaration:Blanc.CompiledShape.dispatchLeaf_size",
+  "declaration:Blanc.CompiledShape.prefixByteSize_fsig",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-09-20"
+
+[[recipe]]
 id = "compile-shape-prepend-congruence"
 status = "active"
 triggers = ["goal-shape:compile-shape-prepend-congruence"]

@@ -498,7 +498,8 @@ theorem flashSettlement_allowanceLedger
         flashLoanSelector_ne_transferFromSelector,
         flashLoanSelector_ne_withdrawFromSelector, hafter]
     rw [hevent]
-    simp only [AllowanceEvent.key, AllowanceVisit.written?]
+    unfold AllowanceEvent.key
+    simp only [AllowanceVisit.written?]
     by_cases hkeyEq :
         projectedAllowanceKey (normalizedAddressArg e 0)
           e.currentTarget.toB256 = key

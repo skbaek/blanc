@@ -5,6 +5,7 @@
 -- from kernel-checked compiler equations and list algebra.  No byte literal,
 -- evaluator result, manifest row, or Python verdict enters a Lean premise.
 
+import Blanc.ChunkedDecide
 import Blanc.DeploymentCompiled
 import Blanc.LidoCircuitBreakerDeploy
 
@@ -220,6 +221,11 @@ private def patchAtOffsets
     (code : Bytes) (word : B256) (offsets : List Nat) : Bytes :=
   offsets.foldl (fun bs offset => Bytes.writeAt bs offset word.toBytes) code
 
+-- A whole 4,282-byte compiler artifact exceeds the Lean 4.34 kernel's
+-- recursion budget in a single `decide +kernel`, while either half of it is
+-- far inside that budget.  `Blanc.eq_of_take_drop_eq` cuts the equality,
+-- changing no statement and no emitted byte.
+
 private lemma Bytes.writeAt_append_middle
     {pre old suffix replacement : Bytes}
     (hlen : old.length = replacement.length) :
@@ -312,6 +318,47 @@ private theorem runtimeTemplateCode_immutable_slices_zero :
     (runtimeTemplateCode.drop 1178).take 32 = (0 : B256).toBytes := by
   decide +kernel
 
+/-! ### The four two-occurrence marker programs
+
+Each marker is its own declaration.  One 4,282-byte artifact needs two
+kernel-checked chunks, and eight of them in a single tactic block exhaust the
+default heartbeat budget, so one marker per declaration is what keeps every
+block inside both the heartbeat and the kernel-recursion budgets.
+`immutableMarkerPrograms_compile` below still states exactly the conjunction its
+consumers read. -/
+
+private theorem minPauseDurationMarkerProgram_compile :
+    Prog.compile (runtime (immutableMarkerParams .minPauseDuration)) =
+      some (patchAtOffsets runtimeTemplateCode B256.max [217, 713]) := by
+  refine (lidoCircuitBreakerCode_compile _).trans (congrArg some ?_)
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
+
+private theorem maxPauseDurationMarkerProgram_compile :
+    Prog.compile (runtime (immutableMarkerParams .maxPauseDuration)) =
+      some (patchAtOffsets runtimeTemplateCode B256.max [258, 1961]) := by
+  refine (lidoCircuitBreakerCode_compile _).trans (congrArg some ?_)
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
+
+private theorem minHeartbeatIntervalMarkerProgram_compile :
+    Prog.compile (runtime (immutableMarkerParams .minHeartbeatInterval)) =
+      some (patchAtOffsets runtimeTemplateCode B256.max [508, 1137]) := by
+  refine (lidoCircuitBreakerCode_compile _).trans (congrArg some ?_)
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
+
+private theorem maxHeartbeatIntervalMarkerProgram_compile :
+    Prog.compile (runtime (immutableMarkerParams .maxHeartbeatInterval)) =
+      some (patchAtOffsets runtimeTemplateCode B256.max [672, 1178]) := by
+  refine (lidoCircuitBreakerCode_compile _).trans (congrArg some ?_)
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
+
 /-- The four two-occurrence marker programs compile to the neutral template
 patched at their own offsets.
 
@@ -329,8 +376,11 @@ private theorem immutableMarkerPrograms_compile :
     Prog.compile (runtime (immutableMarkerParams .minHeartbeatInterval)) =
         some (patchAtOffsets runtimeTemplateCode B256.max [508, 1137]) ∧
     Prog.compile (runtime (immutableMarkerParams .maxHeartbeatInterval)) =
-        some (patchAtOffsets runtimeTemplateCode B256.max [672, 1178]) := by
-  decide +kernel
+        some (patchAtOffsets runtimeTemplateCode B256.max [672, 1178]) :=
+  ⟨minPauseDurationMarkerProgram_compile,
+   maxPauseDurationMarkerProgram_compile,
+   minHeartbeatIntervalMarkerProgram_compile,
+   maxHeartbeatIntervalMarkerProgram_compile⟩
 
 private theorem markerCode_eq_patchAtOffsets
     (field : ImmutableParameter) (offsets : List Nat)
@@ -592,7 +642,10 @@ private theorem adminMarkerProgram_compile_segments :
     Prog.compile (runtime (immutableMarkerParams .admin)) =
       some (fourWordSegments runtimeTemplateCode 174 1094 1833 1920
         B256.max) := by
-  decide +kernel
+  refine (lidoCircuitBreakerCode_compile _).trans (congrArg some ?_)
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
 
 private theorem differingByteOffsets_fourWordSegments
     (bs : Bytes) (first second third fourth : Nat)
@@ -813,7 +866,9 @@ theorem patchRuntimeTemplate_official :
     immutableParameters, List.flatMap_cons, List.flatMap_nil,
     List.map_cons, List.map_nil, hadmin, hminPause, hmaxPause,
     hminHeartbeat, hmaxHeartbeat, ImmutableParameter.value]
-  decide +kernel
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
 
 /-- Exact code coordinate at which the seven-word constructor head begins. -/
 theorem lidoCircuitBreakerCreationTemplate_length_exact :

@@ -134,7 +134,7 @@ def Jinst.Run (evm : Evm) :
 def Linst.Run (sevm : Sevm) (devm : Devm) : Linst → Execution → Prop :=
   λ l ex => l.run sevm devm = ex
 
-def Xlot : Type := Option (Evm × Execution)
+@[implicit_reducible] def Xlot : Type := Option (Evm × Execution)
 
 /-- Fieldwise relations used to assemble the canonical `Devm.Rel` frames. -/
 structure Devm.Rels : Type where

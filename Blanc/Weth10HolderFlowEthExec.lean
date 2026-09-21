@@ -3852,7 +3852,8 @@ theorem Exec.CoreEthSound.nextSome
               rw [Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
                   canonical hcommit hne]
               unfold Exec.descendantActions at hbound ⊢
-              simp only [canonical, Exec.descendantFrames]
+              simp only [canonical]
+              unfold Exec.descendantFrames
               by_cases hscommits :
                   Blanc.Frame.settlementCommits frame raw = true
               · simp only [hscommits, dif_pos, if_pos,

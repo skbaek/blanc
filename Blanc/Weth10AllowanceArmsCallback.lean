@@ -1209,7 +1209,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
       callbackCursor.pre [CountedFrame.ofFrame dp ca frame] := by
     refine ⟨fun key hkey => ?_, hcodeCallback⟩
     rw [congrFun hstorEntry ca, applyAllowanceLedger_singleton, hown]
-    simp only [AllowanceEvent.key, AllowanceVisit.written?]
+    unfold AllowanceEvent.key
+    simp only [AllowanceVisit.written?]
     show (Devm.getStor callbackCursor.pre ca).get key = _
     rw [hstorCa]
     by_cases hkeyEq : projectedAllowanceKey frame.sevm.caller.toB256
@@ -1730,7 +1731,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
       callbackCursor.pre [CountedFrame.ofFrame dp ca frame] := by
     refine ⟨fun key hkey => ?_, hcodeCallback⟩
     rw [congrFun hstorEntry ca, applyAllowanceLedger_singleton, hown]
-    simp only [AllowanceEvent.key, AllowanceVisit.written?]
+    unfold AllowanceEvent.key
+    simp only [AllowanceVisit.written?]
     show (Devm.getStor callbackCursor.pre ca).get key = _
     rw [hstorCa]
     by_cases hkeyEq : projectedAllowanceKey frame.sevm.caller.toB256

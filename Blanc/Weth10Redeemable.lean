@@ -756,8 +756,8 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
       simp only [checkTransactionGasFee, henv.type_eq,
         checkTransactionDynamicGasFee, Benv.beginTransaction]
       rw [if_neg (Nat.not_lt_of_ge henv.priority_fee_le_max)]
-      rw [if_neg (Nat.not_lt_of_ge henv.base_fee_le_max)]
-      rw [if_neg (Nat.not_lt_of_ge henv.max_fee_fits)]
+      simp only [if_neg (Nat.not_lt_of_ge henv.base_fee_le_max),
+        if_neg (Nat.not_lt_of_ge henv.max_fee_fits)]
       simp [redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
         henv.type_eq]
     have hblob : checkTransactionBlobData benv.beginTransaction tx

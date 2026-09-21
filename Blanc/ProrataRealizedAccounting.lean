@@ -1158,8 +1158,7 @@ theorem exists_path {o : Nat} {pre post : RealizedSnapshot}
       rcases ih with ⟨path, hsteps, hfirst, hlast⟩
       have connect : step.post = path.first := post_eq.trans hfirst.symm
       refine ⟨ProrataAccountingPath.cons step path connect, ?_, ?_, ?_⟩
-      · rw [ProrataAccountingPath.cons]
-        simp only
+      · simp only [ProrataAccountingPath.cons]
         rw [hsteps]
       · exact pre_eq
       · simpa using hlast

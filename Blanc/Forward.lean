@@ -78,9 +78,10 @@ lemma Ninst.runCompiled_reg {sevm : Sevm} {devm devm' : Devm} {r : Rinst}
     (h_ne : r ≠ .pc) (h : Rinst.runCore 0 devm sevm r = .ok devm') :
     Ninst.RunCompiled sevm devm (.reg r) devm' := by
   refine ⟨.none, trivial, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution]
-  refine ⟨rfl, ?_⟩
-  show Except.ok devm' = Rinst.runCore pc devm sevm r
+  unfold Ninst.StepRun
+  rw [Ninst.step_reg]
+  refine Step.run_ofExecution.mpr ⟨rfl, ?_⟩
+  simp only [Rinst.run, if_neg h_ne]
   rw [← Rinst.runCore_pc_irrel h_ne 0 pc, h]
 
 /-- The gas a `PUSH` costs: `PUSH0` takes no immediate and is a `gBase`
@@ -99,8 +100,9 @@ lemma Ninst.runCompiled_push {sevm : Sevm} {devm : Devm} {xs : Bytes}
       (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory,
         devm.gasLeft - pushCost xs⟩) := by
   refine ⟨.none, trivial, fun pc => ?_⟩
-  rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution]
-  refine ⟨rfl, ?_⟩
+  unfold Ninst.StepRun
+  rw [Ninst.step_push]
+  refine Step.run_ofExecution.mpr ⟨rfl, ?_⟩
   show _ = (chargeGas (pushCost xs) devm >>= fun d => Devm.push xs.toB256 d)
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
@@ -506,12 +508,12 @@ then applied to the charged stack, which is the pre-state's; the permuted stack
 is handed in rather than computed, because `List.swap` on a literal stack is a
 `rfl` at the call site and an unfolded `Option` bind here. -/
 lemma Rinst.runCore_swap_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
-    {n : Fin 16} {S : List B256} (h_swap : List.swap devm.stack n.val = some S)
+    {n : Fin 16} {S : List B256} (h_swap : Jaune.List.swap devm.stack n.val = some S)
     (h_gas : gVerylow ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm (.swap n) =
       .ok (devm.setMach ⟨S, devm.memory, devm.gasLeft - gVerylow⟩) := by
   show (chargeGas gVerylow devm >>= fun d =>
-    match List.swap d.stack n.val with
+    match Jaune.List.swap d.stack n.val with
     | none => .error ⟨.halt (.stackUnderflow .none), d⟩
     | some stack => .ok (d.withStack stack)) = _
   rw [chargeGas_eq_ok h_gas]
@@ -558,7 +560,7 @@ lemma Rinst.runCore_mload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [h_ext, chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    Devm.stack_setMach]
+    Devm.stack_setMach, Devm.setMach_returnData]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
       devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩])⟩).memRead
@@ -594,7 +596,7 @@ lemma Rinst.runCore_keccak256_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [h_ext, chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    Devm.stack_setMach]
+    Devm.stack_setMach, Devm.setMach_returnData]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
       devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
@@ -709,10 +711,9 @@ lemma Rinst.runCore_returndatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach]
-  rw [if_neg (by
-    show ¬ (Devm.returnData _ ).length < ri.toNat + sz.toNat
-    show ¬ devm.returnData.length < ri.toNat + sz.toNat
-    omega)]
+  change (if devm.returnData.length < ri.toNat + sz.toNat then _ else _) = _
+  rw [if_neg (by omega)]
+  simp only [Devm.setMach_returnData]
   rfl
 
 /-- `Devm.popN`, evaluated forward: a stack that starts with `xs` hands them
@@ -865,13 +866,11 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
-  rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
-  simp only []
-  rw [if_pos (show ⟨sevm.currentTarget, k⟩ ∉
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys
-    from h_cold)]
-  simp only [sstoreValueCost_add]
+    Devm.gasLeft_setMach, Prod.snd]
+  change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
+  simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
+  simp only [Devm.setMach_accessedStorageKeys]
+  simp [h_cold, sstoreValueCost_add]
   -- The popped state's world projections are the pre-state's; naming them so
   -- lets `chargeGas_eq_ok` match syntactically rather than only up to `rfl`.
   rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
@@ -935,13 +934,11 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
-  rw [Except.assert, if_pos (show gCallStipend < devm.gasLeft from h_sentry)]
-  simp only []
-  rw [if_neg (show ¬ (⟨sevm.currentTarget, k⟩ ∉
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedStorageKeys)
-    from fun h => h h_warm)]
-  simp only [Nat.zero_add]
+    Devm.gasLeft_setMach, Prod.snd]
+  change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
+  simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
+  simp only [Devm.setMach_accessedStorageKeys]
+  simp [h_warm, sstoreValueCost_add]
   rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
     show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).refundCounter
@@ -1327,7 +1324,7 @@ lemma Ninst.runCompiled_pop {sevm : Sevm} {devm : Devm} {x : B256}
 /-- `SWAP n`.  The permuted stack is named by the caller; on a literal stack
 `h_swap` is a `rfl`. -/
 lemma Ninst.runCompiled_swap {sevm : Sevm} {devm : Devm} {n : Fin 16}
-    {S : List B256} {G : Nat} (h_swap : List.swap devm.stack n.val = some S)
+    {S : List B256} {G : Nat} (h_swap : Jaune.List.swap devm.stack n.val = some S)
     (h_gas : devm.gasLeft = G + gVerylow) :
     Ninst.RunCompiled sevm devm (.reg (.swap n))
       (devm.setMach ⟨S, devm.memory, G⟩) := by

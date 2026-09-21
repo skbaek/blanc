@@ -4,7 +4,7 @@ import Blanc.DripRpow
 
 namespace Blanc.Drip.ArithmeticEvaluation
 
-open Jaune Lean
+open Jaune _root_.Blanc.Lean
 
 private abbrev s : Nat := scale.toNat
 private abbrev h : Nat := half.toNat

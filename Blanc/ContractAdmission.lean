@@ -86,15 +86,14 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
     replace hσ' := σ_pre hσ'
     cases n' with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
-      rcases Except.bind_eq_ok h_run'.2.symm with ⟨devm1, h_charge, h_push⟩
+      rcases Except.bind_eq_ok (Step.run_ofExecution.mp h_run').2.symm with
+        ⟨devm1, h_charge, h_push⟩
       exact hσ'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
-        simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
-        exact h_run'.2.symm
+        exact (Step.run_ofExecution.mp h_run').2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
@@ -108,20 +107,16 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
           (congr_fun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
       refine Xinst.none_preserves_precond (x := x) ?_ h_ne' hσ'
-      simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-        using h_run'
+      exact XStep.run_toStep.mp h_run'
   · intro pc' sevm' pre' n' evm'' out'' inter' h_at' h_run' child h_ne' hσ'
     cases n' with
     | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run'
-      cases h_run'.1
+      cases (Step.run_ofExecution.mp h_run').1
     | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run'
-      cases h_run'.1
+      cases (Step.run_ofExecution.mp h_run').1
     | exec x =>
-      have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', out''⟩) (.ok inter') := by
-        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-          using h_run'
+      have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', out''⟩) (.ok inter') :=
+        XStep.run_toStep.mp h_run'
       obtain ⟨h_child, h_back⟩ :=
         Xinst.some_preserves_precond (x := x) hx child h_ne' (σ_pre hσ')
       exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,

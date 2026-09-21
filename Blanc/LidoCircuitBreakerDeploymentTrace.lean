@@ -1040,6 +1040,11 @@ theorem officialConstructorFinalMemory_reads :
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceRuntime.lean`. -/
 
+-- A whole 4,282-byte runtime image exceeds the Lean 4.34 kernel's recursion
+-- budget in a single `decide +kernel`, while either half of it is far inside
+-- that budget.  `Blanc.eq_of_take_drop_eq` cuts the equality, changing no
+-- statement and no emitted byte.
+
 private theorem officialConstructorFinalImage_runtime :
     officialConstructorFinalImage.sliceD constructorRuntimeBaseForProof 4282 0 =
       lidoCircuitBreakerCode officialParams := by
@@ -1051,7 +1056,9 @@ private theorem officialConstructorFinalImage_runtime :
     List.flatMap_cons, List.flatMap_nil, List.map_cons, List.map_nil,
     hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat,
     ImmutableParameter.value, constructorRuntimeBaseForProof]
-  decide +kernel
+  refine eq_of_take_drop_eq 2200 ?_ ?_
+  · decide +kernel
+  · decide +kernel
 
 /-- The final `RETURN` window reads the exact official runtime artifact. -/
 theorem officialConstructorFinalMemory_read_runtime :
@@ -2443,6 +2450,10 @@ theorem officialConstructorHeartbeatSuffix_runCompiled
         ⟨[], officialConstructorPauseMemory, G + 23406⟩)
       officialConstructorHeartbeatSuffix
       (officialConstructorPost sevm base G) := by
+  -- Spell the entry gas as the walk accumulates it.  The two forms are equal
+  -- as offsets, but the kernel has no offset representation and would unfold
+  -- `Nat.add` across the 23,406 gap to see it.
+  rw [show G + 23406 = G + 6 + 22109 + 1271 + 20 from by omega]
   have hret := officialConstructorReturn_runCompiled
     (fs := fs) (sevm := sevm) (base := base) (G := G)
   have hreturn := officialConstructorReturnLine_runCompiled hret
@@ -2795,6 +2806,8 @@ theorem officialConstructorConfigurationSuffix_runCompiled
         ⟨[], officialConstructorPatchedMemory, G + 46813⟩)
       officialConstructorConfigurationSuffix
       (officialConstructorPost sevm base G) := by
+  -- As above: the walk's own accumulation, not the folded offset.
+  rw [show G + 46813 = G + 23406 + 22109 + 1271 + 27 from by omega]
   have hheartbeat := officialConstructorHeartbeatSuffix_runCompiled
     (fs := fs) (G := G) hheartbeatCold hheartbeatOriginal
     hheartbeatCurrent hstatic

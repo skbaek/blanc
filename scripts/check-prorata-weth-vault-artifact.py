@@ -18,6 +18,15 @@ GENERATOR = ROOT / "scripts/gen-prorata-weth-vault-code.lean"
 RUNTIME_BYTES = 17_481
 RUNTIME_SHA256 = "e57aebd462ffb71c703194f18b1577f3a58b8287a440b89619e9e62a5ded6770"
 
+COMPILE_WITNESS = """theorem prorataWethVaultCode_compile :
+    Prog.compile ProrataWethVault.vault = some prorataWethVaultCode := by
+  change Table.compile ProrataWethVaultCodeProof.vaultTable
+    ProrataWethVaultCodeProof.vaultTable = some prorataWethVaultCode
+  conv_lhs => arg 2; rw [ProrataWethVaultCodeProof.vaultTable_source]
+  rw [ProrataWethVaultCodeProof.vaultEntries, ProrataWethVaultCodeProof.vaultTableTail0_compile]
+  rw [ProrataWethVaultCodeProof.vaultFinalChunk_take]
+  rfl"""
+
 ABI = [
     ("totalAssets", "", 0, "totalAssets", "01e1d114"),
     ("name", "", 0, "name", "06fdde03"),
@@ -75,6 +84,65 @@ def read(path: Path, errors: list[str]) -> str:
 def require(text: str, snippet: str, owner: str, errors: list[str]) -> None:
     if compact(snippet) not in compact(text):
         errors.append(f"{owner}: missing exact pin: {compact(snippet)}")
+
+
+def mask_lean_trivia(text: str) -> str:
+    """Keep source positions while masking nested comments and string literals."""
+    out = list(text)
+    index, depth, string = 0, 0, False
+    while index < len(text):
+        if depth:
+            if text.startswith("/-", index):
+                out[index:index + 2] = "  "
+                depth += 1
+                index += 2
+            elif text.startswith("-/", index):
+                out[index:index + 2] = "  "
+                depth -= 1
+                index += 2
+            else:
+                if text[index] != "\n":
+                    out[index] = " "
+                index += 1
+        elif string:
+            char = text[index]
+            if char != "\n":
+                out[index] = " "
+            index += 1
+            if char == "\\" and index < len(text):
+                if text[index] != "\n":
+                    out[index] = " "
+                index += 1
+            elif char == '"':
+                string = False
+        elif text.startswith("--", index):
+            end = text.find("\n", index)
+            if end == -1:
+                end = len(text)
+            out[index:end] = " " * (end - index)
+            index = end
+        elif text.startswith("/-", index):
+            out[index:index + 2] = "  "
+            depth = 1
+            index += 2
+        elif text[index] == '"':
+            out[index] = " "
+            string = True
+            index += 1
+        else:
+            index += 1
+    return "".join(out)
+
+
+def check_compile_witness(text: str, errors: list[str]) -> None:
+    code = mask_lean_trivia(text)
+    witness = re.search(
+        r"^theorem prorataWethVaultCode_compile\s*:(.*?)\nend Blanc\s*\Z",
+        code,
+        re.S | re.M,
+    )
+    if witness is None or compact(witness.group(0)) != compact(COMPILE_WITNESS + "\nend Blanc"):
+        errors.append("runtime: missing exact public bounded compiler witness")
 
 
 def check_runtime(text: str, errors: list[str]) -> None:
@@ -179,12 +247,7 @@ def check_runtime(text: str, errors: list[str]) -> None:
             errors.append(f"runtime: literal joins chunks in the wrong order: {joined}")
 
     require(text, f"The {RUNTIME_BYTES}-byte compiled EVM runtime.", "runtime", errors)
-    require(
-        text,
-        "Prog.compile ProrataWethVault.vault = some prorataWethVaultCode := by decide +kernel",
-        "runtime",
-        errors,
-    )
+    check_compile_witness(text, errors)
 
 
 def check_abi(source: str, artifact: str, errors: list[str]) -> None:

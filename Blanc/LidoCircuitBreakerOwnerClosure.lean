@@ -547,7 +547,8 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
               simp only [List.mem_cons] at member
               rcases member with rfl | descendant
               · exact (hforeign owner).elim
-              · simp only [canonical, Exec.descendantFrames] at descendant
+              · simp only [canonical] at descendant
+                unfold Exec.descendantFrames at descendant
                 split at descendant
                 next childSettles =>
                   have childCommits :=
