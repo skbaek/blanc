@@ -2241,6 +2241,18 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `DispatchTree.dispatchMiss_runCompiledTo_with_path` constructs the exact
   empty-revert walk together with raw-SSTORE freedom for the identical selected
   proof.  It deliberately requires no safety property of an unselected sibling.
+- EIP-8024 immediates in compiled code: `Func.compile` rejects forbidden
+  `DUPN`/`SWAPN`/`EXCHANGE` immediates through `Ninst.immAccepted`
+  ([`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean)); the `Ninst.step`
+  equations for the three stack-access instructions are `Ninst.step_dupn`,
+  `Ninst.step_swapn`, and `Ninst.step_exchange`
+  ([`Blanc/Semantics.lean`](../Blanc/Semantics.lean)); accepted-immediate
+  byte classification for the `noPushBefore` boundary walk is
+  `toInstType_ne_p_of_decodeSingle` and `toInstType_ne_p_of_decodePair`
+  ([`Blanc/Compiled.lean`](../Blanc/Compiled.lean)). There is no recipe:
+  the guard fires inside the compiler equation and the classification
+  closes by `decide` over a private `DecidableEq`, neither exposing a
+  reusable goal trigger.
 
 ### C2. I need deployment/message correspondence
 

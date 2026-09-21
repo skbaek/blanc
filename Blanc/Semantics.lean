@@ -153,6 +153,9 @@ structure Devm.Rels : Type where
   (state : State → State → Prop)
   (createdAccounts : AdrSet → AdrSet → Prop)
   (transientStorage : Tra → Tra → Prop)
+  (stateGas : StateGasMeter → StateGasMeter → Prop)
+  (accountReads : AdrSet → AdrSet → Prop)
+  (storageReads : KeySet → KeySet → Prop)
 
 /-- Canonical relation between dynamic EVM states, assembled field by field. -/
 structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
@@ -175,6 +178,11 @@ structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
     rels.createdAccounts devm.createdAccounts devm'.createdAccounts )
   ( transientStorage :
     rels.transientStorage devm.transientStorage devm'.transientStorage )
+  (stateGas : rels.stateGas devm.stateGas devm'.stateGas)
+  ( accountReads :
+    rels.accountReads devm.meta.accountReads devm'.meta.accountReads )
+  ( storageReads :
+    rels.storageReads devm.meta.storageReads devm'.meta.storageReads )
 
 def Devm.Rels.eq : Devm.Rels :=
   {
@@ -191,7 +199,10 @@ def Devm.Rels.eq : Devm.Rels :=
     accessedStorageKeys := _root_.Eq,
     state := _root_.Eq,
     createdAccounts := _root_.Eq,
-    transientStorage := _root_.Eq
+    transientStorage := _root_.Eq,
+    stateGas := _root_.Eq,
+    accountReads := _root_.Eq,
+    storageReads := _root_.Eq
   }
 
 def Devm.Burn : Devm → Devm → Prop :=
@@ -420,7 +431,7 @@ lemma Ninst.step_ne_halt_ok {evm : Evm} {n : Ninst} {devm' : Devm} :
   · exact Step.ofExecution_ne_halt_ok
   · exact Step.ofExecution_ne_halt_ok
 
-/-! ### The three branches of `Ninst.step`, made explicit. -/
+/-! ### The six branches of `Ninst.step`, made explicit. -/
 
 lemma Ninst.step_reg {evm : Evm} {r : Rinst} :
     Ninst.step evm (.reg r) = Step.ofExecution (evm.pc + 1) (r.run evm) := rfl
@@ -434,6 +445,48 @@ lemma Ninst.step_push {evm : Evm} {xs : Bytes} {le : xs.length ≤ 32} :
 lemma Ninst.step_exec {evm : Evm} {x : Xinst} :
     Ninst.step evm (.exec x) =
       XStep.toStep (evm.pc + 1) (Xinst.step evm.sta evm.dyna x) := rfl
+
+lemma Ninst.step_dupn {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.dupn imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodeSingle imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some n =>
+                  match devm.stack[n - 1]? with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some word => devm.push word
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
+
+lemma Ninst.step_swapn {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.swapn imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodeSingle imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some n =>
+                  match Jaune.List.swap devm.stack (n - 1) with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some stack => .ok (devm.withStack stack)
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
+
+lemma Ninst.step_exchange {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.exchange imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodePair imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some (n, m) =>
+                  match Jaune.List.exchange devm.stack n m with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some stack => .ok (devm.withStack stack)
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
 
 /-! ### Introducing frame relations from the frame-entry equation. -/
 
