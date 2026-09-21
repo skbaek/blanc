@@ -513,6 +513,9 @@ def Ninst.toBytes : Ninst → Bytes
   | .reg o => [Rinst.toUInt8 o]
   | .exec o => [Xinst.toUInt8 o]
   | .push bs _ => pushToB8L bs
+  | .dupn a => [0xE6, a]
+  | .swapn a => [0xE7, a]
+  | .exchange a => [0xE8, a]
 
 def compsize : Func → Nat
   | .last _ => 1
@@ -873,7 +876,18 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     split <;>
     try { rename (UInt8.toInstType _ = _) => h
           rw [rw, Rinst.toInstType_toUInt8] at h; cases h }
-    rw [rw, toUInt8_toRinst]; rfl
+    -- `Rinst.toUInt8` never denotes an EIP-8024 stack-access byte: its
+    -- `toRinst` round-trip lands on `some`, while those bytes decode to none.
+    have hnone6 : UInt8.toRinst 230 = none := rfl
+    have hnone7 : UInt8.toRinst 231 = none := rfl
+    have hnone8 : UInt8.toRinst 232 = none := rfl
+    have hsome := toUInt8_toRinst (i := r)
+    simp only [rw]
+    split
+    · simp_all
+    · simp_all
+    · simp_all
+    · rw [toUInt8_toRinst]; rfl
   case exec x =>
     simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
@@ -886,6 +900,99 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           rw [rw, Xinst.toInstType_toUInt8] at h; cases h }
     rw [rw, toUInt8_toXinst]; rfl
   case push xs le => apply (pushAt_of_slice le slice).2
+  case dupn a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE6 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE6 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp only [hD]
+    · simp_all
+    · simp_all
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 230 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne230 hR hbyte0 (hEq _))
+  case swapn a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE7 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE7 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp_all
+    · simp only [hD]
+    · simp_all
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 231 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne231 hR hbyte0 (hEq _))
+  case exchange a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE8 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE8 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp_all
+    · simp_all
+    · simp only [hD]
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 232 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne232 hR hbyte0 (hEq _))
 
 
 lemma of_subcode {cd k} :

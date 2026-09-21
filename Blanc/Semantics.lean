@@ -639,6 +639,18 @@ on the covered forks this bridge is `rfl`-transparent. -/
 lemma executeCode.handleErrorWith_none {raw : Execution} :
     executeCode.handleErrorWith none raw = executeCode.handleError raw := rfl
 
+/-- Under `stateGas = some` the selected handler is `handleErrorAmsterdam`. -/
+lemma executeCode.handleErrorWith_some {s : StateGasRules} {raw : Execution} :
+    executeCode.handleErrorWith (some s) raw =
+      executeCode.handleErrorAmsterdam raw := rfl
+
+/-- The selected handler is the identity on clean results, whichever branch
+the rules select. -/
+lemma executeCode.handleErrorWith_ok {sg : Option StateGasRules}
+    {evm : Devm} :
+    executeCode.handleErrorWith sg (.ok evm) = .ok evm := by
+  cases sg <;> rfl
+
 /-- `Frame.settle` is `settleMsg` after the rules-selected handler. -/
 lemma Frame.settle_eq_settleMsg_handleErrorWith {f : Frame} {raw : Execution} :
     f.settle raw =

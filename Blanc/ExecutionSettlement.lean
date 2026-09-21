@@ -26,24 +26,42 @@ def Frame.settlementCommits (frame : Frame) (raw : Execution) : Bool :=
   | .error _ => false
   | .ok post => post.error.isNone
 
-private theorem execution_commits_of_handleError_clean
-    {raw : Execution} {post : Devm}
-    (hresult : executeCode.handleError raw = .ok post)
+private theorem execution_commits_of_handleErrorWith_clean
+    {raw : Execution} {post : Devm} {sg : Option StateGasRules}
+    (hresult : executeCode.handleErrorWith sg raw = .ok post)
     (hclean : post.error.isNone = true) :
     Execution.commits raw = true := by
-  cases raw with
-  | ok rawPost =>
-      simp only [executeCode.handleError, Except.ok.injEq] at hresult
-      subst post
-      exact hclean
-  | error error =>
-      rcases error with ⟨error, rawPost⟩
-      cases error <;>
-        simp [executeCode.handleError, Devm.withError,
-          Devm.setMeta] at hresult
-      all_goals subst post
-      all_goals change (some _).isNone = true at hclean
-      all_goals simp at hclean
+  cases sg with
+  | none =>
+      rw [executeCode.handleErrorWith_none] at hresult
+      cases raw with
+      | ok rawPost =>
+          simp only [executeCode.handleError, Except.ok.injEq] at hresult
+          subst post
+          exact hclean
+      | error error =>
+          rcases error with ⟨error, rawPost⟩
+          cases error <;>
+            simp [executeCode.handleError, Devm.withError,
+              Devm.setMeta] at hresult
+          all_goals subst post
+          all_goals change (some _).isNone = true at hclean
+          all_goals simp at hclean
+  | some _ =>
+      rw [executeCode.handleErrorWith_some] at hresult
+      cases raw with
+      | ok rawPost =>
+          simp only [executeCode.handleErrorAmsterdam, Except.ok.injEq] at hresult
+          subst post
+          exact hclean
+      | error error =>
+          rcases error with ⟨error, rawPost⟩
+          cases error <;>
+            simp [executeCode.handleErrorAmsterdam, Devm.withError,
+              Devm.setMeta] at hresult
+          all_goals subst post
+          all_goals change (some _).isNone = true at hclean
+          all_goals simp at hclean
 
 private theorem processMessage_clean_input
     {msg : Msg}
@@ -127,14 +145,14 @@ theorem Frame.raw_commits_of_settlementCommits
           simp only [hcreate, Bool.false_eq_true, ↓reduceIte] at hsettled
           rcases processMessage_clean_input hsettled hclean with
             ⟨handled, hhandled, hhandledClean⟩
-          exact execution_commits_of_handleError_clean hhandled hhandledClean
+          exact execution_commits_of_handleErrorWith_clean hhandled hhandledClean
       | true =>
           simp only [hcreate, ↓reduceIte] at hsettled
           rcases processCreateMessage_clean_input hsettled hclean with
             ⟨inner, hinner, hinnerClean⟩
           rcases processMessage_clean_input hinner hinnerClean with
             ⟨handled, hhandled, hhandledClean⟩
-          exact execution_commits_of_handleError_clean hhandled hhandledClean
+          exact execution_commits_of_handleErrorWith_clean hhandled hhandledClean
 
 /-- The concrete outcome indexed by an `Exec` derivation. -/
 def Exec.outcome {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -237,7 +255,8 @@ theorem Exec.descendantFrames_runOk_create_codeDepositRollback
     (_rawCommits : Execution.commits raw = true)
     (hcreate : f.isCreate = true)
     (hsettled : processCreateMessage.settle f.outer
-      (processMessage.settle f.inner (executeCode.handleError raw)) =
+      (processMessage.settle f.inner
+        (executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw)) =
         .ok settled)
     (herror : settled.error.isSome = true) :
     Exec.descendantFrames (Exec.runOk hstep henter child hr next) =
@@ -297,7 +316,7 @@ theorem Frame.settlementCommits_ofCall_of_raw_commits
       cases herror : post.error with
       | none =>
           simp [Frame.settlementCommits, Frame.settle, Frame.settleMsg,
-            Frame.ofCall, executeCode.handleError,
+            Frame.ofCall, executeCode.handleErrorWith_ok,
             processMessage.settle, Bind.bind, Except.bind, herror]
       | some error =>
           simp [Execution.commits, herror] at hraw
@@ -363,6 +382,23 @@ theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     msg.currentTarget).bal = msg.benv.state.bal
   rw [State.incrNonce_bal, State.setStor_bal]
 
+/-- State-gas charging changes only machine state. -/
+private theorem chargeStateGas_state_eq {amount : Nat} {mid post : Devm}
+    (h : chargeStateGas amount mid = .ok post) : post.state = mid.state := by
+  unfold chargeStateGas liftMachExecution liftMach Footprint.liftOutcome
+    Footprint.toExecution at h
+  cases hcore : Mach.chargeStateGas amount mid.mach with
+  | error err =>
+      rw [hcore] at h
+      dsimp only at h
+      cases h
+  | ok res =>
+      rcases res with ⟨_, view⟩
+      rw [hcore] at h
+      dsimp only at h
+      cases h
+      exact Devm.setMach_state _ _
+
 /-- CREATE code-deposit gas charging changes only machine state. -/
 theorem processCreateMessage.chargeCodeGas_bal_eq
     {rules : ForkRules} {pre post : Devm}
@@ -371,16 +407,31 @@ theorem processCreateMessage.chargeCodeGas_bal_eq
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
-    split at hrest
-    · cases hrest
-    · cases hrest
-      rw [chargeGas_def] at hcharge
-      split at hcharge
-      · contradiction
-      · cases hcharge
-        rfl
+  · split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨charged, hcharge, hrest⟩
+      split at hrest
+      · cases hrest
+      · cases hrest
+        rw [chargeGas_def] at hcharge
+        split at hcharge
+        · contradiction
+        · cases hcharge
+          rfl
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rcases Except.bind_eq_ok h with ⟨mid, hchargeGas, hchargeState⟩
+        have hmid : mid.state.bal = pre.state.bal := by
+          rw [chargeGas_def] at hchargeGas
+          split at hchargeGas
+          · contradiction
+          · cases hchargeGas
+            rfl
+        have hpost : post.state.bal = mid.state.bal := by
+          rw [chargeStateGas_state_eq hchargeState]
+        exact hpost.trans hmid
 
 /-- A clean successful CREATE settlement exposes its successful inner message
 and preserves that inner result's complete balance map. -/
@@ -409,10 +460,19 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
             rcases error with ⟨error, charged⟩
             cases error with
             | halt reason =>
-                have heq := Except.ok.inj hsettle
-                rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
+                cases hsg : msg.benv.stat.rules.stateGas with
+                | none =>
+                    rw [hsg] at hsettle
+                    have heq := Except.ok.inj hsettle
+                    rw [heq] at herror
+                    simp [processCreateMessage.exceptionalHalt,
+                      Devm.error, Devm.setMeta] at herror
+                | some _ =>
+                    rw [hsg] at hsettle
+                    have heq := Except.ok.inj hsettle
+                    rw [heq] at herror
+                    simp [processCreateMessage.exceptionalHaltAmsterdam,
+                      Devm.error, Devm.setMeta] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle

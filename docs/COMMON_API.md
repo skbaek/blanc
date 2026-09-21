@@ -299,7 +299,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `genericCall.step_spawn_benvStat`, `genericCreate.step_spawn_benvStat`, or
   the instruction-neutral `Xinst.step_spawn_benvStat` in
   [`Blanc/Semantics.lean`](../Blanc/Semantics.lean), then combine it with
-  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry.
+  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry. When the
+  spawn runs under Amsterdam state-gas rules, use the
+  `genericCallAmsterdam`/`genericCreateAmsterdam` `step_spawn_depth` and
+  `step_spawn_benvStat` mirrors instead; `Xinst.step` selects them on
+  `stateGas`.
 
 For an exact `DELEGATECALL` boundary, use
 [`Blanc/DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean).
@@ -1707,6 +1711,13 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   entry-state identity.
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
   canonical settled error machines.
+- `Frame.settle` is `settleMsg` after the rules-selected error handler: use
+  `Frame.settle_eq_settleMsg_handleErrorWith` in
+  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean) to expose it, then identify
+  the selected handler with `executeCode.handleErrorWith_none` (the legacy
+  `handleError`), `executeCode.handleErrorWith_some` (Amsterdam
+  `handleErrorAmsterdam`), or `executeCode.handleErrorWith_ok` (either handler
+  is the identity on clean results).
 - For the inversion direction, use
   [`Blanc/MessageExecutionInversion.lean`](../Blanc/MessageExecutionInversion.lean):
   `processMessage_clean_rawPost` recovers a clean successful raw post, while
