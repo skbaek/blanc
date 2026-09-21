@@ -10000,84 +10000,200 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   dsimp [Linst.Run, Linst.run] at run
   revert run
-  dsimp [bind, Except.bind]
-  cases h1 : devm.popToAdr <;> dsimp
-  case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
-  case ok res1 =>
-    have h_acc : (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
-      split
-      · exact addAccessedAddress_getCode
-      · rfl
-    have h_acc_ds : Devm.delSets
-        (if res1.1 ∉ res1.2.accessedAddresses then
-          (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
-        else (res1.2, gasSelfDestruct)).1 = Devm.delSets res1.2 := by
-      split
-      · rfl
-      · rfl
-    cases h2 : chargeGas (if ((if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧ ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount else (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).2) (if res1.1 ∉ res1.2.accessedAddresses then (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess) else (res1.2, gasSelfDestruct)).1 <;> dsimp
-    case error err => intro run; rw [← run]; exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-    case ok res2 =>
-      cases h3 : assertDynamic sevm res2
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2 lane: pop, read both accounts, price, charge, sweep.
+    intro run
+    dsimp [bind, Except.bind] at run
+    revert run
+    cases h1 : devm.popToAdr <;> dsimp
+    case error err =>
+      intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
+    case ok res1 =>
+      have h_br2 : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).getCode wa = res1.2.getCode wa :=
+        Devm.balReadAccount_getCode.trans Devm.balReadAccount_getCode
+      have h_acc : (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1.getCode wa = res1.2.getCode wa := by
+        split
+        · exact addAccessedAddress_getCode.trans h_br2
+        · exact h_br2
+      have h_br2_ds : Devm.delSets res1.2 = Devm.delSets (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) :=
+        (Devm.balReadAccount_instructionFrame _ _ _).delSets.trans (Devm.balReadAccount_instructionFrame _ _ _).delSets
+      have h_acc_ds0 : Devm.delSets (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1 = Devm.delSets (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) := by
+        split
+        · rfl
+        · rfl
+      have h_acc_ds : Devm.delSets res1.2 = Devm.delSets (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1 :=
+        h_br2_ds.trans h_acc_ds0.symm
+      cases h2 : chargeGas _ _ <;> dsimp
       case error err =>
         intro run; rw [← run]
-        dsimp [assertDynamic, Except.assert] at h3
-        split at h3
-        · contradiction
-        · simp only [Except.error.injEq] at h3; subst h3
-          exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-      case ok _ =>
-        cases h4 : res2.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
-        case none =>
+        exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+      case ok res2 =>
+        cases h3 : assertDynamic sevm res2
+        case error err =>
           intro run; rw [← run]
-          exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-        case some res3 =>
-          have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds.symm h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
-          have h_sub : res3.getCode wa = res2.getCode wa := by
-            dsimp [Devm.subBal] at h4
-            cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
-            case none =>
-              rw [h_st] at h4; contradiction
-            case some st =>
-              rw [h_st] at h4; dsimp at h4
-              simp only [Option.some.injEq] at h4; subst h4
-              change st.getCode wa = res2.getCode wa
-              exact State.subBal_getCode h_st
-          have h_sub_ds : Devm.delSets res3 = Devm.delSets res2 := by
-            dsimp [Devm.subBal] at h4
-            cases h_st : res2.state.subBal sevm.currentTarget (res1.2.getAcct sevm.currentTarget).bal
-            case none => rw [h_st] at h4; contradiction
-            case some st =>
-              rw [h_st] at h4; dsimp at h4
-              simp only [Option.some.injEq] at h4; subst h4
-              rfl
-          have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
-          by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, if_pos]
+          dsimp [assertDynamic, Except.assert] at h3
+          split at h3
+          · contradiction
+          · simp only [Except.error.injEq] at h3; subst h3
+            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+        case ok _ =>
+          cases h4 : res2.subBal _ _ <;> dsimp [Option.toExcept]
+          case none =>
             intro run; rw [← run]
-            have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
-            have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
-            have h_ne : sevm.currentTarget ≠ wa := by
-              intro heq; rw [heq] at h_ca
-              exact hd3.ca h_ca
-            constructor
-            · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
-            · exact hd3.ca
-            · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-              have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
-                dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
-              have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
-                h_set.trans h_add
-              rw [h_code]; exact hd3.code
-          · simp only [h_if]
+            exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+          case some res3 =>
+            have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+            have h_sub : res3.getCode wa = res2.getCode wa := by
+              dsimp [Devm.subBal] at h4
+              cases h_st : res2.state.subBal _ _
+              case none =>
+                rw [h_st] at h4; contradiction
+              case some st =>
+                rw [h_st] at h4; dsimp at h4
+                simp only [Option.some.injEq] at h4; subst h4
+                change st.getCode wa = res2.getCode wa
+                exact State.subBal_getCode h_st
+            have h_sub_ds : Devm.delSets res3 = Devm.delSets res2 := by
+              dsimp [Devm.subBal] at h4
+              cases h_st : res2.state.subBal _ _
+              case none => rw [h_st] at h4; contradiction
+              case some st =>
+                rw [h_st] at h4; dsimp at h4
+                simp only [Option.some.injEq] at h4; subst h4
+                rfl
+            have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
+            by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+            · simp only [h_if, if_pos]
+              intro run; rw [← run]
+              have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
+              have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
+              have h_ne : sevm.currentTarget ≠ wa := by
+                intro heq; rw [heq] at h_ca
+                exact hd3.ca h_ca
+              constructor
+              · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
+              · exact hd3.ca
+              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
+                  dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+                have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
+                  h_set.trans h_add
+                rw [h_code]; exact hd3.code
+            · simp only [h_if]
+              intro run; rw [← run]
+              constructor
+              · exact hd3.atd
+              · exact hd3.ca
+              · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                rw [h_add]; exact hd3.code
+  · -- Amsterdam lane: static check first, priced access, state charges, logging sweep.
+    rename_i state
+    intro run
+    dsimp [bind, Except.bind] at run
+    revert run
+    cases h0 : assertDynamic sevm devm <;> dsimp
+    case error err =>
+      intro run; rw [← run]
+      dsimp [assertDynamic, Except.assert] at h0
+      split at h0
+      · contradiction
+      · simp only [Except.error.injEq] at h0; subst h0
+        exact h
+    case ok _ =>
+      cases h1 : devm.popToAdr <;> dsimp
+      case error err =>
+        intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
+      case ok res1 =>
+        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp
+        case error err =>
+          intro run; rw [← run]
+          dsimp [Except.assert] at hg
+          by_cases hle : gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft
+          · simp only [hle, if_true] at hg
+            contradiction
+          · simp only [hle, if_false] at hg
+            simp only [Except.error.injEq] at hg; subst hg
+            exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h
+        case ok _ =>
+          have h_warm : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getCode wa = res1.2.getCode wa := by
+            split
+            · exact addAccessedAddress_getCode
+            · rfl
+          have h_warm_ds : Devm.delSets res1.2 = Devm.delSets (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2) := by
+            split
+            · rfl
+            · rfl
+          have h_wb : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getCode wa = res1.2.getCode wa :=
+            Devm.balReadAccount_getCode.trans (Devm.balReadAccount_getCode.trans h_warm)
+          have h_wb_ds : Devm.delSets res1.2 = Devm.delSets (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))) :=
+            h_warm_ds.trans ((Devm.balReadAccount_instructionFrame _ _ _).delSets.trans (Devm.balReadAccount_instructionFrame _ _ _).delSets)
+          cases hchg : chargeGas _ _ <;> dsimp
+          case error err =>
             intro run; rw [← run]
-            constructor
-            · exact hd3.atd
-            · exact hd3.ca
-            · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
-              rw [h_add]; exact hd3.code
+            exact Devm.NoDel.of_eqs (chargeGas_delSets_err hchg).symm (chargeGas_getCode_err hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
+          case ok res2 =>
+            cases hstg : chargeStateGas _ _ <;> dsimp
+            case error err =>
+              intro run; rw [← run]
+              exact Devm.NoDel.of_eqs (chargeStateGas_delSets_err hstg).symm (chargeStateGas_getCode_err hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
+            case ok res2b =>
+              cases h4 : res2b.subBal _ _ <;> dsimp [Option.toExcept]
+              case none =>
+                intro run; rw [← run]
+                exact Devm.NoDel.of_eqs (chargeStateGas_delSets_eq hstg).symm (chargeStateGas_getCode_eq hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
+              case some res3 =>
+                have hd : Devm.NoDel wa res2b := Devm.NoDel.of_eqs (chargeStateGas_delSets_eq hstg).symm (chargeStateGas_getCode_eq hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
+                have h_sub : res3.getCode wa = res2b.getCode wa := by
+                  dsimp [Devm.subBal] at h4
+                  cases h_st : res2b.state.subBal _ _
+                  case none =>
+                    rw [h_st] at h4; contradiction
+                  case some st =>
+                    rw [h_st] at h4; dsimp at h4
+                    simp only [Option.some.injEq] at h4; subst h4
+                    change st.getCode wa = res2b.getCode wa
+                    exact State.subBal_getCode h_st
+                have h_sub_ds : Devm.delSets res3 = Devm.delSets res2b := by
+                  dsimp [Devm.subBal] at h4
+                  cases h_st : res2b.state.subBal _ _
+                  case none => rw [h_st] at h4; contradiction
+                  case some st =>
+                    rw [h_st] at h4; dsimp at h4
+                    simp only [Option.some.injEq] at h4; subst h4
+                    rfl
+                have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
+                have h_add : (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
+                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                have h_add_ds : Devm.delSets ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal)) = Devm.delSets res3 := by
+                  rfl
+                have hdA : Devm.NoDel wa ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal)) :=
+                  Devm.NoDel.of_eqs h_add_ds.symm h_add.symm hd3
+                have hdE : Devm.NoDel wa ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal) :=
+                  Devm.NoDel.of_eqs (Devm.emitTransferLog_instructionFrame _ _ _ _).delSets ((Devm.emitTransferLog_instructionFrame _ _ _ _).getCode wa) hdA
+                by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
+                · simp only [h_if, if_pos]
+                  intro run; rw [← run]
+                  have h_ca_eq : ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := by
+                    exact (Devm.emitTransferLog_instructionFrame _ _ _ _).createdAccounts.symm.trans rfl
+                  have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
+                  have h_ne : sevm.currentTarget ≠ wa := by
+                    intro heq; rw [heq] at h_ca
+                    exact hd3.ca h_ca
+                  have h_del : (addAccountToDelete ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal) sevm.currentTarget).getCode wa = ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode wa := by
+                    rfl
+                  constructor
+                  · exact AdrSet.not_mem_insert (Ne.symm h_ne) hdE.atd
+                  · exact hdE.ca
+                  · rw [h_del]; exact hdE.code
+                · simp only [h_if]
+                  intro run; rw [← run]
+                  constructor
+                  · exact hdE.atd
+                  · exact hdE.ca
+                  · exact hdE.code
+
 
 theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
