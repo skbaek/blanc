@@ -1730,7 +1730,7 @@ locations syntactically, while their instruction bytes remain visible. -/
 /-- Exact byte size carried by a compiler shape. -/
 def Func.CompileShape.byteSize : Func.CompileShape → Nat
   | .last => 1
-  | .next size rest => rest.byteSize + size
+  | .next size _ rest => rest.byteSize + size
   | .branch left right => left.byteSize + right.byteSize + 5
   | .call _ => 4
 
@@ -1756,7 +1756,7 @@ def Func.emitByShape (locations : List Nat) (n : Nat)
       | _ => List.replicate shape.byteSize 0
   | .next i rest =>
       match shape with
-      | .next size restShape =>
+      | .next size _ restShape =>
           List.takeD size (Ninst.toBytes i) 0 ++
             emitByShape locations (n + size) restShape rest
       | _ => List.replicate shape.byteSize 0
@@ -1827,7 +1827,7 @@ def Func.byteAtByShape (locations : List Nat) (n : Nat)
       | _ => (List.replicate shape.byteSize 0).getD i d
   | .next inst rest, i, d =>
       match shape with
-      | .next size restShape =>
+      | .next size _ restShape =>
           if i < size then
             (List.takeD size (Ninst.toBytes inst) 0).getD i d
           else
