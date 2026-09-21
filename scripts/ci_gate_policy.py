@@ -14,13 +14,19 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
+import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 POLICY = ROOT / "scripts/ci-gate-policy.json"
+WORKFLOW = ROOT / ".github/workflows/ci.yml"
+EXPECTED_LAKE_CACHE_DIR = "${{ github.workspace }}/.lake/cache"
 EXPECTED_POLICY = {
     "schema": 1,
     "mode": "conservative-fresh",
@@ -38,6 +44,179 @@ EXPECTED_POLICY = {
 
 class PolicyError(RuntimeError):
     pass
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _section_end(lines: list[str], start: int, indentation: int) -> int:
+    for position in range(start + 1, len(lines)):
+        stripped = lines[position].strip()
+        if stripped and not stripped.startswith("#") and _indent(lines[position]) <= indentation:
+            return position
+    return len(lines)
+
+
+def _single_section(
+    lines: list[str], start: int, end: int, indentation: int, key: str
+) -> tuple[int, int] | None:
+    pattern = re.compile(rf"^{' ' * indentation}{re.escape(key)}:\s*(?:#.*)?$")
+    matches = [position for position in range(start, end) if pattern.fullmatch(lines[position])]
+    if len(matches) != 1:
+        return None
+    position = matches[0]
+    return position, _section_end(lines[:end], position, indentation)
+
+
+def _workflow_steps(path: Path) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """Parse the small reviewed YAML surface needed by the prerequisite audit.
+
+    CI runs this before setup-python, so this deliberately uses only stdlib and
+    accepts only the literal mapping/list forms the workflow uses.  Anything
+    ambiguous in the relevant job fails closed instead of being guessed.
+    """
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise PolicyError(f"CI workflow is unreadable: {error}") from error
+    if "\t" in text:
+        raise PolicyError("CI workflow contains tabs; prerequisite order is ambiguous")
+    lines = text.splitlines()
+    jobs = _single_section(lines, 0, len(lines), 0, "jobs")
+    if jobs is None:
+        raise PolicyError("CI workflow must contain exactly one literal jobs mapping")
+    jobs_start, jobs_end = jobs
+    job = _single_section(lines, jobs_start + 1, jobs_end, 2, "build-and-audit")
+    if job is None:
+        raise PolicyError("CI workflow must contain exactly one literal build-and-audit job")
+    job_start, job_end = job
+
+    env_section = _single_section(lines, job_start + 1, job_end, 4, "env")
+    steps_section = _single_section(lines, job_start + 1, job_end, 4, "steps")
+    if env_section is None or steps_section is None:
+        raise PolicyError("build-and-audit must contain one literal env and steps mapping")
+
+    env_start, env_end = env_section
+    environment: dict[str, str] = {}
+    env_entry = re.compile(r"^ {6}([A-Za-z_][A-Za-z0-9_]*):\s*(.*?)\s*$")
+    for raw in lines[env_start + 1 : env_end]:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = env_entry.fullmatch(raw)
+        if match is None or not match.group(2):
+            raise PolicyError("build-and-audit env uses an unsupported or nested YAML form")
+        name, value = match.groups()
+        if name in environment:
+            raise PolicyError(f"build-and-audit env repeats {name}")
+        environment[name] = value
+
+    steps_start, steps_end = steps_section
+    starts = [
+        position
+        for position in range(steps_start + 1, steps_end)
+        if re.match(r"^ {6}-\s+", lines[position])
+    ]
+    if not starts:
+        raise PolicyError("build-and-audit has no literal steps")
+    for raw in lines[steps_start + 1 : starts[0]]:
+        if raw.strip() and not raw.strip().startswith("#"):
+            raise PolicyError("build-and-audit steps contain content outside a literal list item")
+
+    steps: list[dict[str, Any]] = []
+    top_key = re.compile(r"^(?: {6}-| {8})\s*([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*$")
+    for number, begin in enumerate(starts):
+        finish = starts[number + 1] if number + 1 < len(starts) else steps_end
+        block = lines[begin:finish]
+        fields: dict[str, list[str]] = {}
+        for raw in block:
+            match = top_key.fullmatch(raw)
+            if match is not None:
+                fields.setdefault(match.group(1), []).append(match.group(2))
+        if len(fields.get("uses", [])) > 1 or len(fields.get("run", [])) > 1:
+            raise PolicyError(f"build-and-audit step {number + 1} repeats uses or run")
+        if fields.get("uses") and fields.get("run"):
+            raise PolicyError(f"build-and-audit step {number + 1} mixes uses and run")
+        steps.append({"fields": fields, "lines": block})
+    return environment, steps
+
+
+def _run_tokens(step: dict[str, Any]) -> list[str] | None:
+    values = step["fields"].get("run", [])
+    if len(values) != 1 or values[0] in ("|", ">", "|-", ">-"):
+        return None
+    try:
+        return shlex.split(values[0], comments=True, posix=True)
+    except ValueError:
+        return None
+
+
+def workflow_prerequisite_problems(path: Path) -> list[str]:
+    environment, steps = _workflow_steps(path)
+    problems: list[str] = []
+    if environment.get("LAKE_CACHE_DIR") != EXPECTED_LAKE_CACHE_DIR:
+        problems.append(
+            "build-and-audit must set LAKE_CACHE_DIR to the absolute workspace .lake/cache "
+            "path restored by lean-action"
+        )
+
+    commands = {
+        "Jaune runner build": ["lake", "build", "jaune/jaune"],
+        "proof-recipe authoring leaf build": ["lake", "build", "Blanc.ProofRecipeTactic"],
+        "checked-build certification": ["scripts/certify-checked-build.sh"],
+        "DRIP check": ["scripts/check-drip.sh"],
+    }
+    positions: dict[str, int] = {}
+    for label, tokens in commands.items():
+        matches = [position for position, step in enumerate(steps) if _run_tokens(step) == tokens]
+        raw_matches = [
+            position
+            for position, step in enumerate(steps)
+            if " ".join(tokens) in "\n".join(step["lines"])
+        ]
+        if len(matches) != 1:
+            problems.append(f"build-and-audit must contain exactly one literal {label}")
+        elif raw_matches != matches:
+            problems.append(f"build-and-audit contains an ambiguous {label} invocation")
+        else:
+            positions[label] = matches[0]
+
+    lean_matches: list[int] = []
+    for position, step in enumerate(steps):
+        uses = step["fields"].get("uses", [])
+        if uses == ["leanprover/lean-action@v1"]:
+            lean_matches.append(position)
+    if len(lean_matches) != 1:
+        problems.append("build-and-audit must contain exactly one leanprover/lean-action@v1 step")
+    else:
+        lean_position = lean_matches[0]
+        build_values: list[str] = []
+        for raw in steps[lean_position]["lines"]:
+            match = re.fullmatch(r" {10}build:\s*(.*?)\s*", raw)
+            if match is not None:
+                build_values.append(match.group(1))
+        if build_values != ["true"]:
+            problems.append("lean-action must explicitly perform the full default build")
+        positions["full default build"] = lean_position
+
+    ordered = [
+        "full default build",
+        "Jaune runner build",
+        "proof-recipe authoring leaf build",
+        "checked-build certification",
+        "DRIP check",
+    ]
+    if all(label in positions for label in ordered):
+        actual = [positions[label] for label in ordered]
+        if actual != sorted(actual):
+            problems.append("build prerequisites, certification, and DRIP are out of order")
+        if positions["checked-build certification"] + 1 != positions["DRIP check"]:
+            problems.append("checked-build certification must be immediately adjacent before DRIP")
+        if positions["proof-recipe authoring leaf build"] + 1 != positions["checked-build certification"]:
+            problems.append("checked-build certification must immediately follow the authoring leaf build")
+    return problems
 
 
 def load_gate_cache():
@@ -133,7 +312,7 @@ def audit(arguments: argparse.Namespace) -> int:
     gate_cache = load_gate_cache()
     registry = gate_cache.load_registry(gate_cache.registry_path(ROOT))
     ci = gate_cache.ci_commands(ROOT)
-    problems = dependency_problems(registry, ci)
+    problems = dependency_problems(registry, ci) + workflow_prerequisite_problems(WORKFLOW)
     if problems:
         for problem in problems:
             print(f"CI POLICY MISMATCH — {problem}", file=sys.stderr)
@@ -216,6 +395,53 @@ def self_test() -> int:
         check(selected == population, f"{synthetic} unexpectedly skipped a CI command")
     check(EXPECTED_POLICY["cross_run_evidence"] == "disabled", "cross-run evidence enabled")
     check(EXPECTED_POLICY["sampling"] == "disabled", "production sampling enabled")
+    with tempfile.TemporaryDirectory(prefix="blanc-ci-policy-") as temporary:
+        copied_workflow = Path(temporary) / "ci.yml"
+        shutil.copy2(WORKFLOW, copied_workflow)
+        original = copied_workflow.read_text(encoding="utf-8")
+        check(
+            not workflow_prerequisite_problems(copied_workflow),
+            "the real CI workflow copy failed its prerequisite contract",
+        )
+
+        cache_mutant = original.replace(
+            EXPECTED_LAKE_CACHE_DIR,
+            "${{ runner.temp }}/lake-cache",
+            1,
+        )
+        check(cache_mutant != original, "cache mutation did not bite the real workflow copy")
+        copied_workflow.write_text(cache_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "a warm-invisible runner.temp artifact cache passed",
+        )
+
+        # Use a sentinel so the second replacement cannot rewrite the first.
+        order_mutant = original.replace(
+            "run: lake build Blanc.ProofRecipeTactic",
+            "run: __BLANC_CI_POLICY_SENTINEL__",
+            1,
+        ).replace(
+            "run: scripts/certify-checked-build.sh",
+            "run: lake build Blanc.ProofRecipeTactic",
+            1,
+        ).replace(
+            "run: __BLANC_CI_POLICY_SENTINEL__",
+            "run: scripts/certify-checked-build.sh",
+            1,
+        )
+        check(order_mutant != original, "order mutation did not bite the real workflow copy")
+        copied_workflow.write_text(order_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "certification before the authoring leaf passed",
+        )
+
+        copied_workflow.write_text(original, encoding="utf-8")
+        check(
+            not workflow_prerequisite_problems(copied_workflow),
+            "restoring only the real workflow copy did not restore green",
+        )
     print(f"CI GATE POLICY SELF-TEST OK — {controls} trust/dependency controls")
     return 0
 

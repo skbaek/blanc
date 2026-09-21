@@ -20,6 +20,11 @@ concurrency:
 jobs:
   build-and-audit:
     runs-on: ubuntu-24.04
+    # Keep Lake's artifact cache inside the directory lean-action restores and
+    # saves.  A runner.temp cache would be empty whenever .lake is restored on
+    # a warm run, so it could not support the checked-build certificate.
+    env:
+      LAKE_CACHE_DIR: ${{ github.workspace }}/.lake/cache
     # Sized for a COLD build, not a warm one. lean-action's cache key includes
     # the lake-manifest hash, so every jaune pin bump, toolchain bump or mathlib
     # bump misses the cache and recompiles jaune from source: ~33 min instead of
@@ -89,12 +94,12 @@ jobs:
         run: scripts/check-lido-ossifiable-proxy-performance.sh
       - name: Lido OssifiableProxy generated artifacts (offline)
         run: scripts/check-lido-ossifiable-proxy-artifacts.sh
-      - name: DRIP exact-integer evidence (offline)
-        run: scripts/check-drip.sh
       # The Lido dispatcher and both differential matrices remain mandatory
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.
       - uses: leanprover/lean-action@v1
+        with:
+          build: true
       - name: Lido CircuitBreaker Registry RI7 static assurance
         run: scripts/check-lido-circuit-breaker-registry.sh --static-only
       - name: Lido CircuitBreaker Registry RI7 semantic assurance
@@ -128,6 +133,10 @@ jobs:
       # explicitly here, ahead of every --no-build axiom consumer below.
       - name: Build the proof-recipe authoring leaf
         run: lake build Blanc.ProofRecipeTactic
+      - name: Certify checked build artifacts
+        run: scripts/certify-checked-build.sh
+      - name: DRIP exact-integer evidence (offline)
+        run: scripts/check-drip.sh
       - name: Lido CircuitBreaker direct deployment-root S9 assurance
         env:
           EELS_ROOT: ${{ github.workspace }}/execution-specs
