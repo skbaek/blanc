@@ -153,6 +153,57 @@ def _run_tokens(step: dict[str, Any]) -> list[str] | None:
         return None
 
 
+def _step_mapping(step: dict[str, Any], key: str) -> dict[str, str] | None:
+    if step["fields"].get(key) != [""]:
+        return None
+    lines = step["lines"]
+    starts = [
+        position
+        for position, raw in enumerate(lines)
+        if re.fullmatch(rf"^{' ' * 8}{re.escape(key)}:\s*", raw)
+    ]
+    if len(starts) != 1:
+        return None
+    start = starts[0]
+    end = len(lines)
+    for position in range(start + 1, len(lines)):
+        stripped = lines[position].strip()
+        if stripped and not stripped.startswith("#") and _indent(lines[position]) <= 8:
+            end = position
+            break
+    entry = re.compile(r"^ {10}([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*$")
+    result: dict[str, str] = {}
+    for raw in lines[start + 1 : end]:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = entry.fullmatch(raw)
+        if match is None or not match.group(2):
+            raise PolicyError(f"step {key} uses an unsupported or nested YAML form")
+        name, value = match.groups()
+        if name in result:
+            raise PolicyError(f"step {key} repeats {name}")
+        result[name] = value
+    return result
+
+
+def _required_step_guard_problems(label: str, step: dict[str, Any]) -> list[str]:
+    problems: list[str] = []
+    if "if" in step["fields"]:
+        problems.append(f"required {label} must not have a conditional if guard")
+    continue_values = step["fields"].get("continue-on-error", [])
+    if continue_values and continue_values != ["false"]:
+        problems.append(f"required {label} must not continue on error")
+    for raw in step["lines"]:
+        stripped = raw.strip()
+        if stripped.startswith("#"):
+            continue
+        if re.search(r"(?:^|[{,]\s*)LAKE_CACHE_DIR\s*:", stripped):
+            problems.append(f"required {label} must not override the job artifact cache")
+            break
+    return problems
+
+
 def workflow_prerequisite_problems(path: Path) -> list[str]:
     environment, steps = _workflow_steps(path)
     problems: list[str] = []
@@ -182,6 +233,7 @@ def workflow_prerequisite_problems(path: Path) -> list[str]:
             problems.append(f"build-and-audit contains an ambiguous {label} invocation")
         else:
             positions[label] = matches[0]
+            problems.extend(_required_step_guard_problems(label, steps[matches[0]]))
 
     lean_matches: list[int] = []
     for position, step in enumerate(steps):
@@ -192,13 +244,20 @@ def workflow_prerequisite_problems(path: Path) -> list[str]:
         problems.append("build-and-audit must contain exactly one leanprover/lean-action@v1 step")
     else:
         lean_position = lean_matches[0]
-        build_values: list[str] = []
-        for raw in steps[lean_position]["lines"]:
-            match = re.fullmatch(r" {10}build:\s*(.*?)\s*", raw)
-            if match is not None:
-                build_values.append(match.group(1))
-        if build_values != ["true"]:
+        lean_with = _step_mapping(steps[lean_position], "with")
+        if lean_with is None or lean_with.get("build") != "true":
             problems.append("lean-action must explicitly perform the full default build")
+        build_occurrences = [
+            raw
+            for raw in steps[lean_position]["lines"]
+            if raw.strip() and not raw.strip().startswith("#")
+            and re.match(r"^build\s*:", raw.strip())
+        ]
+        if len(build_occurrences) != 1:
+            problems.append("lean-action build must occur exactly once directly inside with")
+        problems.extend(
+            _required_step_guard_problems("full default build", steps[lean_position])
+        )
         positions["full default build"] = lean_position
 
     ordered = [
@@ -435,6 +494,58 @@ def self_test() -> int:
         check(
             bool(workflow_prerequisite_problems(copied_workflow)),
             "certification before the authoring leaf passed",
+        )
+
+        conditional_mutant = original.replace(
+            "        run: scripts/certify-checked-build.sh",
+            "        if: false\n        run: scripts/certify-checked-build.sh",
+            1,
+        )
+        check(conditional_mutant != original, "conditional mutation did not bite the workflow copy")
+        copied_workflow.write_text(conditional_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "a disabled required certification step passed",
+        )
+
+        continue_mutant = original.replace(
+            "        run: lake build jaune/jaune",
+            "        continue-on-error: true\n        run: lake build jaune/jaune",
+            1,
+        )
+        check(continue_mutant != original, "continue mutation did not bite the workflow copy")
+        copied_workflow.write_text(continue_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "a required runner build allowed to continue on error passed",
+        )
+
+        override_mutant = original.replace(
+            "        run: scripts/check-drip.sh",
+            "        env:\n          LAKE_CACHE_DIR: ${{ runner.temp }}/lake-cache\n"
+            "        run: scripts/check-drip.sh",
+            1,
+        )
+        check(override_mutant != original, "override mutation did not bite the workflow copy")
+        copied_workflow.write_text(override_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "a required step-level artifact-cache override passed",
+        )
+
+        misplaced_build_mutant = original.replace(
+            "        with:\n          build: true",
+            "        env:\n          build: true",
+            1,
+        )
+        check(
+            misplaced_build_mutant != original,
+            "misplaced build mutation did not bite the workflow copy",
+        )
+        copied_workflow.write_text(misplaced_build_mutant, encoding="utf-8")
+        check(
+            bool(workflow_prerequisite_problems(copied_workflow)),
+            "build: true outside lean-action with passed",
         )
 
         copied_workflow.write_text(original, encoding="utf-8")
