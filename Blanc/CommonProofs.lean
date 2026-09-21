@@ -3942,22 +3942,36 @@ lemma GenericCallAmsterdam.codePreserve
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
-  all_goals first
-    | obtain ⟨-, rfl⟩ := run
-      rename_i heq
+  -- early exit, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    by_cases hnac : newAccountCharged = true
+    · rw [if_pos hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
         Devm.restoreChildGas_getCode]
       rfl
-    | obtain ⟨-, rfl⟩ := run
-      rename_i heq
+    · rw [if_neg hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
       rfl
-    | obtain ⟨r, hframe, rfl⟩ := run
-      have hmg : MsgResult.getCode r a = (devm.withReturnData []).getCode a := by
-        rw [ProcessMessage.codePreserve inv hframe a
-          (by rw [callMsgAmsterdam_benv_state_getCode]; exact ha)]
-        exact callMsgAmsterdam_benv_state_getCode a
-      rw [Resume.callAmsterdam_getCode hmg]
+  -- early exit, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    by_cases hnac : newAccountCharged = true
+    · rw [if_pos hnac] at heq
+      rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
+        Devm.restoreChildGas_getCode]
+      rfl
+    · rw [if_neg hnac] at heq
+      rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
+      rfl
+  -- the child frame is entered
+  · obtain ⟨r, hframe, rfl⟩ := run
+    have hmg : MsgResult.getCode r a = (devm.withReturnData []).getCode a := by
+      rw [ProcessMessage.codePreserve inv hframe a
+        (by rw [callMsgAmsterdam_benv_state_getCode]; exact ha)]
+      exact callMsgAmsterdam_benv_state_getCode a
+    rw [Resume.callAmsterdam_getCode hmg]
+    rfl
 
 /-- A call-type step whose `Except` prefix failed carries that failure. -/
 lemma XStep.run_ofExcept_error {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
