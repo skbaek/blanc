@@ -1381,6 +1381,17 @@ lemma Devm.restoreChildGas_instructionFrame (gas reservoir : Nat) (d : Devm) :
   unfold Devm.restoreChildGas
   exact Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
 
+lemma Devm.withholdCreateGas_instructionFrame (d : Devm) :
+    Devm.InstructionFrame d (d.withholdCreateGas.2) := by
+  have h : d.withholdCreateGas.2
+      = d.setMach (d.mach.withholdCreateGas.2) := by
+    unfold Devm.withholdCreateGas
+    cases h : d.mach.withholdCreateGas with
+    | mk c m => rfl
+  rw [h]
+  exact Devm.machFrame_refines_instructionFrame
+    (Devm.machFrame_setMach d (d.mach.withholdCreateGas.2))
+
 /-- Amsterdam delegation completion at most warms one address, so it stays
     inside the instruction frame. -/
 lemma completeDelegationAccess_instructionFrame (d : Devm) (dp : Bool)
@@ -10590,6 +10601,21 @@ lemma Devm.instructionFrame_refines_balNoninc :
   rw [h.state]
   exact balNoninc_refl_trans.1.1 _
 
+/-- Charging state gas is balance-silent: it refines the instruction frame,
+hence transports to the balance preorder on either outcome. -/
+lemma Devm.chargeStateGas_balNoninc {amount : Nat} {d : Devm}
+    {exn : Execution} (h : chargeStateGas amount d = exn) :
+    Execution.Rel Devm.BalNoninc d exn := by
+  rw [← h]
+  exact Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
+    (chargeStateGas_instructionFrame amount d)
+
+lemma Devm.chargeStateGas_balNoninc_of_ok {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') :
+    Devm.BalNoninc d d' := by
+  have hr := Devm.chargeStateGas_balNoninc h
+  exact hr
+
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (EvmError × Jaune.State × AdrSet × Tra) Benv}
     (h : msg.benvAfterTransfer = out) :
@@ -11229,6 +11255,181 @@ lemma GenericCreate.balance_effect
     Execution.Rel Devm.BalNoninc pre out :=
   GenericCreate.balanceEffect hxl run
 
+lemma GenericCreateAmsterdam.balanceEffect
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCreateAmsterdam sevm state pre endowment newAddress mi ms
+      xl out) :
+    Execution.Rel Devm.BalNoninc pre out := by
+  have hret : Devm.BalNoninc pre (pre.withReturnData []) :=
+    Devm.instructionFrame_refines_balNoninc
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
+  have hD : Devm.BalNoninc pre
+      (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData [])) newAddress)) :=
+    balNoninc_refl_trans.2.2 hret
+      (balNoninc_refl_trans.2.2
+        (Devm.instructionFrame_refines_balNoninc
+          (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
+            sevm.currentTarget _))
+        (balNoninc_refl_trans.2.2
+          (Devm.instructionFrame_refines_balNoninc
+            (addAccessedAddress_instructionFrame _ newAddress))
+          (Devm.instructionFrame_refines_balNoninc
+            (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
+              newAddress _))))
+  have hW2 : Devm.BalNoninc
+      (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData [])) newAddress))
+      ((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2) :=
+    Devm.instructionFrame_refines_balNoninc
+      (Devm.withholdCreateGas_instructionFrame _)
+  have hPc : Devm.BalNoninc
+      ((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2)
+      (((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2).incrNonce sevm.currentTarget) :=
+    Devm.incrNonce_balance_effect _ sevm.currentTarget
+  have hR2 : Devm.BalNoninc
+      ((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2)
+      (((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2).drainStateGasReservoir.2) :=
+    Devm.instructionFrame_refines_balNoninc
+      (Devm.drainStateGasReservoir_instructionFrame _)
+  have hP2 : Devm.BalNoninc
+      (((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2).drainStateGasReservoir.2)
+      ((((Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (pre.withReturnData []))
+          newAddress)).withholdCreateGas.2).drainStateGasReservoir.2).incrNonce
+        sevm.currentTarget) :=
+    Devm.incrNonce_balance_effect _ sevm.currentTarget
+  unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  -- preflight abort, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+    exact Devm.instructionFrame_refines_balNoninc
+      (Devm.balReadAccount_instructionFrame _ _ _)
+  -- preflight abort, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+    exact Devm.instructionFrame_refines_balNoninc
+      (Devm.balReadAccount_instructionFrame _ _ _)
+  -- creation charge failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    exact Execution.Rel.trans_left balNoninc_refl_trans.2.2 hD
+      (Devm.chargeStateGas_balNoninc heq)
+  -- charged collision, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i v hchg _ _ _ hpush
+    have hW : Devm.BalNoninc v v.withholdCreateGas.2 :=
+      Devm.instructionFrame_refines_balNoninc
+        (Devm.withholdCreateGas_instructionFrame v)
+    have hI : Devm.BalNoninc v.withholdCreateGas.2
+        (v.withholdCreateGas.2.incrNonce sevm.currentTarget) :=
+      Devm.incrNonce_balance_effect _ sevm.currentTarget
+    exact Devm.push_balance_gen hpush
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2
+          (Devm.chargeStateGas_balNoninc_of_ok hchg)
+          (balNoninc_refl_trans.2.2 hW hI)))
+  -- charged collision, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i v hchg _ _ _ hpush
+    have hW : Devm.BalNoninc v v.withholdCreateGas.2 :=
+      Devm.instructionFrame_refines_balNoninc
+        (Devm.withholdCreateGas_instructionFrame v)
+    have hI : Devm.BalNoninc v.withholdCreateGas.2
+        (v.withholdCreateGas.2.incrNonce sevm.currentTarget) :=
+      Devm.incrNonce_balance_effect _ sevm.currentTarget
+    exact Devm.push_balance_gen hpush
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2
+          (Devm.chargeStateGas_balNoninc_of_ok hchg)
+          (balNoninc_refl_trans.2.2 hW hI)))
+  -- charged spawn
+  · obtain ⟨r, hframe, rfl⟩ := run
+    rename_i v hchg _
+    have hW : Devm.BalNoninc v v.withholdCreateGas.2 :=
+      Devm.instructionFrame_refines_balNoninc
+        (Devm.withholdCreateGas_instructionFrame v)
+    have hR : Devm.BalNoninc v.withholdCreateGas.2
+        (v.withholdCreateGas.2.drainStateGasReservoir.2) :=
+      Devm.instructionFrame_refines_balNoninc
+        (Devm.drainStateGasReservoir_instructionFrame _)
+    have hI : Devm.BalNoninc v.withholdCreateGas.2.drainStateGasReservoir.2
+        (v.withholdCreateGas.2.drainStateGasReservoir.2.incrNonce
+          sevm.currentTarget) :=
+      Devm.incrNonce_balance_effect _ sevm.currentTarget
+    refine Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2
+          (Devm.chargeStateGas_balNoninc_of_ok hchg)
+          (balNoninc_refl_trans.2.2 hW
+            (balNoninc_refl_trans.2.2 hR hI)))) ?_
+    refine Resume.createAmsterdam_balance ?_
+    have h := ProcessCreateMessage.balance_effect hxl hframe
+    unfold MessageExecution.Rel at h
+    rw [createMsgAmsterdam_benv_state] at h
+    exact h
+  -- uncharged collision, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i hpush
+    exact Devm.push_balance_gen hpush
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2 hW2 hPc))
+  -- uncharged collision, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i hpush
+    exact Devm.push_balance_gen hpush
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2 hW2 hPc))
+  -- uncharged spawn
+  · obtain ⟨r, hframe, rfl⟩ := run
+    refine Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (balNoninc_refl_trans.2.2 hD
+        (balNoninc_refl_trans.2.2 hW2
+          (balNoninc_refl_trans.2.2 hR2 hP2))) ?_
+    refine Resume.createAmsterdam_balance ?_
+    have h := ProcessCreateMessage.balance_effect hxl hframe
+    unfold MessageExecution.Rel at h
+    rw [createMsgAmsterdam_benv_state] at h
+    exact h
+
+lemma GenericCreateAmsterdam.balance_effect
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCreateAmsterdam sevm state pre endowment newAddress mi ms
+      xl out) :
+    Execution.Rel Devm.BalNoninc pre out :=
+  GenericCreateAmsterdam.balanceEffect hxl run
+
 lemma Xinst.balance_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.BalNoninc x := by
   intro sevm pre xl out hxl run
@@ -11236,7 +11437,10 @@ lemma Xinst.balance_effectRec (x : Xinst) :
   rcases Xinst.step_shape sevm pre x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, -, hs⟩ <;> rw [hs] at run
+      hf, -, -, -, hs⟩ |
+    ⟨d, st, e, na, mi, ms, hf, hs⟩ |
+    ⟨d, d₀, st, g, r, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      nac, ib, hf, -, -, -, hs⟩ <;> rw [hs] at run
   -- the whole step stayed inside the instruction frame
   · obtain ⟨-, rfl⟩ := run
     exact Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc hframe
@@ -11248,6 +11452,14 @@ lemma Xinst.balance_effectRec (x : Xinst) :
   · exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
       (Devm.instructionFrame_refines_balNoninc hf)
       (GenericCall.balanceEffect hxl run)
+  -- dispatched to the Amsterdam CREATE family
+  · exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (Devm.instructionFrame_refines_balNoninc hf)
+      (GenericCreateAmsterdam.balanceEffect hxl run)
+  -- dispatched to the Amsterdam CALL family
+  · exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+      (Devm.instructionFrame_refines_balNoninc hf)
+      (GenericCallAmsterdam.balanceEffect hxl run)
 
 lemma Ninst.balance_effectRec (n : Ninst) :
     Ninst.EffectRec Devm.BalNoninc n := by
