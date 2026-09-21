@@ -336,7 +336,8 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
     unfold Exec.SuccessfulSstoreOccurrence.Retained
     unfold Exec.NinstOccurrence.Retained
     rw [occurrenceEq]
-    simp [HistoryFixture.occurrence14, HistoryFixture.root,
+    show fixture.occurrence14.node ∈ Exec.retainedNodes fixture.run
+    simp [HistoryFixture.occurrence14,
       HistoryFixture.run, HistoryFixture.node14, Exec.retainedNodes,
       Exec.retainedNodesOfCommits, fixture.commits]
   have owner : write.storageOwner = historySevm.currentTarget := by
@@ -1616,7 +1617,8 @@ private def CallFixture.root (w : CallFixture) : Exec.Deriv :=
 private theorem CallFixture.raw_order (w : CallFixture) :
     Exec.rawNodes w.run =
       w.root :: (Exec.rawNodes w.child ++ Exec.rawNodes w.next) := by
-  simp [CallFixture.run, CallFixture.root, Exec.rawNodes]
+  simp only [CallFixture.run, CallFixture.root]
+  conv_lhs => unfold Exec.rawNodes
 
 /-- The actually entered child root and all of its descendants precede every
 frame entered after the parent resumes. -/
@@ -1624,7 +1626,8 @@ private theorem CallFixture.rawFrameRoot_order (w : CallFixture) :
     Exec.rawFrameRoots w.run =
       w.root ::
         (Exec.rawFrameRoots w.child ++ Exec.rawFrameDescendants w.next) := by
-  simp [CallFixture.run, CallFixture.root]
+  simp [CallFixture.run, CallFixture.root, Exec.rawFrameRoots]
+  conv_lhs => unfold Exec.rawFrameDescendants
 
 private theorem CallFixture.retained_order_of_settles
     (w : CallFixture)
@@ -1983,8 +1986,10 @@ private def RawCallFixture.childRoot {parentCode childCode : ByteArray}
 private theorem RawCallFixture.childSelected {parentCode childCode : ByteArray}
     (w : RawCallFixture parentCode childCode) :
     w.childRoot ∈ Exec.rawFrameRoots w.run := by
-  simp [RawCallFixture.run, RawCallFixture.childRoot,
-    Exec.rawFrameRoots, Exec.rawFrameDescendants]
+  simp only [RawCallFixture.run, RawCallFixture.childRoot,
+    Exec.rawFrameRoots]
+  unfold Exec.rawFrameDescendants
+  simp
 
 private theorem RawCallFixture.childExact {parentCode childCode : ByteArray}
     (w : RawCallFixture parentCode childCode) (program : Prog)

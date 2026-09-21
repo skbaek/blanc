@@ -1020,34 +1020,57 @@ private theorem b256_one_eq_two_false : ((1 : B256) = 2) = False := by
   simp only [eq_iff_iff, iff_false]
   decide
 
-/-- One normalization pass for the double-write machine: unfold the `SSTORE`
-step, steer the accessed-storage-set and storage-read decisions, and fold the
-result back into the named literal states. -/
-macro "tw_norm" : tactic => `(tactic|
-  simp +decide only [twoWriteMid, twoWriteEnd, twoWriteAcctMid,
-    twoWriteAcctEnd,
-    Rinst.run, Rinst.runCore, Devm.pop_def, chargeGas_def,
-    Bind.bind, Except.bind, Except.assert, assertDynamic,
+/-- The 47 entries of `tw_norm` that are pure definitional unfoldings: `dsimp`
+can use every one of them, so they carry no rewriting cost. -/
+macro "tw_defs" : tactic => `(tactic|
+  try dsimp only [
+    twoWriteMid, twoWriteEnd, twoWriteAcctMid, twoWriteAcctEnd, Rinst.run,
+    Rinst.runCore, Bind.bind, Except.bind, Except.assert, assertDynamic,
     getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
-    sstoreNewRefundCounter, safeSub,
-    twoWriteSevm, twoWritePre, twoWriteCode, default,
-    Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
+    sstoreNewRefundCounter, safeSub, twoWriteSevm, twoWritePre, twoWriteCode,
+    default, Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
     Devm.setWorld, Devm.stack, Devm.gasLeft, Devm.state,
-    Devm.accessedStorageKeys, Devm.refundCounter,
-    addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
-    Devm.withRefundCounter, Devm.setStorVal, State.setStorVal,
-    Devm.withState, Devm.mach, Devm.meta, Devm.world, Devm.error,
+    Devm.accessedStorageKeys, Devm.refundCounter, addAccessedStorageKey,
+    liftMachMetaPure, Meta.addAccessedStorageKey, Devm.withRefundCounter,
+    Devm.setStorVal, State.setStorVal, Devm.withState, Devm.mach, Devm.meta,
+    Devm.world, Devm.error, gCallStipend, gasColdSload, gasStorageSet,
+    gasWarmAccess, gasStorageUpdate, rSClear])
+
+/-- The 30 entries of `tw_norm` that are genuine rewrites: the empty-state and
+set-self storage laws, the concrete `B256` disequalities, and the propositional
+and arithmetic normalizers that steer the two decisions. -/
+macro "tw_lemmas" : tactic => `(tactic|
+  try simp +decide only [
     state_get_empty, acctNil_nonce, acctNil_bal, acctNil_stor, acctNil_code,
     stor_get_empty, State.get_set_self, Stor.get_set_self,
     b256_zero_eq_one_false, b256_one_eq_zero_false, b256_two_eq_zero_false,
-    b256_zero_eq_two_false, b256_one_eq_two_false,
-    eq_self_iff_true, and_true, true_and, and_false, false_and,
-    not_true, not_false_iff, not_false_eq_true, ne_eq,
-    Std.HashSet.not_mem_emptyWithCapacity, Std.HashSet.mem_insert,
-    ite_true, ite_false, if_true, if_false,
-    Nat.reduceAdd, Nat.reduceSub,
-    gCallStipend, gasColdSload, gasStorageSet, gasWarmAccess,
-    gasStorageUpdate, rSClear])
+    b256_zero_eq_two_false, b256_one_eq_two_false, eq_self_iff_true, and_true,
+    true_and, and_false, false_and, not_true, not_false_iff,
+    not_false_eq_true, ne_eq, Std.HashSet.not_mem_emptyWithCapacity,
+    Std.HashSet.mem_insert, ite_true, ite_false, if_true, if_false,
+    Nat.reduceAdd, Nat.reduceSub])
+
+/-- One normalization pass for the double-write machine: unfold the `SSTORE`
+step, steer the accessed-storage-set and storage-read decisions, and fold the
+result back into the named literal states.
+
+The same 79 entries are used as before, in four passes rather than one fused
+`simp`.  `Devm.pop_def` and `chargeGas_def` are the only two that `dsimp`
+cannot use (`Jaune/Machine.lean:2356`, `:2021`; each is proved by
+`cases … <;> rfl`, so neither is a `rfl`-lemma), and `chargeGas_def` is
+deliberately held back to the third pass: rewriting it while its cost argument
+is still the un-normalized nested `if` is what makes the following `simp`
+exceed `maxRecDepth` under Lean 4.34.  Once `tw_lemmas` has reduced that cost
+to a literal the same rewrite is trivial.  The passes are `try`-guarded because
+the three call sites enter with different subsets of the pipeline present. -/
+macro "tw_norm" : tactic => `(tactic|
+  (tw_defs
+   try simp only [Devm.pop_def]
+   tw_defs
+   tw_lemmas
+   try simp only [chargeGas_def]
+   tw_defs
+   tw_lemmas))
 
 private theorem twoWriteStep0 :
     Rinst.run ⟨0, twoWriteSevm, twoWritePre⟩ .sstore = .ok twoWriteMid := by
@@ -1117,10 +1140,14 @@ private theorem twoWriteWrites :
          key := 0, value := 1 },
        { node := twoWriteNodeMid, owner := twoWriteSevm.currentTarget,
          key := 0, value := 2 }] := by
-  simp only [Exec.retainedStorageWrites, Exec.retainedNodes, twoWriteCommits,
-    twoWriteRun, Exec.retainedNodesOfCommits, twoWriteRoot, twoWriteNodeMid,
+  simp only [Exec.retainedStorageWrites]
+  rw [Exec.retainedNodes_eq_of_commits _ twoWriteCommits]
+  unfold Exec.retainedNodesOfCommits
+  unfold Exec.retainedNodesOfCommits
+  unfold Exec.retainedNodesOfCommits
+  simp only [twoWriteRun, twoWriteRoot, twoWriteNodeMid,
     List.filterMap, Exec.Deriv.successfulSstore?, twoWriteGetInst0,
-    twoWriteGetInst1, twoWritePre_stack, twoWriteMid_stack, dite_true]
+    twoWriteGetInst1, twoWritePre_stack, twoWriteMid_stack]
 
 /-- The public last-retained selector, instantiated at the double-write run:
 the selected writer carries the second value `2`, the surviving word. -/
