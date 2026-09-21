@@ -5203,6 +5203,110 @@ lemma Ninst.push_codePreserve_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
   exact Ninst.push_effectRec_of_instructionFrame (R := Devm.CodePreserve)
     (fun _ _ hf a _ => (hf.getCode a).symm)
 
+lemma Devm.withStack_instructionFrame (d : Devm) (stack : List B256) :
+    Devm.InstructionFrame d (d.withStack stack) := by
+  unfold Devm.withStack
+  exact Devm.machFrame_refines_instructionFrame (Devm.machFrame_setMach d _)
+
+lemma Ninst.dupn_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.dupn imm) := by
+  intro pc sevm pre xl out hxl hRun
+  simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · refine Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame _ _) fun devm => ?_
+    split
+    · exact Devm.instructionFrame_refl devm
+    · rename_i n
+      split
+      · exact Devm.instructionFrame_refl devm
+      · exact Devm.push_instructionFrame _ _
+  · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.swapn_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.swapn imm) := by
+  intro pc sevm pre xl out hxl hRun
+  simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · refine Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame _ _) fun devm => ?_
+    split
+    · exact Devm.instructionFrame_refl devm
+    · rename_i n
+      split
+      · exact Devm.instructionFrame_refl devm
+      · exact Devm.withStack_instructionFrame _ _
+  · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.exchange_instructionFrame_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.InstructionFrame (.exchange imm) := by
+  intro pc sevm pre xl out hxl hRun
+  simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hRun
+  obtain ⟨-, rfl⟩ := hRun
+  split
+  · refine Execution.Rel.bind Devm.instructionFrame_trans
+      (chargeGas_instructionFrame _ _) fun devm => ?_
+    split
+    · exact Devm.instructionFrame_refl devm
+    · rename_i nm
+      split
+      · exact Devm.instructionFrame_refl devm
+      · exact Devm.withStack_instructionFrame _ _
+  · exact Devm.instructionFrame_refl pre
+
+lemma Ninst.dupn_effectRec_of_instructionFrame
+    {R : Devm → Devm → Prop} {imm : UInt8}
+    (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
+    Ninst.EffectRec R (.dupn imm) := by
+  intro pc sevm pre xl out hxl hRun
+  have h0 : xl = .none := by
+    simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hRun
+    exact hRun.1
+  subst h0
+  exact Outcome.Rel.mono hIR
+    (Ninst.dupn_instructionFrame_effectRec (xl := .none) trivial hRun)
+
+lemma Ninst.swapn_effectRec_of_instructionFrame
+    {R : Devm → Devm → Prop} {imm : UInt8}
+    (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
+    Ninst.EffectRec R (.swapn imm) := by
+  intro pc sevm pre xl out hxl hRun
+  have h0 : xl = .none := by
+    simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hRun
+    exact hRun.1
+  subst h0
+  exact Outcome.Rel.mono hIR
+    (Ninst.swapn_instructionFrame_effectRec (xl := .none) trivial hRun)
+
+lemma Ninst.exchange_effectRec_of_instructionFrame
+    {R : Devm → Devm → Prop} {imm : UInt8}
+    (hIR : ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → R d d') :
+    Ninst.EffectRec R (.exchange imm) := by
+  intro pc sevm pre xl out hxl hRun
+  have h0 : xl = .none := by
+    simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hRun
+    exact hRun.1
+  subst h0
+  exact Outcome.Rel.mono hIR
+    (Ninst.exchange_instructionFrame_effectRec (xl := .none) trivial hRun)
+
+lemma Ninst.dupn_codePreserve_effectRec {imm : UInt8} :
+  Ninst.EffectRec Devm.CodePreserve (.dupn imm) := by
+  exact Ninst.dupn_effectRec_of_instructionFrame (R := Devm.CodePreserve)
+    (fun _ _ hf a _ => (hf.getCode a).symm)
+
+lemma Ninst.swapn_codePreserve_effectRec {imm : UInt8} :
+  Ninst.EffectRec Devm.CodePreserve (.swapn imm) := by
+  exact Ninst.swapn_effectRec_of_instructionFrame (R := Devm.CodePreserve)
+    (fun _ _ hf a _ => (hf.getCode a).symm)
+
+lemma Ninst.exchange_codePreserve_effectRec {imm : UInt8} :
+  Ninst.EffectRec Devm.CodePreserve (.exchange imm) := by
+  exact Ninst.exchange_effectRec_of_instructionFrame (R := Devm.CodePreserve)
+    (fun _ _ hf a _ => (hf.getCode a).symm)
+
 lemma Ninst.codePreserve_effectRec (n : Ninst) :
     Ninst.EffectRec Devm.CodePreserve n := by
   cases n with
@@ -5212,6 +5316,12 @@ lemma Ninst.codePreserve_effectRec (n : Ninst) :
     exact Ninst.effectRec_exec (Xinst.codePreserve_effectRec x)
   | push xs hxs =>
     exact Ninst.push_codePreserve_effectRec
+  | dupn imm =>
+    exact Ninst.dupn_codePreserve_effectRec
+  | swapn imm =>
+    exact Ninst.swapn_codePreserve_effectRec
+  | exchange imm =>
+    exact Ninst.exchange_codePreserve_effectRec
 
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
@@ -10028,6 +10138,24 @@ lemma Ninst.push_balance_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
     (fun _ _ hf =>
       Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
 
+lemma Ninst.dupn_balance_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.BalNoninc (.dupn imm) := by
+  exact Ninst.dupn_effectRec_of_instructionFrame (R := Devm.BalNoninc)
+    (fun _ _ hf =>
+      Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
+
+lemma Ninst.swapn_balance_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.BalNoninc (.swapn imm) := by
+  exact Ninst.swapn_effectRec_of_instructionFrame (R := Devm.BalNoninc)
+    (fun _ _ hf =>
+      Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
+
+lemma Ninst.exchange_balance_effectRec {imm : UInt8} :
+    Ninst.EffectRec Devm.BalNoninc (.exchange imm) := by
+  exact Ninst.exchange_effectRec_of_instructionFrame (R := Devm.BalNoninc)
+    (fun _ _ hf =>
+      Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
+
 lemma Linst.selfdestruct_balance_effect :
     Linst.Effect Devm.BalNoninc .selfdestruct := by
   intro sevm pre out run
@@ -10658,6 +10786,12 @@ lemma Ninst.balance_effectRec (n : Ninst) :
     apply Xinst.balance_effectRec
   case push xs hxs =>
     apply Ninst.push_balance_effectRec
+  case dupn imm =>
+    apply Ninst.dupn_balance_effectRec
+  case swapn imm =>
+    apply Ninst.swapn_balance_effectRec
+  case exchange imm =>
+    apply Ninst.exchange_balance_effectRec
 
 theorem Exec.balance_effect {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out) :
