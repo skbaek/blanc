@@ -3439,6 +3439,13 @@ lemma createMsg_benv_state_getCode
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state.getCode a
       = devm.getCode a := rfl
 
+lemma createMsgAmsterdam_benv_state_getCode
+    {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
+    {newAddress : Adr} {calldata : Bytes} {reservoir : Nat} (a : Adr) :
+    ( { createMsg sevm devm createGas endowment newAddress calldata
+        with stateGasGrant := reservoir } ).benv.state.getCode a
+      = devm.getCode a := rfl
+
 /-- The CREATE-family return path preserves code at every address other than
 the freshly created one, given the child frame preserved it. -/
 lemma Resume.create_getCode {parent : Devm} {newAddress a : Adr}
@@ -3582,12 +3589,151 @@ lemma GenericCreate.codePreserve
     exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
       (by rw [createMsg_benv_state_getCode, h_parent a]; exact ha)
 
+lemma GenericCreateAmsterdam.codePreserve
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {memoryIndex memorySize : Nat} {xl : Xlot}
+    {exn : Execution} (inv : xl.InvGetCode)
+    (run : GenericCreateAmsterdam sevm state devm endowment newAddress
+      memoryIndex memorySize xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a ha
+  unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  all_goals first
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      rw [Devm.push_getCode_gen heq a, Devm.balReadAccount_getCode]
+      rfl
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      dsimp only [Execution.getCode]
+      rw [((chargeStateGas_worldEq_of_error heq).getCode a).symm,
+        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+        Devm.balReadAccount_getCode]
+      rfl
+    | obtain ⟨-, rfl⟩ := run
+      rename_i hchg _ _ _ hpush
+      rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
+        Devm.withholdCreateGas_getCode,
+        ((chargeStateGas_worldEq_of_ok hchg).getCode a).symm,
+        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+        Devm.balReadAccount_getCode]
+      rfl
+    | obtain ⟨-, rfl⟩ := run
+      rename_i hpush
+      rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
+        Devm.withholdCreateGas_getCode,
+        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+        Devm.balReadAccount_getCode]
+      rfl
+    | refine Exists.elim run (fun r hr => ?_)
+      obtain ⟨hframe, rfl⟩ := hr
+      rename_i v hchg hnc
+      have h_parent : ∀ a : Adr,
+          (v.withholdCreateGas.2.drainStateGasReservoir.2.incrNonce
+            sevm.currentTarget).getCode a = devm.getCode a := by
+        intro a
+        rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+          Devm.withholdCreateGas_getCode,
+          ((chargeStateGas_worldEq_of_ok hchg).getCode a).symm,
+          Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.balReadAccount_getCode]
+        rfl
+      have h_a_ne : a ≠ newAddress := by
+        intro h_eq
+        push Not at hnc
+        have h_code_size :
+            (v.withholdCreateGas.2.getCode newAddress).size = 0 := hnc.2.1
+        have h_empty : devm.getCode newAddress = .empty := by
+          have h0 : v.withholdCreateGas.2.getCode newAddress = .empty := by
+            cases h_code' : v.withholdCreateGas.2.getCode newAddress with
+            | mk data =>
+              rw [h_code'] at h_code_size
+              cases data with
+              | mk l =>
+                cases l
+                · rfl
+                · contradiction
+          rw [Devm.withholdCreateGas_getCode,
+            ((chargeStateGas_worldEq_of_ok hchg).getCode newAddress).symm,
+            Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+            Devm.balReadAccount_getCode] at h0
+          exact h0
+        rw [h_eq, h_empty] at ha
+        exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
+      rw [Resume.createAmsterdam_getCode ?_, h_parent a]
+      exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+        (by rw [createMsgAmsterdam_benv_state_getCode, h_parent a]; exact ha)
+    | refine Exists.elim run (fun r hr => ?_)
+      obtain ⟨hframe, rfl⟩ := hr
+      rename_i hnc
+      have h_parent : ∀ a : Adr,
+          ((Devm.balReadAccount sevm.benvStat.rules newAddress
+            (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+              sevm.currentTarget (devm.withReturnData []))
+              newAddress)).withholdCreateGas.2.drainStateGasReservoir.2.incrNonce
+            sevm.currentTarget).getCode a = devm.getCode a := by
+        intro a
+        rw [Devm.incrNonce_getCode, Devm.drainStateGasReservoir_getCode,
+          Devm.withholdCreateGas_getCode,
+          Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.balReadAccount_getCode]
+        rfl
+      have h_a_ne : a ≠ newAddress := by
+        intro h_eq
+        push Not at hnc
+        have h_code_size :
+            ((Devm.balReadAccount sevm.benvStat.rules newAddress
+              (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+                sevm.currentTarget (devm.withReturnData []))
+                newAddress)).withholdCreateGas.2.getCode
+              newAddress).size = 0 := hnc.2.1
+        have h_empty : devm.getCode newAddress = .empty := by
+          have h0 : (Devm.balReadAccount sevm.benvStat.rules newAddress
+              (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+                sevm.currentTarget (devm.withReturnData []))
+                newAddress)).withholdCreateGas.2.getCode newAddress
+              = .empty := by
+            cases h_code' : (Devm.balReadAccount sevm.benvStat.rules newAddress
+              (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+                sevm.currentTarget (devm.withReturnData []))
+                newAddress)).withholdCreateGas.2.getCode newAddress with
+            | mk data =>
+              rw [h_code'] at h_code_size
+              cases data with
+              | mk l =>
+                cases l
+                · rfl
+                · contradiction
+          rw [Devm.withholdCreateGas_getCode,
+            Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+            Devm.balReadAccount_getCode] at h0
+          exact h0
+        rw [h_eq, h_empty] at ha
+        exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
+      rw [Resume.createAmsterdam_getCode ?_, h_parent a]
+      exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+        (by rw [createMsgAmsterdam_benv_state_getCode, h_parent a]; exact ha)
+
 lemma callMsg_benv_state_getCode
     {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {calldata : Bytes} {code : ByteArray} {disablePrecompiles : Bool} (a : Adr) :
     ( callMsg sevm evm1 gas value caller target codeAddress shouldTransferValue
         isStaticcall calldata code disablePrecompiles ).benv.state.getCode a
+      = evm1.getCode a := rfl
+
+lemma callMsgAmsterdam_benv_state_getCode
+    {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {calldata : Bytes} {code : ByteArray} {disablePrecompiles : Bool}
+    {reservoir : Nat} (a : Adr) :
+    ( { callMsg sevm evm1 gas value caller target codeAddress
+          shouldTransferValue isStaticcall calldata code disablePrecompiles
+        with stateGasGrant := reservoir } ).benv.state.getCode a
       = evm1.getCode a := rfl
 
 /-- The CALL-family return path preserves code at every address, given the child
@@ -3766,6 +3912,41 @@ lemma GenericCall.codePreserve
     · rw [ProcessMessage.codePreserve inv hframe a
         (by rw [callMsg_benv_state_getCode]; exact ha)]
       exact callMsg_benv_state_getCode a
+
+lemma GenericCallAmsterdam.codePreserve
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr}
+    {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {xl : Xlot} {exn : Execution}
+    (inv : xl.InvGetCode)
+    (run : GenericCallAmsterdam sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue isStaticcall input_index
+      input_size output_index output_size code disablePrecompiles
+      newAccountCharged insufficientBalance xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a ha
+  unfold GenericCallAmsterdam genericCallAmsterdam.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  all_goals first
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
+        Devm.restoreChildGas_getCode]
+      rfl
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
+      rfl
+    | obtain ⟨r, hframe, rfl⟩ := run
+      have hmg : MsgResult.getCode r a = (devm.withReturnData []).getCode a := by
+        rw [ProcessMessage.codePreserve inv hframe a
+          (by rw [callMsgAmsterdam_benv_state_getCode]; exact ha)]
+        exact callMsgAmsterdam_benv_state_getCode a
+      rw [Resume.callAmsterdam_getCode hmg]
 
 /-- A call-type step whose `Except` prefix failed carries that failure. -/
 lemma XStep.run_ofExcept_error {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
@@ -5272,7 +5453,10 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
   rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, -, hs⟩ <;>
+      hf, -, -, -, hs⟩ |
+    ⟨d, st, e, na, mi, ms, hf, hs⟩ |
+    ⟨d, d₀, st, g, r, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      nac, ib, hf, -, -, -, hs⟩ <;>
     rw [hs] at run
   -- the whole step stayed inside the instruction frame
   · obtain ⟨-, rfl⟩ := run
@@ -5281,6 +5465,10 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
   · exact lift hf (GenericCreate.codePreserve inv run)
   -- dispatched to the CALL family
   · exact lift hf (GenericCall.codePreserve inv run)
+  -- dispatched to the Amsterdam CREATE family
+  · exact lift hf (GenericCreateAmsterdam.codePreserve inv run)
+  -- dispatched to the Amsterdam CALL family
+  · exact lift hf (GenericCallAmsterdam.codePreserve inv run)
 
 /-- Compatibility projection: the legacy observation theorem, now derived from
 the relational master `Xinst.codePreserve_effectRec` through the
@@ -10510,6 +10698,21 @@ lemma createMsg_benv_state
     (createMsg sevm devm createGas endowment newAddress calldata).benv.state
       = devm.state := rfl
 
+lemma callMsgAmsterdam_benv_state
+    {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool} {calldata : Bytes}
+    {code : ByteArray} {dp : Bool} {reservoir : Nat} :
+    ( { callMsg sevm evm1 gas value caller target codeAddress stv isSt calldata
+        code dp with stateGasGrant := reservoir } ).benv.state
+      = evm1.state := rfl
+
+lemma createMsgAmsterdam_benv_state
+    {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
+    {newAddress : Adr} {calldata : Bytes} {reservoir : Nat} :
+    ( { createMsg sevm devm createGas endowment newAddress calldata
+        with stateGasGrant := reservoir } ).benv.state
+      = devm.state := rfl
+
 /-- The create driver is the call driver on the seeded message, followed by the
 create-specific settlement. -/
 lemma processCreateMessage_eq (msg : Msg) :
@@ -10691,6 +10894,24 @@ lemma incorporateChildOnSuccess_balance_effect
   dsimp only [incorporateChildOnSuccess]
   exact h
 
+lemma incorporateChildAmsterdamOnError_balance_effect
+    {pre parent child : Devm} {returnData : Bytes}
+    (h : State.BalNoninc pre.state child.state) :
+    Devm.BalNoninc pre
+      (incorporateChildAmsterdamOnError parent child returnData) := by
+  apply Devm.balNoninc_of_state
+  dsimp only [incorporateChildAmsterdamOnError]
+  exact h
+
+lemma incorporateChildAmsterdamOnSuccess_balance_effect
+    {pre parent child : Devm} {returnData : Bytes}
+    (h : State.BalNoninc pre.state child.state) :
+    Devm.BalNoninc pre
+      (incorporateChildAmsterdamOnSuccess parent child returnData) := by
+  apply Devm.balNoninc_of_state
+  dsimp only [incorporateChildAmsterdamOnSuccess]
+  exact h
+
 /-- Pushing a status word and writing the returned output to memory are both
 frame moves, so they carry a balance bound on the incorporated machine. -/
 lemma Devm.pushMemWrite_balance {pre d : Devm} {v : B256} {oi : Nat} {o : Bytes}
@@ -10749,6 +10970,90 @@ lemma Resume.call_balance {parent : Devm} {oi os : Nat} {r : MessageExecution}
     · exact Devm.pushMemWrite_balance (incorporateChildOnError_balance_effect h)
     · exact Devm.pushMemWrite_balance (incorporateChildOnSuccess_balance_effect h)
 
+/-- The Amsterdam CREATE-family return path never raises the parent's balance
+sum: the guards fail with the child itself, the refund credit touches gas
+only, and incorporation plus the status push are bounded as in the legacy
+path. -/
+lemma Resume.createAmsterdam_balance {state : StateGasRules} {parent : Devm}
+    {newAddress : Adr} {nac : Bool} {r : MessageExecution}
+    (h : State.BalNoninc parent.state (MessageExecution.state r)) :
+    Execution.Rel Devm.BalNoninc parent
+      ((Resume.createAmsterdam state parent newAddress nac).run r) := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, state, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind, Except.assert]
+  · simp only [Execution.Rel, Outcome.Rel]
+    exact h
+  · split
+    · by_cases hP : child.AmsterdamFailedChildSettled
+      · rw [if_pos hP]
+        dsimp only
+        by_cases hnac : nac = true
+        · rw [if_pos hnac]
+          refine Execution.Rel.trans_left balNoninc_refl_trans.2.2
+            (balNoninc_refl_trans.2.2
+              (incorporateChildAmsterdamOnError_balance_effect h)
+              (Devm.instructionFrame_refines_balNoninc
+                (Devm.creditStateGasRefund_instructionFrame _ _)))
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
+              (Devm.push_instructionFrame 0 _))
+        · rw [if_neg hnac]
+          exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+            (incorporateChildAmsterdamOnError_balance_effect h)
+            (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
+              (Devm.push_instructionFrame 0 _))
+      · rw [if_neg hP]
+        simp only [Execution.Rel, Outcome.Rel]
+        exact Devm.balNoninc_of_state h
+    · by_cases hP : child.AmsterdamChildUncommitted
+      · rw [if_pos hP]
+        dsimp only
+        exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+          (incorporateChildAmsterdamOnSuccess_balance_effect h)
+          (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
+            (Devm.push_instructionFrame _ _))
+      · rw [if_neg hP]
+        simp only [Execution.Rel, Outcome.Rel]
+        exact Devm.balNoninc_of_state h
+
+/-- The Amsterdam CALL-family return path, likewise: incorporation plus a
+push and a memory write, with the guard and credit steps bounded. -/
+lemma Resume.callAmsterdam_balance {state : StateGasRules} {parent : Devm}
+    {oi os : Nat} {nac : Bool} {r : MessageExecution}
+    (h : State.BalNoninc parent.state (MessageExecution.state r)) :
+    Execution.Rel Devm.BalNoninc parent
+      ((Resume.callAmsterdam state parent oi os nac).run r) := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, state, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind, Except.assert]
+  · simp only [Execution.Rel, Outcome.Rel]
+    exact h
+  · split
+    · by_cases hP : child.AmsterdamFailedChildSettled
+      · rw [if_pos hP]
+        dsimp only
+        by_cases hnac : nac = true
+        · rw [if_pos hnac]
+          exact Devm.pushMemWrite_balance
+            (balNoninc_refl_trans.2.2
+              (incorporateChildAmsterdamOnError_balance_effect h)
+              (Devm.instructionFrame_refines_balNoninc
+                (Devm.creditStateGasRefund_instructionFrame _ _)))
+        · rw [if_neg hnac]
+          exact Devm.pushMemWrite_balance
+            (incorporateChildAmsterdamOnError_balance_effect h)
+      · rw [if_neg hP]
+        simp only [Execution.Rel, Outcome.Rel]
+        exact Devm.balNoninc_of_state h
+    · by_cases hP : child.AmsterdamChildUncommitted
+      · rw [if_pos hP]
+        dsimp only
+        exact Devm.pushMemWrite_balance
+          (incorporateChildAmsterdamOnSuccess_balance_effect h)
+      · rw [if_neg hP]
+        simp only [Execution.Rel, Outcome.Rel]
+        exact Devm.balNoninc_of_state h
+
 /-- Canonical balance-effect master for generic calls.  The call prefix is
 balance-silent; all balance changes are delegated to `ProcessMessage`, and
 child incorporation merely installs the child's already-bounded state. -/
@@ -10798,6 +11103,53 @@ lemma GenericCall.balance_effect
       stv istat ii is oi os code dp xl out) :
     Execution.Rel Devm.BalNoninc pre out :=
   GenericCall.balanceEffect hxl run
+
+lemma GenericCallAmsterdam.balanceEffect
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {stv istat : Bool}
+    {ii is oi os : Nat} {code : ByteArray}
+    {dp nac ib : Bool} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCallAmsterdam sevm state pre gas reservoir value caller
+      target codeAddress stv istat ii is oi os code dp nac ib xl out) :
+    Execution.Rel Devm.BalNoninc pre out := by
+  have hret : Devm.BalNoninc pre (pre.withReturnData []) :=
+    Devm.instructionFrame_refines_balNoninc
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl)
+  unfold GenericCallAmsterdam genericCallAmsterdam.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  all_goals first
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+      exact Devm.instructionFrame_refines_balNoninc
+        (Devm.instructionFrame_trans
+          (Devm.restoreChildGas_instructionFrame _ _ _)
+          (Devm.creditStateGasRefund_instructionFrame _ _))
+    | obtain ⟨-, rfl⟩ := run
+      rename_i heq
+      refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+      exact Devm.instructionFrame_refines_balNoninc
+        (Devm.restoreChildGas_instructionFrame _ _ _)
+    | obtain ⟨r, hframe, rfl⟩ := run
+      refine Execution.Rel.trans_left balNoninc_refl_trans.2.2 hret ?_
+      refine Resume.callAmsterdam_balance ?_
+      have h := ProcessMessage.balance_effect hxl hframe
+      unfold MessageExecution.Rel at h
+      rwa [callMsgAmsterdam_benv_state] at h
+
+lemma GenericCallAmsterdam.balance_effect
+    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {stv istat : Bool}
+    {ii is oi os : Nat} {code : ByteArray}
+    {dp nac ib : Bool} {xl : Xlot} {out : Execution}
+    (hxl : Xlot.Rel Devm.BalNoninc xl)
+    (run : GenericCallAmsterdam sevm state pre gas reservoir value caller
+      target codeAddress stv istat ii is oi os code dp nac ib xl out) :
+    Execution.Rel Devm.BalNoninc pre out :=
+  GenericCallAmsterdam.balanceEffect hxl run
 
 /-- Canonical balance-effect master for generic creates.  Unlike calls, its
 prefix contains the sender nonce write and its child path performs fresh
