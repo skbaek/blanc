@@ -39,7 +39,7 @@ theorem Ninst.runCompiled_pushB256AsPush2OrPush32
     (room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm
       (CreationArtifact.pushB256AsPush2OrPush32 word)
-      (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨word :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   by_cases fit : word.toNat < 2 ^ 16
   · let bytes : Bytes :=
       [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
