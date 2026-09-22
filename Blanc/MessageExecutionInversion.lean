@@ -39,7 +39,7 @@ theorem processMessage_clean_rawPost
           · exact ProcessMessage.ok_state_eq_committedPost process commits
           · have settleEq := (RunFrame.some_inv process).2
             simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-              executeCode.handleError, processMessage.settle, errorEq] at settleEq
+              executeCode.handleErrorWith_ok, processMessage.settle, errorEq] at settleEq
             exact congrArg Devm.output settleEq
 
 /-- Facts inherited by a retained code frame from its actual message entry.

@@ -2944,17 +2944,273 @@ lemma GenericCreate.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
       obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
       cases h_xl
 
+/-- A successful Amsterdam CALL resumption finishes in a state supplied by the
+child.  Gas and meta-data reconciliation do not alter that state. -/
+private lemma resume_callAmsterdam_state
+    {state : StateGasRules} {parent child sf : Devm}
+    {oi os : Nat} {nac : Bool}
+    (h : (Resume.callAmsterdam state parent oi os nac).run (.ok child) = .ok sf) :
+    sf.state = child.state := by
+  have key : ∀ d : Devm, d.state = child.state → ∀ v : B256, ∀ o : Bytes,
+      (d.push v >>= fun d' => .ok (d'.memWrite oi o)) = .ok sf →
+        sf.state = child.state := by
+    intro d hd v o hh
+    cases hpush : d.push v with
+    | error e =>
+        simp [hpush] at hh
+    | ok d' =>
+        simp only [hpush, bind, Except.bind] at hh
+        have hpushFrame := Devm.push_instructionFrame v d
+        rw [hpush] at hpushFrame
+        have hpushFrame' : Devm.InstructionFrame d d' := hpushFrame
+        have hmemFrame : Devm.InstructionFrame d' (d'.memWrite oi o) :=
+          Devm.memWrite_instructionFrame d' oi o
+        have eq : d'.memWrite oi o = sf := Except.ok.inj hh
+        rw [← eq, ← hmemFrame.state, ← hpushFrame'.state, hd]
+  unfold Resume.run liftToExecution at h
+  dsimp only [bind, Except.bind, Except.assert] at h
+  split at h
+  · by_cases hP : child.AmsterdamFailedChildSettled
+    · rw [ite_eq_left hP] at h
+      dsimp only at h
+      by_cases hnac : nac = true
+      · rw [ite_eq_left hnac] at h
+        exact key (Devm.creditStateGasRefund state.newAccount
+          (incorporateChildAmsterdamOnError parent child child.output)) rfl 0
+          (child.output.take os) h
+      · rw [ite_eq_right hnac] at h
+        exact key (incorporateChildAmsterdamOnError parent child child.output) rfl 0
+          (child.output.take os) h
+    · rw [ite_eq_right hP] at h
+      cases h
+  · by_cases hP : child.AmsterdamChildUncommitted
+    · rw [ite_eq_left hP] at h
+      dsimp only at h
+      exact key (incorporateChildAmsterdamOnSuccess parent child child.output) rfl 1
+        (child.output.take os) h
+    · rw [ite_eq_right hP] at h
+      cases h
+
+/-- A successful synchronous Amsterdam generic call cannot change persistent
+storage.  Its preflight only changes gas, and a childless call cannot commit a
+child state. -/
+lemma GenericCallAmsterdam.none_getStor_eq
+    {sevm : Sevm} {state : StateGasRules} {devm inter : Devm}
+    {gas reservoir : Nat} {value : B256} {caller target codeAddress : Adr}
+    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp nac ib : Bool}
+    (h_run : GenericCallAmsterdam sevm state devm gas reservoir value caller target
+      codeAddress stv isStatic ii is oi os code dp nac ib .none (.ok inter)) :
+    Devm.getStor inter = Devm.getStor devm := by
+  unfold GenericCallAmsterdam genericCallAmsterdam.step at h_run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at h_run
+  repeat' split at h_run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
+  · cases h_run.2
+  · rename_i h_push
+    apply funext
+    intro a
+    change (inter.state.get a).stor = (devm.state.get a).stor
+    rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
+    by_cases hnac : nac = true
+    · rw [ite_eq_left hnac]
+      rfl
+    · rw [ite_eq_right hnac]
+      rfl
+  · obtain ⟨r, hframe, hres⟩ := h_run
+    obtain ⟨childMsg, hframe, hc_state, hc_stv, hc_caller, hc_value, hc_ct,
+        hc_ca⟩ :
+        ∃ m : Msg, ProcessMessage m .none r ∧
+          m.benv.state = devm.state ∧ m.shouldTransferValue = stv ∧
+          m.caller = caller ∧ m.value = value ∧ m.currentTarget = target ∧
+          m.codeAddress = some codeAddress :=
+      ⟨_, hframe, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    rcases r with err | child
+    · unfold Resume.run liftToExecution at hres
+      cases hres
+    have h_inter_state : inter.state = child.state :=
+      resume_callAmsterdam_state hres.symm
+    obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hframe
+    unfold FrameBody at hbody
+    rcases eq_bt : childMsg.benvAfterTransfer with e | benv <;>
+      rw [eq_bt] at hbody
+    · rw [hbody.2, processMessage.settle_error] at hset
+      cases hset
+    have run_ec : ExecuteCode (childMsg.withBenv benv) .none r0 := hbody
+    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
+    subst h_r0
+    rcases h_settle with ⟨h_err2, h_child⟩ | ⟨h_err2, h_child⟩
+    · apply funext
+      apply getStor_eq_of_state_eq
+      rw [h_inter_state, ← h_child]
+      exact hc_state
+    · subst h_child
+      have hc_ca2 : (childMsg.withBenv benv).codeAddress = some codeAddress :=
+        hc_ca
+      rcases of_executeCode_someCode hc_ca2 run_ec with
+        ⟨_, _, h_he⟩ | ⟨_, exn, h_xl_some, _⟩
+      · have h_child_state : evm2.state = benv.state := by
+          have h := state_of_executePrecomp_ok h_he h_err2
+          rw [h]
+          rfl
+        by_cases h_stv : stv = true
+        · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with
+            ⟨st_mid, h_sub, hB⟩
+          rw [hc_state, hc_caller, hc_value] at h_sub
+          have hBs : benv.state = st_mid.addBal target value := by
+            rw [hB, hc_ct, hc_value]
+            rfl
+          apply funext
+          intro a
+          show (inter.state.get a).stor = (devm.state.get a).stor
+          rw [h_inter_state, h_child_state, hBs]
+          exact (of_state_transfer_fields h_sub).1 a
+        · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by
+            rw [hc_stv]
+            exact h_stv
+          have h_benv : benv = childMsg.benv :=
+            of_benvAfterTransfer_no h_stv2 eq_bt
+          apply funext
+          apply getStor_eq_of_state_eq
+          rw [h_inter_state, h_child_state, h_benv]
+          exact hc_state
+      · cases h_xl_some
+
+/-- The Amsterdam creation access prefix changes only instruction-frame
+metadata and therefore preserves persistent storage. -/
+private lemma create_access_getStor
+    {sevm : Sevm} {devm : Devm} {newAddress : Adr} :
+    Devm.getStor
+      (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress
+          (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (devm.withReturnData []))
+          newAddress)) =
+      Devm.getStor devm := by
+  calc
+    Devm.getStor
+        (Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress
+            (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+              (devm.withReturnData []))
+            newAddress)) =
+        Devm.getStor
+          (addAccessedAddress
+            (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+              (devm.withReturnData []))
+            newAddress) := by
+          funext a
+          exact (Devm.balReadAccount_instructionFrame _ _ _).getStor a |>.symm
+    _ = Devm.getStor
+          (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (devm.withReturnData [])) := by
+          funext a
+          exact (addAccessedAddress_instructionFrame _ _).getStor a |>.symm
+    _ = Devm.getStor devm := by
+          funext a
+          exact (Devm.balReadAccount_instructionFrame _ _ _).getStor a |>.symm
+
+private lemma create_collision_getStor
+    {sevm : Sevm} {devm d : Devm}
+    (hd : Devm.getStor d = Devm.getStor devm) :
+    Devm.getStor (d.withholdCreateGas.2.incrNonce sevm.currentTarget) =
+      Devm.getStor devm := by
+  calc
+    Devm.getStor (d.withholdCreateGas.2.incrNonce sevm.currentTarget) =
+        Devm.getStor d.withholdCreateGas.2 := by
+      funext a
+      exact State.incrNonce_get_stor
+    _ = Devm.getStor d := by
+      funext a
+      exact (Devm.withholdCreateGas_instructionFrame d).getStor a |>.symm
+    _ = Devm.getStor devm := hd
+
+private lemma push_getStor {d inter devm : Devm} {v : B256}
+    (hp : d.push v = .ok inter)
+    (h : Devm.getStor d = Devm.getStor devm) :
+    Devm.getStor inter = Devm.getStor devm := by
+  funext a
+  change (inter.state.get a).stor = (devm.state.get a).stor
+  rw [← (Devm.push_of_push hp).state]
+  exact congrFun h a
+
+/-- A successful childless Amsterdam generic create cannot change persistent
+storage.  Its direct exits only alter frame metadata or the creator nonce. -/
+lemma GenericCreateAmsterdam.none_getStor_eq
+    {sevm : Sevm} {state : StateGasRules} {devm inter : Devm}
+    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
+    (h_run : GenericCreateAmsterdam sevm state devm endowment newAddress mi ms
+      .none (.ok inter)) :
+    Devm.getStor inter = Devm.getStor devm := by
+  unfold GenericCreateAmsterdam genericCreateAmsterdam.step at h_run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at h_run
+  repeat' split at h_run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
+  all_goals try cases h_run.2
+  · rename_i hpush
+    exact push_getStor hpush (by
+      funext a
+      exact (Devm.balReadAccount_instructionFrame _ _ _).getStor a |>.symm)
+  · rename_i hpre hnew xcharge v hchg hcollision xpush hpush
+    exact push_getStor hpush
+      (create_collision_getStor
+        ((Devm.chargeStateGas_getStor hchg).symm.trans create_access_getStor))
+  · exfalso
+    obtain ⟨r, hframe, hres⟩ := h_run
+    obtain ⟨childMsg, hframe, hc_ca⟩ :
+        ∃ m : Msg, ProcessCreateMessage m .none r ∧ m.codeAddress = .none :=
+      ⟨_, hframe, rfl⟩
+    obtain ⟨r1, hpm, hset⟩ := ProcessCreateMessage.iff_processMessage.mp hframe
+    obtain ⟨r0, hbody, hset1⟩ := ProcessMessage.iff_body.mp hpm
+    unfold FrameBody at hbody
+    rcases eq_bt : (processCreateMessage.msg childMsg).benvAfterTransfer with
+      e | benv <;> rw [eq_bt] at hbody
+    · rw [hbody.2, processMessage.settle_error] at hset1
+      rw [hset1, processCreateMessage.settle_error] at hset
+      rw [hset] at hres
+      unfold Resume.run liftToExecution at hres
+      cases hres
+    · have hca :
+          ((processCreateMessage.msg childMsg).withBenv benv).codeAddress =
+            .none := hc_ca
+      obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
+      cases h_xl
+  · rename_i hpush
+    exact push_getStor hpush
+      (create_collision_getStor create_access_getStor)
+  · exfalso
+    obtain ⟨r, hframe, hres⟩ := h_run
+    obtain ⟨childMsg, hframe, hc_ca⟩ :
+        ∃ m : Msg, ProcessCreateMessage m .none r ∧ m.codeAddress = .none :=
+      ⟨_, hframe, rfl⟩
+    obtain ⟨r1, hpm, hset⟩ := ProcessCreateMessage.iff_processMessage.mp hframe
+    obtain ⟨r0, hbody, hset1⟩ := ProcessMessage.iff_body.mp hpm
+    unfold FrameBody at hbody
+    rcases eq_bt : (processCreateMessage.msg childMsg).benvAfterTransfer with
+      e | benv <;> rw [eq_bt] at hbody
+    · rw [hbody.2, processMessage.settle_error] at hset1
+      rw [hset1, processCreateMessage.settle_error] at hset
+      rw [hset] at hres
+      unfold Resume.run liftToExecution at hres
+      cases hres
+    · have hca :
+          ((processCreateMessage.msg childMsg).withBenv benv).codeAddress =
+            .none := hc_ca
+      obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
+      cases h_xl
+
 /-- Any successful childless executable instruction preserves persistent
 storage at every address. -/
 lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
-    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Xinst.Run sevm devm x .none (.ok inter)) :
     Devm.getStor inter = Devm.getStor devm := by
   unfold Xinst.Run at h_run
-  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, hcal, -, hs⟩ <;> rw [hs] at h_run
+      hf, -, hcal, -, hs⟩ |
+    ⟨d, state, e, na, mi, ms, hf, hs⟩ |
+    ⟨d, d₀, state, g, reservoir, v, c, t, cadr, stv, isSt, ii, isz, oi,
+      osz, code, dp, nac, ib, hf, -, hcal, -, hs⟩ <;> rw [hs] at h_run
   · obtain ⟨-, hex⟩ := h_run
     rw [← hex] at hframe
     have hif : Devm.InstructionFrame devm inter := hframe
@@ -2962,6 +3218,10 @@ lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
   · exact GenericCreate.none_getStor_eq h_run |>.trans
       (funext hf.getStor).symm
   · exact GenericCall.none_getStor_eq h_run |>.trans
+      (funext hf.getStor).symm
+  · exact GenericCreateAmsterdam.none_getStor_eq h_run |>.trans
+      (funext hf.getStor).symm
+  · exact GenericCallAmsterdam.none_getStor_eq h_run |>.trans
       (funext hf.getStor).symm
 
 /-- Every successfully terminating last instruction preserves persistent
@@ -3444,7 +3704,7 @@ theorem Ninst.targetBalanceMono_of_none
 the observed account's persistent storage. -/
 theorem Ninst.foreignNone_getStor_eq
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (_hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca) :
     Devm.getStor post ca = Devm.getStor pre ca := by
@@ -3458,7 +3718,7 @@ theorem Ninst.foreignNone_getStor_eq
       · exact (congrFun (Rinst.preserves_stor store regularRun) ca).symm
   | exec executable =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact congrFun (Xinst.none_getStor_eq hfork (XStep.run_toStep.mp run)) ca
+      exact congrFun (Xinst.none_getStor_eq (XStep.run_toStep.mp run)) ca
   | push bytes bound =>
       have frame := Ninst.push_instructionFrame_effectRec
         (hxs := bound) (xl := .none) trivial run
