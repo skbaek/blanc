@@ -2967,7 +2967,8 @@ theorem ProcessMessage.none_ok_state_eq_entry_of_clean
   | inr execution =>
       rw [entered] at body
       rcases executeCode.enter_inr entered with ⟨address, execution_eq⟩
-      have handled : executeCode.handleError
+      have handled : executeCode.handleErrorWith
+          (msg.withBenv entry).benv.stat.rules.stateGas
           (executePrecomp (initEvm (msg.withBenv entry)) address) =
           .ok raw := by
         rw [← execution_eq, ← body.2]

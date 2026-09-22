@@ -3267,20 +3267,33 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
 /-- Handling a synchronous precompile result preserves the message-entry world
 state; precompiles only determine gas, output, and error metadata. -/
 theorem executeCode.handle_precompile_ok_state
-    {msg : Msg} {address : Adr} {post : Devm}
-    (h : executeCode.handleError
+    {msg : Msg} {address : Adr} {post : Devm} {stateGas : Option StateGasRules}
+    (h : executeCode.handleErrorWith stateGas
         (executePrecomp (initEvm msg) address) = .ok post) :
     post.state = msg.benv.state := by
-  unfold executePrecomp applyPrecompResult at h
-  cases hpre : precompileRun (initEvm msg) address with
-  | error error cost =>
-      simp only [hpre] at h
-      cases error <;> simp [executeCode.handleError] at h
-      · exact (congrArg Devm.state h).symm.trans rfl
-      · exact (congrArg Devm.state h).symm.trans rfl
-  | ok cost output =>
-      simp [hpre, executeCode.handleError] at h
-      exact (congrArg Devm.state h).symm.trans rfl
+  cases hsg : stateGas
+  · simp only [hsg, executeCode.handleErrorWith] at h
+    unfold executePrecomp applyPrecompResult at h
+    cases hpre : precompileRun (initEvm msg) address with
+    | error error cost =>
+        simp only [hpre] at h
+        cases error <;> simp [executeCode.handleError] at h
+        · exact (congrArg Devm.state h).symm.trans rfl
+        · exact (congrArg Devm.state h).symm.trans rfl
+    | ok cost output =>
+        simp [hpre, executeCode.handleError] at h
+        exact (congrArg Devm.state h).symm.trans rfl
+  · simp only [hsg, executeCode.handleErrorWith] at h
+    unfold executePrecomp applyPrecompResult at h
+    cases hpre : precompileRun (initEvm msg) address with
+    | error error cost =>
+        simp only [hpre] at h
+        cases error <;> simp [executeCode.handleErrorAmsterdam] at h
+        · exact (congrArg Devm.state h).symm.trans rfl
+        · exact (congrArg Devm.state h).symm.trans rfl
+    | ok cost output =>
+        simp [hpre, executeCode.handleErrorAmsterdam] at h
+        exact (congrArg Devm.state h).symm.trans rfl
 
 /-- Successful CREATE code-gas charging preserves the frame error marker. -/
 theorem processCreateMessage.chargeCodeGas_error_eq
@@ -10895,7 +10908,8 @@ theorem ProcessMessage.none_ok_state_cases
           hrollback | ⟨clean, hclean, _hcleanError, hpost⟩
         · exact Or.inl hrollback
         · have hhandled :
-              executeCode.handleError
+              executeCode.handleErrorWith
+                (msg.withBenv benv).benv.stat.rules.stateGas
                 (executePrecomp (initEvm (msg.withBenv benv)) address) =
                   .ok clean := by
             rw [← hraw, ← hexecute.2, hclean]
@@ -11260,16 +11274,24 @@ rolled-back state without introducing any balance write of its own, so it
 transports a raw `Devm.BalNoninc` frame to a `State.BalNoninc` on the handled
 message outcome. -/
 lemma executeCode.handleError_balance_effect {pre : Devm} {raw : Execution}
-    {handled : MessageExecution}
+    {handled : MessageExecution} {stateGas : Option StateGasRules}
     (hb : Execution.Rel Devm.BalNoninc pre raw)
-    (hh : executeCode.handleError raw = handled) :
+    (hh : executeCode.handleErrorWith stateGas raw = handled) :
     State.BalNoninc pre.state (MessageExecution.state handled) := by
-  rcases raw with ⟨err, d⟩ | d
-  · cases err <;>
-      (simp only [executeCode.handleError] at hh; subst handled; exact hb)
-  · simp only [executeCode.handleError] at hh
-    subst handled
-    exact hb
+  unfold executeCode.handleErrorWith at hh
+  split at hh
+  · rcases raw with ⟨err, d⟩ | d
+    · cases err <;>
+        (simp only [executeCode.handleError] at hh; subst handled; exact hb)
+    · simp only [executeCode.handleError] at hh
+      subst handled
+      exact hb
+  · rcases raw with ⟨err, d⟩ | d
+    · cases err <;>
+        (simp only [executeCode.handleErrorAmsterdam] at hh; subst handled; exact hb)
+    · simp only [executeCode.handleErrorAmsterdam] at hh
+      subst handled
+      exact hb
 
 /-- Frame projections of the two child messages, as explicit equations: the
 defeq is cheap to state and expensive to re-derive at every use site. -/
