@@ -8447,7 +8447,14 @@ instance : Rinst.Hinv Devm.memory Rinst.caller := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.callvalue := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.returndatasize := by show_hinv_mem_push
 instance : Rinst.Hinv Devm.memory Rinst.calldatasize := by show_hinv_mem_push
-instance : Rinst.Hinv Devm.memory Rinst.selfbalance := by show_hinv_mem_push
+instance : Rinst.Hinv Devm.memory Rinst.selfbalance := ⟨by
+  intro pc sevm pre post run
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨d1, hgas, hpush⟩
+  have hbr : d1.memory =
+      (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget d1).memory := rfl
+  exact ((Devm.burn_of_chargeGas hgas).memory.trans hbr).trans
+    (Devm.push_of_push hpush).memory⟩
 
 instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
   intro pc sevm pre post run
@@ -8520,24 +8527,49 @@ each produce one, and every one of them leaves `Devm.memory` alone. -/
 instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have m3 : s₂.memory = s₃.memory := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have m4 : s₃.memory = s₄.memory := by
-    injection h6 with eq; rw [← eq]; rfl
-  injection h9 with eq
-  rw [← eq]
-  show pre.memory = s₅.memory
-  exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
-    m4).trans (Devm.burn_of_chargeGas h7).memory⟩
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2: the historical eight-bind walk.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have m3 : s₂.memory = s₃.memory := by
+      injection h4 with eq
+      split at eq <;> (injection eq with eq _; subst eq; rfl)
+    have m4 : s₃.memory = s₄.memory := by
+      injection h6 with eq; rw [← eq]; rfl
+    injection h9 with eq
+    rw [← eq]
+    show pre.memory = s₅.memory
+    exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
+      m4).trans (Devm.burn_of_chargeGas h7).memory
+  · -- Amsterdam: static check first, state-gas second dimension.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨x, s₁⟩, h1, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨⟨y, s₂⟩, h2, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, h3, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₃, hchg, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, hstg, h9⟩
+    have hstg_mem : s₃.memory = s₄.memory :=
+      (Devm.chargeStateGas_memory hstg).symm
+    have hmid : s₂.memory = s₄.memory := by
+      have e1 := (Devm.burn_of_chargeGas hchg).memory
+      have e2 := hstg_mem
+      rw [← e2, ← e1]
+      simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
+        Devm.withRefundCounter, Devm.balReadStorage, Devm.setMach_memory]
+      try split <;> (try split) <;> rfl
+    injection h9 with eq
+    rw [← eq]
+    show pre.memory = s₄.memory
+    exact (Devm.pop_of_pop h1).memory.trans
+      ((Devm.pop_of_pop h2).memory.trans hmid)⟩
 
 /-! The two `Ninst` constructors that are not `reg`, so that `line_inv` carries
 a memory image across a whole `Line` rather than stopping at the first `PUSH`.
