@@ -356,6 +356,7 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
     (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     {child : List O}
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
@@ -366,7 +367,7 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
       C.Replay (C.ofState pre.state) steps (C.ofState post.state) ∧
       obs steps = if Frame.settlementCommits frame raw = true
         then child else [] := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -467,6 +468,7 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
@@ -474,7 +476,7 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     ∃ steps,
       C.Replay (C.ofState pre.state) steps (C.ofState post.state) := by
   exact (C.xinstForeignSome_observed (fun _ => ([] : List Unit)) rfl spawn frameRun
-    resumeRun target_ne sum_nof (child := [])
+    resumeRun target_ne hfork sum_nof (child := [])
     fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
     fun _ replay => replay.1
 
@@ -573,13 +575,14 @@ theorem xinstForeignSome (C : ReplayCarrier ca)
     (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
         (C.ofState (Execution.committedPost raw committed).state)) :
     ∃ steps,
       C.Replay (C.ofState pre.state) steps (C.ofState post.state) :=
-  C.toSettlementCarrier.xinstForeignSome spawn frameRun resumeRun target_ne
+  C.toSettlementCarrier.xinstForeignSome spawn frameRun resumeRun target_ne hfork
     sum_nof body
 
 /-- A transition invisible to this account contributes no step. -/
