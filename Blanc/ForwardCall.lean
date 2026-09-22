@@ -1086,14 +1086,6 @@ lemma genericCall.step_zero_depth {sevm : Sevm} {devm : Devm} {gas : Nat}
     (by show devm.stack.length < 1024; exact h_room)]
   rfl
 
-private lemma BenvStat.gas_eq_prague_of_stateGas_none {s : BenvStat}
-    (h : s.rules.stateGas = none) : s.rules.gas = pragueRules.gas := by
-  have key : ∀ f : Fork,
-      (Fork.ruleSet f).stateGas = none → (Fork.ruleSet f).gas = pragueRules.gas := by
-    intro f hf
-    cases f <;> first | rfl | exact absurd hf (by decide)
-  exact key s.fork h
-
 /-! ## `Xinst.step`'s `.call` arm, at `value = 0`
 
 Seven pops, one memory-expansion charge, one delegation resolution, the EIP-150

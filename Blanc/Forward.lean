@@ -58,7 +58,7 @@ lemma Devm.getCode_setMach {devm : Devm} {m : Mach} {a : Adr} :
 /-- Every one-dimensional fork uses the Prague gas schedule.  `BenvStat.rules`
 is selected from the five concrete forks, and Amsterdam is the only fork whose
 state-gas switch is present. -/
-private lemma BenvStat.gas_eq_prague_of_stateGas_none {s : BenvStat}
+lemma BenvStat.gas_eq_prague_of_stateGas_none {s : BenvStat}
     (h : s.rules.stateGas = none) : s.rules.gas = pragueRules.gas := by
   have key : ∀ f : Fork,
       (Fork.ruleSet f).stateGas = none → (Fork.ruleSet f).gas = pragueRules.gas := by
