@@ -195,6 +195,7 @@ every operation word at or above byte 64 preserved. -/
 theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
     {entry : Devm} {out : Execution} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (run : Func.RunCompiledToAvoiding WethChildRefused fs sevm entry
       (Blanc.ProrataWethVault.readTotalAssets body) out) :
@@ -222,7 +223,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
   have crossingSource := Ninst.Run.of_runCompiled crossing
   -- A status-zero crossing is exactly the refused child this walk avoids.
   have depth : sevm.depth ≠ 0 := by
-    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource with
+    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
       exfalso
@@ -244,8 +245,8 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
     refine ⟨config.distinct, config.nonprecompile, ?_⟩
     rw [← congrFun stagingCode wethAccount]
     exact config.code
-  have occurrence := balanceOfStaging_occurrence callConfig memory staging
-    depth (staticGasAvailable_of_runCompiled callConfig crossing) crossing
+  have occurrence := balanceOfStaging_occurrence callConfig hfork memory staging
+    depth (staticGasAvailable_of_runCompiled callConfig hfork crossing) crossing
   -- The status word is nonzero, so the retained child succeeded.
   have successFlag : ∃ tail, callPost.stack = (1 : B256) :: tail := by
     have shape := occurrence
@@ -266,11 +267,11 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
         (balanceOfCalldata sevm.currentTarget) callPost.returnData true :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
   obtain ⟨-, -, output⟩ := SuccessfulWethWorldProgramRun.balanceOf_effect
-    (ExactWethChildSuccess.worldProgramRun success)
+    (ExactWethChildSuccess.worldProgramRun hfork success)
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [output, B256.length_toBytes]
   have callPostWf : Mem.Wf callPost.memory := by
-    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource with
+    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
       obtain ⟨tail, oneStack⟩ := successFlag
@@ -353,7 +354,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
       (by
         change 32 ≤ offset
         omega)
-      operandPrefix crossingSource
+      operandPrefix crossingSource hfork
     apply MemWordAt.extend loadMemory
     exact MemWordAt.of_memory_eq mloadMemory callPostWindow
 
@@ -399,6 +400,7 @@ theorem staticcallOutputWindow {sevm : Sevm} {pre post : Devm}
     (stack : pre.stack =
       gasWord :: target :: 28 :: inputSize :: 0 :: 32 :: rest)
     (crossing : Ninst.RunCompiled sevm pre staticcall post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (successFlag : ∃ tail, post.stack = (1 : B256) :: tail)
     (returnDataLength : post.returnData.length = 32) :
     (post.memory.read 0 32).1 = post.returnData := by
@@ -408,7 +410,7 @@ theorem staticcallOutputWindow {sevm : Sevm} {pre post : Devm}
     rw [stack]
     exact ⟨[], by simp [Split]⟩
   rcases of_run_staticcall_val_with_depth operandPrefix
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
     obtain ⟨tail, successStack⟩ := successFlag
     have onePrefix : (1 : B256) :: [] <<+ post.stack := by
@@ -440,6 +442,7 @@ theorem callOutputWindow {sevm : Sevm} {pre post : Devm}
     (stack : pre.stack =
       gasWord :: target :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest)
     (crossing : Ninst.RunCompiled sevm pre call post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (successFlag : ∃ tail, post.stack = (1 : B256) :: tail)
     (returnDataLength : post.returnData.length = 32) :
     (post.memory.read 0 32).1 = post.returnData := by
@@ -449,7 +452,7 @@ theorem callOutputWindow {sevm : Sevm} {pre post : Devm}
     rw [stack]
     exact ⟨[], by simp [Split]⟩
   rcases of_run_call_val_with_depth operandPrefix
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
     obtain ⟨tail, successStack⟩ := successFlag
     have onePrefix : (1 : B256) :: [] <<+ post.stack := by
@@ -575,6 +578,7 @@ or above byte 64. -/
 theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
     {entry : Devm} {out : Execution} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (run : Func.RunCompiledToAvoiding WethChildRefused fs sevm entry
       (Blanc.ProrataWethVault.readTotalAssets body) out) :
@@ -604,7 +608,7 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
     exact ⟨[], by simp [Split]⟩
   have crossingSource := Ninst.Run.of_runCompiled crossing
   have depth : sevm.depth ≠ 0 := by
-    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource with
+    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
       exfalso
@@ -629,8 +633,8 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
   have callConfig :
       DirectWethConfiguration sevm.currentTarget sevm callPre :=
     config.of_code_eq (congrFun stagingCode wethAccount).symm
-  have occurrence := balanceOfStaging_occurrence callConfig memory staging
-    depth (staticGasAvailable_of_runCompiled callConfig crossing) crossing
+  have occurrence := balanceOfStaging_occurrence callConfig hfork memory staging
+    depth (staticGasAvailable_of_runCompiled callConfig hfork crossing) crossing
   have successFlag : ∃ tail, callPost.stack = (1 : B256) :: tail := by
     have shape := occurrence
     unfold ExactWethChildOccurrence ExactWethChildExecution at shape
@@ -650,10 +654,10 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
         (balanceOfCalldata sevm.currentTarget) callPost.returnData true :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
   obtain ⟨storage, -, output⟩ := SuccessfulWethWorldProgramRun.balanceOf_effect
-    (ExactWethChildSuccess.worldProgramRun success)
+    (ExactWethChildSuccess.worldProgramRun hfork success)
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [output, B256.length_toBytes]
-  have window := staticcallOutputWindow stack crossing successFlag
+  have window := staticcallOutputWindow stack crossing hfork successFlag
     returnDataLength
   rw [output] at window
   obtain ⟨statusTail, statusStack⟩ := successFlag
@@ -662,7 +666,7 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
       (by rw [statusStack]; exact ⟨statusTail, by simp [Split]⟩)
       returnDataLength window run
   have callPostWf : Mem.Wf callPost.memory := by
-    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource with
+    rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
       have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
@@ -694,7 +698,7 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
       (by
         change 32 ≤ offset
         omega)
-      operandPrefix crossingSource
+      operandPrefix crossingSource hfork
     exact MemWordAt.extend bodyMemory callPostWindow
   · exact (callConfig.of_runCompiled crossing).of_state_eq' bodyState.symm
 
@@ -748,6 +752,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
     {callPre : Devm} {out : Execution} {body : Func}
     {gasWord inputSize : B256} {rest : List B256} {calldata : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (callPreWf : Mem.Wf callPre.memory)
     (stack : callPre.stack =
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest)
@@ -779,7 +784,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
     exact ⟨[], by simp [Split]⟩
   have crossingSource := Ninst.Run.of_runCompiled crossing
   have depth : sevm.depth ≠ 0 := by
-    rcases of_run_call_val_with_depth operandPrefix crossingSource with
+    rcases of_run_call_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -⟩ := failure
       exfalso
@@ -794,9 +799,9 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
   have occurrence :
       ExactWethChildOccurrence sevm callPre callPost call calldata
         sevm.isStatic := by
-    apply exactWethCallOccurrence_of_runCompiled_anyStatic config stack window
+    apply exactWethCallOccurrence_of_runCompiled_anyStatic config hfork stack window
       depth
-    · exact callGasAvailable_of_runCompiled config crossing gasWord rest stack
+    · exact callGasAvailable_of_runCompiled config hfork crossing gasWord rest stack
     · exact crossing
   have successFlag : ∃ tail, callPost.stack = (1 : B256) :: tail := by
     have shape := occurrence
@@ -817,7 +822,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
       successFlag rfl)
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [output, B256.length_toBytes]
-  have outputWindow := callOutputWindow stack crossing successFlag
+  have outputWindow := callOutputWindow stack crossing hfork successFlag
     returnDataLength
   rw [output] at outputWindow
   obtain ⟨statusTail, statusStack⟩ := successFlag
@@ -826,7 +831,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
       (by rw [statusStack]; exact ⟨statusTail, by simp [Split]⟩)
       returnDataLength outputWindow run
   have callPostWf : Mem.Wf callPost.memory := by
-    rcases of_run_call_val_with_depth operandPrefix crossingSource with
+    rcases of_run_call_val_with_depth operandPrefix crossingSource hfork with
       failure | success
     · obtain ⟨zeroPrefix, -⟩ := failure
       have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
@@ -846,7 +851,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
       (by
         change 0 + 32 ≤ offset
         omega)
-      operandPrefix crossingSource ⟨statusTail, statusStack⟩ callWindow
+      operandPrefix crossingSource hfork ⟨statusTail, statusStack⟩ callWindow
     exact MemWordAt.extend bodyMemory postWindow
   · intro account accountNe
     rw [← foreign account accountNe]
@@ -860,6 +865,7 @@ theorem callWethTransferFrom_avoiding {fs : List Func} {sevm : Sevm}
     {entry : Devm} {out : Execution} {body : Func} {image : Bytes}
     {assetsWord assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -892,11 +898,11 @@ theorem callWethTransferFrom_avoiding {fs : List Func} {sevm : Sevm}
       line_inv) staging
   have callConfig := config.of_code_eq (congrFun stagingCode wethAccount).symm
   obtain ⟨bodyPre, bodyWf, bodyWindow, bodyForeign, bodyConfig, bodyRun⟩ :=
-    wethMutationCall_avoiding callConfig callPreWf stack window
+    wethMutationCall_avoiding callConfig hfork callPreWf stack window
       (fun success => by
         obtain ⟨-, foreign, -, output⟩ :=
           SuccessfulWethWorldProgramRun.transferFrom_effect
-            (ExactWethChildSuccess.worldProgramRun success)
+            (ExactWethChildSuccess.worldProgramRun hfork success)
         exact ⟨output, foreign⟩) run
   refine ⟨bodyPre, bodyWf, ?_, ?_, bodyConfig, bodyRun⟩
   · intro offset w above entryWindow
@@ -912,6 +918,7 @@ theorem callWethTransfer_avoiding {fs : List Func} {sevm : Sevm}
     {entry : Devm} {out : Execution} {body : Func} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -936,11 +943,11 @@ theorem callWethTransfer_avoiding {fs : List Func} {sevm : Sevm}
       line_inv) staging
   have callConfig := config.of_code_eq (congrFun stagingCode wethAccount).symm
   obtain ⟨bodyPre, -, -, -, -, bodyRun⟩ :=
-    wethMutationCall_avoiding callConfig callPreWf stack window
+    wethMutationCall_avoiding callConfig hfork callPreWf stack window
       (fun success => by
         obtain ⟨-, foreign, -, output⟩ :=
           SuccessfulWethWorldProgramRun.transfer_effect
-            (ExactWethChildSuccess.worldProgramRun success)
+            (ExactWethChildSuccess.worldProgramRun hfork success)
         exact ⟨output, foreign⟩) run
   exact ⟨bodyPre, bodyRun⟩
 
@@ -1102,6 +1109,7 @@ guard passes, and the words below the supply word survive. -/
 theorem snapshotQuoteState_avoiding {fs : List Func} {sevm : Sevm}
     {entry : Devm} {out : Execution} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (stable : (Devm.getStorVal entry sevm.currentTarget
       Blanc.ProrataWethVault.supplySlot).toNat ≤
@@ -1125,7 +1133,7 @@ theorem snapshotQuoteState_avoiding {fs : List Func} {sevm : Sevm}
   unfold Blanc.ProrataWethVault.snapshotQuoteState at run
   obtain ⟨readPre, assetsPrefix, readWf, readWindows, readStorage,
       readConfig, run⟩ :=
-    readTotalAssets_exact_avoiding config memoryWf run
+    readTotalAssets_exact_avoiding config hfork memoryWf run
   obtain ⟨slotPre, storeRun, run⟩ := Func.RunCompiledToAvoiding.prepend_inv run
   obtain ⟨slotStack, slotWf, slotReads, storeState⟩ :=
     of_run_mstoreAt_image assetsPrefix readWf (selfReads readPre) storeRun
