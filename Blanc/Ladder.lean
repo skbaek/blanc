@@ -781,27 +781,62 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
     (h_ne : sevm.currentTarget ≠ a) :
     Devm.getStor s' a = Devm.getStor s a := by
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  rw [← eq, setStorVal_getStor_ne h_ne]
-  exact (congr_fun E a).symm
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2: the historical eight-bind walk.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+      · have hbr : Devm.getStor s₂ =
+            Devm.getStor (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key s₂) := rfl
+        exact hbr.trans addAccessedStorageKey_getStor.symm
+      · rfl
+    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+      injection h6 with eq; rw [← eq]; rfl
+    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+    have E' : Devm.getStor s =
+        Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
+      E.trans rfl
+    injection h9 with eq
+    rw [← eq, setStorVal_getStor_ne h_ne]
+    exact (congr_fun E' a).symm
+  · -- Amsterdam: static check first, state-gas second dimension.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨key, s₁⟩, h1, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨⟨val, s₂⟩, h2, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, h3, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₃, hchg, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, hstg, h9⟩
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have echg : Devm.getStor s₂ = Devm.getStor s₃ := by
+      have e1' := chargeGas_getStor_eq hchg
+      have e2' : Devm.getStor s₂ = Devm.getStor s₃ := by
+        rw [← e1']
+        simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
+          Devm.withRefundCounter, Devm.balReadStorage]
+        try split <;> (try split) <;> rfl
+      exact e2'
+    have estg : Devm.getStor s₃ = Devm.getStor s₄ :=
+      Devm.chargeStateGas_getStor hstg
+    have E : Devm.getStor s = Devm.getStor s₄ := e1.trans (e2.trans (echg.trans estg))
+    have E' : Devm.getStor s =
+        Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄) :=
+      E.trans rfl
+    injection h9 with eq
+    rw [← eq, setStorVal_getStor_ne h_ne]
+    exact (congr_fun E' a).symm
 
 
 lemma addAccessedAddress_state {devm : Devm} {a : Adr} :
@@ -830,12 +865,25 @@ lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
     (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
     d'.state = d.state := by
   simp only [processCreateMessage.chargeCodeGas] at h
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨dG, h_charge, h_if⟩
-    split_ifs at h_if
-    rw [← Except.ok.inj h_if]
-    exact ((Devm.burn_of_chargeGas h_charge).state).symm
+  cases hsg : rules.stateGas
+  · simp only [hsg] at h
+    split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨dG, h_charge, h_if⟩
+      split_ifs at h_if
+      rw [← Except.ok.inj h_if]
+      exact ((Devm.burn_of_chargeGas h_charge).state).symm
+  · simp only [hsg] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · rcases Except.bind_eq_ok h with ⟨dG1, h_c1, h2⟩
+        have hst : d'.state = dG1.state :=
+          (chargeStateGas_worldEq_of_ok h2).1.symm
+        have hburn : dG1.state = d.state :=
+          ((Devm.burn_of_chargeGas h_c1).state).symm
+        exact hst.trans hburn
 
 lemma Devm.setCode_state {d : Devm} {adr : Adr} {c : ByteArray} :
     (d.setCode adr c).state = d.state.setCode adr c := rfl
@@ -2890,64 +2938,131 @@ theorem Linst.getStor_eq
       contradiction
   | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with
-        ⟨⟨donee, devm1⟩, pop, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨devm2, charge, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨_, asserted, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨devm3, sub, final⟩
-      have subSome : devm2.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-        cases eq : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [eq] at sub
-          contradiction
-        · rw [eq] at sub
-          injection sub with equal
-          subst equal
-          rfl
-      have subState : devm2.state.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-        dsimp [Devm.subBal, Option.bind] at subSome
-        cases eq : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [eq] at subSome
-          contradiction
-        · rw [eq] at subSome
-          injection subSome with equal
-          subst equal
-          rfl
-      let transferred := devm3.addBal donee
-        (devm1.getAcct sevm.currentTarget).bal
-      have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
-        congrFun (Devm.popToAdr_getStor_eq pop) owner
-      have charged : Devm.getStor devm1 owner =
-          Devm.getStor devm2 owner := by
-        have chargedEq := chargeGas_getStor_eq charge
-        have head : Devm.getStor
-            (if donee ∉ devm1.accessedAddresses then
-              (addAccessedAddress devm1 donee,
-                gasSelfDestruct + gasColdAccountAccess)
-            else (devm1, gasSelfDestruct)).1 owner =
-              Devm.getStor devm1 owner := by
-          split <;> rfl
-        exact head.symm.trans (congrFun chargedEq owner)
-      have transferredEq : Devm.getStor devm2 owner =
-          Devm.getStor transferred owner :=
-        (of_state_transfer_fields subState).1 owner |>.symm
-      have postEq : Devm.getStor transferred owner =
-          Devm.getStor post owner := by
-        dsimp only [transferred] at final ⊢
-        split at final
-        · have equal := Except.ok.inj final
-          rw [← equal]
-          exact State.setBal_get_stor.symm
-        · have equal := Except.ok.inj final
-          rw [← equal]
-      exact (preToOne.trans (charged.trans
-        (transferredEq.trans postEq))).symm
+      cases hsg : sevm.benvStat.rules.stateGas
+      · simp only [hsg] at run
+        rcases Except.bind_eq_ok run with
+          ⟨⟨donee, devm1⟩, pop, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨devm2, charge, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨_, asserted, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨devm3, sub, final⟩
+        have subSome : devm2.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
+          cases eq : devm2.subBal sevm.currentTarget
+              (devm1.getAcct sevm.currentTarget).bal
+          · rw [eq] at sub
+            contradiction
+          · rw [eq] at sub
+            injection sub with equal
+            subst equal
+            rfl
+        have subState : devm2.state.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
+          dsimp [Devm.subBal, Option.bind] at subSome
+          cases eq : devm2.state.subBal sevm.currentTarget
+              (devm1.getAcct sevm.currentTarget).bal
+          · rw [eq] at subSome
+            contradiction
+          · rw [eq] at subSome
+            injection subSome with equal
+            subst equal
+            rfl
+        let transferred := devm3.addBal donee
+          (devm1.getAcct sevm.currentTarget).bal
+        have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
+          congrFun (Devm.popToAdr_getStor_eq pop) owner
+        have charged : Devm.getStor devm1 owner =
+            Devm.getStor devm2 owner := by
+          have chargedEq := chargeGas_getStor_eq charge
+          rw [← chargedEq]
+          split
+          · dsimp only
+            exact (((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
+              ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)).trans
+              ((addAccessedAddress_instructionFrame _ _).getStor owner)
+          · dsimp only
+            exact ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
+              ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)
+        have transferredEq : Devm.getStor devm2 owner =
+            Devm.getStor transferred owner :=
+          (of_state_transfer_fields subState).1 owner |>.symm
+        have postEq : Devm.getStor transferred owner =
+            Devm.getStor post owner := by
+          dsimp only [transferred] at final ⊢
+          by_cases h_if : sevm.currentTarget ∈
+              (devm3.addBal donee (devm1.getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos] at final
+            have equal := Except.ok.inj final
+            rw [← equal]
+            exact State.setBal_get_stor.symm
+          · simp only [h_if, if_neg] at final
+            have equal := Except.ok.inj final
+            rw [← equal]
+        exact (preToOne.trans (charged.trans
+          (transferredEq.trans postEq))).symm
+      · simp only [hsg] at run
+        rcases Except.bind_eq_ok run with ⟨_, h0, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨⟨donee, devm1⟩, pop, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm2, charge, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm2b, stg, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm3, sub, final⟩
+        have hp1 : (donee, devm1).1 = donee := rfl
+        have hp2 : (donee, devm1).2 = devm1 := rfl
+        rw [hp1, hp2] at final
+        have subSome : devm2b.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3 := by
+          cases eq : devm2b.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
+          · rw [eq] at sub
+            contradiction
+          · rw [eq] at sub
+            injection sub with equal
+            subst equal
+            rfl
+        have subState : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3.state := by
+          dsimp [Devm.subBal, Option.bind] at subSome
+          cases eq : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
+          · rw [eq] at subSome
+            contradiction
+          · rw [eq] at subSome
+            injection subSome with equal
+            subst equal
+            rfl
+        let transferred := (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
+        have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
+          congrFun (Devm.popToAdr_getStor_eq pop) owner
+        have charged : Devm.getStor devm1 owner = Devm.getStor devm2 owner := by
+          have chargedEq := chargeGas_getStor_eq charge
+          rw [← chargedEq]
+          split
+          · exact ((addAccessedAddress_instructionFrame _ _).getStor owner).trans
+              (((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
+                ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner))
+          · exact ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
+              ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)
+        have stged : Devm.getStor devm2 owner = Devm.getStor devm2b owner :=
+          congrFun (Devm.chargeStateGas_getStor stg) owner
+        have h_tr1 : Devm.getStor devm2b owner =
+            Devm.getStor (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal) owner :=
+          (of_state_transfer_fields subState).1 owner |>.symm
+        have h_tr2 : Devm.getStor (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal) owner =
+            Devm.getStor transferred owner :=
+          (Devm.emitTransferLog_instructionFrame _ _ _ _).getStor owner
+        have transferredEq : Devm.getStor devm2b owner = Devm.getStor transferred owner :=
+          h_tr1.trans h_tr2
+        have postEq : Devm.getStor transferred owner = Devm.getStor post owner := by
+          by_cases h_if : sevm.currentTarget ∈
+              ((devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos] at final
+            have equal := Except.ok.inj final
+            rw [← equal]
+            rfl
+          · simp only [h_if, if_neg] at final
+            have equal := Except.ok.inj final
+            rw [← equal]
+        exact (preToOne.trans (charged.trans (stged.trans
+          (transferredEq.trans postEq)))).symm
 
 /-! ## Clean childless settlement and pointwise balance monotonicity -/
 
@@ -4182,9 +4297,11 @@ lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
   have h_ct' : evm'.sta.currentTarget = target := by rw [h_evm]; exact hc_ct
   have h_v' : evm'.sta.value = value := by rw [h_evm]; exact hc_value
   -- the frame's settlement, unfolded
-  have hr2 : processMessage.settle childMsg (executeCode.handleError exn')
+  have hr2 : processMessage.settle childMsg
+      (executeCode.handleErrorWith childMsg.benv.stat.rules.stateGas exn')
       = .ok child := hr.symm
-  rcases h_he : executeCode.handleError exn' with x | evm2
+  rcases h_he : executeCode.handleErrorWith childMsg.benv.stat.rules.stateGas exn'
+    with x | evm2
   · rw [h_he, processMessage.settle_error] at hr2
     cases hr2
   rw [h_he] at hr2
@@ -4228,7 +4345,7 @@ lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
       exact hc_state
     · cases h_err2
   · -- sub-execution succeeded
-    dsimp only [executeCode.handleError] at h_he
+    rw [executeCode.handleErrorWith_ok] at h_he
     have h_eq2 : child3 = evm2 := Except.ok.inj h_he
     subst h_eq2
     have h_post : c.Post wa evm'.sta child3 := h_ifOk
@@ -4313,8 +4430,12 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
   obtain ⟨benv', eq_bt, h_evm⟩ := Frame.enter_run_inv henter
   have hset : processCreateMessage.settle childMsg
       (processMessage.settle (processCreateMessage.msg childMsg)
-        (executeCode.handleError exn')) = .ok child := hr.symm
-  rcases h_he : executeCode.handleError exn' with x | evmB
+        (executeCode.handleErrorWith
+          (processCreateMessage.msg childMsg).benv.stat.rules.stateGas
+          exn')) = .ok child := hr.symm
+  rcases h_he : executeCode.handleErrorWith
+      (processCreateMessage.msg childMsg).benv.stat.rules.stateGas exn'
+    with x | evmB
   · rw [h_he, processMessage.settle_error, processCreateMessage.settle_error] at hset
     cases hset
   rw [h_he] at hset
@@ -4413,7 +4534,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rfl
     · cases h_errB
   · -- sub-execution succeeded
-    dsimp only [executeCode.handleError] at h_he
+    rw [executeCode.handleErrorWith_ok] at h_he
     have h_eqB : child4 = evmB := Except.ok.inj h_he
     subst h_eqB
     have h_post : c.Post wa evm'.sta child4 := h_ifOk
@@ -4443,7 +4564,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
           have h_child := Except.ok.inj h_ifA
           apply h_rb
           rw [← h_child]
-          rfl
+          cases hsg : childMsg.benv.stat.rules.stateGas <;> rfl
         all_goals cases h_ifA
       · -- code deposit succeeded : reconstruct the precondition
         simp only [h_cc] at h_ifA
