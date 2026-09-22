@@ -26,7 +26,7 @@ variable {c : ContractSpec}
 theorem ConfiguredBlockTrace.openingState
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) :
-    (initBenv trace.rules pre trace.block.header).state = pre.state := rfl
+    (initBenv trace.fork pre trace.block.header).state = pre.state := rfl
 
 /-- Every block opens with an empty created-account set, so a not-yet-created
 side condition is discharged afresh at each block and never has to be carried
@@ -34,7 +34,7 @@ across a block boundary. -/
 theorem ConfiguredBlockTrace.not_mem_openingCreatedAccounts
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) (a : Adr) :
-    a ∉ (initBenv trace.rules pre trace.block.header).createdAccounts :=
+    a ∉ (initBenv trace.fork pre trace.block.header).createdAccounts :=
   AdrSet.not_mem_empty
 
 /-- An arbitrary contract invariant at the parent chain state is already the
@@ -43,7 +43,7 @@ theorem ConfiguredBlockTrace.openingBenvInv
     {cfg : ChainConfig} {pre post : BlockChain} {ca : Adr}
     (trace : ConfiguredBlockTrace cfg pre post)
     (inv : c.StateInv ca pre.state) :
-    c.BenvInv ca (initBenv trace.rules pre trace.block.header) :=
+    c.BenvInv ca (initBenv trace.fork pre trace.block.header) :=
   ⟨inv, trace.not_mem_openingCreatedAccounts ca⟩
 
 /-- The block's retained balance-sum bound, read at the body-entry
@@ -51,7 +51,7 @@ environment where `applyBody`-level rungs ask for it. -/
 theorem ConfiguredBlockTrace.openingBound
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) :
-    sum (initBenv trace.rules pre trace.block.header).state.bal +
+    sum (initBenv trace.fork pre trace.block.header).state.bal +
       wdsum trace.block.wds < 2 ^ 256 :=
   trace.bound
 
@@ -70,10 +70,11 @@ history crosses. -/
 theorem ConfiguredHistoryTrace.stateInv
     {cfg : ChainConfig} {checkpoint future : BlockChain} {ca : Adr}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (hp : c.Preserves ca) (inv : c.StateInv ca checkpoint.state) :
+    (hp : c.Preserves ca) (inv : c.StateInv ca checkpoint.state)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     c.StateInv ca future.state :=
   c.chainUsing_preserves_inv ca hp cfg checkpoint future
-    history.toReachUsing inv
+    history.toReachUsing inv hcov
 
 end ExecutionTrace
 
