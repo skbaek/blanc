@@ -4172,6 +4172,48 @@ def Xinst.Shape (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
       s = genericCallAmsterdam.step sevm state d gas reservoir value caller
             target codeAddress stv isSt ii isz oi osz code dp nac ib)
 
+/-- The covered-fork restriction of `Xinst.Shape`: only the done / create /
+call arms, which are the only ones reachable when `sevm.benvStat.fork` is a
+`CoveredFork` (Prague and BPO2 force `rules.stateGas = none`). -/
+def Xinst.ShapeCovered (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
+  (∃ ex, s = .done ex ∧ Execution.Rel Devm.InstructionFrame devm ex) ∨
+  (∃ d endowment newAddress mi ms,
+      Devm.InstructionFrame devm d ∧
+      s = genericCreate.step sevm d endowment newAddress mi ms) ∨
+  (∃ d d₀ gas value caller target codeAddress stv isSt ii isz oi osz code dp,
+      Devm.InstructionFrame devm d ∧
+      Devm.InstructionFrame devm d₀ ∧
+      ( (stv = true ∧ caller = sevm.currentTarget) ∨
+        (stv = false ∧ target = sevm.currentTarget) ) ∧
+      ( target = sevm.currentTarget ∨
+        ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target ) ) ∧
+      s = genericCall.step sevm d gas value caller target codeAddress stv isSt
+            ii isz oi osz code dp)
+
+theorem Xinst.ShapeCovered.toShape {sevm : Sevm} {devm : Devm} {s : XStep}
+    (h : Xinst.ShapeCovered sevm devm s) : Xinst.Shape sevm devm s := by
+  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
+    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      hf, hf₀, hcal, hsrc, rfl⟩
+  · exact Or.inl ⟨ex, rfl, hex⟩
+  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms, hf, rfl⟩)
+  · exact Or.inr (Or.inr (Or.inl ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
+      oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩))
+
+lemma Xinst.ShapeCovered.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
+    (hab : Devm.InstructionFrame a b) (h : Xinst.ShapeCovered sevm b s) :
+    Xinst.ShapeCovered sevm a s := by
+  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
+    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      hf, hf₀, hcal, hsrc, rfl⟩
+  · exact Or.inl ⟨ex, rfl,
+      Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
+  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
+      Devm.instructionFrame_trans hab hf, rfl⟩)
+  · exact Or.inr (Or.inr ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
+      oi, osz, code, dp, Devm.instructionFrame_trans hab hf,
+      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)
+
 lemma Xinst.Shape.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
     (hab : Devm.InstructionFrame a b) (h : Xinst.Shape sevm b s) :
     Xinst.Shape sevm a s := by
@@ -4311,6 +4353,100 @@ lemma Xinst.shape_shortfall' {sevm : Sevm} {devm d : Devm} {stipend : Nat}
             (d'.gasLeft + stipend)).withReturnData []))))) := by
   refine Xinst.shape_bindE hf (Devm.push_instructionFrame 0 d) fun d' hf' => ?_
   exact Xinst.shape_done
+    (Devm.instructionFrame_trans hf'
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
+
+lemma Xinst.shapeCovered_done {sevm : Sevm} {devm : Devm} {ex : Execution}
+    (h : Execution.Rel Devm.InstructionFrame devm ex) :
+    Xinst.ShapeCovered sevm devm (.done ex) := Or.inl ⟨ex, rfl, h⟩
+
+lemma Xinst.shapeCovered_error {sevm : Sevm} {devm : Devm} {err : EvmError × Devm}
+    (h : Devm.InstructionFrame devm err.2) :
+    Xinst.ShapeCovered sevm devm (XStep.ofExcept (.error err)) :=
+  Xinst.shapeCovered_done h
+
+lemma Xinst.shapeCovered_create {sevm : Sevm} {devm d : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} (hf : Devm.InstructionFrame devm d) :
+    Xinst.ShapeCovered sevm devm
+      (genericCreate.step sevm d endowment newAddress mi ms) :=
+  Or.inr (Or.inl ⟨d, endowment, newAddress, mi, ms, hf, rfl⟩)
+
+lemma Xinst.shapeCovered_call {sevm : Sevm} {devm d d₀ : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool} {ii isz oi osz : Nat}
+    {code : ByteArray} {dp : Bool}
+    (hf : Devm.InstructionFrame devm d) (hf₀ : Devm.InstructionFrame devm d₀)
+    (hcal : (stv = true ∧ caller = sevm.currentTarget) ∨
+      (stv = false ∧ target = sevm.currentTarget))
+    (hsrc : target = sevm.currentTarget ∨
+      ( ¬ isValidDelegation (d₀.getCode target) → code = d₀.getCode target )) :
+    Xinst.ShapeCovered sevm devm
+      (genericCall.step sevm d gas value caller target codeAddress stv isSt
+        ii isz oi osz code dp) :=
+  Or.inr (Or.inr ⟨d, d₀, gas, value, caller, target, codeAddress, stv,
+    isSt, ii, isz, oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩)
+
+lemma Xinst.shapeCovered_bind {sevm : Sevm} {devm d : Devm} {α : Type}
+    {x : Except (EvmError × Devm) (α × Devm)}
+    {f : α × Devm → Except (EvmError × Devm) XStep}
+    (hd : Devm.InstructionFrame devm d)
+    (hx : Outcome.Rel Prod.snd Prod.snd Devm.InstructionFrame d x)
+    (hf : ∀ (v : α) (d' : Devm), Devm.InstructionFrame devm d' →
+      Xinst.ShapeCovered sevm devm (XStep.ofExcept (f ⟨v, d'⟩))) :
+    Xinst.ShapeCovered sevm devm (XStep.ofExcept (x >>= f)) := by
+  rcases x with e | ⟨v, d'⟩
+  · exact Xinst.shapeCovered_error (Devm.instructionFrame_trans hd hx)
+  · exact hf v d' (Devm.instructionFrame_trans hd hx)
+
+lemma Xinst.shapeCovered_bindE {sevm : Sevm} {devm d : Devm} {x : Execution}
+    {f : Devm → Except (EvmError × Devm) XStep}
+    (hd : Devm.InstructionFrame devm d)
+    (hx : Execution.Rel Devm.InstructionFrame d x)
+    (hf : ∀ d' : Devm, Devm.InstructionFrame devm d' →
+      Xinst.ShapeCovered sevm devm (XStep.ofExcept (f d'))) :
+    Xinst.ShapeCovered sevm devm (XStep.ofExcept (x >>= f)) := by
+  rcases x with e | d'
+  · exact Xinst.shapeCovered_error (Devm.instructionFrame_trans hd hx)
+  · exact hf d' (Devm.instructionFrame_trans hd hx)
+
+lemma Xinst.shapeCovered_assert {sevm : Sevm} {devm : Devm} {p : Prop} [Decidable p]
+    {err : EvmError × Devm} {f : Unit → Except (EvmError × Devm) XStep}
+    (herr : Devm.InstructionFrame devm err.2)
+    (hf : Xinst.ShapeCovered sevm devm (XStep.ofExcept (f ()))) :
+    Xinst.ShapeCovered sevm devm (XStep.ofExcept (Except.assert p err >>= f)) := by
+  unfold Except.assert
+  split
+  · exact hf
+  · exact Xinst.shapeCovered_error herr
+
+lemma Xinst.shapeCovered_assertDynamic {sevm : Sevm} {devm : Devm}
+    {f : Unit → Except (EvmError × Devm) XStep}
+    (hf : Xinst.ShapeCovered sevm devm (XStep.ofExcept (f ()))) :
+    Xinst.ShapeCovered sevm devm
+      (XStep.ofExcept (assertDynamic sevm devm >>= f)) := by
+  simp only [assertDynamic]
+  exact Xinst.shapeCovered_assert (Devm.instructionFrame_refl devm) hf
+
+lemma Xinst.shapeCovered_shortfall {sevm : Sevm} {devm d : Devm} {stipend : Nat}
+    (hf : Devm.InstructionFrame devm d) :
+    Xinst.ShapeCovered sevm devm
+      (XStep.ofExcept
+        (d.push 0 >>= fun d' =>
+          .ok (XStep.done (.ok ((d'.withReturnData []).withGasLeft
+            (d'.gasLeft + stipend)))))) := by
+  refine Xinst.shapeCovered_bindE hf (Devm.push_instructionFrame 0 d) fun d' hf' => ?_
+  exact Xinst.shapeCovered_done
+    (Devm.instructionFrame_trans hf'
+      (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
+
+lemma Xinst.shapeCovered_shortfall' {sevm : Sevm} {devm d : Devm} {stipend : Nat}
+    (hf : Devm.InstructionFrame devm d) :
+    Xinst.ShapeCovered sevm devm
+      (XStep.ofExcept
+        (d.push 0 >>= fun d' =>
+          .ok (XStep.done (.ok ((d'.withGasLeft
+            (d'.gasLeft + stipend)).withReturnData []))))) := by
+  refine Xinst.shapeCovered_bindE hf (Devm.push_instructionFrame 0 d) fun d' hf' => ?_
+  exact Xinst.shapeCovered_done
     (Devm.instructionFrame_trans hf'
       (Devm.instructionFrame_of_world_eq rfl rfl rfl rfl))
 
@@ -4752,6 +4888,173 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
             (Devm.memExtends_instructionFrame _ _)))
         h6' (Or.inl ⟨rfl, rfl⟩)
         (Or.inr fun hnd => amsterdamCallCode_of_not_delegation hnd)
+
+lemma Xinst.step_shapeCovered (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Xinst.ShapeCovered sevm devm (Xinst.step sevm devm x) := by
+  have hsg : sevm.benvStat.rules.stateGas = none :=
+    hfork.rules_stateGas_none
+  cases x with
+  | create =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bindE h3 (chargeGas_instructionFrame _ d3) fun d4 h4 => ?_
+      exact Xinst.shapeCovered_create
+        (Devm.instructionFrame_trans h4 (Devm.memExtends_instructionFrame d4 _))
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
+  | create2 =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shapeCovered_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
+      exact Xinst.shapeCovered_create
+        (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
+  | call =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun callee d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shapeCovered_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shapeCovered_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shapeCovered_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      dsimp only
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 callee) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 callee)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d7 callee) callee
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d7 callee) callee with
+        ⟨dpv, na, cd, dagc, d8⟩
+      rw [hdel] at hacc
+      have h8 : Devm.InstructionFrame devm d8 :=
+        Devm.instructionFrame_trans h7' hacc
+      refine Xinst.shapeCovered_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
+      refine Xinst.shapeCovered_assert h9 ?_
+      split
+      · exact Xinst.shapeCovered_shortfall
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+      · refine Xinst.shapeCovered_call
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+          h7' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
+        rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
+        exact (congrArg (fun t => t.2.2.1) hdel).symm
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
+  | callcode =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.pop_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shapeCovered_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shapeCovered_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      refine Xinst.shapeCovered_bind h6 (Devm.popToNat_instructionFrame d6) fun _ d7 h7 => ?_
+      dsimp only
+      have h7' : Devm.InstructionFrame devm (addAccessedAddress d7 cadr) :=
+        Devm.instructionFrame_trans h7 (addAccessedAddress_instructionFrame d7 cadr)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d7 cadr) cadr
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d7 cadr) cadr with
+        ⟨dpv, na, cd, dagc, d8⟩
+      rw [hdel] at hacc
+      have h8 : Devm.InstructionFrame devm d8 :=
+        Devm.instructionFrame_trans h7' hacc
+      refine Xinst.shapeCovered_bindE h8 (chargeGas_instructionFrame _ d8) fun d9 h9 => ?_
+      split
+      · exact Xinst.shapeCovered_shortfall'
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+      · exact Xinst.shapeCovered_call
+          (Devm.instructionFrame_trans h9 (Devm.memExtends_instructionFrame d9 _))
+          h7' (Or.inl ⟨rfl, rfl⟩) (Or.inl rfl)
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
+  | delegatecall =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun cadr d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shapeCovered_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shapeCovered_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      dsimp only
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 cadr) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 cadr)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d6 cadr) cadr
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d6 cadr) cadr with
+        ⟨dpv, na, cd, dagc, d7⟩
+      rw [hdel] at hacc
+      have h7 : Devm.InstructionFrame devm d7 :=
+        Devm.instructionFrame_trans h6' hacc
+      refine Xinst.shapeCovered_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
+      exact Xinst.shapeCovered_call
+        (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
+        h6' (Or.inr ⟨rfl, rfl⟩) (Or.inl rfl)
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
+  | staticcall =>
+    simp only [Xinst.step]
+    cases hcase : sevm.benvStat.rules.stateGas with
+    | none =>
+      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+      refine Xinst.shapeCovered_bind h1 (Devm.popToAdr_instructionFrame d1)
+        fun tgt d2 h2 => ?_
+      refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+      refine Xinst.shapeCovered_bind h3 (Devm.popToNat_instructionFrame d3) fun _ d4 h4 => ?_
+      refine Xinst.shapeCovered_bind h4 (Devm.popToNat_instructionFrame d4) fun _ d5 h5 => ?_
+      refine Xinst.shapeCovered_bind h5 (Devm.popToNat_instructionFrame d5) fun _ d6 h6 => ?_
+      dsimp only
+      have h6' : Devm.InstructionFrame devm (addAccessedAddress d6 tgt) :=
+        Devm.instructionFrame_trans h6 (addAccessedAddress_instructionFrame d6 tgt)
+      have hacc :=
+        GasSchedule.accessDelegation_instructionFrame sevm.benvStat.rules.gas
+          (addAccessedAddress d6 tgt) tgt
+      rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress d6 tgt) tgt with
+        ⟨dpv, na, cd, dagc, d7⟩
+      rw [hdel] at hacc
+      have h7 : Devm.InstructionFrame devm d7 :=
+        Devm.instructionFrame_trans h6' hacc
+      refine Xinst.shapeCovered_bindE h7 (chargeGas_instructionFrame _ d7) fun d8 h8 => ?_
+      refine Xinst.shapeCovered_call
+        (Devm.instructionFrame_trans h8 (Devm.memExtends_instructionFrame d8 _))
+        h6' (Or.inl ⟨rfl, rfl⟩) (Or.inr fun hnd => ?_)
+      rw [GasSchedule.accessDelegation_of_not_delegation hnd] at hdel
+      exact (congrArg (fun t => t.2.2.1) hdel).symm
+    | some _state =>
+      rw [hsg] at hcase; cases hcase
 
 /-! ### What a spawned child frame starts from
 

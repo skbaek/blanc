@@ -1392,4 +1392,31 @@ lemma of_processCreateMessage (msg : Msg)
       ProcessCreateMessage msg xl ex :=
   of_runFrame eq
 
+-------------------------------------------------------------------------------
+-- FORK COVERAGE.  The user-approved verified-fork set for consuming a Jaune
+-- pin with Amsterdam semantics: Prague and BPO2.  Statements restricted by
+-- `CoveredFork` keep their historical denotation on both forks; Amsterdam
+-- coverage is never inferred from them.  The bridges below establish the
+-- equivalence with the machine-field conditions repair proofs rewrite by.
+-------------------------------------------------------------------------------
+
+/-- The user-approved fork coverage: Prague and BPO2 (programme §B). -/
+def CoveredFork (f : Fork) : Prop := f = .prague ∨ f = .bpo2
+
+theorem CoveredFork.stateGas_none {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).stateGas = none := by
+  rcases h with rfl | rfl <;> rfl
+
+theorem CoveredFork.bal_none {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).bal = none := by
+  rcases h with rfl | rfl <;> rfl
+
+theorem CoveredFork.rules_stateGas_none {s : BenvStat}
+    (h : CoveredFork s.fork) : s.rules.stateGas = none :=
+  h.stateGas_none
+
+theorem CoveredFork.rules_bal_none {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.bal = none :=
+  h.bal_none
+
 end Blanc
