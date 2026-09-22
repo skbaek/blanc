@@ -6813,8 +6813,8 @@ lemma of_run_address {e : Sevm} {s s' : Devm} (h : Ninst.Run e s address s') :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
 
-/-- Value-carrying inversion for SELFBALANCE. -/
-/-- `SELFBALANCE` pushes the target balance. Stated on the stack only: the
+/-- `SELFBALANCE` pushes the target balance (value-carrying inversion).
+Stated on the stack only: the
 run records an account read, so the historical `PushBurn` relation (which
 pins `accountReads`) no longer holds. Consumers route through
 `prefix_of_push_stack`. -/
@@ -8836,11 +8836,11 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
   split at run₁
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     exact hpop.logs.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.balReadAccount_logs _ _ _.symm.trans (Devm.push_of_push h3).logs))
+      ((Devm.burn_of_chargeGas h2).logs.trans ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push h3).logs))
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, h3⟩
     have ha : d0.logs = (addAccessedAddress d0 word.toAdr).logs := rfl
     exact hpop.logs.trans (ha.trans
-      ((Devm.burn_of_chargeGas h2).logs.trans (Devm.balReadAccount_logs _ _ _.symm.trans (Devm.push_of_push h3).logs)))⟩
+      ((Devm.burn_of_chargeGas h2).logs.trans ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push h3).logs)))⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
   intro pc sevm pre post run
@@ -9023,9 +9023,9 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
       try split <;> (try split) <;> rfl
     injection h9 with eq
     rw [← eq]
-    show pre.logs = s₄.logs
-    exact (Devm.pop_of_pop h1).logs.trans
-      ((Devm.pop_of_pop h2).logs.trans hmid)⟩
+    exact ((Devm.pop_of_pop h1).logs.trans
+      ((Devm.pop_of_pop h2).logs.trans hmid)).trans
+      ((Devm.balReadAccount_logs _ _ _).symm)⟩
 
 scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
   intro pc sevm pre post run
@@ -9071,9 +9071,9 @@ scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
       try split <;> (try split) <;> rfl
     injection h9 with eq
     rw [← eq]
-    show pre.output = s₄.output
-    exact (Devm.pop_of_pop h1).output.trans
-      ((Devm.pop_of_pop h2).output.trans hmid)⟩
+    exact ((Devm.pop_of_pop h1).output.trans
+      ((Devm.pop_of_pop h2).output.trans hmid)).trans
+      (Devm.balReadAccount_output.symm)⟩
 
 scoped instance {n} : Rinst.Hinv Devm.output (Rinst.log n) := ⟨by
   intro pc sevm pre post run
