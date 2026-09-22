@@ -11500,7 +11500,11 @@ lemma ProcessCreateMessage.balance_effect {msg : Msg} {xl : Xlot}
         dsimp only [id] at h_charge
         dsimp only [MessageExecution.state] at h_pm
         cases err_msg
-        case halt => exact balNoninc_refl_trans.1.1 _
+        case halt =>
+          dsimp only
+          cases hsg : msg.benv.stat.rules.stateGas
+          · exact balNoninc_refl_trans.1.1 _
+          · exact balNoninc_refl_trans.1.1 _
         all_goals exact Nat.le_trans h_charge h_pm
       | ok devm_charge =>
         dsimp only []
@@ -11773,16 +11777,17 @@ lemma GenericCallAmsterdam.balanceEffect
   all_goals first
     | obtain ⟨-, rfl⟩ := run
       rename_i heq
-      refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
-      exact Devm.instructionFrame_refines_balNoninc
-        (Devm.instructionFrame_trans
+      by_cases hnac : nac = true
+      · simp only [hnac] at heq
+        refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+        exact Devm.instructionFrame_refines_balNoninc
+          (Devm.instructionFrame_trans
+            (Devm.restoreChildGas_instructionFrame _ _ _)
+            (Devm.creditStateGasRefund_instructionFrame _ _))
+      · simp only [hnac] at heq
+        refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
+        exact Devm.instructionFrame_refines_balNoninc
           (Devm.restoreChildGas_instructionFrame _ _ _)
-          (Devm.creditStateGasRefund_instructionFrame _ _))
-    | obtain ⟨-, rfl⟩ := run
-      rename_i heq
-      refine Devm.push_balance_gen heq (balNoninc_refl_trans.2.2 hret ?_)
-      exact Devm.instructionFrame_refines_balNoninc
-        (Devm.restoreChildGas_instructionFrame _ _ _)
     | obtain ⟨r, hframe, rfl⟩ := run
       refine Execution.Rel.trans_left balNoninc_refl_trans.2.2 hret ?_
       refine Resume.callAmsterdam_balance ?_
