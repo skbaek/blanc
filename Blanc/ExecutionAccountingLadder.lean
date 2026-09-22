@@ -74,16 +74,6 @@ theorem TransactionTrace.msg_caller
 -- the `injection` of `prepareMessage_benv` (Ladder.lean:6347–6355); `prepareMessage` sets
 -- `caller := tenv.stat.origin` (Jaune Transaction.lean:846) and `transactionTenv` sets `origin := sender`.
 
-/-- G+2.  A transaction list threads its block environment by state alone. -/
-theorem ApplyTransactionsTrace.stat_eq
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
-    finalBenv.stat = benv.stat := by
-  induction trace with
-  | nil => rfl
-  | cons head tail ih => simpa [Benv.withState] using ih
--- `ApplyTransactionsTrace.createdAccounts_eq` (ExecutionBodyEffects.lean:135–143) line for line.
-
 /-- G+3.  The direct withdrawals move balances only. -/
 theorem processWithdrawalsState_getStor_eq (ca : Adr) (state : State)
     (withdrawals : List Withdrawal) :

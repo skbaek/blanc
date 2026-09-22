@@ -511,7 +511,7 @@ inductive ApplyTransactionsTrace :
 /-- A transaction fold changes only its state component of `Benv`.  This
 local form is kept beside the carrier so compatibility construction can carry
 fork evidence through the fold without importing downstream accounting APIs. -/
-private theorem applyTransactionsTrace_stat_eq
+theorem ApplyTransactionsTrace.stat_eq
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
@@ -758,7 +758,7 @@ theorem exists_appliedBodyTrace
       (transactionBenv.withState
         (processWithdrawalsState transactionBenv.state wds)).stat.fork := by
     have hfork_transactions : CoveredFork transactionBenv.stat.fork := by
-      rw [applyTransactionsTrace_stat_eq transactionsTrace]
+      rw [transactionsTrace.stat_eq]
       exact hfork
     simpa [Benv.withState] using hfork_transactions
   rcases exists_requestsTrace hrequests hfork_requests with ⟨requestsTrace⟩

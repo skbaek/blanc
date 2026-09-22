@@ -116,10 +116,11 @@ theorem TransactionTrace.benvInv
     (trace : TransactionTrace benv bout tx index state bout')
     (preserves : c.Preserves ca)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (inv : c.BenvInv ca benv) :
+    (inv : c.BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     c.BenvInv ca (benv.withState state) :=
   ContractSpec.processTransaction_preserves_inv ca preserves benv bout bout' tx
-    index state trace.result sumNof inv
+    index state trace.result sumNof inv hfork
 
 /-! ## Final settlement -/
 
@@ -130,9 +131,12 @@ theorem TransactionTrace.accountsToDelete_ne
     (trace : TransactionTrace benv bout tx index state bout')
     (preserves : c.Preserves ca)
     (inv : c.StateInv ca benv.state)
-    (notCreated : ca ∉ benv.createdAccounts) :
+    (notCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     ∀ address ∈ trace.messageOut.accountsToDelete.toList, address ≠ ca :=
-  (ContractSpec.processMessageCall_preserves_inv preserves
+  (ContractSpec.processMessageCall_preserves_inv (by
+    rw [prepareMessage_benv trace.prepared]
+    simpa [Benv.beginTransaction] using hfork) preserves
     trace.message.result (trace.msgInv inv notCreated)).2
 
 /-- An account the deletion fold never names survives the fold untouched. -/
@@ -157,13 +161,18 @@ theorem TransactionTrace.settlement_sum_bounds
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (refundCounter : Nat)
-    (baseSum : sum benv.state.bal < 2 ^ 256) :
+    (baseSum : sum benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     sum trace.messageState.bal +
         (trace.refundValue refundCounter).toNat < 2 ^ 256 ∧
       sum (trace.refundedState refundCounter).bal +
         (trace.coinbaseValue refundCounter).toNat < 2 ^ 256 := by
-  have feeLt := checkTransaction_upfront_lt_modulus trace.checked
-  simp only [Benv.beginTransaction] at feeLt
+  have feeLt : tx.gas * trace.effectiveGasPrice +
+      (if tx.isTypeThree = true then
+        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
+      else 0) < 2 ^ 256 := by
+    simpa [Benv.beginTransaction, BenvStat.rules] using
+      checkTransaction_upfront_lt_modulus trace.checked
   have floor := validateTransaction_calldataFloorGasCost_le_gas trace.validation
   have usedLe : trace.chargedGas refundCounter ≤ tx.gas := by
     unfold TransactionTrace.chargedGas
@@ -190,7 +199,11 @@ theorem TransactionTrace.settlement_sum_bounds
   dsimp only [State.balSum, transactionBlobGasFee] at debitSum
   rw [State.incrNonce_bal] at debitSum
   rw [B256.toNat_toB256_of_lt feeLt] at debitSum
-  have messageSum := processMessageCall_sum_le trace.message.result
+  have messageSum := processMessageCall_sum_le
+    (by
+      rw [prepareMessage_benv trace.prepared]
+      simpa [Benv.beginTransaction, BenvStat.rules] using hfork.rules_stateGas_none)
+    trace.message.result
   rw [prepareMessage_benv trace.prepared] at messageSum
   change sum trace.messageState.bal ≤ sum trace.debitState.bal at messageSum
   have refundBound :

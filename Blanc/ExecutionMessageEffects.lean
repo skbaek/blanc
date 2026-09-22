@@ -418,11 +418,14 @@ theorem processMessageCall_createCollision_state_eq
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = true)
-    (result : processMessageCall msg = .ok ⟨state, out⟩) :
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     state = msg.benv.state := by
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
   unfold processMessageCall.create at result
+  rw [hsg] at result
   unfold messageCreateCollision at collision
   simp only [collision, ↓reduceIte, pure] at result
   exact (Prod.mk.inj (Except.ok.inj result)).1.symm
@@ -433,11 +436,14 @@ theorem processMessageCall_createRun_state_eq
     (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = false)
     (core : processCreateMessage msg = .ok evm)
-    (result : processMessageCall msg = .ok ⟨state, out⟩) :
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     state = evm.state := by
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
   unfold processMessageCall.create at result
+  rw [hsg] at result
   unfold messageCreateCollision at collision
   simp only [collision, Bool.false_eq_true, ↓reduceIte,
     bind, Except.bind] at result
@@ -461,8 +467,10 @@ theorem processMessageCall_callRun_state_eq
     (delegation : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
     (execMsgEq : execMsg = messageCallExecutionMessage delegated)
     (core : processMessage execMsg = .ok evm)
-    (result : processMessageCall msg = .ok ⟨state, out⟩) :
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     state = evm.state := by
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, Bool.false_eq_true, ↓reduceIte] at result
   cases empty : msg.tenv.stat.auths.isEmpty with
@@ -474,6 +482,7 @@ theorem processMessageCall_callRun_state_eq
       simp only [Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       unfold processMessageCall.call at result
+      rw [hsg] at result
       simp only [empty, Bool.false_eq_true, ↓reduceIte,
         set, bind, Except.bind] at result
       have coreExec :
@@ -497,6 +506,7 @@ theorem processMessageCall_callRun_state_eq
         Except.ok.injEq, Prod.mk.injEq] at delegation
       rcases delegation with ⟨rfl, rfl⟩
       unfold processMessageCall.call at result
+      rw [hsg] at result
       simp only [empty, ↓reduceIte, bind, Except.bind] at result
       have coreExec :
           processMessage (messageCallExecutionMessage msg) = .ok evm :=
