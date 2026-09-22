@@ -179,7 +179,8 @@ end ReplayCarrier
 * `root` — a committed retained execution at the EVM root of a successful
   message entry replays from the frame's entry boundary to its committed
   post-state, for every message that is run-ready for `S`, is not a direct
-  self-call, and opens below the word bound.  This is exactly the shape of a
+  self-call, opens below the word bound, and enters a covered runtime fork.
+  This is exactly the shape of a
   contract's `lift_core` instance at `initEvm`;
 * `preserves` — the contract's `ContractSpec` preservation, which the generic
   ladder lemmas consume to carry `S.StateInv` along the history. -/
@@ -207,7 +208,7 @@ structure AccountingLadder (S : ContractSpec) (ca : Adr) where
 /-! ## 2.3' The observed ladder
 
 An `Observed` ladder is a ladder together with an observation of its carrier's
-step lists and a root law that observes exactly the root's committed frames.
+step lists and a root law that observes exactly each covered root's committed frames.
 Every rung below is proved once, observed; the unobserved rungs of §2.4 are the
 observed ones read through `Observed.trivial`, which observes nothing. -/
 
