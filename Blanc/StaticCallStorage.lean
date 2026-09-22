@@ -13,9 +13,9 @@ instruction that writes persistent storage, `SSTORE`, cannot complete; every
 other successful step, every message entry (`benvAfterTransfer`), every
 successful settlement and every rollback moves the storage map only by an
 equation already proved at `Stor` level.  `CREATE` never spawns from a static
-frame.  This module packages that induction once, contract-neutrally, and
-exposes it as the `Ninst.Hinv Devm.getStor Ninst.staticcall` instance that
-`Func.SilentIn Devm.getStor` certificates consume.
+frame.  Amsterdam's state-gas path has separate recursive preservation
+obligations, so this module packages the existing argument under
+`CoveredFork`.
 -/
 
 namespace Blanc
@@ -72,6 +72,18 @@ private theorem staticStep_cont_getStor
                   ⟨.none, trivial, pc, nrun⟩)).symm
           | exec executable =>
               exact Xinst.none_getStor_eq (XStep.run_toStep.mp nrun)
+          | dupn imm =>
+              have frame := Ninst.dupn_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              exact (funext (Devm.InstructionFrame.getStor frame)).symm
+          | swapn imm =>
+              have frame := Ninst.swapn_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              exact (funext (Devm.InstructionFrame.getStor frame)).symm
+          | exchange imm =>
+              have frame := Ninst.exchange_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              exact (funext (Devm.InstructionFrame.getStor frame)).symm
           | reg regular =>
               by_cases store : regular = .sstore
               · subst regular
@@ -167,6 +179,7 @@ private theorem xinstSome_getStor
     {cevm : Evm} {out : Execution}
     {result : Except (EvmError × State × AdrSet × Tra) Devm}
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (childStatic : frame.inner.isStatic = true)
     (frameRun : RunFrame frame (.some ⟨cevm, out⟩) result)
     (resumeRun : resume.run result = .ok post)
@@ -174,7 +187,7 @@ private theorem xinstSome_getStor
       Devm.getStor (Execution.committedPost out committed) =
         Devm.getStor cevm.dyna) :
     Devm.getStor post = Devm.getStor pre := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -215,13 +228,14 @@ account, children included. -/
 theorem Exec.getStor_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (committed : Execution.commits out = true) :
+    (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStor (Execution.committedPost out committed) =
       Devm.getStor pre := by
   induction run with
   | halt step => exact staticHalt_getStor step committed
   | cont step _ ih =>
-      exact (ih static committed).trans (staticStep_cont_getStor step static)
+      exact (ih static committed hfork).trans (staticStep_cont_getStor step static)
   | doneErr _ _ _ => simp [Execution.commits] at committed
   | @doneOk _ nodeSevm nodePre _ _ _ _ nodePost _ step enter resumeRun _ ih =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
@@ -229,21 +243,24 @@ theorem Exec.getStor_committedPost_eq_of_static
         unfold Xinst.Run XStep.Run
         rw [spawn]
         exact ⟨_, RunFrame.of_done enter, resumeRun.symm⟩
-      exact (ih static committed).trans (Xinst.none_getStor_eq xrun)
+      exact (ih static committed hfork).trans (Xinst.none_getStor_eq xrun)
   | runErr _ _ _ _ _ => simp [Execution.commits] at committed
   | runOk step enter _ resumeRun _ childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have childStatic := Evm.step_run_isStatic step enter static
-      exact (nextIH static committed).trans
-        (xinstSome_getStor spawn (Evm.step_spawn_isStatic step static)
+      have childFork := Evm.step_spawn_child_fork step enter hfork
+      exact (nextIH static committed hfork).trans
+        (xinstSome_getStor spawn hfork (Evm.step_spawn_isStatic step static)
           (RunFrame.of_run enter) resumeRun
-          (fun childCommitted => childIH childStatic childCommitted))
+          (fun childCommitted => childIH childStatic childCommitted childFork))
 
-/-- Every successful `STATICCALL` leaves every storage map equal, including
-when it enters arbitrary interpreted code. -/
-theorem Ninst.staticcall_inv_getStor_exact :
-    Ninst.Inv Devm.getStor Ninst.staticcall := by
-  intro sevm pre post run
+/-- Every successful `STATICCALL` leaves every storage map equal on a covered
+fork, including when it enters arbitrary interpreted code. -/
+theorem Ninst.staticcall_inv_getStor_exact
+    {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Ninst.Run sevm pre Ninst.staticcall post) :
+    Devm.getStor pre = Devm.getStor post := by
   rcases run with ⟨slot, filled, pc, stepRun⟩
   have xrun : Xinst.Run sevm pre .staticcall slot (.ok post) := by
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
@@ -257,12 +274,12 @@ theorem Ninst.staticcall_inv_getStor_exact :
       have childStatic : cevm.sta.isStatic = true :=
         (Frame.enter_run_isStatic enter).trans
           (Xinst.step_staticcall_spawn_isStatic spawn)
-      exact (xinstSome_getStor spawn (Xinst.step_staticcall_spawn_isStatic spawn)
+      have childFork : CoveredFork cevm.sta.benvStat.fork :=
+        Xinst.Run.some_child_fork xrun hfork
+      exact (xinstSome_getStor spawn hfork
+        (Xinst.step_staticcall_spawn_isStatic spawn)
         (RunFrame.of_run enter) resumed.symm
         (fun committed => Exec.getStor_committedPost_eq_of_static childRun
-          childStatic committed)).symm
-
-instance staticcall_getStor_hinv : Ninst.Hinv Devm.getStor Ninst.staticcall :=
-  ⟨Ninst.staticcall_inv_getStor_exact⟩
+          childStatic committed childFork)).symm
 
 end Blanc

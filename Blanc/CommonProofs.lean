@@ -837,6 +837,33 @@ def Func.SilentIn {Observation : Type}
   | .next i body => Ninst.Inv observe i ∧ Func.SilentIn observe P body
   | .call k => P k
 
+/-- A fixed-`Sevm` variant of `Func.SilentIn`.  Its nonterminal leaves need
+only preserve the supplied context, which permits a caller to use a
+context-local semantic fact without manufacturing a universal `Ninst.Hinv`. -/
+def Func.SilentAt {Observation : Type}
+    (observe : Devm → Observation) (sevm : Sevm) (P : Nat → Prop) : Func → Prop
+  | .branch f g => Func.SilentAt observe sevm P f ∧ Func.SilentAt observe sevm P g
+  | .last l => Linst.Inv observe observe l
+  | .next i body =>
+      (∀ {s r : Devm}, Ninst.Run sevm s i r → observe s = observe r) ∧
+        Func.SilentAt observe sevm P body
+  | .call k => P k
+
+/-- A universal silence certificate specializes to every fixed execution
+context. -/
+theorem Func.SilentIn.toSilentAt
+    {Observation : Type} {observe : Devm → Observation}
+    {P : Nat → Prop} {sevm : Sevm} {f : Func}
+    (silent : Func.SilentIn observe P f) :
+    Func.SilentAt observe sevm P f := by
+  induction f with
+  | branch f g ihf ihg =>
+      exact ⟨ihf silent.1, ihg silent.2⟩
+  | last l => exact silent
+  | next i body ih =>
+      exact ⟨fun run => silent.1 run, ih silent.2⟩
+  | call k => exact silent
+
 /-- Walk a `Func.SilentIn` goal structurally: `And.intro` at each `branch` and
 `next`, the synthesised `Ninst`/`Linst` instance at each leaf.  A tail call
 leaves the slot obligation `P k` open; supply `with tac` to close those, since
@@ -858,17 +885,19 @@ macro_rules
       | apply And.intro
       | ($d))
 
-/-- A `SilentIn` body preserves its observation in a fixed function context
-closed under permitted tail calls.  Recursion is on the successful run, so a
-closed set of mutually recursive slots needs no fuel premise. -/
-theorem Func.observe_eq_of_run_silentIn
+/-- A `SilentAt` body preserves its observation in its fixed execution
+context.  Function calls retain that `Sevm`, so a closed set of recursive slots
+needs no separate fork-transport premise. -/
+theorem Func.observe_eq_of_run_silentAt
     {Observation : Type} {observe : Devm → Observation}
     {P : Nat → Prop} {fs : List Func}
     [PopBurn.Inv observe] [Burn.Inv observe]
-    (hclosed : ∀ k g, P k → fs[k]? = some g → Func.SilentIn observe P g)
-    {sevm : Sevm} {s r : Devm} {f : Func}
+    {sevm : Sevm}
+    (hclosed : ∀ k g, P k → fs[k]? = some g →
+      Func.SilentAt observe sevm P g)
+    {s r : Devm} {f : Func}
     (run : Func.Run fs sevm s f r)
-    (silent : Func.SilentIn observe P f) :
+    (silent : Func.SilentAt observe sevm P f) :
     observe r = observe s := by
   induction run with
   | zero hpop _ ih =>
@@ -882,6 +911,23 @@ theorem Func.observe_eq_of_run_silentIn
       exact (ih silent.2).trans (silent.1 hinst).symm
   | call hget hburn _ ih =>
       exact (ih (hclosed _ _ silent hget)).trans (Burn.Inv.inv hburn).symm
+
+/-- A `SilentIn` body preserves its observation in a fixed function context
+closed under permitted tail calls.  Recursion is on the successful run, so a
+closed set of mutually recursive slots needs no fuel premise. -/
+theorem Func.observe_eq_of_run_silentIn
+    {Observation : Type} {observe : Devm → Observation}
+    {P : Nat → Prop} {fs : List Func}
+    [PopBurn.Inv observe] [Burn.Inv observe]
+    (hclosed : ∀ k g, P k → fs[k]? = some g → Func.SilentIn observe P g)
+    {sevm : Sevm} {s r : Devm} {f : Func}
+    (run : Func.Run fs sevm s f r)
+    (silent : Func.SilentIn observe P f) :
+    observe r = observe s := by
+  apply Func.observe_eq_of_run_silentAt (sevm := sevm) (run := run)
+    (silent := silent.toSilentAt)
+  intro k g permitted lookup
+  exact (hclosed k g permitted lookup).toSilentAt
 
 /-- A fixed-context syntactic certificate that a function cannot change
 persistent storage.  Tail calls are admitted only at indices selected by
