@@ -1339,7 +1339,7 @@ private theorem Exec.storageReplay_cont_head
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
     (next : Exec pc' sevm post out)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (_hfork : CoveredFork sevm.benvStat.fork) :
     Exec.StorageReplay pre post
       ([⟨pc, sevm, pre, out, Exec.cont step next⟩].filterMap
         Exec.Deriv.successfulSstore?) := by
@@ -1414,7 +1414,7 @@ private theorem Exec.storageReplay_cont_head
                 XStep.run_toStep.mp nrun
               simpa [Exec.Deriv.successfulSstore?, decoded] using
                 Exec.StorageReplay.of_getStor_eq
-                  (Xinst.none_getStor_eq hfork xrun)
+                  (Xinst.none_getStor_eq xrun)
           | reg regular =>
               have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
                 have equal : (.ok post : Execution) =
@@ -1478,14 +1478,14 @@ private theorem Exec.doneOk_getStor_eq
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .done settled)
     (resumeRun : resume.run settled = .ok post)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (_hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStor post = Devm.getStor pre := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have run : Xinst.Run sevm pre x .none (.ok post) := by
     unfold Xinst.Run XStep.Run
     rw [spawn]
     exact ⟨settled, RunFrame.of_done enter, resumeRun.symm⟩
-  exact Xinst.none_getStor_eq hfork run
+  exact Xinst.none_getStor_eq run
 
 /-- A committing halted driver node is a successful last instruction, hence
 is persistent-storage silent. -/

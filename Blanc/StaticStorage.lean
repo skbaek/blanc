@@ -131,10 +131,11 @@ observation at every owner and key. -/
 theorem Exec.storageView_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (hstatic : sevm.isStatic = true)
-    (committed : Execution.commits out = true) :
+    (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.storageView (Execution.committedPost out committed) =
       Devm.storageView pre := by
-  have replay := Exec.storageReplay_committedPost run committed
+  have replay := Exec.storageReplay_committedPost run committed hfork
   rw [Exec.retainedStorageWrites_eq_nil_of_static run hstatic] at replay
   funext owner
   funext key
@@ -142,9 +143,11 @@ theorem Exec.storageView_committedPost_eq_of_static
 
 /-- Every successful `STATICCALL` preserves persistent storage, including the
 case where it enters arbitrary interpreted code. -/
-theorem Ninst.staticcall_inv_getStor :
-    Ninst.Inv Devm.storageView Ninst.staticcall := by
-  intro sevm pre post run
+theorem Ninst.staticcall_inv_getStor
+    {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Ninst.Run sevm pre Ninst.staticcall post) :
+    Devm.storageView pre = Devm.storageView post := by
   rcases run with ⟨slot, filled, pc, stepRun⟩
   have xrun : Xinst.Run sevm pre .staticcall slot (.ok post) := by
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
@@ -164,6 +167,8 @@ theorem Ninst.staticcall_inv_getStor :
       have childStatic : cevm.sta.isStatic = true :=
         (Frame.enter_run_isStatic enter).trans
           (Xinst.step_staticcall_spawn_isStatic spawn)
+      have childFork : CoveredFork cevm.sta.benvStat.fork :=
+        Xinst.Run.some_child_fork xrun hfork
       have frameRun : RunFrame frame (.some ⟨cevm, out⟩)
           (frame.settle out) := by
         unfold RunFrame
@@ -173,15 +178,12 @@ theorem Ninst.staticcall_inv_getStor :
         simpa using Xinst.storageReplay_some_of_body spawn frameRun resumed.symm
           (writes := []) (fun committed owner key => by
             have equal := Exec.storageView_committedPost_eq_of_static
-              childRun childStatic committed
+              childRun childStatic committed childFork
             simpa [Devm.storageView, Exec.StorageWrite.replayCell] using
-              congrFun (congrFun equal owner) key)
+              congrFun (congrFun equal owner) key) hfork
       funext owner
       funext key
       simpa [Devm.storageView, Exec.StorageWrite.replayCell] using
         (replay owner key).symm
-
-instance : Ninst.Hinv Devm.storageView Ninst.staticcall :=
-  ⟨Ninst.staticcall_inv_getStor⟩
 
 end Blanc

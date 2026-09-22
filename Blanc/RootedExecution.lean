@@ -88,6 +88,12 @@ theorem ninstAllChildRoots_of_not_exec
           cases (Step.run_ofExecution.mp step).1
       | exec x =>
           exact (notExec x rfl).elim
+      | dupn imm =>
+          cases (Step.run_ofExecution.mp step).1
+      | swapn imm =>
+          cases (Step.run_ofExecution.mp step).1
+      | exchange imm =>
+          cases (Step.run_ofExecution.mp step).1
 
 /-- Structural execution-freedom for a function body, including the absence
 of internal `.call` edges. -/
@@ -136,6 +142,24 @@ theorem rootedRunCompiledTo_of_execFree
           · simpa [funcExecFree] using free
       | exec x =>
           simp [funcExecFree] at free
+      | dupn imm =>
+          refine rootedRunCompiledTo.next (step := step) (tail := tail)
+            (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
+          · intro x h
+            cases h
+          · simpa [funcExecFree] using free
+      | swapn imm =>
+          refine rootedRunCompiledTo.next (step := step) (tail := tail)
+            (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
+          · intro x h
+            cases h
+          · simpa [funcExecFree] using free
+      | exchange imm =>
+          refine rootedRunCompiledTo.next (step := step) (tail := tail)
+            (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
+          · intro x h
+            cases h
+          · simpa [funcExecFree] using free
   | call found room burn tail ih =>
       simp [funcExecFree] at free
 
@@ -241,6 +265,24 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
                   simp only [Exec.rawFrameRoots, List.mem_cons]
                   exact Or.inr childMember)
               · exact nextRoots root nextMember
+  | dupn imm =>
+      rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ next, ?_⟩
+      · rw [hstep, Ninst.step_dupn, ← h_step.2]
+        rfl
+      · simpa [Exec.rawFrameDescendants] using nextRoots
+  | swapn imm =>
+      rw [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ next, ?_⟩
+      · rw [hstep, Ninst.step_swapn, ← h_step.2]
+        rfl
+      · simpa [Exec.rawFrameDescendants] using nextRoots
+  | exchange imm =>
+      rw [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ next, ?_⟩
+      · rw [hstep, Ninst.step_exchange, ← h_step.2]
+        rfl
+      · simpa [Exec.rawFrameDescendants] using nextRoots
 
 /-- Core compiler bridge for a rooted compiled function walk. -/
 theorem Func.exec_of_rootedRunCompiledTo_core
@@ -290,10 +332,9 @@ theorem Func.exec_of_rootedRunCompiledTo_core
       rename_i _ _ _ _ _ _ _ hstep _
       rcases Func.noPushBefore_next sub boundary with ⟨boundary', sub'⟩
       rcases of_subcode sub with ⟨code, compiledHead, slice⟩
-      rcases of_bind_eq_some compiledHead with
-        ⟨tailCode, compiledTail, headEq⟩
-      simp [pure] at headEq
-      rw [← headEq] at slice
+      rcases of_bind_eq_some compiledHead with ⟨_, _, headEq⟩
+      rcases of_bind_eq_some headEq with ⟨_, _, headEq⟩
+      rw [← of_pure_eq_some headEq] at slice
       rcases hstep with ⟨slot, filled, stepRun⟩
       exact Ninst.exec_of_stepRun_with_frameRoots
         (Ninst.at_of_slice (List.slice_prefix slice))
