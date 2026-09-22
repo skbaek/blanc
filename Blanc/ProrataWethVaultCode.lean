@@ -1649,6 +1649,16 @@ open CompiledShape
 
 namespace ProrataWethVaultCodeProof
 
+/- `compile_prepend` makes every literal prefix prove its EIP-8024 immediate
+   check.  This local tactic computes only after recognizing the precise
+   bounded acceptance proposition; compiler and byte-equality goals are left
+   untouched. -/
+local macro "discharge_prepend_acceptance" : tactic =>
+  `(tactic| first
+    | guard_target = ∀ i ∈ (_ : List Ninst), Ninst.immAccepted i = true
+      decide +kernel
+    | skip)
+
 private def rootLeft : List (B256 × Func) :=
   ProrataWethVault.vaultFuncs.take 13
 
@@ -2731,10 +2741,13 @@ private theorem divideWideCore_11720_compile :
       some (prorataWethVaultCodeChunk45.drop 200 ++ prorataWethVaultCodeChunk46 ++
         prorataWethVaultCodeChunk47.take 64) := by
   rw [divideWideCore_source_cut, compile_prepend, wideCorePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, sixNewtonSteps_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, wideCoreSuffix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [finishQuotient_capCeilPred_12067_compile]
   rw [wideCorePrefix_bytes, sixNewtonSteps_bytes, wideCoreSuffix_bytes]
@@ -2787,10 +2800,13 @@ private theorem divideWideCore_12288_compile :
       wideCoreInversePrefix_bytes_12405]
     exact (List.take_add (l := prorataWethVaultCodeChunk48) (i := 117) (j := 91)).symm
   rw [divideWideCore_source_cut, compile_prepend, wideCorePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, sixNewtonSteps_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, wideCoreSuffix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [finishQuotient_capCeilPred_12635_compile,
     hprefix, sixNewtonSteps_bytes_12496, wideCoreSuffix_bytes_12622]
@@ -2858,6 +2874,7 @@ private theorem divideWide_11669_compile :
       some (prorataWethVaultCodeChunk45.drop 149 ++ prorataWethVaultCodeChunk46 ++
         prorataWethVaultCodeChunk47.take 64) := by
   rw [divideWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbranch := compile_branch vaultTable 11678 11719 _ _
     divisionOverflowFrozen
@@ -2880,6 +2897,7 @@ private theorem divideWide_12237_compile :
       some (prorataWethVaultCodeChunk47.drop 205 ++ prorataWethVaultCodeChunk48 ++
         prorataWethVaultCodeChunk49.take 120) := by
   rw [divideWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbranch := compile_branch vaultTable 12246 12287 _ _
     divisionOverflowFrozen
@@ -2933,6 +2951,7 @@ private theorem divide512Nonzero_11660_compile :
       some (prorataWethVaultCodeChunk45.drop 140 ++ prorataWethVaultCodeChunk46 ++
         prorataWethVaultCodeChunk47.take 120) := by
   rw [divide512Nonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk45.drop 149 ++ prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47.take 64).length = 427 := by decide +kernel
   have hbranch := compile_branch vaultTable 11665 12096 _ _
@@ -2956,6 +2975,7 @@ private theorem divide512Nonzero_12228_compile :
       some (prorataWethVaultCodeChunk47.drop 196 ++ prorataWethVaultCodeChunk48 ++
         prorataWethVaultCodeChunk49.take 176) := by
   rw [divide512Nonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk47.drop 205 ++ prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 120).length = 427 := by decide +kernel
   have hbranch := compile_branch vaultTable 12233 12664 _ _
@@ -2985,6 +3005,7 @@ private theorem divide512_11651_compile :
       some (prorataWethVaultCodeChunk45.drop 131 ++ prorataWethVaultCodeChunk46 ++
         prorataWethVaultCodeChunk47.take 124) := by
   rw [divide512_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk45.drop 140 ++ prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47.take 120).length = 492 := by decide +kernel
   have hbranch := compile_branch vaultTable 11656 12152 _ _
@@ -3009,6 +3030,7 @@ private theorem divide512_12219_compile :
       some (prorataWethVaultCodeChunk47.drop 187 ++ prorataWethVaultCodeChunk48 ++
         prorataWethVaultCodeChunk49.take 180) := by
   rw [divide512_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk47.drop 196 ++ prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 176).length = 492 := by decide +kernel
   have hbranch := compile_branch vaultTable 12224 12720 _ _
@@ -3078,8 +3100,10 @@ private theorem maxDepositMulDiv_11485_compile :
       some (prorataWethVaultCodeChunk44.drop 221 ++ prorataWethVaultCodeChunk45 ++
         prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47.take 124) := by
   rw [maxDepositMulDiv_source_cut, compile_prepend, maxDepositMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [divide512_11651_compile, maxDepositMulStage_bytes, maxDepositMulRecover_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -3116,6 +3140,7 @@ private theorem maxDepositShiftedDiv_12157_compile :
       some (prorataWethVaultCodeChunk47.drop 125 ++ prorataWethVaultCodeChunk48 ++
         prorataWethVaultCodeChunk49.take 180) := by
   rw [maxDepositShiftedDiv_source_cut, compile_prepend, maxDepositShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [divide512_12219_compile, maxDepositShiftStage_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -3249,6 +3274,7 @@ private theorem maxDepositAssets_11469_compile :
         prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
         prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 180) := by
   rw [maxDepositAssets, compile_prepend, maxDepositAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxDepositArithmetic_11481_compile, maxDepositAssetsPrefix_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -3264,6 +3290,7 @@ private theorem maxDepositReturnSize_11460_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 184) := by
   rw [maxDepositReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 205 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3299,6 +3326,7 @@ private theorem maxDepositRead_11432_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 188) := by
   rw [maxDepositRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 196 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3334,6 +3362,7 @@ private theorem maxDepositSupply_11383_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 196) := by
   rw [maxDepositSupply, compile_prepend, maxDepositSupplyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 168 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3369,6 +3398,7 @@ private theorem maxDepositZero_11375_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 204) := by
   rw [maxDepositZero, compile_prepend, maxDepositZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 119 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3404,6 +3434,7 @@ private theorem maxDepositCanonical_11362_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 208) := by
   rw [maxDepositCanonical, compile_prepend, maxDepositCanonicalPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 111 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3439,6 +3470,7 @@ private theorem maxDepositStatic_11354_compile :
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
       prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49.take 212) := by
   rw [maxDepositStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk44.drop 98 ++ prorataWethVaultCodeChunk45 ++
       prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++
@@ -3476,6 +3508,7 @@ private theorem maxDeposit_endpoint_compile :
       ([Ninst.callvalue, Ninst.iszero] : Line) +++
         Func.branch Func.revert maxDepositStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -3532,6 +3565,7 @@ private theorem maxDeposit_dispatch_compile :
         Func.branch (Func.call ProrataWethVault.revertSlot)
           (ProrataWethVault.routed 1 ProrataWethVault.maxDeposit) := by rfl
   rw [hcut, compile_prepend, maxDepositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x402d267d, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -3579,6 +3613,7 @@ private theorem rightSixLeft_dispatch_compile :
           (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rightSixLeft.drop 2)))
           (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rightSixLeftPair)) := by rfl
   rw [hcut, compile_prepend, maxDepositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x402d267d, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -3631,7 +3666,9 @@ private theorem divideWideCore_compile_from_finish (n : Nat)
         ProrataWethVault.sixNewtonSteps.flatMap Ninst.toBytes ++
         wideCoreSuffix.flatMap Ninst.toBytes ++ bs) := by
   rw [divideWideCore_source_cut_for, compile_prepend, wideCorePrefix_size]
+  all_goals discharge_prepend_acceptance
   rw [compile_prepend, sixNewtonSteps_size, compile_prepend, wideCoreSuffix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.add_assoc, Nat.reduceAdd]
   rw [hfinish]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -3761,6 +3798,7 @@ private theorem divideWide_down_10436_compile :
       (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) =
       some (prorataWethVaultCodeChunk40.drop 196 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 56) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbranch := compile_branch vaultTable 10445 10452 _ _
     [0x5f, 0x5f, 0xfd] (prorataWethVaultCodeChunk40.drop 213 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 56)
@@ -3783,6 +3821,7 @@ private theorem divideWide_down_10890_compile :
       (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) =
       some (prorataWethVaultCodeChunk42.drop 138 ++ prorataWethVaultCodeChunk43.take 254) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbranch := compile_branch vaultTable 10899 10906 _ _
     [0x5f, 0x5f, 0xfd] (prorataWethVaultCodeChunk42.drop 155 ++ prorataWethVaultCodeChunk43.take 254)
@@ -3803,6 +3842,7 @@ private theorem divideWide_down_10890_compile :
 private theorem divide512NonzeroDown_10427_compile :
     Func.compile vaultTable 10427 divide512NonzeroDown = some (prorataWethVaultCodeChunk40.drop 187 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 91) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk40.drop 196 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 56).length = 372 := by decide +kernel
   have hbranch := compile_branch vaultTable 10432 10808 _ _
@@ -3827,6 +3867,7 @@ private theorem divide512NonzeroDown_10427_compile :
 private theorem divide512NonzeroDown_10881_compile :
     Func.compile vaultTable 10881 divide512NonzeroDown = some (prorataWethVaultCodeChunk42.drop 129 ++ prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 33) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk42.drop 138 ++ prorataWethVaultCodeChunk43.take 254).length = 372 := by decide +kernel
   have hbranch := compile_branch vaultTable 10886 11262 _ _
@@ -3856,6 +3897,7 @@ private theorem divide512_down_10418_compile :
       (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) =
       some (prorataWethVaultCodeChunk40.drop 178 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 95) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk40.drop 187 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42.take 91).length = 416 := by decide +kernel
   have hbranch := compile_branch vaultTable 10423 10843 _ _
@@ -3882,6 +3924,7 @@ private theorem divide512_down_10872_compile :
       (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) =
       some (prorataWethVaultCodeChunk42.drop 120 ++ prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 37) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk42.drop 129 ++ prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 33).length = 416 := by decide +kernel
   have hbranch := compile_branch vaultTable 10877 11297 _ _
@@ -3927,8 +3970,10 @@ private theorem previewRedeemMulDiv_10290_compile :
       some (prorataWethVaultCodeChunk40.drop 50 ++ prorataWethVaultCodeChunk41 ++
         prorataWethVaultCodeChunk42.take 95) := by
   rw [previewRedeemMulDiv_source_cut, compile_prepend, previewRedeemMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [divide512_down_10418_compile, previewRedeemMulStage_bytes, previewRedeemMulRecover_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -3963,6 +4008,7 @@ private theorem previewRedeemShiftedDiv_10848_compile :
       some (prorataWethVaultCodeChunk42.drop 96 ++ prorataWethVaultCodeChunk43 ++
         prorataWethVaultCodeChunk44.take 37) := by
   rw [previewRedeemShiftedDiv_source_cut, compile_prepend, previewRedeemShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [divide512_down_10872_compile, previewRedeemShiftStage_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -4043,6 +4089,7 @@ private theorem previewRedeemAssets_10280_compile :
         prorataWethVaultCodeChunk42 ++ prorataWethVaultCodeChunk43 ++
         prorataWethVaultCodeChunk44.take 37) := by
   rw [previewRedeemAssets, compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [previewRedeemArithmetic_10286_compile, previewRedeemAssetsPrefix_bytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -4058,6 +4105,7 @@ private theorem previewRedeemStage_10225_compile :
         prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
         prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 41) := by
   rw [previewRedeemStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk40.drop 40 ++ prorataWethVaultCodeChunk41 ++
       prorataWethVaultCodeChunk42 ++ prorataWethVaultCodeChunk43 ++
@@ -4083,6 +4131,7 @@ private theorem previewRedeemReturnSize_10216_compile :
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
       prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 45) := by
   rw [previewRedeemReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk39.drop 241 ++ prorataWethVaultCodeChunk40 ++
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
@@ -4116,6 +4165,7 @@ private theorem previewRedeemRead_10188_compile :
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
       prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 49) := by
   rw [previewRedeemRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk39.drop 232 ++ prorataWethVaultCodeChunk40 ++
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
@@ -4149,6 +4199,7 @@ private theorem previewRedeemStatic_10180_compile :
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
       prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44.take 53) := by
   rw [previewRedeemStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk39.drop 204 ++ prorataWethVaultCodeChunk40 ++
       prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++
@@ -4187,6 +4238,7 @@ private theorem previewRedeem_endpoint_compile :
   have hcut : nonpayable previewRedeemStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert previewRedeemStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4310,6 +4362,7 @@ private theorem depositWide_9584_compile :
       (ProrataWethVault.divideWide .down ProrataWethVault.depositAfterQuoteSlot) =
       some (prorataWethVaultCodeChunk37.drop 112 ++ prorataWethVaultCodeChunk38.take 228) := by
   rw [depositWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbranch := compile_branch vaultTable 9593 9600 _ _
     [0x5f, 0x5f, 0xfd] (prorataWethVaultCodeChunk37.drop 129 ++ prorataWethVaultCodeChunk38.take 228)
@@ -4331,6 +4384,7 @@ private theorem depositNonzero_9575_compile :
       some (prorataWethVaultCodeChunk37.drop 103 ++ prorataWethVaultCodeChunk38 ++
         prorataWethVaultCodeChunk39.take 7) := by
   rw [depositNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk37.drop 112 ++ prorataWethVaultCodeChunk38.take 228).length =
       372 := by decide +kernel
@@ -4363,6 +4417,7 @@ private theorem depositDivide_9566_compile :
       some (prorataWethVaultCodeChunk37.drop 94 ++ prorataWethVaultCodeChunk38 ++
         prorataWethVaultCodeChunk39.take 11) := by
   rw [depositDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk37.drop 103 ++ prorataWethVaultCodeChunk38 ++
       prorataWethVaultCodeChunk39.take 7).length = 416 := by decide +kernel
@@ -4423,8 +4478,10 @@ private theorem depositMulDiv_9437_compile :
   have hrecovery : maxDepositMulRecover.flatMap Ninst.toBytes =
       (prorataWethVaultCodeChunk37.drop 9).take 85 := by rfl
   rw [depositMulDiv_source_cut, compile_prepend, depositMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositDivide_9566_compile, hstage, hrecovery]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -4449,10 +4506,13 @@ private theorem depositProduct_9996_compile :
   have hfinish : ([0x61, 0x03, 0x00, 0x51, 0x61, 0x3d, 0x3a, 0x56] : Bytes) =
       (prorataWethVaultCodeChunk39.drop 146).take 8 := by rfl
   rw [depositProduct_source_cut, compile_prepend, depositMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [finishQuotient_down_deposit_compile_at, hstage, hrecovery, htail, hfinish]
   simp only [bind, Option.bind, pure, Pure.pure, ← List.append_assoc]
@@ -4540,6 +4600,7 @@ private theorem depositAssets_9427_compile :
     rw [previewRedeemAssetsPrefix_bytes]
     rfl
   rw [depositAssets, compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositArithmetic_9433_compile, hbytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -4553,6 +4614,7 @@ private theorem depositStage_9372_compile :
     Func.compile vaultTable 9372 depositStage = some (prorataWethVaultCodeChunk36.drop 156 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 158) := by
   rw [depositStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk36.drop 211 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 154).length = 711 := by decide +kernel
@@ -4587,6 +4649,7 @@ private theorem depositReturnSize_9363_compile :
     Func.compile vaultTable 9363 depositReturnSize = some (prorataWethVaultCodeChunk36.drop 147 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 162) := by
   rw [depositReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk36.drop 156 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 158).length = 770 := by decide +kernel
@@ -4621,6 +4684,7 @@ private theorem depositRead_9335_compile :
     Func.compile vaultTable 9335 depositRead = some (prorataWethVaultCodeChunk36.drop 119 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 166) := by
   rw [depositRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk36.drop 147 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 162).length = 783 := by decide +kernel
@@ -4658,6 +4722,7 @@ private theorem depositArgs_9321_compile :
   have hbytes : depositArgsPrefix.flatMap Ninst.toBytes =
       (prorataWethVaultCodeChunk36.drop 105).take 14 := by rfl
   rw [depositArgs, compile_prepend, depositArgsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositRead_9335_compile, hbytes]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -4672,6 +4737,7 @@ private theorem depositStatic_9313_compile :
       some (prorataWethVaultCodeChunk36.drop 97 ++ prorataWethVaultCodeChunk37 ++
         prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 170) := by
   rw [depositStatic, compile_prepend, depositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hlen : (prorataWethVaultCodeChunk36.drop 105 ++ prorataWethVaultCodeChunk37 ++
       prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39.take 166).length = 829 := by decide +kernel
@@ -4708,6 +4774,7 @@ private theorem deposit_endpoint_compile :
   have hcut : nonpayable depositStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert depositStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4752,6 +4819,7 @@ private theorem deposit_dispatch_compile :
       ([Ninst.pushB256 (selector "deposit" [.uint256, .address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 2 ProrataWethVault.deposit) := by rfl
   rw [hcut, compile_prepend, depositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x6e553f65, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4782,6 +4850,7 @@ private theorem previewRedeem_dispatch_compile :
       ([Ninst.pushB256 (selector "previewRedeem" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.previewRedeem) := by rfl
   rw [hcut, compile_prepend, previewRedeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x4cdad506, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4813,6 +4882,7 @@ private theorem rightSixRightPair_dispatch_compile :
       ([Ninst.dup 0, Ninst.pushB256 (selector "deposit" [.uint256, .address]), Ninst.gt] : Line) +++
         Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rightSixRightPair.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rightSixRightPair.take 1))) := by rfl
   rw [hcut, compile_prepend, depositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x6e553f65, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4852,6 +4922,7 @@ private theorem rightSixRight_dispatch_compile :
       ([Ninst.dup 0, Ninst.pushB256 (selector "balanceOf" [.address]), Ninst.gt] : Line) +++
         Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rightSixRight.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rightSixRightPair)) := by rfl
   rw [hcut, compile_prepend, balanceOfSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x70a08231, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -4891,6 +4962,7 @@ private theorem rightSix_dispatch_compile :
       ([Ninst.dup 0, Ninst.pushB256 (selector "previewRedeem" [.uint256]), Ninst.gt] : Line) +++
         Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rightSixRight)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rightSixLeft)) := by rfl
   rw [hcut, compile_prepend, previewRedeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x4cdad506, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -5008,6 +5080,7 @@ private theorem divideSimple_up_13847_compile :
 private theorem divideWide_up_13442_compile :
     Func.compile vaultTable 13442 (ProrataWethVault.divideWide .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk52.drop 130 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54.take 22) := by
   rw [divideWide_up_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk52.drop 130).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -5044,6 +5117,7 @@ private theorem divideWide_up_13442_compile :
 private theorem divide512NonzeroUp_13433_compile :
     Func.compile vaultTable 13433 (divide512NonzeroUp) = some (prorataWethVaultCodeChunk52.drop 121 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54.take 89) := by
   rw [divide512NonzeroUp, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk52.drop 121).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -5078,6 +5152,7 @@ private theorem divide512NonzeroUp_13433_compile :
 private theorem divide512_up_13424_compile :
     Func.compile vaultTable 13424 (ProrataWethVault.divide512 .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk52.drop 112 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54.take 93) := by
   rw [divide512_up_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk52.drop 112).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -5142,8 +5217,10 @@ private theorem previewWithdrawMulDiv_13296_compile :
     rfl
   rw [previewWithdrawMulDiv_source_cut]
   rw [compile_prepend, previewWithdrawMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [divide512_up_13424_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5166,10 +5243,13 @@ private theorem previewWithdrawProduct_13918_compile :
     rfl
   rw [previewWithdrawProduct_source_cut]
   rw [compile_prepend, previewWithdrawMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [finishQuotient_up_14051_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5238,6 +5318,7 @@ private theorem previewWithdrawAssets_13286_compile :
     rfl
   rw [previewWithdrawAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [previewWithdrawArithmetic_13292_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5249,6 +5330,7 @@ private theorem previewWithdrawAssets_13286_compile :
 private theorem previewWithdrawStage_13231_compile :
     Func.compile vaultTable 13231 (previewWithdrawStage) = some (prorataWethVaultCodeChunk51.drop 175 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55.take 15) := by
   rw [previewWithdrawStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk51.drop 175).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -5285,6 +5367,7 @@ private theorem previewWithdrawStage_13231_compile :
 private theorem previewWithdrawReturnSize_13222_compile :
     Func.compile vaultTable 13222 (previewWithdrawReturnSize) = some (prorataWethVaultCodeChunk51.drop 166 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55.take 19) := by
   rw [previewWithdrawReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk51.drop 166).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -5321,6 +5404,7 @@ private theorem previewWithdrawReturnSize_13222_compile :
 private theorem previewWithdrawRead_13194_compile :
     Func.compile vaultTable 13194 (previewWithdrawRead) = some (prorataWethVaultCodeChunk51.drop 138 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55.take 23) := by
   rw [previewWithdrawRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk51.drop 138).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -5357,6 +5441,7 @@ private theorem previewWithdrawRead_13194_compile :
 private theorem previewWithdrawStatic_13186_compile :
     Func.compile vaultTable 13186 (previewWithdrawStatic) = some (prorataWethVaultCodeChunk51.drop 130 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55.take 27) := by
   rw [previewWithdrawStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk51.drop 130).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -5400,6 +5485,7 @@ private theorem previewWithdraw_endpoint_compile :
   have hcut : nonpayable previewWithdrawStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert previewWithdrawStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -5629,6 +5715,7 @@ private theorem convertSimple_15431_compile :
 private theorem convertWide_14604_compile :
     Func.compile vaultTable 14604 (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk57.drop 12 ++ prorataWethVaultCodeChunk58.take 128) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk57.drop 12).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -5665,6 +5752,7 @@ private theorem convertWide_14604_compile :
 private theorem convertNonzero_14595_compile :
     Func.compile vaultTable 14595 (divide512NonzeroDown) = some (prorataWethVaultCodeChunk57.drop 3 ++ prorataWethVaultCodeChunk58.take 163) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk57.drop 3).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -5699,6 +5787,7 @@ private theorem convertNonzero_14595_compile :
 private theorem convertDivide_14586_compile :
     Func.compile vaultTable 14586 (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk56.drop 250 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58.take 167) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk56.drop 250).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -5735,6 +5824,7 @@ private theorem convertDivide_14586_compile :
 private theorem convertWide_15058_compile :
     Func.compile vaultTable 15058 (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk58.drop 210 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 70) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk58.drop 210).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -5771,6 +5861,7 @@ private theorem convertWide_15058_compile :
 private theorem convertNonzero_15049_compile :
     Func.compile vaultTable 15049 (divide512NonzeroDown) = some (prorataWethVaultCodeChunk58.drop 201 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 105) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk58.drop 201).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -5805,6 +5896,7 @@ private theorem convertNonzero_15049_compile :
 private theorem convertDivide_15040_compile :
     Func.compile vaultTable 15040 (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk58.drop 192 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 109) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk58.drop 192).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -5846,8 +5938,10 @@ private theorem convertMulDiv_14458_compile :
     rfl
   rw [previewRedeemMulDiv_source_cut]
   rw [compile_prepend, previewRedeemMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [convertDivide_14586_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5866,6 +5960,7 @@ private theorem convertShiftedDiv_15016_compile :
     rfl
   rw [previewRedeemShiftedDiv_source_cut]
   rw [compile_prepend, previewRedeemShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [convertDivide_15040_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5907,6 +6002,7 @@ private theorem convertAssets_14448_compile :
     rfl
   rw [previewRedeemAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [convertArithmetic_14454_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -5918,6 +6014,7 @@ private theorem convertAssets_14448_compile :
 private theorem convertStage_14393_compile :
     Func.compile vaultTable 14393 (previewRedeemStage) = some (prorataWethVaultCodeChunk56.drop 57 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 113) := by
   rw [previewRedeemStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk56.drop 57).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -5954,6 +6051,7 @@ private theorem convertStage_14393_compile :
 private theorem convertReturnSize_14384_compile :
     Func.compile vaultTable 14384 (previewRedeemReturnSize) = some (prorataWethVaultCodeChunk56.drop 48 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 117) := by
   rw [previewRedeemReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk56.drop 48).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -5990,6 +6088,7 @@ private theorem convertReturnSize_14384_compile :
 private theorem convertRead_14356_compile :
     Func.compile vaultTable 14356 (previewRedeemRead) = some (prorataWethVaultCodeChunk56.drop 20 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 121) := by
   rw [previewRedeemRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk56.drop 20).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -6026,6 +6125,7 @@ private theorem convertRead_14356_compile :
 private theorem convertStatic_14348_compile :
     Func.compile vaultTable 14348 (previewRedeemStatic) = some (prorataWethVaultCodeChunk56.drop 12 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 125) := by
   rw [previewRedeemStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk56.drop 12).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -6070,6 +6170,7 @@ private theorem convertToAssets_endpoint_compile :
   have hcut : nonpayable previewRedeemStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert previewRedeemStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6156,6 +6257,7 @@ private theorem approveBody_14240_compile :
 private theorem approveKey_14207_compile :
     Func.compile vaultTable 14207 (approveKey) = some ((prorataWethVaultCodeChunk55.drop 127).take 99) := by
   rw [approveKey, compile_prepend, approveKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : approveKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk55.drop 127).take 29 := by
     rfl
@@ -6194,6 +6296,7 @@ private theorem approveStage_14188_compile :
     rfl
   rw [approveStage]
   rw [compile_prepend, approveStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [approveKey_14207_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -6205,6 +6308,7 @@ private theorem approveStage_14188_compile :
 private theorem approveNonzero_14183_compile :
     Func.compile vaultTable 14183 (approveNonzero) = some ((prorataWethVaultCodeChunk55.drop 103).take 127) := by
   rw [approveNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk55.drop 103).take 1 := by
     rfl
@@ -6240,6 +6344,7 @@ private theorem approveNonzero_14183_compile :
 private theorem approveAddress_14169_compile :
     Func.compile vaultTable 14169 (approveAddress) = some ((prorataWethVaultCodeChunk55.drop 89).take 145) := by
   rw [approveAddress, compile_prepend, vaultAddress0Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultAddress0Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk55.drop 89).take 10 := by
     rfl
@@ -6275,6 +6380,7 @@ private theorem approveAddress_14169_compile :
 private theorem approveCaller_14163_compile :
     Func.compile vaultTable 14163 (approveCaller) = some ((prorataWethVaultCodeChunk55.drop 83).take 155) := by
   rw [approveCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk55.drop 83).take 2 := by
     rfl
@@ -6310,6 +6416,7 @@ private theorem approveCaller_14163_compile :
 private theorem approveStatic_14155_compile :
     Func.compile vaultTable 14155 (approveStatic) = some ((prorataWethVaultCodeChunk55.drop 75).take 167) := by
   rw [approveStatic, compile_prepend, depositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk55.drop 75).take 4 := by
     rfl
@@ -6349,6 +6456,7 @@ private theorem approve_endpoint_compile :
   have hcut : nonpayable approveStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert approveStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6439,6 +6547,7 @@ private theorem transferSlot_13070_compile :
 private theorem transferFinite_13034_compile :
     Func.compile vaultTable 13034 (transferFinite) = some (prorataWethVaultCodeChunk50.drop 234 ++ prorataWethVaultCodeChunk51.take 13) := by
   rw [transferFinite, compile_prepend, transferFinitePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferFinitePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 234).take 9 := by
     rfl
@@ -6474,6 +6583,7 @@ private theorem transferFinite_13034_compile :
 private theorem transferSpend_13011_compile :
     Func.compile vaultTable 13011 (transferSpend) = some (prorataWethVaultCodeChunk50.drop 211 ++ prorataWethVaultCodeChunk51.take 18) := by
   rw [transferSpend, compile_prepend, transferSpendPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferSpendPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 211).take 19 := by
     rfl
@@ -6507,6 +6617,7 @@ private theorem transferSpend_13011_compile :
 private theorem transferKey_12981_compile :
     Func.compile vaultTable 12981 (transferKey) = some (prorataWethVaultCodeChunk50.drop 181 ++ prorataWethVaultCodeChunk51.take 22) := by
   rw [transferKey, compile_prepend, transferKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 181).take 26 := by
     rfl
@@ -6545,6 +6656,7 @@ private theorem transferStage_12960_compile :
     rfl
   rw [transferStage]
   rw [compile_prepend, transferStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [transferKey_12981_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -6556,6 +6668,7 @@ private theorem transferStage_12960_compile :
 private theorem transferNonzero1_12955_compile :
     Func.compile vaultTable 12955 (transferNonzero1) = some (prorataWethVaultCodeChunk50.drop 155 ++ prorataWethVaultCodeChunk51.take 26) := by
   rw [transferNonzero1, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 155).take 1 := by
     rfl
@@ -6591,6 +6704,7 @@ private theorem transferNonzero1_12955_compile :
 private theorem transferAddress1_12941_compile :
     Func.compile vaultTable 12941 (transferAddress1) = some (prorataWethVaultCodeChunk50.drop 141 ++ prorataWethVaultCodeChunk51.take 30) := by
   rw [transferAddress1, compile_prepend, vaultAddress1Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultAddress1Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 141).take 10 := by
     rfl
@@ -6626,6 +6740,7 @@ private theorem transferAddress1_12941_compile :
 private theorem transferNonzero0_12936_compile :
     Func.compile vaultTable 12936 (transferNonzero0) = some (prorataWethVaultCodeChunk50.drop 136 ++ prorataWethVaultCodeChunk51.take 34) := by
   rw [transferNonzero0, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 136).take 1 := by
     rfl
@@ -6661,6 +6776,7 @@ private theorem transferNonzero0_12936_compile :
 private theorem transferAddress0_12922_compile :
     Func.compile vaultTable 12922 (transferAddress0) = some (prorataWethVaultCodeChunk50.drop 122 ++ prorataWethVaultCodeChunk51.take 38) := by
   rw [transferAddress0, compile_prepend, vaultAddress0Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultAddress0Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 122).take 10 := by
     rfl
@@ -6696,6 +6812,7 @@ private theorem transferAddress0_12922_compile :
 private theorem transferCaller_12916_compile :
     Func.compile vaultTable 12916 (transferCaller) = some (prorataWethVaultCodeChunk50.drop 116 ++ prorataWethVaultCodeChunk51.take 42) := by
   rw [transferCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 116).take 2 := by
     rfl
@@ -6731,6 +6848,7 @@ private theorem transferCaller_12916_compile :
 private theorem transferStatic_12908_compile :
     Func.compile vaultTable 12908 (transferStatic) = some (prorataWethVaultCodeChunk50.drop 108 ++ prorataWethVaultCodeChunk51.take 46) := by
   rw [transferStatic, compile_prepend, transferStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk50.drop 108).take 4 := by
     rfl
@@ -6770,6 +6888,7 @@ private theorem transferFrom_endpoint_compile :
   have hcut : nonpayable transferStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert transferStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6830,6 +6949,7 @@ private theorem transferFrom_dispatch_compile :
       ([Ninst.pushB256 (selector "transferFrom" [.address, .address, .uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 3 ProrataWethVault.transferFrom) := by rfl
   rw [hcut, compile_prepend, transferFromSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x23b872dd, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6860,6 +6980,7 @@ private theorem totalSupply_dispatch_compile :
       ([Ninst.pushB256 (selector "totalSupply" []), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 0 ProrataWethVault.totalSupply) := by rfl
   rw [hcut, compile_prepend, totalSupplySelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x18160ddd, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6890,6 +7011,7 @@ private theorem previewWithdraw_dispatch_compile :
       ([Ninst.pushB256 (selector "previewWithdraw" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.previewWithdraw) := by rfl
   rw [hcut, compile_prepend, previewWithdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xa28a477, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6920,6 +7042,7 @@ private theorem approve_dispatch_compile :
       ([Ninst.pushB256 (selector "approve" [.address, .uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 2 ProrataWethVault.approve) := by rfl
   rw [hcut, compile_prepend, approveSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x95ea7b3, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6950,6 +7073,7 @@ private theorem convertToAssets_dispatch_compile :
       ([Ninst.pushB256 (selector "convertToAssets" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.convertToAssets) := by rfl
   rw [hcut, compile_prepend, convertToAssetsSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x7a2d13a, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -6980,6 +7104,7 @@ private theorem name_dispatch_compile :
       ([Ninst.pushB256 (selector "name" []), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 0 ProrataWethVault.name) := by rfl
   rw [hcut, compile_prepend, nameSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x6fdde03, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7010,6 +7135,7 @@ private theorem totalAssets_dispatch_compile :
       ([Ninst.pushB256 (selector "totalAssets" []), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 0 ProrataWethVault.totalAssets) := by rfl
   rw [hcut, compile_prepend, totalAssetsSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x1e1d114, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7039,6 +7165,7 @@ private theorem totalSupplyFork_dispatch_compile :
   have hcut : dispatchNode (selector "totalSupply" []) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (totalSupplyFork.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 totalSupplyLeaf)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "totalSupply" []), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 totalSupplyLeaf)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (totalSupplyFork.take 1))) := by rfl
   rw [hcut, compile_prepend, totalSupplySelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x18160ddd, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7074,6 +7201,7 @@ private theorem rootLeftLeftRight_dispatch_compile :
   have hcut : dispatchNode (selector "transferFrom" [.address, .address, .uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 totalSupplyFork)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootLeftLeftRight.drop 2))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "transferFrom" [.address, .address, .uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootLeftLeftRight.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 totalSupplyFork)) := by rfl
   rw [hcut, compile_prepend, transferFromSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x23b872dd, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7109,6 +7237,7 @@ private theorem firstTwo_dispatch_compile :
   have hcut : dispatchNode (selector "name" []) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (firstTwo.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (firstTwo.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "name" []), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (firstTwo.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (firstTwo.take 1))) := by rfl
   rw [hcut, compile_prepend, nameSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x6fdde03, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7144,6 +7273,7 @@ private theorem secondTwo_dispatch_compile :
   have hcut : dispatchNode (selector "approve" [.address, .uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (secondTwo.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (secondTwo.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "approve" [.address, .uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (secondTwo.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (secondTwo.take 1))) := by rfl
   rw [hcut, compile_prepend, approveSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x95ea7b3, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7179,6 +7309,7 @@ private theorem firstFour_dispatch_compile :
   have hcut : dispatchNode (selector "convertToAssets" [.uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 firstTwo)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 secondTwo)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "convertToAssets" [.uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 secondTwo)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 firstTwo)) := by rfl
   rw [hcut, compile_prepend, convertToAssetsSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x7a2d13a, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7214,6 +7345,7 @@ private theorem rootLeftLeft_dispatch_compile :
   have hcut : dispatchNode (selector "previewWithdraw" [.uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 firstFour)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootLeftLeftRight)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "previewWithdraw" [.uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootLeftLeftRight)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 firstFour)) := by rfl
   rw [hcut, compile_prepend, previewWithdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xa28a477, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7249,6 +7381,7 @@ private theorem rootLeft_dispatch_compile :
   have hcut : dispatchNode (selector "decimals" []) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootLeftLeft)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rightSix)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "decimals" []), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rightSix)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootLeftLeft)) := by rfl
   rw [hcut, compile_prepend, decimalsSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x313ce567, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7350,6 +7483,7 @@ private theorem depositViewSimple_704_compile :
 private theorem depositViewWide_331_compile :
     Func.compile vaultTable 331 (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk1.drop 75 ++ prorataWethVaultCodeChunk2.take 191) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk1.drop 75).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -7386,6 +7520,7 @@ private theorem depositViewWide_331_compile :
 private theorem depositViewNonzero_322_compile :
     Func.compile vaultTable 322 (divide512NonzeroDown) = some (prorataWethVaultCodeChunk1.drop 66 ++ prorataWethVaultCodeChunk2.take 226) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk1.drop 66).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -7420,6 +7555,7 @@ private theorem depositViewNonzero_322_compile :
 private theorem depositViewDivide_313_compile :
     Func.compile vaultTable 313 (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk1.drop 57 ++ prorataWethVaultCodeChunk2.take 230) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk1.drop 57).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -7467,8 +7603,10 @@ private theorem depositViewMul_185_compile :
     rfl
   rw [depositViewMul_source_cut]
   rw [compile_prepend, previewWithdrawMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewDivide_313_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7491,10 +7629,13 @@ private theorem depositViewProduct_743_compile :
     rfl
   rw [depositViewProduct_source_cut]
   rw [compile_prepend, previewWithdrawMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewFinish_876_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7544,6 +7685,7 @@ private theorem depositViewAssets_175_compile :
     rfl
   rw [depositViewAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewArithmetic_181_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7555,6 +7697,7 @@ private theorem depositViewAssets_175_compile :
 private theorem depositViewStage_120_compile :
     Func.compile vaultTable 120 (depositViewStage) = some (prorataWethVaultCodeChunk0.drop 120 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3.take 120) := by
   rw [depositViewStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk0.drop 120).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -7591,6 +7734,7 @@ private theorem depositViewStage_120_compile :
 private theorem depositViewReturnSize_111_compile :
     Func.compile vaultTable 111 (depositViewReturnSize) = some (prorataWethVaultCodeChunk0.drop 111 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3.take 124) := by
   rw [depositViewReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk0.drop 111).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -7627,6 +7771,7 @@ private theorem depositViewReturnSize_111_compile :
 private theorem depositViewRead_83_compile :
     Func.compile vaultTable 83 (depositViewRead) = some (prorataWethVaultCodeChunk0.drop 83 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3.take 128) := by
   rw [depositViewRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk0.drop 83).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -7663,6 +7808,7 @@ private theorem depositViewRead_83_compile :
 private theorem depositViewStatic_75_compile :
     Func.compile vaultTable 75 (depositViewStatic) = some (prorataWethVaultCodeChunk0.drop 75 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3.take 132) := by
   rw [depositViewStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk0.drop 75).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -7703,6 +7849,7 @@ private theorem previewDeposit_endpoint_compile :
   have hcut : nonpayable depositViewStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert depositViewStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -7777,6 +7924,7 @@ private theorem depositViewSimple_3029_compile :
 private theorem depositViewWide_2656_compile :
     Func.compile vaultTable 2656 (ProrataWethVault.divideWide .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk10.drop 96 ++ prorataWethVaultCodeChunk11.take 212) := by
   rw [divideWide_down_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk10.drop 96).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -7813,6 +7961,7 @@ private theorem depositViewWide_2656_compile :
 private theorem depositViewNonzero_2647_compile :
     Func.compile vaultTable 2647 (divide512NonzeroDown) = some (prorataWethVaultCodeChunk10.drop 87 ++ prorataWethVaultCodeChunk11.take 247) := by
   rw [divide512NonzeroDown, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk10.drop 87).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -7847,6 +7996,7 @@ private theorem depositViewNonzero_2647_compile :
 private theorem depositViewDivide_2638_compile :
     Func.compile vaultTable 2638 (ProrataWethVault.divide512 .down ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk10.drop 78 ++ prorataWethVaultCodeChunk11.take 251) := by
   rw [divide512_down_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk10.drop 78).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -7894,8 +8044,10 @@ private theorem depositViewMul_2510_compile :
     rfl
   rw [depositViewMul_source_cut]
   rw [compile_prepend, previewWithdrawMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewDivide_2638_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7918,10 +8070,13 @@ private theorem depositViewProduct_3068_compile :
     rfl
   rw [depositViewProduct_source_cut]
   rw [compile_prepend, previewWithdrawMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewFinish_3201_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7971,6 +8126,7 @@ private theorem depositViewAssets_2500_compile :
     rfl
   rw [depositViewAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositViewArithmetic_2506_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -7982,6 +8138,7 @@ private theorem depositViewAssets_2500_compile :
 private theorem depositViewStage_2445_compile :
     Func.compile vaultTable 2445 (depositViewStage) = some (prorataWethVaultCodeChunk9.drop 141 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12.take 141) := by
   rw [depositViewStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk9.drop 141).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -8018,6 +8175,7 @@ private theorem depositViewStage_2445_compile :
 private theorem depositViewReturnSize_2436_compile :
     Func.compile vaultTable 2436 (depositViewReturnSize) = some (prorataWethVaultCodeChunk9.drop 132 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12.take 145) := by
   rw [depositViewReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk9.drop 132).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -8054,6 +8212,7 @@ private theorem depositViewReturnSize_2436_compile :
 private theorem depositViewRead_2408_compile :
     Func.compile vaultTable 2408 (depositViewRead) = some (prorataWethVaultCodeChunk9.drop 104 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12.take 149) := by
   rw [depositViewRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk9.drop 104).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -8090,6 +8249,7 @@ private theorem depositViewRead_2408_compile :
 private theorem depositViewStatic_2400_compile :
     Func.compile vaultTable 2400 (depositViewStatic) = some (prorataWethVaultCodeChunk9.drop 96 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12.take 153) := by
   rw [depositViewStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk9.drop 96).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -8130,6 +8290,7 @@ private theorem convertToShares_endpoint_compile :
   have hcut : nonpayable depositViewStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert depositViewStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8185,6 +8346,7 @@ private theorem allowanceStorageReturn_1002_compile :
 private theorem allowanceKey_971_compile :
     Func.compile vaultTable 971 (allowanceKey) = some ((prorataWethVaultCodeChunk3.drop 203).take 42) := by
   rw [allowanceKey, compile_prepend, allowanceKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : allowanceKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk3.drop 203).take 27 := by
     rfl
@@ -8220,6 +8382,7 @@ private theorem allowanceKey_971_compile :
 private theorem allowanceAddress1_958_compile :
     Func.compile vaultTable 958 (allowanceAddress1) = some ((prorataWethVaultCodeChunk3.drop 190).take 59) := by
   rw [allowanceAddress1, compile_prepend, allowanceAddress1Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : allowanceAddress1Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk3.drop 190).take 9 := by
     rfl
@@ -8255,6 +8418,7 @@ private theorem allowanceAddress1_958_compile :
 private theorem allowanceAddress0_945_compile :
     Func.compile vaultTable 945 (allowanceAddress0) = some ((prorataWethVaultCodeChunk3.drop 177).take 76) := by
   rw [allowanceAddress0, compile_prepend, allowanceAddress0Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : allowanceAddress0Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk3.drop 177).take 9 := by
     rfl
@@ -8290,6 +8454,7 @@ private theorem allowanceAddress0_945_compile :
 private theorem allowanceStatic_937_compile :
     Func.compile vaultTable 937 (allowanceStatic) = some (prorataWethVaultCodeChunk3.drop 169 ++ prorataWethVaultCodeChunk4.take 1) := by
   rw [allowanceStatic, compile_prepend, depositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk3.drop 169).take 4 := by
     rfl
@@ -8329,6 +8494,7 @@ private theorem boundedAllowance_endpoint_compile :
   have hcut : nonpayable allowanceStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert allowanceStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8378,6 +8544,7 @@ private theorem directTransferStage_7757_compile :
     rfl
   rw [directTransferStage]
   rw [compile_prepend, approveStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [directTransferSlot_7776_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -8389,6 +8556,7 @@ private theorem directTransferStage_7757_compile :
 private theorem directTransferNonzero_7752_compile :
     Func.compile vaultTable 7752 (directTransferNonzero) = some ((prorataWethVaultCodeChunk30.drop 72).take 32) := by
   rw [directTransferNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk30.drop 72).take 1 := by
     rfl
@@ -8424,6 +8592,7 @@ private theorem directTransferNonzero_7752_compile :
 private theorem directTransferAddress_7738_compile :
     Func.compile vaultTable 7738 (directTransferAddress) = some ((prorataWethVaultCodeChunk30.drop 58).take 50) := by
   rw [directTransferAddress, compile_prepend, vaultAddress0Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultAddress0Prefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk30.drop 58).take 10 := by
     rfl
@@ -8459,6 +8628,7 @@ private theorem directTransferAddress_7738_compile :
 private theorem directTransferCaller_7732_compile :
     Func.compile vaultTable 7732 (directTransferCaller) = some ((prorataWethVaultCodeChunk30.drop 52).take 60) := by
   rw [directTransferCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk30.drop 52).take 2 := by
     rfl
@@ -8494,6 +8664,7 @@ private theorem directTransferCaller_7732_compile :
 private theorem directTransferStatic_7724_compile :
     Func.compile vaultTable 7724 (directTransferStatic) = some ((prorataWethVaultCodeChunk30.drop 44).take 72) := by
   rw [directTransferStatic, compile_prepend, depositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk30.drop 44).take 4 := by
     rfl
@@ -8533,6 +8704,7 @@ private theorem directTransfer_endpoint_compile :
   have hcut : nonpayable directTransferStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert directTransferStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8583,6 +8755,7 @@ private theorem previewDeposit_dispatch_compile :
       ([Ninst.pushB256 (selector "previewDeposit" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.previewDeposit) := by rfl
   rw [hcut, compile_prepend, previewDepositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xef8b30f7, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8613,6 +8786,7 @@ private theorem allowance_dispatch_compile :
       ([Ninst.pushB256 (selector "allowance" [.address, .address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 2 ProrataWethVault.allowance) := by rfl
   rw [hcut, compile_prepend, allowanceSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xdd62ed3e, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8643,6 +8817,7 @@ private theorem maxRedeem_dispatch_compile :
       ([Ninst.pushB256 (selector "maxRedeem" [.address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.maxRedeem) := by rfl
   rw [hcut, compile_prepend, maxRedeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xd905777e, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8672,6 +8847,7 @@ private theorem rootRightRightBPair_dispatch_compile :
   have hcut : dispatchNode (selector "allowance" [.address, .address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightBPair.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightBPair.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "allowance" [.address, .address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightBPair.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightBPair.take 1))) := by rfl
   rw [hcut, compile_prepend, allowanceSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xdd62ed3e, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8707,6 +8883,7 @@ private theorem rootRightRightB_dispatch_compile :
   have hcut : dispatchNode (selector "previewDeposit" [.uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightRightBPair)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightRightB.drop 2))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "previewDeposit" [.uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightRightB.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightRightBPair)) := by rfl
   rw [hcut, compile_prepend, previewDepositSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xef8b30f7, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -8795,6 +8972,7 @@ private theorem previewMintSimple_7083_compile :
 private theorem previewMintWide_6678_compile :
     Func.compile vaultTable 6678 (ProrataWethVault.divideWide .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk26.drop 22 ++ prorataWethVaultCodeChunk27.take 170) := by
   rw [divideWide_up_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk26.drop 22).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -8831,6 +9009,7 @@ private theorem previewMintWide_6678_compile :
 private theorem previewMintNonzero_6669_compile :
     Func.compile vaultTable 6669 (divide512NonzeroUp) = some (prorataWethVaultCodeChunk26.drop 13 ++ prorataWethVaultCodeChunk27.take 237) := by
   rw [divide512NonzeroUp, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk26.drop 13).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -8865,6 +9044,7 @@ private theorem previewMintNonzero_6669_compile :
 private theorem previewMintDivide_6660_compile :
     Func.compile vaultTable 6660 (ProrataWethVault.divide512 .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk26.drop 4 ++ prorataWethVaultCodeChunk27.take 241) := by
   rw [divide512_up_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk26.drop 4).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -8957,6 +9137,7 @@ private theorem previewMintSimple_7601_compile :
 private theorem previewMintWide_7196_compile :
     Func.compile vaultTable 7196 (ProrataWethVault.divideWide .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk28.drop 28 ++ prorataWethVaultCodeChunk29.take 176) := by
   rw [divideWide_up_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk28.drop 28).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -8993,6 +9174,7 @@ private theorem previewMintWide_7196_compile :
 private theorem previewMintNonzero_7187_compile :
     Func.compile vaultTable 7187 (divide512NonzeroUp) = some (prorataWethVaultCodeChunk28.drop 19 ++ prorataWethVaultCodeChunk29.take 243) := by
   rw [divide512NonzeroUp, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk28.drop 19).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -9027,6 +9209,7 @@ private theorem previewMintNonzero_7187_compile :
 private theorem previewMintDivide_7178_compile :
     Func.compile vaultTable 7178 (ProrataWethVault.divide512 .up ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk28.drop 10 ++ prorataWethVaultCodeChunk29.take 247) := by
   rw [divide512_up_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk28.drop 10).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -9086,8 +9269,10 @@ private theorem previewMintMul_6532_compile :
     rfl
   rw [previewMintMul_source_cut]
   rw [compile_prepend, previewRedeemMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [previewMintDivide_6660_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9106,6 +9291,7 @@ private theorem previewMintShift_7154_compile :
     rfl
   rw [previewMintShift_source_cut]
   rw [compile_prepend, previewRedeemShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [previewMintDivide_7178_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9147,6 +9333,7 @@ private theorem previewMintAssets_6522_compile :
     rfl
   rw [previewMintAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [previewMintArithmetic_6528_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9158,6 +9345,7 @@ private theorem previewMintAssets_6522_compile :
 private theorem previewMintStage_6467_compile :
     Func.compile vaultTable 6467 (previewMintStage) = some (prorataWethVaultCodeChunk25.drop 67 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29.take 251) := by
   rw [previewMintStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk25.drop 67).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -9194,6 +9382,7 @@ private theorem previewMintStage_6467_compile :
 private theorem previewMintReturnSize_6458_compile :
     Func.compile vaultTable 6458 (previewMintReturnSize) = some (prorataWethVaultCodeChunk25.drop 58 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29.take 255) := by
   rw [previewMintReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk25.drop 58).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -9230,6 +9419,7 @@ private theorem previewMintReturnSize_6458_compile :
 private theorem previewMintRead_6430_compile :
     Func.compile vaultTable 6430 (previewMintRead) = some (prorataWethVaultCodeChunk25.drop 30 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30.take 3) := by
   rw [previewMintRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk25.drop 30).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -9262,6 +9452,7 @@ private theorem previewMintRead_6430_compile :
 private theorem previewMintStatic_6422_compile :
     Func.compile vaultTable 6422 (previewMintStatic) = some (prorataWethVaultCodeChunk25.drop 22 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30.take 7) := by
   rw [previewMintStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk25.drop 22).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -9302,6 +9493,7 @@ private theorem previewMint_endpoint_compile :
   have hcut : nonpayable previewMintStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert previewMintStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -9399,6 +9591,7 @@ private theorem redeemSimple_4906_compile :
 private theorem redeemWide_4533_compile :
     Func.compile vaultTable 4533 (ProrataWethVault.divideWide .down ProrataWethVault.redeemAfterQuoteSlot) = some (prorataWethVaultCodeChunk17.drop 181 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19.take 41) := by
   rw [redeemWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk17.drop 181).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -9435,6 +9628,7 @@ private theorem redeemWide_4533_compile :
 private theorem redeemNonzero_4524_compile :
     Func.compile vaultTable 4524 (redeemNonzero) = some (prorataWethVaultCodeChunk17.drop 172 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19.take 76) := by
   rw [redeemNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk17.drop 172).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -9469,6 +9663,7 @@ private theorem redeemNonzero_4524_compile :
 private theorem redeemDivide_4515_compile :
     Func.compile vaultTable 4515 (ProrataWethVault.divide512 .down ProrataWethVault.redeemAfterQuoteSlot) = some (prorataWethVaultCodeChunk17.drop 163 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19.take 80) := by
   rw [redeemDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk17.drop 163).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -9554,6 +9749,7 @@ private theorem redeemSimple_5361_compile :
 private theorem redeemWide_4988_compile :
     Func.compile vaultTable 4988 (ProrataWethVault.divideWide .down ProrataWethVault.redeemAfterQuoteSlot) = some (prorataWethVaultCodeChunk19.drop 124 ++ prorataWethVaultCodeChunk20.take 240) := by
   rw [redeemWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk19.drop 124).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -9590,6 +9786,7 @@ private theorem redeemWide_4988_compile :
 private theorem redeemNonzero_4979_compile :
     Func.compile vaultTable 4979 (redeemNonzero) = some (prorataWethVaultCodeChunk19.drop 115 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 19) := by
   rw [redeemNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk19.drop 115).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -9624,6 +9821,7 @@ private theorem redeemNonzero_4979_compile :
 private theorem redeemDivide_4970_compile :
     Func.compile vaultTable 4970 (ProrataWethVault.divide512 .down ProrataWethVault.redeemAfterQuoteSlot) = some (prorataWethVaultCodeChunk19.drop 106 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 23) := by
   rw [redeemDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk19.drop 106).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -9707,8 +9905,10 @@ private theorem redeemMul_4386_compile :
     rfl
   rw [redeemMul_source_cut]
   rw [compile_prepend, mutationAssetMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemDivide_4515_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9727,6 +9927,7 @@ private theorem redeemShift_4945_compile :
     rfl
   rw [redeemShift_source_cut]
   rw [compile_prepend, mutationShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemDivide_4970_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9768,6 +9969,7 @@ private theorem redeemAssets_4376_compile :
     rfl
   rw [redeemAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemArithmetic_4382_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9779,6 +9981,7 @@ private theorem redeemAssets_4376_compile :
 private theorem redeemStage_4321_compile :
     Func.compile vaultTable 4321 (redeemStage) = some (prorataWethVaultCodeChunk16.drop 225 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 27) := by
   rw [redeemStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk16.drop 225 ++ prorataWethVaultCodeChunk17.take 20 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -9815,6 +10018,7 @@ private theorem redeemStage_4321_compile :
 private theorem redeemReturnSize_4312_compile :
     Func.compile vaultTable 4312 (redeemReturnSize) = some (prorataWethVaultCodeChunk16.drop 216 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 31) := by
   rw [redeemReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk16.drop 216).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -9851,6 +10055,7 @@ private theorem redeemReturnSize_4312_compile :
 private theorem redeemRead_4284_compile :
     Func.compile vaultTable 4284 (redeemRead) = some (prorataWethVaultCodeChunk16.drop 188 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 35) := by
   rw [redeemRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk16.drop 188).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -9890,6 +10095,7 @@ private theorem redeemArgs_4263_compile :
     rfl
   rw [redeemArgs]
   rw [compile_prepend, mutationArgs3Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemRead_4284_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -9901,6 +10107,7 @@ private theorem redeemArgs_4263_compile :
 private theorem redeemStatic_4255_compile :
     Func.compile vaultTable 4255 (redeemStatic) = some (prorataWethVaultCodeChunk16.drop 159 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 39) := by
   rw [redeemStatic, compile_prepend, transferStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk16.drop 159).take 4 := by
     rfl
@@ -9940,6 +10147,7 @@ private theorem redeem_endpoint_compile :
   have hcut : nonpayable redeemStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert redeemStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -10032,6 +10240,7 @@ private theorem mintSimple_8573_compile :
 private theorem mintWide_8168_compile :
     Func.compile vaultTable 8168 (ProrataWethVault.divideWide .up ProrataWethVault.mintAfterQuoteSlot) = some (prorataWethVaultCodeChunk31.drop 232 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33.take 124) := by
   rw [mintWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk31.drop 232).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -10068,6 +10277,7 @@ private theorem mintWide_8168_compile :
 private theorem mintNonzero_8159_compile :
     Func.compile vaultTable 8159 (mintNonzero) = some (prorataWethVaultCodeChunk31.drop 223 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33.take 191) := by
   rw [mintNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk31.drop 223).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -10102,6 +10312,7 @@ private theorem mintNonzero_8159_compile :
 private theorem mintDivide_8150_compile :
     Func.compile vaultTable 8150 (ProrataWethVault.divide512 .up ProrataWethVault.mintAfterQuoteSlot) = some (prorataWethVaultCodeChunk31.drop 214 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33.take 195) := by
   rw [mintDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk31.drop 214).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -10194,6 +10405,7 @@ private theorem mintSimple_9092_compile :
 private theorem mintWide_8687_compile :
     Func.compile vaultTable 8687 (ProrataWethVault.divideWide .up ProrataWethVault.mintAfterQuoteSlot) = some (prorataWethVaultCodeChunk33.drop 239 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 131) := by
   rw [mintWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk33.drop 239).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -10226,6 +10438,7 @@ private theorem mintWide_8687_compile :
 private theorem mintNonzero_8678_compile :
     Func.compile vaultTable 8678 (mintNonzero) = some (prorataWethVaultCodeChunk33.drop 230 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 198) := by
   rw [mintNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk33.drop 230).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -10260,6 +10473,7 @@ private theorem mintNonzero_8678_compile :
 private theorem mintDivide_8669_compile :
     Func.compile vaultTable 8669 (ProrataWethVault.divide512 .up ProrataWethVault.mintAfterQuoteSlot) = some (prorataWethVaultCodeChunk33.drop 221 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 202) := by
   rw [mintDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk33.drop 221).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -10331,8 +10545,10 @@ private theorem mintMul_8021_compile :
     rfl
   rw [mintMul_source_cut]
   rw [compile_prepend, mutationAssetMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintDivide_8150_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10352,6 +10568,7 @@ private theorem mintShift_8644_compile :
     rfl
   rw [mintShift_source_cut]
   rw [compile_prepend, mutationShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintDivide_8669_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10393,6 +10610,7 @@ private theorem mintAssets_8011_compile :
     rfl
   rw [mintAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintArithmetic_8017_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10404,6 +10622,7 @@ private theorem mintAssets_8011_compile :
 private theorem mintStage_7956_compile :
     Func.compile vaultTable 7956 (mintStage) = some (prorataWethVaultCodeChunk31.drop 20 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 206) := by
   rw [mintStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk31.drop 20).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -10440,6 +10659,7 @@ private theorem mintStage_7956_compile :
 private theorem mintReturnSize_7947_compile :
     Func.compile vaultTable 7947 (mintReturnSize) = some (prorataWethVaultCodeChunk31.drop 11 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 210) := by
   rw [mintReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk31.drop 11).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -10476,6 +10696,7 @@ private theorem mintReturnSize_7947_compile :
 private theorem mintRead_7919_compile :
     Func.compile vaultTable 7919 (mintRead) = some (prorataWethVaultCodeChunk30.drop 239 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 214) := by
   rw [mintRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk30.drop 239 ++ prorataWethVaultCodeChunk31.take 7 := by
     rw [maxDepositReadPrefix_bytes]
@@ -10515,6 +10736,7 @@ private theorem mintArgs_7905_compile :
     rfl
   rw [mintArgs]
   rw [compile_prepend, depositArgsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintRead_7919_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10526,6 +10748,7 @@ private theorem mintArgs_7905_compile :
 private theorem mintStatic_7897_compile :
     Func.compile vaultTable 7897 (mintStatic) = some (prorataWethVaultCodeChunk30.drop 217 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 218) := by
   rw [mintStatic, compile_prepend, depositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk30.drop 217).take 4 := by
     rfl
@@ -10565,6 +10788,7 @@ private theorem mint_endpoint_compile :
   have hcut : nonpayable mintStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert mintStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -10657,6 +10881,7 @@ private theorem withdrawSimple_6135_compile :
 private theorem withdrawWide_5730_compile :
     Func.compile vaultTable 5730 (ProrataWethVault.divideWide .up ProrataWethVault.withdrawAfterQuoteSlot) = some (prorataWethVaultCodeChunk22.drop 98 ++ prorataWethVaultCodeChunk23.take 246) := by
   rw [withdrawWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk22.drop 98).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -10693,6 +10918,7 @@ private theorem withdrawWide_5730_compile :
 private theorem withdrawNonzero_5721_compile :
     Func.compile vaultTable 5721 (withdrawNonzero) = some (prorataWethVaultCodeChunk22.drop 89 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 57) := by
   rw [withdrawNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk22.drop 89).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -10727,6 +10953,7 @@ private theorem withdrawNonzero_5721_compile :
 private theorem withdrawDivide_5712_compile :
     Func.compile vaultTable 5712 (ProrataWethVault.divide512 .up ProrataWethVault.withdrawAfterQuoteSlot) = some (prorataWethVaultCodeChunk22.drop 80 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 61) := by
   rw [withdrawDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk22.drop 80).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -10805,8 +11032,10 @@ private theorem withdrawMul_5583_compile :
     rfl
   rw [withdrawMul_source_cut]
   rw [compile_prepend, depositMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawDivide_5712_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10830,10 +11059,13 @@ private theorem withdrawProduct_6206_compile :
     rfl
   rw [withdrawProduct_source_cut]
   rw [compile_prepend, depositMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawFinish_6340_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10883,6 +11115,7 @@ private theorem withdrawAssets_5573_compile :
     rfl
   rw [withdrawAssets]
   rw [compile_prepend, previewRedeemAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawArithmetic_5579_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -10894,6 +11127,7 @@ private theorem withdrawAssets_5573_compile :
 private theorem withdrawStage_5518_compile :
     Func.compile vaultTable 5518 (withdrawStage) = some (prorataWethVaultCodeChunk21.drop 142 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 240) := by
   rw [withdrawStage, compile_prepend, previewRedeemStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : previewRedeemStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk21.drop 142).take 51 := by
     rw [previewRedeemStagePrefix_bytes]
@@ -10930,6 +11164,7 @@ private theorem withdrawStage_5518_compile :
 private theorem withdrawReturnSize_5509_compile :
     Func.compile vaultTable 5509 (withdrawReturnSize) = some (prorataWethVaultCodeChunk21.drop 133 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 244) := by
   rw [withdrawReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk21.drop 133).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -10966,6 +11201,7 @@ private theorem withdrawReturnSize_5509_compile :
 private theorem withdrawRead_5481_compile :
     Func.compile vaultTable 5481 (withdrawRead) = some (prorataWethVaultCodeChunk21.drop 105 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 248) := by
   rw [withdrawRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk21.drop 105).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -11005,6 +11241,7 @@ private theorem withdrawArgs_5460_compile :
     rfl
   rw [withdrawArgs]
   rw [compile_prepend, mutationArgs3Prefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawRead_5481_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -11016,6 +11253,7 @@ private theorem withdrawArgs_5460_compile :
 private theorem withdrawStatic_5452_compile :
     Func.compile vaultTable 5452 (withdrawStatic) = some (prorataWethVaultCodeChunk21.drop 76 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 252) := by
   rw [withdrawStatic, compile_prepend, transferStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk21.drop 76).take 4 := by
     rfl
@@ -11055,6 +11293,7 @@ private theorem withdraw_endpoint_compile :
   have hcut : nonpayable withdrawStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert withdrawStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -11158,6 +11397,7 @@ private theorem maxWithdrawSimple_1812_compile :
 private theorem maxWithdrawWide_1405_compile :
     Func.compile vaultTable 1405 (ProrataWethVault.divideWide .capDown ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk5.drop 125 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7.take 19) := by
   rw [maxWithdrawWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk5.drop 125).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -11192,6 +11432,7 @@ private theorem maxWithdrawWide_1405_compile :
 private theorem maxWithdrawNonzero_1396_compile :
     Func.compile vaultTable 1396 (maxWithdrawNonzero) = some (prorataWethVaultCodeChunk5.drop 116 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7.take 54) := by
   rw [maxWithdrawNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk5.drop 116).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -11226,6 +11467,7 @@ private theorem maxWithdrawNonzero_1396_compile :
 private theorem maxWithdrawDivide_1387_compile :
     Func.compile vaultTable 1387 (ProrataWethVault.divide512 .capDown ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk5.drop 107 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7.take 58) := by
   rw [maxWithdrawDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk5.drop 107).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -11316,6 +11558,7 @@ private theorem maxWithdrawSimple_2301_compile :
 private theorem maxWithdrawWide_1894_compile :
     Func.compile vaultTable 1894 (ProrataWethVault.divideWide .capDown ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk7.drop 102 ++ prorataWethVaultCodeChunk8.take 252) := by
   rw [maxWithdrawWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk7.drop 102).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -11350,6 +11593,7 @@ private theorem maxWithdrawWide_1894_compile :
 private theorem maxWithdrawNonzero_1885_compile :
     Func.compile vaultTable 1885 (maxWithdrawNonzero) = some (prorataWethVaultCodeChunk7.drop 93 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 31) := by
   rw [maxWithdrawNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk7.drop 93).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -11384,6 +11628,7 @@ private theorem maxWithdrawNonzero_1885_compile :
 private theorem maxWithdrawDivide_1876_compile :
     Func.compile vaultTable 1876 (ProrataWethVault.divide512 .capDown ProrataWethVault.returnWordSlot) = some (prorataWethVaultCodeChunk7.drop 84 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 35) := by
   rw [maxWithdrawDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk7.drop 84).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -11458,8 +11703,10 @@ private theorem maxWithdrawMul_1258_compile :
     rfl
   rw [maxWithdrawMul_source_cut]
   rw [compile_prepend, mutationAssetMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxWithdrawDivide_1387_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -11479,6 +11726,7 @@ private theorem maxWithdrawShift_1851_compile :
     rfl
   rw [maxWithdrawShift_source_cut]
   rw [compile_prepend, mutationShiftStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxWithdrawDivide_1876_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -11520,6 +11768,7 @@ private theorem maxWithdrawAssets_1242_compile :
     rfl
   rw [maxWithdrawAssets]
   rw [compile_prepend, maxDepositAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxWithdrawArithmetic_1254_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -11531,6 +11780,7 @@ private theorem maxWithdrawAssets_1242_compile :
 private theorem maxWithdrawReturnSize_1233_compile :
     Func.compile vaultTable 1233 (maxWithdrawReturnSize) = some (prorataWethVaultCodeChunk4.drop 209 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 39) := by
   rw [maxWithdrawReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk4.drop 209).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -11567,6 +11817,7 @@ private theorem maxWithdrawReturnSize_1233_compile :
 private theorem maxWithdrawRead_1205_compile :
     Func.compile vaultTable 1205 (maxWithdrawRead) = some (prorataWethVaultCodeChunk4.drop 181 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 43) := by
   rw [maxWithdrawRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk4.drop 181).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -11608,6 +11859,7 @@ private theorem maxWithdrawZero_2348_compile :
 private theorem maxWithdrawStage_1148_compile :
     Func.compile vaultTable 1148 (maxWithdrawStage) = some (prorataWethVaultCodeChunk4.drop 124 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 51) := by
   rw [maxWithdrawStage, compile_prepend, maxWithdrawStagePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxWithdrawStagePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk4.drop 124).take 53 := by
     rfl
@@ -11641,6 +11893,7 @@ private theorem maxWithdrawStage_1148_compile :
 private theorem maxWithdrawCanonical_1135_compile :
     Func.compile vaultTable 1135 (maxWithdrawCanonical) = some (prorataWethVaultCodeChunk4.drop 111 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 55) := by
   rw [maxWithdrawCanonical, compile_prepend, maxDepositCanonicalPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositCanonicalPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk4.drop 111).take 9 := by
     rw [maxDepositCanonicalPrefix_bytes]
@@ -11677,6 +11930,7 @@ private theorem maxWithdrawCanonical_1135_compile :
 private theorem maxWithdrawStatic_1127_compile :
     Func.compile vaultTable 1127 (maxWithdrawStatic) = some (prorataWethVaultCodeChunk4.drop 103 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 59) := by
   rw [maxWithdrawStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk4.drop 103).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -11717,6 +11971,7 @@ private theorem maxWithdraw_endpoint_compile :
   have hcut : nonpayable maxWithdrawStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert maxWithdrawStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -11820,6 +12075,7 @@ private theorem maxMintSimple_3965_compile :
 private theorem maxMintWide_3558_compile :
     Func.compile vaultTable 3558 (ProrataWethVault.divideWide .capDown ProrataWethVault.maxMintAfterAssetCapSlot) = some (prorataWethVaultCodeChunk13.drop 230 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15.take 124) := by
   rw [maxMintWide_source_cut, compile_prepend, wideGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : wideGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk13.drop 230).take 9 := by
     rw [wideGuardPrefix_bytes]
@@ -11854,6 +12110,7 @@ private theorem maxMintWide_3558_compile :
 private theorem maxMintNonzero_3549_compile :
     Func.compile vaultTable 3549 (maxMintNonzero) = some (prorataWethVaultCodeChunk13.drop 221 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15.take 159) := by
   rw [maxMintNonzero, compile_prepend, highZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : highZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk13.drop 221).take 5 := by
     rw [highZeroPrefix_bytes]
@@ -11888,6 +12145,7 @@ private theorem maxMintNonzero_3549_compile :
 private theorem maxMintDivide_3540_compile :
     Func.compile vaultTable 3540 (ProrataWethVault.divide512 .capDown ProrataWethVault.maxMintAfterAssetCapSlot) = some (prorataWethVaultCodeChunk13.drop 212 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15.take 163) := by
   rw [maxMintDivide_source_cut, compile_prepend, denominatorZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : denominatorZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk13.drop 212).take 5 := by
     rw [denominatorZeroPrefix_bytes]
@@ -11976,8 +12234,10 @@ private theorem maxMintMul_3382_compile :
     rfl
   rw [maxMintMul_source_cut]
   rw [compile_prepend, maxMintMulStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxMintDivide_3540_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -12001,10 +12261,13 @@ private theorem maxMintProduct_4004_compile :
     rfl
   rw [maxMintProduct_source_cut]
   rw [compile_prepend, maxMintMultiplyStage_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, maxDepositMulRecover_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositProductTail_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxMintProductFinish_4167_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -12054,6 +12317,7 @@ private theorem maxMintAssets_3366_compile :
     rfl
   rw [maxMintAssets]
   rw [compile_prepend, maxDepositAssetsPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [maxMintArithmetic_3378_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -12065,6 +12329,7 @@ private theorem maxMintAssets_3366_compile :
 private theorem maxMintReturnSize_3357_compile :
     Func.compile vaultTable 3357 (maxMintReturnSize) = some (prorataWethVaultCodeChunk13.drop 29 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 83) := by
   rw [maxMintReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk13.drop 29).take 5 := by
     rw [maxDepositReturnSizePrefix_bytes]
@@ -12101,6 +12366,7 @@ private theorem maxMintReturnSize_3357_compile :
 private theorem maxMintRead_3329_compile :
     Func.compile vaultTable 3329 (maxMintRead) = some (prorataWethVaultCodeChunk13.drop 1 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 87) := by
   rw [maxMintRead, compile_prepend, maxDepositReadPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReadPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk13.drop 1).take 24 := by
     rw [maxDepositReadPrefix_bytes]
@@ -12142,6 +12408,7 @@ private theorem maxMintZero_4184_compile :
 private theorem maxMintSupply_3280_compile :
     Func.compile vaultTable 3280 (maxMintSupply) = some (prorataWethVaultCodeChunk12.drop 208 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 95) := by
   rw [maxMintSupply, compile_prepend, maxDepositSupplyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositSupplyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk12.drop 208).take 45 := by
     rw [maxDepositSupplyPrefix_bytes]
@@ -12181,6 +12448,7 @@ private theorem maxMintZero_4192_compile :
 private theorem maxMintZero_3272_compile :
     Func.compile vaultTable 3272 (maxMintZero) = some (prorataWethVaultCodeChunk12.drop 200 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 103) := by
   rw [maxMintZero, compile_prepend, maxDepositZeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositZeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk12.drop 200).take 4 := by
     rw [maxDepositZeroPrefix_bytes]
@@ -12215,6 +12483,7 @@ private theorem maxMintZero_3272_compile :
 private theorem maxMintCanonical_3259_compile :
     Func.compile vaultTable 3259 (maxMintCanonical) = some (prorataWethVaultCodeChunk12.drop 187 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 107) := by
   rw [maxMintCanonical, compile_prepend, maxDepositCanonicalPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositCanonicalPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk12.drop 187).take 9 := by
     rw [maxDepositCanonicalPrefix_bytes]
@@ -12251,6 +12520,7 @@ private theorem maxMintCanonical_3259_compile :
 private theorem maxMintStatic_3251_compile :
     Func.compile vaultTable 3251 (maxMintStatic) = some (prorataWethVaultCodeChunk12.drop 179 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16.take 111) := by
   rw [maxMintStatic, compile_prepend, maxDepositStaticPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositStaticPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk12.drop 179).take 4 := by
     rw [maxDepositStaticPrefix_bytes]
@@ -12291,6 +12561,7 @@ private theorem maxMint_endpoint_compile :
   have hcut : nonpayable maxMintStatic =
       ([Ninst.callvalue, Ninst.iszero] : Line) +++ Func.branch Func.revert maxMintStatic := by rfl
   rw [hcut, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.callvalue, Ninst.iszero] = 2 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12338,6 +12609,7 @@ private theorem mint_dispatch_compile :
       ([Ninst.pushB256 (selector "mint" [.uint256, .address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 2 ProrataWethVault.mint) := by rfl
   rw [hcut, compile_prepend, mintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x94bf804d, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12368,6 +12640,7 @@ private theorem symbol_dispatch_compile :
       ([Ninst.pushB256 (selector "symbol" []), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 0 ProrataWethVault.symbol) := by rfl
   rw [hcut, compile_prepend, symbolSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0x95d89b41, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12398,6 +12671,7 @@ private theorem transfer_dispatch_compile :
       ([Ninst.pushB256 (selector "transfer" [.address, .uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 2 ProrataWethVault.transfer) := by rfl
   rw [hcut, compile_prepend, transferSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xa9059cbb, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12428,6 +12702,7 @@ private theorem previewMint_dispatch_compile :
       ([Ninst.pushB256 (selector "previewMint" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.previewMint) := by rfl
   rw [hcut, compile_prepend, previewMintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xb3d7f6b9, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12458,6 +12733,7 @@ private theorem withdraw_dispatch_compile :
       ([Ninst.pushB256 (selector "withdraw" [.uint256, .address, .address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 3 ProrataWethVault.withdraw) := by rfl
   rw [hcut, compile_prepend, withdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xb460af94, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12488,6 +12764,7 @@ private theorem redeem_dispatch_compile :
       ([Ninst.pushB256 (selector "redeem" [.uint256, .address, .address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 3 ProrataWethVault.redeem) := by rfl
   rw [hcut, compile_prepend, redeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xba087652, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12518,6 +12795,7 @@ private theorem maxMint_dispatch_compile :
       ([Ninst.pushB256 (selector "maxMint" [.address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.maxMint) := by rfl
   rw [hcut, compile_prepend, maxMintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xc63d75b6, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12548,6 +12826,7 @@ private theorem convertToShares_dispatch_compile :
       ([Ninst.pushB256 (selector "convertToShares" [.uint256]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.convertToShares) := by rfl
   rw [hcut, compile_prepend, convertToSharesSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xc6e6f592, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12578,6 +12857,7 @@ private theorem maxWithdraw_dispatch_compile :
       ([Ninst.pushB256 (selector "maxWithdraw" [.address]), Ninst.eq] : Line) +++
         Func.branch (Func.call ProrataWethVault.revertSlot) (ProrataWethVault.routed 1 ProrataWethVault.maxWithdraw) := by rfl
   rw [hcut, compile_prepend, maxWithdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.pushB256 0xce96cb77, Ninst.eq] = 6 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12607,6 +12887,7 @@ private theorem rootRightLeftAPair_dispatch_compile :
   have hcut : dispatchNode (selector "symbol" []) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftAPair.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftAPair.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "symbol" []), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftAPair.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftAPair.take 1))) := by rfl
   rw [hcut, compile_prepend, symbolSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x95d89b41, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12642,6 +12923,7 @@ private theorem rootRightLeftA_dispatch_compile :
   have hcut : dispatchNode (selector "transfer" [.address, .uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightLeftAPair)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightLeftA.drop 2))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "transfer" [.address, .uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightLeftA.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightLeftAPair)) := by rfl
   rw [hcut, compile_prepend, transferSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xa9059cbb, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12677,6 +12959,7 @@ private theorem rootRightLeftBPair_dispatch_compile :
   have hcut : dispatchNode (selector "withdraw" [.uint256, .address, .address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftBPair.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftBPair.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "withdraw" [.uint256, .address, .address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftBPair.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightLeftBPair.take 1))) := by rfl
   rw [hcut, compile_prepend, withdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xb460af94, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12712,6 +12995,7 @@ private theorem rootRightLeftB_dispatch_compile :
   have hcut : dispatchNode (selector "redeem" [.uint256, .address, .address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightLeftBPair)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightLeftB.drop 2))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "redeem" [.uint256, .address, .address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightLeftB.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightLeftBPair)) := by rfl
   rw [hcut, compile_prepend, redeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xba087652, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12747,6 +13031,7 @@ private theorem rootRightLeft_dispatch_compile :
   have hcut : dispatchNode (selector "previewMint" [.uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightLeftA)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightLeftB)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "previewMint" [.uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightLeftB)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightLeftA)) := by rfl
   rw [hcut, compile_prepend, previewMintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xb3d7f6b9, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12782,6 +13067,7 @@ private theorem rootRightRightAPair_dispatch_compile :
   have hcut : dispatchNode (selector "convertToShares" [.uint256]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightAPair.take 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightAPair.drop 1))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "convertToShares" [.uint256]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightAPair.drop 1))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 20 (rootRightRightAPair.take 1))) := by rfl
   rw [hcut, compile_prepend, convertToSharesSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xc6e6f592, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12817,6 +13103,7 @@ private theorem rootRightRightA_dispatch_compile :
   have hcut : dispatchNode (selector "maxWithdraw" [.address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightRightAPair)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightRightA.drop 2))) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "maxWithdraw" [.address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 (rootRightRightA.drop 2))) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 rootRightRightAPair)) := by rfl
   rw [hcut, compile_prepend, maxWithdrawSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xce96cb77, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12852,6 +13139,7 @@ private theorem rootRightRight_dispatch_compile :
   have hcut : dispatchNode (selector "maxRedeem" [.address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightRightA)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightRightB)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "maxRedeem" [.address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightRightB)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootRightRightA)) := by rfl
   rw [hcut, compile_prepend, maxRedeemSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xd905777e, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12887,6 +13175,7 @@ private theorem rootRight_dispatch_compile :
   have hcut : dispatchNode (selector "maxMint" [.address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootRightLeft)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootRightRight)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "maxMint" [.address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootRightRight)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 23 rootRightLeft)) := by rfl
   rw [hcut, compile_prepend, maxMintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0xc63d75b6, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12922,6 +13211,7 @@ private theorem vaultTree_dispatch_compile :
   have hcut : dispatchNode (selector "mint" [.uint256, .address]) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 24 rootLeft)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 24 rootRight)) =
       ([Ninst.dup 0, Ninst.pushB256 (selector "mint" [.uint256, .address]), Ninst.gt] : Line) +++ Func.branch (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 24 rootRight)) (dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 24 rootLeft)) := by rfl
   rw [hcut, compile_prepend, mintSelector_value]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x94bf804d, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
@@ -12960,6 +13250,7 @@ private theorem vaultMain_compile :
     rfl
   rw [vaultMain_source_cut]
   rw [compile_prepend, prefixByteSize_fsig]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [vaultTree_dispatch_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13068,10 +13359,13 @@ private theorem depositAuxWrites_compile :
     rw [depositAuxLogDepositPrefix_bytes]
   rw [depositAuxWrites]
   rw [compile_prepend, depositAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositAuxLogMintPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, depositAuxLogDepositPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositAuxTail_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13094,6 +13388,7 @@ private def depositAuxBalance : Func := depositAuxBalancePrefix +++ Func.branch 
 private theorem depositAuxBalance_compile :
     Func.compile vaultTable 15811 (depositAuxBalance) = some (prorataWethVaultCodeChunk61.drop 195 ++ prorataWethVaultCodeChunk62.take 112) := by
   rw [depositAuxBalance, compile_prepend, depositAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 195).take 31 := by
     rw [depositAuxBalancePrefix_bytes]
@@ -13132,6 +13427,7 @@ private def depositAuxTrue : Func := auxTruePrefix +++ Func.branch depositAuxBal
 private theorem depositAuxTrue_compile :
     Func.compile vaultTable 15801 (depositAuxTrue) = some (prorataWethVaultCodeChunk61.drop 185 ++ prorataWethVaultCodeChunk62.take 116) := by
   rw [depositAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 185).take 6 := by
     rfl
@@ -13170,6 +13466,7 @@ private def depositAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.b
 private theorem depositAuxReturnSize_compile :
     Func.compile vaultTable 15792 (depositAuxReturnSize) = some (prorataWethVaultCodeChunk61.drop 176 ++ prorataWethVaultCodeChunk62.take 120) := by
   rw [depositAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 176).take 5 := by
     rfl
@@ -13208,6 +13505,7 @@ private def depositAuxCall : Func := depositAuxCallPrefix +++ Func.branch deposi
 private theorem depositAuxCall_compile :
     Func.compile vaultTable 15752 (depositAuxCall) = some (prorataWethVaultCodeChunk61.drop 136 ++ prorataWethVaultCodeChunk62.take 124) := by
   rw [depositAuxCall, compile_prepend, depositAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 136).take 36 := by
     rw [depositAuxCallPrefix_bytes]
@@ -13246,6 +13544,7 @@ private def depositAuxRoom : Func := depositAuxRoomPrefix +++ Func.branch deposi
 private theorem depositAuxRoom_compile :
     Func.compile vaultTable 15705 (depositAuxRoom) = some (prorataWethVaultCodeChunk61.drop 89 ++ prorataWethVaultCodeChunk62.take 128) := by
   rw [depositAuxRoom, compile_prepend, depositAuxRoomPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : depositAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 89).take 43 := by
     rw [depositAuxRoomPrefix_bytes]
@@ -13284,6 +13583,7 @@ private def depositAuxNonzero : Func := vaultNonzeroPrefix +++ Func.branch depos
 private theorem depositAuxNonzero_compile :
     Func.compile vaultTable 15700 (depositAuxNonzero) = some (prorataWethVaultCodeChunk61.drop 84 ++ prorataWethVaultCodeChunk62.take 132) := by
   rw [depositAuxNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 84).take 1 := by
     rfl
@@ -13322,6 +13622,7 @@ private def depositAuxAddress : Func := auxReceiverPrefix +++ Func.branch deposi
 private theorem depositAuxAddress_compile :
     Func.compile vaultTable 15685 (depositAuxAddress) = some (prorataWethVaultCodeChunk61.drop 69 ++ prorataWethVaultCodeChunk62.take 136) := by
   rw [depositAuxAddress, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 69).take 11 := by
     rfl
@@ -13360,6 +13661,7 @@ private def depositAuxCaller : Func := vaultCallerPrefix +++ Func.branch deposit
 private theorem depositAuxCaller_compile :
     Func.compile vaultTable 15679 (depositAuxCaller) = some (prorataWethVaultCodeChunk61.drop 63 ++ prorataWethVaultCodeChunk62.take 140) := by
   rw [depositAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 63).take 2 := by
     rfl
@@ -13400,6 +13702,7 @@ private theorem depositAux_compile :
     rfl
   rw [depositAux_source_cut]
   rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositAuxCaller_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13482,10 +13785,13 @@ private theorem mintAuxWrites_compile :
     rw [mintAuxLogDepositPrefix_bytes]
   rw [mintAuxWrites]
   rw [compile_prepend, mintAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, mintAuxLogMintPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, mintAuxLogDepositPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintAuxTail_compile, hb0, hb1, hb2]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13508,6 +13814,7 @@ private def mintAuxBalance : Func := mintAuxBalancePrefix +++ Func.branch mintAu
 private theorem mintAuxBalance_compile :
     Func.compile vaultTable 16149 (mintAuxBalance) = some ((prorataWethVaultCodeChunk63.drop 21).take 173) := by
   rw [mintAuxBalance, compile_prepend, mintAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : mintAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 21).take 31 := by
     rw [mintAuxBalancePrefix_bytes]
@@ -13546,6 +13853,7 @@ private def mintAuxTrue : Func := auxTruePrefix +++ Func.branch mintAuxBalance F
 private theorem mintAuxTrue_compile :
     Func.compile vaultTable 16139 (mintAuxTrue) = some ((prorataWethVaultCodeChunk63.drop 11).take 187) := by
   rw [mintAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 11).take 6 := by
     rfl
@@ -13584,6 +13892,7 @@ private def mintAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.bran
 private theorem mintAuxReturnSize_compile :
     Func.compile vaultTable 16130 (mintAuxReturnSize) = some ((prorataWethVaultCodeChunk63.drop 2).take 200) := by
   rw [mintAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 2).take 5 := by
     rfl
@@ -13622,6 +13931,7 @@ private def mintAuxCall : Func := mintAuxCallPrefix +++ Func.branch mintAuxRetur
 private theorem mintAuxCall_compile :
     Func.compile vaultTable 16090 (mintAuxCall) = some (prorataWethVaultCodeChunk62.drop 218 ++ prorataWethVaultCodeChunk63.take 206) := by
   rw [mintAuxCall, compile_prepend, mintAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : mintAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 218).take 36 := by
     rw [mintAuxCallPrefix_bytes]
@@ -13660,6 +13970,7 @@ private def mintAuxRoom : Func := mintAuxRoomPrefix +++ Func.branch mintAuxCall 
 private theorem mintAuxRoom_compile :
     Func.compile vaultTable 16043 (mintAuxRoom) = some (prorataWethVaultCodeChunk62.drop 171 ++ prorataWethVaultCodeChunk63.take 210) := by
   rw [mintAuxRoom, compile_prepend, mintAuxRoomPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : mintAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 171).take 43 := by
     rw [mintAuxRoomPrefix_bytes]
@@ -13698,6 +14009,7 @@ private def mintAuxNonzero : Func := vaultNonzeroPrefix +++ Func.branch mintAuxR
 private theorem mintAuxNonzero_compile :
     Func.compile vaultTable 16038 (mintAuxNonzero) = some (prorataWethVaultCodeChunk62.drop 166 ++ prorataWethVaultCodeChunk63.take 214) := by
   rw [mintAuxNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 166).take 1 := by
     rfl
@@ -13736,6 +14048,7 @@ private def mintAuxAddress : Func := auxReceiverPrefix +++ Func.branch mintAuxNo
 private theorem mintAuxAddress_compile :
     Func.compile vaultTable 16023 (mintAuxAddress) = some (prorataWethVaultCodeChunk62.drop 151 ++ prorataWethVaultCodeChunk63.take 218) := by
   rw [mintAuxAddress, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 151).take 11 := by
     rfl
@@ -13774,6 +14087,7 @@ private def mintAuxCaller : Func := vaultCallerPrefix +++ Func.branch mintAuxAdd
 private theorem mintAuxCaller_compile :
     Func.compile vaultTable 16017 (mintAuxCaller) = some (prorataWethVaultCodeChunk62.drop 145 ++ prorataWethVaultCodeChunk63.take 222) := by
   rw [mintAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 145).take 2 := by
     rfl
@@ -13814,6 +14128,7 @@ private theorem mintAux_compile :
     rfl
   rw [mintAux_source_cut]
   rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintAuxCaller_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13883,6 +14198,7 @@ private theorem withdrawBurnAuxLog_compile :
     rw [withdrawBurnAuxLogWithdrawPrefix_bytes]
   rw [withdrawBurnAuxLog]
   rw [compile_prepend, withdrawBurnAuxLogWithdrawPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawBurnAuxTail_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -13897,6 +14213,7 @@ private def withdrawBurnAuxTrue : Func := auxTruePrefix +++ Func.branch withdraw
 private theorem withdrawBurnAuxTrue_compile :
     Func.compile vaultTable 17052 (withdrawBurnAuxTrue) = some ((prorataWethVaultCodeChunk66.drop 156).take 83) := by
   rw [withdrawBurnAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 156).take 6 := by
     rfl
@@ -13935,6 +14252,7 @@ private def withdrawBurnAuxReturnSize : Func := maxDepositReturnSizePrefix +++ F
 private theorem withdrawBurnAuxReturnSize_compile :
     Func.compile vaultTable 17043 (withdrawBurnAuxReturnSize) = some ((prorataWethVaultCodeChunk66.drop 147).take 96) := by
   rw [withdrawBurnAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 147).take 5 := by
     rfl
@@ -13973,6 +14291,7 @@ private def withdrawBurnAuxCall : Func := withdrawBurnAuxCallPrefix +++ Func.bra
 private theorem withdrawBurnAuxCall_compile :
     Func.compile vaultTable 17004 (withdrawBurnAuxCall) = some ((prorataWethVaultCodeChunk66.drop 108).take 139) := by
   rw [withdrawBurnAuxCall, compile_prepend, withdrawBurnAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : withdrawBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 108).take 35 := by
     rw [withdrawBurnAuxCallPrefix_bytes]
@@ -14016,8 +14335,10 @@ private theorem withdrawBurnAuxWrites_compile :
     rw [withdrawBurnAuxLogBurnPrefix_bytes]
   rw [withdrawBurnAuxWrites]
   rw [compile_prepend, withdrawBurnAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, withdrawBurnAuxLogBurnPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawBurnAuxCall_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -14036,6 +14357,7 @@ private theorem withdrawBurnAux_source_cut : ProrataWethVault.withdrawBurn =
 private theorem withdrawBurnAux_compile :
     Func.compile vaultTable 16917 (ProrataWethVault.withdrawBurn) = some ((prorataWethVaultCodeChunk66.drop 21).take 230) := by
   rw [withdrawBurnAux_source_cut, compile_prepend, withdrawBurnAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : withdrawBurnAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 21).take 23 := by
     rw [withdrawBurnAuxGuardPrefix_bytes]
@@ -14129,6 +14451,7 @@ private theorem redeemBurnAuxLog_compile :
     rw [redeemBurnAuxLogWithdrawPrefix_bytes]
   rw [redeemBurnAuxLog]
   rw [compile_prepend, redeemBurnAuxLogWithdrawPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemBurnAuxTail_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -14143,6 +14466,7 @@ private def redeemBurnAuxTrue : Func := auxTruePrefix +++ Func.branch redeemBurn
 private theorem redeemBurnAuxTrue_compile :
     Func.compile vaultTable 17283 (redeemBurnAuxTrue) = some ((prorataWethVaultCodeChunk67.drop 131).take 83) := by
   rw [redeemBurnAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 131).take 6 := by
     rfl
@@ -14181,6 +14505,7 @@ private def redeemBurnAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Fun
 private theorem redeemBurnAuxReturnSize_compile :
     Func.compile vaultTable 17274 (redeemBurnAuxReturnSize) = some ((prorataWethVaultCodeChunk67.drop 122).take 96) := by
   rw [redeemBurnAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 122).take 5 := by
     rfl
@@ -14219,6 +14544,7 @@ private def redeemBurnAuxCall : Func := redeemBurnAuxCallPrefix +++ Func.branch 
 private theorem redeemBurnAuxCall_compile :
     Func.compile vaultTable 17235 (redeemBurnAuxCall) = some ((prorataWethVaultCodeChunk67.drop 83).take 139) := by
   rw [redeemBurnAuxCall, compile_prepend, redeemBurnAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : redeemBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 83).take 35 := by
     rw [redeemBurnAuxCallPrefix_bytes]
@@ -14262,8 +14588,10 @@ private theorem redeemBurnAuxWrites_compile :
     rw [redeemBurnAuxLogBurnPrefix_bytes]
   rw [redeemBurnAuxWrites]
   rw [compile_prepend, redeemBurnAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, redeemBurnAuxLogBurnPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemBurnAuxCall_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -14282,6 +14610,7 @@ private theorem redeemBurnAux_source_cut : ProrataWethVault.redeemBurn =
 private theorem redeemBurnAux_compile :
     Func.compile vaultTable 17148 (ProrataWethVault.redeemBurn) = some (prorataWethVaultCodeChunk66.drop 252 ++ prorataWethVaultCodeChunk67.take 226) := by
   rw [redeemBurnAux_source_cut, compile_prepend, redeemBurnAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : redeemBurnAuxGuardPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk66.drop 252 ++ prorataWethVaultCodeChunk67.take 19 := by
     rw [redeemBurnAuxGuardPrefix_bytes]
@@ -14350,8 +14679,10 @@ private theorem transferAuxWrites_compile :
     rw [transferAuxLogPrefix_bytes]
   rw [transferAuxWrites]
   rw [compile_prepend, transferAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [compile_prepend, transferAuxLogPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [transferAuxTrue_compile, hb0, hb1]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -14370,6 +14701,7 @@ private def transferAuxBalance : Func := transferAuxBalancePrefix +++ Func.branc
 private theorem transferAuxBalance_compile :
     Func.compile vaultTable 16791 (transferAuxBalance) = some (prorataWethVaultCodeChunk65.drop 151 ++ prorataWethVaultCodeChunk66.take 16) := by
   rw [transferAuxBalance, compile_prepend, transferAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 151).take 45 := by
     rfl
@@ -14408,6 +14740,7 @@ private theorem transferAux_source_cut : ProrataWethVault.transferStaged =
 private theorem transferAux_compile :
     Func.compile vaultTable 16769 (ProrataWethVault.transferStaged) = some (prorataWethVaultCodeChunk65.drop 129 ++ prorataWethVaultCodeChunk66.take 20) := by
   rw [transferAux_source_cut, compile_prepend, transferAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 129).take 18 := by
     rfl
@@ -14456,6 +14789,7 @@ private def maxMintAuxRoom : Func := shareRoom +++ Func.call returnWordSlot
 
 private theorem maxMintAuxRoom_compile : Func.compile vaultTable 17439 (maxMintAuxRoom) = some ((prorataWethVaultCodeChunk68.drop 31).take 42) := by
   rw [maxMintAuxRoom, compile_prepend]
+  all_goals discharge_prepend_acceptance
   have hsize : prefixByteSize ProrataWethVault.shareRoom = 38 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd, returnWord_slot_compile_at, bind, Option.bind, pure, Pure.pure]
@@ -14467,6 +14801,7 @@ private theorem maxMintAux_source_cut : ProrataWethVault.maxMintAfterAssetCap =
 private theorem maxMintAux_compile :
     Func.compile vaultTable 17379 (ProrataWethVault.maxMintAfterAssetCap) = some (prorataWethVaultCodeChunk67.drop 227 ++ prorataWethVaultCodeChunk68.take 73) := by
   rw [maxMintAux_source_cut, compile_prepend, maxMintAuxPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : maxMintAuxPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk67.drop 227 ++ prorataWethVaultCodeChunk68.take 18 := by
     rfl
@@ -14531,6 +14866,7 @@ private def withdrawQuoteAuxFinite : Func := withdrawQuoteAuxFinitePrefix +++ Fu
 private theorem withdrawQuoteAuxFinite_compile :
     Func.compile vaultTable 16486 (withdrawQuoteAuxFinite) = some ((prorataWethVaultCodeChunk64.drop 102).take 35) := by
   rw [withdrawQuoteAuxFinite, compile_prepend, withdrawQuoteAuxFinitePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : withdrawQuoteAuxFinitePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 102).take 9 := by
     rfl
@@ -14569,6 +14905,7 @@ private def withdrawQuoteAuxSpend : Func := transferSpendPrefix +++ Func.branch 
 private theorem withdrawQuoteAuxSpend_compile :
     Func.compile vaultTable 16463 (withdrawQuoteAuxSpend) = some ((prorataWethVaultCodeChunk64.drop 79).take 63) := by
   rw [withdrawQuoteAuxSpend, compile_prepend, transferSpendPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferSpendPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 79).take 19 := by
     rfl
@@ -14605,6 +14942,7 @@ private def withdrawQuoteAuxKey : Func := transferKeyPrefix +++ Func.branch with
 private theorem withdrawQuoteAuxKey_compile :
     Func.compile vaultTable 16433 (withdrawQuoteAuxKey) = some ((prorataWethVaultCodeChunk64.drop 49).take 97) := by
   rw [withdrawQuoteAuxKey, compile_prepend, transferKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 49).take 26 := by
     rfl
@@ -14643,6 +14981,7 @@ private def withdrawQuoteAuxOwnerEq : Func := auxOwnerEqPrefix +++ Func.branch w
 private theorem withdrawQuoteAuxOwnerEq_compile :
     Func.compile vaultTable 16423 (withdrawQuoteAuxOwnerEq) = some ((prorataWethVaultCodeChunk64.drop 39).take 112) := by
   rw [withdrawQuoteAuxOwnerEq, compile_prepend, auxOwnerEqPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxOwnerEqPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 39).take 6 := by
     rfl
@@ -14679,6 +15018,7 @@ private def withdrawQuoteAuxGuard : Func := withdrawQuoteAuxGuardPrefix +++ Func
 private theorem withdrawQuoteAuxGuard_compile :
     Func.compile vaultTable 16401 (withdrawQuoteAuxGuard) = some ((prorataWethVaultCodeChunk64.drop 17).take 138) := by
   rw [withdrawQuoteAuxGuard, compile_prepend, withdrawQuoteAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : withdrawQuoteAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 17).take 18 := by
     rfl
@@ -14717,6 +15057,7 @@ private def withdrawQuoteAuxOwnerNonzero : Func := vaultNonzeroPrefix +++ Func.b
 private theorem withdrawQuoteAuxOwnerNonzero_compile :
     Func.compile vaultTable 16396 (withdrawQuoteAuxOwnerNonzero) = some ((prorataWethVaultCodeChunk64.drop 12).take 147) := by
   rw [withdrawQuoteAuxOwnerNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 12).take 1 := by
     rfl
@@ -14755,6 +15096,7 @@ private def withdrawQuoteAuxOwner : Func := auxOwnerPrefix +++ Func.branch withd
 private theorem withdrawQuoteAuxOwner_compile :
     Func.compile vaultTable 16381 (withdrawQuoteAuxOwner) = some (prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 163) := by
   rw [withdrawQuoteAuxOwner, compile_prepend, auxOwnerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxOwnerPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 8 := by
     rfl
@@ -14793,6 +15135,7 @@ private def withdrawQuoteAuxReceiverNonzero : Func := vaultNonzeroPrefix +++ Fun
 private theorem withdrawQuoteAuxReceiverNonzero_compile :
     Func.compile vaultTable 16376 (withdrawQuoteAuxReceiverNonzero) = some (prorataWethVaultCodeChunk63.drop 248 ++ prorataWethVaultCodeChunk64.take 167) := by
   rw [withdrawQuoteAuxReceiverNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 248).take 1 := by
     rfl
@@ -14831,6 +15174,7 @@ private def withdrawQuoteAuxReceiver : Func := auxReceiverPrefix +++ Func.branch
 private theorem withdrawQuoteAuxReceiver_compile :
     Func.compile vaultTable 16361 (withdrawQuoteAuxReceiver) = some (prorataWethVaultCodeChunk63.drop 233 ++ prorataWethVaultCodeChunk64.take 171) := by
   rw [withdrawQuoteAuxReceiver, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 233).take 11 := by
     rfl
@@ -14869,6 +15213,7 @@ private def withdrawQuoteAuxCaller : Func := vaultCallerPrefix +++ Func.branch w
 private theorem withdrawQuoteAuxCaller_compile :
     Func.compile vaultTable 16355 (withdrawQuoteAuxCaller) = some (prorataWethVaultCodeChunk63.drop 227 ++ prorataWethVaultCodeChunk64.take 175) := by
   rw [withdrawQuoteAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 227).take 2 := by
     rfl
@@ -14909,6 +15254,7 @@ private theorem withdrawQuoteAux_compile :
     rfl
   rw [withdrawQuoteAux_source_cut]
   rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawQuoteAuxCaller_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
@@ -14947,6 +15293,7 @@ private def redeemQuoteAuxFinite : Func := redeemQuoteAuxFinitePrefix +++ Func.b
 private theorem redeemQuoteAuxFinite_compile :
     Func.compile vaultTable 16695 (redeemQuoteAuxFinite) = some ((prorataWethVaultCodeChunk65.drop 55).take 35) := by
   rw [redeemQuoteAuxFinite, compile_prepend, redeemQuoteAuxFinitePrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : redeemQuoteAuxFinitePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 55).take 9 := by
     rfl
@@ -14985,6 +15332,7 @@ private def redeemQuoteAuxSpend : Func := transferSpendPrefix +++ Func.branch re
 private theorem redeemQuoteAuxSpend_compile :
     Func.compile vaultTable 16672 (redeemQuoteAuxSpend) = some ((prorataWethVaultCodeChunk65.drop 32).take 63) := by
   rw [redeemQuoteAuxSpend, compile_prepend, transferSpendPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferSpendPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 32).take 19 := by
     rfl
@@ -15021,6 +15369,7 @@ private def redeemQuoteAuxKey : Func := transferKeyPrefix +++ Func.branch redeem
 private theorem redeemQuoteAuxKey_compile :
     Func.compile vaultTable 16642 (redeemQuoteAuxKey) = some ((prorataWethVaultCodeChunk65.drop 2).take 97) := by
   rw [redeemQuoteAuxKey, compile_prepend, transferKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : transferKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 2).take 26 := by
     rfl
@@ -15059,6 +15408,7 @@ private def redeemQuoteAuxOwnerEq : Func := auxOwnerEqPrefix +++ Func.branch red
 private theorem redeemQuoteAuxOwnerEq_compile :
     Func.compile vaultTable 16632 (redeemQuoteAuxOwnerEq) = some (prorataWethVaultCodeChunk64.drop 248 ++ prorataWethVaultCodeChunk65.take 104) := by
   rw [redeemQuoteAuxOwnerEq, compile_prepend, auxOwnerEqPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxOwnerEqPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 248).take 6 := by
     rfl
@@ -15095,6 +15445,7 @@ private def redeemQuoteAuxGuard : Func := redeemQuoteAuxGuardPrefix +++ Func.bra
 private theorem redeemQuoteAuxGuard_compile :
     Func.compile vaultTable 16610 (redeemQuoteAuxGuard) = some (prorataWethVaultCodeChunk64.drop 226 ++ prorataWethVaultCodeChunk65.take 108) := by
   rw [redeemQuoteAuxGuard, compile_prepend, redeemQuoteAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : redeemQuoteAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 226).take 18 := by
     rfl
@@ -15133,6 +15484,7 @@ private def redeemQuoteAuxOwnerNonzero : Func := vaultNonzeroPrefix +++ Func.bra
 private theorem redeemQuoteAuxOwnerNonzero_compile :
     Func.compile vaultTable 16605 (redeemQuoteAuxOwnerNonzero) = some (prorataWethVaultCodeChunk64.drop 221 ++ prorataWethVaultCodeChunk65.take 112) := by
   rw [redeemQuoteAuxOwnerNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 221).take 1 := by
     rfl
@@ -15171,6 +15523,7 @@ private def redeemQuoteAuxOwner : Func := auxOwnerPrefix +++ Func.branch redeemQ
 private theorem redeemQuoteAuxOwner_compile :
     Func.compile vaultTable 16590 (redeemQuoteAuxOwner) = some (prorataWethVaultCodeChunk64.drop 206 ++ prorataWethVaultCodeChunk65.take 116) := by
   rw [redeemQuoteAuxOwner, compile_prepend, auxOwnerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxOwnerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 206).take 11 := by
     rfl
@@ -15209,6 +15562,7 @@ private def redeemQuoteAuxReceiverNonzero : Func := vaultNonzeroPrefix +++ Func.
 private theorem redeemQuoteAuxReceiverNonzero_compile :
     Func.compile vaultTable 16585 (redeemQuoteAuxReceiverNonzero) = some (prorataWethVaultCodeChunk64.drop 201 ++ prorataWethVaultCodeChunk65.take 120) := by
   rw [redeemQuoteAuxReceiverNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 201).take 1 := by
     rfl
@@ -15247,6 +15601,7 @@ private def redeemQuoteAuxReceiver : Func := auxReceiverPrefix +++ Func.branch r
 private theorem redeemQuoteAuxReceiver_compile :
     Func.compile vaultTable 16570 (redeemQuoteAuxReceiver) = some (prorataWethVaultCodeChunk64.drop 186 ++ prorataWethVaultCodeChunk65.take 124) := by
   rw [redeemQuoteAuxReceiver, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 186).take 11 := by
     rfl
@@ -15285,6 +15640,7 @@ private def redeemQuoteAuxCaller : Func := vaultCallerPrefix +++ Func.branch red
 private theorem redeemQuoteAuxCaller_compile :
     Func.compile vaultTable 16564 (redeemQuoteAuxCaller) = some (prorataWethVaultCodeChunk64.drop 180 ++ prorataWethVaultCodeChunk65.take 128) := by
   rw [redeemQuoteAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 180).take 2 := by
     rfl
@@ -15325,6 +15681,7 @@ private theorem redeemQuoteAux_compile :
     rfl
   rw [redeemQuoteAux_source_cut]
   rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemQuoteAuxCaller_compile, hb0]
   simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
