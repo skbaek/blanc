@@ -56,12 +56,13 @@ that block's own header number rather than a synthetic counter. -/
 theorem retainedConfiguredHistoryAccountingReplay
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (inv : prorataSpec.StateInv ca checkpoint.state) :
+    (inv : prorataSpec.StateInv ca checkpoint.state)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca checkpoint.state) steps
         (RealizedSnapshot.ofState ca future.state) :=
-  (accountingLadder ca).configuredHistory history inv
+  (accountingLadder ca).configuredHistory history inv hcov
 
 /-! ## Rung R10: the realized-trace interface
 
@@ -131,7 +132,8 @@ reach. -/
 theorem prorataTraceRealizes_of_configuredHistoryTrace
     {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
-    (history : ConfiguredHistoryTrace cfg deployed future) :
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, ProrataTraceRealizes root steps future := by
   induction history with
   | refl hcfg hctx hid => exact ⟨[], .refl⟩
@@ -139,7 +141,7 @@ theorem prorataTraceRealizes_of_configuredHistoryTrace
       obtain ⟨priorSteps, priorRealizes⟩ := ih
       obtain ⟨blockSteps, blockReplay⟩ :=
         retainedConfiguredBlockAccountingReplay block
-          (root.reachable_stateInv prior.toReachUsing)
+          (root.reachable_stateInv prior.toReachUsing hcov)
           block.block.header.number
       exact ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay⟩
 
@@ -152,10 +154,14 @@ vacuous. -/
 theorem prorataTraceRealizes_exists_of_reachUsing
     {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, ProrataTraceRealizes root steps future := by
-  rcases exists_configuredHistoryTrace_of_reachUsing reach with ⟨history⟩
-  exact prorataTraceRealizes_of_configuredHistoryTrace root history
+  rcases exists_configuredHistoryTrace_of_reachUsing reach
+    (by
+      intro _ _ _ _ _ hfork
+      exact hcov _ _ hfork) with ⟨history⟩
+  exact prorataTraceRealizes_of_configuredHistoryTrace root history hcov
 
 /-! ## Rung R11: the realized cumulative-dust identity -/
 
