@@ -1257,6 +1257,38 @@ lemma chargeStateGas_instructionFrame (amount : Nat) (d : Devm) :
   exact Outcome.Rel.mono Devm.machFrame_refines_instructionFrame
     (liftMachExecution_machFrame (Mach.chargeStateGas amount) d)
 
+/-- A successful state-gas charge preserves the operand stack: only the gas
+pools move. The `instructionFrame`/`machFrame` relations both relax `stack`,
+so walks that track it need this equation. -/
+lemma Devm.chargeStateGas_stack {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') : d'.stack = d.stack := by
+  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
+    Footprint.toExecution, Mach.chargeStateGas] at h
+  by_cases h1 : amount ≤ d.mach.stateGas.left
+  · simp only [h1] at h
+    injection h with heq; subst heq; rfl
+  · simp only [h1] at h
+    by_cases h2 : amount - d.mach.stateGas.left ≤ d.mach.gasLeft
+    · simp only [h2] at h
+      injection h with heq; subst heq; rfl
+    · simp only [h2] at h
+      cases h
+
+/-- A successful state-gas charge preserves memory, for the same walks. -/
+lemma Devm.chargeStateGas_memory {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') : d'.memory = d.memory := by
+  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
+    Footprint.toExecution, Mach.chargeStateGas] at h
+  by_cases h1 : amount ≤ d.mach.stateGas.left
+  · simp only [h1] at h
+    injection h with heq; subst heq; rfl
+  · simp only [h1] at h
+    by_cases h2 : amount - d.mach.stateGas.left ≤ d.mach.gasLeft
+    · simp only [h2] at h
+      injection h with heq; subst heq; rfl
+    · simp only [h2] at h
+      cases h
+
 lemma Devm.popToNat_machFrame (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
   exact liftMach_machFrame Mach.popToNat d
@@ -6568,28 +6600,54 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
-  have hb := Devm.burn_of_chargeGas h7
-  have h_s₃ : s₃.stack = s₂.stack := by
-    injection h4 with eq
-    split at eq <;> (injection eq with eq _; subst eq; rfl)
-  have h_s₄ : s₄.stack = s₃.stack := by
-    injection h6 with eq; rw [← eq]
-    rfl
-  injection h9 with eq
-  refine ⟨x, y, ?_⟩
-  rw [← eq]
-  show Stack.Pop [x, y] s.stack s₅.stack
-  rw [← hb.stack, h_s₄, h_s₃]
-  exact hp
+  cases hsg : e.benvStat.rules.stateGas
+  · -- Prague/BPO2: the historical eight-bind walk.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
+    have hb := Devm.burn_of_chargeGas h7
+    have h_s₃ : s₃.stack = s₂.stack := by
+      injection h4 with eq
+      split at eq <;> (injection eq with eq _; subst eq; rfl)
+    have h_s₄ : s₄.stack = s₃.stack := by
+      injection h6 with eq; rw [← eq]
+      rfl
+    injection h9 with eq
+    refine ⟨x, y, ?_⟩
+    rw [← eq]
+    show Stack.Pop [x, y] s.stack s₅.stack
+    rw [← hb.stack, h_s₄, h_s₃]
+    exact hp
+  · -- Amsterdam: static check first, state-gas second dimension.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨x, s₁⟩, h1, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨⟨y, s₂⟩, h2, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, h3, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₃, hchg, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, hstg, h9⟩
+    have hp := (Devm.pop_append (Devm.pop_of_pop h1) (Devm.pop_of_pop h2)).stack
+    have hstg_st : s₃.stack = s₄.stack := (Devm.chargeStateGas_stack hstg).symm
+    have hmid : s₂.stack = s₄.stack := by
+      have e1 := (Devm.burn_of_chargeGas hchg).stack
+      have e2 := hstg_st
+      rw [← e2, ← e1]
+      simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
+        Devm.withRefundCounter, Devm.balReadStorage, Devm.setMach_stack]
+      try split <;> (try split) <;> rfl
+    injection h9 with eq
+    refine ⟨x, y, ?_⟩
+    rw [← eq]
+    show Stack.Pop [x, y] s.stack s₄.stack
+    rw [← hmid]
+    exact hp
 
 /-- `Devm.memWrite` changes memory to the requested write. -/
 @[simp] lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
