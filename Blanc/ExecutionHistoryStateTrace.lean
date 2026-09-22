@@ -39,7 +39,7 @@ def ConfiguredBlockStateChronology.stateBoundaries
     List ConfiguredBlockStateBoundary :=
   { origin := .preparation chronology
     before := pre.state
-    after := (initBenv trace.rules pre trace.block.header).state } ::
+    after := (initBenv trace.fork pre trace.block.header).state } ::
   chronology.body.stateBoundaries.map
     (StateTransition.mapOrigin
       (ConfiguredBlockStateBoundaryOrigin.body chronology))
@@ -48,7 +48,7 @@ theorem ConfiguredBlockTrace.exists_stateChronology
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) :
     Nonempty (ConfiguredBlockStateChronology trace) := by
-  rcases trace.bodyTrace.exists_stateChronology with ⟨body⟩
+  rcases trace.bodyTrace.exists_stateChronology trace.covered with ⟨body⟩
   exact ⟨⟨body⟩⟩
 
 theorem ConfiguredBlockStateChronology.stateReplay
@@ -59,7 +59,7 @@ theorem ConfiguredBlockStateChronology.stateReplay
   let preparation : ConfiguredBlockStateBoundary :=
     { origin := .preparation chronology
       before := pre.state
-      after := (initBenv trace.rules pre trace.block.header).state }
+      after := (initBenv trace.fork pre trace.block.header).state }
   have bodyReplay := StateReplay.mapOrigin
     (ConfiguredBlockStateBoundaryOrigin.body chronology)
     chronology.body.stateReplay
