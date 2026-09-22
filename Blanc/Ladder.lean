@@ -7014,44 +7014,93 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         omega
 
 lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : Tx}
-    {intrinsicGas calldataFloorGasCost : Nat}
+    {sender : Adr} {intrinsicGas calldataFloorGasCost : Nat}
     (h_validate :
-      validateTransaction rules tx = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
+      validateTransaction rules tx sender = .ok ⟨intrinsicGas, calldataFloorGasCost⟩) :
     calldataFloorGasCost ≤ tx.gas := by
   unfold validateTransaction at h_validate
-  rcases h_cost : calculateIntrinsicCost tx with ⟨ig, floorCost⟩
-  rw [h_cost] at h_validate
-  dsimp only at h_validate
   split at h_validate
-  · cases h_validate
-  · rename_i h_gas
-    cases h_limit : rules.tx.maxGas with
-    | none =>
-      simp only [h_limit] at h_validate
-      split at h_validate
-      · cases h_validate
-      · unfold checkInitcodeSize at h_validate
-        split at h_validate
-        · cases h_validate
-        · have h_result := Except.ok.inj h_validate
-          simp only [Prod.mk.injEq] at h_result
-          obtain ⟨rfl, rfl⟩ := h_result
-          omega
-    | some maxGas =>
-      simp only [h_limit] at h_validate
-      unfold checkInitcodeSize at h_validate
-      split at h_validate
-      · cases h_validate
-      · unfold checkTransactionGasCap at h_validate
+  · -- none lane : the max-intrinsic/floor affordability check
+    rcases h_cost : calculateIntrinsicCost rules tx sender with ⟨ig, floorCost⟩
+    rw [h_cost] at h_validate
+    dsimp only at h_validate
+    split at h_validate
+    · cases h_validate
+    · rename_i h_gas
+      cases h_limit : rules.tx.maxGas with
+      | none =>
         simp only [h_limit] at h_validate
         split at h_validate
         · cases h_validate
-        · split at h_validate
+        · unfold checkInitcodeSize at h_validate
+          split at h_validate
           · cases h_validate
           · have h_result := Except.ok.inj h_validate
             simp only [Prod.mk.injEq] at h_result
             obtain ⟨rfl, rfl⟩ := h_result
             omega
+      | some maxGas =>
+        simp only [h_limit] at h_validate
+        unfold checkInitcodeSize at h_validate
+        split at h_validate
+        · cases h_validate
+        · unfold checkTransactionGasCap at h_validate
+          simp only [h_limit] at h_validate
+          split at h_validate
+          · cases h_validate
+          · split at h_validate
+            · cases h_validate
+            · have h_result := Except.ok.inj h_validate
+              simp only [Prod.mk.injEq] at h_result
+              obtain ⟨rfl, rfl⟩ := h_result
+              omega
+  · -- some lane : the structural checks cannot fail on an ok run, and the
+    -- separate floor check yields the bound
+    rcases h_cost : calculateIntrinsicCost rules tx sender with ⟨ig, floorCost⟩
+    rw [h_cost] at h_validate
+    dsimp only at h_validate
+    split at h_validate
+    · dsimp only [bind, Except.bind] at h_validate
+      cases h_validate
+    · dsimp only [bind, Except.bind] at h_validate
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+      dsimp only at h_validate
+      split at h_validate
+      · dsimp only [bind, Except.bind] at h_validate
+        cases h_validate
+      · dsimp only [bind, Except.bind] at h_validate
+        split at h_validate
+        · dsimp only [bind, Except.bind] at h_validate
+          cases h_validate
+        · rename_i h_floor
+          dsimp only [bind, Except.bind] at h_validate
+          cases h_limit : rules.tx.maxGas with
+          | none =>
+            simp only [h_limit] at h_validate
+            dsimp only [bind, Except.bind] at h_validate
+            have h_result := Except.ok.inj h_validate
+            simp only [Prod.mk.injEq] at h_result
+            obtain ⟨rfl, rfl⟩ := h_result
+            omega
+          | some maxGas =>
+            simp only [h_limit] at h_validate
+            split at h_validate
+            · dsimp only [bind, Except.bind] at h_validate
+              cases h_validate
+            · dsimp only [bind, Except.bind] at h_validate
+              split at h_validate
+              · dsimp only [bind, Except.bind] at h_validate
+                cases h_validate
+              · dsimp only [bind, Except.bind] at h_validate
+                have h_result := Except.ok.inj h_validate
+                simp only [Prod.mk.injEq] at h_result
+                obtain ⟨rfl, rfl⟩ := h_result
+                omega
+
 
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
 -- mint ether with wrapping addition (`State.addBal`), so the block-level
@@ -7971,7 +8020,7 @@ lemma StateInv.add_transaction_gas_credits {wa : Adr}
     {intrinsicGas calldataFloorGasCost refundCounter : Nat}
     {txOutput : MsgCallOutput}
     (h_validate :
-      validateTransaction benv.stat.rules tx =
+      validateTransaction benv.stat.rules tx sender =
         .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
     (h_check :
       checkTransaction benv bout tx =
