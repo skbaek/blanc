@@ -177,11 +177,19 @@ def load_host_identity(root: Path) -> str:
     if spec is None or spec.loader is None:
         raise CompareError("cannot load registered stable-host identity provider")
     module = importlib.util.module_from_spec(spec)
+    previous_bytecode_policy = sys.dont_write_bytecode
     try:
+        # `gate-cache.py` is a registered provider, but importing it normally
+        # creates scripts/__pycache__ in the candidate.  This reader must be
+        # safe in a clean worktree without a caller-supplied environment flag.
+        # The process-local policy also covers its provider-local imports.
+        sys.dont_write_bytecode = True
         spec.loader.exec_module(module)
         identity = module.host_identity()
     except Exception as error:  # provider failures cannot receive a default identity
         raise CompareError(f"registered stable-host identity provider failed: {error}") from error
+    finally:
+        sys.dont_write_bytecode = previous_bytecode_policy
     if not isinstance(identity, str) or not identity:
         raise CompareError("registered stable-host identity provider returned no identity")
     return identity

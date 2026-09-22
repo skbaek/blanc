@@ -274,6 +274,9 @@ def selectors(fix: Fixture) -> list[str]:
 def invoke(fix: Fixture, receipt_name: str, *, candidate: str | None = None, old_jaune: str = OLD_JAUNE, new_jaune: str = NEW_JAUNE) -> subprocess.CompletedProcess[str]:
     receipt = fix.temp / receipt_name
     environment = os.environ.copy()
+    # The comparator itself must be clean under the ordinary bytecode policy.
+    # Tests never grant it a PYTHONDONTWRITEBYTECODE workaround.
+    environment.pop("PYTHONDONTWRITEBYTECODE", None)
     environment["PATH"] = f"{fix.fake_bin}:{environment.get('PATH', '')}"
     return subprocess.run(
         [
@@ -290,13 +293,22 @@ def invoke(fix: Fixture, receipt_name: str, *, candidate: str | None = None, old
 
 def snapshot(fix: Fixture) -> str:
     digest = hashlib.sha256()
-    for relative in shell(fix.root, "git", "ls-files").splitlines():
-        digest.update(relative.encode("utf-8"))
+    for label, namespace, skip_git in (
+        ("source", fix.root, True),
+        ("shared-store", fix.store.parent, False),
+    ):
+        digest.update(label.encode("utf-8"))
         digest.update(b"\0")
-        digest.update((fix.root / relative).read_bytes())
-        digest.update(b"\n")
-    digest.update(b"store\0")
-    digest.update(fix.store.read_bytes())
+        for path in sorted(namespace.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(namespace)
+            if skip_git and ".git" in relative.parts:
+                continue
+            digest.update(relative.as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\n")
     return digest.hexdigest()
 
 

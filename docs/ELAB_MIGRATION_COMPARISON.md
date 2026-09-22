@@ -66,4 +66,6 @@ python3 scripts/test-elab-migration-comparison.py
 It builds disposable synthetic Git stores, provides only fixture-local host and
 `lake env lean --version` stand-ins, and exercises positive, boundary,
 regression, identity, schema and malformed-input paths. It neither elaborates
-Lean nor accesses the real shared timing store.
+Lean nor accesses the real shared timing store. The comparator suppresses
+bytecode writes only while loading the registered host provider, so callers do
+not need to set `PYTHONDONTWRITEBYTECODE` to keep a candidate clean.
