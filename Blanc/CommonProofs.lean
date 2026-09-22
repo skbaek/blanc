@@ -1750,6 +1750,34 @@ lemma Devm.balReadStorage_instructionFrame (rules : ForkRules) (a : Adr)
   · exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
   · exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
 
+/-- `ForkRules.Valid` does not tie `stateGas` to `bal`, but `BenvStat.rules` is
+`Fork.ruleSet` of a five-constructor `Fork`, and Amsterdam is the only fork
+carrying either. So a machine in the one-dimensional metering lane also builds
+no block access list, and every EIP-7928 recorder on it is the identity. This
+is what lets a single `stateGas = none` premise carry a whole proof through
+Jaune's Amsterdam-series insertions. -/
+lemma BenvStat.bal_none_of_stateGas_none {s : BenvStat}
+    (h : s.rules.stateGas = none) : s.rules.bal = none := by
+  have key : ∀ f : Fork,
+      (Fork.ruleSet f).stateGas = none → (Fork.ruleSet f).bal = none := by
+    intro f hf
+    cases f <;> first | rfl | exact absurd hf (by decide)
+  exact key s.fork h
+
+/-- Under `bal = none` the account-read recorder is the identity. -/
+lemma Devm.balReadAccount_of_bal_none {rules : ForkRules} {a : Adr} {d : Devm}
+    (h : rules.bal = none) : Devm.balReadAccount rules a d = d := by
+  unfold Devm.balReadAccount
+  rw [h]
+  rfl
+
+/-- Under `bal = none` the storage-read recorder is the identity. -/
+lemma Devm.balReadStorage_of_bal_none {rules : ForkRules} {a : Adr} {k : B256}
+    {d : Devm} (h : rules.bal = none) : Devm.balReadStorage rules a k d = d := by
+  unfold Devm.balReadStorage
+  rw [h]
+  rfl
+
 /-- EIP-7928 storage-read recording leaves the log list alone: `logs` is a
 `Meta` field, so the equation needs the `bal`-presence split rather than
 `rfl`. Jaune names the `mach`/`world` projections; the log/output cases

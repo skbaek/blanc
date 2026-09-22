@@ -384,7 +384,7 @@ private def storageEffectStep (g : MVarId) : ForwardM (Option MVarId) :=
     let f' ← whnf f
     let g ← g.change (mkAppN (mkConst ``Blanc.Func.StorageEffectRun)
       #[fs, sevm, d, f', post, effects])
-    let (base, stk, mem, gas) ← parseState d
+    let (base, stk, mem, gas, sg) ← parseState d
     let (gb, goff) ← parseGas gas
     match f'.getAppFnArgs with
     | (``Blanc.Func.next, #[instruction, rest]) => do
@@ -423,7 +423,7 @@ private def storageEffectStep (g : MVarId) : ForwardM (Option MVarId) :=
         else pure false
       if takesZero then
         let gas' ← mkGas gb goff 13
-        let successor ← mkState base stackTail mem gas'
+        let successor ← mkState base stackTail mem gas' sg
         let gs ← applyLemma g ``Func.storageEffectRun_branch_zero
           [(0, fs), (1, sevm), (2, d), (3, left), (4, right),
             (5, post), (6, effects), (7, stackTail), (8, gas')]
@@ -439,7 +439,7 @@ private def storageEffectStep (g : MVarId) : ForwardM (Option MVarId) :=
               "storage_effect_run: `.zero` left an unexpected obligation set"
       else
         let gas' ← mkGas gb goff 14
-        let successor ← mkState base stackTail mem gas'
+        let successor ← mkState base stackTail mem gas' sg
         let gs ← applyLemma g ``Func.storageEffectRun_branch_succ
           [(0, fs), (1, sevm), (2, d), (3, left), (4, right),
             (5, post), (6, effects), (7, word), (8, stackTail),
