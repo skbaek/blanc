@@ -19,7 +19,9 @@ private instance : Rinst.Hinv Devm.logs Rinst.callvalue := ⟨by
 private instance : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs⟩
+  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).logs.trans
+    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
 
 private instance : Rinst.Hinv Devm.logs Rinst.shr := by
   refine ⟨?_⟩

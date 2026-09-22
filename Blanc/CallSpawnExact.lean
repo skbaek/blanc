@@ -11,7 +11,8 @@ theorem Ninst.step_call_spawn_exact
     {g c v ii is oi os : B256} {rest : Stack}
     {f : Frame} {rsm : Resume}
     (hspawn : Ninst.step ⟨pc, sevm, s⟩ Ninst.call = .spawn f rsm pc')
-    (hstack : s.stack = g :: c :: v :: ii :: is :: oi :: os :: rest) :
+    (hstack : s.stack = g :: c :: v :: ii :: is :: oi :: os :: rest)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ (parent : Devm) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
@@ -34,6 +35,8 @@ theorem Ninst.step_call_spawn_exact
     XStep.toStep_spawn (by
       simpa only [Ninst.call, Ninst.step_exec] using hspawn)
   simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
+  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  rw [hsg] at hx
   have hp : (g :: c :: v :: ii :: is :: oi :: os :: rest) <<+ s.stack := by
     rw [hstack]
     simpa only [List.append_nil] using
@@ -125,23 +128,24 @@ theorem Ninst.step_call_spawn_exact
       ((f5.memory).trans ((f6.memory).trans f7.memory)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
-  rcases hp11 : accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
+  rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress devm7 c.toAdr) c.toAdr with
     ⟨dp, na, code0, dagc, devm9⟩
   simp only [hp11] at hx
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
     dsimp at h
-    rw [← h, accessDelegation_state]
+    rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
     dsimp at h
-    rw [← h, accessDelegation_stack]
+    rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem9 : devm9.memory = devm7.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
     dsimp at h
-    rw [← h, accessDelegation_memory]
+    rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr
       = s.getCode c.toAdr := by
@@ -154,7 +158,7 @@ theorem Ninst.step_call_spawn_exact
       (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
         na = d ∧ code0 = s.getCode d ∧ dp = true) := by
     have h_acc := hp11
-    dsimp only [accessDelegation] at h_acc
+    dsimp only [GasSchedule.accessDelegation] at h_acc
     rw [h_gc7] at h_acc
     rcases hdel : getDelegatedCodeAddress (s.getCode c.toAdr) with _ | d <;>
       rw [hdel] at h_acc <;>
@@ -191,9 +195,9 @@ theorem Ninst.step_call_spawn_exact
             (((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData []).gasLeft +
               (calculateMsgCallGas v.toNat g.toNat devm9.gasLeft
                 (devm7.extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)])
-                ((accessCost c.toAdr devm7.accessedAddresses + dagc +
+                ((sevm.benvStat.rules.gas.accessCost c.toAdr devm7.accessedAddresses + dagc +
                     if ¬(devm9.getAcct c.toAdr).Empty ∨ v = 0 then 0 else gNewAccount) +
-                  if v = 0 then 0 else gasCallValue)).2))
+                  if v = 0 then 0 else sevm.benvStat.rules.gas.callValue)).2))
         with _ | ⟨devm13, eq21⟩ <;>
         simp only [eq21] at hx
       · simp only [reduceCtorEq] at hx
