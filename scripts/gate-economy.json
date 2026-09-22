@@ -28,7 +28,8 @@
   "drip-evidence",
   "drip-current-mainnet",
   "lido-twg-pinned-target-current-mainnet",
-  "recipe-dispatch-controls"
+  "recipe-dispatch-controls",
+  "elab-migration-comparison-controls"
  ],
  "rows": [
   {
@@ -874,6 +875,15 @@
    "historical_catches": [
     "a suggestion harness that re-implemented the production dispatch, so deleting the leaf delegation inside proofRecipeMatches left every assertion green"
    ]
+  },
+  {
+   "id": "elab-migration-comparison-controls",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
   },
   {
    "id": "drip-evidence",

@@ -97,6 +97,7 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "drip-current-mainnet",
             "lido-twg-pinned-target-current-mainnet",
             "recipe-dispatch-controls",
+            "elab-migration-comparison-controls",
         ],
     }
     for key, expected in expected_meta.items():
@@ -214,7 +215,7 @@ def render() -> str:
         "- Five launch composite rows retain their static halves in catalogue order and",
         "  add semantic halves at positions 56–60: "
         + ", ".join(f"`{item}`" for item in economy["split_families"]) + ".",
-          "- Seventeen gates landed after the launch inventory: BeaconDeposit assurance runs early;",
+          "- Eighteen gates landed after the launch inventory: BeaconDeposit assurance runs early;",
           "  BeaconDeposit deployment and WETH10 current-mainnet retain their reviewed output-aware",
           "  boundaries; Keccak rate-boundary is a static row; the local-draft DRIP stack",
           "  certificate data row runs deterministic source comparison and corruption controls;",
@@ -228,8 +229,10 @@ def render() -> str:
           "  arms under literal BPO2 with exact compiler-owned artifacts as direct inputs;",
           "  and the isolated recipe-dispatch controls row elaborates the committed suggestion",
           "  harness alone, so a mutation of the production dispatch has a green baseline that",
-          "  the coupled axiom-audit row cannot give it.",
-          "  The final population is therefore 53 + 5 + 17 = 75; no required content was dropped.",
+          "  the coupled axiom-audit row cannot give it. The elaboration-migration comparison",
+          "  control is a disposable-fixture reader test that neither adopts nor initializes",
+          "  a normal elaboration baseline.",
+          "  The final population is therefore 53 + 5 + 18 = 76; no required content was dropped.",
           "- CI makes the same five splits and adds the cheap assurance, WETH10 current-mainnet",
           "  and DRIP rows, so its registered command population moves from 34 to 41. Deployment,",
           "  the DRIP certificate, and the TWG pinned-target replay remain local merge-candidate",
