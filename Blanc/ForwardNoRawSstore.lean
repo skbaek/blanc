@@ -178,6 +178,24 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_execFree
               intro external impossible
               cases impossible))
             (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+      | dupn immediate =>
+          exact .next (instructionRun := instructionRun) storeFree.1
+            (instructionRun.childless_of_not_exec (by
+              intro external impossible
+              cases impossible))
+            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+      | swapn immediate =>
+          exact .next (instructionRun := instructionRun) storeFree.1
+            (instructionRun.childless_of_not_exec (by
+              intro external impossible
+              cases impossible))
+            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+      | exchange immediate =>
+          exact .next (instructionRun := instructionRun) storeFree.1
+            (instructionRun.childless_of_not_exec (by
+              intro external impossible
+              cases impossible))
+            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
       | exec operation =>
           simp [funcExecFree] at execFree
   | call lookup room burn tail ih =>
@@ -227,7 +245,7 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
     {slot G : Nat} {w : B256} {stack : List B256} {otherwise : Func}
     {run : Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
-        (devm.setMach ⟨stack, devm.memory, G⟩).withOutput []))}
+        (devm.setMach ⟨stack, devm.memory, G, devm.stateGas⟩).withOutput []))}
     (h_get : fs[slot]? = some Func.revert)
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack) :
     Func.RunCompiledTo.NoRawSstorePath run := by
@@ -467,6 +485,21 @@ private lemma Ninst.exists_exec_noRawSstore
         rw [evmStep, Ninst.step_push, ← stepRun.2]
         rfl
       exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
+  | dupn immediate =>
+      rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at stepRun
+      refine ⟨.cont ?_ tail, .cont rootSafe tailSafe⟩
+      rw [evmStep, Ninst.step_dupn, ← stepRun.2]
+      rfl
+  | swapn immediate =>
+      rw [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at stepRun
+      refine ⟨.cont ?_ tail, .cont rootSafe tailSafe⟩
+      rw [evmStep, Ninst.step_swapn, ← stepRun.2]
+      rfl
+  | exchange immediate =>
+      rw [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at stepRun
+      refine ⟨.cont ?_ tail, .cont rootSafe tailSafe⟩
+      rw [evmStep, Ninst.step_exchange, ← stepRun.2]
+      rfl
   | exec operation =>
       replace stepRun := XStep.run_toStep.mp stepRun
       cases operationStep : Xinst.step sevm pre operation with
@@ -570,8 +603,8 @@ theorem Func.RunCompiledTo.exists_exec_noRawSstore_core :
       rcases of_subcode sub with ⟨code, compileEq, slice⟩
       rcases of_bind_eq_some compileEq with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
-      rw [← codeEq] at slice
+      rcases of_bind_eq_some codeEq with ⟨_, _, codeEq⟩
+      rw [← of_pure_eq_some codeEq] at slice
       have instructionAt : Ninst.At sevm.code pc _ :=
         Ninst.at_of_slice (List.slice_prefix slice)
       rcases ih compiled tableEq _ tailSub tailNoPush with
