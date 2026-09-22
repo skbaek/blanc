@@ -7715,7 +7715,9 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
   refine ⟨key, s₁.stack, hpop.stack, ?_⟩
   suffices H : ∀ (d : Devm) (c : Nat),
       Devm.getStor s₁ = Devm.getStor d → s₁.stack = d.stack →
-      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) = .ok s' →
+      (chargeGas c d >>= fun next => Devm.push
+        (Devm.getStorVal (Devm.balReadStorage e.benvStat.rules e.currentTarget key next) e.currentTarget key)
+        (Devm.balReadStorage e.benvStat.rules e.currentTarget key next)) = .ok s' →
       Stack.Push [Devm.getStorVal s e.currentTarget key] s₁.stack s'.stack by
     split at run₁
     · exact H s₁ gasWarmAccess rfl rfl run₁
@@ -7726,8 +7728,10 @@ lemma of_run_sload {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sload s') :
   have hpush := Devm.push_of_push run₂
   have hstk : d.stack = s₂.stack := (Devm.burn_of_chargeGas h2).stack
   have e2 : Devm.getStor d = Devm.getStor s₂ := chargeGas_getStor_eq h2
-  have hval : Devm.getStorVal s₂ e.currentTarget key
-      = Devm.getStorVal s e.currentTarget key := by
+  have hval : Devm.getStorVal
+      (Devm.balReadStorage e.benvStat.rules e.currentTarget key s₂)
+      e.currentTarget key = Devm.getStorVal s e.currentTarget key := by
+    rw [Devm.balReadStorage_getStorVal]
     show (Devm.getStor s₂ e.currentTarget).get key =
       (Devm.getStor s e.currentTarget).get key
     rw [← e2, ← hgs, ← e1]
@@ -7755,7 +7759,8 @@ lemma of_run_sload_state {e : Sevm} {s s' : Devm}
       s1.state = d.state →
       (chargeGas cost d >>=
         fun next => Devm.push
-          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+          (Devm.getStorVal (Devm.balReadStorage e.benvStat.rules e.currentTarget key next) e.currentTarget key)
+          (Devm.balReadStorage e.benvStat.rules e.currentTarget key next)) = .ok s' →
       s1.state = s'.state by
     refine popState.trans ?_
     split at tailRun
@@ -7778,7 +7783,8 @@ lemma of_run_sload_logs {e : Sevm} {s s' : Devm}
       s1.logs = d.logs →
       (chargeGas cost d >>=
         fun next => Devm.push
-          (Devm.getStorVal next e.currentTarget key) next) = .ok s' →
+          (Devm.getStorVal (Devm.balReadStorage e.benvStat.rules e.currentTarget key next) e.currentTarget key)
+          (Devm.balReadStorage e.benvStat.rules e.currentTarget key next)) = .ok s' →
       s1.logs = s'.logs by
     refine popLogs.trans ?_
     split at tailRun
@@ -7788,7 +7794,7 @@ lemma of_run_sload_logs {e : Sevm} {s s' : Devm}
   intro d cost logsEq tailRun
   rcases Except.bind_eq_ok tailRun with ⟨charged, chargeRun, pushRun⟩
   exact (logsEq.trans (Devm.burn_of_chargeGas chargeRun).logs).trans
-    (Devm.push_of_push pushRun).logs
+    (Devm.balReadStorage_logs.symm.trans (Devm.push_of_push pushRun).logs)
 
 lemma prefix_of_mload {e x xs} {s s' : Devm} :
     Ninst.Run e s mload s' → (x :: xs <<+ s.stack) → ∃ y, y :: xs <<+ s'.stack := by
@@ -8496,7 +8502,9 @@ instance : Rinst.Hinv Devm.memory Rinst.sload := ⟨by
   rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
   refine (Devm.pop_of_pop h1).memory.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s₁.memory = d.memory →
-      (chargeGas c d >>= fun y => Devm.push (Devm.getStorVal y sevm.currentTarget key) y)
+      (chargeGas c d >>= fun next => Devm.push
+        (Devm.getStorVal (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key next) sevm.currentTarget key)
+        (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key next))
         = .ok post → s₁.memory = post.memory by
     split at run₁
     · exact H s₁ gasWarmAccess rfl run₁
