@@ -36,11 +36,22 @@
 # STALE LOCKS
 #
 # A run killed with SIGKILL leaves its lock directory behind, so a lock whose
-# recorded PID is no longer running is reclaimed — and the reclaim is
-# announced, never silent. A guard that cleans up quietly stops being evidence.
-# There is deliberately no timeout-based reclaim: a legitimate --full run holds
-# its lock for minutes, so any duration threshold either breaks that or fails
-# to help.
+# recorded PID is confirmed dead is reclaimed — and the reclaim is announced,
+# never silent. A guard that cleans up quietly stops being evidence. There is
+# deliberately no timeout-based reclaim: a legitimate --full run holds its lock
+# for minutes, so any duration threshold either breaks that or fails to help.
+#
+# "Confirmed dead" means exactly one thing: `kill -0` answered ESRCH ("No such
+# process"). A failed `kill -0` is not that answer — EPERM means the process
+# exists but is not ours, and a sandboxed client may deny the probe outright —
+# and neither is a failed `ps`, which a sandbox can deny too. So liveness has
+# three outcomes: alive (kill -0 succeeds, or ps lists the PID), dead (ESRCH),
+# and unknown (everything else). Unknown is REFUSED and the lock is left in
+# place; treating a denied probe as death once let a live holder be reclaimed.
+#
+# Likewise a failed `mkdir` is contention only when the lock directory then
+# exists. A missing parent, a permission error or a read-only filesystem is
+# reported as what it is, with mkdir's own error text, not as a held lock.
 #
 # THE HEAVY LOCK IS HOST-GLOBAL
 #
@@ -88,14 +99,35 @@ gate_lock_acquire() {
   gl_what="$3"
   gl_hint="${4:-}"
   gl_reclaimed=0
+  gl_vanished=0
+  gl_rm_err=""
 
   while : ; do
-    if mkdir "$gl_dir" 2>/dev/null; then
+    if gl_err="$(mkdir "$gl_dir" 2>&1)"; then
       printf '%s\n%s\n%s\n' \
         "$$" "$(date '+%F %T')" "${GATE_CMDLINE:-unknown command}" \
         > "$gl_dir/owner"
       GATE_LOCKS="$GATE_LOCKS $gl_dir"
       return 0
+    fi
+
+    # mkdir failed. Only an existing lock directory is contention; anything
+    # else is a failure to create it, reported with the real error. A lock
+    # released between mkdir and this test is retried once.
+    if [ ! -e "$gl_dir" ] && [ ! -L "$gl_dir" ]; then
+      if [ "$gl_vanished" -eq 0 ]; then
+        gl_vanished=1
+        continue
+      fi
+      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: ${gl_err:-mkdir failed without a message}"
+      echo "REFUSED — $gl_label: this is not a held lock; fix the path or its permissions"
+      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      return 1
+    fi
+    if [ ! -d "$gl_dir" ]; then
+      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: the path exists and is not a directory (${gl_err:-no mkdir message})"
+      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      return 1
     fi
 
     # Held. The holder stamps its metadata immediately after creating the
@@ -110,34 +142,79 @@ gate_lock_acquire() {
       echo "REFUSED — $gl_label: nothing was run and nothing was written"
       return 1
     fi
-
-    gl_pid="$(awk 'NR == 1' "$gl_dir/owner")"
-    gl_when="$(awk 'NR == 2' "$gl_dir/owner")"
-    gl_cmd="$(awk 'NR == 3' "$gl_dir/owner")"
-
-    # kill -0 fails with EPERM for a live process owned by someone else, so a
-    # ps lookup backs it up. Refusing a lock whose holder is alive is the safe
-    # direction; reclaiming one that is still running is not.
-    if [ -n "$gl_pid" ] && { kill -0 "$gl_pid" 2>/dev/null || ps -p "$gl_pid" >/dev/null 2>&1; }; then
-      echo "REFUSED — $gl_label: $gl_what is locked by PID $gl_pid, started $gl_when"
-      echo "REFUSED — $gl_label: holder: $gl_cmd"
-      if [ -n "$gl_hint" ]; then echo "REFUSED — $gl_label: $gl_hint"; fi
+    if ! gl_owner="$(cat "$gl_dir/owner" 2>&1)"; then
+      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir, whose owner metadata cannot be read: $gl_owner"
+      echo "REFUSED — $gl_label: the holder's liveness is unknown, so the lock was left in place"
       echo "REFUSED — $gl_label: nothing was run and nothing was written"
       return 1
     fi
 
-    # Stale. Reclaim once; a second failure means someone else won the race
-    # for it, and that someone is now a live holder.
+    gl_pid="$(printf '%s\n' "$gl_owner" | awk 'NR == 1')"
+    gl_when="$(printf '%s\n' "$gl_owner" | awk 'NR == 2')"
+    gl_cmd="$(printf '%s\n' "$gl_owner" | awk 'NR == 3')"
+
+    gl_state="$(gate_lock_liveness "$gl_pid")"
+    case "$gl_state" in
+      alive)
+        echo "REFUSED — $gl_label: $gl_what is locked by PID $gl_pid, started $gl_when"
+        echo "REFUSED — $gl_label: holder: $gl_cmd"
+        if [ -n "$gl_hint" ]; then echo "REFUSED — $gl_label: $gl_hint"; fi
+        echo "REFUSED — $gl_label: nothing was run and nothing was written"
+        return 1
+        ;;
+      dead) ;;
+      *)
+        echo "REFUSED — $gl_label: $gl_what is locked by PID ${gl_pid:-<none>} ($gl_cmd, started $gl_when), whose liveness cannot be determined"
+        echo "REFUSED — $gl_label: probe: ${gl_state#unknown: }"
+        echo "REFUSED — $gl_label: an unknown holder is never treated as dead, so the lock was left in place; if that process is truly gone, remove $gl_dir by hand"
+        echo "REFUSED — $gl_label: nothing was run and nothing was written"
+        return 1
+        ;;
+    esac
+
+    # Confirmed dead. Reclaim once; a second failure means someone else won
+    # the race for it, and that someone is now a holder.
     if [ "$gl_reclaimed" -ne 0 ]; then
-      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir and could not be reclaimed"
+      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir and could not be reclaimed${gl_rm_err:+: $gl_rm_err}"
       echo "REFUSED — $gl_label: nothing was run and nothing was written"
       return 1
     fi
     gl_reclaimed=1
     echo "RECLAIMED — $gl_label: stale lock $gl_dir left by PID $gl_pid ($gl_cmd, started $gl_when); that process is no longer running"
-    rm -f "$gl_dir/owner"
-    rmdir "$gl_dir" 2>/dev/null || true
+    gl_rm_err="$( { rm -f "$gl_dir/owner" && rmdir "$gl_dir"; } 2>&1 )" || true
   done
+}
+
+# Probe seams, separate so the tests can stub them. Each prints what the probe
+# printed (stdout and stderr) and returns the probe's own status.
+gate_lock_probe_kill() { ( LC_ALL=C; export LC_ALL; kill -0 "$1" ) 2>&1; }
+gate_lock_probe_ps() { LC_ALL=C ps -p "$1" -o pid= 2>&1; }
+
+# gate_lock_liveness <pid>
+#
+# Prints `alive`, `dead`, or `unknown: <why>`. Only an ESRCH answer from
+# kill -0 is `dead`; see STALE LOCKS above.
+gate_lock_liveness() {
+  gl_lpid="$1"
+  case "$gl_lpid" in
+    ''|*[!0-9]*)
+      echo "unknown: owner metadata records no numeric PID ('$gl_lpid')"
+      return 0
+      ;;
+  esac
+  if gl_kout="$(gate_lock_probe_kill "$gl_lpid")"; then
+    echo alive
+    return 0
+  fi
+  if gl_pout="$(gate_lock_probe_ps "$gl_lpid")" \
+     && printf '%s\n' "$gl_pout" | awk -v p="$gl_lpid" '$1 == p { found = 1 } END { exit !found }'; then
+    echo alive
+    return 0
+  fi
+  case "$gl_kout" in
+    *"No such process"*) echo dead ;;
+    *) echo "unknown: kill -0 said '${gl_kout:-nothing}'; ps said '${gl_pout:-nothing}'" ;;
+  esac
 }
 
 # The single heavy-gate lock for this host. See THE HEAVY LOCK IS HOST-GLOBAL

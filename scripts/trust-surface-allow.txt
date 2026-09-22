@@ -4,24 +4,8 @@
 #   <rule> <relative path> <normalized complete source line> ## justification
 #
 # The gate is fail-closed in both directions: a new occurrence and a stale row
-# both fail.  Comment/docstring mentions are listed rather than lexically
-# discarded, so changing their wording forces review too.
-
-# Comment-only descriptions of what the proof does not assume.
-S2-axiom Blanc/Weth10Permit.lean This is not a cryptographic correctness axiom. It is the exact result of ## comment-only non-claim
-S2-axiom Blanc/Weth10Permit.lean supplied to KECCAK256, are identified without a hash axiom. -/ ## comment-only non-claim
-
-# Comment/docstring uses of "opaque" in its ordinary proof-engineering sense.
-S3-opaque Blanc/CommonCore.lean -- resulting tree. Keeping the comparisons in `sorted` leaves the leaves opaque. ## comment only
-S3-opaque Blanc/CommonProofs.lean on why the leaves must stay opaque). -/ ## comment only
-S3-opaque Blanc/FlashSpec.lean `fmintFuncs_sorted`'s docstring). Proofs treat it as an opaque word. -/ ## comment only
-S3-opaque Blanc/ForwardCall.lean derivation is `exec cevm`, an opaque term the caller case-splits on. -/ ## comment only
-S3-opaque Blanc/Weth10DeployDomainSlices.lean off-path subtrees opaque. -/ ## comment only
-
-# Compile-witness docstrings explicitly distinguish kernel evaluation from the
-# forbidden native evaluator.
-S6-native-decide Blanc/FmintCode.lean *not* `native_decide`). -/ ## comment-only trust explanation
-S6-native-decide Blanc/WethCode.lean trusted base (in particular this is *not* `native_decide`). -/ ## comment-only trust explanation
+# both fail.  Only Lean code is scanned: comments, docstrings and literal text
+# are masked by the checker, so prose needs no row here.
 
 # Terminating-by-construction metaprograms and tactics. These declarations
 # operate on Lean expressions/goals; no object-level Blanc function is partial.
