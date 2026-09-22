@@ -11220,46 +11220,86 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
     {rules : ForkRules} {pre : Devm} {out : Execution}
     (h : processCreateMessage.chargeCodeGas rules pre = out) :
     Execution.Rel Devm.BalNoninc pre out := by
-  rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
-  · simp only [processCreateMessage.chargeCodeGas] at h
-    split at h
-    · simp only [Except.error.injEq] at h
-      cases h
-      exact balNoninc_refl_trans.2.1 pre
-    · dsimp [Bind.bind, Except.bind] at h
-      split at h
-      · rename_i code neq ex errCharge hCharge
-        simp only [Except.error.injEq] at h
+  cases hsg : rules.stateGas
+  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+    simp only [processCreateMessage.chargeCodeGas, hsg] at h
+    rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
+    · split at h
+      · simp only [Except.error.injEq] at h
         cases h
-        have hstate := chargeGas_err_snd hCharge
-        change d = pre at hstate
-        rw [hstate]
         exact balNoninc_refl_trans.2.1 pre
-      · split at h
-        · simp only [Except.error.injEq] at h
+      · dsimp [Bind.bind, Except.bind] at h
+        split at h
+        · rename_i code neq ex errCharge hCharge
+          simp only [Except.error.injEq] at h
           cases h
-          rename_i code neq ex hSize hCharge
-          have hb := Devm.burn_of_chargeGas hCharge
-          apply Devm.balNoninc_of_state
-          rw [hb.state]
-          exact balNoninc_refl_trans.1.1 d.state
-        · cases h
-  · simp only [id]
-    simp only [processCreateMessage.chargeCodeGas] at h
-    split at h
-    · cases h
-    · dsimp [Bind.bind, Except.bind] at h
+          have hstate := chargeGas_err_snd hCharge
+          change d = pre at hstate
+          rw [hstate]
+          exact balNoninc_refl_trans.2.1 pre
+        · split at h
+          · simp only [Except.error.injEq] at h
+            cases h
+            rename_i code neq ex hSize hCharge
+            have hb := Devm.burn_of_chargeGas hCharge
+            apply Devm.balNoninc_of_state
+            rw [hb.state]
+            exact balNoninc_refl_trans.1.1 d.state
+          · cases h
+    · simp only [id]
       split at h
       · cases h
-      · split at h
+      · dsimp [Bind.bind, Except.bind] at h
+        split at h
         · cases h
-        · rename_i code neq ex hSize hCharge
-          simp only [Except.ok.injEq] at h
+        · split at h
+          · cases h
+          · rename_i code neq ex hSize hCharge
+            simp only [Except.ok.injEq] at h
+            cases h
+            have hb := Devm.burn_of_chargeGas hSize
+            apply Devm.balNoninc_of_state
+            rw [hb.state]
+            exact balNoninc_refl_trans.1.1 d.state
+  · -- Amsterdam: prefix and size first, keccak-plus-state-bytes charge.
+    simp only [processCreateMessage.chargeCodeGas, hsg] at h
+    rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
+    · -- Error outcome: prefix, oversize, or a failed charge.
+      split at h
+      · simp only [Except.error.injEq] at h
+        cases h
+        exact balNoninc_refl_trans.2.1 pre
+      · split_ifs at h
+        · simp only [Except.error.injEq] at h
           cases h
-          have hb := Devm.burn_of_chargeGas hSize
-          apply Devm.balNoninc_of_state
-          rw [hb.state]
-          exact balNoninc_refl_trans.1.1 d.state
+          exact balNoninc_refl_trans.2.1 pre
+        · rcases hcg : chargeGas _ pre with ⟨e, dd⟩ | dd
+          · rw [hcg] at h
+            dsimp [Bind.bind, Except.bind] at h
+            cases h
+            have hcarried := chargeGas_err_snd hcg
+            change d = pre at hcarried
+            rw [hcarried]
+            exact balNoninc_refl_trans.2.1 pre
+          · rw [hcg] at h
+            dsimp [Bind.bind, Except.bind] at h
+            rcases hcsg : chargeStateGas _ dd with ⟨e2, dd2⟩ | dd2
+            · rw [hcsg] at h
+              cases h
+              exact balNoninc_refl_trans.2.2
+                (Devm.balNoninc_of_getBal_eq
+                  (funext (chargeGas_getBal_eq hcg)))
+                (Devm.chargeStateGas_balNoninc hcsg)
+            · rw [hcsg] at h
+              cases h
+    · -- Success outcome: both charges are frames.
+      split at h
+      · cases h
+      · split_ifs at h
+        rcases Except.bind_eq_ok h with ⟨d1, hchg, hstg⟩
+        exact balNoninc_refl_trans.2.2
+          (Devm.balNoninc_of_getBal_eq (funext (chargeGas_getBal_eq hchg)))
+          (Devm.chargeStateGas_balNoninc_of_ok hstg)
 
 lemma executePrecomp_balance_effect {evm : Evm} {a : Adr} {out : Execution}
     (h : executePrecomp evm a = out) :
