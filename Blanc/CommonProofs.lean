@@ -4247,7 +4247,7 @@ def Xinst.Shape (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
 
 /-- The covered-fork restriction of `Xinst.Shape`: only the done / create /
 call arms, which are the only ones reachable when `sevm.benvStat.fork` is a
-`CoveredFork` (Prague and BPO2 force `rules.stateGas = none`). -/
+`CoveredFork` (every covered fork forces `rules.stateGas = none`). -/
 def Xinst.ShapeCovered (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
   (∃ ex, s = .done ex ∧ Execution.Rel Devm.InstructionFrame devm ex) ∨
   (∃ d endowment newAddress mi ms,
@@ -5716,7 +5716,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
   dsimp [Linst.Run, Linst.run] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2 lane: pop, read both accounts, price, charge, sweep.
+  · -- Covered-fork lane: pop, read both accounts, price, charge, sweep.
     intro run
     dsimp [bind, Except.bind] at run
     revert run
@@ -7011,7 +7011,7 @@ theorem of_run_sstore_not_static {e : Sevm} {s s' : Devm}
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : e.benvStat.rules.stateGas
-  · -- Prague/BPO2: assertDynamic at the end of the walk.
+  · -- Covered forks: assertDynamic at the end of the walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨_, _⟩, _, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨_, _⟩, _, run₂⟩
@@ -7163,7 +7163,7 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : e.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
@@ -9090,7 +9090,7 @@ instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
@@ -9515,7 +9515,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
@@ -9563,7 +9563,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨x, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨y, s₂⟩, h2, run₂⟩
@@ -10769,7 +10769,7 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
   dsimp [Linst.Run, Linst.run] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2 lane: pop, read both accounts, price, charge, sweep.
+  · -- Covered-fork lane: pop, read both accounts, price, charge, sweep.
     intro run
     dsimp [bind, Except.bind] at run
     revert run
@@ -11004,7 +11004,7 @@ lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   cases hsg : rules.stateGas
-  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+  · -- Covered forks: per-byte deposit, size check after the charge.
     simp only [hsg] at h
     split at h
     · cases h
@@ -11027,7 +11027,7 @@ lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : EvmErro
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
   cases hsg : rules.stateGas
-  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+  · -- Covered forks: per-byte deposit, size check after the charge.
     simp only [hsg] at h
     split at h
     · cases h; rfl
@@ -11536,7 +11536,7 @@ lemma Linst.selfdestruct_balance_effect :
   dsimp [Linst.Run, Linst.run] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2 lane: priced access over balance reads, charge, sweep.
+  · -- Covered-fork lane: priced access over balance reads, charge, sweep.
     intro run
     dsimp [bind, Except.bind] at run
     revert run
@@ -11750,7 +11750,7 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
     (h : processCreateMessage.chargeCodeGas rules pre = out) :
     Execution.Rel Devm.BalNoninc pre out := by
   cases hsg : rules.stateGas
-  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+  · -- Covered forks: per-byte deposit, size check after the charge.
     simp only [processCreateMessage.chargeCodeGas, hsg] at h
     rcases out with ⟨err, d⟩ | d <;> simp only [Execution.Rel, Outcome.Rel]
     · split at h
@@ -13378,7 +13378,7 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
@@ -13457,7 +13457,7 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩

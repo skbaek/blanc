@@ -409,19 +409,6 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
   rw [hrun]
   simp [Except.mapError, herr]
 
-/-- System addresses used by the deployment prefix are not precompiles on the
-covered schedules.  Keeping this compatibility fact local lets callers pass
-the existing coverage predicate without choosing a schedule. -/
-private theorem CoveredFork.beaconRoots_not_precompile {fork : Fork}
-    (hfork : CoveredFork fork) :
-    ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress := by
-  rcases hfork with rfl | rfl <;> decide
-
-private theorem CoveredFork.historyStorage_not_precompile {fork : Fork}
-    (hfork : CoveredFork fork) :
-    ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress := by
-  rcases hfork with rfl | rfl <;> decide
-
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 configured prestate. -/
 theorem canonicalDeploymentSystemPrefix
