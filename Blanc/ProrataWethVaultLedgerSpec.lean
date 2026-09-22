@@ -248,24 +248,30 @@ theorem readOnlySilentSlot_closed :
           some maxMintAfterAssetCap from rfl).symm.trans lookup)
     exact silentIn_maxMintAfterAssetCap
 
-/-- Every read-only dispatch target is storage-silent in the observation. -/
-theorem readOnly_silent :
+/-- Every read-only dispatch target is storage-silent in one covered context. -/
+theorem readOnly_silent {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∀ p ∈ readOnlyFuncs,
-      Func.SilentIn Devm.storageView ReadOnlySilentSlot p.2 := by
+      Func.SilentAt Devm.storageView sevm ReadOnlySilentSlot p.2 := by
   intro p h_mem
   simp only [readOnlyFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
   rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h) <;>
-    silent_structure with readOnly_slot
+    silent_structure with first
+      | exact fun run => Ninst.staticcall_inv_getStor hfork run
+      | readOnly_slot
 
 /-- Conservation rides across every read-only target. -/
 theorem readOnly_preserves_conserved :
     ∀ p ∈ readOnlyFuncs, ∀ {sevm : Sevm} {s r : Devm},
+      CoveredFork sevm.benvStat.fork →
       Func.Run (vault.main :: vaultAux) sevm s p.2 r →
       Conserved (Devm.getStor s sevm.currentTarget) →
       Conserved (Devm.getStor r sevm.currentTarget) := by
-  intro p h_mem sevm s r run h
-  have view := Func.observe_eq_of_run_silentIn readOnlySilentSlot_closed run
-    (readOnly_silent p h_mem)
+  intro p h_mem sevm s r hfork run h
+  have view := Func.observe_eq_of_run_silentAt
+    (fun k g permitted lookup =>
+      (readOnlySilentSlot_closed k g permitted lookup).toSilentAt)
+    run (readOnly_silent hfork p h_mem)
   exact h.of_get_eq fun key =>
     (congrFun (congrFun view sevm.currentTarget) key).symm
 
@@ -345,7 +351,7 @@ theorem source_transferFrom_preserves_conserved {sevm : Sevm} {s r : Devm}
 obligation is vacuous: an unrecognized selector cannot move the ledger. -/
 theorem vaultSpec_funcSound_revert {ca : Adr} :
     vaultSpec.FuncSoundNoMem ca vaultAux Func.revert := by
-  intro _ _ _ _ _ _ h_run
+  intro _ _ _ _ _ _ _ h_run
   exact absurd h_run not_run_revert
 
 
