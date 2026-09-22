@@ -55,6 +55,7 @@ theorem canonicalDeploymentSuffix_succeeds
         rw [ctx.systemPrefix.environment_eq]
         change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress
         decide)
+      (by simpa [Benv.withState] using CoveredFork.prague)
   obtain ⟨consolidationOut, hconsolidation, _, _, _, _,
       hconsolidationReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
@@ -65,6 +66,7 @@ theorem canonicalDeploymentSuffix_succeeds
         rw [ctx.systemPrefix.environment_eq]
         change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress
         decide)
+      (by simpa [Benv.withState] using CoveredFork.prague)
   have hrun : processGeneralPurposeRequests
       (ctx.txInput.withState post) bout = .ok (post, bout) := by
     unfold processGeneralPurposeRequests
@@ -104,14 +106,14 @@ theorem canonicalDeploymentApplyBody_succeeds
     (post : State) (bout : BlockOutput)
     (htx : DeploymentTransactionResult chainId ca ctx post bout)
     (hsuffix : DeploymentSuffixResult chainId ca ctx post bout) :
-    applyBody (initBenv pragueRules base cb.block.header)
+    applyBody (initBenv .prague base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) := by
   unfold applyBody
   have hbeacon := ctx.systemPrefix.beaconRun
   change processUncheckedSystemTransaction
-    (initBenv pragueRules base cb.block.header)
+    (initBenv .prague base cb.block.header)
     beaconRootsAddress
-    (initBenv pragueRules base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
+    (initBenv .prague base cb.block.header).stat.parentBeaconBlockRoot.toBytes =
       .ok (ctx.systemPrefix.stBeacon, ctx.systemPrefix.outBeacon) at hbeacon
   rw [hbeacon]
   simp only [Except.mapError, bind, Except.bind]

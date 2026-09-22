@@ -49,7 +49,7 @@ insertion. -/
 theorem canonicalDeploymentTransaction_succeeds
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
@@ -82,7 +82,7 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [ctx.systemPrefix.environment_eq]
     rfl
   have hprice : deploymentEffectiveGasPrice
-      (initBenv pragueRules base cb.block.header) tx =
+      (initBenv .prague base cb.block.header) tx =
       deploymentEffectiveGasPrice ctx.txInput tx := by
     rw [ctx.systemPrefix.environment_eq]
   have hchecked :
