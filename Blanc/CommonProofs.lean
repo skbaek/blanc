@@ -693,6 +693,29 @@ lemma Xinst.depth_lt
   rw [Frame.enter_run_depth henter]
   exact Xinst.step_spawn_depth hs
 
+lemma Xinst.Run.some_child_fork {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {evm' : Evm} {exn' : Execution} {out : Execution}
+    (h : Xinst.Run sevm pre x (.some ⟨evm', exn'⟩) out)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    CoveredFork evm'.sta.benvStat.fork := by
+  obtain ⟨f, rsm, hs, henter, _⟩ := XStep.Run.some_inv h
+  have h1 : f.inner.benv.stat = sevm.benvStat := Xinst.step_spawn_benvStat hs
+  have h2 : evm'.sta.benvStat = f.inner.benv.stat :=
+    Frame.enter_run_benvStat henter
+  rw [h2, h1]; exact hfork
+
+lemma Evm.step_spawn_child_fork {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run child)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    CoveredFork child.sta.benvStat.fork := by
+  obtain ⟨x, _, hspawn, _⟩ := Evm.step_spawn_inv hstep
+  have h1 : f.inner.benv.stat = sevm.benvStat := Xinst.step_spawn_benvStat hspawn
+  have h2 : child.sta.benvStat = f.inner.benv.stat :=
+    Frame.enter_run_benvStat henter
+  rw [h2, h1]; exact hfork
+
 lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
 
@@ -5909,6 +5932,94 @@ theorem Exec.effect {R : Devm → Devm → Prop}
     refine hcomp (?_ : R _ _) ih
     exact Evm.step_effect hrefl hn hj hl (xl := .some ⟨_, _⟩) (out := .ok _) ihc
       (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+
+/-- Fork-indexed nonterminal effect: `Ninst.EffectRec` with the covered-fork
+premise for the frame. Consumed by `Exec.effectFork`. -/
+def Ninst.EffectRecFork (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
+  ∀ {pc sevm pre xl out}, CoveredFork sevm.benvStat.fork → Xlot.Rel R xl →
+    Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
+
+lemma Evm.step_effectFork {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R)
+    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hxl : Xlot.Rel R xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel R devm out := by
+  rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
+  · rw [Evm.step_invOp hgi] at hrun
+    obtain ⟨-, rfl⟩ := hrun
+    exact hrefl _
+  · cases i with
+    | next n =>
+      rw [Evm.step_next (n := n) hgi] at hrun
+      exact hn n hfork hxl hrun
+    | jump j =>
+      rw [Evm.step_jump (j := j) hgi] at hrun
+      obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
+      have hjr := hj j (evm := ⟨pc, sevm, devm⟩) (out := j.run ⟨pc, sevm, devm⟩) rfl
+      rcases hcase with ⟨e, hje, rfl⟩ | ⟨pc', d, hje, rfl⟩ <;> rw [hje] at hjr <;>
+        exact hjr
+    | last l =>
+      rw [Evm.step_last (l := l) hgi] at hrun
+      obtain ⟨-, rfl⟩ := hrun
+      exact hl l rfl
+
+/-- The fork-indexed traversal: `Exec.effect` where the per-instruction
+`Ninst` effect may assume the frame's fork is covered. Child-frame coverage
+is transported across each spawn by `Evm.step_spawn_child_fork`; tails keep
+the same frame. -/
+theorem Exec.effectFork {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
+    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Execution.Rel R pre out := by
+  have hcomp : ∀ {a b : Devm} {o : Execution},
+      R a b → Execution.Rel R b o → Execution.Rel R a o := by
+    intro a b o hab hbo
+    cases o <;> exact htrans hab hbo
+  have aux : ∀ {pc sevm pre out}, Exec pc sevm pre out →
+      CoveredFork sevm.benvStat.fork → Execution.Rel R pre out := by
+    intro pc sevm pre out run hfork
+    revert hfork
+    induction run with
+    | halt hstep =>
+      intro hfork
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+    | cont hstep _ ih =>
+      intro hfork
+      refine hcomp (?_ : R _ _) (ih hfork)
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
+        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+    | doneErr hstep henter hr =>
+      intro hfork
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+    | doneOk hstep henter hr _ ih =>
+      intro hfork
+      refine hcomp (?_ : R _ _) (ih hfork)
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+    | runErr hstep henter _ hr ihc =>
+      intro hfork
+      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (ihc hfork_c)
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+    | runOk hstep henter _ hr _ ihc ih =>
+      intro hfork
+      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
+      refine hcomp (?_ : R _ _) (ih hfork)
+      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (out := .ok _) (ihc hfork_c)
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+  exact aux run hfork
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)

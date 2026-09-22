@@ -1419,4 +1419,9 @@ theorem CoveredFork.rules_bal_none {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.bal = none :=
   h.bal_none
 
+/-- Transport a coverage proof along a fork equation. -/
+theorem CoveredFork.of_eq {f1 f2 : Fork} (h : f1 = f2) (hf : CoveredFork f1) :
+    CoveredFork f2 := by
+  cases h; exact hf
+
 end Blanc
