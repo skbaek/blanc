@@ -175,4 +175,70 @@ theorem decode_hash (name : String) (word : B256) :
     rfl
   simp only [Bytes.toRlpHash, h, Option.toExcept]
 
+/-- A 21-field header returns from Jaune's structural decoder when its
+variable-width scalar fields carry their exact decoder equations.  The
+optional tail is deliberately restricted to a requests commitment alone:
+the 20- and 23-field wire shapes have different parser branches. -/
+theorem header21_roundtrip (header : Header) (requestsHash : B256)
+    (hrequests : header.requestsHash = some requestsHash)
+    (haccess : header.blockAccessListHash = none)
+    (hslot : header.slotNumber = none)
+    (hcoinbase : header.coinbase.toBytes.toRlpAdr "header coinbase" = .ok header.coinbase)
+    (hbloom : header.bloom.toRlpFixed "header bloom" 256 = .ok header.bloom)
+    (hdifficulty : header.difficulty.toBytes.toRlpNat "header difficulty" 32 =
+      .ok header.difficulty)
+    (hnumber : header.number.toBytes.toRlpNat "header number" 32 = .ok header.number)
+    (hgasLimit : header.gasLimit.toBytes.toRlpNat "header gasLimit" 32 = .ok header.gasLimit)
+    (hgasUsed : header.gasUsed.toBytes.toRlpNat "header gasUsed" 32 = .ok header.gasUsed)
+    (htimestamp : header.timestamp.toBytes.toRlpNat "header timestamp" 32 =
+      .ok header.timestamp)
+    (hnonce : header.nonce.toBytes.toRlpFixedB64 "header nonce" = .ok header.nonce)
+    (hbaseFee : header.baseFeePerGas.toBytes.toRlpNat "header baseFeePerGas" 32 =
+      .ok header.baseFeePerGas)
+    (blobGasUsed excessBlobGas : UInt64)
+    (hblobGasUsed : header.blobGasUsed.toBytes.toRlpB64 "header blobGasUsed" =
+      .ok blobGasUsed)
+    (hblobGasUsedNat : blobGasUsed.toNat = header.blobGasUsed)
+    (hexcessBlobGas : header.excessBlobGas.toBytes.toRlpB64 "header excessBlobGas" =
+      .ok excessBlobGas)
+    (hexcessBlobGasNat : excessBlobGas.toNat = header.excessBlobGas) :
+    header.toBLT.toExHeader = .ok header := by
+  rw [Header.toBLT, hrequests, haccess, hslot]
+  simp only [List.cons_append, List.nil_append, BLT.toExHeader, decode_hash,
+    bind, Except.bind, hcoinbase, hbloom, hdifficulty, hnumber, hgasLimit, hgasUsed,
+    htimestamp, hnonce, hbaseFee, hblobGasUsed, hexcessBlobGas]
+  change (do
+    let decodedRequestsHash ← requestsHash.toBytes.toRlpHash "header requestsHash"
+    .ok ({
+      parentHash := header.parentHash
+      ommersHash := header.ommersHash
+      coinbase := header.coinbase
+      stateRoot := header.stateRoot
+      txsRoot := header.txsRoot
+      receiptRoot := header.receiptRoot
+      bloom := header.bloom
+      difficulty := header.difficulty
+      number := header.number
+      gasLimit := header.gasLimit
+      gasUsed := header.gasUsed
+      timestamp := header.timestamp
+      extraData := header.extraData
+      prevRandao := header.prevRandao
+      nonce := header.nonce
+      baseFeePerGas := header.baseFeePerGas
+      withdrawalsRoot := header.withdrawalsRoot
+      blobGasUsed := blobGasUsed.toNat
+      excessBlobGas := excessBlobGas.toNat
+      parentBeaconBlockRoot := header.parentBeaconBlockRoot
+      requestsHash := some decodedRequestsHash
+      blockAccessListHash := none
+      slotNumber := none } : Header)) = .ok header
+  rw [decode_hash]
+  rw [hblobGasUsedNat, hexcessBlobGasNat]
+  change Except.ok ({ header with
+    requestsHash := some requestsHash
+    blockAccessListHash := none
+    slotNumber := none } : Header) = Except.ok header
+  rw [← hrequests, ← haccess, ← hslot]
+
 end Blanc.RlpConcrete
