@@ -1928,7 +1928,8 @@ lemma of_run_call_val_with_depth_frame
     {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail pc : Nat),
@@ -2109,7 +2110,7 @@ lemma of_run_call_val_with_depth_frame
       (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
         na = d ∧ code0 = s.getCode d ∧ dp = true) := by
     have h_acc := hp11
-    dsimp only [accessDelegation] at h_acc
+    dsimp only [GasSchedule.accessDelegation] at h_acc
     rw [h_gc7] at h_acc
     rcases hdel : getDelegatedCodeAddress (s.getCode c.toAdr) with _ | d <;>
       rw [hdel] at h_acc <;>
@@ -2121,7 +2122,12 @@ lemma of_run_call_val_with_depth_frame
       show devm7.state.getCode d = s.getCode d
       rw [← h_st7]
       rfl
-  -- charge the call gas
+  -- charge the call gas (the Amsterdam lane contradicts covered forks)
+  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  rcases heqS : sevm.benvStat.rules.stateGas with _ | state
+  swap
+  · rw [hsg] at heqS; cases heqS
+  simp only [heqS] at h_run
   split at h_run
   · cases XStep.run_ofExcept_error h_run
   rename_i devm10 eq16
@@ -2303,7 +2309,8 @@ lemma of_run_call_val_with_depth
     {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail : Nat),
@@ -2330,7 +2337,7 @@ lemma of_run_call_val_with_depth
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
-  rcases of_run_call_val_with_depth_frame hp h_run with hfail | hsuccess
+  rcases of_run_call_val_with_depth_frame hp h_run hfork with hfail | hsuccess
   · exact Or.inl hfail
   · rcases hsuccess with
       ⟨parent, child, xl, dp, na, code, avail, _pc, _hstep,
@@ -2343,7 +2350,8 @@ consumers that do not need the entered-frame depth fact keep the original API. -
 lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.call sf) :
+    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
     ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail : Nat),
@@ -2369,7 +2377,7 @@ lemma of_run_call_val {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
-  rcases of_run_call_val_with_depth hp h_run with h_fail | h_enter
+  rcases of_run_call_val_with_depth hp h_run hfork with h_fail | h_enter
   · exact Or.inl h_fail
   · rcases h_enter with
       ⟨parent, child, xl, dp, na, code, avail, _, h_enter⟩
@@ -2413,7 +2421,8 @@ number of bytes. -/
 lemma of_run_staticcall_val_with_depth_cause
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.staticcall sf) :
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
       ∃ out : Bytes,
         sf.returnData = out ∧
@@ -2582,7 +2591,7 @@ lemma of_run_staticcall_val_with_depth_cause
       (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
         na = d ∧ code0 = s.getCode d ∧ dp = true) := by
     have h_acc := hp10
-    dsimp only [accessDelegation] at h_acc
+    dsimp only [GasSchedule.accessDelegation] at h_acc
     rw [h_gc6] at h_acc
     rcases hdel : getDelegatedCodeAddress (s.getCode t.toAdr) with _ | d <;>
       rw [hdel] at h_acc <;>
@@ -2594,7 +2603,12 @@ lemma of_run_staticcall_val_with_depth_cause
       show devm6.state.getCode d = s.getCode d
       rw [← h_st6]
       rfl
-  -- charge the parent-side overhead
+  -- charge the parent-side overhead (Amsterdam lane contradicts covered forks)
+  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  rcases heqS : sevm.benvStat.rules.stateGas with _ | state
+  swap
+  · rw [hsg] at heqS; cases heqS
+  simp only [heqS] at h_run
   split at h_run
   · cases XStep.run_ofExcept_error h_run
   rename_i devm9 eq14
@@ -2753,7 +2767,8 @@ carry the failure-cause witness. -/
 lemma of_run_staticcall_val_with_depth
     {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.staticcall sf) :
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
       ∃ out : Bytes,
         sf.returnData = out ∧
@@ -2783,7 +2798,7 @@ lemma of_run_staticcall_val_with_depth
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
       sf.stack = (1 : B256) :: parent.stack := by
-  rcases of_run_staticcall_val_with_depth_cause hp h_run with hfail | hsuccess
+  rcases of_run_staticcall_val_with_depth_cause hp h_run hfork with hfail | hsuccess
   · rcases hfail with ⟨hstack, hworld, out, hret, hmem, hcause⟩
     exact Or.inl ⟨hstack, hworld, out, hret, hmem⟩
   · rcases hsuccess with
