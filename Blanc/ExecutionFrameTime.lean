@@ -179,8 +179,8 @@ theorem ConfiguredBlockTrace.post_blocks_getLast
     (trace : ConfiguredBlockTrace cfg pre post) :
     post.blocks.getLast? = some trace.block := by
   cases trace with
-  | mk block bound rules rulesAt transition bodyState blockOutput bodyRun bodyTrace
-      postEq =>
+  | mk block bound fork forkAt rules rulesEq rulesAt covered transition bodyState
+      blockOutput bodyRun bodyTrace postEq =>
       show post.blocks.getLast? = some block
       rw [postEq]
       exact appendBlock_getLast? pre.blocks block
@@ -210,7 +210,7 @@ theorem ConfiguredBlockTrace.parent_timestamp_lt
   have hId : cfg.chainId = pre.chainId := stateTransitionUsing_success_chainId_eq h
   rw [stateTransitionUsing_eq_of_chainId_eq hId] at h
   obtain ⟨rules, _, hWith⟩ := Except.bind_eq_ok h
-  rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at hWith
+  rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hWith
   obtain ⟨u, hvalid, _⟩ := Except.bind_eq_ok hWith
   exact validateHeader_parent_timestamp_lt hvalid head
 
