@@ -195,6 +195,7 @@ def deploymentFinalBout
   let charged :=
     {prelude with
       blockGasUsed := prelude.blockGasUsed + usedGas
+      cumulativeGasUsed := prelude.cumulativeGasUsed + usedGas
       blobGasUsed := prelude.blobGasUsed}
   let receipt := makeReceipt tx out.error charged.blockGasUsed out.logs
   {charged with
