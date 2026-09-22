@@ -1423,6 +1423,40 @@ lemma accessDelegation_output {devm : Devm} {adr : Adr} :
   dsimp only [accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
+/-- Gas-schedule twins of the `accessDelegation_*` projection family: the
+schedule-parameterized resolution differs from `accessDelegation` only in the
+`dagc` component, so every projection proof is the same case split. -/
+lemma GasSchedule.accessDelegation_state {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.state = devm.state := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+lemma GasSchedule.accessDelegation_stack {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.stack = devm.stack := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+lemma GasSchedule.accessDelegation_memory {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.memory = devm.memory := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+lemma GasSchedule.accessDelegation_transientStorage {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.transientStorage
+      = devm.transientStorage := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+lemma GasSchedule.accessDelegation_logs {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.logs = devm.logs := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
+lemma GasSchedule.accessDelegation_output {gas : GasSchedule} {devm : Devm} {adr : Adr} :
+    (gas.accessDelegation devm adr).2.2.2.2.output = devm.output := by
+  dsimp only [GasSchedule.accessDelegation]
+  cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
+
 /-- On the successful path the CALL-family return pushes `0` after a failed
 child and `1` after a clean one; incorporating the child and the output write
 leave the stack alone otherwise.  The flag-carrying refinement of
@@ -2030,38 +2064,38 @@ lemma of_run_call_val_with_depth_frame
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
   -- delegation resolution
-  rcases hp11 : accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
+  rcases hp11 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
     ⟨dp, na, code0, dagc, devm9⟩
   simp only [hp11] at h_run
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
     dsimp at h
-    rw [← h, accessDelegation_state]
+    rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
     dsimp at h
-    rw [← h, accessDelegation_stack]
+    rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem9 : devm9.memory = devm7.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
     dsimp at h
-    rw [← h, accessDelegation_memory]
+    rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_tra9 : devm9.transientStorage = devm7.transientStorage := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp11
     dsimp at h
-    rw [← h, accessDelegation_transientStorage]
+    rw [← h, GasSchedule.accessDelegation_transientStorage]
     rfl
   have h_logs9 : devm9.logs = devm7.logs := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp11
     dsimp at h
-    rw [← h, accessDelegation_logs]
+    rw [← h, GasSchedule.accessDelegation_logs]
     rfl
   have h_output9 : devm9.output = devm7.output := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp11
     dsimp at h
-    rw [← h, accessDelegation_output]
+    rw [← h, GasSchedule.accessDelegation_output]
     rfl
   -- the code the child will run, and the delegation disjunction
   have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr
@@ -2504,38 +2538,38 @@ lemma of_run_staticcall_val_with_depth_cause
   clear e1 e2 e3 e4 e5 e6 f1 f2 f3 f4 f5 f6
   clear eq1 eq2 eq3 eq4 eq5 eq6 h_pop2
   -- delegation resolution
-  rcases hp10 : accessDelegation (addAccessedAddress devm6 t.toAdr) t.toAdr with
+  rcases hp10 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm6 t.toAdr) t.toAdr with
     ⟨dp, na, code0, dagc, devm8⟩
   simp only [hp10] at h_run
   have h_st8 : devm8.state = devm6.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp10
     dsimp at h
-    rw [← h, accessDelegation_state]
+    rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk8 : devm8.stack = devm6.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
     dsimp at h
-    rw [← h, accessDelegation_stack]
+    rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem8 : devm8.memory = devm6.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp10
     dsimp at h
-    rw [← h, accessDelegation_memory]
+    rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_tra8 : devm8.transientStorage = devm6.transientStorage := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp10
     dsimp at h
-    rw [← h, accessDelegation_transientStorage]
+    rw [← h, GasSchedule.accessDelegation_transientStorage]
     rfl
   have h_logs8 : devm8.logs = devm6.logs := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp10
     dsimp at h
-    rw [← h, accessDelegation_logs]
+    rw [← h, GasSchedule.accessDelegation_logs]
     rfl
   have h_output8 : devm8.output = devm6.output := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp10
     dsimp at h
-    rw [← h, accessDelegation_output]
+    rw [← h, GasSchedule.accessDelegation_output]
     rfl
   have h_gc6 : (addAccessedAddress devm6 t.toAdr).state.getCode t.toAdr
       = s.getCode t.toAdr := by
