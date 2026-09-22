@@ -142,7 +142,7 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
 @[simp] theorem afterSstore_refundCounter
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).refundCounter =
-      sstoreNewRefundCounter value
+      sstoreNewRefundCounter sevm.benvStat.rules.gas value
         (getOrigStorVal sevm sevm.currentTarget key)
         (base.getStorVal sevm.currentTarget key) base.refundCounter := by
   unfold afterSstore
