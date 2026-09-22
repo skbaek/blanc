@@ -12240,108 +12240,77 @@ lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
 
 lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hgas : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall.call msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.call at h
-  dsimp only at h
+  simp only [hgas] at h
   split at h
-  · simp only [bind, Except.bind] at h
-    unfold Except.bimap at h
-    split at h
-    · injection h
-    · rename_i evm h_evm
-      split at h_evm
-      · injection h_evm
-      · rename_i evm' h_pm
-        simp only [id_eq, Except.ok.injEq] at h_evm
-        subst h_evm
-        have hbal := processMessage_balance_noninc h_pm
-        have hpre : State.BalNoninc msg.benv.state evm'.state := by
-          split at hbal <;> exact hbal
-        split at h
-        · split at h
-          · injection h
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-            rcases h with ⟨rfl, _⟩
-            exact hpre
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-          rcases h with ⟨rfl, _⟩
-          exact hpre
-  · rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgD, val⟩⟩
-    · simp only [h_del, bind, Except.bind] at h
-      injection h
-    · simp only [h_del, bind, Except.bind] at h
-      have h_sum := setDelegation_balSum_eq h_del
-      unfold Except.bimap at h
-      split at h
-      · injection h
-      · rename_i evm h_evm
-        split at h_evm
-        · injection h_evm
-        · rename_i evm' h_pm
-          simp only [id_eq, Except.ok.injEq] at h_evm
-          subst h_evm
-          have hbal := processMessage_balance_noninc h_pm
-          have hpre : State.BalNoninc msg.benv.state evm'.state := by
-            have hD : State.BalNoninc msgD.benv.state evm'.state := by
-              split at hbal <;> exact hbal
-            unfold State.BalNoninc at *
-            omega
-          split at h
-          · split at h
-            · injection h
-            · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-              rcases h with ⟨rfl, _⟩
-              exact hpre
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-            rcases h with ⟨rfl, _⟩
-            exact hpre
+  · -- No authorizations: the join point receives the message unchanged.
+    obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
+    cases hx0
+    dsimp only at h
+    split at h <;>
+      (obtain ⟨evm, hevm, h⟩ := Except.bind_eq_ok h
+       have hbal := processMessage_balance_noninc (Except.bimap_id_eq_ok hevm)
+       split at h <;>
+         (obtain ⟨rc, _, h⟩ := Except.bind_eq_ok h
+          cases h
+          exact hbal))
+  · -- Delegation processed first.
+    obtain ⟨w, hw, h⟩ := Except.bind_eq_ok h
+    obtain ⟨msgD, val⟩ := w
+    have hsum := setDelegation_balSum_eq hw
+    obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
+    cases hx0
+    dsimp only at h
+    split at h <;>
+      (obtain ⟨evm, hevm, h⟩ := Except.bind_eq_ok h
+       have hbal := processMessage_balance_noninc (Except.bimap_id_eq_ok hevm)
+       have hpre : State.BalNoninc msg.benv.state evm.state := by
+         have hD : State.BalNoninc msgD.benv.state evm.state := hbal
+         unfold State.BalNoninc at *
+         omega
+       split at h <;>
+         (obtain ⟨rc, _, h⟩ := Except.bind_eq_ok h
+          cases h
+          exact hpre))
 
 lemma processMessageCall.create_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hgas : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall.create msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall.create at h
-  dsimp only at h
+  simp only [hgas] at h
   split at h
-  · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-    rcases h with ⟨rfl, _⟩
+  · -- Address collision: the pre-state is returned unchanged.
+    cases h
     exact le_refl _
-  · simp only [bind, Except.bind] at h
-    unfold Except.bimap at h
-    split at h
-    · injection h
-    · rename_i evm h_evm
-      split at h_evm
-      · injection h_evm
-      · rename_i evm' h_pm
-        simp only [id_eq, Except.ok.injEq] at h_evm
-        subst h_evm
-        have hbal := processCreateMessage_balance_noninc h_pm
-        split at h
-        · split at h
-          · injection h
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-            rcases h with ⟨rfl, _⟩
-            exact hbal
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-          rcases h with ⟨rfl, _⟩
-          exact hbal
+  · -- No collision: the created message determines the post-state.
+    obtain ⟨evm, hevm, h⟩ := Except.bind_eq_ok h
+    have hbal := processCreateMessage_balance_noninc (Except.bimap_id_eq_ok hevm)
+    split at h <;>
+      (obtain ⟨rc, _, h⟩ := Except.bind_eq_ok h
+       cases h
+       exact hbal)
 
 lemma processMessageCall_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hgas : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     State.BalNoninc msg.benv.state post := by
   unfold processMessageCall at h
   split at h
-  · exact processMessageCall.create_balance_noninc h
-  · exact processMessageCall.call_balance_noninc h
+  · exact processMessageCall.create_balance_noninc hgas h
+  · exact processMessageCall.call_balance_noninc hgas h
 
 lemma processMessageCall_sum_le
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
+    (hgas : msg.benv.stat.rules.stateGas = none)
     (h : processMessageCall msg = .ok ⟨post, out⟩) :
     sum post.bal ≤ sum msg.benv.state.bal := by
-  exact processMessageCall_balance_noninc h
+  exact processMessageCall_balance_noninc hgas h
 
 
 /-! ## The shared ERC-20 proof layer
