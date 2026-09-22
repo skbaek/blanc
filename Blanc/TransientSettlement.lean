@@ -81,49 +81,76 @@ theorem tstore_run_cell
     Except.bind] at hr
   simp only [Devm.stack, Devm.setMach] at hr
   let d0 : Devm := {
-    mach := { stack := tail, memory := pre.mach.memory, gasLeft := pre.mach.gasLeft }
-    «meta» := pre.meta
+    mach := ⟨tail, pre.mach.memory, pre.mach.gasLeft, pre.stateGas⟩,
+    «meta» := pre.meta,
     world := pre.world }
-  change (do
-    let charged ← chargeGas gasWarmAccess d0
-    assertDynamic sevm charged
-    .ok (charged.setTransVal sevm.currentTarget key value)) = .ok post at hr
-  rcases Except.bind_eq_ok hr with ⟨charged, hc, hr⟩
-  rcases Except.bind_eq_ok hr with ⟨u, ha, hr⟩
-  injection hr with heq
-  subst post
-  have hb := Devm.burn_of_chargeGas hc
-  constructor
-  · exact hb.stack.symm
-  constructor
-  · exact tra_get_set_self charged.transientStorage
-      sevm.currentTarget key value
-  constructor
-  · intro otherAddress otherKey hne
-    change (Std.TreeMap.getD
-      (charged.transientStorage.setStorVal sevm.currentTarget key value)
-      otherAddress .empty).get otherKey =
-      (pre.transientStorage.getD otherAddress .empty).get otherKey
-    rw [← hb.transientStorage]
-    change (Std.TreeMap.getD
-      (pre.transientStorage.setStorVal sevm.currentTarget key value)
-      otherAddress .empty).get otherKey =
-      (pre.transientStorage.getD otherAddress .empty).get otherKey
-    by_cases hadr : sevm.currentTarget = otherAddress
-    · subst otherAddress
-      apply tra_get_set_same_address
-      intro hkey
-      exact hne (by simp [hkey])
-    · exact tra_get_set_other_address pre.transientStorage hadr
-        key value otherKey
-  constructor
-  · exact hb.state.symm
-  constructor
-  · exact hf
-  · unfold assertDynamic Except.assert at ha
+  have finish {charged : Devm} (hc : chargeGas gasWarmAccess d0 = .ok charged)
+      (hstatic : sevm.isStatic = false)
+      (hpost : charged.setTransVal sevm.currentTarget key value = post) :
+      post.stack = tail ∧
+        post.getTransVal sevm.currentTarget key = value ∧
+        (∀ otherAddress otherKey,
+          (otherAddress, otherKey) ≠ (sevm.currentTarget, key) →
+          post.getTransVal otherAddress otherKey =
+            pre.getTransVal otherAddress otherKey) ∧
+        post.state = pre.state ∧
+        Devm.TransientWriteFrame pre post ∧
+        sevm.isStatic = false := by
+    subst post
+    have hb := Devm.burn_of_chargeGas hc
+    constructor
+    · exact hb.stack.symm
+    constructor
+    · exact tra_get_set_self charged.transientStorage
+        sevm.currentTarget key value
+    constructor
+    · intro otherAddress otherKey hne
+      change (Std.TreeMap.getD
+        (charged.transientStorage.setStorVal sevm.currentTarget key value)
+        otherAddress .empty).get otherKey =
+        (pre.transientStorage.getD otherAddress .empty).get otherKey
+      rw [← hb.transientStorage]
+      change (Std.TreeMap.getD
+        (pre.transientStorage.setStorVal sevm.currentTarget key value)
+        otherAddress .empty).get otherKey =
+        (pre.transientStorage.getD otherAddress .empty).get otherKey
+      by_cases hadr : sevm.currentTarget = otherAddress
+      · subst otherAddress
+        apply tra_get_set_same_address
+        intro hkey
+        exact hne (by simp [hkey])
+      · exact tra_get_set_other_address pre.transientStorage hadr
+          key value otherKey
+    constructor
+    · exact hb.state.symm
+    exact ⟨hf, hstatic⟩
+  cases hrules : sevm.benvStat.rules.stateGas with
+  | none =>
+    rw [hrules] at hr
+    change (do
+      let charged ← chargeGas gasWarmAccess d0
+      assertDynamic sevm charged
+      .ok (charged.setTransVal sevm.currentTarget key value)) = .ok post at hr
+    rcases Except.bind_eq_ok hr with ⟨charged, hc, hr⟩
+    rcases Except.bind_eq_ok hr with ⟨_, ha, hr⟩
+    injection hr with hpost
+    unfold assertDynamic Except.assert at ha
     by_cases hs : sevm.isStatic
     · simp [hs] at ha
-    · exact Bool.eq_false_iff.mpr hs
+    · exact finish hc (Bool.eq_false_iff.mpr hs) hpost
+  | some rules =>
+    rw [hrules] at hr
+    change (do
+      assertDynamic sevm pre
+      let charged ← chargeGas gasWarmAccess d0
+      .ok (charged.setTransVal sevm.currentTarget key value)) = .ok post at hr
+    rcases Except.bind_eq_ok hr with ⟨_, ha, hr⟩
+    rcases Except.bind_eq_ok hr with ⟨charged, hc, hr⟩
+    injection hr with hpost
+    unfold assertDynamic Except.assert at ha
+    by_cases hs : sevm.isStatic
+    · simp [hs] at ha
+    · exact finish hc (Bool.eq_false_iff.mpr hs) hpost
 
 /-- Writing zero clears only the selected cell's read. The accompanying
 `tstore_run_cell` theorem retains every unrelated cell. -/
@@ -153,8 +180,8 @@ theorem tload_run_cell
     Except.bind] at hr
   simp only [Devm.setMach] at hr
   let d0 : Devm := {
-    mach := { stack := tail, memory := pre.mach.memory, gasLeft := pre.mach.gasLeft }
-    «meta» := pre.meta
+    mach := ⟨tail, pre.mach.memory, pre.mach.gasLeft, pre.stateGas⟩,
+    «meta» := pre.meta,
     world := pre.world }
   change pushItem (d0.getTransVal sevm.currentTarget key)
       gasWarmAccess d0 = .ok post at hr
@@ -171,23 +198,24 @@ theorem tload_run_cell
 
 /-! ## Opcode-proven direct call edges -/
 
-/-- A nonzero-value CALL's exact child message, tied to the actual `.call`
-edge. Delegation may choose `code` from another account; the target and code
+/-- A nonzero-value CALL's exact child message at a covered fork, tied to the
+actual `.call` edge. Delegation may choose `code` from another account; the target and code
 address equalities below therefore do not claim byte or installation identity. -/
 theorem directCall_nonzero_spawn
     {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_create :
       (if ¬ (d1.getAcct cw.toAdr).Empty then 0 else gNewAccount) = create)
@@ -210,30 +238,32 @@ theorem directCall_nonzero_spawn
       child.isStatic = sevm.isStatic ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_call_nonzero_spawn h_stk h_value h_ext h_del h_acc
+  refine ⟨Xinst.step_call_nonzero_spawn hfork h_stk h_value h_ext h_del h_acc
     h_create h_split h_gas h_dynamic h_sender h_depth,
     rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
   · simp [valueCallSpawnMsg, callMsg, h_dynamic]
   · have hf := accessDelegation_instructionFrame
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr) cw.toAdr
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr) cw.toAdr
     rw [h_del] at hf
     exact hf.transientStorage.symm
 
-/-- The zero-value CALL companion, still proven from the actual `.call` edge. -/
+/-- The zero-value CALL companion at a covered fork, proven from the actual
+`.call` edge. -/
 theorem directCall_zero_spawn
     {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -250,28 +280,30 @@ theorem directCall_zero_spawn
       child.isStatic = sevm.isStatic ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_call_zero_value_spawn h_stk h_ext h_del h_acc h_split
+  refine ⟨Xinst.step_call_zero_value_spawn hfork h_stk h_ext h_del h_acc h_split
     h_gas h_depth, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
   have hf := accessDelegation_instructionFrame
     (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr) cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr) cw.toAdr
   rw [h_del] at hf
   exact hf.transientStorage.symm
 
-/-- A STATICCALL's exact child message, tied to the actual `.staticcall` edge. -/
+/-- A STATICCALL's exact child message at a covered fork, tied to the actual
+`.staticcall` edge. -/
 theorem directStatcall_spawn
     {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -288,15 +320,15 @@ theorem directStatcall_spawn
       child.isStatic = true ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+  refine ⟨Xinst.step_staticcall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
     h_depth, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
   have hf := accessDelegation_instructionFrame
     (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) tw.toAdr) tw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) tw.toAdr) tw.toAdr
   rw [h_del] at hf
   exact hf.transientStorage.symm
 
-/-- A DELEGATECALL's exact child message, tied to the actual `.delegatecall` edge.
+/-- A DELEGATECALL's exact child message at a covered fork, tied to the actual `.delegatecall` edge.
 Where the three siblings above put the popped operand in the storage-owner
 slot, this one puts `sevm.currentTarget`: the running account keeps its own
 storage while `dadr` supplies the code alone, and `caller`/`value` are the
@@ -308,14 +340,15 @@ theorem directDelcall_spawn
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0) :
@@ -332,12 +365,12 @@ theorem directDelcall_spawn
       child.isStatic = sevm.isStatic ∧
       child.tenv.transientStorage = devm.transientStorage := by
   dsimp only
-  refine ⟨Xinst.step_delegatecall_spawn h_stk h_ext h_del h_acc h_split h_gas
+  refine ⟨Xinst.step_delegatecall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
     h_depth, rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
   · exact Bool.false_or _
   · have hf := accessDelegation_instructionFrame
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) cw.toAdr) cw.toAdr
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr) cw.toAdr
     rw [h_del] at hf
     exact hf.transientStorage.symm
 
@@ -381,19 +414,23 @@ theorem cleanCall_childSettlement
 
 /-! ## Transaction-boundary preparation -/
 
-/-- The exact message-preparation prefix retained from a successful
+/-- The message-preparation prefix retained from a successful
 `processTransaction` run.
 
 The final transaction result does not expose its prepared message, so this
 witness keeps the validation, checking, debit, preparation, and final-result
-equations together. The transaction environment is written inline on purpose:
-this is a narrow projection from Jaune's real prefix, not a parallel trace
+equations together. `validationSender` is retained opaquely because Blanc
+cannot name Jaune-private sender recovery: its validation equation comes from
+the actual run, but does not independently characterize recovery or prove
+uniqueness. The transaction environment is written inline on purpose: this is
+a narrow projection from Jaune's real prefix, not a parallel trace
 abstraction. -/
 structure PreparedTransactionMessage
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat)
     (state : State) (bout' : BlockOutput) where
   intrinsicGas : Nat
   calldataFloorGasCost : Nat
+  validationSender : Adr
   sender : Adr
   effectiveGasPrice : Nat
   blobVersionedHashes : List B256
@@ -402,8 +439,8 @@ structure PreparedTransactionMessage
   msg : Msg
   messageState : State
   output : MsgCallOutput
-  validation : validateTransaction benv.beginTransaction.stat.rules tx =
-    .ok (intrinsicGas, calldataFloorGasCost)
+  validation : validateTransaction benv.beginTransaction.stat.rules tx
+    validationSender = .ok (intrinsicGas, calldataFloorGasCost)
   checked : checkTransaction benv.beginTransaction
     { bout with transactionsTrie :=
         bout.transactionsTrie.insert (BLT.bytes index.toBytes).toBytes tx } tx =
@@ -420,7 +457,9 @@ structure PreparedTransactionMessage
       stat :=
         { origin := sender
           gasPrice := effectiveGasPrice
-          gas := tx.gas - intrinsicGas
+          gas := (allocateEvmGas benv.beginTransaction.stat.rules tx.gas intrinsicGas).executionGas
+          stateGasReservoir :=
+            (allocateEvmGas benv.beginTransaction.stat.rules tx.gas intrinsicGas).stateGasReservoir
           accessListAddresses :=
             .ofList (benv.beginTransaction.stat.coinbase ::
               tx.accessList.map Prod.fst)
@@ -445,6 +484,7 @@ theorem preparedTransactionMessage_exists
   dsimp only at h
   obtain ⟨prelude, hp, h⟩ := Except.bind_eq_ok h
   cases hp
+  obtain ⟨validationSender, hsender, h⟩ := Except.bind_eq_ok h
   obtain ⟨validated, hv, h⟩ := Except.bind_eq_ok h
   obtain ⟨intrinsicGas, calldataFloorGasCost⟩ := validated
   rw [Except.mapError_eq_ok_iff] at hv
@@ -456,7 +496,7 @@ theorem preparedTransactionMessage_exists
   obtain ⟨processed, hpm, h⟩ := Except.bind_eq_ok h
   obtain ⟨messageState, output⟩ := processed
   rw [Except.mapError_eq_ok_iff] at hpm
-  exact ⟨⟨intrinsicGas, calldataFloorGasCost, sender,
+  exact ⟨⟨intrinsicGas, calldataFloorGasCost, validationSender, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState, msg,
     messageState, output,
     by simpa [Benv.beginTransaction] using hv,
@@ -482,16 +522,50 @@ theorem PreparedTransactionMessage.transientStorage_eq_empty
 
 /-! ## Top-level observable logs -/
 
-private theorem processMessageCall_create_error_logs
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    (run : processMessageCall.create msg = .ok (state, out))
+private theorem processTopLevelAmsterdam_error_logs
+    {rules : StateGasRules} {msg : Msg} {frameOf : Msg → Frame}
+    {state : State} {out : MsgCallOutput}
+    (run : processTopLevelAmsterdam rules msg frameOf = .ok (state, out))
     (herr : out.error.isSome) : out.logs = [] := by
-  unfold processMessageCall.create at run
-  dsimp only at run
-  split at run
-  · cases run
-    rfl
-  · rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
+  unfold processTopLevelAmsterdam at run
+  cases hprepare : prepareTopLevelAmsterdam rules msg with
+  | error failure =>
+    rw [hprepare] at run
+    obtain ⟨error, devm⟩ := failure
+    cases error <;> simp [settleTopLevelPreparationFailure] at run
+    all_goals rcases run with ⟨_, rfl⟩
+    all_goals rfl
+  | ok prepared =>
+    rw [hprepare] at run
+    obtain ⟨preparedMsg, preparedDevm⟩ := prepared
+    rcases Except.bind_eq_ok run with ⟨evm, hrun, hrest⟩
+    change (do
+      let refundCounter ←
+        if evm.error.isNone then
+          (Int.toNat? evm.refundCounter).toExcept
+            (EvmError.internal (.invariant (.text "refund counter is negative")))
+        else .ok 0
+      let logs := if evm.error.isNone then evm.logs else []
+      let accountsToDelete :=
+        if evm.error.isNone then evm.accountsToDelete else .emptyWithCapacity
+      let stateGasUsed :=
+        Int.ofNat preparedMsg.stateGasGrant - Int.ofNat evm.stateGasLeft +
+          Int.ofNat evm.mach.stateGas.spilled +
+          Int.ofNat evm.mach.stateGas.committedSpill
+      (Except.ok
+        ((evm.state, ({
+          accountReads := evm.meta.accountReads
+          storageReads := evm.meta.storageReads
+          gasLeft := evm.gasLeft
+          refundCounter := refundCounter
+          logs := logs
+          accountsToDelete := accountsToDelete
+          error := evm.error
+          returnData := evm.output
+          stateGasLeft := evm.stateGasLeft
+          stateGasUsed := stateGasUsed
+        } : MsgCallOutput)) : State × MsgCallOutput) :
+          Except EvmError (State × MsgCallOutput))) = .ok (state, out) at hrest
     by_cases clean : evm.error.isNone
     · rw [if_pos clean] at hrest
       rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
@@ -501,6 +575,27 @@ private theorem processMessageCall_create_error_logs
       cases hrest
       simp only [if_neg clean]
 
+private theorem processMessageCall_create_error_logs
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (run : processMessageCall.create msg = .ok (state, out))
+    (herr : out.error.isSome) : out.logs = [] := by
+  unfold processMessageCall.create at run
+  dsimp only at run
+  split at run
+  · split at run
+    · cases run
+      rfl
+    · rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
+      by_cases clean : evm.error.isNone
+      · rw [if_pos clean] at hrest
+        rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
+        cases hfinal
+        simp_all
+      · rw [if_neg clean] at hrest
+        cases hrest
+        simp only [if_neg clean]
+  · exact processTopLevelAmsterdam_error_logs run herr
+
 private theorem processMessageCall_call_error_logs
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (run : processMessageCall.call msg = .ok (state, out))
@@ -508,28 +603,30 @@ private theorem processMessageCall_call_error_logs
   unfold processMessageCall.call at run
   dsimp only at run
   split at run
-  · simp only [bind, Except.bind] at run
-    rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
-    by_cases clean : evm.error.isNone
-    · rw [if_pos clean] at hrest
-      rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
-      cases hfinal
-      simp_all
-    · rw [if_neg clean] at hrest
-      cases hrest
-      simp only [if_neg clean]
-  · rcases Except.bind_eq_ok run with
-      ⟨⟨delegated, setValue⟩, hdelegated, hrest⟩
-    simp only [bind, Except.bind] at hrest
-    rcases Except.bind_eq_ok hrest with ⟨evm, hprocess, hrest⟩
-    by_cases clean : evm.error.isNone
-    · rw [if_pos clean] at hrest
-      rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
-      cases hfinal
-      simp_all
-    · rw [if_neg clean] at hrest
-      cases hrest
-      simp only [if_neg clean]
+  · split at run
+    · simp only [bind, Except.bind] at run
+      rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
+      by_cases clean : evm.error.isNone
+      · rw [if_pos clean] at hrest
+        rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
+        cases hfinal
+        simp_all
+      · rw [if_neg clean] at hrest
+        cases hrest
+        simp only [if_neg clean]
+    · rcases Except.bind_eq_ok run with
+        ⟨⟨delegated, setValue⟩, hdelegated, hrest⟩
+      simp only [bind, Except.bind] at hrest
+      rcases Except.bind_eq_ok hrest with ⟨evm, hprocess, hrest⟩
+      by_cases clean : evm.error.isNone
+      · rw [if_pos clean] at hrest
+        rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
+        cases hfinal
+        simp_all
+      · rw [if_neg clean] at hrest
+        cases hrest
+        simp only [if_neg clean]
+  · exact processTopLevelAmsterdam_error_logs run herr
 
 /-- An errored top-level message exposes no logs. Its `returnData` remains an
 independent output field and is not constrained by this theorem. -/
