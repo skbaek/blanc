@@ -24,7 +24,8 @@ private theorem pushDeployWord_word_byte
     simp [pushDeployWord, Ninst.size, B256.length_toBytes]
   change
     Func.byteAtByShape locations n
-      (.next (pushDeployWord 0).size p0.compileShape)
+      (.next (pushDeployWord 0).size
+        (Ninst.immAccepted (pushDeployWord 0)) p0.compileShape)
       (pushDeployWord w ::: p) (j + 1) d = _
   rw [Func.byteAtByShape, if_pos (by
     simpa only [hsize0] using Nat.add_lt_add_right hj 1)]
@@ -69,12 +70,12 @@ private theorem domainCachedPathByteAt_eq_zero_0_2
   unfold domainCachedPath
   change
     Func.byteAtByShape locations n
-        (.next Ninst.pop.size
+        (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop :::
           pushDeployWord dp.cachedDomainSeparator ::: domainReturnTail) i 0 =
       Func.byteAtByShape locations n
-        (.next Ninst.pop.size
+        (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop ::: pushDeployWord 0 ::: domainReturnTail) i 0
   by_cases hpop : i < 1
@@ -103,7 +104,7 @@ private theorem domainCachedPathByteAt_word
   unfold domainCachedPath
   change
     Func.byteAtByShape locations n
-        (.next Ninst.pop.size
+        (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop :::
           pushDeployWord dp.cachedDomainSeparator ::: domainReturnTail) i 0 = _
@@ -129,12 +130,12 @@ private theorem domainCachedPathByteAt_eq_zero_34_40
   unfold domainCachedPath
   change
     Func.byteAtByShape locations n
-        (.next Ninst.pop.size
+        (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop :::
           pushDeployWord dp.cachedDomainSeparator ::: domainReturnTail) i 0 =
       Func.byteAtByShape locations n
-        (.next Ninst.pop.size
+        (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop ::: pushDeployWord 0 ::: domainReturnTail) i 0
   conv_lhs => rw [Func.byteAtByShape, if_neg (by
@@ -167,13 +168,13 @@ private theorem domainAfterChainByteAt_eq_zero_0_132
   unfold domainAfterChain
   change
     Func.byteAtByShape locations n
-        (.next Ninst.eq.size
+        (.next Ninst.eq.size (Ninst.immAccepted Ninst.eq)
           (.branch domainCalculatePath.compileShape
             (domainCachedPath (⟨0, 0⟩ : DeployParams)).compileShape))
         (Ninst.eq :::
           Func.branch domainCalculatePath (domainCachedPath dp)) i 0 =
       Func.byteAtByShape locations n
-        (.next Ninst.eq.size
+        (.next Ninst.eq.size (Ninst.immAccepted Ninst.eq)
           (.branch domainCalculatePath.compileShape
             (domainCachedPath (⟨0, 0⟩ : DeployParams)).compileShape))
         (Ninst.eq ::: Func.branch domainCalculatePath
@@ -219,7 +220,7 @@ private theorem domainAfterChainByteAt_to_cachedPath
   unfold domainAfterChain
   change
     Func.byteAtByShape locations n
-        (.next Ninst.eq.size
+        (.next Ninst.eq.size (Ninst.immAccepted Ninst.eq)
           (.branch domainCalculatePath.compileShape
             (domainCachedPath (⟨0, 0⟩ : DeployParams)).compileShape))
         (Ninst.eq :::

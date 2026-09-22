@@ -126,12 +126,13 @@ theorem lockedErrorGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨w :: stack, base.memory, G + errorGuardCost base e.reason⟩)
+        ⟨w :: stack, base.memory, G + errorGuardCost base e.reason,
+          base.stateGas⟩)
       ((.call e.slot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory (bytesWords (errorData e.reason)).zipIdx,
-          G⟩).withOutput (errorData e.reason))) := by
+          G, base.stateGas⟩).withOutput (errorData e.reason))) := by
   exact Func.runCompiledTo_errorGuard (lockedError_lookup dp e) h_ne rfl
     hwf hr halign h_blob h_words (by
       simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
@@ -153,10 +154,11 @@ theorem codelessCallback_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     {base : Devm} {G : Nat} {stack : List B256} {afterCall : Func}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨0 :: stack, base.memory, G + codelessCallbackCost⟩)
+      (base.setMach ⟨0 :: stack, base.memory, G + codelessCallbackCost,
+        base.stateGas⟩)
       (iszero ::: Func.revert <?> afterCall)
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   rw [codelessCallbackCost_eq]
   func_run (2) [1]
   all_goals try {
@@ -164,7 +166,7 @@ theorem codelessCallback_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     omega }
   all_goals try omega
   exact Func.runCompiledTo_revert_func
-    (devm := base.setMach ⟨stack, base.memory, G + 4⟩) (G := G) (by
+    (devm := base.setMach ⟨stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
     simp only [Devm.gasLeft_setMach, gBase]) (by
       simp only [Devm.stack_setMach]
       omega)
@@ -190,11 +192,12 @@ theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
+          base.stateGas⟩)
       (iszero ::: (.call bubbleRevertSlot) <?> afterSuccess)
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   rw [show G + bubbleContinuationCost base =
       (G + revertReturnDataCost base) + 29 by
@@ -207,7 +210,7 @@ theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   all_goals try omega
   exact Func.runCompiledTo_revertReturnData
     (devm := base.setMach
-      ⟨stack, base.memory, G + revertReturnDataCost base⟩)
+      ⟨stack, base.memory, G + revertReturnDataCost base, base.stateGas⟩)
     (G := G) hwf hr halign h_len (by
       simp only [Devm.gasLeft_setMach, revertReturnDataCost,
         Devm.returnData_setMach, Devm.extCost, Devm.memory_setMach]) (by
@@ -224,10 +227,11 @@ theorem boolReturn_childRevert_runCompiledTo {dp : DeployParams}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩) boolReturn
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
+          base.stateGas⟩) boolReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   simpa only [boolReturn] using
     callbackBubble_runCompiledTo hwf hr halign h_len h_room
@@ -262,7 +266,7 @@ def flashCallbackReturnDataHead (base : Devm) : B256 :=
 It lets the following error-body cost mention exactly the memory image at the
 locked flash-failure guard. -/
 def flashCallbackHeadBase (base : Devm) (stack : List B256) : Devm :=
-  base.setMach ⟨stack, flashCallbackHeadMemory base, 0⟩
+  base.setMach ⟨stack, flashCallbackHeadMemory base, 0, base.stateGas⟩
 
 /-- Flash callback failure uses the same byte-for-byte bubble auxiliary as
 typed Boolean callbacks. -/
@@ -274,11 +278,12 @@ theorem flashCallback_childRevert_runCompiledTo {dp : DeployParams}
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
+          base.stateGas⟩)
       flashCallbackReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   simpa only [flashCallbackReturn] using
     callbackBubble_runCompiledTo hwf hr halign h_len h_room
@@ -301,12 +306,13 @@ theorem callbackShort_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_short : base.returnData.length < 32)
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost⟩)
+      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
+        base.stateGas⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
         (returnDataShorterThan 32 +++ Func.revert <?> fullWord))
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   rw [shortReturnCost_eq]
   func_run (6) [0, 1]
   all_goals try {
@@ -320,7 +326,7 @@ theorem callbackShort_runCompiledTo {dp : DeployParams} {sevm : Sevm}
         B256.toNat_toB256_of_lt (by omega)]
       exact h_short)
   · exact Func.runCompiledTo_revert_func
-      (devm := base.setMach ⟨stack, base.memory, G + 4⟩) (G := G) (by
+      (devm := base.setMach ⟨stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
         simp only [Devm.gasLeft_setMach, gBase]) (by
         simp only [Devm.stack_setMach]
         omega)
@@ -330,9 +336,10 @@ theorem boolReturn_short_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_short : base.returnData.length < 32)
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost⟩) boolReturn
+      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
+        base.stateGas⟩) boolReturn
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   simpa only [boolReturn] using
     callbackShort_runCompiledTo h_short h_room
 
@@ -341,10 +348,11 @@ theorem flashCallback_short_runCompiledTo {dp : DeployParams}
     (h_short : base.returnData.length < 32)
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost⟩)
+      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
+        base.stateGas⟩)
       flashCallbackReturn
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   simpa only [flashCallbackReturn] using
     callbackShort_runCompiledTo h_short h_room
 
@@ -356,10 +364,10 @@ theorem callbackFullWordPrefix_runCompiledTo {dp : DeployParams}
     {fullWord : Func} {ex : Execution}
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨stack, base.memory, G⟩) fullWord ex)
+      (base.setMach ⟨stack, base.memory, G, base.stateGas⟩) fullWord ex)
     (h_room : stack.length < 1019) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + 37⟩)
+      (base.setMach ⟨1 :: stack, base.memory, G + 37, base.stateGas⟩)
       (iszero :::
         (.call bubbleRevertSlot) <?>
         (returnDataShorterThan 32 +++ Func.revert <?> fullWord)) ex := by
@@ -368,7 +376,8 @@ theorem callbackFullWordPrefix_runCompiledTo {dp : DeployParams}
     simp only [Devm.stack_setMach, List.length_cons] at *
     omega }
   all_goals try omega
-  simpa only [Devm.memory_setMach, Nat.add_sub_cancel] using h_tail
+  simpa only [Devm.memory_setMach, Devm.stateGas_setMach,
+    Nat.add_sub_cancel] using h_tail
 
 /-- Copy the callback's first returndata word into covered memory.  This is
 the first 13-gas half of `checkReturnDataHead`. -/
@@ -379,10 +388,10 @@ theorem callbackHeadCopyPrefix_runCompiledTo {dp : DeployParams}
     (h32 : base.memory.size % 32 = 0)
     (h_msz : 64 ≤ base.memory.size)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨stack, flashCallbackCopiedMemory base, G⟩) tail ex)
+      (base.setMach ⟨stack, flashCallbackCopiedMemory base, G, base.stateGas⟩) tail ex)
     (h_room : stack.length < 1019) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨stack, base.memory, G + 13⟩)
+      (base.setMach ⟨stack, base.memory, G + 13, base.stateGas⟩)
       (pushList [32, 0, 0] +++ returndatacopy ::: tail) ex := by
   func_run (4) [6]
   all_goals try simp only [Devm.stack_setMach, List.length_cons] at *
@@ -405,10 +414,11 @@ theorem callbackHeadReadPrefix_runCompiledTo {dp : DeployParams}
     (h_msz : 64 ≤ base.memory.size)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨flashCallbackReturnDataHead base :: stack,
-        flashCallbackHeadMemory base, G⟩) tail ex)
+        flashCallbackHeadMemory base, G, base.stateGas⟩) tail ex)
     (h_room : stack.length < 1019) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨stack, flashCallbackCopiedMemory base, G + 5⟩)
+      (base.setMach ⟨stack, flashCallbackCopiedMemory base, G + 5,
+        base.stateGas⟩)
       (pushB256 0 ::: mload ::: tail) ex := by
   func_run (2) [3]
   all_goals try simp only [Devm.stack_setMach] at *
@@ -430,11 +440,11 @@ theorem callbackHeadMismatchFlagPrefix_runCompiledTo {dp : DeployParams}
     {expected head : B256} {memory : Mem} {tail : Func} {ex : Execution}
     (h_neq : (expected =? head) = 0)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, memory, G⟩) tail ex)
+      (base.setMach ⟨1 :: stack, memory, G, base.stateGas⟩) tail ex)
     (h_room : stack.length < 1019) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨head :: stack, memory,
-        G + (pushCost expected.toBytes.sig + 6)⟩)
+        G + (pushCost expected.toBytes.sig + 6), base.stateGas⟩)
       (pushB256 expected ::: eq ::: iszero ::: tail) ex := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := expected)
@@ -446,7 +456,8 @@ theorem callbackHeadMismatchFlagPrefix_runCompiledTo {dp : DeployParams}
   simp only [Devm.setMach_setMach]
   func_run (2) [0, 1]
   all_goals try omega
-  simpa only [Devm.memory_setMach, Nat.add_sub_cancel] using h_tail
+  simpa only [Devm.memory_setMach, Devm.stateGas_setMach,
+    Nat.add_sub_cancel] using h_tail
 
 /-- Read, compare and invert the copied word.  A mismatch leaves the nonzero
 guard flag after an exact symbolic push-width charge plus eleven gas. -/
@@ -458,11 +469,12 @@ theorem callbackHeadMismatchReadPrefix_runCompiledTo {dp : DeployParams}
     (h32 : base.memory.size % 32 = 0)
     (h_msz : 64 ≤ base.memory.size)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, flashCallbackHeadMemory base, G⟩) tail ex)
+      (base.setMach ⟨1 :: stack, flashCallbackHeadMemory base, G,
+        base.stateGas⟩) tail ex)
     (h_room : stack.length < 1018) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, flashCallbackCopiedMemory base,
-        G + (pushCost expected.toBytes.sig + 11)⟩)
+        G + (pushCost expected.toBytes.sig + 11), base.stateGas⟩)
       (pushB256 0 ::: mload ::: pushB256 expected :::
         eq ::: iszero ::: tail) ex := by
   rw [show G + (pushCost expected.toBytes.sig + 11) =
@@ -482,11 +494,12 @@ theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
     (h32 : base.memory.size % 32 = 0)
     (h_msz : 64 ≤ base.memory.size)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, flashCallbackHeadMemory base, G⟩) tail ex)
+      (base.setMach ⟨1 :: stack, flashCallbackHeadMemory base, G,
+        base.stateGas⟩) tail ex)
     (h_room : stack.length < 1016) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, base.memory,
-        G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 24)⟩)
+        G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 24), base.stateGas⟩)
       (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero ::: tail) ex := by
   have h_len : B256.toNat 0 + B256.toNat 32 ≤ base.returnData.length := by
     have h1 : ¬ Nat.toB256 base.returnData.length < (32 : B256) := by
@@ -536,7 +549,7 @@ theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
       (base.setMach ⟨stack, base.memory,
         (G + errorGuardCost (flashCallbackHeadBase base stack)
           "WETH: flash loan failed") +
-          (pushCost CALLBACK_SUCCESS.toBytes.sig + 24)⟩)
+          (pushCost CALLBACK_SUCCESS.toBytes.sig + 24), base.stateGas⟩)
       (checkReturnDataHead CALLBACK_SUCCESS 0 +++ iszero :::
         (.call flashFailedErrorSlot) <?>
         (pop ::: pop ::: .call flashSettleSlot))
@@ -544,7 +557,8 @@ theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
         ((flashCallbackHeadBase base stack).setMach ⟨stack,
           Mem.writeStoresRev (flashCallbackHeadMemory base)
             (bytesWords (errorData "WETH: flash loan failed")).zipIdx,
-          G⟩).withOutput (errorData "WETH: flash loan failed"))) := by
+          G, (flashCallbackHeadBase base stack).stateGas⟩).withOutput
+            (errorData "WETH: flash loan failed"))) := by
   apply callbackMagicMismatchPrefix_runCompiledTo h_ge h_neq h32 h_msz
   · exact Func.runCompiledTo_errorGuard (flashFailedError_lookup dp)
       (by decide) rfl
@@ -578,13 +592,14 @@ theorem flashCallback_wrongMagic_runCompiledTo {dp : DeployParams}
       (base.setMach ⟨1 :: stack, base.memory,
         ((G + errorGuardCost (flashCallbackHeadBase base stack)
           "WETH: flash loan failed") +
-          (pushCost CALLBACK_SUCCESS.toBytes.sig + 24)) + 37⟩)
+          (pushCost CALLBACK_SUCCESS.toBytes.sig + 24)) + 37, base.stateGas⟩)
       flashCallbackReturn
       (.error (.revert,
         ((flashCallbackHeadBase base stack).setMach ⟨stack,
           Mem.writeStoresRev (flashCallbackHeadMemory base)
             (bytesWords (errorData "WETH: flash loan failed")).zipIdx,
-          G⟩).withOutput (errorData "WETH: flash loan failed"))) := by
+          G, (flashCallbackHeadBase base stack).stateGas⟩).withOutput
+            (errorData "WETH: flash loan failed"))) := by
   simpa only [flashCallbackReturn] using
     callbackFullWordPrefix_runCompiledTo h_ge
       (flashCallback_wrongMagicTail_runCompiledTo h_ge h_neq h32 h_msz
@@ -605,10 +620,10 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : base.stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach
-        ⟨base.stack, base.memory, G + nonpayableRevertCost⟩)
+        ⟨base.stack, base.memory, G + nonpayableRevertCost, base.stateGas⟩)
       (nonpayable body)
       (.error (.revert,
-        (base.setMach ⟨base.stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   rw [nonpayableRevertCost_eq]
   func_run (3) [0]
   all_goals try {
@@ -617,7 +632,7 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   all_goals try omega
   · simp [B256.eqCheck, h_value]
   · exact Func.runCompiledTo_revert_func
-      (devm := base.setMach ⟨base.stack, base.memory, G + 4⟩) (G := G) (by
+      (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
       simp only [Devm.gasLeft_setMach, gBase]) (by
         simp only [Devm.stack_setMach]
         omega)
@@ -640,13 +655,14 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, base.memory,
-        (G + errorGuardCost base "WETH: flash mint only WETH10") + 14⟩)
+        (G + errorGuardCost base "WETH: flash mint only WETH10") + 14,
+        base.stateGas⟩)
       flashFee
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: flash mint only WETH10")).zipIdx,
-          G⟩).withOutput
+          G, base.stateGas⟩).withOutput
             (errorData "WETH: flash mint only WETH10"))) := by
   func_run (5) [0]
   all_goals try {
