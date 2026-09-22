@@ -573,6 +573,15 @@ installs the result; neither touches `BenvStat` — the chain rules, chain id an
 the rest are fixed for the block. A multi-contract frame invariant that names
 another account's status under those rules needs exactly this to cross a call
 boundary, which `Frame.enter_run_depth` alone cannot supply. -/
+/-- `initSevm` copies the message's block context. -/
+lemma initSevm_benvStat (msg : Msg) : (initSevm msg).benvStat = msg.benv.stat :=
+  rfl
+
+/-- `Msg.withBenv` replaces the whole block context. -/
+lemma Msg.withBenv_benvStat (msg : Msg) (benv : Benv) :
+    (msg.withBenv benv).benv.stat = benv.stat :=
+  rfl
+
 lemma Frame.enter_run_benvStat {f : Frame} {cevm : Evm}
     (h : f.enter = .run cevm) : cevm.sta.benvStat = f.inner.benv.stat := by
   unfold Frame.enter at h
