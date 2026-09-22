@@ -2897,10 +2897,11 @@ lemma GenericCreate.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
 /-- Any successful childless executable instruction preserves persistent
 storage at every address. -/
 lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Xinst.Run sevm devm x .none (.ok inter)) :
     Devm.getStor inter = Devm.getStor devm := by
   unfold Xinst.Run at h_run
-  rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, hcal, -, hs⟩ <;> rw [hs] at h_run
@@ -3311,12 +3312,13 @@ theorem GenericCreate.targetBalanceMono_of_none
 current target differs from `ca` cannot lower `ca`'s balance. -/
 theorem Xinst.targetBalanceMono_of_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Xinst.Run sevm pre x .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256) :
     (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
   unfold Xinst.Run at run
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, step_eq, frame⟩ |
     ⟨d, endowment, newAddress, mi, ms, framePrefix, step_eq⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -3352,6 +3354,7 @@ theorem Xinst.targetBalanceMono_of_none
 the observed account's balance. -/
 theorem Ninst.targetBalanceMono_of_none
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256) :
@@ -3364,7 +3367,7 @@ theorem Ninst.targetBalanceMono_of_none
         (congrFun (Rinst.preserves_bal regularRun) ca))
   | exec executable =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.targetBalanceMono_of_none
+      exact Xinst.targetBalanceMono_of_none hfork
         (XStep.run_toStep.mp run) target_ne sum_nof
   | push bytes bound =>
       have frame := Ninst.push_instructionFrame_effectRec
@@ -3391,6 +3394,7 @@ theorem Ninst.targetBalanceMono_of_none
 the observed account's persistent storage. -/
 theorem Ninst.foreignNone_getStor_eq
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca) :
     Devm.getStor post ca = Devm.getStor pre ca := by
@@ -3404,7 +3408,7 @@ theorem Ninst.foreignNone_getStor_eq
       · exact (congrFun (Rinst.preserves_stor store regularRun) ca).symm
   | exec executable =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact congrFun (Xinst.none_getStor_eq (XStep.run_toStep.mp run)) ca
+      exact congrFun (Xinst.none_getStor_eq hfork (XStep.run_toStep.mp run)) ca
   | push bytes bound =>
       have frame := Ninst.push_instructionFrame_effectRec
         (hxs := bound) (xl := .none) trivial run
