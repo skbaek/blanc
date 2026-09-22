@@ -1354,9 +1354,10 @@ theorem backedPost_of_value_call
     (h_le : v ≤ s.getBal ca)
     (h_inv : Stor.Weth10Inv (Devm.getStor s ca) 0
       (s.getBal ca - v))
-    (h_run : Ninst.Run sevm s call sf) :
+    (h_run : Ninst.Run sevm s call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (backedSpec weth10 dp).Post ca sevm sf := by
-  rcases of_run_call_val_with_depth hp h_run with
+  rcases of_run_call_val_with_depth hp h_run hfork with
     ⟨_, h_world⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
@@ -1501,9 +1502,10 @@ theorem value_le_balance_of_run_call_success_guard
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (hcall : Ninst.Run sevm s call sc)
     (hiszero : Ninst.Run sevm sc iszero si)
-    (hpop : Devm.PopBurn [0] si sb) :
+    (hpop : Devm.PopBurn [0] si sb)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     v ≤ s.getBal sevm.currentTarget := by
-  rcases of_run_call_val_with_depth hp hcall with
+  rcases of_run_call_val_with_depth hp hcall hfork with
     ⟨hp0, h_world⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
@@ -3642,9 +3644,10 @@ theorem flashFloorPost_of_value_call
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_run : Ninst.Run sevm s call sf) :
+    (h_run : Ninst.Run sevm s call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (flashFloorSpec dp floor).Post ca sevm sf := by
-  rcases of_run_call_val_with_depth hp h_run with
+  rcases of_run_call_val_with_depth hp h_run hfork with
     ⟨_, h_world⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,
@@ -6941,13 +6944,14 @@ theorem flashFloorPostStack_of_value_call
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_run : Ninst.Run sevm s call sf) :
+    (h_run : Ninst.Run sevm s call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (flashFloorSpec dp floor).Post ca sevm sf ∧
       ∃ b, b :: xs <<+ sf.stack := by
   have h_post := flashFloorPost_of_value_call dp floor ca
-    h_target ih hp h_code h_floor h_run
+    h_target ih hp h_code h_floor h_run hfork
   refine ⟨h_post, ?_⟩
-  rcases of_run_call_val_with_depth hp h_run with
+  rcases of_run_call_val_with_depth hp h_run hfork with
     ⟨hstack, hworld⟩ |
     ⟨parent, child, xl, delegated, na, code, avail, hdepth,
       hstack, hstate, hmemory, hdelegation, hfill, hpm,
@@ -7333,9 +7337,10 @@ theorem flashExactRel_of_value_call
     (ih : FlashExactDepth dp ca sevm.depth)
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_run : Ninst.Run sevm s call sf) :
+    (h_run : Ninst.Run sevm s call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     FlashExactRel dp ca sevm s sf := by
-  rcases of_run_call_val_with_depth hp h_run with
+  rcases of_run_call_val_with_depth hp h_run hfork with
     ⟨_, h_world⟩ |
       ⟨parent, child, xl, delegated, na, code, avail, h_depth,
         h_stack, h_parent_state, h_parent_memory, h_delegation,

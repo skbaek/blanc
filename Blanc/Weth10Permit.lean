@@ -1387,7 +1387,8 @@ theorem of_recoverPermitSigner
     (hdec : DecodesPermit sevm owner spender value deadline v sigR sigS)
     (hp : digest :: xs <<+ s.stack)
     (hwf : Mem.Wf s.memory) (hr : Mem.Reads s.memory img)
-    (run : Line.Run sevm s recoverPermitSigner t) :
+    (run : Line.Run sevm s recoverPermitSigner t)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ (signer : B256) (out : Bytes),
       signer :: xs <<+ t.stack ∧
       Mem.Wf t.memory ∧
@@ -1412,7 +1413,7 @@ theorem of_recoverPermitSigner
       permitEcrecoverImage digest v sigR sigS := by
     rw [Mem.Reads.read hrq 0 128, permitRecover_input_window]
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
-  rcases of_run_staticcall_val_with_depth_cause hpq qstat with
+  rcases of_run_staticcall_val_with_depth_cause hpq qstat hfork with
       hfail | hsuccess
   · rcases hfail with ⟨hpU, hworld, out, hret, hmem, hcause⟩
     have hout : out = [] := by

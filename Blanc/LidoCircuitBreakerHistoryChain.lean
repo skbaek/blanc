@@ -276,10 +276,11 @@ theorem coherent_of_staticcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
     (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
-    (h_run : Ninst.Run sevm s staticcall sf) :
+    (h_run : Ninst.Run sevm s staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     RegistryCoherent (Devm.getStor sf sevm.currentTarget) ∧
       ∃ b, ((b :: xs) <<+ sf.stack) := by
-  rcases of_run_staticcall_val_with_depth hp h_run with ⟨h_stk, h_world, -⟩ | h_enter
+  rcases of_run_staticcall_val_with_depth hp h_run hfork with ⟨h_stk, h_world, -⟩ | h_enter
   · refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
     exact h_coh

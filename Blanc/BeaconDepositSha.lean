@@ -337,7 +337,8 @@ theorem sha64_success_of_run
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hnodeleg : getDelegatedCodeAddress (s.getCode 2) = none)
     (hp : xs <<+ s.stack)
-    (run : Func.Run fs sevm s (sha64 inputWord outputWord success) r) :
+    (run : Func.Run fs sevm s (sha64 inputWord outputWord success) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ q,
       xs <<+ q.stack ∧
       Func.Run fs sevm q success r ∧
@@ -394,7 +395,7 @@ theorem sha64_success_of_run
     rw [congrFun hcodeCall 2]
     exact hnodeleg
   rcases of_run_next run with ⟨callPost, qstat, run⟩
-  rcases of_run_staticcall_val_with_depth_cause hpCall qstat with
+  rcases of_run_staticcall_val_with_depth_cause hpCall qstat hfork with
       hfail | hsuccess
   · rcases hfail with ⟨hpPost, hworld, out, hret, hmem, hcause⟩
     rcases of_run_next run with ⟨afterIszero, qiszero, run⟩

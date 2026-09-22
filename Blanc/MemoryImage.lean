@@ -287,8 +287,9 @@ theorem MemWordAt.acrossStaticcall
       g :: target :: inputOffset :: inputSize :: outputOffset :: outputSize ::
         tail <<+ pre.stack)
     (run : Ninst.Run sevm pre Ninst.staticcall post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (window : MemWordAt pre offset w) : MemWordAt post offset w := by
-  rcases of_run_staticcall_val_with_depth stack run with failure | success
+  rcases of_run_staticcall_val_with_depth stack run hfork with failure | success
   · rcases failure with ⟨-, -, out, -, finalMemory⟩
     refine window.extendsWrite finalMemory (Or.inr ?_)
     have copiedLe : (out.take outputSize.toNat).length ≤ outputSize.toNat :=
@@ -323,9 +324,10 @@ theorem MemWordAt.acrossSuccessfulCall
       g :: target :: value :: inputOffset :: inputSize :: outputOffset ::
         outputSize :: tail <<+ pre.stack)
     (run : Ninst.Run sevm pre Ninst.call post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (status : ∃ rest, post.stack = (1 : B256) :: rest)
     (window : MemWordAt pre offset w) : MemWordAt post offset w := by
-  rcases of_run_call_val_with_depth stack run with failure | success
+  rcases of_run_call_val_with_depth stack run hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
     obtain ⟨rest, oneStack⟩ := status
     have onePrefix : (1 : B256) :: [] <<+ post.stack := by

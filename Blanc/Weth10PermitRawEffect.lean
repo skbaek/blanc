@@ -646,7 +646,8 @@ theorem of_recoverPermitSigner_raw
     (hpre : decide (sevm.benvStat.rules.isPrecomp 1) = true)
     (hnodeleg : getDelegatedCodeAddress (s.getCode 1) = none)
     (hp : digest :: xs <<+ s.stack)
-    (run : Line.Run sevm s recoverPermitSigner t) :
+    (run : Line.Run sevm s recoverPermitSigner t)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (∃ signer : B256, signer :: xs <<+ t.stack) ∧
       Devm.getStor t = Devm.getStor s := by
   rw [recoverPermitSigner_eq_prepare] at run
@@ -660,7 +661,7 @@ theorem of_recoverPermitSigner_raw
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
   have hcross : (∃ w : B256, w :: xs <<+ u.stack) ∧
       Devm.getStor u = Devm.getStor q := by
-    rcases of_run_staticcall_val_with_depth_cause hpq qstat with
+    rcases of_run_staticcall_val_with_depth_cause hpq qstat hfork with
         hfail | hsuccess
     · rcases hfail with ⟨hpU, hworld, _⟩
       refine ⟨⟨0, hpU⟩, ?_⟩
@@ -913,7 +914,8 @@ theorem of_recoverPermitSigner_raw_region
     {sevm : Sevm} {s t : Devm} {digest : B256} {xs : Stack}
     (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
     (hp : digest :: xs <<+ s.stack)
-    (run : Line.Run sevm s recoverPermitSigner t) :
+    (run : Line.Run sevm s recoverPermitSigner t)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (∃ signer : B256, signer :: xs <<+ t.stack) ∧
       ∀ key, InRegion .allowance key →
         (Devm.getStor t sevm.currentTarget).get key =
@@ -929,7 +931,7 @@ theorem of_recoverPermitSigner_raw_region
         (Devm.getStor q sevm.currentTarget).get key :=
     hsilent hcodePrep.symm hpq qstat
   have hpU : ∃ w : B256, w :: xs <<+ u.stack := by
-    rcases of_run_staticcall_val_with_depth hpq qstat with hfail | hsuccess
+    rcases of_run_staticcall_val_with_depth hpq qstat hfork with hfail | hsuccess
     · exact ⟨0, hfail.1⟩
     · rcases hsuccess with
         ⟨parent, _child, _xl, _dpFlag, _na, _code, _avail,

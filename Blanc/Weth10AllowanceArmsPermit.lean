@@ -1276,14 +1276,15 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm childPre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     PermitStatcallRegionSilent e (Devm.getCode pre) := by
   intro u v gasWord tail hcodeU hoperands hrun key hkey
   rw [htarget]
   have hcodeAt : some (u.getCode ca).toList = Prog.compile (weth10 dp) := by
     rw [show u.getCode ca = pre.getCode ca from congrFun hcodeU ca]
     exact installed
-  rcases of_run_staticcall_val_with_depth hoperands hrun with hfail | hsuccess
+  rcases of_run_staticcall_val_with_depth hoperands hrun hfork with hfail | hsuccess
   · rw [← getStor_eq_of_state_eq hfail.2.1.1 ca]
   · rcases hsuccess with
       ⟨parent, child, xl, dpFlag, resolvedCallee, code, avail, hdepthPos,

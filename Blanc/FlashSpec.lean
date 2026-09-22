@@ -1140,9 +1140,10 @@ theorem rollback_of_callback_failure {sevm : Sevm} {sc mid : Devm}
         Nat.toB256 (196 + ceil32 data.length) ::
         (0 : B256) :: (0 : B256) :: [amount, a.toB256] <<+ sc.stack)
     (h_call : Ninst.Run sevm sc Ninst.call mid)
-    (h_flag : (0 : B256) :: [amount, a.toB256] <<+ mid.stack) :
+    (h_flag : (0 : B256) :: [amount, a.toB256] <<+ mid.stack)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.WorldEq sc mid := by
-  rcases of_run_call_val h_stack h_call with h_fail | h_ok
+  rcases of_run_call_val h_stack h_call hfork with h_fail | h_ok
   · exact h_fail.2
   · -- the clean-child branch pushes `1`, which `h_flag` refutes
     exfalso
@@ -1171,7 +1172,8 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
         = abiCallWithTail onFlashLoanSelector
             [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
-    (h_run : Func.Run (fmint.main :: fmintAux) sevm sc flashLoanFromCall r) :
+    (h_run : Func.Run (fmint.main :: fmintAux) sevm sc flashLoanFromCall r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ mid sfin : Devm,
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid ∧
       Devm.getStor mid = Devm.getStor sfin ∧
@@ -1183,7 +1185,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       Func.Run (fmint.main :: fmintAux) sevm sfin spendAllowanceThenBurn r := by
   simp only [flashLoanFromCall] at h_run
   rcases of_run_next h_run with ⟨mid, r_call, h_run⟩
-  rcases of_run_call_val h_stack r_call with h_fail | h_ok
+  rcases of_run_call_val h_stack r_call hfork with h_fail | h_ok
   · -- the call pushed `0` : the success guard refutes it
     exfalso
     rcases of_run_next h_run with ⟨s1, r_iz, h_run⟩
