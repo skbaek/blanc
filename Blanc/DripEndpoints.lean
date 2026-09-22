@@ -2070,11 +2070,12 @@ claims do not require the derived no-wrap, cap, or call-preimage code facts. -/
 theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
     {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs sevm s Drip.exit post) :
+    (run : Func.Run fs sevm s Drip.exit post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactly sevm entry post := by
   unfold ExitPaysExactly at ⊢
   dsimp only
-  rcases exit_pays_exactly_full hlookup frame hp run with
+  rcases exit_pays_exactly_full hlookup frame hp run hfork with
     ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
       hguards, -, -, callPre, callPost, guardPost, returnPre, hstor, -, -,
       haccepted, hstorPost, hbalPost, hret⟩
@@ -2128,7 +2129,7 @@ theorem of_run_exit_child_outcome {fs : List Func} (hlookup : AuxLookup fs)
     · exact Or.inr ⟨callPre, callPost, _, hflag0, hworld, hstorW, htraW,
         mid, hpop, hrev⟩
     · exact (hnz (popBurn_pref hpop hflag0).1).elim
-  · exact Or.inl (exit_pays_exactly hlookup frame hp run)
+  · exact Or.inl (exit_pays_exactly hlookup frame hp run hfork)
 
 end Drip
 
