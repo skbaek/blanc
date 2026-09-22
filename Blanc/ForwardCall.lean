@@ -2507,19 +2507,48 @@ lemma handleError_error_inv {raw : Execution}
     · cases h; exact nonConsensus_internal
   · cases h
 
+/-- Both rule-selected error handlers pass cryptographic and internal failures
+through with the same error tuple. -/
+private lemma executeCode.handleErrorWith_error_inv {sg : Option StateGasRules}
+    {raw : Execution} {p : EvmError × State × AdrSet × Tra}
+    (h : executeCode.handleErrorWith sg raw = .error p) :
+    executeCode.handleError raw = .error p := by
+  cases sg with
+  | none =>
+      simpa [executeCode.handleErrorWith] using h
+  | some sg =>
+      cases raw with
+      | ok d =>
+          simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+      | error d =>
+          rcases d with ⟨e, d⟩
+          cases e with
+          | halt reason =>
+              simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+          | revert =>
+              simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+          | crypto reason =>
+              simpa [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
+                executeCode.handleError] using h
+          | internal reason =>
+              simpa [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
+                executeCode.handleError] using h
+
 /-- A call frame's settlement passes an error through untouched: the settle
 step only inspects `.ok` results. -/
 lemma Frame.settle_error_inv {f : Frame} {raw : Execution}
     {p : EvmError × State × AdrSet × Tra}
-    (hfork : CoveredFork f.inner.benv.stat.fork)
     (h_call : f.isCreate = false) (h : f.settle raw = .error p) :
     executeCode.handleError raw = .error p := by
   unfold Frame.settle Frame.settleMsg at h
-  rw [hfork.rules_stateGas_none, executeCode.handleErrorWith_none] at h
   rw [h_call] at h
   simp only [Bool.false_eq_true, if_false] at h
-  rcases hh : executeCode.handleError raw with q | evm <;> rw [hh] at h
-  · simpa [processMessage.settle] using h
+  rcases hh : executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw with q | evm <;>
+    rw [hh] at h
+  · have hq : q = p := by
+      simpa [processMessage.settle] using h
+    rw [← hq]
+    exact executeCode.handleErrorWith_error_inv hh
   · unfold processMessage.settle at h
     simp only [bind, Except.bind] at h
     split at h <;> cases h
@@ -2541,7 +2570,6 @@ lemma Msg.benvAfterTransfer_error_inv {msg : Msg}
 transfer — can only carry a non-consensus error in its `.done`. -/
 lemma Frame.enter_done_error_inv {f : Frame}
     {p : EvmError × State × AdrSet × Tra}
-    (hfork : CoveredFork f.inner.benv.stat.fork)
     (h_call : f.isCreate = false) (h : f.enter = .done (.error p)) :
     NonConsensus p.1 := by
   unfold Frame.enter at h
@@ -2558,7 +2586,7 @@ lemma Frame.enter_done_error_inv {f : Frame}
       simp only [he] at h
     · cases h
     · injection h with h_eq
-      exact handleError_error_inv (Frame.settle_error_inv hfork h_call h_eq)
+      exact handleError_error_inv (Frame.settle_error_inv h_call h_eq)
 
 /-! ## `Func.ExecTo` — a walk, transported to derivation evidence
 
