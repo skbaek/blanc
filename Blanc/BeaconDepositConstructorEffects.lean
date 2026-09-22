@@ -51,9 +51,9 @@ private theorem constructorNonpayable_zero_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hvalue : sevm.value = 0)
     (tail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, K⟩) body ex effects) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) body ex effects) :
   Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, K + 19⟩)
+      (base.setMach ⟨[], Mem.empty, K + 19, base.stateGas⟩)
       (nonpayable body) ex effects := by
   unfold nonpayable
   storage_effect_run (3) [1]
@@ -74,6 +74,7 @@ theorem constructorMain_storageEffectRun_withSlack
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
       post.output = code ∧
@@ -86,14 +87,14 @@ theorem constructorMain_storageEffectRun_withSlack
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun
         (constructorProgram.main :: constructorProgram.aux) sevm
-        (base.setMach ⟨[], Mem.empty, constructorMainGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorMainGas + slack, base.stateGas⟩)
         constructorProgram.main (.ok post)
         (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
       postRefund, postStorage, loopRun⟩ :=
     constructorZeroHashLoop_storageEffectRun_withSlack slack hgasBound
       (fs := constructorProgram.main :: constructorProgram.aux)
-      (sevm := sevm) (base := base) world hstatic hdepth hpre
+      (sevm := sevm) (base := base) world hstatic hdepth hpre hfork
       (by rfl) (by rfl) hcode
   have startRun := constructorStart_storageEffectRun
     (K := constructorLoopGas slack 31) (hloop := by rfl) loopRun
@@ -115,6 +116,7 @@ theorem constructorMain_storageEffectRun
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
       post.output = code ∧
@@ -122,13 +124,13 @@ theorem constructorMain_storageEffectRun
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       Func.StorageEffectRun
         (constructorProgram.main :: constructorProgram.aux) sevm
-        (base.setMach ⟨[], Mem.empty, constructorMainGas⟩)
+        (base.setMach ⟨[], Mem.empty, constructorMainGas, base.stateGas⟩)
         constructorProgram.main (.ok post)
         (constructorStorageEffectTriples sevm.currentTarget) := by
   obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,
       _postRefund, postStorage, run⟩ :=
     constructorMain_storageEffectRun_withSlack 0 (by decide +kernel)
-      hvalue world hstatic hdepth hpre hcode
+      hvalue world hstatic hdepth hpre hfork hcode
   exact ⟨post, postOutput, postError, postStorage, by simpa using run⟩
 
 /-- Slack-preserving constructor flagship: the compiled creation prefix
@@ -147,10 +149,11 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
         (.ok post),
       post.output = code ∧
       post.error = none ∧
@@ -162,7 +165,7 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
         constructorProgram (.ok post) ∧
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples sevm.currentTarget := by
@@ -172,16 +175,16 @@ theorem constructor_success_retainedStorageEffectTriples_withSlack
   obtain ⟨post, postOutput, postError, postSlack, postLogs, postDelete,
       postRefund, postStorage, mainRun⟩ :=
     constructorMain_storageEffectRun_withSlack slack hgasBound hvalue world
-      hstatic hdepth hpre hcode
-  let mid := base.setMach ⟨[], Mem.empty, constructorMainGas + slack⟩
+      hstatic hdepth hpre hfork hcode
+  let mid := base.setMach ⟨[], Mem.empty, constructorMainGas + slack, base.stateGas⟩
   have entryBurn : Devm.BurnBy gJumpdest
-      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩) mid := by
+      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩) mid := by
     dsimp only [mid]
     apply Devm.burnBy_setMach_gas
     simp only [constructorProgramGas, Devm.gasLeft_setMach]
     omega
   have programRun : Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack⟩)
+      (base.setMach ⟨[], Mem.empty, constructorProgramGas + slack, base.stateGas⟩)
       constructorProgram (.ok post) := by
     exact ⟨mid, entryBurn, mainRun.run⟩
   have committed : Execution.commits (.ok post) = true := by
@@ -210,16 +213,17 @@ theorem constructor_success_retainedStorageEffectTriples
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩) (.ok post),
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩) (.ok post),
       post.output = code ∧
       post.error = none ∧
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩)
         constructorProgram (.ok post) ∧
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples sevm.currentTarget := by
@@ -227,7 +231,7 @@ theorem constructor_success_retainedStorageEffectTriples
       _postRefund, postStorage, invariant, programRun, executionEffects⟩ :=
     constructor_success_retainedStorageEffectTriples_withSlack 0
       (by decide +kernel) hvalue hstorage hshaCode hshaWarm herror hstatic
-      hdepth hpre hcode
+      hdepth hpre hfork hcode
   exact ⟨post, execution, postOutput, postError, postStorage, invariant,
     programRun, executionEffects⟩
 

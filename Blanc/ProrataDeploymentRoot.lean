@@ -43,21 +43,25 @@ theorem DeploymentRoot.reflReach
 /-- PRORATA's complete invariant survives every configured continuation. -/
 theorem DeploymentRoot.reachable_stateInv
     (root : DeploymentRoot cfg deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     prorataSpec.StateInv ca future.state :=
   prorataSpec.chainUsing_preserves_inv ca (prorataSpec_preserves ca)
-    cfg deployed future reach root.stateInv
+    cfg deployed future reach root.stateInv hcov
 
 /-- Genesis-rooted P3 invariant in its public accounting spelling. -/
 theorem DeploymentRoot.reachable_accountingInvariant
     (root : DeploymentRoot cfg deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     balSum (future.state.getStor ca) =
         supplyN (future.state.getStor ca) ∧
       supplyN (future.state.getStor ca) ≤ maxSupply.toNat ∧
       supplyN (future.state.getStor ca) ≤
         offset.toNat * (future.state.bal ca).toNat := by
-  have invariant := (root.reachable_stateInv reach).inv
+  have invariant := (root.reachable_stateInv reach hcov).inv
   exact ⟨invariant.balSum_eq, invariant.supply_le, by
     simpa only [B256.toNat_zero, Nat.mul_zero, Nat.add_zero] using
       invariant.backed⟩

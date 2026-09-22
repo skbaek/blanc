@@ -57,7 +57,8 @@ theorem convertToAssets_eq_withdraw_pay
     (hStor : Devm.getStor viewPre = Devm.getStor withdrawPre)
     (hBal : Devm.getBal viewPre view.currentTarget =
       Devm.getBal withdrawPre withdrawal.currentTarget)
-    (hArg : Sevm.argWord view 0 = Sevm.argWord withdrawal 0) :
+    (hArg : Sevm.argWord view 0 = Sevm.argWord withdrawal 0)
+    (hfork : CoveredFork withdrawal.benvStat.fork) :
     ∃ p, p = Sevm.argWord withdrawal 0 *
         (Devm.getBal withdrawPre withdrawal.currentTarget + 1) /
           ((Devm.getStor withdrawPre withdrawal.currentTarget).get supplySlot + offset) ∧
@@ -67,7 +68,7 @@ theorem convertToAssets_eq_withdraw_pay
   unfold AssetsViewEffect at hview
   dsimp at hview
   rcases hview with ⟨hshares, hbalance, hviewWord, hstor, hbal', hcode, hlogs⟩
-  have hpay := withdraw_pays_exactly withdrawRun
+  have hpay := withdraw_pays_exactly withdrawRun hfork
   unfold WithdrawPaysExactly at hpay
   dsimp at hpay
   rcases hpay with ⟨callPre, callPost, guardPost, returnPre, hpre, hpayout, hwithdrawWord⟩

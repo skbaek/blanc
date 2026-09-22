@@ -28,14 +28,17 @@ private theorem chargeCodeGas_code
     {rules : ForkRules} {d : Devm}
     (houtput : d.output = code)
     (hgas : constructorCodeDepositGas ≤ d.gasLeft)
-    (hmax : 2891 ≤ rules.code.maxCodeSize) :
+    (hmax : 2891 ≤ rules.code.maxCodeSize)
+    (hstateGas : rules.stateGas = none) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
-        ⟨d.stack, d.memory, d.gasLeft - constructorCodeDepositGas⟩) := by
+        ⟨d.stack, d.memory, d.gasLeft - constructorCodeDepositGas,
+          d.stateGas⟩) := by
   rw [constructorCodeDepositGas_eq] at hgas ⊢
   obtain ⟨tail, hcons⟩ := code_cons_jumpdest
   have hlen := constructorAppendedRuntime_length_exact
   unfold processCreateMessage.chargeCodeGas
+  rw [hstateGas]
   rw [houtput, hcons]
   rw [hcons] at hlen
   simp only [List.length_cons] at hlen
@@ -61,7 +64,8 @@ structure DirectCreateMessageExecution
         (initSevm ((processCreateMessage.msg msg).withBenv benv))
         ((initDevm ((processCreateMessage.msg msg).withBenv benv)).setMach
           ⟨[], Mem.empty,
-            constructorProgramGas + constructorCodeDepositGas⟩)
+            constructorProgramGas + constructorCodeDepositGas,
+            (initDevm ((processCreateMessage.msg msg).withBenv benv)).stateGas⟩)
         (.ok raw),
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples ca) ∧
@@ -110,7 +114,8 @@ theorem processCreateMessage_establishes_artifact
       (msg.benv.stat.origState.get msg.currentTarget).stor = Stor.empty)
     (hstatic : msg.isStatic = false)
     (hdepth : msg.depth ≠ 0)
-    (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true) :
+    (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post, DirectCreateMessageResult msg.currentTarget msg post := by
   let prepared := processCreateMessage.msg msg
   obtain ⟨benv, htransfer⟩ :=
@@ -151,6 +156,8 @@ theorem processCreateMessage_establishes_artifact
   have hseedPre : decide (sevm.benvStat.rules.isPrecomp 2) = true := by
     rw [hstat]
     exact hpre
+  have hseedFork : CoveredFork sevm.benvStat.fork := by
+    simpa only [hstat] using hfork
   have hpreparedCodeAddress : prepared.codeAddress = .none := by
     calc
       prepared.codeAddress = msg.codeAddress := rfl
@@ -180,6 +187,15 @@ theorem processCreateMessage_establishes_artifact
     change (2 : Adr) ∈ msg.accessedAddresses
     exact hshaWarm
   have hbaseError : base.error = none := by rfl
+  have hbaseLogs : base.logs = [] := by
+    change (initDevm seeded).logs = []
+    change (match benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    have hstateGas : benv.stat.rules.stateGas = none := by
+      change sevm.benvStat.rules.stateGas = none
+      exact hseedFork.rules_stateGas_none
+    rw [hstateGas]
   have horiginal' :
       (sevm.benvStat.origState.get sevm.currentTarget).stor = Stor.empty := by
     rw [htarget, hstat]
@@ -190,11 +206,11 @@ theorem processCreateMessage_establishes_artifact
     constructor_success_retainedStorageEffectTriples_withSlack
       constructorCodeDepositGas constructorCodeDepositGas_loopBound
       hseedValue hbaseStorage hbaseShaCode hbaseShaWarm hbaseError
-      hseedStatic hseedDepth hseedPre hseedCode
+      hseedStatic hseedDepth hseedPre hseedFork hseedCode
   have hrawLogs : raw.logs = [] := by
     calc
       raw.logs = base.logs := hrawLogsBase
-      _ = [] := by rfl
+      _ = [] := hbaseLogs
   have hrawRefund : raw.refundCounter = 0 := by
     calc
       raw.refundCounter = base.refundCounter := hrawRefundBase horiginal'
@@ -208,11 +224,13 @@ theorem processCreateMessage_establishes_artifact
       ⟨0, sevm,
         base.setMach
           ⟨[], Mem.empty,
-            constructorProgramGas + constructorCodeDepositGas⟩⟩ := by
+            constructorProgramGas + constructorCodeDepositGas,
+            base.stateGas⟩⟩ := by
     change initEvm seeded =
       ⟨0, sevm,
         base.setMach
-          ⟨[], Mem.empty, constructorCreateMessageGasAccounting⟩⟩
+          ⟨[], Mem.empty, constructorCreateMessageGasAccounting,
+            base.stateGas⟩⟩
     rw [← hgas]
     rfl
   have hexec : exec (initEvm seeded) = .ok raw := by
@@ -224,13 +242,13 @@ theorem processCreateMessage_establishes_artifact
     · exact hrawError
   let chargedMach : Mach :=
     ⟨raw.stack, raw.memory,
-      raw.gasLeft - constructorCodeDepositGas⟩
+      raw.gasLeft - constructorCodeDepositGas, raw.stateGas⟩
   let charged := raw.setMach chargedMach
   have hcharge :
       processCreateMessage.chargeCodeGas msg.benv.stat.rules raw =
         .ok charged := by
     simpa only [charged, chargedMach] using
-      chargeCodeGas_code hrawOutput hrawGas hmax
+      chargeCodeGas_code hrawOutput hrawGas hmax hfork.rules_stateGas_none
   have hmach : Devm.MachFrame raw charged := by
     change Devm.MachFrame raw (raw.setMach chargedMach)
     exact Devm.machFrame_setMach raw chargedMach
@@ -365,11 +383,12 @@ theorem processMessageCall_establishes_artifact
       (msg.benv.stat.origState.get msg.currentTarget).stor = Stor.empty)
     (hstatic : msg.isStatic = false)
     (hdepth : msg.depth ≠ 0)
-    (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true) :
+    (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post out, DirectConstructorMessageResult ca msg post out := by
   obtain ⟨createPost, hcreate⟩ :=
     processCreateMessage_establishes_artifact msg hvalue hcodeAddress hcode
-      hgas hmax hshaCode hshaWarm horiginal hstatic hdepth hpre
+      hgas hmax hshaCode hshaWarm horiginal hstatic hdepth hpre hfork
   have hcreate' : DirectCreateMessageResult ca msg createPost := by
     simpa only [htarget] using hcreate
   let out := messageOutputOf createPost
@@ -385,7 +404,7 @@ theorem processMessageCall_establishes_artifact
     rw [htarget]
     simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
       hcreate'.error, htoNat, out, messageOutputOf,
-      directCreateMessageOutputOf]
+      directCreateMessageOutputOf, hfork.rules_stateGas_none]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
