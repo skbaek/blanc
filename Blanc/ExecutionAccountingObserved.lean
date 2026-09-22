@@ -92,6 +92,7 @@ theorem xinstForeignSome_observed (C : ReplayCarrier ca)
     (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw)
     (body : ∀ childCommitted : Execution.commits raw = true, ∃ steps,
@@ -102,7 +103,7 @@ theorem xinstForeignSome_observed (C : ReplayCarrier ca)
       V.obs steps = (if Frame.settlementCommits frame raw = true
         then (Exec.committedFrames child).flatMap V.frameObs else []) :=
   C.toSettlementCarrier.xinstForeignSome_observed V.obs V.obs_nil spawn
-    frameRun resumeRun target_ne sum_nof body
+    frameRun resumeRun target_ne hfork sum_nof body
 
 /-- A transition invisible to this account contributes no step, observed as
 nothing. -/
