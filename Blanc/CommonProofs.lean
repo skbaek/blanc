@@ -6784,12 +6784,23 @@ lemma of_run_address {e : Sevm} {s s' : Devm} (h : Ninst.Run e s address s') :
   exact Devm.pushBurn_of_pushItem run
 
 /-- Value-carrying inversion for SELFBALANCE. -/
+/-- `SELFBALANCE` pushes the target balance. Stated on the stack only: the
+run records an account read, so the historical `PushBurn` relation (which
+pins `accountReads`) no longer holds. Consumers route through
+`prefix_of_push_stack`. -/
 lemma of_run_selfbalance {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s selfbalance s') :
-    Devm.PushBurn [s.getBal e.currentTarget] s s' := by
+    Stack.Push [s.getBal e.currentTarget] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact Devm.pushBurn_of_pushItem run
+  rcases Except.bind_eq_ok run with ⟨d1, hgas, hpush⟩
+  have hp := (Devm.push_of_push hpush).stack
+  rw [Devm.balReadAccount_stack] at hp
+  rw [← (Devm.burn_of_chargeGas hgas).stack] at hp
+  have hval : d1.getBal e.currentTarget = s.getBal e.currentTarget :=
+    chargeGas_getBal_eq hgas _
+  rw [hval] at hp
+  exact hp
 
 lemma of_run_returndatasize {e : Sevm} {s s' : Devm} (h : Ninst.Run e s returndatasize s') :
     ∃ x, Devm.PushBurn [x] s s' := by
@@ -7097,6 +7108,13 @@ lemma prefix_of_mod {e} {x y xs} {s s' : Devm} :
 lemma prefix_of_push {xs ys} {s s' : Devm} :
     Devm.PushBurn xs s s' → (ys <<+ s.stack) → ((xs ++ ys) <<+ s'.stack) :=
   λ h0 h1 => append_pref h0.stack h1
+
+/-- Stack-only variant of `prefix_of_push` for producers whose run records
+reads (`SELFBALANCE`), where the full `PushBurn` relation is false. -/
+lemma prefix_of_push_stack {xs ys} {s s' : Devm} :
+    Stack.Push xs s.stack s'.stack → (ys <<+ s.stack) →
+      ((xs ++ ys) <<+ s'.stack) :=
+  λ h0 h1 => append_pref h0 h1
 
 /-- `TIMESTAMP` pushes the current block time above any known stack prefix. -/
 lemma prefix_of_timestamp {e : Sevm} {s s' : Devm} {xs : Stack}

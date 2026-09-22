@@ -292,7 +292,7 @@ theorem withdraw_settles_before_call
       _ = Devm.getBal u11 := Line.of_inv Devm.getBal (by line_inv) hcallerStoreInv
   have r1 : Devm.getBal pre sevm.currentTarget :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
       v1.stack := by
-    have hpush := prefix_of_push (of_run_selfbalance qbalance) p11
+    have hpush := prefix_of_push_stack (of_run_selfbalance qbalance) p11
     rw [← congrFun hbal11 sevm.currentTarget] at hpush
     exact hpush
   have r2 : Devm.getBal pre sevm.currentTarget :: Devm.getBal pre sevm.currentTarget ::

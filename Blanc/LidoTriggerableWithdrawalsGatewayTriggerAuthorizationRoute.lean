@@ -1413,7 +1413,7 @@ theorem triggerAuthorizedContinuation_paused_route
   have rbalance := Ninst.Run.of_runCompiled qbalance
   have rlt := Ninst.Run.of_runCompiled qlt
   have pCallvalue := prefix_of_push (of_run_callvalue rcallvalue) hp
-  have pBalance0 := prefix_of_push (of_run_selfbalance rbalance) pCallvalue
+  have pBalance0 := prefix_of_push_stack (of_run_selfbalance rbalance) pCallvalue
   have balancePreserved : pre.getBal sevm.currentTarget =
       callvaluePost.getBal sevm.currentTarget := by
     exact Ninst.Hinv.inv (f := fun d => d.getBal sevm.currentTarget) rcallvalue
@@ -1442,7 +1442,7 @@ theorem triggerAuthorizedContinuation_paused_route
   have pCallvalue2 :=
     prefix_of_push (of_run_callvalue rcallvalue2) pAfterBalance
   have pBalance2 :=
-    prefix_of_push (of_run_selfbalance rbalance2) pCallvalue2
+    prefix_of_push_stack (of_run_selfbalance rbalance2) pCallvalue2
   have pDifference := prefix_of_sub rsub pBalance2
   have storeWordRun : Line.Run sevm differencePost
       (mstoreAt Trigger.balanceBeforeWord) afterStore := by
@@ -1586,7 +1586,7 @@ theorem triggerFullWithdrawals_selected_paused_not_ok
       prefix_of_push (of_run_callvalue rcallvalue) (nil_pref :
         ([] : Stack) <<+ authorizedPre.stack)
     have pBalance0 :=
-      prefix_of_push (of_run_selfbalance rbalance) pCallvalue
+      prefix_of_push_stack (of_run_selfbalance rbalance) pCallvalue
     have balancePreserved :
         authorizedPre.getBal sevm.currentTarget =
           callvaluePost.getBal sevm.currentTarget :=
