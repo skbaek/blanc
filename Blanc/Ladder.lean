@@ -3455,80 +3455,170 @@ theorem Linst.targetBalanceMono_of_foreign
           · simp [charged] at run
   | selfdestruct =>
       dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with
-        ⟨⟨destination, devm1⟩, popped, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨devm2, charged, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨_, asserted, rest⟩
-      rcases Except.bind_eq_ok rest with
-        ⟨devm3, subtracted, final⟩
-      have subtractedSome : devm2.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-        cases equal : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [equal] at subtracted
-          contradiction
-        · rw [equal] at subtracted
-          injection subtracted with state_eq
-          subst state_eq
-          rfl
-      have subtractedState : devm2.state.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-        dsimp [Devm.subBal, Option.bind] at subtractedSome
-        cases equal : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [equal] at subtractedSome
-          contradiction
-        · rw [equal] at subtractedSome
-          injection subtractedSome with state_eq
-          subst state_eq
-          rfl
-      have chargedBalance : devm2.state.bal = pre.state.bal := by
-        have afterCharge : devm2.getBal =
-            (if destination ∉ devm1.accessedAddresses then
-              addAccessedAddress devm1 destination else devm1).getBal := by
-          funext address
-          by_cases cold : destination ∉ devm1.accessedAddresses
-          · rw [if_pos cold]
-            simpa [cold] using chargeGas_getBal_eq charged address
-          · rw [if_neg cold]
-            simpa [cold] using chargeGas_getBal_eq charged address
-        have afterPop : devm1.getBal = pre.getBal := by
-          funext address
-          exact Devm.popToAdr_getBal_eq popped address
-        change devm2.getBal = pre.getBal
-        exact afterCharge.trans (by split <;> exact afterPop)
-      have sumCharged : sum devm2.state.bal < 2 ^ 256 := by
-        rw [chargedBalance]
-        exact sum_nof
-      let transferred := devm3.addBal destination
-        (devm1.getAcct sevm.currentTarget).bal
-      have transferMono :
-          (devm2.state.bal ca).toNat ≤
-            (transferred.state.bal ca).toNat := by
-        change (devm2.state.bal ca).toNat ≤
-          ((devm3.state.addBal destination
-            (devm1.getAcct sevm.currentTarget).bal).bal ca).toNat
-        by_cases destination_eq : destination = ca
-        · subst destination
-          rw [of_transfer_bal_target subtractedState target_ne sumCharged]
-          omega
-        · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
-      have postBalance : post.state.bal ca = transferred.state.bal ca := by
-        dsimp only [transferred] at final ⊢
-        split at final
-        · have state_eq := Except.ok.inj final
-          rw [← state_eq]
-          change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
-            transferred.state.bal ca
-          show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
-            (transferred.state.get ca).bal
-          rw [State.setBal_get_ne target_ne]
-        · have state_eq := Except.ok.inj final
-          rw [← state_eq]
-      rw [← chargedBalance, postBalance]
-      exact transferMono
+      cases hsg : sevm.benvStat.rules.stateGas
+      · simp only [hsg] at run
+        rcases Except.bind_eq_ok run with
+          ⟨⟨destination, devm1⟩, popped, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨devm2, charged, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨_, asserted, rest⟩
+        rcases Except.bind_eq_ok rest with
+          ⟨devm3, subtracted, final⟩
+        have subtractedSome : devm2.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
+          cases equal : devm2.subBal sevm.currentTarget
+              (devm1.getAcct sevm.currentTarget).bal
+          · rw [equal] at subtracted
+            contradiction
+          · rw [equal] at subtracted
+            injection subtracted with state_eq
+            subst state_eq
+            rfl
+        have subtractedState : devm2.state.subBal sevm.currentTarget
+            (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
+          dsimp [Devm.subBal, Option.bind] at subtractedSome
+          cases equal : devm2.state.subBal sevm.currentTarget
+              (devm1.getAcct sevm.currentTarget).bal
+          · rw [equal] at subtractedSome
+            contradiction
+          · rw [equal] at subtractedSome
+            injection subtractedSome with state_eq
+            subst state_eq
+            rfl
+        have chargedBalance : devm2.state.bal = pre.state.bal := by
+          have h1 : devm1.getBal = devm2.getBal := by
+            funext address
+            have hchg := chargeGas_getBal_eq charged address
+            rw [hchg]
+            split
+            · dsimp only
+              exact (((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
+                ((Devm.balReadAccount_instructionFrame _ _ _).getBal address)).trans
+                ((addAccessedAddress_instructionFrame _ _).getBal address)
+            · dsimp only
+              exact ((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
+                ((Devm.balReadAccount_instructionFrame _ _ _).getBal address)
+          have h2 : devm1.getBal = pre.getBal := by
+            funext address
+            exact Devm.popToAdr_getBal_eq popped address
+          change devm2.getBal = pre.getBal
+          exact h1.symm.trans h2
+        have sumCharged : sum devm2.state.bal < 2 ^ 256 := by
+          rw [chargedBalance]
+          exact sum_nof
+        let transferred := devm3.addBal destination
+          (devm1.getAcct sevm.currentTarget).bal
+        have transferMono :
+            (devm2.state.bal ca).toNat ≤
+              (transferred.state.bal ca).toNat := by
+          change (devm2.state.bal ca).toNat ≤
+            ((devm3.state.addBal destination
+              (devm1.getAcct sevm.currentTarget).bal).bal ca).toNat
+          by_cases destination_eq : destination = ca
+          · subst destination
+            rw [of_transfer_bal_target subtractedState target_ne sumCharged]
+            omega
+          · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
+        have postBalance : post.state.bal ca = transferred.state.bal ca := by
+          dsimp only [transferred] at final ⊢
+          by_cases h_if : sevm.currentTarget ∈
+              (devm3.addBal destination (devm1.getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos] at final
+            have state_eq := Except.ok.inj final
+            rw [← state_eq]
+            change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
+              transferred.state.bal ca
+            show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
+              (transferred.state.get ca).bal
+            rw [State.setBal_get_ne target_ne]
+          · simp only [h_if, if_neg] at final
+            have state_eq := Except.ok.inj final
+            rw [← state_eq]
+        rw [← chargedBalance, postBalance]
+        exact transferMono
+      · simp only [hsg] at run
+        rcases Except.bind_eq_ok run with ⟨_, h0, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨⟨destination, devm1⟩, popped, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm2, charged, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm2b, stg, rest⟩
+        rcases Except.bind_eq_ok rest with ⟨devm3, subtracted, final⟩
+        have hp1 : (destination, devm1).1 = destination := rfl
+        have hp2 : (destination, devm1).2 = devm1 := rfl
+        rw [hp1, hp2] at final
+        have subtractedSome : devm2b.subBal sevm.currentTarget
+            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3 := by
+          cases equal : devm2b.subBal sevm.currentTarget
+              ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal
+          · rw [equal] at subtracted
+            contradiction
+          · rw [equal] at subtracted
+            injection subtracted with state_eq
+            subst state_eq
+            rfl
+        have subtractedState : devm2b.state.subBal sevm.currentTarget
+            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3.state := by
+          cases hss : devm2b.state.subBal sevm.currentTarget
+              ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal with
+          | none =>
+              have hnone : Devm.subBal devm2b sevm.currentTarget ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = none := by
+                simp only [Devm.subBal, hss, Option.bind]; rfl
+              rw [hnone] at subtractedSome
+              cases subtractedSome
+          | some st =>
+              simp only [Devm.subBal, hss, Option.bind] at subtractedSome
+              have hde : devm3 = devm2b.withState st :=
+                (Option.some.inj subtractedSome).symm
+              have hst : devm3.state = st := by rw [hde]; rfl
+              rw [hst]
+        have chargedBalance : devm2b.state.bal = pre.state.bal := by
+          have hchg : devm1.getBal = devm2.getBal := by
+            funext address
+            have h := chargeGas_getBal_eq charged address
+            rw [h]
+            split
+            · exact ((addAccessedAddress_instructionFrame _ _).getBal address).trans
+                (((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
+                  ((Devm.balReadAccount_instructionFrame _ _ _).getBal address))
+            · exact ((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
+                ((Devm.balReadAccount_instructionFrame _ _ _).getBal address)
+          have hstg : devm2.getBal = devm2b.getBal := by
+            funext address
+            exact (chargeStateGas_worldEq_of_ok stg).getBal address
+          have hpop : devm1.getBal = pre.getBal := by
+            funext address
+            exact Devm.popToAdr_getBal_eq popped address
+          change devm2b.getBal = pre.getBal
+          exact hstg.symm.trans (hchg.symm.trans hpop)
+        have sumCharged : sum devm2b.state.bal < 2 ^ 256 := by
+          rw [chargedBalance]
+          exact sum_nof
+        let transferred := (devm3.addBal destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal
+        have transferMono :
+            (devm2b.state.bal ca).toNat ≤
+              (transferred.state.bal ca).toNat := by
+          have hem : transferred.state = (devm3.addBal destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).state :=
+            (Devm.emitTransferLog_instructionFrame _ _ _ _).state.symm
+          rw [hem]
+          change (devm2b.state.bal ca).toNat ≤
+            ((devm3.state.addBal destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).bal ca).toNat
+          by_cases destination_eq : destination = ca
+          · subst destination_eq
+            rw [of_transfer_bal_target subtractedState target_ne sumCharged]
+            omega
+          · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
+        have postBalance : post.state.bal ca = transferred.state.bal ca := by
+          by_cases h_if : sevm.currentTarget ∈ ((devm3.addBal destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).createdAccounts
+          · simp only [h_if, if_pos] at final
+            have state_eq := Except.ok.inj final
+            rw [← state_eq]
+            rfl
+          · simp only [h_if, if_neg] at final
+            have state_eq := Except.ok.inj final
+            rw [← state_eq]
+        rw [← chargedBalance, postBalance]
+        exact transferMono
 
 /-! ## Static propagation across a spawned frame -/
 
@@ -3545,6 +3635,28 @@ theorem genericCall.step_spawn_isStatic
     (hstatic : sevm.isStatic = true) :
     f.inner.isStatic = true := by
   simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals simp only [Jaune.Frame.ofCall, callMsg, hstatic, Bool.or_true]
+
+/-- Amsterdam sibling: the grant-carrying child message still sets
+`isStatic := isStaticcall || sevm.isStatic`. -/
+theorem genericCallAmsterdam.step_spawn_isStatic
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr}
+    {shouldTransferValue isStaticcall : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {f : Jaune.Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue isStaticcall inputIndex inputSize
+      outputIndex outputSize code disablePrecompiles newAccountCharged
+      insufficientBalance = .spawn f rsm)
+    (hstatic : sevm.isStatic = true) :
+    f.inner.isStatic = true := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
     Except.pure] at hs
   repeat' split at hs
   all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
@@ -3582,6 +3694,8 @@ theorem Xinst.step_spawn_isStatic {sevm : Sevm} {devm : Devm} {x : Xinst}
       | exact absurd hstatic
           (by rw [genericCreate.step_spawn_not_static hs]; exact Bool.noConfusion)
       | exact genericCall.step_spawn_isStatic hs hstatic
+      | exact genericCallAmsterdam.step_spawn_isStatic hs hstatic
+      | exact absurd hstatic (by simp_all [assertDynamic, Except.assert])
 
 /-- Every child frame spawned by one driver step from a static context is
 itself static. -/
@@ -3651,6 +3765,25 @@ theorem genericCall.step_spawn_isStatic_of_staticcall
   all_goals obtain ⟨rfl, -⟩ := hs
   all_goals simp only [Jaune.Frame.ofCall, callMsg, Bool.true_or]
 
+/-- Amsterdam sibling: `isStaticcall := true` still forces a static child. -/
+theorem genericCallAmsterdam.step_spawn_isStatic_of_staticcall
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {shouldTransferValue : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {f : Jaune.Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue true inputIndex inputSize
+      outputIndex outputSize code disablePrecompiles newAccountCharged
+      insufficientBalance = .spawn f rsm) :
+    f.inner.isStatic = true := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals simp only [Jaune.Frame.ofCall, callMsg, Bool.true_or]
+
 theorem Xinst.step_staticcall_spawn_isStatic
     {sevm : Sevm} {devm : Devm} {f : Jaune.Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm .staticcall = .spawn f rsm) :
@@ -3659,7 +3792,10 @@ theorem Xinst.step_staticcall_spawn_isStatic
     Except.pure] at hs
   repeat' split at hs
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-  all_goals exact genericCall.step_spawn_isStatic_of_staticcall hs
+  all_goals
+    first
+      | exact genericCall.step_spawn_isStatic_of_staticcall hs
+      | exact genericCallAmsterdam.step_spawn_isStatic_of_staticcall hs
 
 theorem Ninst.step_staticcall_spawn_isStatic
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
@@ -3701,6 +3837,30 @@ theorem genericCall_step_spawn_exact
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
+/-- Exact Amsterdam CALL frame and resumption selected by a successful
+generic spawn: the grant rides on the child message. -/
+theorem genericCallAmsterdam_step_spawn_exact
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp nac ib : Bool}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCallAmsterdam.step sevm state devm gas reservoir value
+      caller target codeAddress stv isSt ii isz oi osz code dp nac ib =
+      .spawn frame resume) :
+    frame = Frame.ofCall
+      ({ callMsg sevm (devm.withReturnData []) gas value caller target
+          codeAddress stv isSt
+          (((devm.withReturnData []).memory.data.sliceD ii isz 0)) code dp
+        with stateGasGrant := reservoir }) ∧
+    resume = .callAmsterdam state (devm.withReturnData []) oi osz nac := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, rfl⟩ := hspawn
+  all_goals exact ⟨rfl, rfl⟩
+
 /-- Exact CREATE frame and resumption selected by a successful generic spawn. -/
 theorem genericCreate_step_spawn_exact
     {sevm : Sevm} {devm : Devm} {endowment : B256}
@@ -3730,6 +3890,25 @@ theorem genericCreate_step_spawn_exact
   all_goals obtain ⟨rfl, rfl⟩ := hspawn
   all_goals exact ⟨rfl, rfl⟩
 
+/-- An Amsterdam CREATE spawn hands the parent's current target to the child
+as caller.  Stated as the caller projection (not the full frame) because the
+monadic creation-charge bind gives the two spawn lanes different parent
+terms. -/
+theorem genericCreateAmsterdam_step_spawn_caller
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCreateAmsterdam.step sevm state devm endowment newAddress
+      mi ms = .spawn frame resume) :
+    frame.inner.caller = sevm.currentTarget := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, -⟩ := hspawn
+  all_goals rfl
+
 /-- Every recursive instruction child either receives the parent's current
 target as its caller or keeps that target as its own execution context.  This
 is the common caller-separation fact behind direct callbacks into a distinct
@@ -3743,12 +3922,21 @@ theorem Xinst.step_spawn_caller_eq_parent_or_target_eq_parent
   rcases Xinst.step_shape sevm devm x with ⟨execution, shape, -⟩ |
       ⟨d, endowment, newAddress, mi, ms, -, shape⟩ |
       ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
-        ii, isz, oi, osz, code, delegated, -, -, callKind, -, shape⟩ <;>
+        ii, isz, oi, osz, code, delegated, -, -, callKind, -, shape⟩ |
+      ⟨d, state, endowment, newAddress, mi, ms, -, shape⟩ |
+      ⟨d, d₀, state, gas, reservoir, value, caller, target, codeAddress,
+        stv, isSt, ii, isz, oi, osz, code, dp, nac, ib, -, -, callKind,
+        -, shape⟩ <;>
     rw [shape] at spawn
   · cases spawn
   · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, -⟩
     exact Or.inl rfl
   · rcases genericCall_step_spawn_exact spawn with ⟨rfl, -⟩
+    rcases callKind with ⟨-, caller_eq⟩ | ⟨-, target_eq⟩
+    · exact Or.inl caller_eq
+    · exact Or.inr target_eq
+  · exact Or.inl (genericCreateAmsterdam_step_spawn_caller spawn)
+  · rcases genericCallAmsterdam_step_spawn_exact spawn with ⟨rfl, -⟩
     rcases callKind with ⟨-, caller_eq⟩ | ⟨-, target_eq⟩
     · exact Or.inl caller_eq
     · exact Or.inr target_eq
@@ -6263,7 +6451,9 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
           have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
           have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
           unfold processCreateMessage.exceptionalHalt
-          exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl (Devm.NoDel.rollback h_atd h_ca h.code)
+          cases hsg : msg.benv.stat.rules.stateGas <;>
+            exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl
+              (Devm.NoDel.rollback h_atd h_ca h.code)
         all_goals cases h_rest
       · rw [hcg] at h_rest; dsimp only at h_rest
         rw [← Except.ok.inj h_rest]
@@ -6815,6 +7005,7 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   -- `stat.origState`, which no balance below reads.
   simp only [Benv.beginTransaction] at h_run
   rcases Except.bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨validationSender, hrec, h_run⟩
   rcases Except.bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
   rcases Except.bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
@@ -7001,7 +7192,7 @@ lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
   induction h_reach with
   | refl => rfl
   | step h_reach' h_bound h_st ih =>
-      rw [stateTransitionWith_preserves_chainId h_st, ih]
+      rw [stateTransitionAt_preserves_chainId h_st, ih]
 
 -- A Prague-only schedule is the Prague chain: every `Reach` step is a
 -- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
@@ -7746,6 +7937,7 @@ theorem processTransaction_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   -- reads; project it away so the state/fee terms stay in terms of `benv`.
   simp only [Benv.beginTransaction] at h_run
   rcases Except.bind_eq_ok h_run with ⟨bout0, hbout0, h_run⟩
+  rcases Except.bind_eq_ok h_run with ⟨validationSender, hrec, h_run⟩
   rcases Except.bind_eq_ok h_run with ⟨gasInfo, hval, h_run⟩
   rcases gasInfo with ⟨intrinsicGas, calldataFloorGasCost⟩
   rcases Except.bind_eq_ok h_run with ⟨chk, hcheck, h_run⟩
