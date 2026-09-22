@@ -109,9 +109,9 @@ theorem ContractSpec.ofStorageOnly_funcSound {p : Prog} {P : Stor → Prop}
       P (Devm.getStor s sevm.currentTarget) →
       P (Devm.getStor r sevm.currentTarget)) :
     (ContractSpec.ofStorageOnly p P).FuncSoundNoMem ca aux f := by
-  intro sevm s r h_ct h_pre _ h_run
+  intro sevm s r hfork h_ct h_pre h_depth run
   subst h_ct
-  exact ⟨trivial, h_cons h_run (ofStorageOnly_preInv_iff.mp h_pre.inv)⟩
+  exact ⟨trivial, h_cons run (ofStorageOnly_preInv_iff.mp h_pre.inv)⟩
 
 /-- Discharge a target that never writes storage: `func_inv` shows the walk
 leaves `Devm.getStor` alone at every account, and the invariant is transported
@@ -179,6 +179,7 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
       (fun sevm' pre' => sevm'.benvStat = sevm.benvStat ∧
         (ContractSpec.ofStorageOnly p P).PreWf sevm.currentTarget sevm' pre')
       ((ContractSpec.ofStorageOnly p P).Post sevm.currentTarget))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile p)
     (h_cons : P (Devm.getStor s sevm.currentTarget))
@@ -187,6 +188,7 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
+  rw [hfork.rules_stateGas_none] at h_run
   -- pop gas
   rcases eq1 : Devm.pop s with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
@@ -254,21 +256,23 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
             ((h_pop5.state).trans ((h_pop6.state).trans h_pop7.state)))))
   clear e1 e2 e3 e4 e5 e6 e7 eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2 h_pop4 h_pop5 h_pop6 h_pop7
   -- delegation resolution
-  rcases hp11 : accessDelegation (addAccessedAddress devm7 callee) callee with
+  rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress devm7 callee) callee with
     ⟨dp, na, code0, dagc, devm9⟩
   simp only [hp11] at h_run
   have h_code0 :
-      code0 = (accessDelegation (addAccessedAddress devm7 callee) callee).2.2.1 := by
+      code0 = (sevm.benvStat.rules.gas.accessDelegation
+        (addAccessedAddress devm7 callee) callee).2.2.1 := by
     rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
     dsimp at h
-    rw [← h, accessDelegation_state]
+    rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
     dsimp at h
-    rw [← h, accessDelegation_stack]
+    rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   -- charge the call gas
   split at h_run
@@ -422,7 +426,7 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
             exact absurd h_some4 h_err2
           · cases h_err4
         -- clean sub-execution : apply the induction hypothesis
-        simp only [executeCode.handleError] at h_he
+        rw [executeCode.handleErrorWith_ok] at h_he
         have h_he := (Except.ok.inj h_he).symm
         subst h_he
         obtain ⟨ex_sub⟩ := h_fill
@@ -454,7 +458,10 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
           have h_notdel : ¬ isValidDelegation
               ((addAccessedAddress devm7 callee).state.getCode callee) := by
             rw [h_ad]; exact not_delegation_of_compile h_code
-          rw [accessDelegation_code_of_not h_notdel, h_ad]
+          rw [GasSchedule.accessDelegation_of_not_delegation h_notdel]
+          change some ((addAccessedAddress devm7 callee).state.getCode callee).toList
+            = Prog.compile p
+          rw [h_ad]
           exact h_code
         -- the depth of the sub-execution is strictly smaller
         have h_depth_lt : (initSevm (childMsg.withBenv benv')).depth < sevm.depth := by
@@ -474,10 +481,16 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
           rw [h_gs]
           exact h_cons
         -- apply the induction hypothesis
+        have hfork_child : CoveredFork
+            (initSevm (childMsg.withBenv benv')).benvStat.fork := by
+          rw [initSevm_benvStat, Msg.withBenv_benvStat,
+            benvAfterTransfer_stat eq_bt, hc_stat]
+          exact hfork
         have hpost : (ContractSpec.ofStorageOnly p P).Post sevm.currentTarget
             (initSevm (childMsg.withBenv benv')) child :=
           ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
             (.ok child) ex_sub h_depth_lt h_at
+            hfork_child
             ⟨(benvAfterTransfer_stat eq_bt).trans hc_stat,
               h_precond, fun _ => Mem.wf_empty⟩
         have h_post_cons : P (Devm.getStor child sevm.currentTarget) :=
@@ -508,14 +521,16 @@ theorem ContractSpec.ofStorageOnly_of_call {p : Prog} {P : Stor → Prop}
     {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget p
       ((ContractSpec.ofStorageOnly p P).PreWf sevm.currentTarget) ((ContractSpec.ofStorageOnly p P).Post sevm.currentTarget))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile p)
     (h_cons : P (Devm.getStor s sevm.currentTarget))
     (h_run : Ninst.Run sevm s call sf) :
     P (Devm.getStor sf sevm.currentTarget) ∧ ∃ b, ((b :: xs) <<+ sf.stack) :=
   ContractSpec.ofStorageOnly_of_call_sameBenv
-    (fun pc sevm' pre' exn ex depth at_ h => ih pc sevm' pre' exn ex depth at_ h.2)
-    hp h_code h_cons h_run
+    (fun pc sevm' pre' exn ex depth at_ hfork prewf =>
+      ih pc sevm' pre' exn ex depth at_ hfork prewf.2)
+    hfork hp h_code h_cons h_run
 
 end ChildCall
 
