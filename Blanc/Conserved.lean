@@ -431,7 +431,7 @@ says no `Func.Run` witnesses it, so the obligation is vacuous — which is what
 "an unrecognized selector reverts" buys at the proof layer. -/
 theorem fmintSpec_funcSound_revert {fa : Adr} :
     fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Func.revert := by
-  intro _ _ _ _ _ _ h_run
+  intro _ _ _ _ _ _ _ h_run
   exact absurd h_run not_run_revert
 
 /-! ### The eight read-only targets
@@ -1119,12 +1119,13 @@ each needs exactly this lemma at its own invariant. -/
 lemma conserved_of_call {sevm : Sevm} {s sf : Devm} {g w v ii is oi os : B256} {xs : Stack}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget Fmint.fmint
       (fmintSpec.PreWf sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile Fmint.fmint)
     (h_cons : Stor.Conserved (Devm.getStor s sevm.currentTarget))
     (h_run : Ninst.Run sevm s call sf) :
     Stor.Conserved (Devm.getStor sf sevm.currentTarget) ∧ ∃ b, ((b :: xs) <<+ sf.stack) :=
-  ContractSpec.ofStorageOnly_of_call ih hp h_code h_cons h_run
+  ContractSpec.ofStorageOnly_of_call ih hfork hp h_code h_cons h_run
 lemma supplySlot_eq_not_zero : (~~~ (0 : B256)) = supplySlot := by decide
 
 /-- **The burn pair.**  `burnAndReturn` decreases the receiver's balance by
@@ -1723,6 +1724,7 @@ Walked in the program's own order: the three guards, the mint pair completing
 before the `CALL`, the callback under the deeper-frame induction hypothesis,
 the returndata checks, and the repayment converging on the burn pair. -/
 theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (cond : fmintSpec.Pre sevm.currentTarget sevm s)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget Fmint.fmint
       (fmintSpec.PreWf sevm.currentTarget) (fmintSpec.Post sevm.currentTarget))
@@ -2104,7 +2106,8 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
   have h_cons43 : Stor.Conserved (Devm.getStor s43 sevm.currentTarget) := by
     rw [← congr_fun hg3 sevm.currentTarget]
     exact h_cons28
-  rcases Fmint.conserved_of_call ih hs43 h_code43 h_cons43 r44 with ⟨h_cons44, b, hs44⟩
+  rcases Fmint.conserved_of_call ih hfork hs43 h_code43 h_cons43 r44 with
+    ⟨h_cons44, b, hs44⟩
   clear h_cons43 h_code43 hs43 r44 hg3 hgc h_cons28 h_code
   -- (7) the returndata checks : storage-silent
   rcases of_run_next h_run with ⟨s45, r45, h_run⟩
@@ -2157,10 +2160,10 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
 induction hypothesis — the mirror of WETH's `wethSpec_funcSound_withdraw`. -/
 theorem fmintSpec_funcSound_flashLoan {fa : Adr} :
     fmintSpec.FuncSoundNoMem fa Fmint.fmintAux Fmint.flashLoan := by
-  intro sevm s r h_ct h_pre ih h_run
+  intro sevm s r hfork h_ct h_pre ih h_run
   subst h_ct
   refine ⟨trivial, ?_⟩
-  exact flashLoan_preserves_conserved h_pre ih h_run
+  exact flashLoan_preserves_conserved hfork h_pre ih h_run
 
 end
 
@@ -2250,6 +2253,7 @@ claim here is precisely that the books balance at every point an observer can
 reach. -/
 theorem fmint_preserves_conserved (fa : Adr) :
     ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = fa → some sevm.code.toList = Prog.compile Fmint.fmint) →
       PrecondC fa sevm pre →
@@ -2282,17 +2286,17 @@ theorem stateTransition_preserves_conserved (fa : Adr)
     (ContractSpec.stateTransition_preserves_inv fa (fmintSpec_preserves fa)
       ch ch' block h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
 
-/-- On a configured chain the block's own timestamp picks the rules, and the
-result holds whichever ones it picks: a chain that crosses an activation is not
-a new case. -/
+/-- On a configured chain the block's own timestamp picks the rules.  The
+result is available when every selected fork is named by `CoveredFork`. -/
 theorem stateTransitionUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.stateTransitionUsing_preserves_inv fa (fmintSpec_preserves fa)
-      cfg ch ch' block h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' block h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv) hfork)
 
 /-- **The chain-level rung**, the second statement this module carried as a
 `Prop`-valued definition: no sequence of valid blocks can break fmint's supply
@@ -2304,14 +2308,15 @@ theorem chain_preserves_conserved (fa : Adr) (ch ch' : BlockChain)
     (ContractSpec.chain_preserves_inv fa (fmintSpec_preserves fa)
       ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv))
 
-/-- Chain-level induction over a configured chain, whatever schedule it follows
-and whichever activations the sequence crosses. -/
+/-- Chain-level induction over a configured chain whose selected forks satisfy
+`CoveredFork`. -/
 theorem chainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.chainUsing_preserves_inv fa (fmintSpec_preserves fa)
-      cfg ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' h_reach (fmintSpec_stateInv_iff.mpr h_inv) hfork)
 
 /-- Preservation through RLP decoding and the block-hash checks. -/
 theorem addBlockToChain_preserves_conserved (fa : Adr)
@@ -2325,16 +2330,17 @@ theorem addBlockToChain_preserves_conserved (fa : Adr)
       ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
 
 /-- Block import on a configured chain: the schedule and chain identity are
-validated before decoding, and the decoded timestamp then selects the rules. -/
+validated before decoding, and every selected fork is covered. -/
 theorem addBlockToChainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.addBlockToChainUsing_preserves_inv fa (fmintSpec_preserves fa)
-      cfg ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' rlp h_run h_wds (fmintSpec_stateInv_iff.mpr h_inv) hfork)
 
 /-! ### Context stability, demonstrated at fmint
 
