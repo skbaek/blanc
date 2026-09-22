@@ -4242,12 +4242,13 @@ lemma GenericCreate.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       cases h_xl
 
 lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Xinst.Run sevm devm x .none (.ok inter))
     (h_ne : sevm.currentTarget ≠ wa)
     (h_pc : c.Pre wa sevm devm) :
     c.Pre wa sevm inter := by
   unfold Xinst.Run at h_run
-  rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, hcal, -, hs⟩ <;> rw [hs] at h_run
@@ -4267,6 +4268,7 @@ contract precondition.  This packages the register/push/executable split used
 by proof-indexed interpreter recursions. -/
 lemma Ninst.none_preserves_precond
     {wa : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok inter))
     (target_ne : sevm.currentTarget ≠ wa)
     (precondition : c.Pre wa sevm pre) :
@@ -4307,7 +4309,7 @@ lemma Ninst.none_preserves_precond
           (Rinst.preserves_bal registerRun).symm
           (congrFun (Rinst.preserves_stor store registerRun) wa).symm
   | exec x =>
-      apply Xinst.none_preserves_precond (x := x) _ target_ne precondition
+      apply Xinst.none_preserves_precond (x := x) hfork _ target_ne precondition
       exact XStep.run_toStep.mp run
 
 
@@ -4775,6 +4777,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
 
 lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
     {evm' : Evm} {exn' : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Xinst.Run sevm devm x (.some ⟨evm', exn'⟩) (.ok inter))
     (ex_sub : Exec evm'.pc evm'.sta evm'.dyna exn')
     (h_ne : sevm.currentTarget ≠ wa)
@@ -4782,6 +4785,7 @@ lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
     c.Pre wa evm'.sta evm'.dyna ∧
       (ifOk (c.Post wa evm'.sta) exn' → c.Pre wa sevm inter) := by
   unfold Xinst.Run at h_run
+  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
   rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hfr, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
@@ -4844,6 +4848,7 @@ lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
   exact h_pc.inv.right h_ne
 
 lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Linst.Run sevm pre l (.ok post))
     (h_ne : sevm.currentTarget ≠ wa)
     (h_pc : c.Pre wa sevm pre) :
@@ -4872,7 +4877,10 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
     contradiction
   case selfdestruct =>
+    have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
     dsimp [Linst.Run, Linst.run] at h_run
+    rw [hsg] at h_run
+    dsimp only at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
     rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
     rcases Except.bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
@@ -4931,12 +4939,14 @@ takes the precondition to the postcondition, given the induction hypothesis for
 deeper frames.  This is the sole input `preserves_inv` cannot supply. -/
 def Sound (c : ContractSpec) (ca : Adr) : Prop :=
   ∀ {sevm pre post},
+    CoveredFork sevm.benvStat.fork →
     Prog.Run sevm pre c.prog post →
     sevm.currentTarget = ca →
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
         Prog.At c.prog ca pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
     Mem.Wf pre.memory →
@@ -4957,21 +4967,24 @@ because that is what the ladder can deliver, and a re-entrant target consumes
 it at a child frame whose memory is `initDevm`'s. -/
 def SoundNoMem (c : ContractSpec) (ca : Adr) : Prop :=
   ∀ {sevm pre post},
+    CoveredFork sevm.benvStat.fork →
     Prog.Run sevm pre c.prog post →
     sevm.currentTarget = ca →
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
         Prog.At c.prog ca pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
     c.Pre ca sevm pre →
+    c.Post ca sevm post
     c.Post ca sevm post
 
 /-- Dropping a premise the obligation never used. -/
 theorem SoundNoMem.sound {c : ContractSpec} {ca : Adr} (h : c.SoundNoMem ca) :
     c.Sound ca :=
-  fun h_run h_ca h_ih _ h_pre => h h_run h_ca h_ih h_pre
+  fun hfork h_run h_ca h_ih _ h_pre => h hfork h_run h_ca h_ih h_pre
 
 /-- `Sound` with the memory premise left as a parameter.  `mw := Mem.Wf` is
 `Sound`; `mw := fun _ => True` is `SoundNoMem` with the premise supplied by
@@ -4980,27 +4993,32 @@ theorem SoundNoMem.sound {c : ContractSpec} {ca : Adr} (h : c.SoundNoMem ca) :
 two; a contract states its own obligation at `Sound` or `SoundNoMem`. -/
 def SoundWith (c : ContractSpec) (ca : Adr) (mw : Mem → Prop) : Prop :=
   ∀ {sevm pre post},
+    CoveredFork sevm.benvStat.fork →
     Prog.Run sevm pre c.prog post →
     sevm.currentTarget = ca →
     ( ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
         sevm'.depth < sevm.depth →
         Prog.At c.prog ca pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
         c.PreWf ca sevm' pre' →
         c.Post ca sevm' post' ) →
     mw pre.memory →
+    c.Pre ca sevm pre →
+    c.Post ca sevm post
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
 /-- `SoundWith` at the trivial memory premise is `SoundNoMem`. -/
 theorem SoundWith.soundNoMem {c : ContractSpec} {ca : Adr}
     (h : c.SoundWith ca (fun _ => True)) : c.SoundNoMem ca :=
-  fun h_run h_ca h_ih h_pre => h h_run h_ca h_ih trivial h_pre
+  fun hfork h_run h_ca h_ih h_pre => h hfork h_run h_ca h_ih trivial h_pre
 
 /-- What the frame-level ladder delivers, and what every rung above it
 consumes.  `preserves_inv : c.Sound ca → c.Preserves ca`. -/
 def Preserves (c : ContractSpec) (ca : Adr) : Prop :=
   ∀ sevm pre post,
+    CoveredFork sevm.benvStat.fork →
     Exec 0 sevm pre (.ok post) →
     (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
     (sevm.currentTarget = ca → Mem.Wf pre.memory) →
@@ -5015,6 +5033,7 @@ and `PreservesNoMem.preserves` weakens it back for the message-, transaction-
 and block-level rungs, every one of which consumes `c.Preserves ca`. -/
 def PreservesNoMem (c : ContractSpec) (ca : Adr) : Prop :=
   ∀ sevm pre post,
+    CoveredFork sevm.benvStat.fork →
     Exec 0 sevm pre (.ok post) →
     (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
     c.Pre ca sevm pre →
@@ -5023,9 +5042,9 @@ def PreservesNoMem (c : ContractSpec) (ca : Adr) : Prop :=
 /-- Dropping a premise the frame theorem never used. -/
 theorem PreservesNoMem.preserves {c : ContractSpec} {ca : Adr}
     (h : c.PreservesNoMem ca) : c.Preserves ca :=
-  fun sevm pre post exc h_code _ h_pre => h sevm pre post exc h_code h_pre
-
-/-! ### The frame-level ladder
+theorem PreservesNoMem.preserves {c : ContractSpec} {ca : Adr}
+    (h : c.PreservesNoMem ca) : c.Preserves ca :=
+  fun sevm pre post hfork exc h_code _ h_pre => h sevm pre post hfork exc h_code h_pre
 
 `lift_inv` (CommonProofs.lean) is already generic in the program and in the two
 predicates; what was WETH-specific about `weth_preserves_solvent` was only the
@@ -5059,40 +5078,42 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
             Exec pc' sevm' pre' (.ok post') →
             sevm'.depth < sevm.depth →
             Prog.At c.prog ca pc' sevm' pre' →
-            σ sevm' pre' →
+            σ sevm' pre' ∧ CoveredFork sevm'.benvStat.fork →
             c.Post ca sevm' post' ) →
-        σ sevm pre →
+        σ sevm pre ∧ CoveredFork sevm.benvStat.fork →
         c.Post ca sevm post ) :
     ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
       σ sevm pre →
       c.Post ca sevm post := by
-  intro sevm devm exn exc h_code h_pc
-  apply lift_inv ca c.prog σ (c.Post ca)
+  intro sevm devm exn hfork exc h_code h_pc
+  apply lift_inv ca c.prog (fun e d => σ e d ∧ CoveredFork e.benvStat.fork) (c.Post ca)
   · exact body
   · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' h_pc'
-    refine σ_of_ne h_ne' ?_
-    replace h_pc' := σ_pre h_pc'
+    obtain ⟨hσ, hfork'⟩ := h_pc'
+    refine ⟨σ_of_ne h_ne' ?_, hfork'⟩
+    replace hσ := σ_pre hσ
     cases n' with
     | push xs le =>
       have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
       rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
-      exact h_pc'.state_eq
+      exact hσ.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
     | dupn imm =>
       have frame := Ninst.dupn_instructionFrame_effectRec
         (xl := .none) trivial h_run'
-      exact h_pc'.state_eq frame.state.symm
+      exact hσ.state_eq frame.state.symm
     | swapn imm =>
       have frame := Ninst.swapn_instructionFrame_effectRec
         (xl := .none) trivial h_run'
-      exact h_pc'.state_eq frame.state.symm
+      exact hσ.state_eq frame.state.symm
     | exchange imm =>
       have frame := Ninst.exchange_instructionFrame_effectRec
         (xl := .none) trivial h_run'
-      exact h_pc'.state_eq frame.state.symm
+      exact hσ.state_eq frame.state.symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
         exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp h_run').2.symm
@@ -5100,16 +5121,17 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
         rw [h_reg] at h_frame
-        refine Pre.of_eqs h_pc' (h_frame.getCode_eq ca).symm ?_
+        refine Pre.of_eqs hσ (h_frame.getCode_eq ca).symm ?_
           (sstore_preserves_getStor_ne h_reg h_ne')
         funext b
         exact (h_frame.getBal_eq b).symm
-      · exact Pre.of_eqs h_pc' (Rinst.preserves_getCode h_reg ca) (Rinst.preserves_bal h_reg).symm
+      · exact Pre.of_eqs hσ (Rinst.preserves_getCode h_reg ca) (Rinst.preserves_bal h_reg).symm
           (congr_fun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
-      refine Xinst.none_preserves_precond (x := x) ?_ h_ne' h_pc'
+      refine Xinst.none_preserves_precond (x := x) hfork' ?_ h_ne' hσ
       exact XStep.run_toStep.mp h_run'
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
+    obtain ⟨hσ, hfork'⟩ := h_pc'
     cases n' with
     | push xs le =>
       have hrun := (Step.run_ofExecution
@@ -5134,69 +5156,69 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
     | exec x =>
       have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', exn''⟩) (.ok inter') := by
         exact XStep.run_toStep.mp h_run'
+      have hfork_c := Xinst.Run.some_child_fork hx hfork'
       obtain ⟨h_child, h_back⟩ :=
-        Xinst.some_preserves_precond (x := x) hx ex_sub' h_ne' (σ_pre h_pc')
-      exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,
-        fun h_if => σ_of_ne h_ne' (h_back h_if)⟩
+        Xinst.some_preserves_precond (x := x) hfork' hx ex_sub' h_ne' (σ_pre hσ)
+      exact ⟨⟨σ_of_wf (Xinst.some_child_wf hx) h_child, hfork_c⟩,
+        fun h_if => ⟨σ_of_ne h_ne' (h_back h_if), hfork'⟩⟩
   · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
-    exact σ_of_ne h_ne'
-      (Pre.state_eq (σ_pre h_pc') (Jinst.preserves_state h_run'))
+    obtain ⟨hσ, hfork'⟩ := h_pc'
+    exact ⟨σ_of_ne h_ne'
+      (Pre.state_eq (σ_pre hσ) (Jinst.preserves_state h_run')), hfork'⟩
   · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
-    exact Linst.inv_postcond h_run' h_ne' (σ_pre h_pc')
+    obtain ⟨hσ, hfork'⟩ := h_pc'
+    exact Linst.inv_postcond hfork' h_run' h_ne' (σ_pre hσ)
   · exact exc
   · exact ⟨(σ_pre h_pc).1, λ h => ⟨h_code h, rfl⟩⟩
-  · exact h_pc
+  · exact ⟨h_pc, hfork⟩
 
 /-- The memory-carrying frame-level ladder: `lift_inv` at `σ := c.PreWf ca`,
 which is what a contract obligation that reasons about memory needs. -/
 theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
     c.Preserves ca := by
-  intro sevm devm exn exc h_code h_wf h_pc
+  intro sevm devm exn hfork exc h_code h_wf h_pc
   refine preserves_lift c ca (c.PreWf ca) (fun h => h.pre)
     (fun h_ne h => ⟨h, fun hc => absurd hc h_ne⟩)
-    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_ sevm devm exn exc h_code ⟨h_pc, h_wf⟩
+    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_ sevm devm exn hfork exc h_code ⟨h_pc, h_wf⟩
   intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
-  exact body h_run' h_eq' h_ih' (h_pre'.wf h_eq') h_pre'.pre
-
-/-- The premise-free frame-level ladder: the same `lift_inv` plumbing at
-`σ := c.Pre ca`, so no memory premise is manufactured anywhere and none
-reaches the frame theorem.  The obligation's deeper-frame hypothesis is still
-phrased at `PreWf`, which is strictly less than what this instantiation
+  exact body h_pre'.2 h_run' h_eq'
+    (fun pc'' sevm'' pre'' post'' hex hd hat hfork_n hpw =>
+      h_ih' pc'' sevm'' pre'' post'' hex hd hat ⟨hpw, hfork_n⟩)
+    (h_pre'.1.wf h_eq') h_pre'.1.pre
 delivers, so it is weakened on the way in. -/
 theorem preserves_noMem (c : ContractSpec) (ca : Adr) (body : c.SoundNoMem ca) :
     c.PreservesNoMem ca := by
-  intro sevm devm exn exc h_code h_pc
+  intro sevm devm exn hfork exc h_code h_pc
   refine preserves_lift c ca (c.Pre ca) (fun h => h) (fun _ h => h)
-    (fun _ h => h) ?_ sevm devm exn exc h_code h_pc
+    (fun _ h => h) ?_ sevm devm exn hfork exc h_code h_pc
   intro sevm' pre' post' h_run' h_eq' h_ih' h_pre'
-  exact body h_run' h_eq'
-    (fun pc'' sevm'' pre'' post'' hex hd hat hpw =>
-      h_ih' pc'' sevm'' pre'' post'' hex hd hat hpw.pre)
-    h_pre'
+  exact body h_pre'.2 h_run' h_eq'
+    (fun pc'' sevm'' pre'' post'' hex hd hat hfork_n hpw =>
+      h_ih' pc'' sevm'' pre'' post'' hex hd hat ⟨hpw.pre, hfork_n⟩)
+    h_pre'.1
 
 /-- The `exec` counterpart: with sufficiency proved in Jaune there is no fuel
 to quantify away, so the hypothesis is a plain equation about the interpreter. -/
 theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
     (sevm : Sevm) (pre post : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog)
     (h_wf : sevm.currentTarget = ca → Mem.Wf pre.memory)
     (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post := by
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
-  exact hp sevm pre post exc h_code h_wf h_pc
-
+  exact hp sevm pre post hfork exc h_code h_wf h_pc
 /-- The `exec` counterpart of `PreservesNoMem`, with no memory premise. -/
+theorem exec_preserves_noMem (c : ContractSpec) (ca : Adr)
 theorem exec_preserves_noMem (c : ContractSpec) (ca : Adr)
     (hp : c.PreservesNoMem ca)
     (sevm : Sevm) (pre post : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog)
     (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post := by
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
-  exact hp sevm pre post exc h_code h_pc
-
-
-/-! ### The dispatcher decomposition of `Sound`
+  exact hp sevm pre post hfork exc h_code h_pc
 
 The plain Blanc dispatch protocol has program shape
 `⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩`; receive-aware contracts
@@ -6281,11 +6303,12 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
 
 lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     {xl : Xlot} {exn : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (inv : Xlot.InvNoDel wa xl)
     (h : Xinst.Run sevm s x xl exn)
     (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn := by
   unfold Xinst.Run at h
-  rcases Xinst.step_shape sevm s x with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shapeCovered sevm s x hfork with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hs⟩ <;> rw [hs] at h
@@ -6297,6 +6320,7 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
 
 lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {n : Ninst} {xl : Xlot} {exn : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (inv : Xlot.InvNoDel wa xl)
     (run : Ninst.StepRun pc sevm devm n xl exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
@@ -6325,7 +6349,7 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
         exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.preserves_getCode h_run wa).symm h
   | exec xinst =>
     simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
-    exact Xinst.inv_noDel_gen (x := xinst) inv run h
+    exact Xinst.inv_noDel_gen (x := xinst) hfork inv run h
   | dupn imm =>
       have h0 : xl = .none := by
         simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at run
@@ -6372,10 +6396,10 @@ lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
     | ok d => exact h hnd
 
 lemma Ninst.noDelCode_effectRec (wa : Adr) (n : Ninst) :
-    Ninst.EffectRec (Devm.NoDelCode wa) n := by
-  intro pc sevm pre xl out hxl hrun
+    Ninst.EffectRecFork (Devm.NoDelCode wa) n := by
+  intro pc sevm pre xl out hfork hxl hrun
   have hnd := fun h =>
-    Ninst.inv_noDel_gen (Xlot.invNoDel_of_rel hxl) hrun h
+    Ninst.inv_noDel_gen hfork (Xlot.invNoDel_of_rel hxl) hrun h
   cases out with
   | error e => exact hnd
   | ok d => exact hnd
@@ -6405,12 +6429,12 @@ lemma Linst.noDelCode_effect (wa : Adr) (l : Linst) :
 
 lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     {exn : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Exec pc sevm devm exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  have heff := Exec.effect (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
+  have heff := Exec.effectFork (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
     (Ninst.noDelCode_effectRec wa) (Jinst.noDelCode_effect wa)
-    (Linst.noDelCode_effect wa) run
-  cases exn with
+    (Linst.noDelCode_effect wa) run hfork
   | error e => exact heff h
   | ok d => exact heff h
 
