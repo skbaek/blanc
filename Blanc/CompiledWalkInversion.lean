@@ -115,7 +115,10 @@ theorem Devm.PopBurn.trans_burn {xs : List B256} {a b c : Devm}
     accessedStorageKeys := hp.accessedStorageKeys.trans hb.accessedStorageKeys,
     state := hp.state.trans hb.state,
     createdAccounts := hp.createdAccounts.trans hb.createdAccounts,
-    transientStorage := hp.transientStorage.trans hb.transientStorage }
+    transientStorage := hp.transientStorage.trans hb.transientStorage,
+    stateGas := hp.stateGas.trans hb.stateGas,
+    accountReads := hp.accountReads.trans hb.accountReads,
+    storageReads := hp.storageReads.trans hb.storageReads }
 
 /-- The nonzero arm, selected the same way.  The jumped arm's extra burn is
 folded into the pop, so this has the same four-part shape as the zero arm. -/
@@ -468,7 +471,7 @@ private lemma of_run_revert_window {sevm : Sevm} {devm : Devm} {i sz : B256}
     with h_gas | h_gas
   · have h_oog : Linst.run sevm devm .revert
         = .error ⟨.halt (.outOfGas .none),
-            devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+            devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
       show (do
         let ⟨index, d⟩ ← devm.popToNat
         let ⟨size, d⟩ ← d.popToNat
@@ -480,20 +483,21 @@ private lemma of_run_revert_window {sevm : Sevm} {devm : Devm} {i sz : B256}
       rw [Devm.popToNat_eq_ok h_stk]
       simp only [bind, Except.bind]
       rw [Devm.popToNat_eq_ok
-        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
+        (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft,
+          devm.stateGas⟩) rfl]
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
-        Devm.gasLeft_setMach]
+        Devm.gasLeft_setMach, Devm.stateGas_setMach]
       have h_ext : (devm.setMach
-          ⟨s, devm.memory, devm.gasLeft⟩).extCost
+          ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
       rw [h_ext]
       have hcg : chargeGas (devm.extCost [⟨i.toNat, sz.toNat⟩])
-          (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) =
+          (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) =
             .error ⟨.halt (.outOfGas .none),
-              devm.setMach ⟨s, devm.memory, devm.gasLeft⟩⟩ := by
+              devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
         rw [chargeGas_def]
         have hs : safeSub (devm.setMach
-            ⟨s, devm.memory, devm.gasLeft⟩).gasLeft
+            ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
             (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
           unfold safeSub
           rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
@@ -644,7 +648,7 @@ theorem of_run_revert_window_frame
       (devm.extCost [⟨i.toNat, sz.toNat⟩]) with hgas | hgas
   · have hoog : Linst.run sevm devm .revert =
         .error ⟨.halt (.outOfGas .none),
-          devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩⟩ := by
+          devm.setMach ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
       show (do
         let ⟨index, d⟩ ← devm.popToNat
         let ⟨size, d⟩ ← d.popToNat
@@ -657,22 +661,22 @@ theorem of_run_revert_window_frame
       simp only [bind, Except.bind]
       rw [Devm.popToNat_eq_ok
         (devm := devm.setMach
-          ⟨sz :: tail, devm.memory, devm.gasLeft⟩) rfl]
+          ⟨sz :: tail, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
       simp only [Devm.setMach_setMach, Devm.memory_setMach,
-        Devm.gasLeft_setMach]
+        Devm.gasLeft_setMach, Devm.stateGas_setMach]
       have hext : (devm.setMach
-          ⟨tail, devm.memory, devm.gasLeft⟩).extCost
+          ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
           [⟨i.toNat, sz.toNat⟩] =
             devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
       rw [hext]
       have hcharge : chargeGas
           (devm.extCost [⟨i.toNat, sz.toNat⟩])
-          (devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩) =
+          (devm.setMach ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩) =
             .error ⟨.halt (.outOfGas .none),
-              devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩⟩ := by
+              devm.setMach ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩⟩ := by
         rw [chargeGas_def]
         have hsafe : safeSub
-            (devm.setMach ⟨tail, devm.memory, devm.gasLeft⟩).gasLeft
+            (devm.setMach ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
             (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
           unfold safeSub
           rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
@@ -681,7 +685,7 @@ theorem of_run_revert_window_frame
     exact Or.inl ⟨_, heq.symm.trans hoog, rfl, rfl, rfl⟩
   · let post :=
       ((devm.setMach ⟨tail, devm.memory,
-        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩], devm.stateGas⟩).memRead
           i.toNat sz.toNat).2.withOutput
         (devm.memory.read i.toNat sz.toNat).1
     have hpost : Linst.run sevm devm .revert = .error (.revert, post) := by
@@ -695,10 +699,10 @@ theorem of_run_revert_window_frame
     · exact hframe.transientStorage.symm
     · dsimp only [post]
       change ((devm.setMach ⟨tail, devm.memory,
-        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩], devm.stateGas⟩).memRead
           i.toNat sz.toNat).2.logs = devm.logs
       let base := devm.setMach ⟨tail, devm.memory,
-        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩], devm.stateGas⟩
       change (base.memRead i.toNat sz.toNat).2.logs = devm.logs
       have hread : (base.memRead i.toNat sz.toNat).2.logs = base.logs := by
         unfold Devm.memRead
