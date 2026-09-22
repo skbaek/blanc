@@ -197,7 +197,7 @@ def deploymentFinalBout
       blockGasUsed := prelude.blockGasUsed + usedGas
       cumulativeGasUsed := prelude.cumulativeGasUsed + usedGas
       blobGasUsed := prelude.blobGasUsed}
-  let receipt := makeReceipt tx out.error charged.blockGasUsed out.logs
+  let receipt := makeReceipt tx out.error charged.cumulativeGasUsed out.logs
   {charged with
     receiptKeys := charged.receiptKeys ++ [deploymentReceiptKey index]
     receiptsTrie := charged.receiptsTrie.insert
