@@ -782,7 +782,7 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
     Devm.getStor s' a = Devm.getStor s a := by
   simp only [Rinst.run, Rinst.runCore] at run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Prague/BPO2: the historical eight-bind walk.
+  · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
@@ -7647,6 +7647,33 @@ theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (t : Nat) :
   unfold ChainConfig.forkAt
   simp [ChainConfig.pragueOnly_validate, h, Except.mapError, Bind.bind,
     Except.bind]
+
+/-- A fork a configured lookup selects is one the schedule activates. -/
+theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {t : Nat} {f : Fork}
+    (h : cfg.forkAt t = .ok f) : f ∈ cfg.activations.map (·.fork) := by
+  have hsome : cfg.forkAt? t = some f := by
+    unfold ChainConfig.forkAt at h
+    cases hv : cfg.validate with
+    | error e =>
+      simp [hv, Except.mapError, Bind.bind, Except.bind] at h
+    | ok u =>
+      cases hq : cfg.forkAt? t with
+      | none => simp [hv, hq, Except.mapError, Bind.bind, Except.bind] at h
+      | some g =>
+        simp [hv, hq, Except.mapError, Bind.bind, Except.bind] at h
+        rw [h]
+  unfold ChainConfig.forkAt? at hsome
+  obtain ⟨a, ha, rfl⟩ := Option.map_eq_some_iff.mp hsome
+  exact List.mem_map.mpr
+    ⟨a, List.mem_of_mem_filter (List.mem_of_getLast? ha), rfl⟩
+
+/-- Every fork the mainnet schedule selects is covered: its activations are
+exactly Prague, Osaka, BPO1, and BPO2. -/
+theorem mainnetChainConfig_covered (t : Nat) (f : Fork)
+    (h : mainnetChainConfig.forkAt t = .ok f) : CoveredFork f := by
+  have hmem := ChainConfig.forkAt_mem h
+  simp only [mainnetChainConfig, List.map_cons, List.map_nil] at hmem
+  exact hmem
 
 theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
     (h_ctx : ch.ValidContext)
