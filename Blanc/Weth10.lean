@@ -726,19 +726,23 @@ private theorem pushDeployWord_size (w : B256) :
     (pushDeployWord w).size = 33 := by
   simp [pushDeployWord, Ninst.size, B256.length_toBytes]
 
+private theorem pushDeployWord_immAccepted (w : B256) :
+    Ninst.immAccepted (pushDeployWord w) = true := by
+  simp [pushDeployWord, Ninst.immAccepted]
+
 private theorem domainSeparator_compileShape_eq (dp : DeployParams) :
     (nonpayable (domainSeparator dp)).compileShape =
       (nonpayable
         (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape := by
   simp [nonpayable, domainSeparator, Func.compileShape,
-    pushDeployWord_size, returnDeployWord]
+    pushDeployWord_size, pushDeployWord_immAccepted, returnDeployWord]
 
 private theorem deploymentChainId_compileShape_eq (dp : DeployParams) :
     (nonpayable (deploymentChainId dp)).compileShape =
       (nonpayable
         (deploymentChainId (⟨0, 0⟩ : DeployParams))).compileShape := by
   simp [nonpayable, deploymentChainId, returnDeployWord, Func.compileShape,
-    pushDeployWord_size]
+    pushDeployWord_size, pushDeployWord_immAccepted]
 
 private theorem permit_compileShape_eq (dp : DeployParams) :
     (nonpayable (permit dp)).compileShape =
@@ -746,7 +750,7 @@ private theorem permit_compileShape_eq (dp : DeployParams) :
   simp [nonpayable, permit, Func.compileShape, arg, addressArg,
     normalizeAddress, tagNonceKey, mstoreAt, argCopy, pushList,
     calculateDomainSeparator, cdl, cdc, pushAddressMask, prepend,
-    pushDeployWord_size]
+    pushDeployWord_size, pushDeployWord_immAccepted]
 
 private theorem weth10EntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (weth10Funcs dp) =
