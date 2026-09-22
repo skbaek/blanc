@@ -198,6 +198,7 @@ theorem Func.exec_of_runCompiledTo_core :
     rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
+    rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
     simp [pure] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
@@ -307,6 +308,7 @@ theorem Func.exec_of_runCompiledTo_subcode
     rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', _h_eq'', h_rw⟩
+    rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
     simp [pure] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
@@ -358,7 +360,7 @@ lemma Func.runCompiledTo_branch_zero {fs : List Func} {sevm : Sevm} {devm : Devm
     {f g : Func} {ex : Execution} {s : List B256} {G : Nat}
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
-    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) f ex) :
+    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.RunCompiledTo fs sevm devm (.branch f g) ex :=
   .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 
@@ -369,7 +371,7 @@ lemma Func.runCompiledTo_branch_succ {fs : List Func} {sevm : Sevm} {devm : Devm
     (h_ne : w ≠ 0) (h_stk : devm.stack = w :: s)
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
-    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G⟩) g ex) :
+    (h_arm : Func.RunCompiledTo fs sevm (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) g ex) :
     Func.RunCompiledTo fs sevm devm (.branch f g) ex :=
   .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 
@@ -381,7 +383,7 @@ lemma Func.runCompiledTo_call' {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gMid + gJumpdest))
     (h_body : Func.RunCompiledTo fs sevm
-      (devm.setMach ⟨devm.stack, devm.memory, G⟩) f ex) :
+      (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩) f ex) :
     Func.RunCompiledTo fs sevm devm (.call k) ex :=
   .call h_get h_room (Devm.burnBy_setMach_gas h_gas) h_body
 
@@ -390,7 +392,7 @@ mirroring `Prog.runCompiled_intro`.  Reusing the `.call` rule here would charge
 `gVerylow + gMid` for a `PUSH2; JUMP` the entry never emits. -/
 lemma Prog.runCompiledTo_intro {sevm : Sevm} {devm mid : Devm} {p : Prog}
     {ex : Execution} {G : Nat} (h_gas : devm.gasLeft = G + gJumpdest)
-    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G⟩)
+    (h_mid : mid = devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩)
     (h_main : Func.RunCompiledTo (p.main :: p.aux) sevm mid p.main ex) :
     Prog.RunCompiledTo sevm devm p ex := by
   subst h_mid
@@ -418,7 +420,7 @@ lemma Linst.run_revert_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.extCost [⟨i.toNat, sz.toNat⟩] ≤ devm.gasLeft)
     (h_read : (devm.setMach ⟨s, devm.memory,
-        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩]⟩).memRead
+        devm.gasLeft - devm.extCost [⟨i.toNat, sz.toNat⟩], devm.stateGas⟩).memRead
           i.toNat sz.toNat = ⟨out, d'⟩) :
     Linst.run sevm devm .revert = .error ⟨.revert, d'.withOutput out⟩ := by
   show (do
@@ -432,14 +434,15 @@ lemma Linst.run_revert_eq_error {sevm : Sevm} {devm : Devm} {i sz : B256}
   rw [Devm.popToNat_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+    Devm.stateGas_setMach]
+  have h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨i.toNat, sz.toNat⟩] = devm.extCost [⟨i.toNat, sz.toNat⟩] := rfl
   rw [h_ext, chargeGas_eq_ok
-    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) h_gas]
+    (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    Devm.stack_setMach]
+    Devm.stack_setMach, Devm.stateGas_setMach]
   rw [h_read]
 
 /-- `REVERT`, at the relation's altitude.  The memory read is handed in rather
@@ -451,7 +454,7 @@ lemma Func.runCompiledTo_revert {fs : List Func} {sevm : Sevm} {devm : Devm}
     {i sz : B256} {s : List B256} {out : Bytes} {d' : Devm} {G : Nat}
     (h_stk : devm.stack = i :: sz :: s)
     (h_gas : devm.gasLeft = G + devm.extCost [⟨i.toNat, sz.toNat⟩])
-    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+    (h_read : (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
     Func.RunCompiledTo fs sevm devm (.last .revert)
       (.error (.revert, d'.withOutput out)) := by
@@ -469,7 +472,7 @@ lemma Func.runCompiledTo_revert_of {fs : List Func} {sevm : Sevm} {devm : Devm}
     (h_stk : devm.stack = i :: sz :: s)
     (h_ext : devm.extCost [⟨i.toNat, sz.toNat⟩] = e)
     (h_gas : devm.gasLeft = G + e)
-    (h_read : (devm.setMach ⟨s, devm.memory, G⟩).memRead i.toNat sz.toNat
+    (h_read : (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩).memRead i.toNat sz.toNat
       = ⟨out, d'⟩) :
     Func.RunCompiledTo fs sevm devm (.last .revert)
       (.error (.revert, d'.withOutput out)) := by
@@ -532,13 +535,13 @@ lemma Func.runCompiledTo_revert_func {fs : List Func} {sevm : Sevm} {devm : Devm
     (h_room : devm.stack.length < 1023) :
     Func.RunCompiledTo fs sevm devm Func.revert
       (.error (.revert,
-        (devm.setMach ⟨devm.stack, devm.memory, G⟩).withOutput [])) := by
+        (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩).withOutput [])) := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 pushCost_zero (G := G + gBase) (by omega)
       (by omega)) ?_
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (devm := devm.setMach
-        ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase⟩)
+        ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase, devm.stateGas⟩)
       pushCost_zero (G := G) rfl
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach]
@@ -565,7 +568,7 @@ theorem Func.runCompiledTo_emptyRevertGuard
     (h_room : devm.stack.length < 1024) :
     Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
-        (devm.setMach ⟨stack, devm.memory, G⟩).withOutput [])) := by
+        (devm.setMach ⟨stack, devm.memory, G, devm.stateGas⟩).withOutput [])) := by
   have h_room_tail : stack.length < 1023 := by
     rw [h_stack] at h_room
     simp only [List.length_cons] at h_room
