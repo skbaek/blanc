@@ -54,18 +54,19 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     (h_stk : devm.stack =
       gw :: (2 : B256) :: iiw :: (64 : B256) ::
         oiw :: (32 : B256) :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (h_del : accessDelegation
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) 2) 2 =
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) 2) 2 =
         ⟨false, 2, code, dgc, d1⟩)
     (h_acc : accessCost 2
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses +
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses +
         dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_depth : sevm.depth ≠ 0)
     (h_parent : parent = callSpawnParent d1 (mcc + ext)
       iiw.toNat 64 oiw.toNat 32)
@@ -90,7 +91,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     let post :=
       (((incorporateChildOnSuccess parent child child.output).setMach
         ⟨1 :: parent.stack, parent.memory,
-          parent.gasLeft + child.gasLeft⟩).memWrite
+          parent.gasLeft + child.gasLeft, parent.stateGas⟩).memWrite
             oiw.toNat (child.output.take 32))
     Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post := by
   subst parent
@@ -122,22 +123,33 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     simpa only [child, cev, applyPrecompResult, Frame.ofCall] using henterRaw
   have hsettle :
       (Frame.ofCall msg).settle (.ok child) = .ok child := by
-    rfl
+    rw [Frame.settle_eq_settleMsg_handleErrorWith,
+      executeCode.handleErrorWith_ok]
+    simp [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, cev,
+      initEvm, initDevm]
+    intro h
+    cases h
   have hroom : p.stack.length < 1024 := by
     simpa only [p] using h_room
   let post :=
     (((incorporateChildOnSuccess p child child.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft, p.stateGas⟩).memWrite
         oiw.toNat (child.output.take 32))
   have hres : Resume.run (.call p oiw.toNat 32)
       ((Frame.ofCall msg).settle (.ok child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rfl) hroom]
+    have hstateGas :
+        (incorporateChildOnSuccess p child child.output).stateGas =
+          p.stateGas := by
+      unfold incorporateChildOnSuccess
+      rfl
+    rw [hstateGas]
   have h64 : (64 : B256).toNat = 64 := rfl
   have h32 : (32 : B256).toNat = 32 := rfl
   have h2adr : (2 : B256).toAdr = 2 := rfl
   have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.childlessRunCompiled_staticcall_doneFrame
-      h_stk (by simpa only [h64, h32] using h_ext) h_del h_acc
+      hfork h_stk (by simpa only [h64, h32] using h_ext) h_del h_acc
       (by simpa using h_split) h_gas h_depth
       (by simpa only [p, msg, h64, h32, h2adr] using henter)
       (by simpa only [p, msg, h64, h32] using hres)
@@ -153,18 +165,19 @@ theorem Ninst.runCompiled_staticcall_sha256_64
     (h_stk : devm.stack =
       gw :: (2 : B256) :: iiw :: (64 : B256) ::
         oiw :: (32 : B256) :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (h_del : accessDelegation
       (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) 2) 2 =
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) 2) 2 =
         ⟨false, 2, code, dgc, d1⟩)
     (h_acc : accessCost 2
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses +
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses +
         dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_depth : sevm.depth ≠ 0)
     (h_parent : parent = callSpawnParent d1 (mcc + ext)
       iiw.toNat 64 oiw.toNat 32)
@@ -189,11 +202,11 @@ theorem Ninst.runCompiled_staticcall_sha256_64
     let post :=
       (((incorporateChildOnSuccess parent child child.output).setMach
         ⟨1 :: parent.stack, parent.memory,
-          parent.gasLeft + child.gasLeft⟩).memWrite
+          parent.gasLeft + child.gasLeft, parent.stateGas⟩).memWrite
             oiw.toNat (child.output.take 32))
     Ninst.RunCompiled sevm devm (.exec .staticcall) post := by
   exact (Ninst.childlessRunCompiled_staticcall_sha256_64
-    h_stk h_ext h_del h_acc h_split h_gas h_depth h_parent h_bt h_pre
+    h_stk h_ext h_del h_acc h_split h_gas hfork h_depth h_parent h_bt h_pre
     h_len h_shaGas h_room).toRunCompiled
 
 /-- Changing an account balance leaves every account's storage untouched. -/
@@ -346,11 +359,12 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -378,7 +392,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       ∃ stmid,
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal 2 0 := by
-  let base := devm.setMach ⟨s, devm.memory, devm.gasLeft⟩
+  let base := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
   have hextBase : base.extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext := by
     simpa only [base] using hext
@@ -457,13 +471,13 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (Bytes.sha256 cev.sta.data).toBytes
   let post :=
     (((incorporateChildOnSuccess p child child.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft, p.stateGas⟩).memWrite
         oiw.toNat (child.output.take 32))
   have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post := by
     simpa only [msg, cev, child, post] using
       (Ninst.childlessRunCompiled_staticcall_sha256_64
         (parent := p) (benv := benv') hstk hextBase hdel hacc hsplit
-        (by rw [hd0gas]; exact hcross) hdepth rfl hbt hpre' hlen hmcs hproom)
+        (by rw [hd0gas]; exact hcross) hfork hdepth rfl hbt hpre' hlen hmcs hproom)
   have hpmem : p.memory = devm.memory.extends
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] := by
     rfl
@@ -481,7 +495,13 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     rw [hcevdata]
   have hchildGas : child.gasLeft = mcs - 84 := by
     rfl
+  have hstateGas : benv'.stat.rules.stateGas = none := by
+    change sevm.benvStat.rules.stateGas = none
+    exact hfork.rules_stateGas_none
   have hchildLogs : child.logs = [] := by
+    change cev.dyna.logs = []
+    dsimp [cev, initEvm, initDevm]
+    rw [hstateGas]
     rfl
   have hsub' :
       devm.state.subBal sevm.currentTarget 0 = some stmid := by
@@ -535,7 +555,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (successfulCallPost_getCode
         (parent := p) (child := child)
         (returnData := child.output)
-        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft, p.stateGas⟩)
         (offset := oiw.toNat) (bytes := child.output.take 32) hchildCode)
   have hpAddresses : p.accessedAddresses = devm.accessedAddresses := by
     change d0.accessedAddresses = devm.accessedAddresses
@@ -551,7 +571,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     simpa only [post] using
       (successfulCallPost_accessedAddresses
         (parent := p) (child := child) (returnData := child.output)
-        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft, p.stateGas⟩)
         (offset := oiw.toNat) (bytes := child.output.take 32)
         hchildAddresses)
   have haddresses : post.accessedAddresses = devm.accessedAddresses :=
@@ -563,7 +583,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     simpa only [post] using
       (successfulCallPost_accessedStorageKeys
         (parent := p) (child := child) (returnData := child.output)
-        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft⟩)
+        (mach := ⟨1 :: p.stack, p.memory, p.gasLeft + child.gasLeft, p.stateGas⟩)
         (offset := oiw.toNat) (bytes := child.output.take 32) hchildKeys)
   have hkeys : post.accessedStorageKeys = devm.accessedStorageKeys :=
     hpostParentKeys.trans hpKeys
@@ -609,11 +629,12 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -643,7 +664,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       hcode, haddresses, hkeys, hlogs, _hrefund, _hdelete, houtput,
       herror, stmid, hsub, hstate⟩ :=
     Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
-      hstk hgas hext hnodeleg hwarm hpre hdepth hfloor hbound hroom
+      hstk hgas hext hnodeleg hwarm hpre hfork hdepth hfloor hbound hroom
   exact ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage, hcode,
     haddresses, hkeys, hlogs, houtput, herror, stmid, hsub, hstate⟩
 
@@ -658,11 +679,12 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
         oiw :: (32 : B256) :: s)
     (hgas : devm.gasLeft = G)
     (hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -692,7 +714,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
       hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
       stmid, hsub, hstate⟩ :=
     Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
-      hstk hgas hext hnodeleg hwarm hpre hdepth hfloor hbound hroom
+      hstk hgas hext hnodeleg hwarm hpre hfork hdepth hfloor hbound hroom
   exact ⟨post, hrun.toRunCompiled, hstack, hmemory, hgas', hreturn,
     hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
     stmid, hsub, hstate⟩
@@ -711,6 +733,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 ≤ G)
     (hbound : G < 2 ^ 256)
@@ -736,12 +759,12 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal 2 0 := by
   have hext : (devm.setMach
-      ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
     Devm.extCost_covered hcovered
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
     (Ninst.runCompiled_staticcall_sha256_64_warm_ext
-      (ext := 0) hstk hgas hext hnodeleg hwarm hpre hdepth
+      (ext := 0) hstk hgas hext hnodeleg hwarm hpre hfork hdepth
       (by omega) hbound hroom)
 
 end Blanc
