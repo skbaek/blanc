@@ -180,6 +180,7 @@ def fixture(
     shell(root, "git", "init", "-b", "main")
     shell(root, "git", "config", "user.email", "fixture@example.invalid")
     shell(root, "git", "config", "user.name", "Fixture")
+    write(root / ".gitignore", "scripts/baseline-elab.txt\n.lake/\nscripts/__pycache__/\n")
     write(root / "lean-toolchain", "leanprover/lean4:v4.34.0\n")
     write(root / "lakefile.lean", lakefile(OLD_JAUNE))
     write(root / "lake-manifest.json", manifest(OLD_JAUNE))
@@ -239,6 +240,12 @@ def fixture(
         shell(root, "git", "checkout", "candidate-record" if normalized else "candidate")
         records[0]["origin"] = unrelated
         records[0]["environment"] = environment_at(root, unrelated)
+
+    # Timing-owned paths are ignored so the candidate remains clean, but the
+    # snapshot still includes them.  A comparator may not create, replace or
+    # disturb an existing baseline/cache merely because it reads provenance.
+    write(root / "scripts/baseline-elab.txt", "local baseline sentinel\n")
+    write(root / ".lake/check-elab-state.json", '{"cache": "sentinel"}\n')
 
     store = root / ".git/blanc-elab-evidence" / f"evidence-stable-host-v2-{HOST}.json"
     store.parent.mkdir(parents=True)
