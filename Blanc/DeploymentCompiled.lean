@@ -108,7 +108,8 @@ theorem Func.exec_of_runCompiled_appended_core :
     intro h_compile h_code hFS pc sub hb
     rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
-    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
+    rcases of_guard_eq_some h_eq' with ⟨-, h_rest⟩
+    rcases of_bind_eq_some h_rest with ⟨cd', h_eq'', h_rw⟩
     simp [pure] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
@@ -179,7 +180,8 @@ theorem Func.exec_of_runCompiledTo_appended_core :
     intro h_compile h_code hFS pc sub hb
     rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
-    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
+    rcases of_guard_eq_some h_eq' with ⟨-, h_rest⟩
+    rcases of_bind_eq_some h_rest with ⟨cd', h_eq'', h_rw⟩
     simp [pure] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
