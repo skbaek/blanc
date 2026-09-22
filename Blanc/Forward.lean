@@ -2637,6 +2637,10 @@ partial def whnfUntilHead (heads : List Name) : Nat → Expr → MetaM Expr
 def mkState (base stack memory gas stateGas : Expr) : MetaM Expr := do
   mkAppM ``Jaune.Devm.setMach #[base, ← mkAppM ``Jaune.Mach.mk #[stack, memory, gas, stateGas]]
 
+/-- The fully instantiated absent state-gas rules used by legacy-metering probes. -/
+def noStateGasRules : Expr :=
+  mkApp (mkConst ``Option.none [0]) (mkConst ``Jaune.StateGasRules)
+
 /-- `gasBase - (n + cost)`. -/
 def mkGas (gasBase : Expr) (n cost : Nat) : MetaM Expr :=
   mkAppM ``HSub.hSub #[gasBase, mkNatLit (n + cost)]
@@ -2800,7 +2804,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         #[← mkAppM ``Jaune.ForkRules.stateGas
             #[← mkAppM ``Jaune.BenvStat.rules
               #[← mkAppM ``Jaune.Sevm.benvStat #[sevm]]],
-          ← mkAppM ``Option.none #[]]
+          noStateGasRules]
       let isLegacy ← g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
@@ -2888,7 +2892,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         #[← mkAppM ``Jaune.ForkRules.stateGas
             #[← mkAppM ``Jaune.BenvStat.rules
               #[← mkAppM ``Jaune.Sevm.benvStat #[sevm]]],
-          ← mkAppM ``Option.none #[]]
+          noStateGasRules]
       let isLegacy ← g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
@@ -3255,7 +3259,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         #[← mkAppM ``Jaune.ForkRules.stateGas
             #[← mkAppM ``Jaune.BenvStat.rules
               #[← mkAppM ``Jaune.Sevm.benvStat #[sevm]]],
-          ← mkAppM ``Option.none #[]]
+          noStateGasRules]
       let isLegacy ← g.withContext do
         (← getLCtx).findDeclM? fun decl => do
           if decl.isImplementationDetail then return none
