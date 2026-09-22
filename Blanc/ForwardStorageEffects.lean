@@ -40,6 +40,12 @@ private theorem Ninst.successfulSstore_effectTriples
   cases instruction with
   | push bytes bound =>
       simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+  | dupn immediate =>
+      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+  | swapn immediate =>
+      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+  | exchange immediate =>
+      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
   | exec operation =>
       simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
   | reg operation =>
@@ -145,6 +151,9 @@ theorem Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath
           Ninst.storageEffectTriple? sevm certPre instruction = none := by
         cases instruction with
         | push bytes bound => rfl
+        | dupn immediate => rfl
+        | swapn immediate => rfl
+        | exchange immediate => rfl
         | exec operation => rfl
         | reg operation =>
             cases operation <;>
@@ -188,22 +197,34 @@ theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
         intro instructionEq
         subst instructionEq
         rcases instructionRun with ⟨slot, filled, instructionRun⟩
-        rcases pre with ⟨⟨stack, memory, gasLeft⟩, view, world⟩
+        rcases pre with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
         cases stack with
         | nil =>
             have hrun := instructionRun 0
             rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
             rcases hrun with ⟨_, hrun⟩
-            simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-              Devm.setMach] at hrun
+            cases hstate : sevm.benvStat.rules.stateGas with
+            | none =>
+                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+                  Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+            | some state =>
+                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+                  Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+                split at hrun <;> simp at hrun
         | cons key rest =>
             cases rest with
             | nil =>
                 have hrun := instructionRun 0
                 rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
                 rcases hrun with ⟨_, hrun⟩
-                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-                  Devm.setMach] at hrun
+                cases hstate : sevm.benvStat.rules.stateGas with
+                | none =>
+                    simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+                      Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+                | some state =>
+                    simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
+                      Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+                    split at hrun <;> simp at hrun
             | cons value tail =>
                 simp [Ninst.storageEffectTriple?, Devm.stack] at hparts
       exact .next (instructionRun := instructionRun) hnotSstore
@@ -285,6 +306,9 @@ theorem Func.StorageEffectRun.next_effectNeutral
   have none : Ninst.storageEffectTriple? sevm pre instruction = none := by
     cases instruction with
     | push bytes bound => rfl
+    | dupn immediate => rfl
+    | swapn immediate => rfl
+    | exchange immediate => rfl
     | exec operation => rfl
     | reg operation =>
         cases operation <;>
@@ -334,7 +358,7 @@ lemma Func.storageEffectRun_branch_zero
     (h_stk : devm.stack = 0 :: s) (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh))
     (h_arm : Func.StorageEffectRun fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) f ex effects) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) f ex effects) :
     Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
   .zero h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 
@@ -347,7 +371,7 @@ lemma Func.storageEffectRun_branch_succ
     (h_room : devm.stack.length < 1024)
     (h_gas : devm.gasLeft = G + (gVerylow + gHigh + gJumpdest))
     (h_arm : Func.StorageEffectRun fs sevm
-      (devm.setMach ⟨s, devm.memory, G⟩) g ex effects) :
+      (devm.setMach ⟨s, devm.memory, G, devm.stateGas⟩) g ex effects) :
     Func.StorageEffectRun fs sevm devm (.branch f g) ex effects :=
   .succ h_ne h_room (Devm.popBurnBy_setMach h_stk h_gas) h_arm
 
@@ -604,6 +628,27 @@ theorem Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree
                   cases impossible))
                 (ih tail (by simpa [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
+          | dupn immediate =>
+              exact .next (instructionRun := instructionRun) storeFree.1
+                (instructionRun.childless_of_not_exec (by
+                  intro external impossible
+                  cases impossible))
+                (ih tail (by simpa [funcExecFree] using execFree)
+                  storeFree.2 stopOnly)
+          | swapn immediate =>
+              exact .next (instructionRun := instructionRun) storeFree.1
+                (instructionRun.childless_of_not_exec (by
+                  intro external impossible
+                  cases impossible))
+                (ih tail (by simpa [funcExecFree] using execFree)
+                  storeFree.2 stopOnly)
+          | exchange immediate =>
+              exact .next (instructionRun := instructionRun) storeFree.1
+                (instructionRun.childless_of_not_exec (by
+                  intro external impossible
+                  cases impossible))
+                (ih tail (by simpa [funcExecFree] using execFree)
+                  storeFree.2 stopOnly)
           | exec operation =>
               simp [funcExecFree] at execFree
   | call index =>
@@ -638,6 +683,9 @@ theorem Func.RunCompiledTo.SuccessfulStopPrefix.splice
           Ninst.storageEffectTriple? sevm prefixPre instruction = none := by
         cases instruction with
         | push bytes bound => rfl
+        | dupn immediate => rfl
+        | swapn immediate => rfl
+        | exchange immediate => rfl
         | exec operation => rfl
         | reg operation =>
             cases operation <;>
@@ -681,6 +729,36 @@ private theorem Ninst.exists_exec_storageEffects
       have step : Evm.step ⟨pc, sevm, pre⟩ =
           .cont (pc + Ninst.size (.push bytes bound)) nextPre := by
         rw [evmStep, Ninst.step_push, ← stepRun.2]
+        rfl
+      refine ⟨.cont step tail, ?_⟩
+      rw [Exec.retainedStorageEffectTriples_cont tail committed,
+        Ninst.successfulSstore_effectTriples tail instructionAt,
+        tailEffects]
+  | dupn immediate =>
+      rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at stepRun
+      have step : Evm.step ⟨pc, sevm, pre⟩ =
+          .cont (pc + Ninst.size (.dupn immediate)) nextPre := by
+        rw [evmStep, Ninst.step_dupn, ← stepRun.2]
+        rfl
+      refine ⟨.cont step tail, ?_⟩
+      rw [Exec.retainedStorageEffectTriples_cont tail committed,
+        Ninst.successfulSstore_effectTriples tail instructionAt,
+        tailEffects]
+  | swapn immediate =>
+      rw [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at stepRun
+      have step : Evm.step ⟨pc, sevm, pre⟩ =
+          .cont (pc + Ninst.size (.swapn immediate)) nextPre := by
+        rw [evmStep, Ninst.step_swapn, ← stepRun.2]
+        rfl
+      refine ⟨.cont step tail, ?_⟩
+      rw [Exec.retainedStorageEffectTriples_cont tail committed,
+        Ninst.successfulSstore_effectTriples tail instructionAt,
+        tailEffects]
+  | exchange immediate =>
+      rw [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at stepRun
+      have step : Evm.step ⟨pc, sevm, pre⟩ =
+          .cont (pc + Ninst.size (.exchange immediate)) nextPre := by
+        rw [evmStep, Ninst.step_exchange, ← stepRun.2]
         rfl
       refine ⟨.cont step tail, ?_⟩
       rw [Exec.retainedStorageEffectTriples_cont tail committed,
@@ -794,8 +872,8 @@ private theorem Func.RunCompiledTo.StorageEffectPath.exists_exec_core :
       rcases of_subcode sub with ⟨compiledTail, compileEq, slice⟩
       rcases of_bind_eq_some compileEq with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
-      rw [← codeEq] at slice
+      rcases of_bind_eq_some codeEq with ⟨_, _, codeEq⟩
+      rw [← of_pure_eq_some codeEq] at slice
       have instructionAt : Ninst.At sevm.code pc instruction :=
         Ninst.at_of_slice (List.slice_prefix slice)
       rcases ih committed compiled tableEq _ tailSub tailNoPush with
@@ -945,8 +1023,8 @@ private theorem Func.RunCompiledTo.StorageEffectPath.exists_exec_appended_core :
       rcases of_subcode sub with ⟨compiledTail, compileEq, slice⟩
       rcases of_bind_eq_some compileEq with
         ⟨tailCode, tailCompileEq, codeEq'⟩
-      simp [pure] at codeEq'
-      rw [← codeEq'] at slice
+      rcases of_bind_eq_some codeEq' with ⟨_, _, codeEq'⟩
+      rw [← of_pure_eq_some codeEq'] at slice
       have instructionAt : Ninst.At sevm.code pc instruction :=
         Ninst.at_of_slice (List.slice_prefix slice)
       rcases ih committed compiled codeEq tableEq _ tailSub tailNoPush with
