@@ -10732,105 +10732,181 @@ lemma Linst.selfdestruct_balance_effect :
   intro sevm pre out run
   dsimp [Linst.Run, Linst.run] at run
   revert run
-  dsimp [bind, Except.bind]
-  cases h1 : pre.popToAdr <;> dsimp
-  case error err =>
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2 lane: priced access over balance reads, charge, sweep.
     intro run
-    rw [← run]
-    apply Devm.balNoninc_of_getBal_eq
-    rw [Devm.popToAdr_err_snd h1]
-  case ok res1 =>
-    have hpop : res1.2.getBal = pre.getBal := by
-      funext a
-      exact Devm.popToAdr_getBal_eq h1 a
-    have hacc :
-        (if res1.1 ∉ res1.2.accessedAddresses then
-            (addAccessedAddress res1.2 res1.1, gasSelfDestruct + gasColdAccountAccess)
-          else (res1.2, gasSelfDestruct)).1.getBal = res1.2.getBal := by
-      funext a
-      split <;> rfl
-    cases h2 : chargeGas
-        (if ((if res1.1 ∉ res1.2.accessedAddresses then
-                    (addAccessedAddress res1.2 res1.1,
-                      gasSelfDestruct + gasColdAccountAccess)
-                  else (res1.2, gasSelfDestruct)).1.getAcct res1.1).Empty ∧
-              ¬(res1.2.getAcct sevm.currentTarget).bal = 0 then
-          (if res1.1 ∉ res1.2.accessedAddresses then
-                (addAccessedAddress res1.2 res1.1,
-                  gasSelfDestruct + gasColdAccountAccess)
-              else (res1.2, gasSelfDestruct)).2 + gasSelfDestructNewAccount
-        else
-          (if res1.1 ∉ res1.2.accessedAddresses then
-              (addAccessedAddress res1.2 res1.1,
-                gasSelfDestruct + gasColdAccountAccess)
-            else (res1.2, gasSelfDestruct)).2)
-        (if res1.1 ∉ res1.2.accessedAddresses then
-            (addAccessedAddress res1.2 res1.1,
-              gasSelfDestruct + gasColdAccountAccess)
-          else (res1.2, gasSelfDestruct)).1 <;> dsimp
+    dsimp [bind, Except.bind] at run
+    revert run
+    cases h1 : pre.popToAdr <;> dsimp
     case error err =>
       intro run
       rw [← run]
       apply Devm.balNoninc_of_getBal_eq
-      rw [chargeGas_err_snd h2]
-      exact hacc.trans hpop
-    case ok res2 =>
-      have hpre : res2.getBal = pre.getBal := by
+      rw [Devm.popToAdr_err_snd h1]
+    case ok res1 =>
+      have hpop : res1.2.getBal = pre.getBal := by
         funext a
-        exact (chargeGas_getBal_eq h2 a).trans
-          (congrFun (hacc.trans hpop) a)
-      cases h3 : assertDynamic sevm res2
+        exact Devm.popToAdr_getBal_eq h1 a
+      have hacc : (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1.getBal = res1.2.getBal := by
+        funext a
+        split
+        · show (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).getBal a = res1.2.getBal a
+          exact (Devm.balReadAccount_getBal _ _ _ _).trans (Devm.balReadAccount_getBal _ _ _ _)
+        · exact (Devm.balReadAccount_getBal _ _ _ _).trans (Devm.balReadAccount_getBal _ _ _ _)
+      cases h2 : chargeGas _ _ <;> dsimp
       case error err =>
         intro run
         rw [← run]
         apply Devm.balNoninc_of_getBal_eq
-        have herr : err.2 = res2 := by
-          dsimp [assertDynamic] at h3
-          exact Except.assert_err_snd h3
-        rw [herr]
-        exact hpre
-      case ok _ =>
-        cases h4 : res2.subBal sevm.currentTarget
-            (res1.2.getAcct sevm.currentTarget).bal <;> dsimp [Option.toExcept]
-        case none =>
+        rw [chargeGas_err_snd h2]
+        exact hacc.trans hpop
+      case ok res2 =>
+        have hpre : res2.getBal = pre.getBal := by
+          funext a
+          exact (chargeGas_getBal_eq h2 a).trans
+            (congrFun (hacc.trans hpop) a)
+        cases h3 : assertDynamic sevm res2
+        case error err =>
           intro run
           rw [← run]
-          exact Devm.balNoninc_of_getBal_eq hpre
-        case some res3 =>
-          have hsub : res2.state.subBal sevm.currentTarget
-              (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
-            dsimp [Devm.subBal, Option.bind] at h4
-            cases hs : res2.state.subBal sevm.currentTarget
-                (res1.2.getAcct sevm.currentTarget).bal
-            · rw [hs] at h4
-              contradiction
-            · rw [hs] at h4
-              injection h4 with heq
-              subst heq
-              rfl
-          have htransfer : State.BalNoninc pre.state
-              (res3.addBal res1.1
-                (res1.2.getAcct sevm.currentTarget).bal).state := by
-            have ht := State.sub_addBal_noninc (dst := res1.1) hsub
-            have hbal : res2.state.bal = pre.state.bal := hpre
-            unfold State.BalNoninc State.balSum at ht ⊢
-            rw [hbal] at ht
-            exact ht
-          by_cases hdel : sevm.currentTarget ∈
-              (res3.addBal res1.1
-                (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [hdel, if_pos]
+          apply Devm.balNoninc_of_getBal_eq
+          have herr : err.2 = res2 := by
+            dsimp [assertDynamic] at h3
+            exact Except.assert_err_snd h3
+          rw [herr]
+          exact hpre
+        case ok _ =>
+          cases h4 : res2.subBal _ _ <;> dsimp [Option.toExcept]
+          case none =>
             intro run
             rw [← run]
-            unfold Execution.Rel Outcome.Rel
-            apply Devm.balNoninc_of_state
-            apply balNoninc_refl_trans.1.2 htransfer
-            exact State.setBal_zero_noninc _ _
-          · simp only [hdel]
-            intro run
-            rw [← run]
-            unfold Execution.Rel Outcome.Rel
-            exact Devm.balNoninc_of_state htransfer
+            exact Devm.balNoninc_of_getBal_eq hpre
+          case some res3 =>
+            have hsub : res2.state.subBal sevm.currentTarget
+                (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
+              dsimp [Devm.subBal, Option.bind] at h4
+              cases hs : res2.state.subBal sevm.currentTarget
+                  (res1.2.getAcct sevm.currentTarget).bal
+              · rw [hs] at h4
+                contradiction
+              · rw [hs] at h4
+                injection h4 with heq
+                subst heq
+                rfl
+            have htransfer : State.BalNoninc pre.state
+                (res3.addBal res1.1
+                  (res1.2.getAcct sevm.currentTarget).bal).state := by
+              have ht := State.sub_addBal_noninc (dst := res1.1) hsub
+              have hbal : res2.state.bal = pre.state.bal := hpre
+              unfold State.BalNoninc State.balSum at ht ⊢
+              rw [hbal] at ht
+              exact ht
+            by_cases hdel : sevm.currentTarget ∈
+                (res3.addBal res1.1
+                  (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
+            · simp only [hdel, if_pos]
+              intro run
+              rw [← run]
+              unfold Execution.Rel Outcome.Rel
+              apply Devm.balNoninc_of_state
+              apply balNoninc_refl_trans.1.2 htransfer
+              exact State.setBal_zero_noninc _ _
+            · simp only [hdel]
+              intro run
+              rw [← run]
+              unfold Execution.Rel Outcome.Rel
+              exact Devm.balNoninc_of_state htransfer
+  · -- Amsterdam lane: static check, priced access, state charges, logging sweep.
+    rename_i state
+    intro run
+    dsimp [bind, Except.bind] at run
+    revert run
+    cases h0 : assertDynamic sevm pre <;> dsimp
+    case error err =>
+      intro run; rw [← run]
+      apply Devm.balNoninc_of_getBal_eq
+      have herr : err.2 = pre := by
+        dsimp [assertDynamic] at h0
+        exact Except.assert_err_snd h0
+      rw [herr]
+    case ok _ =>
+      cases h1 : pre.popToAdr <;> dsimp
+      case error err =>
+        intro run; rw [← run]
+        apply Devm.balNoninc_of_getBal_eq
+        rw [Devm.popToAdr_err_snd h1]
+      case ok res1 =>
+        have hpop : res1.2.getBal = pre.getBal := by
+          funext a
+          exact Devm.popToAdr_getBal_eq h1 a
+        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp
+        case error err =>
+          intro run; rw [← run]
+          apply Devm.balNoninc_of_getBal_eq
+          have herr : err.2 = res1.2 := Except.assert_err_snd hg
+          rw [herr]
+          exact hpop
+        case ok _ =>
+          have hwb : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getBal = res1.2.getBal := by
+            funext a
+            have e1 : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getBal a = (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getBal a :=
+              (Devm.balReadAccount_getBal _ _ _ _).trans (Devm.balReadAccount_getBal _ _ _ _)
+            have e2 : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getBal a = res1.2.getBal a := by
+              split <;> rfl
+            exact e1.trans e2
+          cases hchg : chargeGas _ _ <;> dsimp
+          case error err =>
+            intro run; rw [← run]
+            apply Devm.balNoninc_of_getBal_eq
+            rw [chargeGas_err_snd hchg]
+            exact hwb.trans hpop
+          case ok res2 =>
+            have hpre2 : res2.getBal = pre.getBal := by
+              funext a
+              exact (chargeGas_getBal_eq hchg a).trans
+                (congrFun (hwb.trans hpop) a)
+            cases hstg : chargeStateGas _ _ <;> dsimp
+            case error err =>
+              intro run; rw [← run]
+              exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
+                (Devm.balNoninc_of_getBal_eq hpre2)
+                (Devm.chargeStateGas_balNoninc hstg)
+            case ok res2b =>
+              have hPre : Devm.BalNoninc pre res2b :=
+                balNoninc_refl_trans.2.2 (Devm.balNoninc_of_getBal_eq hpre2)
+                  (Devm.chargeStateGas_balNoninc_of_ok hstg)
+              have hPreState : State.BalNoninc pre.state res2b.state := hPre
+              cases h4 : res2b.subBal _ _ <;> dsimp [Option.toExcept]
+              case none =>
+                intro run; rw [← run]
+                exact hPre
+              case some res3 =>
+                have hsub : res2b.state.subBal sevm.currentTarget (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal = some res3.state := by
+                  dsimp [Devm.subBal, Option.bind] at h4
+                  cases hs : res2b.state.subBal sevm.currentTarget (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal
+                  · rw [hs] at h4
+                    simp at h4
+                  · rw [hs] at h4
+                    injection h4 with heq
+                    subst heq
+                    rfl
+                have htransfer : State.BalNoninc pre.state (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).state :=
+                  balNoninc_refl_trans.1.2 hPreState (State.sub_addBal_noninc (dst := res1.1) hsub)
+                by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
+                · simp only [h_if, if_pos]
+                  intro run; rw [← run]
+                  unfold Execution.Rel Outcome.Rel
+                  apply Devm.balNoninc_of_state
+                  apply balNoninc_refl_trans.1.2 htransfer
+                  rw [(Devm.emitTransferLog_instructionFrame _ _ _ _).state]
+                  exact balNoninc_refl_trans.1.1 _
+                · simp only [h_if]
+                  intro run; rw [← run]
+                  unfold Execution.Rel Outcome.Rel
+                  apply Devm.balNoninc_of_state
+                  apply balNoninc_refl_trans.1.2 htransfer
+                  rw [(Devm.emitTransferLog_instructionFrame _ _ _ _).state]
+                  exact balNoninc_refl_trans.1.1 _
 
 lemma Linst.balance_effect (l : Linst) :
     Linst.Effect Devm.BalNoninc l := by
