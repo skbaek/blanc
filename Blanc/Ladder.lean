@@ -4878,8 +4878,11 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     contradiction
   case selfdestruct =>
     have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+    have hbal : sevm.benvStat.rules.bal = none :=
+      BenvStat.bal_none_of_stateGas_none hsg
     dsimp [Linst.Run, Linst.run] at h_run
     rw [hsg] at h_run
+    simp only [Devm.balReadAccount_of_bal_none hbal] at h_run
     dsimp only at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
     rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
@@ -4896,8 +4899,8 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       · rw [h] at h_sub_some; injection h_sub_some with h2; subst h2; rfl
     have h_bal2 : devm2.getBal = devm1.getBal := by
       ext a
-      have := chargeGas_getBal_eq h_charge a
-      rw [this]
+      have h1 := chargeGas_getBal_eq h_charge a
+      rw [h1]
       split
       · simp [Devm.getBal, Devm.getAcct]
         rw [addAccessedAddress_state]
@@ -4912,24 +4915,24 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       · have h_code : devm2.getCode = devm1.getCode := by
           funext a
           have h1 := chargeGas_getCode_eq h_charge a
-          have h2 : (if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1.getCode a = devm1.getCode a := by
-            split <;> rfl
-          exact h1.trans h2
+          rw [h1]
+          split <;> rfl
         exact congr_fun h_code wa
       · exact h_bal2
       · have h_stor : Devm.getStor devm2 = Devm.getStor devm1 := by
           have h1 := (chargeGas_getStor_eq h_charge).symm
-          have h2 : Devm.getStor ((if ((dest_a, devm1).1 ∉ (dest_a, devm1).2.accessedAddresses) then (addAccessedAddress (dest_a, devm1).2 (dest_a, devm1).1, gasSelfDestruct + gasColdAccountAccess) else ((dest_a, devm1).2, gasSelfDestruct)).1) = Devm.getStor devm1 := by
-            split <;> rfl
-          exact h1.trans h2
+          rw [h1]
+          split <;> rfl
         exact congr_fun h_stor wa
     have h_pc3 : c.Pre wa sevm (devm3.addBal dest_a ((dest_a, devm1).2.getAcct sevm.currentTarget).bal) := by
       exact Pre.transfer_state h_pc2 h_ne h_sub_st rfl
     clear h_run h_run1 h_run2 h_run3
-    split at h_run4
-    · rw [← Except.ok.inj h_run4]
+    by_cases hdel : sevm.currentTarget ∈ (devm3.addBal (dest_a, devm1).1 ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).createdAccounts
+    · rw [if_pos hdel] at h_run4
+      rw [← Except.ok.inj h_run4]
       exact Post.selfdestruct_delete h_ne h_pc3
-    · rw [← Except.ok.inj h_run4]
+    · rw [if_neg hdel] at h_run4
+      rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
 
 /-! ### The contract's obligation, and the frame-level result it yields -/
@@ -6163,7 +6166,11 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
           have hh := processCreateMessage.chargeCodeGas_getCode_gen h_cg wa
           simpa only [Execution.getCode] using hh
         cases err
-        case halt reason => exact ⟨h_atd, h_ca, h.code⟩
+        case halt reason =>
+          unfold processCreateMessage.exceptionalHalt
+          cases hsg : msg.benv.stat.rules.stateGas <;>
+            exact Devm.NoDel.of_eqs (d := evm'.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl
+              (Devm.NoDel.rollback h_atd h_ca h.code)
         all_goals
           refine ⟨h_ca, ?_⟩
           show (evm'.state.getCode wa).toList ≠ []
