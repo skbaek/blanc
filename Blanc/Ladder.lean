@@ -6691,9 +6691,12 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
     (h : Msg.NoDel wa msg)
     (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa)) :
     wa ∉ out.accountsToDelete := by
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at h_run
   split at h_run
   · unfold processMessageCall.create at h_run
+    dsimp only at h_run
+    rw [hsg] at h_run
     dsimp only at h_run
     split at h_run
     · injection h_run with h_eq
@@ -6710,7 +6713,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_preserves_noDel h_evm h_ct h
+        have h_nodel := processCreateMessage_preserves_noDel hfork h_evm h_ct h
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
@@ -6727,6 +6730,8 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
       cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
     unfold processMessageCall.call at h_run
     dsimp only at h_run
+    rw [hsg] at h_run
+    dsimp only at h_run
     split at h_run
     · simp only [bind, Except.bind] at h_run
       unfold Except.bimap at h_run
@@ -6742,8 +6747,8 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
             split
             · exact h
             · exact ⟨h.ca, h.code⟩
-          have hfork' : CoveredFork (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true }) := by).benv.stat.fork := by
-            have hbenv : (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true }) := by).benv = msg.benv := by split <;> rfl
+          have hfork' : CoveredFork (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true }).benv.stat.fork := by
+            have hbenv : (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true }).benv = msg.benv := by split <;> rfl
             rw [hbenv]; exact hfork
           have h_nodel_evm := processMessage_preserves_noDel hfork' h_pm h_pc
           split at h_run
@@ -6774,8 +6779,8 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
               split
               · exact h_del_nodel
               · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
-            have hfork' : CoveredFork (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true }) := by).benv.stat.fork := by
-              have hbenv : (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true }) := by).benv = msgDelegation.benv := by split <;> rfl
+            have hfork' : CoveredFork (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true }).benv.stat.fork := by
+              have hbenv : (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true }).benv = msgDelegation.benv := by split <;> rfl
               have hstat : msgDelegation.benv.stat = msg.benv.stat :=
                 setDelegation_benvStat h_del
               rw [hbenv, hstat]; exact hfork
@@ -6792,13 +6797,14 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
 
 theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
     {st' : Jaune.State} {out : MsgCallOutput}
+    (hfork : CoveredFork msg.benv.stat.fork)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
     (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa)) :
     ∀ a ∈ out.accountsToDelete.toList, a ≠ wa := by
   intro a ha heq
   subst heq
-  exact processMessageCall_preserves_noDel h_run h h_not_del
+  exact processMessageCall_preserves_noDel hfork h_run h h_not_del
     (Std.HashSet.mem_toList.mp ha)
 
 lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -7638,15 +7644,19 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
 
 theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
+    (hfork : CoveredFork msg.benv.stat.fork)
     (hp : c.Preserves wa)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : c.MsgInv wa msg) :
     c.StateInv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
-  refine ⟨?_, processMessageCall_accountsToDelete_ne h_run h_inv.nodel
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
+  refine ⟨?_, processMessageCall_accountsToDelete_ne hfork h_run h_inv.nodel
     (not_delegation_of_compile h_inv.state.code)⟩
   unfold processMessageCall at h_run
   split at h_run
   · unfold processMessageCall.create at h_run
+    dsimp only at h_run
+    rw [hsg] at h_run
     dsimp only at h_run
     split at h_run
     · injection h_run with h_eq
@@ -7679,6 +7689,8 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
     have h_target_false : msg.target.isNone = false := by
       cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
     unfold processMessageCall.call at h_run
+    dsimp only at h_run
+    rw [hsg] at h_run
     dsimp only at h_run
     split at h_run
     · simp only [bind, Except.bind] at h_run
