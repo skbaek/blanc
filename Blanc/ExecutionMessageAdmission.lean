@@ -61,6 +61,7 @@ lemma StateInv.of_exec_precond_admitted
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {sevm : Sevm} {pre post : Devm}
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (precond : c.Pre ca sevm pre)
     (code : sevm.currentTarget = ca →
       some sevm.code.toList = Prog.compile c.prog)
@@ -69,7 +70,7 @@ lemma StateInv.of_exec_precond_admitted
     (admitted : Exec.FrameAdmitted ca entry run) :
     c.StateInv ca post.state := by
   have postcond : c.Post ca sevm post :=
-    preserves sevm pre post run admitted code wf precond
+    preserves sevm pre post hfork run admitted code wf precond
   apply StateInv.of_postcond postcond
   have codeEq : post.getCode ca = pre.getCode ca :=
     code_eq_of_exec run precond.code
@@ -92,6 +93,7 @@ theorem ProcessMessageTrace.stateInv_admitted
     {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (ready : c.MessageRunReady ca msg) :
     c.StateInv ca post.state := by
@@ -141,7 +143,12 @@ theorem ProcessMessageTrace.stateInv_admitted
           have outputEq : exception = .ok evm :=
             exec_ok_of_handleError handled failed
           subst exception
-          exact StateInv.of_exec_precond_admitted preserves precond code'
+          have hfork' :
+              CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+            rw [initSevm_benvStat, Msg.withBenv_benvStat,
+              benvAfterTransfer_stat transfer]
+            exact hfork
+          exact StateInv.of_exec_precond_admitted preserves hfork' precond code'
             (fun _ => Mem.wf_empty) execution admitted'
 
 /-- A retained CREATE core preserves an invariant at a distinct installed
@@ -151,6 +158,7 @@ theorem ProcessCreateMessageTrace.stateInv_admitted
     {msg : Msg} {post : Devm}
     (trace : ProcessCreateMessageTrace msg (.ok post))
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
@@ -167,8 +175,11 @@ theorem ProcessCreateMessageTrace.stateInv_admitted
   have innerReady : c.MessageRunReady ca (processCreateMessage.msg msg) :=
     (ready.processCreateMessage_msg targetNone targetNe).runReady_of_foreign
       (by simpa [processCreateMessage.msg, Msg.withBenv] using targetNe)
+  have hfork' : CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by
+    rw [processCreateMessage.msg_benvStat]
+    exact hfork
   have innerInv : c.StateInv ca innerPost.state :=
-    innerTrace.stateInv_admitted preserves admitted innerReady
+    innerTrace.stateInv_admitted preserves hfork' admitted innerReady
   have rest := settle.symm
   unfold processCreateMessage.settle at rest
   dsimp only [bind, Except.bind] at rest
@@ -179,6 +190,9 @@ theorem ProcessCreateMessageTrace.stateInv_admitted
     · rw [codeGas] at rest
       cases error with
       | halt reason =>
+          have hsg : msg.benv.stat.rules.stateGas = none :=
+            hfork.rules_stateGas_none
+          rw [hsg] at rest
           rw [← Except.ok.inj rest]
           exact ready.state
       | revert => cases rest
@@ -200,25 +214,26 @@ theorem MessageCallTrace.stateInv_admitted
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (ready : c.MsgInv ca msg) :
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
-  refine ⟨?_, processMessageCall_accountsToDelete_ne trace.result ready.nodel
+  refine ⟨?_, processMessageCall_accountsToDelete_ne hfork trace.result ready.nodel
     (not_delegation_of_compile ready.state.code)⟩
   cases trace with
   | createCollision target collision result =>
-      rw [processMessageCall_createCollision_state_eq target collision result]
+      rw [processMessageCall_createCollision_state_eq target collision result hfork]
       exact ready.state
   | createRun target collision evm core coreTrace result =>
-      rw [processMessageCall_createRun_state_eq target collision core result]
-      exact coreTrace.stateInv_admitted preserves admitted target
+      rw [processMessageCall_createRun_state_eq target collision core result hfork]
+      exact coreTrace.stateInv_admitted preserves hfork admitted target
         (StateInv.ne_of_messageCreateCollision_false ready.state collision)
         ready
   | callRun target delegated refund delegation execMsg execMsgEq evm core
       coreTrace result =>
       rw [processMessageCall_callRun_state_eq target delegation execMsgEq core
-        result]
+        result hfork]
       have delegatedReady : c.MsgInv ca delegated :=
         ready.of_messageCallDelegation delegation
       have execReady : c.MsgInv ca execMsg := by
@@ -228,7 +243,11 @@ theorem MessageCallTrace.stateInv_admitted
         rw [execMsgEq, messageCallExecutionMessage_target_eq,
           messageCallDelegation_target_eq delegation]
         exact target
-      exact coreTrace.stateInv_admitted preserves admitted
+      have execFork : CoveredFork execMsg.benv.stat.fork := by
+        rw [execMsgEq, messageCallExecutionMessage_benv_stat,
+          messageCallDelegation_benv_stat delegation]
+        exact hfork
+      exact coreTrace.stateInv_admitted preserves execFork admitted
         (execReady.runReady_of_call execTarget)
 
 end ExecutionTrace
