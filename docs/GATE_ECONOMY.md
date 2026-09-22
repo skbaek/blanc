@@ -85,7 +85,7 @@ host-local observations; `unmeasured` is preserved honestly and no parallel sums
 | 73 | `scripts/check-drip-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, populations, tools | already precise: generated fixture sources, complete fixture population, target and native runtime closure are direct inputs | generated population reproduced | exclusive | none known |
 | 74 | `scripts/check-lido-twg-pinned-target-current-mainnet.sh --composed-prerequisites` | yes | yes | yes | `current-mainnet` | env, external, files, lean_entries, populations, tools | already precise: exact compiler-owned artifacts, generated result, applicability ledger, target and runtime closure are direct inputs | ~15 s after the evaluator cache is warm | exclusive | none known |
 | 75 | `scripts/check.sh --suggestions-only` | — | — | yes | — | files, lean_entries, tools | not expensive | ~4 s | elaboration | a suggestion harness that re-implemented the production dispatch, so deleting the leaf delegation inside proofRecipeMatches left every assertion green |
-| 76 | `python3 -B scripts/test-elab-migration-comparison.py` | — | — | yes | — | files, tools | not expensive | sub-second | light | none known |
+| 76 | `python3 -B scripts/test-elab-migration-comparison.py` | — | — | yes | — | files, tools | not expensive | unmeasured | light | none known |
 
 ## Population reconciliation
 
