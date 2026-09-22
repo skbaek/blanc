@@ -10703,6 +10703,30 @@ lemma Ninst.exchange_balance_effectRec {imm : UInt8} :
     (fun _ _ hf =>
       Devm.balNoninc_of_getBal_eq (funext fun a => (hf.getBal a).symm))
 
+/-- An instruction frame is balance-silent, hence transports directly to the
+total-balance preorder used by the balance-effect layer. -/
+lemma Devm.instructionFrame_refines_balNoninc :
+    ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → Devm.BalNoninc d d' := by
+  intro pre post h
+  apply Devm.balNoninc_of_state
+  rw [h.state]
+  exact balNoninc_refl_trans.1.1 _
+
+/-- Charging state gas is balance-silent: it refines the instruction frame,
+hence transports to the balance preorder on either outcome. -/
+lemma Devm.chargeStateGas_balNoninc {amount : Nat} {d : Devm}
+    {exn : Execution} (h : chargeStateGas amount d = exn) :
+    Execution.Rel Devm.BalNoninc d exn := by
+  rw [← h]
+  exact Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
+    (chargeStateGas_instructionFrame amount d)
+
+lemma Devm.chargeStateGas_balNoninc_of_ok {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') :
+    Devm.BalNoninc d d' := by
+  have hr := Devm.chargeStateGas_balNoninc h
+  exact hr
+
 lemma Linst.selfdestruct_balance_effect :
     Linst.Effect Devm.BalNoninc .selfdestruct := by
   intro sevm pre out run
@@ -10817,30 +10841,6 @@ lemma Linst.balance_effect (l : Linst) :
     rw [run] at hf
     cases out <;> exact Devm.balNoninc_of_getBal_eq
       (funext fun a => (hf.getBal a).symm)
-
-/-- An instruction frame is balance-silent, hence transports directly to the
-total-balance preorder used by the balance-effect layer. -/
-lemma Devm.instructionFrame_refines_balNoninc :
-    ∀ ⦃d d'⦄, Devm.InstructionFrame d d' → Devm.BalNoninc d d' := by
-  intro pre post h
-  apply Devm.balNoninc_of_state
-  rw [h.state]
-  exact balNoninc_refl_trans.1.1 _
-
-/-- Charging state gas is balance-silent: it refines the instruction frame,
-hence transports to the balance preorder on either outcome. -/
-lemma Devm.chargeStateGas_balNoninc {amount : Nat} {d : Devm}
-    {exn : Execution} (h : chargeStateGas amount d = exn) :
-    Execution.Rel Devm.BalNoninc d exn := by
-  rw [← h]
-  exact Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
-    (chargeStateGas_instructionFrame amount d)
-
-lemma Devm.chargeStateGas_balNoninc_of_ok {amount : Nat} {d d' : Devm}
-    (h : chargeStateGas amount d = .ok d') :
-    Devm.BalNoninc d d' := by
-  have hr := Devm.chargeStateGas_balNoninc h
-  exact hr
 
 lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     {out : Except (EvmError × Jaune.State × AdrSet × Tra) Benv}
