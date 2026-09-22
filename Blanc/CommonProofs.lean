@@ -7261,7 +7261,7 @@ lemma prefix_of_extcodesize_val
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by rw [Devm.balReadAccount_stack, ← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
           (Devm.push_of_push hpush).memory)
@@ -7276,7 +7276,7 @@ lemma prefix_of_extcodesize_val
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by rw [Devm.balReadAccount_stack, ← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
           ((Devm.burn_of_chargeGas hgas).memory.trans
