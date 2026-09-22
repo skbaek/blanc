@@ -1403,22 +1403,48 @@ lemma of_processCreateMessage (msg : Msg)
 
 -------------------------------------------------------------------------------
 -- FORK COVERAGE.  The user-approved verified-fork set for consuming a Jaune
--- pin with Amsterdam semantics: Prague and BPO2.  Statements restricted by
--- `CoveredFork` keep their historical denotation on both forks; Amsterdam
--- coverage is never inferred from them.  The bridges below establish the
--- equivalence with the machine-field conditions repair proofs rewrite by.
+-- pin with Amsterdam semantics: the four pre-Amsterdam forks Prague, Osaka,
+-- BPO1, and BPO2 (user decision 2026-09-23).  Statements restricted by
+-- `CoveredFork` keep their historical denotation on every covered fork;
+-- Amsterdam coverage is never inferred from them.  Consumers use only the
+-- facts below (no state-gas or BAL dimension, the Prague request contracts,
+-- the system addresses are not precompiles), never the membership shape, so a
+-- change to the covered set changes this block and its eliminator alone.
 -------------------------------------------------------------------------------
 
-/-- The user-approved fork coverage: Prague and BPO2 (programme §B). -/
-def CoveredFork (f : Fork) : Prop := f = .prague ∨ f = .bpo2
+/-- The covered forks, in activation order. -/
+def coveredForks : List Fork := [.prague, .osaka, .bpo1, .bpo2]
+
+/-- The user-approved fork coverage: Prague, Osaka, BPO1, and BPO2
+(programme §B).  Amsterdam is not covered. -/
+def CoveredFork (f : Fork) : Prop := f ∈ coveredForks
+
+instance : DecidablePred CoveredFork :=
+  fun f => inferInstanceAs (Decidable (f ∈ coveredForks))
+
+/-- Eliminate a coverage proof into one case per covered fork.  The only place
+outside this block that should depend on which forks are covered. -/
+theorem CoveredFork.cases {motive : Fork → Prop} {f : Fork}
+    (h : CoveredFork f)
+    (prague : motive .prague) (osaka : motive .osaka)
+    (bpo1 : motive .bpo1) (bpo2 : motive .bpo2) : motive f := by
+  unfold CoveredFork coveredForks at h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at h
+  rcases h with rfl | rfl | rfl | rfl
+  · exact prague
+  · exact osaka
+  · exact bpo1
+  · exact bpo2
 
 theorem CoveredFork.stateGas_none {f : Fork} (h : CoveredFork f) :
-    (Fork.ruleSet f).stateGas = none := by
-  rcases h with rfl | rfl <;> rfl
+    (Fork.ruleSet f).stateGas = none :=
+  h.cases (motive := fun f => (Fork.ruleSet f).stateGas = none)
+    rfl rfl rfl rfl
 
 theorem CoveredFork.bal_none {f : Fork} (h : CoveredFork f) :
-    (Fork.ruleSet f).bal = none := by
-  rcases h with rfl | rfl <;> rfl
+    (Fork.ruleSet f).bal = none :=
+  h.cases (motive := fun f => (Fork.ruleSet f).bal = none)
+    rfl rfl rfl rfl
 
 theorem CoveredFork.rules_stateGas_none {s : BenvStat}
     (h : CoveredFork s.fork) : s.rules.stateGas = none :=
@@ -1428,15 +1454,47 @@ theorem CoveredFork.rules_bal_none {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.bal = none :=
   h.bal_none
 
+/-- Every covered fork runs the Prague general-purpose request contracts. -/
+theorem CoveredFork.requests_eq {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).requests = pragueRequests :=
+  h.cases (motive := fun f => (Fork.ruleSet f).requests = pragueRequests)
+    rfl rfl rfl rfl
+
+/-- The beacon-roots system address is not a precompile on any covered fork. -/
+theorem CoveredFork.beaconRoots_not_precompile {fork : Fork}
+    (hfork : CoveredFork fork) :
+    ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress :=
+  hfork.cases
+    (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp beaconRootsAddress)
+    (by decide) (by decide) (by decide) (by decide)
+
+/-- The history-storage system address is not a precompile on any covered
+fork. -/
+theorem CoveredFork.historyStorage_not_precompile {fork : Fork}
+    (hfork : CoveredFork fork) :
+    ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress :=
+  hfork.cases
+    (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp historyStorageAddress)
+    (by decide) (by decide) (by decide) (by decide)
+
 /-- Transport a coverage proof along a fork equation. -/
 theorem CoveredFork.of_eq {f1 f2 : Fork} (h : f1 = f2) (hf : CoveredFork f1) :
     CoveredFork f2 := by
   cases h; exact hf
 
 /-- Prague is covered. -/
-theorem CoveredFork.prague : CoveredFork .prague := .inl rfl
+theorem CoveredFork.prague : CoveredFork .prague := by decide
+
+/-- Osaka is covered. -/
+theorem CoveredFork.osaka : CoveredFork .osaka := by decide
+
+/-- BPO1 is covered. -/
+theorem CoveredFork.bpo1 : CoveredFork .bpo1 := by decide
 
 /-- BPO2 is covered. -/
-theorem CoveredFork.bpo2 : CoveredFork .bpo2 := .inr rfl
+theorem CoveredFork.bpo2 : CoveredFork .bpo2 := by decide
+
+/-- Amsterdam is not covered (the negative control on the covered set). -/
+theorem CoveredFork.not_amsterdam : ¬ CoveredFork .amsterdam := by decide
 
 end Blanc

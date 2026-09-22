@@ -612,11 +612,7 @@ theorem exists_requestsTrace
       [(1, withdrawalRequestPredeployAddress),
        (2, consolidationRequestPredeployAddress)] := by
     change (Fork.ruleSet benv.stat.fork).requests = _
-    rcases hfork with hfork | hfork
-    · rw [hfork]
-      exact pragueRules_requests
-    · rw [hfork]
-      rfl
+    exact hfork.requests_eq
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at h
   obtain ⟨deposits, hdeposits, h⟩ := Except.bind_eq_ok h
   rw [hrequests] at h
