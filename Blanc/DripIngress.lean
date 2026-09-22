@@ -78,20 +78,20 @@ theorem receive_runCompiledTo
     (hdata : sevm.data = [])
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas⟩)
-        (.ok (base.setMach ⟨[], Mem.empty, G⟩)),
+        (base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas, base.stateGas⟩)
+        (.ok (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)),
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas, base.stateGas⟩)
         runtime
-        (.ok (base.setMach ⟨[], Mem.empty, G⟩)) ∧
+        (.ok (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
-  let pre := base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas⟩
-  let mid := base.setMach ⟨[], Mem.empty, G + 15⟩
-  let afterSize := base.setMach ⟨[(0 : B256)], Mem.empty, G + 13⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, G⟩
+  let pre := base.setMach ⟨[], Mem.empty, G + receiveRuntimeGas, base.stateGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, G + 15, base.stateGas⟩
+  let afterSize := base.setMach ⟨[(0 : B256)], Mem.empty, G + 13, base.stateGas⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, G, base.stateGas⟩
   let out : Execution := .ok afterBranch
   have hstop : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       afterBranch Func.stop out :=
@@ -106,7 +106,7 @@ theorem receive_runCompiledTo
     omega
   have hpop : Devm.PopBurnBy [0] (gVerylow + gHigh) afterSize afterBranch := by
     simpa only [afterSize, afterBranch, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := afterSize) (G := G)
         (by simp only [afterSize, Devm.stack_setMach])
         (by simp only [afterSize, Devm.gasLeft_setMach, gVerylow, gHigh])
@@ -120,7 +120,7 @@ theorem receive_runCompiledTo
     simpa only [hdata, mid, afterSize, List.length_nil,
         show Nat.toB256 0 = (0 : B256) by decide,
         Devm.setMach_setMach, Devm.stack_setMach,
-        Devm.memory_setMach] using
+        Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid)
         (r := .calldatasize) (x := Nat.toB256 sevm.data.length)
         (cost := gBase) (G := G + 13) (by rintro ⟨⟩) rfl
@@ -139,7 +139,7 @@ theorem receive_runCompiledTo
       hbranchSafe
   have hentry : Devm.BurnBy gJumpdest pre mid := by
     simpa only [pre, mid, Devm.setMach_setMach, Devm.stack_setMach,
-        Devm.memory_setMach] using
+        Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.burnBy_setMach_gas (devm := pre) (G := G + 15)
         (by simp only [pre, receiveRuntimeGas, Devm.gasLeft_setMach,
           gJumpdest])
@@ -165,10 +165,10 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     (hmiss : sel ∉ selectors) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach
-          ⟨[], Mem.empty, G + tree.dispatchMissGas sel + 11⟩)
+          ⟨[], Mem.empty, G + tree.dispatchMissGas sel + 11, base.stateGas⟩)
         (Func.main tree)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   have htreeMiss : ¬ tree.HasSelector sel := by
     intro member
@@ -178,43 +178,43 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
       (program := runtime) (sevm := sevm) (base := base) G htreeMiss
   let D := tree.dispatchMissGas sel
   let afterPushZero :=
-    base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9⟩
+    base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9, base.stateGas⟩
   have hpushZero : Ninst.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+      (base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
       (pushB256 0) afterPushZero := by
     simpa only [afterPushZero, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm)
-        (devm := base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+        (devm := base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
         (w := (0 : B256)) (c := gBase) (G := G + D + 9)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
         (by simp only [Devm.stack_setMach, List.length_nil]; omega))
   let afterLoad := base.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
       calldataload afterLoad := by
     simpa only [afterPushZero, afterLoad, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_calldataload (sevm := sevm)
         (devm := afterPushZero) (v := Sevm.dataWord sevm 0)
         (G := G + D + 6) rfl rfl
         (by simp only [afterPushZero, Devm.gasLeft_setMach, gVerylow])
         (by decide))
   let afterPush224 := base.setMach
-    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + D + 3⟩
+    ⟨[(224 : B256), Sevm.dataWord sevm 0], Mem.empty, G + D + 3, base.stateGas⟩
   have hpush224Cost : pushCost (224 : B256).toBytes.sig = gVerylow := by
     decide +kernel
   have hpush224 : Ninst.RunCompiled sevm afterLoad
       (pushB256 224) afterPush224 := by
     simpa only [afterLoad, afterPush224, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := afterLoad)
         (w := (224 : B256)) (G := G + D + 3) hpush224Cost
         (by simp only [afterLoad, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterLoad, Devm.stack_setMach, List.length_cons,
           List.length_nil]; omega))
-  let afterShr := base.setMach ⟨[sel], Mem.empty, G + D⟩
+  let afterShr := base.setMach ⟨[sel], Mem.empty, G + D, base.stateGas⟩
   have h224 : (224 : B256).toNat = 224 := by decide +kernel
   have hselector' :
       Sevm.dataWord sevm 0 >>> (224 : B256).toNat = sel := by
@@ -228,10 +228,10 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
       (by simp only [afterPush224, Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)
   let run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + D + 11⟩)
+      (base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩)
       (Func.main tree)
       (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) := by
+        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
     unfold Func.main fsig shiftRight cdl
     exact .next hpushZero (.next hload (.next hpush224 (.next hshr (by
       simpa only [afterShr, D, prepend] using hdispatch))))
@@ -269,28 +269,28 @@ theorem unmatched_selector_noRawSstore
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas sel⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas sel, base.stateGas⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas sel⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas sel, base.stateGas⟩)
         runtime
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   let D := tree.dispatchMissGas sel
-  let pre := base.setMach ⟨[], Mem.empty, G + D + 28⟩
-  let mid := base.setMach ⟨[], Mem.empty, G + D + 27⟩
+  let pre := base.setMach ⟨[], Mem.empty, G + D + 28, base.stateGas⟩
+  let mid := base.setMach ⟨[], Mem.empty, G + D + 27, base.stateGas⟩
   let afterSize := base.setMach
-    ⟨[sevm.data.length.toB256], Mem.empty, G + D + 25⟩
-  let afterBranch := base.setMach ⟨[], Mem.empty, G + D + 11⟩
+    ⟨[sevm.data.length.toB256], Mem.empty, G + D + 25, base.stateGas⟩
+  let afterBranch := base.setMach ⟨[], Mem.empty, G + D + 11, base.stateGas⟩
   let out : Execution :=
     .error (.revert,
-      (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
     unmatchedSelectorMain_runCompiledTo_with_path
       (sevm := sevm) (base := base) (G := G) hselector hmiss
@@ -301,7 +301,7 @@ theorem unmatched_selector_noRawSstore
   have hpop : Devm.PopBurnBy [sevm.data.length.toB256]
       (gVerylow + gHigh + gJumpdest) afterSize afterBranch := by
     simpa only [afterSize, afterBranch, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := afterSize) (G := G + D + 11)
         (by simp only [afterSize, Devm.stack_setMach])
         (by simp only [afterSize, Devm.gasLeft_setMach,
@@ -314,10 +314,10 @@ theorem unmatched_selector_noRawSstore
       (⟨hmain, hmainSafe⟩ :
         ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
             (base.setMach ⟨[], Mem.empty,
-              G + tree.dispatchMissGas sel + 11⟩)
+              G + tree.dispatchMissGas sel + 11, base.stateGas⟩)
             (Func.main tree)
             (.error (.revert,
-              (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+              (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
           Func.RunCompiledTo.NoRawSstorePath run)
   obtain ⟨hmain', hmainSafe'⟩ := mainPack
   let hbranch : Func.RunCompiledTo
@@ -330,7 +330,7 @@ theorem unmatched_selector_noRawSstore
       hmainSafe'
   have hsize : Ninst.RunCompiled sevm mid calldatasize afterSize := by
     simpa only [mid, afterSize, Devm.setMach_setMach,
-        Devm.stack_setMach, Devm.memory_setMach] using
+        Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid)
         (r := .calldatasize) (x := Nat.toB256 sevm.data.length)
         (cost := gBase) (G := G + D + 25) (by rintro ⟨⟩) rfl
@@ -349,7 +349,7 @@ theorem unmatched_selector_noRawSstore
       hbranchSafe
   have hentry : Devm.BurnBy gJumpdest pre mid := by
     simpa only [pre, mid, Devm.setMach_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, gJumpdest] using
+        Devm.memory_setMach, Devm.stateGas_setMach, gJumpdest] using
       Devm.burnBy_setMach_gas (devm := pre) (G := G + D + 27)
         (by simp only [pre, Devm.gasLeft_setMach])
   have hprogram : Prog.RunCompiledTo sevm pre runtime out :=
