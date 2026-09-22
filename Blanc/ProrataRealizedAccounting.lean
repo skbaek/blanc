@@ -741,7 +741,8 @@ theorem BodyEntry.realizedWithdrawal
     (invariant : Inv (Devm.getStor pre sevm.currentTarget) sevm.value
       (Devm.getBal pre sevm.currentTarget))
     (precondition : prorataSpec.Pre sevm.currentTarget sevm pre)
-    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (RealizedWithdrawal sevm pre post) := by
   rcases entry with ⟨bodyPre, hstor, hbal, hcode, run⟩
   have bodyInvariant :
@@ -757,7 +758,7 @@ theorem BodyEntry.realizedWithdrawal
   let paid := Sevm.argWord sevm 0 *
     (Devm.getBal bodyPre sevm.currentTarget + 1) /
       ((Devm.getStor bodyPre sevm.currentTarget).get supplySlot + offset)
-  have pays := withdraw_pays_exactly run
+  have pays := withdraw_pays_exactly run hfork
   change ∃ callPre callPost guardPost returnPre,
     WithdrawPreCallEffect sevm bodyPre callPre ∧
     AcceptedPayout sevm paid callPre callPost guardPost returnPre ∧
@@ -1196,6 +1197,7 @@ exactly the projected PRORATA accounting change: either a positive external
 credit or no accounting step. -/
 theorem Ninst.foreignNoneAccountingReplay
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
@@ -1205,8 +1207,8 @@ theorem Ninst.foreignNoneAccountingReplay
         (RealizedSnapshot.ofState ca pre.state) steps
         (RealizedSnapshot.ofState ca post.state) := by
   exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-    (_root_.Blanc.Ninst.foreignNone_getStor_eq run target_ne)
-    (_root_.Blanc.Ninst.targetBalanceMono_of_none run target_ne sum_nof)
+    (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork run target_ne)
+    (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork run target_ne sum_nof)
 
 /-- Every successful terminal instruction in a foreign frame realizes exactly
 one projected PRORATA external credit or no accounting step. -/
@@ -1272,7 +1274,8 @@ theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
     (precondition : prorataSpec.Pre ca frame.sevm frame.pre)
     (provenance : ProrataAccountingProvenance)
     (actor : provenance.actor = some frame.sevm.caller)
-    (recipient_ne : frame.sevm.caller.toB256.toAdr ≠ ca) :
+    (recipient_ne : frame.sevm.caller.toB256.toAdr ≠ ca)
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     (∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.beforeCredit ca frame.sevm.value frame.pre.state)
@@ -1302,7 +1305,7 @@ theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
     have recipient_ne' :
         frame.sevm.caller.toB256.toAdr ≠ frame.sevm.currentTarget := by
       simpa only [target_eq] using recipient_ne
-    exact entry.realizedWithdrawal hvalue invariant precondition' recipient_ne'
+    exact entry.realizedWithdrawal hvalue invariant precondition' recipient_ne' hfork
 
 end Prorata
 
