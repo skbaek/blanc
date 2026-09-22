@@ -1319,6 +1319,21 @@ lemma Devm.chargeStateGas_output {amount : Nat} {d d' : Devm}
     · simp only [h2] at h
       cases h
 
+/-- A successful state-gas charge preserves loaded storage. -/
+lemma Devm.chargeStateGas_getStor {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') : Devm.getStor d = Devm.getStor d' := by
+  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
+    Footprint.toExecution, Mach.chargeStateGas] at h
+  by_cases h1 : amount ≤ d.mach.stateGas.left
+  · simp only [h1] at h
+    injection h with heq; subst heq; rfl
+  · simp only [h1] at h
+    by_cases h2 : amount - d.mach.stateGas.left ≤ d.mach.gasLeft
+    · simp only [h2] at h
+      injection h with heq; subst heq; rfl
+    · simp only [h2] at h
+      cases h
+
 lemma Devm.popToNat_machFrame (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
   exact liftMach_machFrame Mach.popToNat d
@@ -12821,29 +12836,66 @@ lemma sstore_getStor_setStorVal {sevm : Sevm} {s s' : Devm} {x xs}
     ∃ v, Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x v := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hkx : x = key :=
-    (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  refine ⟨val, ?_⟩
-  rw [← eq, setStorVal_getStor_self, hkx, E]
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2: the historical eight-bind walk.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have hkx : x = key :=
+      (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+      · have hbr : Devm.getStor s₂ =
+            Devm.getStor (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key s₂) := rfl
+        exact hbr.trans addAccessedStorageKey_getStor.symm
+      · rfl
+    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+      injection h6 with eq; rw [← eq]; rfl
+    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+    have E' : Devm.getStor s =
+          Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
+      E.trans rfl
+    injection h9 with eq
+    refine ⟨val, ?_⟩
+    rw [← eq, setStorVal_getStor_self, hkx, E']
+  · -- Amsterdam: static check first, state-gas second dimension.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨key, s₁⟩, h1, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨⟨val, s₂⟩, h2, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, h3, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₃, hchg, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, hstg, h9⟩
+    have hkx : x = key :=
+      (List.of_cons_pref_of_cons_pref hx (pref_of_split (Devm.pop_of_pop h1).stack)).left
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have echg : Devm.getStor s₂ = Devm.getStor s₃ := by
+      have e1' := chargeGas_getStor_eq hchg
+      have e2' : Devm.getStor s₂ = Devm.getStor s₃ := by
+        rw [← e1']
+        simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
+          Devm.withRefundCounter, Devm.balReadStorage]
+        try split <;> (try split) <;> rfl
+      exact e2'
+    have estg : Devm.getStor s₃ = Devm.getStor s₄ :=
+      Devm.chargeStateGas_getStor hstg
+    have E : Devm.getStor s = Devm.getStor s₄ := e1.trans (e2.trans (echg.trans estg))
+    have E' : Devm.getStor s =
+        Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄) :=
+      E.trans rfl
+    injection h9 with eq
+    refine ⟨val, ?_⟩
+    rw [← eq, setStorVal_getStor_self, hkx, E']
 
 lemma sstore_preserves_stor_rest {x xs} {sevm : Sevm} {s s' : Devm} :
   ¬ ValidAdr x →
@@ -12863,34 +12915,74 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     Devm.getStor s' sevm.currentTarget = (Devm.getStor s sevm.currentTarget).set x y := by
   rcases of_run_reg h_run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-  rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-  rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-  rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-  rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-  have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
-  have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
-  have hxy : x = key ∧ y = val := by
-    rw [hs, hs2] at hx
-    rcases hx with ⟨sfx, heq⟩
-    injection heq with hk hrest
-    injection hrest with hv _
-    exact ⟨hk.symm, hv.symm⟩
-  have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-    injection h6 with eq; rw [← eq]; rfl
-  have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-  have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E]
+  cases hsg : sevm.benvStat.rules.stateGas
+  · -- Prague/BPO2: the historical eight-bind walk.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+    have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
+    have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
+    have hxy : x = key ∧ y = val := by
+      rw [hs, hs2] at hx
+      rcases hx with ⟨sfx, heq⟩
+      injection heq with hk hrest
+      injection hrest with hv _
+      exact ⟨hk.symm, hv.symm⟩
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
+      · have hbr : Devm.getStor s₂ =
+            Devm.getStor (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key s₂) := rfl
+        exact hbr.trans addAccessedStorageKey_getStor.symm
+      · rfl
+    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+      injection h6 with eq; rw [← eq]; rfl
+    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+    have E' : Devm.getStor s =
+          Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
+      E.trans rfl
+    injection h9 with eq
+    rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E']
+  · -- Amsterdam: static check first, state-gas second dimension.
+    simp only [hsg] at run
+    rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨key, s₁⟩, h1, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨⟨val, s₂⟩, h2, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, h3, run₄⟩
+    rcases Except.bind_eq_ok run₄ with ⟨s₃, hchg, run₅⟩
+    rcases Except.bind_eq_ok run₅ with ⟨s₄, hstg, h9⟩
+    have hs : s.stack = key :: s₁.stack := (Devm.pop_of_pop h1).stack
+    have hs2 : s₁.stack = val :: s₂.stack := (Devm.pop_of_pop h2).stack
+    have hxy : x = key ∧ y = val := by
+      rw [hs, hs2] at hx
+      rcases hx with ⟨sfx, heq⟩
+      injection heq with hk hrest
+      injection hrest with hv _
+      exact ⟨hk.symm, hv.symm⟩
+    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+    have echg : Devm.getStor s₂ = Devm.getStor s₃ := by
+      have e1' := chargeGas_getStor_eq hchg
+      rw [← e1']
+      simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
+        Devm.withRefundCounter, Devm.balReadStorage]
+      try split <;> (try split) <;> rfl
+    have estg : Devm.getStor s₃ = Devm.getStor s₄ :=
+      Devm.chargeStateGas_getStor hstg
+    have E : Devm.getStor s = Devm.getStor s₄ := e1.trans (e2.trans (echg.trans estg))
+    have E' : Devm.getStor s =
+        Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄) :=
+      E.trans rfl
+    injection h9 with eq
+    rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E']
 
 syntax "invariance" : tactic
 macro_rules
