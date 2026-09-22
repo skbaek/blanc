@@ -10461,29 +10461,63 @@ lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
     Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
-  split at h
-  · cases h
-  · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
-    split_ifs at h_rest
-    cases h_rest
-    exact chargeGas_delSets_eq h_charge
+  cases hsg : rules.stateGas
+  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+    simp only [hsg] at h
+    split at h
+    · cases h
+    · rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+      split_ifs at h_rest
+      cases h_rest
+      exact chargeGas_delSets_eq h_charge
+  · -- Amsterdam: prefix and size first, keccak-plus-state-bytes charge.
+    simp only [hsg] at h
+    split at h
+    · cases h
+    · split_ifs at h
+      rcases Except.bind_eq_ok h with ⟨d1, h_charge, h_rest⟩
+      exact (chargeStateGas_delSets_eq h_rest).trans
+        (chargeGas_delSets_eq h_charge)
 
 lemma chargeCodeGas_delSets_err {rules : ForkRules} {d d' : Devm} {err : EvmError}
     (h : processCreateMessage.chargeCodeGas rules d = .error ⟨err, d'⟩) :
     Devm.delSets d' = Devm.delSets d := by
   unfold processCreateMessage.chargeCodeGas at h
   dsimp only at h
-  split at h
-  · cases h; rfl
-  · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
-    · rw [hcg] at h
-      dsimp only [Bind.bind, Except.bind] at h
-      cases h
-      exact chargeGas_delSets_err hcg
-    · rw [hcg] at h
-      dsimp only [Bind.bind, Except.bind] at h
-      split_ifs at h
-      cases h; exact chargeGas_delSets_eq hcg
+  cases hsg : rules.stateGas
+  · -- Prague/BPO2: per-byte deposit, size check after the charge.
+    simp only [hsg] at h
+    split at h
+    · cases h; rfl
+    · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+      · rw [hcg] at h
+        dsimp only [Bind.bind, Except.bind] at h
+        cases h
+        exact chargeGas_delSets_err hcg
+      · rw [hcg] at h
+        dsimp only [Bind.bind, Except.bind] at h
+        split_ifs at h
+        cases h; exact chargeGas_delSets_eq hcg
+  · -- Amsterdam: prefix and size first, keccak-plus-state-bytes charge.
+    simp only [hsg] at h
+    split at h
+    · cases h; rfl
+    · split_ifs at h
+      · cases h; rfl
+      · rcases hcg : chargeGas _ d with ⟨e, dd⟩ | dd
+        · rw [hcg] at h
+          dsimp only [Bind.bind, Except.bind] at h
+          cases h
+          exact chargeGas_delSets_err hcg
+        · rw [hcg] at h
+          dsimp only [Bind.bind, Except.bind] at h
+          rcases hcsg : chargeStateGas _ dd with ⟨e2, dd2⟩ | dd2
+          · rw [hcsg] at h
+            cases h
+            exact (chargeStateGas_delSets_err hcsg).trans
+              (chargeGas_delSets_eq hcg)
+          · rw [hcsg] at h
+            cases h
 
 lemma Devm.push_noDel {wa : Adr} {x : B256} {d : Devm} {exn : Execution}
     (heq : Devm.push x d = exn) (h : Devm.NoDel wa d) : Execution.NoDel wa exn := by
