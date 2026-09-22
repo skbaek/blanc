@@ -2070,7 +2070,7 @@ theorem canonicalDeploymentTransaction_succeeds
   have hentry :
       Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) =
         some (makeReceipt deploymentTx messageOut.error
-          ((BlockOutput.init : BlockOutput).blockGasUsed + usedGas)
+          ((BlockOutput.init : BlockOutput).cumulativeGasUsed + usedGas)
           messageOut.logs) := by
     dsimp only [bout, deploymentFinalBout]
     simp only [deploymentTxPreludeBout]
@@ -2078,7 +2078,7 @@ theorem canonicalDeploymentTransaction_succeeds
       (((BlockOutput.init : BlockOutput).receiptsTrie.insert
         (deploymentReceiptKey 0)
         (makeReceipt deploymentTx messageOut.error
-          ((BlockOutput.init : BlockOutput).blockGasUsed + usedGas)
+          ((BlockOutput.init : BlockOutput).cumulativeGasUsed + usedGas)
           messageOut.logs))[deploymentReceiptKey 0]?) = _
     rw [Std.TreeMap.getElem?_insert_self]
   have hdeposit : parseDepositRequests bout = .ok [] := by
