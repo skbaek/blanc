@@ -1774,7 +1774,8 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
       ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (transferZeroThen next) r) :
+      (transferZeroThen next) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ snext,
       (backedSpec weth10 dp).Pre ca sevm snext ∧
       Func.Run ((weth10 dp).main :: weth10Aux) sevm snext next r := by
@@ -1868,7 +1869,7 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
   have h_eth_le :
       Sevm.argWord sevm 1 ≤ sc.getBal sevm.currentTarget :=
     value_le_balance_of_run_call_success_guard
-      hpCall hcall hiszero hpopCall
+      hpCall hcall hiszero hpopCall hfork
   have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
     (Line.of_inv Devm.getBal (by line_inv) hdebit).trans
       ((Line.of_inv Devm.getBal (by line_inv) hevent).trans h_bal_s5_sc)
@@ -1905,7 +1906,7 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
       ← congrFun h_bal_s3_sc sevm.currentTarget]
     exact h_afterDebit
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall
+    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -1991,7 +1992,7 @@ token debit and unchanged flash counter supply the storage premises. -/
 theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdraw) := by
-  intro sevm s r h_target h_pre ih run
+  intro sevm s r hfork h_target h_pre ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -2094,7 +2095,7 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
   have h_eth_le :
       Sevm.argWord sevm 0 ≤ sc.getBal sevm.currentTarget :=
     value_le_balance_of_run_call_success_guard
-      hpCall hcall hiszero hpopCall
+      hpCall hcall hiszero hpopCall hfork
   have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
     (Line.of_inv Devm.getBal (by line_inv) hdebit).trans
       ((Line.of_inv Devm.getBal (by line_inv) hevent).trans h_bal_s5_sc)
@@ -2126,7 +2127,7 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
       ← congrFun h_bal_s3_sc sevm.currentTarget]
     exact h_afterDebit
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall
+    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -2227,7 +2228,7 @@ arbitrary canonical or dirty target words. -/
 theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
     (backedSpec weth10 dp).FuncSoundNoMem ca weth10Aux
       (nonpayable withdrawTo) := by
-  intro sevm s r h_target h_pre ih run
+  intro sevm s r hfork h_target h_pre ih run
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
   change Stor.Weth10Inv
@@ -2328,7 +2329,7 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
   have h_eth_le :
       Sevm.argWord sevm 1 ≤ sc.getBal sevm.currentTarget :=
     value_le_balance_of_run_call_success_guard
-      hpCall hcall hiszero hpopCall
+      hpCall hcall hiszero hpopCall hfork
   have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
     (Line.of_inv Devm.getBal (by line_inv) hdebit).trans
       ((Line.of_inv Devm.getBal (by line_inv) hevent).trans h_bal_s5_sc)
@@ -2360,7 +2361,7 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
       ← congrFun h_bal_s3_sc sevm.currentTarget]
     exact h_afterDebit
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall
+    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -2509,7 +2510,8 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
       ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      transferFromZero r) :
+      transferFromZero r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (backedSpec weth10 dp).Post ca sevm r := by
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
@@ -2607,7 +2609,7 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
   have h_eth_le :
       Sevm.argWord sevm 2 ≤ sc.getBal sevm.currentTarget :=
     value_le_balance_of_run_call_success_guard
-      hpCall hcall hiszero hpopCall
+      hpCall hcall hiszero hpopCall hfork
   have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
     (Line.of_inv Devm.getBal (by line_inv) hdebit).trans
       ((Line.of_inv Devm.getBal (by line_inv) hevent).trans h_bal_s5_sc)
@@ -2644,7 +2646,7 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
       ← congrFun h_bal_s3_sc sevm.currentTarget]
     exact h_afterDebit
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall
+    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -2774,7 +2776,8 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
       ((backedSpec weth10 dp).PreWf ca) ((backedSpec weth10 dp).Post ca))
     (h_value : sevm.value = 0)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      withdrawFromCore r) :
+      withdrawFromCore r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (backedSpec weth10 dp).Post ca sevm r := by
   subst ca
   refine ⟨Func.preserves_nof run h_pre.side, ?_⟩
@@ -2872,7 +2875,7 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
   have h_eth_le :
       Sevm.argWord sevm 2 ≤ sc.getBal sevm.currentTarget :=
     value_le_balance_of_run_call_success_guard
-      hpCall hcall hiszero hpopCall
+      hpCall hcall hiszero hpopCall hfork
   have h_bal_s3_sc : Devm.getBal s3 = Devm.getBal sc :=
     (Line.of_inv Devm.getBal (by line_inv) hdebit).trans
       ((Line.of_inv Devm.getBal (by line_inv) hevent).trans h_bal_s5_sc)
@@ -2909,7 +2912,7 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
       ← congrFun h_bal_s3_sc sevm.currentTarget]
     exact h_afterDebit
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall
+    rfl ih hpCall h_code_sc h_side_sc h_eth_le h_ready hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -3309,7 +3312,8 @@ theorem backedPost_of_run_callBoolCallback
     (h_value_bal : Line.Inv Devm.getBal value)
     (h_value_code : Line.Inv Devm.getCode value)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (callBoolCallback sel target dataArg value) r) :
+      (callBoolCallback sel target dataArg value) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (backedSpec weth10 dp).Post ca sevm r := by
   obtain ⟨sc, sf, g, inputSize, xs, hpCall, hcall, hbool,
       h_stor_s_sc, h_bal_s_sc, h_code_s_sc⟩ :=
@@ -3331,7 +3335,7 @@ theorem backedPost_of_run_callBoolCallback
     rw [b256_sub_zero]
     exact h_inv_sc
   have h_post_call := backedPost_of_value_call dp ca
-    h_target ih hpCall h_code_sc h_side_sc (b256_zero_le _) h_inv_ready hcall
+    h_target ih hpCall h_code_sc h_side_sc (b256_zero_le _) h_inv_ready hcall hfork
   obtain ⟨h_stor_tail, h_bal_tail, h_code_tail⟩ :=
     of_run_call_boolReturn_preserves_fields dp hbool
   refine ⟨?_, ?_⟩
@@ -3938,7 +3942,8 @@ theorem flashFloorPost_of_run_callBoolCallback
     (h_value_bal : Line.Inv Devm.getBal value)
     (h_value_code : Line.Inv Devm.getCode value)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (callBoolCallback sel target dataArg value) r) :
+      (callBoolCallback sel target dataArg value) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (flashFloorSpec dp floor).Post ca sevm r := by
   obtain ⟨sc, sf, g, inputSize, xs, hpCall, hcall, hbool,
       h_stor_s_sc, h_bal_s_sc, h_code_s_sc⟩ :=
@@ -3952,7 +3957,7 @@ theorem flashFloorPost_of_run_callBoolCallback
     rw [← h_target, ← h_code_s_sc, h_target]
     exact h_code
   have h_post_call := flashFloorPost_of_value_call dp floor ca
-    h_target ih hpCall h_code_sc h_floor_sc hcall
+    h_target ih hpCall h_code_sc h_floor_sc hcall hfork
   obtain ⟨h_stor_tail, h_bal_tail, h_code_tail⟩ :=
     of_run_call_boolReturn_preserves_fields dp hbool
   refine ⟨trivial, ?_⟩
@@ -3976,11 +3981,12 @@ theorem flashFloorCode_of_call_success_guard
     (h_floor : Stor.FlashFloor floor (Devm.getStor sc ca))
     (hcall : Ninst.Run sevm sc call s6)
     (hiszero : Ninst.Run sevm s6 iszero si)
-    (hpop : Devm.PopBurn [0] si sb) :
+    (hpop : Devm.PopBurn [0] si sb)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Stor.FlashFloor floor (Devm.getStor sb ca) ∧
       some (sb.getCode ca).toList = Prog.compile (weth10 dp) := by
   have h_post_call := flashFloorPost_of_value_call dp floor ca
-    h_target ih hp h_code h_floor hcall
+    h_target ih hp h_code h_floor hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -4484,7 +4490,8 @@ theorem of_transferZeroThen_floor
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (transferZeroThen next) r) :
+      (transferZeroThen next) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ snext,
       Stor.FlashFloor floor (Devm.getStor snext ca) ∧
       some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
@@ -4580,7 +4587,7 @@ theorem of_transferZeroThen_floor
       h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
     exact h_floor
   have h_post_call := flashFloorPost_of_value_call dp floor
-    sevm.currentTarget rfl ih hpCall h_code_sc h_floor_sc hcall
+    sevm.currentTarget rfl ih hpCall h_code_sc h_floor_sc hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -7319,6 +7326,7 @@ premise is explicit because callback-bearing leaves must construct the child
 `Prog.At` witness used by the deeper-frame hypothesis. -/
 def ExactRelFuncSound (dp : DeployParams) (ca : Adr) (f : Func) : Prop :=
   ∀ {sevm : Sevm} {s r : Devm},
+    CoveredFork sevm.benvStat.fork →
     sevm.currentTarget = ca →
     some (s.getCode ca).toList = Prog.compile (weth10 dp) →
     FlashExactDepth dp ca sevm.depth →
@@ -9007,7 +9015,7 @@ private theorem permitBody_balanceOwnSilent
 private theorem permitBody_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca (permit dp) := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
     (arg 3 +++ [timestamp, gt] +++
       ((.call expiredPermitErrorSlot) <?>
@@ -9117,7 +9125,7 @@ theorem permit_balanceSilent
 theorem permit_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca (nonpayable (permit dp)) := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   rcases run_body_of_run_nonpayable run with
     ⟨mid, _, h_state, hrun⟩
   have h_code_mid : some (mid.getCode ca).toList =
@@ -9149,7 +9157,7 @@ theorem ExactRelFuncSound.of_stable
     (dp : DeployParams) (ca : Adr) {f : Func}
     (hstable : FlashStable dp f) :
     ExactRelFuncSound dp ca f := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   unfold FlashExactRel
   rw [← h_target]
   exact hstable run
@@ -9160,7 +9168,7 @@ theorem ExactRelFuncSound.nonpayable
     (dp : DeployParams) (ca : Adr) {body : Func}
     (hbody : ExactRelFuncSound dp ca body) :
     ExactRelFuncSound dp ca (nonpayable body) := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   rcases run_body_of_run_nonpayable run with
     ⟨mid, _, h_state, hrun⟩
   have h_code_mid :
@@ -9168,7 +9176,7 @@ theorem ExactRelFuncSound.nonpayable
     rw [← h_code]
     congr 2
     exact getCode_eq_of_state_eq h_state.symm ca
-  have h_exact := hbody h_target h_code_mid ih hrun
+  have h_exact := hbody hfork h_target h_code_mid ih hrun
   unfold FlashExactRel at h_exact ⊢
   exact h_exact.trans (congrArg
     (fun st => (st.get ca).stor.get flashMintedSlot) h_state.symm)
@@ -9284,7 +9292,8 @@ theorem flashExactRel_of_run_callBoolCallback
     (h_value_bal : Line.Inv Devm.getBal value)
     (h_value_code : Line.Inv Devm.getCode value)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (callBoolCallback sel target dataArg value) r) :
+      (callBoolCallback sel target dataArg value) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     FlashExactRel dp ca sevm s r := by
   obtain ⟨sc, sf, g, inputSize, xs, hpCall, hcall, hbool,
       h_stor_s_sc, h_bal_s_sc, h_code_s_sc⟩ :=
@@ -9295,7 +9304,7 @@ theorem flashExactRel_of_run_callBoolCallback
     rw [← h_target, ← h_code_s_sc, h_target]
     exact h_code
   have h_call := flashExactRel_of_value_call dp ca
-    h_target ih hpCall h_code_sc hcall
+    h_target ih hpCall h_code_sc hcall hfork
   obtain ⟨h_stor_tail, h_bal_tail, h_code_tail⟩ :=
     of_run_call_boolReturn_preserves_fields dp hbool
   unfold FlashExactRel at h_call ⊢
@@ -9307,7 +9316,7 @@ theorem flashExactRel_of_run_callBoolCallback
 theorem depositToAndCall_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca depositToAndCall := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   subst ca
   simp only [depositToAndCall] at run
   rcases of_run_prepend mintToPrefix _ run with
@@ -9358,7 +9367,8 @@ theorem of_transferZeroThen_exact
     (ih : FlashExactDepth dp ca sevm.depth)
     (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (transferZeroThen next) r) :
+      (transferZeroThen next) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ snext,
       FlashExactRel dp ca sevm s snext ∧
       some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
@@ -9453,7 +9463,7 @@ theorem of_transferZeroThen_exact
     rw [← congrFun h_stor_s4_sc sevm.currentTarget,
       h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
   have h_call_exact := flashExactRel_of_value_call dp
-    sevm.currentTarget rfl ih hpCall h_code_sc hcall
+    sevm.currentTarget rfl ih hpCall h_code_sc hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -9589,11 +9599,12 @@ theorem flashExactCode_of_call_success_guard
     (h_code : some (sc.getCode ca).toList = Prog.compile (weth10 dp))
     (hcall : Ninst.Run sevm sc call s6)
     (hiszero : Ninst.Run sevm s6 iszero si)
-    (hpop : Devm.PopBurn [0] si sb) :
+    (hpop : Devm.PopBurn [0] si sb)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     FlashExactRel dp ca sevm sc sb ∧
       some (sb.getCode ca).toList = Prog.compile (weth10 dp) := by
   have h_call := flashExactRel_of_value_call dp ca
-    h_target ih hp h_code hcall
+    h_target ih hp h_code hcall hfork
   have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
     Line.of_inv Devm.getStor (by line_inv)
       (Line.Run.cons hiszero Line.Run.nil)
@@ -9894,7 +9905,7 @@ arbitrary borrower call, decoder, allowance phase, and final burn. -/
 theorem flashLoan_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca flashLoan := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   subst ca
   rcases of_flashLoan_toCall dp run with
     ⟨recipient, sc, g, inputSize, base, hbase, hamount, htotal,
@@ -9906,7 +9917,7 @@ theorem flashLoan_exactRelFuncSound
   rcases of_run_flashLoanFromCall dp htail with
     ⟨sf, ss, hcall, hsettle, hstorSfSs, hbalSfSs⟩
   have hcallExact := flashExactRel_of_value_call dp sevm.currentTarget
-    rfl ih hpCall h_code_sc hcall
+    rfl ih hpCall h_code_sc hcall hfork
   have hflashSs :
       (Devm.getStor ss sevm.currentTarget).get flashMintedSlot =
         base + Sevm.argWord sevm 2 := by
@@ -10008,7 +10019,7 @@ theorem withdrawTo_exactRelFuncSound
 theorem transferFromZero_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca transferFromZero := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
     transferFromZero r at run
   obtain ⟨snext, h_exact, h_code_next, hreturn⟩ :=
@@ -10032,7 +10043,7 @@ theorem transferFromZero_exactRelFuncSound
 theorem transferFromCore_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca transferFromCore := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
     transferFromCore r at run
   simp only [transferFromCore] at run
@@ -10106,7 +10117,7 @@ theorem transferFrom_exactRelFuncSound
 theorem withdrawFromCore_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
     ExactRelFuncSound dp ca withdrawFromCore := by
-  intro sevm s r h_target h_code ih run
+  intro sevm s r hfork h_target h_code ih run
   change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
     withdrawFromCore r at run
   obtain ⟨snext, h_exact, h_code_next, hstop⟩ :=
@@ -10357,7 +10368,8 @@ theorem of_flashLoanFromCall_backed
         inputSize :: 0 :: 0 ::
         [Sevm.argWord sevm 2, recipient.toB256] <<+ sc.stack))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
-      flashLoanFromCall r) :
+      flashLoanFromCall r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ ss,
       Func.Run ((weth10 dp).main :: weth10Aux) sevm ss flashSettle r ∧
       Stor.Weth10Inv (Devm.getStor ss ca) 0 (Devm.getBal ss ca) ∧
@@ -10374,10 +10386,10 @@ theorem of_flashLoanFromCall_backed
     exact h_inv_sc
   have h_post_call := backedPost_of_value_call dp sevm.currentTarget
     rfl ih hpCall h_code_sc h_side_sc (b256_zero_le _)
-      h_inv_call hcall
+      h_inv_call hcall hfork
   have h_call_exact := flashExactRel_of_value_call dp sevm.currentTarget
     rfl (flashExactDepth dp sevm.currentTarget sevm.depth)
-      hpCall h_code_sc hcall
+      hpCall h_code_sc hcall hfork
   have h_inv_ss : Stor.Weth10Inv
       (Devm.getStor ss sevm.currentTarget) 0
       (Devm.getBal ss sevm.currentTarget) := by
