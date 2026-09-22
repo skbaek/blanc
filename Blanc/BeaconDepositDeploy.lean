@@ -43,7 +43,7 @@ theorem Ninst.runCompiled_constructorPushWord
     (gas : devm.gasLeft = G + gVerylow)
     (room : devm.stack.length < 1024) :
     Ninst.RunCompiled sevm devm (constructorPushWord word)
-      (devm.setMach ⟨word :: devm.stack, devm.memory, G⟩) := by
+      (devm.setMach ⟨word :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   simpa only [constructorPushWord] using
     (Ninst.runCompiled_pushB256AsPush2OrPush32
       (sevm := sevm) (devm := devm) (word := word) (G := G) gas room)
