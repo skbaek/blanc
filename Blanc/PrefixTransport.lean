@@ -481,7 +481,8 @@ theorem Exec.Deriv.SourceCursor.ofRunPrefix_sameFrame_gasFree
     {s t : Devm} {target : Prog.SourcePath} {rest : Func}
     (walk : Func.RunPrefix (program.main :: program.aux) root.sevm
       current s body target t rest)
-    (agree : Devm.EqModGas s cursor.pre) :
+    (agree : Devm.EqModGas s cursor.pre)
+    (hsg : root.sevm.benvStat.rules.stateGas = none) :
     ∃ cursor' : Exec.Deriv.SourceCursor root program target rest,
       Devm.EqModGas t cursor'.pre ∧
       Exec.Deriv.ExecFreeUntil cursor.node cursor'.node := by
@@ -490,7 +491,7 @@ theorem Exec.Deriv.SourceCursor.ofRunPrefix_sameFrame_gasFree
   | next gasFree looseRun _ ih =>
       rcases cursor.nextForward ok with ⟨tailCursor, edge, actualRun⟩
       rcases ih tailCursor
-          (Ninst.run_eqModGas gasFree looseRun actualRun agree) with
+          (Ninst.run_eqModGas gasFree looseRun actualRun agree hsg) with
         ⟨cursor', agree', reached⟩
       exact ⟨cursor', agree', (Exec.Deriv.ExecFreeUntil.ofStep edge
         (cursor.ninstAt.not_exec_of_gasFree gasFree)).trans reached⟩
@@ -538,11 +539,12 @@ theorem Exec.Deriv.SourceCursor.ofRunPrefix
     {s t : Devm} {target : Prog.SourcePath} {rest : Func}
     (walk : Func.RunPrefix (program.main :: program.aux) root.sevm
       current s body target t rest)
-    (agree : Devm.EqModGas s cursor.pre) :
+    (agree : Devm.EqModGas s cursor.pre)
+    (hsg : root.sevm.benvStat.rules.stateGas = none) :
     ∃ cursor' : Exec.Deriv.SourceCursor root program target rest,
       Devm.EqModGas t cursor'.pre ∧
       Exec.Deriv.ParentPrefix cursor.node cursor'.node := by
-  rcases cursor.ofRunPrefix_sameFrame_gasFree compiled ok walk agree with
+  rcases cursor.ofRunPrefix_sameFrame_gasFree compiled ok walk agree hsg with
     ⟨cursor', agree', free⟩
   exact ⟨cursor', agree', free.1⟩
 
