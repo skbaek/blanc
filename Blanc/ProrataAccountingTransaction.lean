@@ -20,12 +20,13 @@ theorem TransactionTrace.messageAccountingReplay
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (msgInv : prorataSpec.MsgInv ca trace.msg)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca trace.msg.benv.state) steps
         (RealizedSnapshot.ofState ca trace.messageState) :=
-  (accountingLadder ca).transactionMessage trace msgInv msgInv.state.side
+  (accountingLadder ca).transactionMessage trace msgInv msgInv.state.side hfork
     blockIndex transactionIndex
 
 /-- Rung R2: one whole successful transaction realizes a complete PRORATA
@@ -47,12 +48,13 @@ theorem retainedTransactionAccountingReplay
     (trace : TransactionTrace benv bout tx index state bout')
     (inv : prorataSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
         (RealizedSnapshot.ofState ca state) :=
-  (accountingLadder ca).transaction trace inv notCreated inv.side blockIndex
+  (accountingLadder ca).transaction trace inv notCreated inv.side hfork blockIndex
     transactionIndex
 
 end Prorata
