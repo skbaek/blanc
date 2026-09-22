@@ -1673,6 +1673,25 @@ lemma Devm.balReadStorage_instructionFrame (rules : ForkRules) (a : Adr)
   · exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
   · exact Devm.instructionFrame_of_world_eq rfl rfl rfl rfl
 
+/-- EIP-7928 storage-read recording leaves the log list alone: `logs` is a
+`Meta` field, so the equation needs the `bal`-presence split rather than
+`rfl`. Jaune names the `mach`/`world` projections; the log/output cases
+live here beside their use sites. -/
+lemma Devm.balReadStorage_logs {rules : ForkRules} {a : Adr} {k : B256}
+    {devm : Devm} :
+    (Devm.balReadStorage rules a k devm).logs = devm.logs := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+lemma Devm.balReadStorage_output {rules : ForkRules} {a : Adr} {k : B256}
+    {devm : Devm} :
+    (Devm.balReadStorage rules a k devm).output = devm.output := by
+  unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
+
+lemma Devm.balReadAccount_output {rules : ForkRules} {a : Adr}
+    {devm : Devm} :
+    (Devm.balReadAccount rules a devm).output = devm.output := by
+  unfold Devm.balReadAccount Meta.readAccount; split <;> rfl
+
 lemma popChargePush_instructionFrame (pre : Devm)
     (cost : B256 → Devm → Nat) (value : B256 → Devm → B256) :
     Execution.Rel Devm.InstructionFrame pre (do
