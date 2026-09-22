@@ -4932,7 +4932,6 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     dsimp [Linst.Run, Linst.run] at h_run
     rw [hsg] at h_run
     simp only [Devm.balReadAccount_of_bal_none hbal] at h_run
-    dsimp only at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
     rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
     rcases Except.bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
@@ -4977,10 +4976,10 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       exact Pre.transfer_state h_pc2 h_ne h_sub_st rfl
     clear h_run h_run1 h_run2 h_run3
     by_cases hdel : sevm.currentTarget ∈ (devm3.addBal (dest_a, devm1).1 ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).createdAccounts
-    · rw [if_pos hdel] at h_run4
+    · simp only [hdel, ite_true] at h_run4
       rw [← Except.ok.inj h_run4]
       exact Post.selfdestruct_delete h_ne h_pc3
-    · rw [if_neg hdel] at h_run4
+    · simp only [hdel, ite_false] at h_run4
       rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
 
@@ -7083,20 +7082,14 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
-      dsimp only at h_validate
       split at h_validate
-      · dsimp only [bind, Except.bind] at h_validate
-        cases h_validate
-      · dsimp only [bind, Except.bind] at h_validate
-        split at h_validate
-        · dsimp only [bind, Except.bind] at h_validate
-          cases h_validate
+      · cases h_validate
+      · split at h_validate
+        · cases h_validate
         · rename_i h_floor
-          dsimp only [bind, Except.bind] at h_validate
           cases h_limit : rules.tx.maxGas with
           | none =>
             simp only [h_limit] at h_validate
-            dsimp only [bind, Except.bind] at h_validate
             have h_result := Except.ok.inj h_validate
             simp only [Prod.mk.injEq] at h_result
             obtain ⟨rfl, rfl⟩ := h_result
@@ -7104,14 +7097,10 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
           | some maxGas =>
             simp only [h_limit] at h_validate
             split at h_validate
-            · dsimp only [bind, Except.bind] at h_validate
-              cases h_validate
-            · dsimp only [bind, Except.bind] at h_validate
-              split at h_validate
-              · dsimp only [bind, Except.bind] at h_validate
-                cases h_validate
-              · dsimp only [bind, Except.bind] at h_validate
-                have h_result := Except.ok.inj h_validate
+            · cases h_validate
+            · split at h_validate
+              · cases h_validate
+              · have h_result := Except.ok.inj h_validate
                 simp only [Prod.mk.injEq] at h_result
                 obtain ⟨rfl, rfl⟩ := h_result
                 omega
@@ -7164,7 +7153,8 @@ lemma foldl_destroyAccount_sum_le :
 -- One-step wei conservation for `processTransaction`.
 lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     {tx : Tx} {i : Nat} {st : Jaune.State}
-    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩) :
+    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
+    (hgas : benv.stat.rules.stateGas = none) :
     sum st.bal ≤ sum benv.state.bal := by
   unfold processTransaction at h_run
   -- as in `processTransaction_preserves_solvent`: `beginTransaction` touches only
@@ -7184,28 +7174,24 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   rcases Except.bind_eq_ok h_run with ⟨refundCounter, hrefund, h_run⟩
   simp only at h_run
   rcases h_run with ⟨rfl, rfl⟩
+  -- `hsub` carries the `beginTransaction` stat record; its debit term is
+  -- defeq (not syntactic) to the stated one, which is all `exact` needs.
   have hsub_some :
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
             calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
-            0).toB256 = some state1 := by
-    generalize hopt : (benv.state.incrNonce sender).subBal sender
-        (tx.gas * effectiveGasPrice +
-          if tx.isTypeThree = true then
-            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-          else
-            0).toB256 = o at hsub ⊢
-    cases o with
-    | none => simp [Option.toExcept] at hsub
-    | some s => simpa [Option.toExcept] using hsub
+            0).toB256 = some state1 :=
+    Option.toExcept_eq_ok hsub
   -- the up-front debit does not wrap
-  have hfee_lt := checkTransaction_upfront_lt_modulus hcheck
-  -- `hcheck` carries the `beginTransaction` environment, so this arrives with an
-  -- unreduced `stat` projection; put it back in terms of `benv` (as `hsub_some`
-  -- already is) or `omega` below sees the two blob-fee terms as distinct atoms.
-  dsimp only at hfee_lt
+  -- (`hcheck` carries the `beginTransaction` environment; ascribe the bound in
+  -- `benv` form so `omega` below sees one blob-fee atom, not two.)
+  have hfee_lt : tx.gas * effectiveGasPrice +
+        (if tx.isTypeThree = true then
+          calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
+        else 0) < 2 ^ 256 :=
+    checkTransaction_upfront_lt_modulus hcheck
   have hcdf := validateTransaction_calldataFloorGasCost_le_gas hval
   -- sum bookkeeping
   have h1 := foldl_destroyAccount_sum_le txOutput.accountsToDelete.toList
@@ -7239,7 +7225,10 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
           calldataFloorGasCost) *
       effectiveGasPrice).toB256
   have h4 : sum state2.bal ≤ sum state1.bal := by
-    have h := processMessageCall_sum_le hpm
+    have hgas_msg : msg.benv.stat.rules.stateGas = none := by
+      rw [prepareMessage_benv hprep]
+      exact hgas
+    have h := processMessageCall_sum_le hgas_msg hpm
     rw [prepareMessage_benv hprep] at h
     exact h
   have h5 := State.balSum_subBal hsub_some
@@ -7278,6 +7267,9 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     apply le_trans (Nat.add_le_add_left
       (Nat.mul_le_mul_left _ (Nat.sub_le _ _)) _)
     rw [← Nat.add_mul, Nat.sub_add_cancel hGle]
+  -- normalize the goal's settlements to the none-lane arithmetic `h1` uses
+  simp only [settleSelfdestructs, settleTransactionGas, BenvStat.rules] at hgas ⊢
+  simp only [hgas] at ⊢
   omega
 
 /-
@@ -7295,7 +7287,8 @@ nonincreasing.  Then induct over `txis`, composing the one-step inequalities.
 lemma applyTransactions_sum_le
     {txis : List (Nat × Tx)} {benv benv' : Benv}
     {bout bout' : BlockOutput}
-    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩) :
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
+    (hgas : benv.stat.rules.stateGas = none) :
     sum benv'.state.bal ≤ sum benv.state.bal := by
   induction txis generalizing benv bout with
   | nil =>
@@ -7306,7 +7299,24 @@ lemma applyTransactions_sum_le
     obtain ⟨i, tx⟩ := hd
     rw [applyTransactions] at h_run
     obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
-    exact le_trans (ih h2) (processTransaction_sum_le h1)
+    exact le_trans (ih h2 hgas) (processTransaction_sum_le h1 hgas)
+
+lemma applyTransactions_benvStat_eq
+    {txis : List (Nat × Tx)} {benv benv' : Benv}
+    {bout bout' : BlockOutput}
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩) :
+    benv'.stat = benv.stat := by
+  induction txis generalizing benv bout with
+  | nil =>
+    rw [applyTransactions] at h_run
+    obtain ⟨hb, hbo⟩ := Prod.mk.inj (Except.ok.inj h_run)
+    subst hb; rfl
+  | cons hd tl ih =>
+    obtain ⟨i, tx⟩ := hd
+    rw [applyTransactions] at h_run
+    obtain ⟨⟨st, bout''⟩, _, h2⟩ := Except.bind_eq_ok h_run
+    have h := ih h2
+    simpa [Benv.withState] using h
 
 /-! ## Chain-level reachability
 
@@ -7369,6 +7379,15 @@ lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
 -- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
 -- by construction, and the base snapshot's context validity is the one fact
 -- plain `Reach` never established, so it enters as a hypothesis.
+theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (t : Nat) :
+    (ChainConfig.pragueOnly chainId).forkAt t = .ok .prague := by
+  have h : (ChainConfig.pragueOnly chainId).forkAt? t = some .prague := by
+    unfold ChainConfig.forkAt? ChainConfig.pragueOnly
+    simp
+  unfold ChainConfig.forkAt
+  simp [ChainConfig.pragueOnly_validate, h, Except.mapError, Bind.bind,
+    Except.bind]
+
 theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
     (h_ctx : ch.ValidContext)
     (h_reach : BlockChain.Reach ch ch') :
@@ -7380,7 +7399,7 @@ theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
       rw [stateTransitionUsing_eq_of_chainId_eq
         (show (ChainConfig.pragueOnly ch.chainId).chainId = _ from
           (Reach.chainId_eq h_reach').symm),
-        ChainConfig.pragueOnly_rulesAt]
+        ChainConfig.pragueOnly_forkAt]
       exact h_st
 
 namespace ContractSpec
@@ -7523,6 +7542,8 @@ theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
       cases err
       case halt reason =>
         -- exceptional halt : state rolled back to `msg.benv.state`
+        have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
+        rw [hsg] at h_rest
         rw [← Except.ok.inj h_rest]; exact h_inv
       all_goals cases h_rest
     · -- clean success : install the returned code at `currentTarget ≠ wa`
@@ -7841,14 +7862,16 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                 { msg with
                   disablePrecompiles := true,
                   accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,.benv.stat.fork := by
+                  code := msg.benv.state.getCode dca,
+                  codeAddress := some dca }).benv.stat.fork := by
             have hbenv :               (match getDelegatedCodeAddress msg.code with
               | none => msg
               | some dca =>
                 { msg with
                   disablePrecompiles := true,
                   accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,.benv = msg.benv := by split <;> rfl
+                  code := msg.benv.state.getCode dca,
+                  codeAddress := some dca }).benv = msg.benv := by split <;> rfl
             rw [hbenv]; exact hfork
           have h_evm_inv :=
             processMessage_preserves_inv hfork' hp h_pm
@@ -7908,14 +7931,16 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                   { msgDelegation with
                     disablePrecompiles := true,
                     accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,.benv.stat.fork := by
+                    code := msgDelegation.benv.state.getCode dca,
+                    codeAddress := some dca }).benv.stat.fork := by
               have hbenv :                 (match getDelegatedCodeAddress msgDelegation.code with
                 | none => msgDelegation
                 | some dca =>
                   { msgDelegation with
                     disablePrecompiles := true,
                     accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,.benv = msgDelegation.benv := by split <;> rfl
+                    code := msgDelegation.benv.state.getCode dca,
+                    codeAddress := some dca }).benv = msgDelegation.benv := by split <;> rfl
               have hstat : msgDelegation.benv.stat = msg.benv.stat :=
                 setDelegation_benvStat h_del
               rw [hbenv, hstat]; exact hfork
@@ -8029,17 +8054,22 @@ lemma prepareMessage_preserves_inv {wa : Adr}
 
 lemma StateInv.add_transaction_gas_credits {wa : Adr}
     {baseState debitState postMsgState : Jaune.State}
-    {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {benv : Benv} {tx : Tx}
     {sender : Adr} {effectiveGasPrice : Nat}
-    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    {validationSender : Adr}
     {intrinsicGas calldataFloorGasCost refundCounter : Nat}
     {txOutput : MsgCallOutput}
     (h_validate :
-      validateTransaction benv.stat.rules tx sender =
+      validateTransaction benv.stat.rules tx validationSender =
         .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
-    (h_check :
-      checkTransaction benv bout tx =
-        .ok ⟨sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed⟩)
+    -- the upfront-fee modulus bound, in `benv` form: the caller derives it
+    -- from `checkTransaction_upfront_lt_modulus` (whose `beginTransaction`
+    -- environment is only defeq) and ascribes it here.
+    (h_fee_lt :
+      tx.gas * effectiveGasPrice +
+        (if tx.isTypeThree = true then
+          calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
+        else 0) < 2 ^ 256)
     (h_debit :
       (baseState.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
@@ -8063,7 +8093,6 @@ lemma StateInv.add_transaction_gas_credits {wa : Adr}
               min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
               calldataFloorGasCost *
             (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) := by
-  have h_fee_lt := checkTransaction_upfront_lt_modulus h_check
   have h_floor := validateTransaction_calldataFloorGasCost_le_gas h_validate
   have h_debit_sum := State.balSum_subBal h_debit
   dsimp only [State.balSum] at h_debit_sum
@@ -8139,12 +8168,13 @@ lemma StateInv.add_transaction_gas_credits {wa : Adr}
   · omega
   · exact h_sender_inv
 
-theorem processTransaction_preserves_inv (wa : Adr) (hfork : CoveredFork benv.stat.fork)
+theorem processTransaction_preserves_inv (wa : Adr)
     (hp : c.Preserves wa)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : Jaune.State)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_inv : c.BenvInv wa benv) : c.BenvInv wa (benv.withState st) := by
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) : c.BenvInv wa (benv.withState st) := by
   unfold processTransaction at h_run
   -- `beginTransaction` only refreshes `stat.origState`, which no balance here
   -- reads; project it away so the state/fee terms stay in terms of `benv`.
@@ -8167,22 +8197,16 @@ theorem processTransaction_preserves_inv (wa : Adr) (hfork : CoveredFork benv.st
     -- `beginTransaction` leaves `state` and `createdAccounts` alone, which is
     -- all `InvSolvent` constrains, so the invariant transfers field-wise.
     checkTransaction_sender_ne_of_inv hcheck ⟨h_inv.state, h_inv.ca⟩
+  -- `hsub` carries the `beginTransaction` stat record; its debit term is
+  -- defeq (not syntactic) to the stated one, which is all `exact` needs.
   have hsub_some :
       (benv.state.incrNonce sender).subBal sender
         (tx.gas * effectiveGasPrice +
           if tx.isTypeThree = true then
             calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
           else
-            0).toB256 = some state1 := by
-    generalize hopt : (benv.state.incrNonce sender).subBal sender
-        (tx.gas * effectiveGasPrice +
-          if tx.isTypeThree = true then
-            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-          else
-            0).toB256 = o at hsub ⊢
-    cases o with
-    | none => simp [Option.toExcept] at hsub
-    | some s => simpa [Option.toExcept] using hsub
+            0).toB256 = some state1 :=
+    Option.toExcept_eq_ok hsub
   have hstate1 : c.StateInv wa state1 :=
     StateInv.subBal hsender hsub_some (StateInv.incrNonce h_inv.state)
   have horigin :
@@ -8211,9 +8235,21 @@ theorem processTransaction_preserves_inv (wa : Adr) (hfork : CoveredFork benv.st
   have hpm_inv := processMessageCall_preserves_inv hfork_msg hp hpm hmsg
   have hmsg_benv := prepareMessage_benv hprep
   have hsum_le : sum state2.bal ≤ sum state1.bal := by
-    have h := processMessageCall_sum_le hpm
+    have hgas_msg : msg.benv.stat.rules.stateGas = none := by
+      rw [prepareMessage_benv hprep]
+      exact hfork.rules_stateGas_none
+    have h := processMessageCall_sum_le hgas_msg hpm
     rw [hmsg_benv] at h
     exact h
+  -- `hval`/`hcheck` carry the `beginTransaction` stat record; the gas-credit
+  -- facts only read `rules`/`excessBlobGas`, which are defeq to `benv`'s.
+  have hval_benv : validateTransaction benv.stat.rules tx validationSender =
+      .ok ⟨intrinsicGas, calldataFloorGasCost⟩ := hval
+  have hfee_benv : tx.gas * effectiveGasPrice +
+        (if tx.isTypeThree = true then
+          calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
+        else 0) < 2 ^ 256 :=
+    checkTransaction_upfront_lt_modulus hcheck
   have hcredits : c.StateInv wa
       ((state2.addBal sender
           ((tx.gas -
@@ -8226,17 +8262,23 @@ theorem processTransaction_preserves_inv (wa : Adr) (hfork : CoveredFork benv.st
               min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
               calldataFloorGasCost *
             (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) :=
-    StateInv.add_transaction_gas_credits hval hcheck hsub_some hsum_le h_sum
-      hpm_inv.1
+    StateInv.add_transaction_gas_credits hval_benv hfee_benv hsub_some hsum_le
+      h_sum hpm_inv.1
   refine ⟨?_, ?_⟩
-  · exact StateInv.foldl_destroyAccount hpm_inv.2 hcredits
+  · -- on covered forks both settlements take the none lane; unfold to the
+    -- matches, align `hsg` to their scrutinee form, and rewrite by it
+    have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
+    simp only [settleSelfdestructs, settleTransactionGas, BenvStat.rules] at hsg ⊢
+    simp only [hsg] at ⊢
+    exact StateInv.foldl_destroyAccount hpm_inv.2 hcredits
   · simpa [Benv.withState] using h_inv.ca
 
 theorem applyTransactions_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
     (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
     (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_inv : c.BenvInv wa benv) : c.BenvInv wa benv' := by
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) : c.BenvInv wa benv' := by
   -- list induction over `txis`; each step is `processTransaction_preserves_inv`
   -- (note `processTransaction` threads `Benv`, so track `benv.state`).
   induction txis generalizing benv bout with
@@ -8248,11 +8290,11 @@ theorem applyTransactions_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     obtain ⟨i, tx⟩ := hd
     rw [applyTransactions] at h_run
     obtain ⟨⟨st, bout''⟩, h1, h2⟩ := Except.bind_eq_ok h_run
-    have hstep := processTransaction_preserves_inv wa hp benv bout bout'' tx i st h1 h_sum h_inv
+    have hstep := processTransaction_preserves_inv wa hp benv bout bout'' tx i st h1 h_sum h_inv hfork
     have hsum' : sum (benv.withState st).state.bal < 2 ^ 256 := by
-      have := processTransaction_sum_le h1
+      have := processTransaction_sum_le h1 hfork.rules_stateGas_none
       simpa [Benv.withState] using Nat.lt_of_le_of_lt this h_sum
-    exact ih (benv.withState st) bout'' h2 hsum' hstep
+    exact ih (benv.withState st) bout'' h2 hsum' hstep hfork
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -8263,12 +8305,12 @@ theorem applyTransactions_preserves_inv (wa : Adr) (hp : c.Preserves wa)
 code and otherwise does not alter the starting state.
 -/
 lemma processUncheckedSystemTransaction_preserves_inv_sum_le (wa : Adr)
-    (hfork : CoveredFork benv.stat.fork)
     (hp : c.Preserves wa)
     (benv : Benv) (target : Adr) (data : Bytes)
     (st : Jaune.State) (out : MsgCallOutput)
     (h_run : processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩)
-    (h_inv : c.BenvInv wa benv) :
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) :
     c.StateInv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
   dsimp [processUncheckedSystemTransaction, processSystemTransaction] at h_run
   -- The system transaction opens on `benv.beginTransaction`; that only
@@ -8295,7 +8337,11 @@ lemma processUncheckedSystemTransaction_preserves_inv_sum_le (wa : Adr)
       rfl
     · simp [processSystemTransactionMsg]
     · simp [processSystemTransactionMsg]
-  have hsum := processMessageCall_sum_le h_run
+  have hgas_msg : (processSystemTransactionMsg benv.beginTransaction
+    (processSystemTransactionTenv benv.beginTransaction)
+    target data (benv.state.getCode target)).benv.stat.rules.stateGas = none :=
+    hfork.rules_stateGas_none
+  have hsum := processMessageCall_sum_le hgas_msg h_run
   have hfork_msg : CoveredFork (processSystemTransactionMsg benv.beginTransaction
 (processSystemTransactionTenv benv.beginTransaction)
 target data (benv.state.getCode target)).benv.stat.fork := hfork
@@ -8341,49 +8387,70 @@ lemma processWithdrawalsState_preserves_inv (wa : Adr)
 
 /-
 (1) Difficulty: ★★☆☆☆
+(2) Proof plan: induction on the request-contract list.  Each checked call
+reduces, on its successful branch, to the corresponding unchecked system
+transaction; the request-byte accumulation and BAL incorporation are pure
+data plumbing.  Thread `createdAccounts` through `Benv.withState` and
+compose the sum inequalities.
+-/
+lemma runRequestContracts_preserves_inv_sum_le (wa : Adr)
+    (hp : c.Preserves wa)
+    (idx : Nat) (contracts : List (UInt8 × Adr))
+    (benv : Benv) (acc : List Bytes) (bal : BalBuilder)
+    {st : Jaune.State} {acc' : List Bytes} {bal' : BalBuilder}
+    (h_run : runRequestContracts idx contracts benv acc bal = .ok ⟨st, acc', bal'⟩)
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) :
+    c.StateInv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
+  induction contracts generalizing benv acc bal with
+  | nil =>
+    rw [runRequestContracts] at h_run
+    simp only [Except.ok.injEq] at h_run
+    obtain ⟨rfl, _, _⟩ := h_run
+    exact ⟨h_inv.state, le_refl _⟩
+  | cons hd tl ih =>
+    obtain ⟨requestType, address⟩ := hd
+    rw [runRequestContracts] at h_run
+    obtain ⟨⟨state, output⟩, h1, h_run⟩ := Except.bind_eq_ok h_run
+    have hu := processUncheckedSystemTransaction_preserves_inv_sum_le wa hp benv
+      address [] state output (processCheckedSystemTransaction_to_unchecked h1)
+      h_inv hfork
+    have h_inv1 : c.BenvInv wa (benv.withState state) :=
+      ⟨hu.1, by simpa [Benv.withState] using h_inv.ca⟩
+    dsimp only at h_run
+    have ih' := ih _ _ _ h_run h_inv1 hfork
+    exact ⟨ih'.1, le_trans (by simpa [Benv.withState] using ih'.2) hu.2⟩
+
+/-
+(1) Difficulty: ★★☆☆☆
 (2) Proof plan: invert `processGeneralPurposeRequests`.  Parsing deposits and
-updating the request list do not touch state.  Each of the two checked system
-transactions reduces, on its successful branch, to the corresponding
-unchecked system transaction, so apply
-`processUncheckedSystemTransaction_preserves_inv_sum_le` twice.  Thread
-`createdAccounts` through `Benv.withState` and compose the two sum
-inequalities.
+updating the request list do not touch state.  The request-contract fold is
+`runRequestContracts_preserves_inv_sum_le`, applied at the decoded run.
 -/
 lemma processGeneralPurposeRequests_preserves_inv_sum_le (wa : Adr)
     (hp : c.Preserves wa)
     (benv : Benv) (bout : BlockOutput)
     (st : Jaune.State) (bout' : BlockOutput)
     (h_run : processGeneralPurposeRequests benv bout = .ok ⟨st, bout'⟩)
-    (h_inv : c.BenvInv wa benv) :
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) :
     c.StateInv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
-  rw [processGeneralPurposeRequests] at h_run
-  rcases Except.bind_eq_ok h_run with ⟨deposits, h_dep, h_run⟩
+  rw [processGeneralPurposeRequests, processGeneralPurposeRequestsAt] at h_run
+  obtain ⟨depositRequests, _, h_run⟩ := Except.bind_eq_ok h_run
   dsimp only at h_run
-  split at h_run <;>
-    (rcases Except.bind_eq_ok h_run with ⟨⟨st1, out1⟩, h1, h_run⟩;
-     dsimp only at h_run;
-     have hu1 := processUncheckedSystemTransaction_preserves_inv_sum_le wa hp benv
-       withdrawalRequestPredeployAddress [] st1 out1
-       (processCheckedSystemTransaction_to_unchecked h1) h_inv;
-     have h_inv1 : c.BenvInv wa (benv.withState st1) :=
-       ⟨hu1.1, by simpa [Benv.withState] using h_inv.ca⟩;
-     split at h_run <;>
-       (rcases Except.bind_eq_ok h_run with ⟨⟨st2, out2⟩, h2, h_run⟩;
-        have hu2 := processUncheckedSystemTransaction_preserves_inv_sum_le wa hp
-          (benv.withState st1)
-          consolidationRequestPredeployAddress [] st2 out2
-          (processCheckedSystemTransaction_to_unchecked h2) h_inv1;
-        split at h_run <;>
-          (obtain ⟨h3, h4⟩ := Prod.mk.inj (Except.ok.inj h_run);
-           subst h3;
-           exact ⟨hu2.1, le_trans (by simpa [Benv.withState] using hu2.2) hu1.2⟩)))
+  obtain ⟨⟨state, allRequests, bal⟩, h_contracts, h_run⟩ := Except.bind_eq_ok h_run
+  obtain ⟨hst, _⟩ := Prod.mk.inj (Except.ok.inj h_run)
+  subst hst
+  exact runRequestContracts_preserves_inv_sum_le wa hp _ _ benv _ _
+    h_contracts h_inv hfork
 
 theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
     (st : Jaune.State) (bout : BlockOutput)
     (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (h_inv : c.BenvInv wa benv) : c.StateInv wa st := by
+    (h_inv : c.BenvInv wa benv)
+    (hfork : CoveredFork benv.stat.fork) : c.StateInv wa st := by
   rw [applyBody] at h_run
   simp only at h_run
   rcases Except.bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
@@ -8396,13 +8463,13 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   have h_beacon_inv :=
     processUncheckedSystemTransaction_preserves_inv_sum_le wa hp benv
       beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes
-      stBeacon outBeacon h_beacon h_inv
+      stBeacon outBeacon h_beacon h_inv hfork
   have h_benv_beacon : c.BenvInv wa (benv.withState stBeacon) :=
     ⟨h_beacon_inv.1, by simpa [Benv.withState] using h_inv.ca⟩
   have h_history_inv :=
     processUncheckedSystemTransaction_preserves_inv_sum_le wa hp
       (benv.withState stBeacon) historyStorageAddress lastHash.toBytes
-      stHistory outHistory h_history h_benv_beacon
+      stHistory outHistory h_history h_benv_beacon hfork
   have h_benv_history :
       c.BenvInv wa ((benv.withState stBeacon).withState stHistory) :=
     ⟨h_history_inv.1, by simpa [Benv.withState] using h_benv_beacon.ca⟩
@@ -8416,8 +8483,8 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   have h_txs_inv : c.BenvInv wa benvTxs :=
     applyTransactions_preserves_inv wa hp decodedTxs.putIndex
       ((benv.withState stBeacon).withState stHistory) benvTxs
-      BlockOutput.init boutTxs h_txs h_hist_bound h_benv_history
-  have h_txs_sum := applyTransactions_sum_le h_txs
+      _ boutTxs h_txs h_hist_bound h_benv_history hfork
+  have h_txs_sum := applyTransactions_sum_le h_txs hfork.rules_stateGas_none
   dsimp [processWithdrawals] at h_requests
   have h_txs_bound : sum benvTxs.state.bal + wdsum wds < 2 ^ 256 := by
     have h_history_sum : sum stHistory.bal ≤ sum stBeacon.bal := by
@@ -8431,38 +8498,48 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   have h_benv_wds : c.BenvInv wa
       (benvTxs.withState (processWithdrawalsState benvTxs.state wds)) :=
     ⟨h_wds_inv, by simpa [Benv.withState] using h_txs_inv.ca⟩
+  have hfork_txs : CoveredFork benvTxs.stat.fork := by
+    rw [applyTransactions_benvStat_eq h_txs]
+    simpa [Benv.withState] using hfork
+  -- `h_requests` still runs the request pass and the access-list check after
+  -- the withdrawals; invert both binds, then the request pass is `h_req`.
+  obtain ⟨⟨stReq, boutReq⟩, h_req, h_requests⟩ := Except.bind_eq_ok h_requests
+  obtain ⟨_, _, h_requests⟩ := Except.bind_eq_ok h_requests
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h_requests
+  obtain ⟨rfl, _⟩ := h_requests
   exact (processGeneralPurposeRequests_preserves_inv_sum_le wa hp
     (benvTxs.withState (processWithdrawalsState benvTxs.state wds))
-    (boutTxs.withWithdrawalsTrie
-      (processWithdrawalsTrie boutTxs.withdrawalsTrie wds))
-    st bout h_requests h_benv_wds).1
+    _ _ _ h_req h_benv_wds hfork_txs).1
 
--- The state transition preserves WETH solvency whichever fork's rules it runs.
--- This is the general theorem, and it is general for a reason rather than by
--- luck: `applyBody_preserves_inv` never asks which rules it is running, because
--- solvency is a statement about how value moves and no fork rule moves value.
--- Everything below -- Prague, an explicitly named fork, a configured chain
--- crossing Osaka and the BPO forks -- is an instance of this one proof.
+-- The state transition preserves WETH solvency at whichever explicitly named
+-- fork it runs. This is the general theorem, and it is general for a reason
+-- rather than by luck: `applyBody_preserves_inv` never asks which fork it is
+-- running at, because solvency is a statement about how value moves and no
+-- fork rule moves value. Everything below -- Prague, an explicitly named
+-- fork, a configured chain crossing Osaka and the BPO forks -- is an instance
+-- of this one proof.
 
-theorem stateTransitionWith_preserves_inv (wa : Adr) (hp : c.Preserves wa)
-    (rules : ForkRules)
+theorem stateTransitionAt_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (f : Fork)
     (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionWith rules ch block = .ok ch')
+    (h_run : stateTransitionAt f ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+    (h_inv : c.StateInv wa ch.state)
+    (hfork : CoveredFork f) : c.StateInv wa ch'.state := by
   -- invert the typed core behind the byte-identical renderer adapter
-  -- (`stateTransitionWith_eq_ok_iff`); the state change is `applyBody`, so
+  -- (`stateTransitionAt_eq_ok_iff`); the state change is `applyBody`, so
   -- this is `applyBody_preserves_inv` (the block-check helpers don't touch state).
-  rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at h_run
+  rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at h_run
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   dsimp only at h_run
   obtain ⟨⟨st, bout⟩, h_ab, h_run⟩ := Except.bind_eq_ok h_run
   dsimp only at h_run
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
+  obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
-  exact applyBody_preserves_inv wa hp (initBenv rules ch block.header) block.txs
-    block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩
+  exact applyBody_preserves_inv wa hp (initBenv f ch block.header) block.txs
+    block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩ hfork
 
 
 
@@ -8472,33 +8549,40 @@ theorem stateTransitionUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+    (h_inv : c.StateInv wa ch.state)
+    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    c.StateInv wa ch'.state := by
   -- the configured entry point checks the chain identity first; the invariant
-  -- needs neither that fact nor which rules the schedule picked.
+  -- needs neither that fact nor which fork the schedule picked, only that
+  -- every fork it can pick is covered.
   rw [stateTransitionUsing] at h_run
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
-  obtain ⟨rules, _, h_run⟩ := Except.bind_eq_ok h_run
-  exact stateTransitionWith_preserves_inv wa hp rules ch ch' block h_run h_wds h_inv
+  obtain ⟨f, hf, h_run⟩ := Except.bind_eq_ok h_run
+  have hfork : CoveredFork f := hcov _ _ (Except.mapError_eq_ok_iff.mp hf)
+  exact stateTransitionAt_preserves_inv wa hp f ch ch' block h_run h_wds h_inv hfork
 
-/-- Prague is the `rules := pragueRules` instance, and `stateTransition` is
-*definitionally* `stateTransitionWith pragueRules`. -/
+/-- Prague is the `f := .prague` instance, and `stateTransition` is
+*definitionally* `stateTransitionAt .prague`. -/
 theorem stateTransition_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransition ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state :=
-  stateTransitionWith_preserves_inv wa hp pragueRules ch ch' block h_run h_wds h_inv
+  stateTransitionAt_preserves_inv wa hp .prague ch ch' block h_run h_wds h_inv
+    CoveredFork.prague
 
 /-- Chain-level induction over a configured chain: no sequence of valid blocks
-can break the invariant, whatever schedule the chain follows and whichever
-activations that sequence crosses. -/
+can break the invariant, whatever covered schedule the chain follows and
+whichever activations that sequence crosses. -/
 theorem chainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
-    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+    (h_inv : c.StateInv wa ch.state)
+    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    c.StateInv wa ch'.state := by
   induction h_reach with
   | refl => exact h_inv
   | step h_reach' h_bound h_st ih =>
-    exact stateTransitionUsing_preserves_inv wa hp cfg _ _ _ h_st h_bound ih
+    exact stateTransitionUsing_preserves_inv wa hp cfg _ _ _ h_st h_bound ih hcov
 
 /-- The Prague corollary of the same induction. -/
 theorem chain_preserves_inv (wa : Adr) (hp : c.Preserves wa) (ch ch' : BlockChain)
@@ -8509,19 +8593,20 @@ theorem chain_preserves_inv (wa : Adr) (hp : c.Preserves wa) (ch ch' : BlockChai
   | step h_reach' h_bound h_st ih =>
     exact stateTransition_preserves_inv wa hp _ _ _ h_st h_bound ih
 
-/-- Preservation through RLP decoding and block-hash checks, under any fork's
-rules. -/
-theorem addBlockToChainWith_preserves_inv (wa : Adr) (hp : c.Preserves wa)
-    (rules : ForkRules) (ch ch' : BlockChain) (rlp : Bytes)
-    (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
+/-- Preservation through RLP decoding and block-hash checks, at any explicitly
+named fork. -/
+theorem addBlockToChainAt_preserves_inv (wa : Adr) (hp : c.Preserves wa)
+    (f : Fork) (ch ch' : BlockChain) (rlp : Bytes)
+    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+    (h_inv : c.StateInv wa ch.state)
+    (hfork : CoveredFork f) : c.StateInv wa ch'.state := by
   -- invert the raw import through Jaune's own bridge, then one
-  -- `stateTransitionWith_preserves_inv` step at the decoded block.
-  obtain ⟨block, hash, h_rlp, h_size, h_st⟩ := addBlockToChainWith_eq_ok_inl h_run
-  exact stateTransitionWith_preserves_inv wa hp rules ch ch' block h_st
-    (h_wds block hash h_rlp) h_inv
+  -- `stateTransitionAt_preserves_inv` step at the decoded block.
+  obtain ⟨block, hash, h_rlp, h_size, h_st⟩ := addBlockToChainAt_eq_ok_inl h_run
+  exact stateTransitionAt_preserves_inv wa hp f ch ch' block h_st
+    (h_wds block hash h_rlp) h_inv hfork
 
 /-- Block import on a configured chain validates the schedule and chain
 identity before decoding; once decoding supplies the timestamp the configured
@@ -8531,7 +8616,9 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state := by
+    (h_inv : c.StateInv wa ch.state)
+    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    c.StateInv wa ch'.state := by
   unfold addBlockToChainUsing at h_run
   cases hE : addBlockToChainUsingE cfg ch rlp with
   | error failure =>
@@ -8552,20 +8639,22 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
           split at hE
           · simp at hE
           · rename_i block hash h_decode
-            obtain ⟨rules, _, hE⟩ := Except.bind_eq_ok hE
+            obtain ⟨f, hf, hE⟩ := Except.bind_eq_ok hE
             obtain ⟨_, h_st⟩ := addBlockToChainCanonicalE_eq_ok_inl hE
-            exact stateTransitionWith_preserves_inv wa hp rules ch ch' block
-              (stateTransitionWith_eq_ok_iff.mpr h_st)
-              (h_wds block hash (rlpToBlock_eq_ok_iff.mpr h_decode)) h_inv
+            have hfork : CoveredFork f := hcov _ _ (Except.mapError_eq_ok_iff.mp hf)
+            exact stateTransitionAt_preserves_inv wa hp f ch ch' block
+              (stateTransitionAt_eq_ok_iff.mpr h_st)
+              (h_wds block hash (rlpToBlock_eq_ok_iff.mpr h_decode)) h_inv hfork
 
-/-- Prague is the `rules := pragueRules` instance here too. -/
+/-- Prague is the `f := .prague` instance here too. -/
 theorem addBlockToChain_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state) : c.StateInv wa ch'.state :=
-  addBlockToChainWith_preserves_inv wa hp pragueRules ch ch' rlp h_run h_wds h_inv
+  addBlockToChainAt_preserves_inv wa hp .prague ch ch' rlp h_run h_wds h_inv
+    CoveredFork.prague
 
 end ContractSpec
 

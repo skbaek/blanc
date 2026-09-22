@@ -1433,4 +1433,10 @@ theorem CoveredFork.of_eq {f1 f2 : Fork} (h : f1 = f2) (hf : CoveredFork f1) :
     CoveredFork f2 := by
   cases h; exact hf
 
+/-- Prague is covered. -/
+theorem CoveredFork.prague : CoveredFork .prague := .inl rfl
+
+/-- BPO2 is covered. -/
+theorem CoveredFork.bpo2 : CoveredFork .bpo2 := .inr rfl
+
 end Blanc
