@@ -3477,6 +3477,10 @@ lemma processCreateMessage.msg_getCode (msg : Msg) (a : Adr) :
   dsimp [processCreateMessage.msg, Msg.withBenv]
   rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
 
+lemma processCreateMessage.msg_benvStat (msg : Msg) :
+    (processCreateMessage.msg msg).benv.stat = msg.benv.stat := by
+  rfl
+
 /-- Master: `executeCode` preserves the code of every nonempty-code address.
 The suspended child's oracle invariant (`inv`) supplies the interpreted-code
 case; `handleError_getCode` covers precompile and error selection. -/
@@ -12701,6 +12705,64 @@ lemma setDelegation_balSum_eq {msg msg' : Msg} {refund : B256}
       rw [show ({ msgL with
         code := msgL.benv.state.getCode _ } : Msg).benv.state.bal =
           msgL.benv.state.bal from rfl, h_bal]
+
+lemma setDelegationStep_benvStat {auth : Auth} {msg msg' : Msg} {rc rc' : B256}
+    (h : setDelegationStep auth msg rc = .ok ⟨msg', rc'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  unfold setDelegationStep at h
+  dsimp only at h
+  split at h
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    rcases h with ⟨rfl, _⟩; rfl
+  · split at h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩; rfl
+    · split at h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        rcases h with ⟨rfl, _⟩; rfl
+      · cases h
+      · split at h
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          rcases h with ⟨rfl, _⟩; rfl
+        · split at h
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩; rfl
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            rcases h with ⟨rfl, _⟩; rfl
+
+lemma setDelegationLoop_benvStat {auths : List Auth} {msg msg' : Msg}
+    {rc rc' : B256}
+    (h : setDelegationLoop auths msg rc = .ok ⟨msg', rc'⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  induction auths generalizing msg rc with
+  | nil =>
+    unfold setDelegationLoop at h
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    rcases h with ⟨rfl, _⟩; rfl
+  | cons auth auths ih =>
+    unfold setDelegationLoop at h
+    simp only [bind, Except.bind] at h
+    split at h
+    · cases h
+    · rename_i p h_step
+      obtain ⟨msgS, rcS⟩ := p
+      exact (ih h).trans (setDelegationStep_benvStat h_step)
+
+lemma setDelegation_benvStat {msg msg' : Msg} {refund : B256}
+    (h : setDelegation msg = .ok ⟨msg', refund⟩) :
+    msg'.benv.stat = msg.benv.stat := by
+  unfold setDelegation at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  · rename_i p h_loop
+    obtain ⟨msgL, rcL⟩ := p
+    have hst := setDelegationLoop_benvStat h_loop
+    split at h
+    · cases h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, _⟩
+      exact hst
 
 lemma processMessageCall.call_balance_noninc
     {msg : Msg} {post : Jaune.State} {out : MsgCallOutput}
