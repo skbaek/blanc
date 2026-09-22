@@ -4122,6 +4122,18 @@ lemma GenericCallAmsterdam.codePreserve
 lemma XStep.run_ofExcept_error {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
     (h : XStep.Run (XStep.ofExcept (.error e)) xl ex) : ex = .error e := h.2
 
+/-- The call-family error arms route through a `stateGas` match whose two arms
+are the same `ofExcept`, so the error equation holds in both lanes. -/
+lemma XStep.run_ofExcept_error_stateGas {sg : Option StateGasRules}
+    {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
+    (h : XStep.Run (match sg with
+      | none => XStep.ofExcept (.error e)
+      | some _ => XStep.ofExcept (.error e)) xl ex) :
+    ex = .error e := by
+  cases hsg : sg <;> simp only [hsg] at h
+  · exact XStep.run_ofExcept_error h
+  · exact XStep.run_ofExcept_error h
+
 /-! ### The dispatch shape of a call-type instruction
 
 Everything `Xinst.step` does before dispatching — popping operands, charging
@@ -10068,18 +10080,28 @@ lemma Devm.NoDel.rollback {wa : Adr} {d : Devm} {st : State} {tra : Tra}
 
 -- handleError shuffles error payloads into ok results without touching
 -- the sets (jaune Execution.lean:2692-2701).
-lemma handleError_noDel {wa : Adr} {exn : Execution}
+lemma handleError_noDel {wa : Adr} {sg : Option StateGasRules} {exn : Execution}
     (h : Execution.NoDel wa exn) :
-    MsgResult.NoDel wa (executeCode.handleError exn) := by
-  cases exn with
-  | ok d => exact h
-  | error p =>
-    rcases p with ⟨err, d⟩
-    have hd : Devm.NoDel wa d := h
-    cases err <;>
-      first
-        | exact ⟨hd.atd, hd.ca, hd.code⟩
-        | exact ⟨hd.ca, hd.code⟩
+    MsgResult.NoDel wa (executeCode.handleErrorWith sg exn) := by
+  cases sg <;> simp only [executeCode.handleErrorWith]
+  · cases exn with
+    | ok d => exact h
+    | error p =>
+      rcases p with ⟨err, d⟩
+      have hd : Devm.NoDel wa d := h
+      cases err <;>
+        first
+          | exact ⟨hd.atd, hd.ca, hd.code⟩
+          | exact ⟨hd.ca, hd.code⟩
+  · cases exn with
+    | ok d => exact h
+    | error p =>
+      rcases p with ⟨err, d⟩
+      have hd : Devm.NoDel wa d := h
+      cases err <;>
+        first
+          | exact ⟨hd.atd, hd.ca, hd.code⟩
+          | exact ⟨hd.ca, hd.code⟩
 
 /-! ## §4 Plumbing -/
 

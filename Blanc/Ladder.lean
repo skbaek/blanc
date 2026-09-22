@@ -820,7 +820,7 @@ lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
     (h_ca : msg.codeAddress = .none)
     (h : ExecuteCode msg xl ex) :
     ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
-      executeCode.handleError ex' = ex := by
+      executeCode.handleErrorWith msg.benv.stat.rules.stateGas ex' = ex := by
   unfold ExecuteCode executeCode.enter at h
   simp only [h_ca] at h
   rcases h with ⟨ex', hxl, hh⟩
@@ -1202,16 +1202,22 @@ lemma getCode_eq_of_state_eq {d d' : Devm} (h : d.state = d'.state) (a : Adr) :
 
 -- solvency is preserved when the state is unchanged, given that it was
 
-lemma of_handleError_err {err : EvmError} {d : Devm}
+lemma of_handleError_err {sg : Option StateGasRules} {err : EvmError} {d : Devm}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
-    (h : executeCode.handleError (.error ⟨err, d⟩) = ex) :
+    (h : executeCode.handleErrorWith sg (.error ⟨err, d⟩) = ex) :
     (∃ evm2 : Devm, ex = .ok evm2 ∧ evm2.error.isSome = true ∧ evm2.state = d.state) ∨
     (∃ e, ex = .error e) := by
-  cases err <;>
-    simp only [executeCode.handleError] at h <;>
-    first
-      | exact Or.inl ⟨_, h.symm, rfl, rfl⟩
-      | exact Or.inr ⟨_, h.symm⟩
+  cases sg <;> simp only [executeCode.handleErrorWith] at h
+  · cases err <;>
+      simp only [executeCode.handleError] at h <;>
+      first
+        | exact Or.inl ⟨_, h.symm, rfl, rfl⟩
+        | exact Or.inr ⟨_, h.symm⟩
+  · cases err <;>
+      simp only [executeCode.handleErrorAmsterdam] at h <;>
+      first
+        | exact Or.inl ⟨_, h.symm, rfl, rfl⟩
+        | exact Or.inr ⟨_, h.symm⟩
 
 lemma of_benvAfterTransfer {msg : Msg} {benv' : Benv}
     (h_stv : msg.shouldTransferValue = true)
@@ -1235,10 +1241,10 @@ lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
     (h : ExecuteCode msg xl ex) :
     ((!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
       xl = .none ∧
-      executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
+      executeCode.handleErrorWith msg.benv.stat.rules.stateGas (executePrecomp (initEvm msg) adr) = ex) ∨
     (¬ (!msg.disablePrecompiles && decide (msg.benv.stat.rules.isPrecomp adr)) = true ∧
       ∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
-      executeCode.handleError ex' = ex) := by
+      executeCode.handleErrorWith msg.benv.stat.rules.stateGas ex' = ex) := by
   unfold ExecuteCode executeCode.enter at h
   simp only [h_ca] at h
   split_ifs at h with h_pre
@@ -1246,8 +1252,9 @@ lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
   · rcases h with ⟨ex', hxl, hh⟩
     exact Or.inr ⟨h_pre, ex', hxl, hh.symm⟩
 
-lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
-    (h : executeCode.handleError (executePrecomp evm adr) = .ok child)
+lemma state_of_executePrecomp_ok {sg : Option StateGasRules} {evm : Evm} {adr : Adr}
+    {child : Devm}
+    (h : executeCode.handleErrorWith sg (executePrecomp evm adr) = .ok child)
     (h_err : ¬ child.error.isSome = true) :
     child.state = evm.dyna.state := by
   unfold executePrecomp applyPrecompResult at h
@@ -1257,7 +1264,7 @@ lemma state_of_executePrecomp_ok {evm : Evm} {adr : Adr} {child : Devm}
       rw [← h_ok4] at h_some4
       exact absurd h_some4 h_err
     · cases h_err4
-  · simp only [executeCode.handleError] at h
+  · rw [executeCode.handleErrorWith_ok] at h
     injection h with h
     rw [← h]
     rfl
@@ -1271,8 +1278,9 @@ lemma State.get_erase_ne {w : Jaune.State} {a b : Adr} (h : b ≠ a) :
 -- `handleError` only returns a clean (`error = none`) devm when the underlying
 -- execution itself returned `.ok`; the exceptional-halt / revert branches all
 -- set the error flag, and the hard-error branch returns `.error`.
-lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
-    (h : executeCode.handleError exn = .ok evm') (herr : ¬ evm'.error.isSome = true) :
+lemma exec_ok_of_handleError {sg : Option StateGasRules} {exn : Execution} {evm' : Devm}
+    (h : executeCode.handleErrorWith sg exn = .ok evm')
+    (herr : ¬ evm'.error.isSome = true) :
     exn = .ok evm' := by
   cases exn with
   | error ee =>
@@ -1281,7 +1289,7 @@ lemma exec_ok_of_handleError {exn : Execution} {evm' : Devm}
     · rw [Except.ok.inj h_ok] at herr; exact absurd h_some herr
     · exact absurd h_e2 (by simp)
   | ok e =>
-    simp only [executeCode.handleError] at h; rw [Except.ok.inj h]
+    rw [executeCode.handleErrorWith_ok] at h; rw [Except.ok.inj h]
 
 /-! ## Frame rollback when no successful execution exists
 
@@ -1874,7 +1882,7 @@ lemma of_run_call_val_with_depth_frame
     Bind.bind, Except.bind, Except.assert] at h_run
   -- pop gas
   rcases eq1 : Devm.pop s with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   have f1 := Devm.pop_of_pop eq1
   have e1 := f1.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
@@ -1885,7 +1893,7 @@ lemma of_run_call_val_with_depth_frame
   -- pop callee
   rcases eq2 : Devm.popToAdr devm1 with _ | ⟨callee, devm2⟩ <;>
     simp only [eq2] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, h_pop2⟩
   have f2 := Devm.pop_of_pop h_pop2
   have e2 := f2.stack
@@ -1897,7 +1905,7 @@ lemma of_run_call_val_with_depth_frame
   replace hp := cons_pref_cons_inv hp
   -- pop value
   rcases eq3 : Devm.pop devm2 with _ | ⟨value, devm3⟩ <;> simp only [eq3] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   have f3 := Devm.pop_of_pop eq3
   have e3 := f3.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
@@ -1908,7 +1916,7 @@ lemma of_run_call_val_with_depth_frame
   -- pop the four indices/sizes, keeping each popped word's `toNat`
   rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputIndex, devm4⟩ <;>
     simp only [eq4] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
   have e4 := f4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
@@ -1919,7 +1927,7 @@ lemma of_run_call_val_with_depth_frame
   replace hp := cons_pref_cons_inv hp
   rcases eq5 : Devm.popToNat devm4 with _ | ⟨inputSize, devm5⟩ <;>
     simp only [eq5] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
   have e5 := f5.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
@@ -1930,7 +1938,7 @@ lemma of_run_call_val_with_depth_frame
   replace hp := cons_pref_cons_inv hp
   rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputIndex, devm6⟩ <;>
     simp only [eq6] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
   have e6 := f6.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
@@ -1941,7 +1949,7 @@ lemma of_run_call_val_with_depth_frame
   replace hp := cons_pref_cons_inv hp
   rcases eq7 : Devm.popToNat devm6 with _ | ⟨outputSize, devm7⟩ <;>
     simp only [eq7] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq7 with ⟨x7, f7, hk7⟩
   have e7 := f7.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e7
@@ -2361,7 +2369,7 @@ lemma of_run_staticcall_val_with_depth_cause
     Bind.bind, Except.bind] at h_run
   -- pop gas
   rcases eq1 : Devm.pop s with _ | ⟨gas1, devm1⟩ <;> simp only [eq1] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   have f1 := Devm.pop_of_pop eq1
   have e1 := f1.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
@@ -2372,7 +2380,7 @@ lemma of_run_staticcall_val_with_depth_cause
   -- pop target
   rcases eq2 : Devm.popToAdr devm1 with _ | ⟨target, devm2⟩ <;>
     simp only [eq2] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, h_pop2⟩
   have f2 := Devm.pop_of_pop h_pop2
   have e2 := f2.stack
@@ -2385,7 +2393,7 @@ lemma of_run_staticcall_val_with_depth_cause
   -- pop the four indices/sizes
   rcases eq3 : Devm.popToNat devm2 with _ | ⟨inputIndex, devm3⟩ <;>
     simp only [eq3] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, hk3⟩
   have e3 := f3.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
@@ -2396,7 +2404,7 @@ lemma of_run_staticcall_val_with_depth_cause
   replace hp := cons_pref_cons_inv hp
   rcases eq4 : Devm.popToNat devm3 with _ | ⟨inputSize, devm4⟩ <;>
     simp only [eq4] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
   have e4 := f4.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
@@ -2407,7 +2415,7 @@ lemma of_run_staticcall_val_with_depth_cause
   replace hp := cons_pref_cons_inv hp
   rcases eq5 : Devm.popToNat devm4 with _ | ⟨outputIndex, devm5⟩ <;>
     simp only [eq5] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
   have e5 := f5.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
@@ -2418,7 +2426,7 @@ lemma of_run_staticcall_val_with_depth_cause
   replace hp := cons_pref_cons_inv hp
   rcases eq6 : Devm.popToNat devm5 with _ | ⟨outputSize, devm6⟩ <;>
     simp only [eq6] at h_run
-  · cases XStep.run_ofExcept_error h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
   rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
   have e6 := f6.stack
   simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
@@ -3248,6 +3256,21 @@ theorem Ninst.targetBalanceMono_of_none
         (hxs := bound) (xl := .none) trivial run
       exact Nat.le_of_eq
         (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+  | dupn imm =>
+      have frame := Ninst.dupn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Nat.le_of_eq
+        (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+  | swapn imm =>
+      have frame := Ninst.swapn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Nat.le_of_eq
+        (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
+  | exchange imm =>
+      have frame := Ninst.exchange_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Nat.le_of_eq
+        (congrArg (fun state : State => (state.bal ca).toNat) frame.state)
 
 /-- Every successful nonrecursive instruction in a foreign frame preserves
 the observed account's persistent storage. -/
@@ -3270,6 +3293,18 @@ theorem Ninst.foreignNone_getStor_eq
   | push bytes bound =>
       have frame := Ninst.push_instructionFrame_effectRec
         (hxs := bound) (xl := .none) trivial run
+      exact (frame.getStor ca).symm
+  | dupn imm =>
+      have frame := Ninst.dupn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact (frame.getStor ca).symm
+  | swapn imm =>
+      have frame := Ninst.swapn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact (frame.getStor ca).symm
+  | exchange imm =>
+      have frame := Ninst.exchange_instructionFrame_effectRec
+        (xl := .none) trivial run
       exact (frame.getStor ca).symm
 
 /-- A successful terminal instruction executed by an account other than `ca`
@@ -3937,6 +3972,18 @@ lemma Ninst.none_preserves_precond
       exact precondition.state_eq
         (((Devm.burn_of_chargeGas charge).state).trans
           ((Devm.push_of_push pushed).state)).symm
+  | dupn imm =>
+    have frame := Ninst.dupn_instructionFrame_effectRec
+      (xl := .none) trivial run
+    exact precondition.state_eq frame.state.symm
+  | swapn imm =>
+    have frame := Ninst.swapn_instructionFrame_effectRec
+      (xl := .none) trivial run
+    exact precondition.state_eq frame.state.symm
+  | exchange imm =>
+    have frame := Ninst.exchange_instructionFrame_effectRec
+      (xl := .none) trivial run
+    exact precondition.state_eq frame.state.symm
   | reg r =>
       have registerRun : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
         exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp run).2.symm
@@ -4721,6 +4768,18 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
       exact h_pc'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
+    | dupn imm =>
+      have frame := Ninst.dupn_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact h_pc'.state_eq frame.state.symm
+    | swapn imm =>
+      have frame := Ninst.swapn_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact h_pc'.state_eq frame.state.symm
+    | exchange imm =>
+      have frame := Ninst.exchange_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact h_pc'.state_eq frame.state.symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
         exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp h_run').2.symm
@@ -4740,6 +4799,18 @@ theorem preserves_lift (c : ContractSpec) (ca : Adr)
   · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
     cases n' with
     | push xs le =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | dupn imm =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | swapn imm =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | exchange imm =>
       have hrun := (Step.run_ofExecution
         (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
       cases hrun.1
@@ -5667,9 +5738,9 @@ the wei-conservation (`sum_le`) tier.  None of it mentions the contract. -/
 lemma of_executeCode_cases {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h : ExecuteCode msg xl ex) :
-    (∃ adr, executeCode.handleError (executePrecomp (initEvm msg) adr) = ex) ∨
+    (∃ adr, executeCode.handleErrorWith msg.benv.stat.rules.stateGas (executePrecomp (initEvm msg) adr) = ex) ∨
     (∃ ex', xl = .some ⟨initEvm msg, ex'⟩ ∧
-      executeCode.handleError ex' = ex) := by
+      executeCode.handleErrorWith msg.benv.stat.rules.stateGas ex' = ex) := by
   rcases h_ca : msg.codeAddress with _ | adr
   · refine Or.inr ?_
     unfold ExecuteCode executeCode.enter at h
@@ -5942,6 +6013,30 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   | exec xinst =>
     simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
     exact Xinst.inv_noDel_gen (x := xinst) inv run h
+  | dupn imm =>
+      have h0 : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at run
+        exact run.1
+      subst h0
+      have frame := Ninst.dupn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Execution.NoDel.of_instructionFrame frame h
+  | swapn imm =>
+      have h0 : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at run
+        exact run.1
+      subst h0
+      have frame := Ninst.swapn_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Execution.NoDel.of_instructionFrame frame h
+  | exchange imm =>
+      have h0 : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at run
+        exact run.1
+      subst h0
+      have frame := Ninst.exchange_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact Execution.NoDel.of_instructionFrame frame h
 
 -- The composite relation carried through `Exec.effect` for the NoDel invariant.
 def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
