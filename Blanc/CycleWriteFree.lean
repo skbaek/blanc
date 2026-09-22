@@ -64,6 +64,12 @@ theorem Func.localSstoreFree_iff {body : Func} :
           simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
       | push bytes size =>
           simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+      | dupn immediate =>
+          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+      | swapn immediate =>
+          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+      | exchange immediate =>
+          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
 
 /-- Exact reflection for `Func.callsIn` when the executable predicate is
 membership in one finite call component. -/
