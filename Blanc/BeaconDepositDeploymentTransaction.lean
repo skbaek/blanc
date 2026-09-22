@@ -25,6 +25,7 @@ structure DeploymentTransactionResult
   artifact : ArtifactInv (post.getStor ca) []
   blockLogs : bout.blockLogs = []
   requests : bout.requests = []
+  blockAccessList : bout.blockAccessList = []
   depositRequests : parseDepositRequests bout = .ok []
   receiptKeys : bout.receiptKeys = [deploymentReceiptKey 0]
   receiptEntry : ∃ entry,
@@ -197,6 +198,10 @@ theorem canonicalDeploymentTransaction_succeeds
     dsimp only [bout, deploymentFinalBout]
     simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
       BlockOutput.init]
+  have hblockAccessList : bout.blockAccessList = [] := by
+    dsimp only [bout, deploymentFinalBout]
+    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init]
   have hreceiptKeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
     dsimp only [bout, deploymentFinalBout]
     simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
@@ -311,6 +316,7 @@ theorem canonicalDeploymentTransaction_succeeds
     artifact := hartifact
     blockLogs := hblockLogs
     requests := hrequests
+    blockAccessList := hblockAccessList
     depositRequests := hdeposit
     receiptKeys := hreceiptKeys
     receiptEntry := hreceiptEntry
