@@ -276,7 +276,7 @@ theorem sentinelGatewayPauseWorld_closedPremises
       (gatewayCode controlDeployParams)
       (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
-  publicPause_gatewayPinnedTarget sentinelGatewayPauseWorld_publicPausePremises
+  publicPause_gatewayPinnedTarget (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) sentinelGatewayPauseWorld_publicPausePremises
     sentinelGatewayPauseWorld_target_ne_owner sentinelGatewayPauseWorld_target_not_precompile
     publicRun success
 
