@@ -19,6 +19,7 @@ open PinnedTargetControl
 target stub on its cold `pauseFor(uint256)` route. -/
 private lemma runCompiled_call_zero_value_stubPause
     {sevm : Sevm} {devm : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw cw iiw isw oiw osw duration : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -129,6 +130,7 @@ private lemma runCompiled_call_zero_value_stubPause
   obtain ⟨out, hexec, herr, hout, hgasOut, hmetaOut, hworldOut,
     heffectOut⟩ :=
     stubPause_exec (msg.withBenv benv') duration (mcs - 22185)
+      (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = stubCode; exact h_code) hchildData
       (by change mcs = mcs - 22185 + 22185; omega)
       hchildCold (by change sevm.isStatic = false; exact h_dynamic)
@@ -139,14 +141,19 @@ private lemma runCompiled_call_zero_value_stubPause
         (initDevm (msg.withBenv benv')) duration).logs from
       congrArg (fun view => view.logs) hmetaOut]
     rw [stubPausePost_logs]
-    rfl
+    change (match (msg.withBenv benv').benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [show (msg.withBenv benv').benv.stat.rules.stateGas = none from by
+      change sevm.benvStat.rules.stateGas = none
+      exact hfork.rules_stateGas_none]
   have hrefundOut : out.refundCounter = 0 := by
     rw [show out.refundCounter =
       (stubPausePost (initSevm (msg.withBenv benv'))
         (initDevm (msg.withBenv benv')) duration).refundCounter from
       congrArg (fun view => view.refundCounter) hmetaOut]
     rw [stubPausePost_refundCounter]
-    change sstoreNewRefundCounter (pauseForProjection sevm.benvStat.time duration)
+    change sstoreNewRefundCounter sevm.benvStat.rules.gas (pauseForProjection sevm.benvStat.time duration)
       (getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
         pausedUntilSlot)
       ((initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot)
@@ -196,7 +203,8 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [stubPausePost_state]
     rfl
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
-    rw [show exec child = .ok out from hexec]
+    rw [show exec child = .ok out from hexec,
+      Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp [processMessage.settle, herr]
   have hdi := accessDelegation_inv h_del
@@ -230,7 +238,7 @@ private lemma runCompiled_call_zero_value_stubPause
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
-    Ninst.runCompiled_call_zero_value h_stk h_ext h_del h_acc h_split h_gas
+    Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
       h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, ?_, stmid, ?_, ?_⟩
@@ -303,6 +311,7 @@ private lemma runCompiled_call_zero_value_stubPause
 charge is the warm access `100` plus the compiled stub's `22185`. -/
 private lemma stubPause_call_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw duration : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
       Nat.toB256 G :: target :: 0 :: iiw :: isw :: oiw :: osw :: s)
@@ -420,7 +429,7 @@ private lemma stubPause_call_crossing
     exact hcold
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
     hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
-    runCompiled_call_zero_value_stubPause
+    runCompiled_call_zero_value_stubPause (hfork := hfork)
       (gw := Nat.toB256 G) (cw := target) (duration := duration)
       hstk
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -450,6 +459,7 @@ private lemma stubPause_call_crossing
 stub on its warm canonical-true query route. -/
 private lemma runCompiled_staticcall_stubQuery
     {sevm : Sevm} {devm : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw tw iiw isw oiw osw storedUntil : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -535,6 +545,7 @@ private lemma runCompiled_staticcall_stubQuery
   obtain ⟨out, hexec, herr, hout, hgasOut, hmetaOut, hworldOut,
     heffectOut⟩ :=
     stubQuery_exec (msg.withBenv benv') storedUntil (mcs - 172)
+      (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = stubCode; exact h_code) hchildData
       (by change mcs = mcs - 172 + 172; omega)
       hchildStored hchildWarm
@@ -544,7 +555,13 @@ private lemma runCompiled_staticcall_stubQuery
       ((initDevm (msg.withBenv benv')).withOutput
         (1 : B256).toBytes).logs from
       congrArg (fun view => view.logs) hmetaOut]
-    rfl
+    rw [Devm.withOutput_logs]
+    change (match (msg.withBenv benv').benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [show (msg.withBenv benv').benv.stat.rules.stateGas = none from by
+      change sevm.benvStat.rules.stateGas = none
+      exact hfork.rules_stateGas_none]
   have hrefundOut : out.refundCounter = 0 := by
     rw [show out.refundCounter =
       ((initDevm (msg.withBenv benv')).withOutput
@@ -579,7 +596,8 @@ private lemma runCompiled_staticcall_stubQuery
       congrArg (fun world => world.state) hworldOut]
     rfl
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
-    rw [show exec child = .ok out from hexec]
+    rw [show exec child = .ok out from hexec,
+      Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp [processMessage.settle, herr]
   have hdi := accessDelegation_inv h_del
@@ -614,7 +632,7 @@ private lemma runCompiled_staticcall_stubQuery
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.runCompiled_exec_run
-      (Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+      (Xinst.step_staticcall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
       (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
@@ -677,6 +695,7 @@ private lemma runCompiled_staticcall_stubQuery
 parent charge is the warm access `100` plus the compiled stub's `172`. -/
 private lemma stubQuery_staticcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw storedUntil : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
       Nat.toB256 G :: target :: iiw :: isw :: oiw :: osw :: s)
@@ -786,7 +805,7 @@ private lemma stubQuery_staticcall_crossing
       d0.accessedStorageKeys := by exact hwarmSlot
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
     hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
-    runCompiled_staticcall_stubQuery
+    runCompiled_staticcall_stubQuery (hfork := hfork)
       (gw := Nat.toB256 G) (tw := target) (storedUntil := storedUntil)
       hstk
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -961,6 +980,7 @@ private theorem installedCodeGuard_runCompiled
 the installed source-compiled pinned-target stub. -/
 theorem pauseAfterSet_stub_toSuccess_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target duration : B256) (M : Mem) (img : Bytes)
     (codeCost Gb : Nat)
     (hwf : Mem.Wf M)
@@ -1144,7 +1164,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
     hrefund1, hatd1, htrans1, hask1, haa1, heffect1, st₁, hsub1,
     hstate1⟩ :=
-    stubPause_call_crossing (sevm := sevm)
+    stubPause_call_crossing (hfork := hfork) (sevm := sevm)
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + 22663), target, 0, 284, 36, 0, 0],
           (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
@@ -1205,7 +1225,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
     hrefund2, hatd2, htrans2, hask2, haa2, heffect2, st₂, hsub2,
     hstate2⟩ :=
-    stubQuery_staticcall_crossing (sevm := sevm)
+    stubQuery_staticcall_crossing (hfork := hfork) (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
@@ -1334,6 +1354,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     have hG64 : 64 ≤ Gb + 62 := by omega
     have hG67 : 67 ≤ Gb + 62 := by omega
     func_run (14) [0, 0, 3, 0, 1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
@@ -1364,6 +1385,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       installedQueryStage post := by
     unfold installedQueryStage
     func_run (7) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try simp_rw [htargetMemory3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign3 (by
@@ -1457,13 +1479,14 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       Ninst.extcodesize
       ((temporalAccountAccessBase base target.toAdr).setMach
         ⟨[stubCode.size.toB256, target], M, Gb + 22722, (temporalAccountAccessBase base target.toAdr).stateGas⟩) := by
-    have h := temporal_extcodesize_runCompiled (sevm := sevm) (base := base)
+    have h := temporal_extcodesize_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (x := target) (v := stubCode.size.toB256) (stack := [target])
       (M := M) (G := Gb + 22722)
       (by rw [hstubCode]) (by simp)
     rw [hcodeCost] at h
     exact h
   func_run (3) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
