@@ -53,6 +53,7 @@ open Jaune.Ninst Blanc.Ninst
 
 private theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength lengthValue indexValue _previous : B256)
     (stack : List B256)
@@ -170,7 +171,7 @@ private theorem removeTarget_restoreTail_runCompiled
             G + finishGas + 12 + indexClearCost, lengthPost.stateGas⟩)
         Ninst.sstore
         (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled hindexPost hindexOrig hindexCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost hindexOrig hindexCost
         hwarmIndexPost hgasFinal hstatic
     exact Func.RunCompiled.next hsstore hfinishCall
   have hindexTail : Func.RunCompiled fs sevm
@@ -201,10 +202,11 @@ private theorem removeTarget_restoreTail_runCompiled
         Ninst.sstore
         (lengthPost.setMach
           ⟨stack, M, G + finishGas + 26 + indexClearCost, lengthPost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled hlength hlengthOrig hlengthCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hlength hlengthOrig hlengthCost
         hwarmLength (lt_of_lt_of_le hgasFinal (by omega)) hstatic
     exact Func.RunCompiled.next hsstore hindexTail
   func_run (6) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
@@ -223,6 +225,7 @@ private theorem removeTarget_restoreTail_runCompiled
 
 private theorem removeTarget_storePrefix_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next : B256) (stack : List B256)
     (hstack : stack.length ≤ 1)
@@ -413,7 +416,7 @@ private theorem removeTarget_storePrefix_runCompiled
   have hremovedValue := readValue removedIndexWord next hremovedWord
   have hlengthValue := readValue arrayLengthWord next hlengthWord
   have hlastValue := readValue lastTargetWord target hlastWord
-  have hrestore := removeTarget_restoreTail_runCompiled
+  have hrestore := removeTarget_restoreTail_runCompiled (hfork := hfork)
     dp sevm tailPost M img target oldLength next next 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTail hindexTail
@@ -444,7 +447,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harrayMoved harrayOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved harrayOrig htailClearCost
         hwarmArrayMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -458,6 +461,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [arrayKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 50 + lengthRestoreCost + indexClearCost +
@@ -478,6 +482,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered arrayLengthWord (by decide))]
@@ -502,6 +507,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
@@ -522,7 +528,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hindexHole hindexOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexHole hindexOrig hmovedIndexCost
         hwarmIndexHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -537,6 +543,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [indexKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 64 + lengthRestoreCost + indexClearCost +
@@ -558,6 +565,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
@@ -583,6 +591,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
@@ -609,7 +618,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harray harrayOrig hholeCost hwarmArray
+      (temporal_sstore_runCompiled (hfork := hfork) harray harrayOrig hholeCost hwarmArray
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholeTag : Func.RunCompiled fs sevm
@@ -626,6 +635,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [arrayKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 82 + lengthRestoreCost + indexClearCost +
@@ -648,6 +658,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
@@ -675,6 +686,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
@@ -707,6 +719,7 @@ exactly like a cold `SLOAD`. -/
 theorem temporal_sstore_cold_runCompiled
     {sevm : Sevm} {base : Devm} {key value current original : B256}
     {stack : List B256} {M : Mem} {G cost : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcurrent : base.getStorVal sevm.currentTarget key = current)
     (horiginal : getOrigStorVal sevm sevm.currentTarget key = original)
     (hcost : sstoreValueCost original current value = cost)
@@ -722,6 +735,7 @@ theorem temporal_sstore_cold_runCompiled
         ⟨stack, M, G, (temporalSstorePost sevm (addAccessedStorageKey base sevm.currentTarget key) key value).stateGas⟩) := by
   apply Ninst.runCompiled_sstore_cold
       (c := gasColdSload + cost) (G := G)
+  · exact hfork.rules_stateGas_none
   · rfl
   · exact hcold
   · simp only [Devm.gasLeft_setMach]
@@ -729,10 +743,10 @@ theorem temporal_sstore_cold_runCompiled
   · exact hstatic
   · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
     rw [hcost]
-  · show sstoreNewRefundCounter value
+  · show sstoreNewRefundCounter sevm.benvStat.rules.gas value
         (getOrigStorVal sevm sevm.currentTarget key)
         (base.getStorVal sevm.currentTarget key) base.refundCounter =
-      sstoreNewRefundCounter value
+      sstoreNewRefundCounter sevm.benvStat.rules.gas value
         (getOrigStorVal sevm sevm.currentTarget key)
         (base.getStorVal sevm.currentTarget key) base.refundCounter
     rfl
@@ -750,6 +764,7 @@ keys are warm.  Fixed charge `139 = 439 - 300`. -/
 
 theorem removeTarget_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next : B256) (stack : List B256)
     (hstack : stack.length ≤ 1)
@@ -916,6 +931,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     (earlierLast (by decide) (by decide) (by decide)).trans htarget
   have hremovedLength : Bytes.toB256
       (imgLength.sliceD (removedIndexWord * 32).toNat 32 0) = next := by
+    try clear_value base3 base2 base1
     rw [sliceBeforeLength (word := removedIndexWord) (by decide)]
     dsimp only [imgIndex]
     rw [show 32 = next.toBytes.length by rw [B256.length_toBytes],
@@ -926,12 +942,14 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       hremovedLength
   have hlengthLast : Bytes.toB256
       (imgLast.sliceD (arrayLengthWord * 32).toNat 32 0) = next := by
+    try clear_value base3 base2 base1
     rw [sliceBeforeLast (word := arrayLengthWord) (by decide)]
     dsimp only [imgLength]
     rw [show 32 = next.toBytes.length by rw [B256.length_toBytes],
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
   have hlastLast : Bytes.toB256
       (imgLast.sliceD (lastTargetWord * 32).toNat 32 0) = target := by
+    try clear_value base3 base2 base1
     dsimp only [imgLast]
     rw [show 32 = target.toBytes.length by rw [B256.length_toBytes],
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
@@ -995,7 +1013,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     temporalSloadBase_warm sevm base2 (arrayEntrySlot next)
   let tailPost := entryClearPost sevm base3 target next
   let removePost := indexClearPost sevm tailPost target oldLength
-  have hstores := removeTarget_storePrefix_runCompiled
+  have hstores := removeTarget_storePrefix_runCompiled (hfork := hfork)
     dp sevm base3 MLast imgLast target oldLength next stack hstack
     arrayOriginal
     indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
@@ -1024,6 +1042,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_mstore_of
         (G := G + finishGas + 94 + holeCost + movedIndexCost + tailClearCost +
@@ -1048,7 +1067,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
@@ -1068,7 +1089,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         ⟨target :: stack, MLength,
           G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost, base3.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base2)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base2)
       (key := arrayEntrySlot next) (value := target) (stack := stack)
       (M := MLength)
       (G := G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
@@ -1108,7 +1129,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (2) [arrayKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 106 + lastExtCost + holeCost + movedIndexCost +
@@ -1121,12 +1144,14 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       exact hloadLastStorage
   have hlengthValue :
       (MLength.read (arrayLengthWord * 32).toNat 32).1.toB256 = next := by
+    try clear_value base3 base2 base1
     rw [Mem.Reads.read hreadsLength]
     dsimp only [imgLength]
     rw [show 32 = next.toBytes.length by rw [B256.length_toBytes],
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
   have hlengthMemory :
       (MLength.read (arrayLengthWord * 32).toNat 32).2 = MLength := by
+    try clear_value base3 base2 base1
     rw [Mem.read_snd_eq_self (memExtSize_of_le halignLength (by
       rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
       exact Nat.le_max_right _ _))]
@@ -1146,7 +1171,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLength (by
@@ -1179,6 +1206,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_mstore_of
         (G := G + finishGas + 112 + lastExtCost + holeCost + movedIndexCost +
@@ -1205,7 +1233,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 118 + lastExtCost + lengthExtCost + holeCost +
@@ -1228,7 +1258,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
           G + finishGas + 118 + lastExtCost + lengthExtCost + holeCost +
             movedIndexCost + tailClearCost + lengthRestoreCost +
             indexClearCost + arrSloadCost, base2.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base1)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base1)
       (key := arrayLengthSlot) (value := next) (stack := stack)
       (M := MIndex)
       (G := G + finishGas + 118 + lastExtCost + lengthExtCost + holeCost +
@@ -1273,7 +1303,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 121 + lastExtCost + lengthExtCost + holeCost +
@@ -1301,6 +1333,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     apply Func.RunCompiled.next
     · exact Ninst.runCompiled_mstore_of
         (G := G + finishGas + 121 + lastExtCost + lengthExtCost + holeCost +
@@ -1330,7 +1363,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 127 + lastExtCost + indexExtCost +
@@ -1354,7 +1389,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
           G + finishGas + 127 + lastExtCost + indexExtCost + lengthExtCost +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
             indexClearCost + arrSloadCost + lenSloadCost, base1.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (key := indexSlot target) (value := next) (stack := stack)
       (M := M)
       (G := G + finishGas + 127 + lastExtCost + indexExtCost + lengthExtCost +
@@ -1385,6 +1420,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     Func.RunCompiled.next hidxSloadStep hsaveIndexPrefix
   have htargetValue :
       (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
+    try clear_value base3 base2 base1
     rw [Mem.Reads.read hreads]
     exact htarget
   have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
@@ -1392,6 +1428,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     omega
   have htargetMemory :
       (M.read (targetWord * 32).toNat 32).2 = M := by
+    try clear_value base3 base2 base1
     rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
   have hindexTag : Func.RunCompiled fs sevm
       (base.setMach
@@ -1411,7 +1448,12 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
+    clear hstores hsaveLast hlastLoad harrSloadStep hloadLastStorage hlastTag
+      hlastPrefix hsaveLength hsaveLengthPrefix hlenSloadStep hlengthLoad
+      hlengthPrefix hsaveIndex hsaveIndexPrefix hidxSloadStep hfinish
     func_run (2) [indexKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 133 + lastExtCost + indexExtCost +
@@ -1443,7 +1485,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    try clear_value base3 base2 base1
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
@@ -1570,6 +1614,7 @@ private theorem removeTarget_holeStorePrefix_runCompiled
 set_option maxHeartbeats 1600000 in
 theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength : B256)
     (stack : List B256)
@@ -2044,7 +2089,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
   have hlengthValue := readValueLast arrayLengthWord len hlengthLast
   have hlastValue := readValueLast lastTargetWord lastTarget hlastLast
   -- the restore tail at the tail-cleared state
-  have hrestore := removeTarget_restoreTail_runCompiled
+  have hrestore := removeTarget_restoreTail_runCompiled (hfork := hfork)
     dp sevm tailPost MLast imgLast target oldLength len idx 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreadsLast htargetLast hlengthLast htargetValid
@@ -2079,7 +2124,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled htailMovedPost htailOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost htailOrig htailClearCost
         hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -2093,6 +2138,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [tailKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 50 + lengthRestoreCost + indexClearCost +
@@ -2113,6 +2159,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
@@ -2138,6 +2185,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
@@ -2158,7 +2206,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_cold_runCompiled hmovedHolePost hmovedOrig
+      (temporal_sstore_cold_runCompiled (hfork := hfork) hmovedHolePost hmovedOrig
         hmovedIndexCost hmovedColdHole
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
@@ -2174,6 +2222,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [movedKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 64 + lengthRestoreCost + indexClearCost +
@@ -2195,6 +2244,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
@@ -2221,6 +2271,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
@@ -2249,7 +2300,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_cold_runCompiled hhole3 hholeOrig hholeCost hholeCold3
+      (temporal_sstore_cold_runCompiled (hfork := hfork) hhole3 hholeOrig hholeCost hholeCold3
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholePrefix : Func.RunCompiled fs sevm
@@ -2376,6 +2427,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 100 + lastExtCost + gasColdSload +
@@ -2398,7 +2450,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 100 + lastExtCost + gasColdSload + gasColdSload +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
             indexClearCost, base3.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base2)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base2)
       (key := arrayEntrySlot len) (value := lastTarget) (stack := stack)
       (M := MLength)
       (G := G + finishGas + 100 + lastExtCost + gasColdSload + gasColdSload +
@@ -2440,6 +2492,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [tailKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 106 + lastExtCost + gasColdSload +
@@ -2467,6 +2520,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLength (by
@@ -2527,6 +2581,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 118 + lastExtCost + lengthExtCost +
@@ -2551,7 +2606,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 118 + lastExtCost + lengthExtCost + gasColdSload +
             gasColdSload + holeCost + movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost + arrSloadCost, base2.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base1)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base1)
       (key := arrayLengthSlot) (value := len) (stack := stack)
       (M := MIndex)
       (G := G + finishGas + 118 + lastExtCost + lengthExtCost +
@@ -2599,6 +2654,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 121 + lastExtCost + lengthExtCost +
@@ -2661,6 +2717,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 127 + lastExtCost + indexExtCost +
@@ -2687,7 +2744,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
             gasColdSload + gasColdSload + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
             arrSloadCost + lenSloadCost, base1.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := base)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (key := indexSlot target) (value := idx) (stack := stack)
       (M := M)
       (G := G + finishGas + 127 + lastExtCost + indexExtCost +
@@ -2748,6 +2805,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [indexKey]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 133 + lastExtCost + indexExtCost +
@@ -2780,6 +2838,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
