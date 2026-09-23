@@ -388,6 +388,7 @@ here rather than carrying it would mean composing the whole `pause`-to-CALL
 prefix into this statement, which this cut deliberately does not do. -/
 theorem pauseCall_boundary_with_execution
     {sevm : Sevm} {callPre callPost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gasWord duration : B256} {target : Adr} {rest : List B256}
     (h_stk : callPre.stack =
       gasWord :: target.toB256 :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest)
@@ -425,13 +426,13 @@ theorem pauseCall_boundary_with_execution
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [Xinst.step_call_zero_value_outOfGas h_stk hext h_del hacc hsplit
+    rw [Xinst.step_call_zero_value_outOfGas hfork h_stk hext h_del hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
   case pos =>
     obtain ⟨hstep, -, -, -, -, -, -, htra⟩ :=
-      directCall_zero_spawn h_stk hext h_del hacc hsplit hga h_depth
+      directCall_zero_spawn hfork h_stk hext h_del hacc hsplit hga h_depth
     rw [hta] at hstep htra
     obtain ⟨hd1stk, hd1mem, -, -⟩ := accessDelegation_inv hdel
     obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
@@ -523,6 +524,7 @@ theorem pauseCall_boundary_with_execution
 /-- The established CALL boundary, retained as the compatibility projection
 of the execution-shaped constructor. -/
 theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gasWord duration : B256} {target : Adr} {rest : List B256}
     (h_stk : callPre.stack =
       gasWord :: target.toB256 :: 0 :: 0x11c :: 36 :: 0 :: 0 :: rest)
@@ -531,7 +533,7 @@ theorem pauseCall_boundary {sevm : Sevm} {callPre callPost : Devm}
     (h_dynamic : sevm.isStatic = false)
     (run : Ninst.RunCompiled sevm callPre (.exec .call) callPost) :
     PauseCallBoundary sevm target duration callPre callPost :=
-  (pauseCall_boundary_with_execution h_stk h_window h_depth h_dynamic run).1
+  (pauseCall_boundary_with_execution (hfork := hfork) h_stk h_window h_depth h_dynamic run).1
 
 /-- **The STATICCALL edge, inverted.**  Any derivation that crosses the pause's
 `.staticcall` instruction satisfies `PauseStatBoundary`: the six operands, the
@@ -566,6 +568,7 @@ argument; `B256.toAdr` truncates, so at a stack word with high bits set the
 relation is false rather than merely unproved. -/
 theorem pauseStat_boundary_with_execution
     {sevm : Sevm} {statPre statPost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gasWord : B256} {target : Adr} {rest : List B256}
     (h_stk : statPre.stack =
       gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
@@ -602,13 +605,13 @@ theorem pauseStat_boundary_with_execution
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [Xinst.step_staticcall_outOfGas h_stk hext h_del hacc hsplit
+    rw [Xinst.step_staticcall_outOfGas hfork h_stk hext h_del hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
   case pos =>
     obtain ⟨hstep, -, -, -, -, -, -, htra⟩ :=
-      directStatcall_spawn h_stk hext h_del hacc hsplit hga h_depth
+      directStatcall_spawn hfork h_stk hext h_del hacc hsplit hga h_depth
     rw [hta] at hstep htra
     obtain ⟨hd1stk, hd1mem, -, -⟩ := accessDelegation_inv hdel
     obtain ⟨hd1state, hd1logs, -, -, -⟩ := accessDelegation_frame hdel
@@ -696,6 +699,7 @@ theorem pauseStat_boundary_with_execution
 /-- The established STATICCALL boundary, retained as the compatibility
 projection of the execution-shaped constructor. -/
 theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gasWord : B256} {target : Adr} {rest : List B256}
     (h_stk : statPre.stack =
       gasWord :: target.toB256 :: 0x11c :: 4 :: 0 :: 32 :: rest)
@@ -703,7 +707,7 @@ theorem pauseStat_boundary {sevm : Sevm} {statPre statPost : Devm}
     (h_depth : sevm.depth ≠ 0)
     (run : Ninst.RunCompiled sevm statPre (.exec .staticcall) statPost) :
     PauseStatBoundary sevm target statPre statPost :=
-  (pauseStat_boundary_with_execution h_stk h_window h_depth run).1
+  (pauseStat_boundary_with_execution (hfork := hfork) h_stk h_window h_depth run).1
 
 /-! ## The pause's post-CALL branch
 
@@ -948,6 +952,7 @@ way the gas and stack-room cases fall, a derivation that crosses the
 instruction left `0` at the head of the stack.  The out-of-gas and
 stack-overflow arms are refuted by the derivation's own `.ok` polarity. -/
 private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_depth : sevm.depth = 0)
@@ -973,7 +978,7 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
     with ⟨mcc, mcs⟩
   by_cases hga : mcc + ext ≤ d1.gasLeft
   case neg =>
-    rw [Xinst.step_call_zero_value_outOfGas h_stk hext hdel hacc hsplit
+    rw [Xinst.step_call_zero_value_outOfGas hfork h_stk hext hdel hacc hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
@@ -982,7 +987,7 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
     · -- Room to push: the forward zero-depth packaging constructs the run's
       -- unique outcome, and determinism transfers its stack head.
       have hfwd := Ninst.runCompiled_call_zero_value_zero_depth
-        h_stk hext hdel hacc hsplit hga h_depth hroom
+        hfork h_stk hext hdel hacc hsplit hga h_depth hroom
       obtain ⟨xf, ff, rf⟩ := hfwd
       have hl := hrun 0
       have hr := rf 0
@@ -994,7 +999,7 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
     · -- No room: the push overflows, the step halts, and the derivation's
       -- `.ok` polarity refutes the case.  The `show … from hroom` coercion
       -- rides the definitional stack projections through the record updates.
-      rw [Xinst.step_call_zero_value h_stk hext hdel hacc hsplit hga,
+      rw [Xinst.step_call_zero_value hfork h_stk hext hdel hacc hsplit hga,
         genericCall.step, if_pos h_depth, Devm.push_def] at hx
       simp only [Except.assert] at hx
       rw [if_neg (show ¬ ((((d1.setMach
@@ -1015,6 +1020,7 @@ the flag the depth-limit arm pushes selects the bubble, whose body ends in a
 revert or an out-of-gas halt, never `.ok`.  The crossing consumes this and
 derives its depth fact instead of carrying the premise. -/
 theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {callPre callPost final : Devm} {gw cw iiw isw oiw osw : B256}
     {s : List B256}
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -1024,7 +1030,7 @@ theorem pauseAfterCall_ok_depth_ne_zero {fs : List Func} {sevm : Sevm}
       (.ok final)) :
     sevm.depth ≠ 0 := by
   intro h_depth
-  obtain ⟨tail, hflag⟩ := callEdge_zero_depth_flag h_stk h_depth callRun
+  obtain ⟨tail, hflag⟩ := callEdge_zero_depth_flag (hfork := hfork) h_stk h_depth callRun
   obtain ⟨mid, hn, hrest⟩ := runCompiledTo_next_inv afterCall
   obtain ⟨hmidstk, -⟩ := iszero_inv hn hflag
   rcases runCompiledTo_branch_inv hrest with
@@ -1661,6 +1667,7 @@ child changed no state: deriving that would need a static-context no-write
 result over arbitrary code, which exists nowhere in Jaune or Blanc and is not
 built here. -/
 theorem pause_externalBoundary {sevm : Sevm} {target : Adr} {duration : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {entry callPre callPost statPre statPost : Devm}
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (hDuration : MemWordAt entry (durationWord * 32).toNat duration)
@@ -1676,14 +1683,14 @@ theorem pause_externalBoundary {sevm : Sevm} {target : Adr} {duration : B256}
   obtain ⟨gasWord, rest, hstk, wCall⟩ :=
     pauseCallStaging_operands hTarget hCallStaging
   have hcall : PauseCallBoundary sevm target duration callPre callPost :=
-    pauseCall_boundary hstk
+    pauseCall_boundary (hfork := hfork) hstk
       (pauseCallStaging_calldata hDuration hCallStaging) hDepth hDynamic hCall
   have wPost : MemWordAt callPost (targetWord * 32).toNat target.toB256 :=
     pauseCall_targetWord_survives hcall wCall
   obtain ⟨gasWord', rest', hstk', wStat⟩ :=
     pauseStatStaging_operands wPost hStatStaging
   exact ⟨hcall, wStat,
-    pauseStat_boundary hstk'
+    pauseStat_boundary (hfork := hfork) hstk'
       (pauseStatStaging_calldata wPost.memImage hStatStaging) hDepth hStat⟩
 
 end Blanc.LidoCircuitBreaker
