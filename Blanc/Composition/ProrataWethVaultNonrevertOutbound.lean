@@ -480,6 +480,7 @@ reverts. -/
 theorem outboundBurn_revert {pre d : Devm} {sharesWord assetsSourceWord : B256}
     {receiver shares assets supply : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sharesWindow : MemWordAt pre (sharesWord * 32).toNat shares)
     (assetsWindow : MemWordAt pre (assetsSourceWord * 32).toNat assets)
     (supplyWindow : MemWordAt pre
@@ -589,7 +590,7 @@ theorem outboundBurn_revert {pre d : Devm} {sharesWord assetsSourceWord : B256}
   have assetsAt6 := moveT (by omega) (move9 (move5 assetsWindow))
   obtain ⟨receiverAdr, rfl⟩ := receiverValid
   obtain ⟨bodyPre, bodyRun⟩ :=
-    callWethTransfer_avoiding config6 ⟨receiverAt6.1, selfReads t6⟩
+    callWethTransfer_avoiding (hfork := hfork) config6 ⟨receiverAt6.1, selfReads t6⟩
       (receiverAt6.slice_eq (selfReads t6)) (assetsAt6.slice_eq (selfReads t6))
       (by decide +kernel) assetsAbove run
   have free : Func.revertFreeIn []
@@ -611,6 +612,7 @@ theorem outboundGuardedTail_revert {entry d : Devm}
     {sharesWord assetsSourceWord : B256} {burnSlot : Nat}
     {receiver owner supply shares assets : B256} {tail : Stack}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (receiverWindow : MemWordAt entry
       (Blanc.ProrataWethVault.receiverWord * 32).toNat receiver)
@@ -755,7 +757,7 @@ theorem outboundGuardedTail_revert {entry d : Devm}
     have moveB : ∀ {offset : Nat} {w : B256}, MemWordAt s4 offset w →
         MemWordAt burnPre offset w := fun window =>
       MemWordAt.of_memory_eq memoryEnd.symm (move7 window)
-    exact outboundBurn_revert
+    exact outboundBurn_revert (hfork := hfork)
       (config4.of_state_eq' (state7.trans (pop'.state.trans burn'.state)))
       (moveB (move4 (Or.inl sharesBelow) sharesWindow))
       (moveB (move4 (Or.inl assetsBelow) assetsWindow))
@@ -809,7 +811,7 @@ theorem outboundGuardedTail_revert {entry d : Devm}
         by decide +kernel
       exact carryB (by omega) (Or.inr (by omega)) (Or.inl (by omega))
         (moveS (move4 (Or.inl below) window))
-    exact outboundBurn_revert configB
+    exact outboundBurn_revert (hfork := hfork) configB
       (moveB sharesAbove sharesBelow sharesWindow)
       (moveB assetsAbove assetsBelow assetsWindow)
       (moveB (by decide +kernel) supplyMiss supplyWindow)
@@ -855,6 +857,7 @@ the booked WETH balance and the share supply are read at their pre-state
 values, and the stable-supply guard passes. -/
 theorem outboundEntry_avoiding {fs : List Func} {sevm : Sevm}
     {pre bodyPre : Devm} {out : Execution} {arithmetic : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (entryState : pre.state = bodyPre.state)
@@ -927,7 +930,7 @@ theorem outboundEntry_avoiding {fs : List Func} {sevm : Sevm}
     exact stable.backed.2.1
   obtain ⟨quotePre, quoteWf, assetsWindow, supplyWindow, carry, quoteStorage,
       quoteConfig, run⟩ :=
-    snapshotQuoteState_avoiding (config.of_state_eq' readState) readWf
+    snapshotQuoteState_avoiding (hfork := hfork) (config.of_state_eq' readState) readWf
       supplyStable run
   refine ⟨quotePre, quoteWf,
     carry (by decide +kernel) (by decide +kernel) amountWindow,
@@ -971,6 +974,7 @@ allowance covers the quoted burn) reverts only through a refused WETH child
 (`balanceOf` or `transfer`). -/
 theorem withdraw_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq : Sevm.selector sevm =
@@ -1039,7 +1043,7 @@ theorem withdraw_revert_visits_refused_weth_child
   unfold Blanc.ProrataWethVault.withdraw at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, ownerWindow,
       assetsWindow, supplyWindow, quoteStorage, quoteConfig, run⟩ :=
-    outboundEntry_avoiding stable memoryWf entryState entryMemory run
+    outboundEntry_avoiding (hfork := hfork) stable memoryWf entryState entryMemory run
   obtain ⟨afterPre, afterImage, afterStack, afterMemImage, afterFrame,
       afterQuiet, run⟩ :=
     Blanc.ProrataWethVault.withdrawQuote_avoiding quoteWf (selfReads quotePre)
@@ -1063,7 +1067,7 @@ theorem withdraw_revert_visits_refused_weth_child
     (funext (getStor_eq_of_state_eq (afterQuiet.1.trans storeState))).symm.trans
       quoteStorage
   have quoteNat := B256.toNat_toB256_of_lt quoteFits
-  refine outboundGuardedTail_revert
+  refine outboundGuardedTail_revert (hfork := hfork)
     (quoteConfig.of_state_eq' (afterQuiet.1.trans storeState)) guardWf
     (move (by decide +kernel) (Or.inl (by decide +kernel)) receiverWindow)
     (move (by decide +kernel) (Or.inl (by decide +kernel)) ownerWindow)
@@ -1095,6 +1099,7 @@ theorem withdraw_revert_visits_refused_weth_child
 shares themselves. -/
 theorem redeem_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq : Sevm.selector sevm =
@@ -1164,7 +1169,7 @@ theorem redeem_revert_visits_refused_weth_child
   unfold Blanc.ProrataWethVault.redeem at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, ownerWindow,
       assetsWindow, supplyWindow, quoteStorage, quoteConfig, run⟩ :=
-    outboundEntry_avoiding stable memoryWf entryState entryMemory run
+    outboundEntry_avoiding (hfork := hfork) stable memoryWf entryState entryMemory run
   obtain ⟨afterPre, afterImage, afterStack, afterMemImage, afterFrame,
       afterQuiet, run⟩ :=
     Blanc.ProrataWethVault.redeemQuote_avoiding quoteWf (selfReads quotePre)
@@ -1187,7 +1192,7 @@ theorem redeem_revert_visits_refused_weth_child
   have guardStorage : Devm.getStor guardPre = Devm.getStor pre :=
     (funext (getStor_eq_of_state_eq (afterQuiet.1.trans storeState))).symm.trans
       quoteStorage
-  refine outboundGuardedTail_revert
+  refine outboundGuardedTail_revert (hfork := hfork)
     (quoteConfig.of_state_eq' (afterQuiet.1.trans storeState)) guardWf
     (move (by decide +kernel) (Or.inl (by decide +kernel)) receiverWindow)
     (move (by decide +kernel) (Or.inl (by decide +kernel)) ownerWindow)
