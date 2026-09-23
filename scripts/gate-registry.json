@@ -3739,6 +3739,43 @@
       "root": "Blanc",
       "pattern": "Lido*.lean",
       "reason": "contract-module subject of the clean ownership audit and in-memory falsifiers; the static prerequisite verifies the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "BeaconDeposit*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "Drip*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "DripConcreteHistory/*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "ProxyPair*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "Prorata*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "path": "Blanc/Conserved.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "path": "Blanc/FlashSpec.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "path": "Blanc/Solvent.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
      }
     ]
    },
