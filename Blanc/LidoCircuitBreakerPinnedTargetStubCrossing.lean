@@ -23,13 +23,13 @@ private lemma runCompiled_call_zero_value_stubPause
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
@@ -224,7 +224,7 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [hd1stack]
     exact h_room
   let post := (((incorporateChildOnSuccess p out out.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
       oiw.toNat (out.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
@@ -349,9 +349,9 @@ private lemma stubPause_call_crossing
         post.state = (stmid.addBal target.toAdr 0).setStorVal target.toAdr
           pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) := by
   have hnodel : getDelegatedCodeAddress
-      ((devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
-    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
     have hsize : stubCode.size = 53 := by
       decide +kernel
@@ -362,25 +362,25 @@ private lemma stubPause_call_crossing
     rw [hsize] at hs
     norm_num [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
       ⟨false, target.toAdr,
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
           target.toAdr, 0,
-        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
           target.toAdr⟩ := by
     unfold accessDelegation
     simp only [show (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr).state.getCode target.toAdr =
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr from rfl, hnodel]
   set d0 := addAccessedAddress
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) target.toAdr with hd0
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) target.toAdr with hd0
   have hd0gas : d0.gasLeft = G := by
     rw [show d0.gasLeft = devm.gasLeft from rfl, hgas]
   have hacc : accessCost target.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses + 0 =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
@@ -423,10 +423,10 @@ private lemma stubPause_call_crossing
     runCompiled_call_zero_value_stubPause
       (gw := Nat.toB256 G) (cw := target) (duration := duration)
       hstk
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = stubCode from hcode)
       hmcs (by simpa only [hd0mem] using hdata) hd0current horiginal hd0cold
       hdynamic hnew hroom
@@ -454,13 +454,13 @@ private lemma runCompiled_staticcall_stubQuery
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
@@ -607,7 +607,7 @@ private lemma runCompiled_staticcall_stubQuery
     rw [hd1stack]
     exact h_room
   let post := (((incorporateChildOnSuccess p out out.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
       oiw.toNat (out.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
@@ -716,9 +716,9 @@ private lemma stubQuery_staticcall_crossing
         devm.state.subBal sevm.currentTarget 0 = some stmid ∧
         post.state = stmid.addBal target.toAdr 0 := by
   have hnodel : getDelegatedCodeAddress
-      ((devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
-    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+    rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = devm.getCode target.toAdr from rfl, hcode]
     have hsize : stubCode.size = 53 := by
       decide +kernel
@@ -729,25 +729,25 @@ private lemma stubQuery_staticcall_crossing
     rw [hsize] at hs
     norm_num [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
       ⟨false, target.toAdr,
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
           target.toAdr, 0,
-        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+        addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
           target.toAdr⟩ := by
     unfold accessDelegation
     simp only [show (addAccessedAddress
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr).state.getCode target.toAdr =
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr from rfl, hnodel]
   set d0 := addAccessedAddress
-    (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩) target.toAdr with hd0
+    (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) target.toAdr with hd0
   have hd0gas : d0.gasLeft = G := by
     rw [show d0.gasLeft = devm.gasLeft from rfl, hgas]
   have hacc : accessCost target.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses + 0 =
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
@@ -789,10 +789,10 @@ private lemma stubQuery_staticcall_crossing
     runCompiled_staticcall_stubQuery
       (gw := Nat.toB256 G) (tw := target) (storedUntil := storedUntil)
       hstk
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
-      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).state.getCode
+      (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = stubCode from hcode)
       hmcs (by simpa only [hd0mem] using hdata) hd0stored hd0warmSlot
       hpaused hroom
@@ -852,9 +852,9 @@ theorem installedQueryGuard_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm) (M : Mem)
     (G : Nat) (tail : Func) (post : Devm)
     (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M, G⟩) tail post) :
+      (devm.setMach ⟨[], M, G, devm.stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
-      (devm.setMach ⟨[1], M, G + 16⟩)
+      (devm.setMach ⟨[1], M, G + 16, devm.stateGas⟩)
       (Ninst.iszero ::: ((Func.call bubbleRevertSlot) <?> tail)) post := by
   func_run (2) [0]
   case h_arm =>
@@ -869,14 +869,14 @@ theorem installedQueryWrite_runCompiled
     (halign : M.size % 32 = 0)
     (hcover : 256 + 32 ≤ M.size)
     (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M.write 256 value.toBytes, G⟩)
+      (devm.setMach ⟨[], M.write 256 value.toBytes, G, devm.stateGas⟩)
       tail post) :
     Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M, G + 9⟩)
+      (devm.setMach ⟨[], M, G + 9, devm.stateGas⟩)
       (pushB256 value ::: mstoreAt 8 +++ tail) post := by
   have hpush : Ninst.RunCompiled sevm
-      (devm.setMach ⟨[], M, G + 9⟩) (pushB256 value)
-      (devm.setMach ⟨[value], M, G + 6⟩) :=
+      (devm.setMach ⟨[], M, G + 9, devm.stateGas⟩) (pushB256 value)
+      (devm.setMach ⟨[value], M, G + 6, devm.stateGas⟩) :=
     Ninst.runCompiled_pushB256 (w := value) (c := 3) (G := G + 6)
       (by simpa only [gVerylow] using pushCost_of_ne_zero hvalue)
       (by show G + 9 = G + 6 + 3; omega)
@@ -900,9 +900,9 @@ theorem installedCallArgs_runCompiled
     (hreadValue : (M.read (targetWord * 32).toNat 32).1.toB256 = target)
     (htail : Func.RunCompiled fs sevm
       (devm.setMach
-        ⟨[Nat.toB256 G, target, 0, 284, 36, 0, 0], M, G⟩)
+        ⟨[Nat.toB256 G, target, 0, 284, 36, 0, 0], M, G, devm.stateGas⟩)
       tail post) :
-    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 20⟩)
+    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 20, devm.stateGas⟩)
       (pushList [0, 0, 36, 0x11c, 0] +++ loadWord targetWord +++
         Ninst.gas ::: tail) post := by
   func_run (8) [3]
@@ -925,8 +925,8 @@ theorem installedDurationWrite_runCompiled
     (hreadMemory : (M.read (durationWord * 32).toNat 32).2 = M)
     (hreadValue : (M.read (durationWord * 32).toNat 32).1.toB256 = duration)
     (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M.write 288 duration.toBytes, G⟩) tail post) :
-    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 12⟩)
+      (devm.setMach ⟨[], M.write 288 duration.toBytes, G, devm.stateGas⟩) tail post) :
+    Func.RunCompiled fs sevm (devm.setMach ⟨[], M, G + 12, devm.stateGas⟩)
       (loadWord durationWord +++ mstoreAt 9 +++ tail) post := by
   func_run (4) [3, 0]
   all_goals try simp_rw [show ((9 : B256) * 32).toNat = 288 by decide]
@@ -946,9 +946,9 @@ private theorem installedCodeGuard_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm)
     (target : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (htail : Func.RunCompiled fs sevm
-      (devm.setMach ⟨[], M, G⟩) tail post) :
+      (devm.setMach ⟨[], M, G, devm.stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
-      (devm.setMach ⟨[(53 : B256), target], M, G + 18⟩)
+      (devm.setMach ⟨[(53 : B256), target], M, G + 18, devm.stateGas⟩)
       (Ninst.iszero :::
         ((Func.call emptyRevertSlot) <?> (Ninst.pop ::: tail))) post := by
   func_run (3) [0]
@@ -1009,7 +1009,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       ∀ post : Devm,
         Func.RunCompiled fs sevm mid pauseSuccess post →
         Func.RunCompiled fs sevm
-          (base.setMach ⟨[], M, Gb + 22731 + codeCost⟩)
+          (base.setMach ⟨[], M, Gb + 22731 + codeCost, base.stateGas⟩)
           pauseAfterSet post := by
   have halign : M.size % 32 = 0 := by omega
   have hwf1 : Mem.Wf (M.write 256 pauseForSelector.toBytes) :=
@@ -1148,7 +1148,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + 22663), target, 0, 284, 36, 0, 0],
           (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-          Gb + 22663⟩)
+          Gb + 22663, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
       (target := target) (iiw := 284) (isw := 36) (oiw := 0) (osw := 0)
       (duration := duration) (s := []) (G := Gb + 22663)
       rfl rfl
@@ -1156,7 +1156,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         show ((temporalAccountAccessBase base target.toAdr).setMach
           ⟨[Nat.toB256 (Gb + 22663), target, 0, 284, 36, 0, 0],
             (M.write 256 pauseForSelector.toBytes).write 288
-              duration.toBytes, Gb + 22663⟩).extCost _ = 0
+              duration.toBytes, Gb + 22663, (temporalAccountAccessBase base target.toAdr).stateGas⟩).extCost _ = 0
         exact Devm.extCost_covered (by rw [hsize2]; decide))
       (by
         show (temporalAccountAccessBase base target.toAdr).getCode
@@ -1192,7 +1192,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     rfl
   have heta1 : post1 = post1.setMach ⟨[1],
       (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-      Gb + 378⟩ := by
+      Gb + 378, post1.stateGas⟩ := by
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   have hcode1 : post1.state.getCode target.toAdr = stubCode := by
@@ -1210,7 +1210,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 334⟩)
+          Gb + 334, post1.stateGas⟩)
       (target := target) (iiw := 284) (isw := 4) (oiw := 0) (osw := 32)
       (storedUntil := pauseForProjection sevm.benvStat.time duration)
       (s := []) (G := Gb + 334)
@@ -1220,7 +1220,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
           ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
             ((M.write 256 pauseForSelector.toBytes).write 288
               duration.toBytes).write 256 isPausedSelector.toBytes,
-            Gb + 334⟩).extCost _ = 0
+            Gb + 334, post1.stateGas⟩).extCost _ = 0
         exact Devm.extCost_covered (by rw [hsize3]; decide))
       (by
         show post1.state.getCode target.toAdr = stubCode
@@ -1248,7 +1248,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       Mem.extends_covered (by rw [hsize3]; decide)]
     rfl
   have heta2 : post2 = post2.setMach ⟨[1], pauseDecodedMemory M duration,
-      Gb + 62⟩ := by
+      Gb + 62, post2.stateGas⟩ := by
     rw [← hstk2, ← hmem2', ← hgas2']
     rfl
   have hltFlag : (Nat.toB256 post2.returnData.length <? (32 : B256)) =
@@ -1313,13 +1313,13 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
           some st₂ := by
     rw [← hstate1]
     exact hsub2
-  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 19⟩,
+  refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 19, post2.stateGas⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
     haskB, haaB, ?_, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
   · simpa only [Devm.getStorVal_setMach] using heffect2
   intro post hwalk
   have hC : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62, post2.stateGas⟩)
       (Ninst.iszero :::
         ((Func.call bubbleRevertSlot) <?> decodePausedResult)) post := by
     have hisz : ((pauseDecodedMemory M duration).read 0 32).1.toB256 =? 0 =
@@ -1344,7 +1344,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         hdecodedMemory]
       exact hwalk
   have hQueryPost : Func.RunCompiled fs sevm
-      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62⟩)
+      (post2.setMach ⟨[1], pauseDecodedMemory M duration, Gb + 62, post2.stateGas⟩)
       installedQueryPost post := by
     simpa only [installedQueryPost] using hC
   have hQueryCross : Func.RunCompiled fs sevm
@@ -1352,7 +1352,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
             duration.toBytes).write 256 isPausedSelector.toBytes,
-          Gb + 334⟩)
+          Gb + 334, post1.stateGas⟩)
       (Ninst.staticcall ::: installedQueryPost) post := by
     refine Func.RunCompiled.next hrun2 ?_
     rw [heta2]
@@ -1360,7 +1360,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   have hQueryStage : Func.RunCompiled fs sevm
       (post1.setMach
         ⟨[], ((M.write 256 pauseForSelector.toBytes).write 288
-          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 353⟩)
+          duration.toBytes).write 256 isPausedSelector.toBytes, Gb + 353, post1.stateGas⟩)
       installedQueryStage post := by
     unfold installedQueryStage
     func_run (7) [3]
@@ -1378,7 +1378,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   have hQueryWrite : Func.RunCompiled fs sevm
       (post1.setMach ⟨[],
         (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-        Gb + 362⟩)
+        Gb + 362, post1.stateGas⟩)
       installedQueryWrite post := by
     unfold installedQueryWrite
     have h := installedQueryWrite_runCompiled fs sevm post1
@@ -1390,7 +1390,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
   have hB : Func.RunCompiled fs sevm
       (post1.setMach ⟨[1],
         (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-        Gb + 378⟩)
+        Gb + 378, post1.stateGas⟩)
       installedQueryPrelude post := by
     unfold installedQueryPrelude
     have h := installedQueryGuard_runCompiled fs sevm post1
@@ -1399,13 +1399,13 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     simpa only [show Gb + 362 + 16 = Gb + 378 by omega] using h
   have hA2 : Func.RunCompiled fs sevm
       ((temporalAccountAccessBase base target.toAdr).setMach
-        ⟨[stubCode.size.toB256, target], M, Gb + 22722⟩)
+        ⟨[stubCode.size.toB256, target], M, Gb + 22722, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
       installedGuardPrelude post := by
     have hCallCross : Func.RunCompiled fs sevm
         ((temporalAccountAccessBase base target.toAdr).setMach
           ⟨[Nat.toB256 (Gb + 22663), target, 0, 284, 36, 0, 0],
             (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
-            Gb + 22663⟩)
+            Gb + 22663, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         (Ninst.call ::: installedQueryPrelude) post := by
       refine Func.RunCompiled.next hrun1 ?_
       rw [heta1]
@@ -1413,7 +1413,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     have hCallStage : Func.RunCompiled fs sevm
         ((temporalAccountAccessBase base target.toAdr).setMach
           ⟨[], (M.write 256 pauseForSelector.toBytes).write 288
-            duration.toBytes, Gb + 22683⟩)
+            duration.toBytes, Gb + 22683, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         installedCallStage post := by
       unfold installedCallStage
       have h := installedCallArgs_runCompiled fs sevm
@@ -1424,7 +1424,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       simpa only [show Gb + 22663 + 20 = Gb + 22683 by omega] using h
     have hDurationWrite : Func.RunCompiled fs sevm
         ((temporalAccountAccessBase base target.toAdr).setMach
-          ⟨[], M.write 256 pauseForSelector.toBytes, Gb + 22695⟩)
+          ⟨[], M.write 256 pauseForSelector.toBytes, Gb + 22695, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         (loadWord durationWord +++ mstoreAt 9 +++ installedCallStage) post := by
       have h := installedDurationWrite_runCompiled fs sevm
         (temporalAccountAccessBase base target.toAdr) duration
@@ -1435,7 +1435,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       simpa only [show Gb + 22683 + 12 = Gb + 22695 by omega] using h
     have hSelectorWrite : Func.RunCompiled fs sevm
         ((temporalAccountAccessBase base target.toAdr).setMach
-          ⟨[], M, Gb + 22704⟩)
+          ⟨[], M, Gb + 22704, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         (pushB256 pauseForSelector ::: mstoreAt 8 +++
           loadWord durationWord +++ mstoreAt 9 +++ installedCallStage) post := by
       have h := installedQueryWrite_runCompiled fs sevm
@@ -1453,10 +1453,10 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     simpa only [hstubSize,
       show Gb + 22704 + 18 = Gb + 22722 by omega] using h
   have hextStep : Ninst.RunCompiled sevm
-      (base.setMach ⟨[target, target], M, Gb + 22722 + codeCost⟩)
+      (base.setMach ⟨[target, target], M, Gb + 22722 + codeCost, base.stateGas⟩)
       Ninst.extcodesize
       ((temporalAccountAccessBase base target.toAdr).setMach
-        ⟨[stubCode.size.toB256, target], M, Gb + 22722⟩) := by
+        ⟨[stubCode.size.toB256, target], M, Gb + 22722, (temporalAccountAccessBase base target.toAdr).stateGas⟩) := by
     have h := temporal_extcodesize_runCompiled (sevm := sevm) (base := base)
       (x := target) (v := stubCode.size.toB256) (stack := [target])
       (M := M) (G := Gb + 22722)

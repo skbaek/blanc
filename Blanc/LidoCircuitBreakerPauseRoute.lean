@@ -109,7 +109,7 @@ theorem output_ne_nil_of_run_revert {sevm : Sevm} {devm raw : Devm}
   rw [Devm.popToNat_eq_ok hstack] at run
   simp only [bind, Except.bind] at run
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl] at run
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl] at run
   dsimp only [bind, Except.bind] at run
   split at run
   · rename_i err heq

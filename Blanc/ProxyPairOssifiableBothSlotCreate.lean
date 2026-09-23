@@ -159,11 +159,11 @@ private theorem initializedBase_getCode
 private def callPre (sevm : Sevm) (base : Devm) (memory : Mem) : Devm :=
   (ossifiableConstructorInitializedBase base sevm implementation).setMach
     ⟨[Nat.toB256 499979, implementation.toB256, 0x100, 32, 0, 0],
-      memory, 499979⟩
+      memory, 499979, (ossifiableConstructorInitializedBase base sevm implementation).stateGas⟩
 
 private def afterAccess (sevm : Sevm) (base : Devm) (memory : Mem) : Devm :=
   addAccessedAddress
-    ((callPre sevm base memory).setMach ⟨[], memory, 499979⟩)
+    ((callPre sevm base memory).setMach ⟨[], memory, 499979, (callPre sevm base memory).stateGas⟩)
     implementation
 
 private theorem spawnDescriptor_exists
@@ -210,7 +210,7 @@ private theorem spawnDescriptor_exists
     childGas := 492069
     stackEq := by rfl
     extensionEq := by
-      simp only [callPre, Devm.setMach_setMach,
+      simp only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.memory_setMach,
         show (0x100 : B256).toNat = 256 by decide,
         show (32 : B256).toNat = 32 by decide,
@@ -238,7 +238,7 @@ private theorem spawnDescriptor_exists
       simp only [show getDelegatedCodeAddress implementationCode = none by
         decide +kernel]
     accessEq := by
-      simp only [callPre, Devm.setMach_setMach,
+      simp only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.setMach_accessedAddresses,
         show implementation.toB256.toAdr = implementation by
           exact toAdr_toB256 implementation]
@@ -399,7 +399,7 @@ private theorem spawnChild_success
       hchildAdminOriginal hchildAdminCurrent
   have hentry :
       (initDevm spawn.child).setMach
-          ⟨[], Mem.empty, 469851 + setupBodyGas⟩ =
+          ⟨[], Mem.empty, 469851 + setupBodyGas, (initDevm spawn.child).stateGas⟩ =
         initDevm spawn.child := by
     have hgas : (initDevm spawn.child).gasLeft =
         469851 + setupBodyGas := by
@@ -532,7 +532,7 @@ private theorem callAndTail_success
     rw [hparentStack]
     decide
   let resumed := resumedBase spawn child
-  let callPost := resumed.setMach ⟨[1], memory, 477661⟩
+  let callPost := resumed.setMach ⟨[1], memory, 477661, resumed.stateGas⟩
   have hresume : spawn.resume.run (.ok child) = .ok callPost := by
     have exactResume := Resume.run_call_ok
       (parent := spawn.parent) (child := child)
@@ -615,13 +615,13 @@ private theorem callAndTail_success
       norm_num [gVerylow, gHigh, gJumpdest]
     · apply Func.runCompiled_call' (G := 477635)
         (ossifiableConstructorFunctions_afterSetup 1249 2188)
-      · simp only [callPost, Devm.setMach_setMach, Devm.stack_setMach,
+      · simp only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           List.length_nil]
         decide
-      · simp only [callPost, Devm.setMach_setMach,
+      · simp only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.gasLeft_setMach]
         norm_num [gVerylow, gMid, gJumpdest]
-      · simpa only [callPost, Devm.setMach_setMach,
+      · simpa only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.memory_setMach, Devm.stack_setMach] using hafterRun
   refine ⟨post, Func.RunCompiled.next hcall htail, ?_, ?_, ?_,
     houtput, ?_, ?_⟩
@@ -666,7 +666,7 @@ private theorem delegateSetup_success
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
         ((ossifiableConstructorInitializedBase base sevm implementation
-          ).setMach ⟨[], memory, 499999⟩)
+          ).setMach ⟨[], memory, 499999, (ossifiableConstructorInitializedBase base sevm implementation ).stateGas⟩)
         ossifiableConstructorDelegateSetup post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
@@ -716,7 +716,7 @@ private theorem delegateSetup_success
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (1)
   · norm_num [gBase]
-  simpa only [callPre, Devm.setMach_setMach, Devm.memory_setMach,
+  simpa only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
     Devm.stack_setMach] using hrest
 
 private theorem initialize_success
@@ -754,7 +754,7 @@ private theorem initialize_success
         runtimeBaselineBytes) :
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-        (base.setMach ⟨[], memory, 525913⟩)
+        (base.setMach ⟨[], memory, 525913, base.stateGas⟩)
         ossifiableConstructorInitializeImplementation post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
@@ -821,7 +821,7 @@ private theorem decodeInitialize_success
         runtimeBaselineBytes) :
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-        (base.setMach ⟨[], Mem.empty, 526228⟩)
+        (base.setMach ⟨[], Mem.empty, 526228, base.stateGas⟩)
         (ossifiableConstructorDecode 3437
           ossifiableConstructorInitializeImplementation) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
@@ -905,7 +905,7 @@ private theorem program_success_from_layout
       sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧
@@ -927,7 +927,7 @@ private theorem program_success_from_layout
       hadminCold hstatic hdepth hprecompile hruntime
   have hmain : Func.RunCompiled
       (ossifiableConstructorFunctions 1249 2188) sevm
-      (base.setMach ⟨[], Mem.empty, 526247⟩)
+      (base.setMach ⟨[], Mem.empty, 526247, base.stateGas⟩)
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
@@ -970,7 +970,7 @@ theorem program_success
     (hprecompile :
       sevm.benvStat.rules.isPrecomp implementation = false) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         postSetupImplementation.toB256 ∧

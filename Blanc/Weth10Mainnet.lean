@@ -113,21 +113,20 @@ theorem canonicalMainnetBpo2DeploymentStep_establishes_root
     (base deployed : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
     (htimestamp : mainnetBpo2Timestamp ≤ cb.block.header.timestamp)
-    (hbase : CanonicalDeploymentBase mainnetChainConfig bpo2Rules
+    (hbase : CanonicalDeploymentBase mainnetChainConfig .bpo2
       base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock mainnetChainConfig bpo2Rules
+    (henv : CanonicalWeth10DeploymentBlock mainnetChainConfig .bpo2
       base cb deploymentTxBytes deploymentTx sender ca)
     (hstep : stateTransitionUsing mainnetChainConfig
       base cb.block = .ok deployed) :
     MainnetDeploymentRoot base deployed
-      (freshDeployParams mainnetChainConfig.chainId.toB256 ca) ca := by
-  have hselected :
-      mainnetChainConfig.rulesAt cb.block.header.timestamp = .ok bpo2Rules :=
-    mainnet_rulesAt_eq_bpo2_of_ge htimestamp
-  rw [henv.rulesAt] at hselected
-  exact canonicalDeploymentStep_establishes_root
-    mainnetChainConfig bpo2Rules base deployed cb deploymentTxBytes
-      deploymentTx sender ca hbase henv hstep
+      (freshDeployParams mainnetChainConfig.chainId.toB256 ca) ca :=
+  -- `htimestamp` is retained for the public statement; the envelope's
+  -- `forkAt` field already pins the selected fork to `.bpo2`.
+  have _ := htimestamp
+  canonicalDeploymentStep_establishes_root
+    mainnetChainConfig .bpo2 base deployed cb deploymentTxBytes
+      deploymentTx sender ca hbase henv CoveredFork.bpo2 hstep
 
 /-! ## Public current-mainnet instances
 
@@ -143,6 +142,7 @@ theorem chainUsing_preserves_stable_mainnet
     (hstable : Stable dp ca ch.state) :
     Stable dp ca ch'.state :=
   chainUsing_preserves_stable dp ca mainnetChainConfig ch ch' hreach hstable
+    mainnetChainConfig_covered
 
 theorem chain_reachable_backed_and_flash_zero_mainnet
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
@@ -151,7 +151,7 @@ theorem chain_reachable_backed_and_flash_zero_mainnet
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
   chain_reachable_backed_and_flash_zero
-    dp ca mainnetChainConfig ch ch' hreach hstable
+    dp ca mainnetChainConfig ch ch' hreach hstable mainnetChainConfig_covered
 
 theorem deployment_reachable_residual_messageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -398,7 +398,7 @@ theorem deployment_reachable_redeemClaims_anyOrder_mainnet
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   deployment_reachable_redeemClaims_anyOrder
-    hroot hfuture hrules hadm hperm
+    hroot hfuture mainnetChainConfig_covered hrules hadm hperm
 
 theorem deployment_reachable_redeemEveryoneList_anyOrder_mainnet
     {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
@@ -415,7 +415,7 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder_mainnet
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture hrules hnodup hrecipients hperm
+    hroot hfuture mainnetChainConfig_covered hrules hnodup hrecipients hperm
 
 /-! The schedule-indexed conservation, no-wrap, and determinism pins. -/
 

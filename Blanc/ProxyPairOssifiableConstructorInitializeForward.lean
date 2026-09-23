@@ -138,10 +138,10 @@ private theorem
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((ossifiableConstructorInitializedBase base sevm implementation).setMach
-        ⟨[], memory, G⟩)
+        ⟨[], memory, G, (ossifiableConstructorInitializedBase base sevm implementation).stateGas⟩)
       initializeLoadLength post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 25882⟩)
+      (base.setMach ⟨[], memory, G + 25882, base.stateGas⟩)
       ossifiableConstructorInitializeImplementation post := by
   have hmemory0 : (memory.read 0 32).2 = memory := by
     exact Mem.read_snd_eq_self
@@ -261,10 +261,10 @@ theorem
     (hsetup : fs[6]? = some ossifiableConstructorDelegateSetup)
     (hrest : Func.RunCompiled fs sevm
       ((ossifiableConstructorInitializedBase base sevm implementation).setMach
-        ⟨[], memory, G⟩)
+        ⟨[], memory, G, (ossifiableConstructorInitializedBase base sevm implementation).stateGas⟩)
       ossifiableConstructorDelegateSetup post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 25914⟩)
+      (base.setMach ⟨[], memory, G + 25914, base.stateGas⟩)
       ossifiableConstructorInitializeImplementation post := by
   have hmemory128 : (memory.read 128 32).2 = memory := by
     apply Mem.read_snd_eq_self
@@ -272,7 +272,7 @@ theorem
     decide
   have hload : Func.RunCompiled fs sevm
       ((ossifiableConstructorInitializedBase base sevm implementation).setMach
-        ⟨[], memory, G + 32⟩)
+        ⟨[], memory, G + 32, (ossifiableConstructorInitializedBase base sevm implementation).stateGas⟩)
       initializeLoadLength post := by
     unfold initializeLoadLength
     func_run (2) [3]
@@ -291,7 +291,7 @@ theorem
         decide
       · simp only [Devm.gasLeft_setMach]
         norm_num [gVerylow, gMid, gJumpdest]
-      · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
           Devm.stack_setMach] using hrest
   have hpfx :=
     ossifiableConstructorInitializeImplementation_prefix_runCompiled
@@ -344,7 +344,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     (hgas : 200000 ≤ G) :
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-        (base.setMach ⟨[], memory, G⟩)
+        (base.setMach ⟨[], memory, G, base.stateGas⟩)
         ossifiableConstructorInitializeImplementation post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -503,7 +503,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     rw [hrefund]
     rw [show G - k - 1163 = G - 25913 from by omega]
     change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-      (initializedBase.setMach ⟨[], memory, G - 25913⟩)
+      (initializedBase.setMach ⟨[], memory, G - 25913, initializedBase.stateGas⟩)
       (ossifiableConstructorAfterSetup 1249 2188) post
     exact htailRun
   · rw [htailStorage]

@@ -10,6 +10,7 @@ open Jaune
 unique first-live branch write. -/
 theorem commitDeposit_firstLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount node : B256}
     {stor : Stor} {keys : KeySet} {n size G : Nat}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
@@ -61,11 +62,11 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
                 insertionFirstLiveStoreCost sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
-            38 + sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
         commitDeposit
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n node)).setMach ⟨[], finalMemory, G⟩))
+            0 n node)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩))
         [(sevm.currentTarget, depositCountSlot, oldCount + 1),
           (sevm.currentTarget, branchSlot n,
             accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -92,7 +93,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
     · rfl
     · rfl
   obtain ⟨finalBase, finalMemory, hfinal, run⟩ :=
-    insertionLoop_firstLive_exists_storageEffectRun
+    insertionLoop_firstLive_exists_storageEffectRun (hfork := hfork)
       (height := 0) (n := n) (size := size) (G := G)
       carrier hstor (by omega) hsize hfirst hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry hbound hinsertionContinuation hinsertionLoop
@@ -103,16 +104,16 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
           (G + 46 +
               insertionFirstLiveStoreCost sevm stor keys 0 n node) +
             insertionDeadGas sevm.currentTarget stor n
-              (insertionNatState 0 size node keys)⟩)
+              (insertionNatState 0 size node keys), countPost.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm finalBase (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-          0 n node)).setMach ⟨[], finalMemory, G⟩))
+          0 n node)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩))
       [(sevm.currentTarget, branchSlot n,
         accumulatedNode Bytes.sha256 (accOfStor stor).branch
           0 n node)] := by
     simpa only [countPost, nextMemory, Nat.zero_add, hzero] using run
-  have commit := commitDeposit_storageEffectRun
+  have commit := commitDeposit_storageEffectRun (hfork := hfork)
     (K :=
       (G + 46 +
           insertionFirstLiveStoreCost sevm stor keys 0 n node) +
@@ -126,6 +127,7 @@ unique first-live branch store.  The result exposes the exact branch slot,
 accumulated node, and post-insertion carrier. -/
 theorem commitDeposit_firstLive_exists_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount node : B256}
     {stor : Stor} {keys : KeySet} {n size G : Nat}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
@@ -177,13 +179,13 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
                 insertionFirstLiveStoreCost sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
-            38 + sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
         commitDeposit
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n node)).setMach ⟨[], finalMemory, G⟩)) := by
+            0 n node)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
   obtain ⟨finalBase, finalMemory, hfinal, storageRun⟩ :=
-    commitDeposit_firstLive_exists_storageEffectRun
+    commitDeposit_firstLive_exists_storageEffectRun (hfork := hfork)
       hmem hshift hstor hkeys hheight hsize hfirst hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry hbound hcountSentry hinsertionContinuation
       hinsertionLoop

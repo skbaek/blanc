@@ -499,7 +499,7 @@ private def sharedValueAfterAccess (state : State)
   addAccessedAddress
     ((sharedValueCallPre state).setMach
       ⟨[], (sharedValueCallPre state).memory,
-        (sharedValueCallPre state).gasLeft⟩)
+        (sharedValueCallPre state).gasLeft, (sharedValueCallPre state).stateGas⟩)
     implementation
 
 private theorem sharedValueCallPre_stack
@@ -1072,9 +1072,9 @@ private theorem fsig_prepend_runCompiledTo
     (tail : Func) (post : Devm)
     (selectorEq : Sevm.selector sevm = selector)
     (body : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[selector], memory, gas⟩) tail (.ok post)) :
+      (base.setMach ⟨[selector], memory, gas, base.stateGas⟩) tail (.ok post)) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, gas + 11⟩) (fsig +++ tail)
+      (base.setMach ⟨[], memory, gas + 11, base.stateGas⟩) (fsig +++ tail)
       (.ok post) := by
   unfold fsig cdl shiftRight
   func_run (4) [selector]

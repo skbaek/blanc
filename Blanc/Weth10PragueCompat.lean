@@ -345,6 +345,14 @@ theorem deployment_reachable_dormant_holder_balance_monotone_prague
         bookedBalanceNat future.state ca u :=
   deployment_reachable_dormant_holder_balance_monotone hroot hfuture
 
+/-- A Prague-only schedule selects only the covered Prague fork. -/
+private theorem pragueOnly_covered (chainId : UInt64) :
+    ∀ t f, (ChainConfig.pragueOnly chainId).forkAt t = .ok f → CoveredFork f := by
+  intro t f h
+  rw [ChainConfig.pragueOnly_forkAt] at h
+  cases h
+  exact CoveredFork.prague
+
 theorem deployment_reachable_redeemClaims_anyOrder_prague
     {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
@@ -357,7 +365,7 @@ theorem deployment_reachable_redeemClaims_anyOrder_prague
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   deployment_reachable_redeemClaims_anyOrder
-    hroot hfuture hrules hadm hperm
+    hroot hfuture (pragueOnly_covered chainId) hrules hadm hperm
 
 theorem deployment_reachable_redeemEveryoneList_anyOrder_prague
     {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
@@ -376,7 +384,7 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder_prague
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture hrules hnodup hrecipients hperm
+    hroot hfuture (pragueOnly_covered chainId) hrules hnodup hrecipients hperm
 
 theorem AccountedHistory.flash_pair_totals_eq_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}

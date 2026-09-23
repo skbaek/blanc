@@ -11,6 +11,7 @@ open Jaune
 prefix and terminal store, including its exact slot, node, and gas charge. -/
 theorem insertionLoop_firstLive_exists_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {stor : Stor}
     {height n size G : Nat} {node : B256} {keys : KeySet}
     (carrier : InsertionLoopCarrier origin base memory oldCount
@@ -44,13 +45,13 @@ theorem insertionLoop_firstLive_exists_runCompiledTo
             (G + 46 +
                 insertionFirstLiveStoreCost sevm stor keys height n node) +
               insertionDeadGas sevm.currentTarget stor n
-                (insertionNatState height size node keys)⟩)
+                (insertionNatState height size node keys), base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (branchSlot (height + n))
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
             height n node)).setMach
-              ⟨[], finalMemory, G⟩)) := by
+              ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
   have hdead :=
     insertionLoopDead_insertionNatState_of_firstLive
       sevm.currentTarget stor n height size node keys
@@ -69,7 +70,7 @@ theorem insertionLoop_firstLive_exists_runCompiledTo
     insertionLoopIter_node
       sevm.currentTarget stor n height size node keys (by omega)
   obtain ⟨finalBase, finalMemory, hcarrier, hrun⟩ :=
-    insertionLoop_deadThenLive_exists_runCompiledTo
+    insertionLoop_deadThenLive_exists_runCompiledTo (hfork := hfork)
       carrier horiginStor hdead hlive hnodeleg hwarm hpre hdepth hstatic
       (by rw [hcost]; exact hsentry)
       (by rw [hcost]; exact hbound)
@@ -82,6 +83,7 @@ theorem insertionLoop_firstLive_exists_runCompiledTo
 `insertionLoop_firstLive_exists_runCompiledTo`. -/
 theorem insertionLoop_firstLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {stor : Stor}
     {height n size G : Nat} {node : B256} {keys : KeySet}
     (carrier : InsertionLoopCarrier origin base memory oldCount
@@ -115,13 +117,13 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
             (G + 46 +
                 insertionFirstLiveStoreCost sevm stor keys height n node) +
               insertionDeadGas sevm.currentTarget stor n
-                (insertionNatState height size node keys)⟩)
+                (insertionNatState height size node keys), base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (branchSlot (height + n))
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
             height n node)).setMach
-              ⟨[], finalMemory, G⟩))
+              ⟨[], finalMemory, G, finalBase.stateGas⟩))
         [(sevm.currentTarget, branchSlot (height + n),
           accumulatedNode Bytes.sha256 (accOfStor stor).branch
             height n node)] := by
@@ -143,7 +145,7 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
     insertionLoopIter_node
       sevm.currentTarget stor n height size node keys (by omega)
   obtain ⟨finalBase, finalMemory, finalCarrier, run⟩ :=
-    insertionLoop_deadThenLive_exists_storageEffectRun
+    insertionLoop_deadThenLive_exists_storageEffectRun (hfork := hfork)
       carrier horiginStor hdead hlive hnodeleg hwarm hpre hdepth hstatic
       (by rw [hcost]; exact hsentry)
       (by rw [hcost]; exact hbound)

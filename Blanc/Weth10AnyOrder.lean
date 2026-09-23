@@ -653,12 +653,13 @@ theorem deployment_reachable_redeemClaims_anyOrder
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hrules : cfg.rulesAt timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   redeemClaims_anyOrder (hroot.target_not_precompile hrules)
-    (hroot.reachable_stable hfuture) hadm hperm
+    (hroot.reachable_stable hfuture hcov) hadm hperm
 
 /-- The deployment-rooted full-balance instance for any supplied
 duplicate-free holder list and admissible recipient map. -/
@@ -669,6 +670,7 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hrules : cfg.rulesAt timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
@@ -678,7 +680,7 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   redeemEveryoneList_anyOrder (hroot.target_not_precompile hrules)
-    (hroot.reachable_stable hfuture) hnodup hrecipients hperm
+    (hroot.reachable_stable hfuture hcov) hnodup hrecipients hperm
 
 end Weth10
 

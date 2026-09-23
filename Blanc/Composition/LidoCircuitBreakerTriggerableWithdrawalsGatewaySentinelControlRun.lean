@@ -1950,7 +1950,7 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
             ((runtime officialParams).main :: (runtime officialParams).aux)
             sentinelGatewayPauseWorldSevm
             (gatewayRunAfterSetBase.setMach
-              ⟨[], gatewayRunMemoryLast, 71123⟩)
+              ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩)
             pauseAfterSet final := by
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
@@ -2090,7 +2090,7 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           sentinelGatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71123⟩)
+            ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet final ∧
       Func.RunCompiledTo
           ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -2099,11 +2099,11 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           sentinelGatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71123⟩)
+            ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference sentinelGatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 71123⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
     sentinelGatewayPauseWorld_afterSetGatewaySeam
   have hmidCount : mid.getStorVal sentinelGatewayPauseWorldSevm.currentTarget
@@ -2154,7 +2154,7 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900⟩ = mid := by
+      ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
@@ -2180,11 +2180,11 @@ private theorem sentinelGatewayPauseWorld_productionRun :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           sentinelGatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71123⟩)
+            ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference sentinelGatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 71123⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     sentinelGatewayPauseWorld_successSuffix
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
@@ -2327,7 +2327,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       exact sentinelGatewayPauseWorld_publicPausePremises.codeAddress)
     sentinelGatewayPauseWorld_publicPausePremises.productionBytes hbodyTo
   have hentry : sentinelGatewayPauseWorldPre.setMach
-      ⟨[], Mem.empty, 0 + pauseDispatchGas + 103322⟩ =
+      ⟨[], Mem.empty, 0 + pauseDispatchGas + 103322, sentinelGatewayPauseWorldPre.stateGas⟩ =
       sentinelGatewayPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 103322 : Nat) = sentinelGatewayPauseWorldGas from by
       norm_num [pauseDispatchGas, sentinelGatewayPauseWorldGas]]
@@ -2336,7 +2336,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
 
 private def sentinelGatewayPauseWorldAfterSetEntry : Devm :=
-  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 71123⟩
+  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩
 
 private theorem sentinelGatewayPauseWorldAfterSetEntry_memory :
     sentinelGatewayPauseWorldAfterSetEntry.memory = gatewayRunMemoryLast := by

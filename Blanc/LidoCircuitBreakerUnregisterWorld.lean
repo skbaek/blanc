@@ -989,7 +989,7 @@ theorem unregisterWorld_effects :
             unregWorldTarget unregWorldPauser unregWorldResetCost
             unregWorldResetCost gasWarmAccess gasWarmAccess
             unregWorldResetCost unregWorldResetCost unregWorldResetCost
-            unregWorldResetCost⟩ = unregWorldPre := by
+            unregWorldResetCost, unregWorldPre.stateGas⟩ = unregWorldPre := by
     rw [unregWorld_bodyGasEq]
     rfl
   rw [hentry] at hrun

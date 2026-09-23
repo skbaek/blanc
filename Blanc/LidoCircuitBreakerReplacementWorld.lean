@@ -788,7 +788,7 @@ theorem replRetainedWorld_run :
               (replWorldPre replRetainedWorldCount replRetainedWorldGas)
               replWorldTarget replWorldNewPauser replWorldOldPauser
               replRetainedWorldCount replWorldResetCost replWorldResetCost
-              gasStorageSet gasStorageSet⟩ =
+              gasStorageSet gasStorageSet, (replWorldPre replRetainedWorldCount replRetainedWorldGas).stateGas⟩ =
         replWorldPre replRetainedWorldCount replRetainedWorldGas := by
     rw [replRetained_bodyGasEq]
     rfl
@@ -966,7 +966,7 @@ theorem replOldLastWorld_run :
               (replWorldPre replOldLastWorldCount replOldLastWorldGas)
               replWorldTarget replWorldNewPauser replWorldOldPauser
               replOldLastWorldCount replWorldResetCost replWorldResetCost
-              gasStorageSet replWorldResetCost gasStorageSet⟩ =
+              gasStorageSet replWorldResetCost gasStorageSet, (replWorldPre replOldLastWorldCount replOldLastWorldGas).stateGas⟩ =
         replWorldPre replOldLastWorldCount replOldLastWorldGas := by
     rw [replOldLast_bodyGasEq]
     rfl

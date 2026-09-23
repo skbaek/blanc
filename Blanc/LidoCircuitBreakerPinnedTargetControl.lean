@@ -1134,7 +1134,7 @@ private theorem benignCallEvm8_childCode :
 
 private def benignCallBase : Devm :=
   benignCallEvm8.dyna.setMach
-    ⟨[], benignCallEvm8.dyna.memory, benignCallEvm8.dyna.gasLeft⟩
+    ⟨[], benignCallEvm8.dyna.memory, benignCallEvm8.dyna.gasLeft, benignCallEvm8.dyna.stateGas⟩
 
 private def benignCallDelegated : Devm :=
   addAccessedAddress benignCallBase benignCallTarget

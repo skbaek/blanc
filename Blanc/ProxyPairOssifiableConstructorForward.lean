@@ -76,15 +76,15 @@ private theorem stageReturnEnd_runCompiled
     (houtput : (memory.read 0 2188).1 = runtimeBytes)
     (hgas : 10 ≤ G) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G⟩) stageReturnEnd
-      ((((base.setMach ⟨[], memory, G - 5⟩).memRead
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) stageReturnEnd
+      ((((base.setMach ⟨[], memory, G - 5, base.stateGas⟩).memRead
         0 2188).2).withOutput runtimeBytes) := by
   unfold stageReturnEnd
   simp only [ossifiablePushCreationCoordinate_shape]
   func_run (2)
   apply Func.runCompiled_return_word
     (devm := base.setMach
-      ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5⟩)
+      ⟨[(0 : B256), Nat.toB256 2188], memory, G - 5, base.stateGas⟩)
     (i := 0) (sz := Nat.toB256 2188) (s := [])
     (out := runtimeBytes) (G := G - 5) (e := 0)
   · rfl
@@ -118,9 +118,9 @@ private theorem stageCopy_runCompiled
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : copyCost + 18 ≤ G) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G⟩) stageCopy
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) stageCopy
       ((((base.setMach
-          ⟨[], memory.write 0 runtimeBytes, G - (copyCost + 13)⟩).memRead
+          ⟨[], memory.write 0 runtimeBytes, G - (copyCost + 13), base.stateGas⟩).memRead
             0 2188).2).withOutput runtimeBytes) := by
   let copiedMemory : Mem := memory.write 0 runtimeBytes
   have hsizeCopied : copiedMemory.size = 2208 := by
@@ -164,7 +164,7 @@ private theorem stageCopy_runCompiled
         show Linst.toUInt8 .stop = (0 : UInt8) by rfl] using hcopy
     · simp only [Devm.gasLeft_setMach]
       omega
-  · simpa only [Devm.setMach_setMach, hgasTail] using hreturn
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, hgasTail] using hreturn
 
 private theorem stageMask_complete
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -188,7 +188,7 @@ private theorem stageMask_complete
     (hgas : 100000 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G⟩)
+        (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G, base.stateGas⟩)
         stageMask post ∧
       post.output = runtimeBytes ∧
       post.gasLeft = G - 21873 ∧
@@ -275,13 +275,13 @@ private theorem stageMask_complete
       show (32 : B256).toNat = 32 by decide] at hvalue1 hmemory1 ⊢
     rw [hvalue1, hmemory1]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[requested], memory1, G - 24⟩)
+      (base.setMach ⟨[requested], memory1, G - 24, base.stateGas⟩)
       (mstoreAt 6 +++ stageLog) _
     func_run (2) [3]
     · exact Devm.extCost_of_size hsize1 (by decide)
     simp only [prepend, show ((6 : B256) * 32).toNat = 192 by decide]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory2, G - 33⟩) stageLog _
+      (base.setMach ⟨[], memory2, G - 33, base.stateGas⟩) stageLog _
     unfold stageLog
     func_run (4) [1262]
     · exact Devm.extCost_add_of_size hsize2 (by decide)
@@ -290,7 +290,7 @@ private theorem stageMask_complete
       show ((2 : B256) * 32).toNat = 64 by decide]
     rw [hlogData, hlogMemory]
     change Func.RunCompiled fs sevm
-      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1304⟩)
+      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1304, (base.addLog adminLog).stateGas⟩)
       stageAdminTest _
     unfold stageAdminTest
     func_run (3) [3, 0]
@@ -353,7 +353,7 @@ private theorem stageMask_dirtyCovered_complete
     (hgas : 100000 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G⟩)
+        (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G, base.stateGas⟩)
         stageMask post ∧
       post.output = runtimeBytes ∧
       post.gasLeft = G - 1961 ∧
@@ -435,13 +435,13 @@ private theorem stageMask_dirtyCovered_complete
       show (32 : B256).toNat = 32 by decide] at hvalue1 hmemory1 ⊢
     rw [hvalue1, hmemory1]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[requested], memory1, G - 21⟩)
+      (base.setMach ⟨[requested], memory1, G - 21, base.stateGas⟩)
       (mstoreAt 6 +++ stageLog) _
     func_run (2) [0]
     · exact Devm.extCost_of_size hsize1 (by decide)
     simp only [prepend, show ((6 : B256) * 32).toNat = 192 by decide]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory2, G - 27⟩) stageLog _
+      (base.setMach ⟨[], memory2, G - 27, base.stateGas⟩) stageLog _
     unfold stageLog
     func_run (4) [1262]
     · exact Devm.extCost_add_of_size hsize2 (by decide)
@@ -450,7 +450,7 @@ private theorem stageMask_dirtyCovered_complete
       show ((2 : B256) * 32).toNat = 64 by decide]
     rw [hlogData, hlogMemory]
     change Func.RunCompiled fs sevm
-      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1298⟩)
+      ((base.addLog adminLog).setMach ⟨[], memory2, G - 1298, (base.addLog adminLog).stateGas⟩)
       stageAdminTest _
     unfold stageAdminTest
     func_run (3) [3, 0]
@@ -518,7 +518,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
     (hgas : 102108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], memory, G⟩)
+        (base.setMach ⟨[], memory, G, base.stateGas⟩)
         (ossifiableConstructorAfterSetup 1249 2188) post ∧
       post.output = runtimeBytes ∧
       post.gasLeft = G - 23981 ∧
@@ -549,7 +549,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_runCompiled
     func_run (4)
     simp only [Devm.getStorVal_setMach, hraw]
     change Func.RunCompiled fs sevm
-      (warmBase.setMach ⟨[~~~(0 : B256), 0], memory, G - 2108⟩)
+      (warmBase.setMach ⟨[~~~(0 : B256), 0], memory, G - 2108, warmBase.stateGas⟩)
       stageMask post
     exact htail
   · rw [hgasPost]
@@ -585,7 +585,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_runCompiled
     (hgas : 100108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], memory, G⟩)
+        (base.setMach ⟨[], memory, G, base.stateGas⟩)
         (ossifiableConstructorAfterSetup 1249 2188) post ∧
       post.output = runtimeBytes ∧
       post.gasLeft = G - 2069 ∧
@@ -613,7 +613,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_runCompiled
     func_run (4)
     simp only [Devm.getStorVal_setMach, hraw]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G - 108⟩)
+      (base.setMach ⟨[~~~(0 : B256), oldRaw], memory, G - 108, base.stateGas⟩)
       stageMask post
     exact htail
   · rw [hgasPost]
@@ -648,7 +648,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
     (hgas : 100108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], memory, G⟩)
+        (base.setMach ⟨[], memory, G, base.stateGas⟩)
         (ossifiableConstructorAfterSetup 1249 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         (Devm.getStor base sevm.currentTarget).set adminSlotLit
@@ -670,7 +670,7 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
   have effects := ossifiableConstructorAfterSetup_success
     (runtimeOffset := 1249) (runtimeLength := 2188)
     (fs := fs) (sevm := sevm)
-    (pre := base.setMach ⟨[], memory, G⟩) (post := post)
+    (pre := base.setMach ⟨[], memory, G, base.stateGas⟩) (post := post)
     (tail := []) (image := image) (runtimeBytes := runtimeBytes)
     (requestedAdmin := requestedAdmin)
     hZeroAdmin
@@ -681,12 +681,12 @@ theorem ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
   rcases effects with ⟨_, hstorage, hlogs, _⟩
   refine ⟨post, run, ?_, ?_, houtput, hgasPost, herrorPost⟩
   · have hpreStorage :
-        Devm.getStor (base.setMach ⟨[], memory, G⟩) sevm.currentTarget =
+        Devm.getStor (base.setMach ⟨[], memory, G, base.stateGas⟩) sevm.currentTarget =
           Devm.getStor base sevm.currentTarget := rfl
     rw [hpreStorage, Devm.getStorVal_setMach, hraw, hnew] at hstorage
     exact hstorage
   · have hpreLogs :
-        (base.setMach ⟨[], memory, G⟩).logs = base.logs := rfl
+        (base.setMach ⟨[], memory, G, base.stateGas⟩).logs = base.logs := rfl
     rw [hpreLogs, Devm.getStorVal_setMach, hraw] at hlogs
     exact hlogs
 
@@ -715,7 +715,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
     (hgas : 102108 ≤ G) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], memory, G⟩)
+        (base.setMach ⟨[], memory, G, base.stateGas⟩)
         (ossifiableConstructorAfterSetup 1249 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         (Devm.getStor base sevm.currentTarget).set adminSlotLit
@@ -736,7 +736,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
   have effects := ossifiableConstructorAfterSetup_success
     (runtimeOffset := 1249) (runtimeLength := 2188)
     (fs := fs) (sevm := sevm)
-    (pre := base.setMach ⟨[], memory, G⟩) (post := post)
+    (pre := base.setMach ⟨[], memory, G, base.stateGas⟩) (post := post)
     (tail := []) (image := image) (runtimeBytes := runtimeBytes)
     (requestedAdmin := requestedAdmin)
     hZeroAdmin
@@ -747,13 +747,13 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
   rcases effects with ⟨_, hstorage, hlogs, _⟩
   refine ⟨post, run, ?_, ?_, houtput, hgasPost, herrorPost⟩
   · have hpreStorage :
-        Devm.getStor (base.setMach ⟨[], memory, G⟩) sevm.currentTarget =
+        Devm.getStor (base.setMach ⟨[], memory, G, base.stateGas⟩) sevm.currentTarget =
           Devm.getStor base sevm.currentTarget := rfl
     rw [hpreStorage, Devm.getStorVal_setMach, hraw,
       addressSlotWriteWord, b256_and_zero_or] at hstorage
     exact hstorage
   · have hpreLogs :
-        (base.setMach ⟨[], memory, G⟩).logs = base.logs := rfl
+        (base.setMach ⟨[], memory, G, base.stateGas⟩).logs = base.logs := rfl
     rw [hpreLogs, Devm.getStorVal_setMach, hraw] at hlogs
     exact hlogs
 

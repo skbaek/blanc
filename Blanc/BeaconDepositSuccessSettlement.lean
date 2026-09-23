@@ -26,6 +26,7 @@ certifies that its raw result is an execution rather than merely a value
 carried by the settlement relation. -/
 private theorem deposit_success_settled_effects_of_processMessage
     {msg : Msg} {sevm : Sevm} {base final settled : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -119,7 +120,7 @@ private theorem deposit_success_settled_effects_of_processMessage
       settled.output = base.output ∧
       settled.error = base.error ∧
       some sevm.code.toList = Prog.compile runtime := by
-  rcases deposit_success_runCompiled sevm base pubkey withdrawalCredentials
+  rcases deposit_success_runCompiled (hfork := hfork) sevm base pubkey withdrawalCredentials
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
@@ -134,7 +135,7 @@ private theorem deposit_success_settled_effects_of_processMessage
         depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
           ((accOfStor
             (Devm.getStor base sevm.currentTarget)).count + 1)
-          countCost G⟩ = base := by
+          countCost G, base.stateGas⟩ = base := by
     rw [← hentryStack, ← hentryMemory, ← hgasEntry]
     cases base
     rfl
@@ -182,6 +183,7 @@ the common post-transfer settlement adapter. -/
 theorem deposit_success_settled_effects
     {msg : Msg} {benv : Benv} {codeAddress : Adr}
     (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -280,7 +282,7 @@ theorem deposit_success_settled_effects
       settled.output = base.output ∧
       settled.error = base.error ∧
       some sevm.code.toList = Prog.compile runtime := by
-  rcases deposit_success_runCompiled sevm base pubkey withdrawalCredentials
+  rcases deposit_success_runCompiled (hfork := hfork) sevm base pubkey withdrawalCredentials
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
@@ -291,7 +293,7 @@ theorem deposit_success_settled_effects
         depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
           ((accOfStor
             (Devm.getStor base sevm.currentTarget)).count + 1)
-          countCost G⟩ = base := by
+          countCost G, base.stateGas⟩ = base := by
     have hstackEntry : base.stack = [] := by
       rw [hbase]
       rfl

@@ -100,10 +100,10 @@ private lemma step_jumpdest_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
     (h_at : Jinst.At sevm.code pc .jumpdest)
     (h_gas : gJumpdest ≤ devm.gasLeft) :
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1)
-      (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest⟩) := by
+      (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest, devm.stateGas⟩) := by
   rw [Evm.step_jump h_at]
   have hrun : Jinst.run ⟨pc, sevm, devm⟩ .jumpdest = .ok ⟨pc + 1,
-      devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest⟩⟩ := by
+      devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - gJumpdest, devm.stateGas⟩⟩ := by
     show Jinst.runCore pc devm sevm .jumpdest = _
     unfold Jinst.runCore
     rw [chargeGas_eq_ok h_gas]
@@ -129,13 +129,13 @@ private lemma step_push0_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
     (h_gas : gBase ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1)
       (devm.setMach ⟨0 :: devm.stack, devm.memory,
-        devm.gasLeft - gBase⟩) := by
+        devm.gasLeft - gBase, devm.stateGas⟩) := by
   rw [Evm.step_next h_at, Ninst.step_push]
   rw [show (if ([] : Bytes) = [] then gBase else gVerylow) = gBase from rfl]
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
-    ⟨devm.stack, devm.memory, devm.gasLeft - gBase⟩) h_room]
+    ⟨devm.stack, devm.memory, devm.gasLeft - gBase, devm.stateGas⟩) h_room]
   rfl
 
 /-- An `MSTORE` at offset zero over empty memory, without the gas for its
@@ -152,18 +152,18 @@ private lemma step_mstore_fail {pc : Nat} {sevm : Sevm} {devm : Devm}
   unfold Rinst.runCore
   rw [Devm.popToNat_eq_ok (devm := devm) h_stk]
   simp only [bind, Except.bind]
-  rw [Devm.pop_eq_ok (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩)
+  rw [Devm.pop_eq_ok (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩)
     rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-  have hext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+  have hext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨(0 : B256).toNat, 32⟩] = 3 := by
     rw [show ((0 : B256).toNat) = 0 from rfl]
-    show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost [⟨0, 32⟩] = 3
-    have hm : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).memory =
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost [⟨0, 32⟩] = 3
+    have hm : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).memory =
         Mem.empty := h_mem
     exact hm ▸ Devm.extCost_empty_word
   rw [hext, chargeGas_eq_outOfGas (by
-    show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).gasLeft < _
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft < _
     rw [Devm.gasLeft_setMach]
     omega)]
   exact ⟨_, rfl⟩
@@ -181,24 +181,24 @@ private lemma step_mstore_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
   have hstep : Step.ofExecution (pc + 1)
       (Rinst.runCore pc devm sevm .mstore) = .cont (pc + 1)
         ((devm.setMach
-          ⟨s, devm.memory, devm.gasLeft - (gVerylow + 3)⟩).memWrite
+          ⟨s, devm.memory, devm.gasLeft - (gVerylow + 3), devm.stateGas⟩).memWrite
             (0 : B256).toNat v.toBytes) := by
     unfold Rinst.runCore
     rw [Devm.popToNat_eq_ok (devm := devm) h_stk]
     simp only [bind, Except.bind]
     rw [Devm.pop_eq_ok
-      (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft⟩) rfl]
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
-    have hext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+      (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+    simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    have hext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨(0 : B256).toNat, 32⟩] = 3 := by
       rw [show ((0 : B256).toNat) = 0 from rfl]
-      show (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost [⟨0, 32⟩] = 3
-      have hm : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).memory =
+      show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost [⟨0, 32⟩] = 3
+      have hm : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).memory =
           Mem.empty := h_mem
       exact hm ▸ Devm.extCost_empty_word
     rw [hext, chargeGas_eq_ok (by
       show gVerylow + 3 ≤
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).gasLeft
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
       rw [Devm.gasLeft_setMach]
       omega)]
     rfl
@@ -243,46 +243,46 @@ private theorem callee_exec_low_gas {m : Msg}
     show m.gas < 1
     omega
   have s0 : Evm.step ⟨0, initSevm m, initDevm m⟩ = .cont 1
-      ((initDevm m).setMach ⟨[], Mem.empty, m.gas - 1⟩) :=
+      ((initDevm m).setMach ⟨[], Mem.empty, m.gas - 1, (initDevm m).stateGas⟩) :=
     step_jumpdest_cont (devm := initDevm m) at0 (show (1 : Nat) ≤ m.gas from h1)
   rcases Nat.lt_or_ge m.gas 4 with h2 | h2
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.halt (step_push_fail
-        (devm := (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1⟩) at1 ?_))⟩⟩
+        (devm := (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1, (initDevm m).stateGas⟩) at1 ?_))⟩⟩
     rw [if_neg (by decide)]
     show m.gas - 1 < 3
     omega
   have s1 : Evm.step ⟨1, initSevm m,
-      (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1⟩⟩ = .cont 3
+      (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1, (initDevm m).stateGas⟩⟩ = .cont 3
       ((initDevm m).setMach
-        ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3⟩) :=
+        ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩) :=
     Evm.push_cont (by decide) at1 (show (3 : Nat) ≤ m.gas - 1 by omega)
       (show (0 : Nat) < 1024 by decide)
   rcases Nat.lt_or_ge m.gas 6 with h3 | h3
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.cont s1 (Exec.halt (step_push_fail
         (devm := (initDevm m).setMach
-          ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3⟩) at3 ?_)))⟩⟩
+          ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩) at3 ?_)))⟩⟩
     rw [if_pos rfl]
     show m.gas - 1 - 3 < 2
     omega
   have s2 : Evm.step ⟨3, initSevm m, (initDevm m).setMach
-      ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3⟩⟩ = .cont 4
+      ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩⟩ = .cont 4
       ((initDevm m).setMach
-        ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2⟩) :=
+        ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2, (initDevm m).stateGas⟩) :=
     step_push0_cont (le := by decide) at3
       (show (2 : Nat) ≤ m.gas - 1 - 3 by omega)
       (show (1 : Nat) < 1024 by decide)
   rcases Nat.lt_or_ge m.gas 12 with h4 | h4
   · obtain ⟨d, hfail⟩ := step_mstore_fail
       (devm := (initDevm m).setMach
-        ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2⟩)
+        ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2, (initDevm m).stateGas⟩)
       at4 rfl rfl (show m.gas - 1 - 3 - 2 < 3 + 3 by omega)
     exact ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.cont s1 (Exec.cont s2 (Exec.halt hfail)))⟩⟩
   obtain ⟨d4, s3, hstk4, hg4'⟩ := step_mstore_cont
     (devm := (initDevm m).setMach
-      ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2⟩)
+      ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2, (initDevm m).stateGas⟩)
     at4 rfl rfl (show 3 + 3 ≤ m.gas - 1 - 3 - 2 by omega)
   have hg4 : d4.gasLeft = m.gas - 12 := by
     rw [hg4']
@@ -297,14 +297,14 @@ private theorem callee_exec_low_gas {m : Msg}
     omega
   have s4 : Evm.step ⟨5, initSevm m, d4⟩ = .cont 7
       (d4.setMach
-        ⟨Bytes.toB256 [32] :: d4.stack, d4.memory, d4.gasLeft - 3⟩) :=
+        ⟨Bytes.toB256 [32] :: d4.stack, d4.memory, d4.gasLeft - 3, d4.stateGas⟩) :=
     Evm.push_cont (by decide) at5 (show (3 : Nat) ≤ d4.gasLeft by omega)
       (by rw [hstk4]; decide)
   refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
     ⟨Exec.cont s0 (Exec.cont s1 (Exec.cont s2 (Exec.cont (by exact s3)
       (Exec.cont s4 (Exec.halt (step_push_fail
         (devm := d4.setMach ⟨Bytes.toB256 [32] :: d4.stack, d4.memory,
-          d4.gasLeft - 3⟩) at7 ?_))))))⟩⟩
+          d4.gasLeft - 3, d4.stateGas⟩) at7 ?_))))))⟩⟩
   rw [if_pos rfl]
   show d4.gasLeft - 3 < 2
   omega
@@ -493,7 +493,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
     rw [hsettle, Resume.run_call_err hce hroom] at hres
     have hpost : postC = ((incorporateChildOnError p child2
         child2.output).setMach ⟨0 :: p.stack, p.memory,
-          p.gasLeft + child2.gasLeft⟩).memWrite oi
+          p.gasLeft + child2.gasLeft, (incorporateChildOnError p child2 child2.output).stateGas⟩).memWrite oi
             (child2.output.take os) :=
       Except.ok.inj hres
     have hstate : child2.state = msg.benv.state := settle_err_state hsettle hce
@@ -514,7 +514,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
     rw [hsettle, Resume.run_call_ok hce' hroom] at hres
     have hpost : postC = ((incorporateChildOnSuccess p child2
         child2.output).setMach ⟨1 :: p.stack, p.memory,
-          p.gasLeft + child2.gasLeft⟩).memWrite oi
+          p.gasLeft + child2.gasLeft, (incorporateChildOnSuccess p child2 child2.output).stateGas⟩).memWrite oi
             (child2.output.take os) :=
       Except.ok.inj hres
     have hraw : raw = .ok child2 := settle_ok_clean hsettle hce'
@@ -583,27 +583,27 @@ theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
       Devm.getStorVal postC a key = Devm.getStorVal preC a key) ∧
     (∀ a : Adr, Devm.getCode postC a = Devm.getCode preC a) := by
   have hcc : (addAccessedAddress
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).state.getCode tw.toAdr = calleeCode := h_code
   have h_del := accessDelegation_of_none
     (devm := addAccessedAddress
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩) tw.toAdr)
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩) tw.toAdr)
     (a := tw.toAdr) (by rw [hcc]; exact calleeCode_notDelegation)
   rw [hcc] at h_del
   rcases hsplit : calculateMsgCallGas 0 gw.toNat
-    (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+    (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
       tw.toAdr).gasLeft
-    ((preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩).extCost
+    ((preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
     (accessCost tw.toAdr
       (preC.setMach
-        ⟨rest, preC.memory, preC.gasLeft⟩).accessedAddresses + 0)
+        ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).accessedAddresses + 0)
     with ⟨mcc, mcs⟩
   obtain ⟨xl, hfill, hx⟩ := runCompiled_exec_okStep run
   by_cases hga : mcc +
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩).extCost
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] ≤
-      (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+      (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).gasLeft
   case neg =>
     rw [Xinst.step_call_zero_value_outOfGas h_stk rfl h_del rfl hsplit
@@ -639,27 +639,27 @@ theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
       Devm.getStorVal postC a key = Devm.getStorVal preC a key) ∧
     (∀ a : Adr, Devm.getCode postC a = Devm.getCode preC a) := by
   have hcc : (addAccessedAddress
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).state.getCode tw.toAdr = calleeCode := h_code
   have h_del := accessDelegation_of_none
     (devm := addAccessedAddress
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩) tw.toAdr)
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩) tw.toAdr)
     (a := tw.toAdr) (by rw [hcc]; exact calleeCode_notDelegation)
   rw [hcc] at h_del
   rcases hsplit : calculateMsgCallGas 0 gw.toNat
-    (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+    (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
       tw.toAdr).gasLeft
-    ((preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩).extCost
+    ((preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩])
     (accessCost tw.toAdr
       (preC.setMach
-        ⟨rest, preC.memory, preC.gasLeft⟩).accessedAddresses + 0)
+        ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).accessedAddresses + 0)
     with ⟨mcc, mcs⟩
   obtain ⟨xl, hfill, hx⟩ := runCompiled_exec_okStep run
   by_cases hga : mcc +
-      (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩).extCost
+      (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] ≤
-      (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft⟩)
+      (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).gasLeft
   case neg =>
     rw [Xinst.step_staticcall_outOfGas h_stk rfl h_del rfl hsplit (by omega)] at hx

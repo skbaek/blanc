@@ -75,7 +75,7 @@ theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
     (G : Nat) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 16⟩) calleeMain (.ok post) ∧
+        (base.setMach ⟨[], Mem.empty, G + 16, base.stateGas⟩) calleeMain (.ok post) ∧
       post.error = base.error ∧
       post.output = (1 : B256).toBytes ∧
       post.gasLeft = G ∧
@@ -138,7 +138,7 @@ theorem callee_exec (m : Msg) (G : Nat)
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) calleeProg
       (.ok post) := by
     refine Prog.runCompiledTo_intro (G := G + 16)
-      (mid := (initDevm m).setMach ⟨[], Mem.empty, G + 16⟩) ?_ rfl walk
+      (mid := (initDevm m).setMach ⟨[], Mem.empty, G + 16, (initDevm m).stateGas⟩) ?_ rfl walk
     show m.gas = G + 16 + gJumpdest
     simp only [gJumpdest]
     omega
@@ -183,13 +183,13 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
@@ -266,7 +266,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     rw [hd1stack]
     exact h_room
   let post := (((incorporateChildOnSuccess p out out.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
       oiw.toNat (out.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
@@ -282,13 +282,13 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     stmid, ?_, ?_⟩
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).stack = 1 :: s
     rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).memory = _
     rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     change (d1.memory.extends
@@ -296,7 +296,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
         oiw.toNat ((1 : B256).toBytes.take osw.toNat) = _
     rw [hd1mem]
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).gasLeft = _
     rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     change d1.gasLeft - (mcc + ext) + (mcs - 17) = _
@@ -354,13 +354,13 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
@@ -437,7 +437,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     rw [hd1stack]
     exact h_room
   let post := (((incorporateChildOnSuccess p out out.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+    ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
       oiw.toNat (out.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
@@ -455,13 +455,13 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     stmid, ?_, ?_⟩
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).stack = 1 :: s
     rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).memory = _
     rw [Devm.memWrite_memory, Devm.memory_setMach, hout]
     change (d1.memory.extends
@@ -469,7 +469,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
         oiw.toNat ((1 : B256).toBytes.take osw.toNat) = _
     rw [hd1mem]
   · show ((((incorporateChildOnSuccess p out out.output).setMach
-      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft⟩).memWrite
+      ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).gasLeft = _
     rw [Devm.memWrite_gasLeft, Devm.gasLeft_setMach, hgasOut]
     change d1.gasLeft - (mcc + ext) + (mcs - 17) = _

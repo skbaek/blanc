@@ -1626,7 +1626,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
             ((runtime officialParams).main :: (runtime officialParams).aux)
             gatewayPauseWorldSevm
             (gatewayRunAfterSetBase.setMach
-              ⟨[], gatewayRunMemoryLast, 71154⟩)
+              ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩)
             pauseAfterSet final := by
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
@@ -1770,7 +1770,7 @@ private theorem gatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71154⟩)
+            ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet final ∧
       Func.RunCompiledTo
           ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -1779,11 +1779,11 @@ private theorem gatewayPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71154⟩)
+            ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference gatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 71154⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
     gatewayPauseWorld_afterSetGatewaySeam
   have hmidCount : mid.getStorVal gatewayPauseWorldSevm.currentTarget
@@ -1830,7 +1830,7 @@ private theorem gatewayPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900⟩ = mid := by
+      ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
@@ -1856,11 +1856,11 @@ private theorem gatewayPauseWorld_productionRun :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           gatewayPauseWorldSevm
           (gatewayRunAfterSetBase.setMach
-            ⟨[], gatewayRunMemoryLast, 71154⟩)
+            ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference gatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
-          ⟨[], gatewayRunMemoryLast, 71154⟩) successPre := by
+          ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     gatewayPauseWorld_successSuffix
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
@@ -1998,7 +1998,7 @@ private theorem gatewayPauseWorld_productionRun :
       exact gatewayPauseWorld_publicPausePremises.codeAddress)
     gatewayPauseWorld_publicPausePremises.productionBytes hbodyTo
   have hentry : gatewayPauseWorldPre.setMach
-      ⟨[], Mem.empty, 0 + pauseDispatchGas + 103353⟩ =
+      ⟨[], Mem.empty, 0 + pauseDispatchGas + 103353, gatewayPauseWorldPre.stateGas⟩ =
       gatewayPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 103353 : Nat) = gatewayPauseWorldGas from by
       norm_num [pauseDispatchGas, gatewayPauseWorldGas]]
@@ -2007,7 +2007,7 @@ private theorem gatewayPauseWorld_productionRun :
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
 
 private def gatewayPauseWorldAfterSetEntry : Devm :=
-  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 71154⟩
+  gatewayRunAfterSetBase.setMach ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩
 
 private theorem gatewayPauseWorldAfterSetEntry_memory :
     gatewayPauseWorldAfterSetEntry.memory = gatewayRunMemoryLast := by

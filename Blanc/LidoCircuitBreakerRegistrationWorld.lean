@@ -774,7 +774,7 @@ theorem freshRegistrationWorld_run :
         0 + registerPauserDispatchGas +
           freshRegisterBodyGas freshWorldSevm freshWorldPre []
             freshWorldTarget freshWorldPauser gasStorageSet gasStorageSet
-            gasStorageSet gasStorageSet gasStorageSet⟩ = freshWorldPre := by
+            gasStorageSet gasStorageSet gasStorageSet, freshWorldPre.stateGas⟩ = freshWorldPre := by
     rw [freshWorld_bodyGasEq]
     rfl
   rw [hentry] at hrun

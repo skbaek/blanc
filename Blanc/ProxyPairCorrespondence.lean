@@ -203,6 +203,8 @@ structure CorrespondencePremises (m : Msg) : Prop where
   implementationWriteSlotCurrentZero :
     (m.benv.state.get proxyAdr).stor.get implSlot = 0
   forwardBudget : ForwardBudget m.gas
+  /-- The message executes under a covered pre-Amsterdam fork. -/
+  covered : CoveredFork m.benv.stat.fork
 
 /-- The finite threshold type is bounded by the guarded implementation and
 the protocol depth limit. -/
@@ -310,7 +312,10 @@ theorem proxyCorrespondenceMsg_premises
       simpa [proxyCorrespondenceMsg, pairBenv] using
         pairState_proxyImplSlot_zero
     forwardBudget := by
-      simpa [proxyCorrespondenceMsg] using forwardBudget_27224 }
+      simpa [proxyCorrespondenceMsg] using forwardBudget_27224
+    covered := by
+      change CoveredFork .prague
+      exact CoveredFork.prague }
 
 /-- Every semantically representable gas/depth threshold has a concrete
 installed-pair message satisfying the complete public premise set.  The exposed
@@ -346,29 +351,29 @@ private def proxyCopiedMemory (m : Msg) : Mem :=
   Mem.empty.write 0 m.data
 
 private def proxyEntry (m : Msg) (atCallGas : Nat) : Devm :=
-  (initDevm m).setMach ⟨[], Mem.empty, atCallGas + 2128⟩
+  (initDevm m).setMach ⟨[], Mem.empty, atCallGas + 2128, (initDevm m).stateGas⟩
 
 private def proxyBeforeSload (m : Msg) (atCallGas : Nat) : Devm :=
   (proxyEntry m atCallGas).setMach
     ⟨[implementationSlotLit, 0, 32, 0, 0], proxyCopiedMemory m,
-      atCallGas + 2102⟩
+      atCallGas + 2102, (proxyEntry m atCallGas).stateGas⟩
 
 private def proxyAfterSload (m : Msg) (atCallGas : Nat) : Devm :=
   (addAccessedStorageKey (proxyBeforeSload m atCallGas)
       (initSevm m).currentTarget implementationSlotLit).setMach
     ⟨[(proxyBeforeSload m atCallGas).getStorVal
         (initSevm m).currentTarget implementationSlotLit,
-      0, 32, 0, 0], proxyCopiedMemory m, atCallGas + 2⟩
+      0, 32, 0, 0], proxyCopiedMemory m, atCallGas + 2, (addAccessedStorageKey (proxyBeforeSload m atCallGas) (initSevm m).currentTarget implementationSlotLit).stateGas⟩
 
 private def proxyCallPre (m : Msg) (atCallGas : Nat) : Devm :=
   (proxyAfterSload m atCallGas).setMach
     ⟨[Nat.toB256 atCallGas, implAdr.toB256, 0, 32, 0, 0],
-      proxyCopiedMemory m, atCallGas⟩
+      proxyCopiedMemory m, atCallGas, (proxyAfterSload m atCallGas).stateGas⟩
 
 private def proxyCallBase (m : Msg) (atCallGas : Nat) : Devm :=
   (proxyCallPre m atCallGas).setMach
     ⟨[], (proxyCallPre m atCallGas).memory,
-      (proxyCallPre m atCallGas).gasLeft⟩
+      (proxyCallPre m atCallGas).gasLeft, (proxyCallPre m atCallGas).stateGas⟩
 
 private def proxyD1 (m : Msg) (atCallGas : Nat) : Devm :=
   addAccessedAddress (proxyCallBase m atCallGas) implAdr
@@ -445,8 +450,15 @@ private theorem implGuardedCode_compile :
     simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
   exact implGuardedProg_compile.symm
 
+private theorem initDevm_logs_of_covered {msg : Msg}
+    (hfork : CoveredFork msg.benv.stat.fork) : (initDevm msg).logs = [] := by
+  change (match msg.benv.stat.rules.stateGas with
+    | none => []
+    | some _ => _) = []
+  rw [hfork.rules_stateGas_none]
+
 private theorem implGuarded_exec_nonzero
-    (msg : Msg)
+    (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     (hcode : msg.code = implGuardedCode)
     (hstatic : msg.isStatic = false)
     (henough : implGuardedSuccessEntryGas ≤ msg.gas)
@@ -474,14 +486,14 @@ private theorem implGuarded_exec_nonzero
     exact hdata
   obtain ⟨post, hrun, herr, hout, hgas, hstate, _, htra, hlogs⟩ :=
     implGuarded_runCompiledTo_nonzero [implGuarded]
-      (initSevm msg) (initDevm msg) G hstatic hcold horig hcur hdata'
+      (initSevm msg) (initDevm msg) G hfork hstatic hcold horig hcur hdata'
   have hprog :
       Prog.RunCompiledTo (initSevm msg) (initDevm msg) implGuardedProg
         (.ok post) := by
     refine Prog.runCompiledTo_intro (G := G + implGuardedSuccessGas)
       (mid := (initDevm msg).setMach
         ⟨(initDevm msg).stack, (initDevm msg).memory,
-          G + implGuardedSuccessGas⟩) ?_ rfl hrun
+          G + implGuardedSuccessGas, (initDevm msg).stateGas⟩) ?_ rfl hrun
     change msg.gas = (G + implGuardedSuccessGas) + gJumpdest
     rw [← hsum]
     simp [implGuardedSuccessEntryGas, Nat.add_assoc]
@@ -496,10 +508,10 @@ private theorem implGuarded_exec_nonzero
   · simpa [Devm.error, initDevm] using herr
   · exact hgas
   · simpa [Devm.transientStorage, initDevm] using htra
-  · simpa [Devm.logs, initDevm] using hlogs
+  · exact hlogs.trans (initDevm_logs_of_covered hfork)
 
 private theorem implGuarded_exec_zero
-    (msg : Msg)
+    (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     (hcode : msg.code = implGuardedCode)
     (henough : implGuardedRevertEntryGas ≤ msg.gas)
     (hlen : msg.data.length = 32)
@@ -528,7 +540,7 @@ private theorem implGuarded_exec_zero
     refine Prog.runCompiledTo_intro (G := G + implGuardedRevertGas)
       (mid := (initDevm msg).setMach
         ⟨(initDevm msg).stack, (initDevm msg).memory,
-          G + implGuardedRevertGas⟩) ?_ rfl hrun
+          G + implGuardedRevertGas, (initDevm msg).stateGas⟩) ?_ rfl hrun
     change msg.gas = (G + implGuardedRevertGas) + gJumpdest
     rw [← hsum]
     simp [implGuardedRevertEntryGas, Nat.add_assoc]
@@ -544,10 +556,10 @@ private theorem implGuarded_exec_zero
   · exact hgas
   · simpa [Devm.state, initDevm] using hstate
   · simpa [Devm.transientStorage, initDevm] using htra
-  · simpa [Devm.logs, initDevm] using hlogs
+  · exact hlogs.trans (initDevm_logs_of_covered hfork)
 
 private theorem implGuarded_exec_static_nonzero
-    (msg : Msg)
+    (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     (hcode : msg.code = implGuardedCode)
     (hstatic : msg.isStatic = true)
     (henough : implGuardedSuccessEntryGas ≤ msg.gas)
@@ -574,11 +586,11 @@ private theorem implGuarded_exec_static_nonzero
   have hcode' : (initSevm msg).code = implGuardedCode := by
     exact hcode
   obtain ⟨raw, _, hexec, hstate, htra, hlogs⟩ :=
-    implGuarded_static_halt_exec (initSevm msg) (initDevm msg) G
+    implGuarded_static_halt_exec (initSevm msg) (initDevm msg) G hfork
       hcode' hstatic hcold horig hcur hdata'
   have hbase :
       (initDevm msg).setMach
-        ⟨[], Mem.empty, G + implGuardedSuccessEntryGas⟩ = initDevm msg := by
+        ⟨[], Mem.empty, G + implGuardedSuccessEntryGas, (initDevm msg).stateGas⟩ = initDevm msg := by
     rw [hsum]
     rfl
   rw [hbase] at hexec
@@ -586,7 +598,7 @@ private theorem implGuarded_exec_static_nonzero
   · simpa [initEvm] using hexec
   · simpa [Devm.state, initDevm] using hstate
   · simpa [Devm.transientStorage, initDevm] using htra
-  · simpa [Devm.logs, initDevm] using hlogs
+  · exact hlogs.trans (initDevm_logs_of_covered hfork)
 
 @[simp] private theorem proxyCallPre_state (m : Msg) (atCallGas : Nat) :
     (proxyCallPre m atCallGas).state = m.benv.state := rfl
@@ -596,8 +608,10 @@ private theorem implGuarded_exec_static_nonzero
     (proxyCallPre m atCallGas).transientStorage =
       m.tenv.transientStorage := rfl
 
-@[simp] private theorem proxyCallPre_logs (m : Msg) (atCallGas : Nat) :
-    (proxyCallPre m atCallGas).logs = [] := rfl
+private theorem proxyCallPre_logs (m : Msg) (atCallGas : Nat)
+    (hfork : CoveredFork m.benv.stat.fork) :
+    (proxyCallPre m atCallGas).logs = [] :=
+  initDevm_logs_of_covered hfork
 
 @[simp] private theorem proxyCallBase_accessedAddresses
     (m : Msg) (atCallGas : Nat) :
@@ -664,7 +678,7 @@ private theorem proxyChild_exec_nonzero
       exact proxyChild_data m atCallGas callCost childGas premises.dataLength]
     exact premises.dataLength
   obtain ⟨post, hexec, herr, hout, hgas, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_nonzero child
+    implGuarded_exec_nonzero child premises.covered
       (by rfl) (by simpa [child] using hstatic) henough hcold horig hcur
       hchildLength hchildData
   refine ⟨post, hexec, herr, hout, ?_, ?_, ?_, hlogs⟩
@@ -696,7 +710,7 @@ private theorem proxyChild_exec_zero
       exact proxyChild_data m atCallGas callCost childGas premises.dataLength]
     exact premises.dataLength
   obtain ⟨raw, hexec, herr, hout, hgas, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_zero child (by rfl) henough hchildLength hchildData
+    implGuarded_exec_zero child premises.covered (by rfl) henough hchildLength hchildData
   refine ⟨raw, hexec, herr, hout, ?_, ?_, ?_, hlogs⟩
   · simpa [child] using hgas
   · simpa [child] using hstate
@@ -739,7 +753,7 @@ private theorem proxyChild_exec_static_nonzero
       exact proxyChild_data m atCallGas callCost childGas premises.dataLength]
     exact premises.dataLength
   obtain ⟨raw, hexec, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_static_nonzero child (by rfl)
+    implGuarded_exec_static_nonzero child premises.covered (by rfl)
       (by simpa [child] using hstatic) henough hcold horig hcur
       hchildLength hchildData
   refine ⟨raw, hexec, ?_, ?_, hlogs⟩
@@ -754,7 +768,7 @@ private theorem proxyCallBase_extCost
     (m : Msg) (atCallGas : Nat) (hlen : m.data.length = 32) :
     ((proxyCallBase m atCallGas).setMach
       ⟨[], (proxyCallBase m atCallGas).memory,
-        (proxyCallBase m atCallGas).gasLeft⟩).extCost
+        (proxyCallBase m atCallGas).gasLeft, (proxyCallBase m atCallGas).stateGas⟩).extCost
       [⟨0, 32⟩, ⟨0, 0⟩] = 0 := by
   apply Devm.extCost_covered
   rw [show (proxyCallBase m atCallGas).memory.size = 32 by
@@ -773,7 +787,7 @@ private theorem proxyCall_accessDelegation
       (addAccessedAddress
         ((proxyCallPre m atCallGas).setMach
           ⟨[], (proxyCallPre m atCallGas).memory,
-            (proxyCallPre m atCallGas).gasLeft⟩) implAdr) implAdr =
+            (proxyCallPre m atCallGas).gasLeft, (proxyCallPre m atCallGas).stateGas⟩) implAdr) implAdr =
       ⟨false, implAdr, implGuardedCode, 0, proxyD1 m atCallGas⟩ := by
   change accessDelegation (proxyD1 m atCallGas) implAdr = _
   have hcode : (proxyD1 m atCallGas).state.getCode implAdr =
@@ -816,7 +830,7 @@ private theorem proxy_delegatecall_crossing
   have h_ext :
       ((proxyCallPre m atCallGas).setMach
         ⟨[], (proxyCallPre m atCallGas).memory,
-          (proxyCallPre m atCallGas).gasLeft⟩).extCost
+          (proxyCallPre m atCallGas).gasLeft, (proxyCallPre m atCallGas).stateGas⟩).extCost
         [⟨0, 32⟩, ⟨0, 0⟩] = 0 :=
     proxyCallBase_extCost m atCallGas premises.dataLength
   have h_del := proxyCall_accessDelegation m atCallGas implementationInstalled
@@ -836,7 +850,7 @@ private theorem proxy_delegatecall_crossing
       (initSevm m).benvStat.rules.isPrecomp implAdr = false := by
     exact premises.implementationNotPrecompile
   obtain ⟨henter, _, _, _, _, hrun⟩ :=
-    delegatecall_enters_with_parent_as_storage_owner h_stk h_ext h_del h_acc
+    delegatecall_enters_with_parent_as_storage_owner premises.covered h_stk h_ext h_del h_acc
       h_split h_gas h_depth h_nonprecompile
   have h0 : (0 : B256).toNat = 0 := by decide
   have h32 : (32 : B256).toNat = 32 := by decide
@@ -851,7 +865,7 @@ private def proxySuccessResume
       childPost childPost.output).setMach
     ⟨1 :: (proxyParent m atCallGas callCost).stack,
       (proxyParent m atCallGas callCost).memory,
-      (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft⟩).memWrite
+      (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft, (incorporateChildOnSuccess (proxyParent m atCallGas callCost) childPost childPost.output).stateGas⟩).memWrite
     0 (childPost.output.take 0))
 
 private theorem proxy_delegatecall_success
@@ -886,8 +900,11 @@ private theorem proxy_delegatecall_success
         (exec (initEvm (proxyChild m atCallGas callCost childGas))) =
           .ok childPost := by
     rw [hchild]
+    have hsg : (proxyChild m atCallGas callCost childGas).benv.stat.rules.stateGas =
+        none := premises.covered.rules_stateGas_none
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      processMessage.settle, executeCode.handleError, h_ok]
+      processMessage.settle, hsg, executeCode.handleErrorWith_none,
+      executeCode.handleError, h_ok]
   have hresume :
       Resume.run (.call (proxyParent m atCallGas callCost) 0 0)
         ((Frame.ofCall (proxyChild m atCallGas callCost childGas)).settle
@@ -909,7 +926,7 @@ private def proxyErrorResume
       childPost childPost.output).setMach
     ⟨0 :: (proxyParent m atCallGas callCost).stack,
       (proxyParent m atCallGas callCost).memory,
-      (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft⟩).memWrite
+      (proxyParent m atCallGas callCost).gasLeft + childPost.gasLeft, (incorporateChildOnError (proxyParent m atCallGas callCost) childPost childPost.output).stateGas⟩).memWrite
     0 (childPost.output.take 0))
 
 private theorem proxy_delegatecall_revert
@@ -939,6 +956,10 @@ private theorem proxy_delegatecall_revert
   have hsettle :
       (Frame.ofCall child).settle (exec (initEvm child)) = .ok childPost := by
     rw [hchild]
+    have hsg : child.benv.stat.rules.stateGas = none :=
+      premises.covered.rules_stateGas_none
+    simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
+      processMessage.settle, hsg, executeCode.handleErrorWith_none]
     rfl
   have hce : childPost.error.isSome = true := by rfl
   have hresume :
@@ -992,6 +1013,10 @@ private theorem proxy_delegatecall_halt
   have hsettle :
       (Frame.ofCall child).settle (exec (initEvm child)) = .ok childPost := by
     rw [hchild]
+    have hsg : child.benv.stat.rules.stateGas = none :=
+      premises.covered.rules_stateGas_none
+    simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
+      processMessage.settle, hsg, executeCode.handleErrorWith_none]
     rfl
   have hce : childPost.error.isSome = true := by rfl
   have hresume :
@@ -1046,12 +1071,12 @@ private theorem proxy_success_tail
   let base := incorporateChildOnSuccess parent childPost childPost.output
   let final :=
     (((base.setMach ⟨[], parent.memory.write 0
-        implReturnWord.toBytes, finalGas⟩).memRead 0 32).2.withOutput
+        implReturnWord.toBytes, finalGas, base.stateGas⟩).memRead 0 32).2.withOutput
       implReturnWord.toBytes)
   refine ⟨final, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         proxySuccessResume m atCallGas callCost childPost =
-          base.setMach ⟨[1], parent.memory, resumeGas⟩ := by
+          base.setMach ⟨[1], parent.memory, resumeGas, base.stateGas⟩ := by
       simp [proxySuccessResume, base, parent, resumeGas, hgas]
       rw [Devm.memWrite_nil]
     rw [hstart]
@@ -1064,7 +1089,7 @@ private theorem proxy_success_tail
       exact proxyCopiedMemory_size m premises.dataLength
     have hext :
         (base.setMach ⟨[0, 0, 32, 0, 1], parent.memory,
-          resumeGas - 8⟩).extCost [⟨0, 32⟩] = 0 := by
+          resumeGas - 8, base.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
       apply Devm.extCost_covered
       rw [hpmem]
       decide
@@ -1115,7 +1140,7 @@ private theorem proxy_success_tail
         decide
       have hfinalext :
           (base.setMach ⟨[0, 32], parent.memory.write 0
-            implReturnWord.toBytes, finalGas⟩).extCost [⟨0, 32⟩] = 0 := by
+            implReturnWord.toBytes, finalGas, base.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
         apply Devm.extCost_covered
         rw [hm]
         decide
@@ -1136,11 +1161,12 @@ private theorem proxy_success_tail
       Devm.setMach_logs]
     unfold base incorporateChildOnSuccess
     simp only [Devm.setWorld_logs, Devm.setMeta_logs, Devm.setMach_logs]
-    rw [hlogs]
-    rfl
+    rw [hlogs, List.append_nil]
+    exact proxyCallPre_logs m atCallGas premises.covered
 
 private theorem proxy_error_tail
     (m : Msg) (atCallGas callCost : Nat) (childPost : Devm)
+    (hfork : CoveredFork m.benv.stat.fork)
     (hout : childPost.output = [])
     (htail : proxyErrorTailGas32 ≤
       (atCallGas - callCost) + childPost.gasLeft)
@@ -1160,11 +1186,11 @@ private theorem proxy_error_tail
   have hsum : finalGas + proxyErrorTailGas32 = resumeGas :=
     Nat.sub_add_cancel htail
   let base := incorporateChildOnError parent childPost childPost.output
-  let final := (base.setMach ⟨[], parent.memory, finalGas⟩).withOutput []
+  let final := (base.setMach ⟨[], parent.memory, finalGas, base.stateGas⟩).withOutput []
   refine ⟨final, ?_, ?_, ?_, ?_, ?_⟩
   · have hstart :
         proxyErrorResume m atCallGas callCost childPost =
-          base.setMach ⟨[0], parent.memory, resumeGas⟩ := by
+          base.setMach ⟨[0], parent.memory, resumeGas, base.stateGas⟩ := by
       simp [proxyErrorResume, base, parent, resumeGas, hout]
       rw [Devm.memWrite_nil]
     rw [hstart]
@@ -1206,7 +1232,11 @@ private theorem proxy_error_tail
   · simp only [final, Devm.withOutput_logs, Devm.setMach_logs]
     change (incorporateChildOnError parent childPost childPost.output).logs = []
     rw [incorporateChildOnError_logs]
-    rfl
+    exact proxyCallPre_logs m atCallGas hfork
+
+private theorem corr_stateGas_addAccessedStorageKey
+    {base : Devm} {target : Adr} {key : B256} :
+    (addAccessedStorageKey base target key).stateGas = base.stateGas := rfl
 
 private theorem proxy_prefix
     (m : Msg) (atCallGas : Nat)
@@ -1227,6 +1257,7 @@ private theorem proxy_prefix
       pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
       proxySuccessTail) result
   func_run [9]
+  case h_legacy => exact premises.covered.rules_stateGas_none
   all_goals simp_all [proxyEntry, gBase, gVerylow, gasCopy,
     gasColdSload, ceilDiv, Devm.stack_setMach, Devm.memory_setMach,
     Devm.setMach_accessedStorageKeys, premises.dataLength]
@@ -1251,8 +1282,9 @@ private theorem proxy_prefix
       exact slotNamesImplementation
     have hmem : (initDevm m).memory = Mem.empty := rfl
     simpa only [proxyCallPre, proxyAfterSload, proxyBeforeSload,
-      proxyCopiedMemory, proxyEntry, Devm.setMach_setMach,
+      proxyCopiedMemory, proxyEntry, Devm.setMach_setMach, Devm.stateGas_setMach,
       Devm.addAccessedStorageKey_setMach_setMach, Devm.getStorVal_setMach,
+      corr_stateGas_addAccessedStorageKey,
       Devm.memory_setMach, Msg.initDevm_stack, Msg.initSevm_data,
       Msg.initSevm_currentTarget, premises.dataLength,
       show Nat.toB256 32 = (32 : B256) by decide,
@@ -1347,7 +1379,7 @@ private theorem proxy_exec_revert
     rw [hgas]
     exact budget.revertTailEnough
   obtain ⟨final, htail, hfout, hfstate, hftra, hflogs⟩ :=
-    proxy_error_tail m atCallGas callCost childPost hout htailEnough
+    proxy_error_tail m atCallGas callCost childPost premises.covered hout htailEnough
       hstate htra
   have hrest := Func.RunCompiledTo.next hcall htail
   have hfunc := proxy_prefix m atCallGas premises slotNamesImplementation hrest
@@ -1382,7 +1414,7 @@ private theorem proxy_exec_halt
     rw [hgas]
     simpa using budget.haltTailEnough
   obtain ⟨final, htail, hfout, hfstate, hftra, hflogs⟩ :=
-    proxy_error_tail m atCallGas callCost childPost hout htailEnough
+    proxy_error_tail m atCallGas callCost childPost premises.covered hout htailEnough
       hstate htra
   have hrest := Func.RunCompiledTo.next hcall htail
   have hfunc := proxy_prefix m atCallGas premises slotNamesImplementation hrest
@@ -1423,7 +1455,7 @@ private theorem direct_exec_success
     simpa [direct, premises.currentTarget] using
       premises.implementationWriteSlotCurrentZero
   obtain ⟨final, hexec, herror, hout, _, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_nonzero direct hcode
+    implGuarded_exec_nonzero direct premises.covered hcode
       (by simpa [direct] using hstatic)
       (by simpa [direct] using budget.directEnough)
       hcold horig hcur
@@ -1455,7 +1487,7 @@ private theorem direct_exec_revert
       decide
     exact Nat.le_trans hle (by simpa [direct] using budget.directEnough)
   obtain ⟨final, hexec, _, hout, _, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_zero direct hcode henough
+    implGuarded_exec_zero direct premises.covered hcode henough
       (by simpa [direct] using premises.dataLength)
       (by simpa [direct] using hdata)
   refine ⟨final, hexec, hout, ?_, ?_, hlogs⟩
@@ -1494,7 +1526,7 @@ private theorem direct_exec_halt
     simpa [direct, premises.currentTarget] using
       premises.implementationWriteSlotCurrentZero
   obtain ⟨final, hexec, hstate, htra, hlogs⟩ :=
-    implGuarded_exec_static_nonzero direct hcode
+    implGuarded_exec_static_nonzero direct premises.covered hcode
       (by simpa [direct] using hstatic)
       (by simpa [direct] using budget.directEnough)
       hcold horig hcur
@@ -1614,11 +1646,12 @@ private theorem processMessage_correspondence_revert
         .ok (settledRevert (directCounterfactual m) direct) :=
     processMessage_revert_of_exec (directCounterfactual m) direct
       (by simpa using premises.entryIdentity)
-      (by simpa using premises.disablePrecompiles) hdexec
+      (by simpa using premises.disablePrecompiles)
+      (by simpa using premises.covered.rules_stateGas_none) hdexec
   have hpmessage :
       processMessage m = .ok (settledRevert m proxied) :=
     processMessage_revert_of_exec m proxied premises.entryIdentity
-      premises.disablePrecompiles hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
   rw [hdmessage, hpmessage]
   exact settledObservable_revert m direct proxied hdout hpout hdlogs hplogs
 
@@ -1652,11 +1685,12 @@ private theorem processMessage_correspondence_halt
     processMessage_halt_of_exec (directCounterfactual m) reason direct
       (by simpa using premises.entryIdentity)
       (by simpa using premises.disablePrecompiles)
+      (by simpa using premises.covered.rules_stateGas_none)
       (by simpa [reason] using hdexec)
   have hpmessage :
       processMessage m = .ok (settledRevert m proxied) :=
     processMessage_revert_of_exec m proxied premises.entryIdentity
-      premises.disablePrecompiles hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
   rw [hdmessage, hpmessage]
   exact settledObservable_halt_revert m reason direct proxied
     hdlogs hpout hplogs
@@ -1742,11 +1776,12 @@ theorem processMessage_static_halt_to_revert :
     processMessage_halt_of_exec (directCounterfactual m) reason directRaw
       (by simpa using premises.entryIdentity)
       (by simpa using premises.disablePrecompiles)
+      (by simpa using premises.covered.rules_stateGas_none)
       (by simpa [reason] using hdexec)
   have hpmessage :
       processMessage m = .ok (settledRevert m proxiedRaw) :=
     processMessage_revert_of_exec m proxiedRaw premises.entryIdentity
-      premises.disablePrecompiles hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
   refine ⟨settledHalt (directCounterfactual m) reason directRaw,
     settledRevert m proxiedRaw, ?_, ?_, ?_, ?_⟩
   · simpa [m] using hdmessage

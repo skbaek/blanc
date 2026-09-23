@@ -94,7 +94,7 @@ theorem stubPause_cold_runCompiledTo
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22132⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22132, base.stateGas⟩)
         stubPause (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
@@ -161,7 +161,7 @@ theorem stubQuery_true_warm_runCompiledTo
     (hpaused : sevm.benvStat.time < storedUntil) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 120⟩)
+        (base.setMach ⟨[], Mem.empty, G + 120, base.stateGas⟩)
         stubQuery (.ok post) ∧
       post.output = (1 : B256).toBytes ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil ∧
@@ -215,7 +215,7 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22154⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22154, base.stateGas⟩)
         stubBaseMain (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
@@ -242,9 +242,9 @@ private theorem protected_zero_tail_runCompiledTo
     (hne : guardSelector ≠ selector)
     (guardNonzero : guardSelector ≠ 0)
     (body : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], M, G⟩) stubBaseMain (.ok post)) :
+      (base.setMach ⟨[], M, G, base.stateGas⟩) stubBaseMain (.ok post)) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[selector], M, G + 19⟩)
+      (base.setMach ⟨[selector], M, G + 19, base.stateGas⟩)
       (pushB256 guardSelector ::: Ninst.eq :::
         (Func.revert <?> stubBaseMain)) (.ok post) := by
   apply Func.RunCompiledTo.next
@@ -262,9 +262,9 @@ private theorem fsig_prepend_runCompiledTo
     (selector : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (hselector : Sevm.selector sevm = selector)
     (body : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[selector], M, G⟩) tail (.ok post)) :
+      (base.setMach ⟨[selector], M, G, base.stateGas⟩) tail (.ok post)) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], M, G + 11⟩) (fsig +++ tail) (.ok post) := by
+      (base.setMach ⟨[], M, G + 11, base.stateGas⟩) (fsig +++ tail) (.ok post) := by
   unfold fsig cdl shiftRight
   func_run (4) [selector]
   case a => exact body
@@ -287,7 +287,7 @@ theorem stubMain_pause_cold_runCompiledTo
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 22184⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22184, base.stateGas⟩)
         stubMain (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
@@ -324,7 +324,7 @@ private theorem stubBaseMain_query_true_warm_runCompiledTo
     (hpaused : sevm.benvStat.time < storedUntil) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 141⟩)
+        (base.setMach ⟨[], Mem.empty, G + 141, base.stateGas⟩)
         stubBaseMain (.ok post) ∧
       post.output = (1 : B256).toBytes ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil ∧
@@ -358,7 +358,7 @@ theorem stubMain_query_true_warm_runCompiledTo
     (hpaused : sevm.benvStat.time < storedUntil) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 171⟩)
+        (base.setMach ⟨[], Mem.empty, G + 171, base.stateGas⟩)
         stubMain (.ok post) ∧
       post.output = (1 : B256).toBytes ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil ∧
@@ -401,7 +401,7 @@ theorem stubProgram_pause_cold_runCompiledTo
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + 22185⟩)
+        (base.setMach ⟨[], Mem.empty, G + 22185, base.stateGas⟩)
         stubProgram (.ok post) ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
@@ -415,7 +415,7 @@ theorem stubProgram_pause_cold_runCompiledTo
       hselector hsize harg hcold hdynamic hcost
   refine ⟨post, ?_, effect, gas, error, output, hmeta, world⟩
   apply Prog.runCompiledTo_intro (G := G + 22184)
-      (mid := base.setMach ⟨[], Mem.empty, G + 22184⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 22184, base.stateGas⟩)
   · simp only [Devm.gasLeft_setMach, gJumpdest]
   · rfl
   · simpa only [stubProgram] using body
@@ -432,7 +432,7 @@ theorem stubProgram_query_true_warm_runCompiledTo
     (hpaused : sevm.benvStat.time < storedUntil) :
     ∃ post,
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, G + 172⟩)
+        (base.setMach ⟨[], Mem.empty, G + 172, base.stateGas⟩)
         stubProgram (.ok post) ∧
       post.output = (1 : B256).toBytes ∧
       post.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil ∧
@@ -445,7 +445,7 @@ theorem stubProgram_query_true_warm_runCompiledTo
       hselector hsize hstored hwarm hpaused
   refine ⟨post, ?_, output, effect, gas, error, hmeta, world⟩
   apply Prog.runCompiledTo_intro (G := G + 171)
-      (mid := base.setMach ⟨[], Mem.empty, G + 171⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 171, base.stateGas⟩)
   · simp only [Devm.gasLeft_setMach, gJumpdest]
   · rfl
   · simpa only [stubProgram] using body
@@ -724,7 +724,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) stubProgram
       (.ok post) := by
     have hbase : (initDevm m).setMach
-        ⟨[], Mem.empty, G + 22185⟩ = initDevm m := by
+        ⟨[], Mem.empty, G + 22185, (initDevm m).stateGas⟩ = initDevm m := by
       rw [← hgas]
       rfl
     rw [hbase] at walk
@@ -843,7 +843,7 @@ theorem stubQuery_exec (m : Msg) (storedUntil : B256) (G : Nat)
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) stubProgram
       (.ok post) := by
     have hbase : (initDevm m).setMach
-        ⟨[], Mem.empty, G + 172⟩ = initDevm m := by
+        ⟨[], Mem.empty, G + 172, (initDevm m).stateGas⟩ = initDevm m := by
       rw [← hgas]
       rfl
     rw [hbase] at walk

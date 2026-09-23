@@ -2304,7 +2304,7 @@ theorem setPauseDuration_body_runCompiledTo
     (hstatic : sevm.isStatic = false) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 21498⟩)
+        (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
   have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
@@ -2351,16 +2351,16 @@ theorem setPauseDuration_dispatch_runCompiledTo
     (hselector : Sevm.selector sevm = selector "setPauseDuration" [.uint256])
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩)
       (setPauseDuration dp) out) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setPauseDurationDispatchGas + bodyGas⟩)
+        G + setPauseDurationDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas, base.stateGas⟩)
       (G := G + 150 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, setPauseDurationDispatchGas, gJumpdest]
       omega
@@ -2382,7 +2382,7 @@ theorem setPauseDuration_dispatch_runCompiledTo
         0, 0, 0, 0, 1]
       have hboundary : G + 150 + bodyGas - 150 = G + bodyGas := by
         omega
-      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
         runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
         List.take, List.drop, List.head?, Option.map, Option.getD,
@@ -2409,7 +2409,7 @@ theorem configWorld_run :
       configWorld_selector configWorld_codeBytes hbody
   have hentry :
       configWorldPre.setMach ⟨[], Mem.empty,
-        0 + setPauseDurationDispatchGas + 21498⟩ = configWorldPre := rfl
+        0 + setPauseDurationDispatchGas + 21498, configWorldPre.stateGas⟩ = configWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -2710,7 +2710,7 @@ theorem intervalWorld_run :
       some intervalWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, _hexpiries, hcompile⟩ :=
-    setHeartbeatInterval_runCompiledTo_zero_of_inclusive officialParams
+    setHeartbeatInterval_runCompiledTo_zero_of_inclusive (hfork := hfork) officialParams
       intervalWorldSevm intervalWorldPre intervalWorldInterval 0
       intervalWorld_dataLength intervalWorld_value intervalWorld_selector
       intervalWorld_codeAddress intervalWorld_codeBytes intervalWorld_admin
@@ -2720,7 +2720,7 @@ theorem intervalWorld_run :
   have hentry :
       intervalWorldPre.setMach ⟨[], Mem.empty,
         0 + setHeartbeatIntervalDispatchGas +
-          setHeartbeatIntervalBodyGasWarmSet⟩ = intervalWorldPre := rfl
+          setHeartbeatIntervalBodyGasWarmSet, intervalWorldPre.stateGas⟩ = intervalWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -2883,7 +2883,7 @@ theorem attainable_setHeartbeatIntervalConfig_adminConfiguration :
     (fun found pathEq =>
       RuntimePersistentWrite.eq_of_path setHeartbeatIntervalConfig_index_pin
         found pathEq)
-    (by decide) intervalWorld_run
+    (by decide) intervalWorld_run (hfork := hfork)
     (fun _devm _post h =>
       runtimeMain_routeTo_setHeartbeatIntervalConfig officialParams h
         intervalWorld_selector)
@@ -3134,7 +3134,7 @@ theorem heartbeatWorld_run :
       some heartbeatWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, hcompile⟩ :=
-    heartbeat_runCompiledTo_of_checkedExtension officialParams
+    heartbeat_runCompiledTo_of_checkedExtension (hfork := hfork) officialParams
       heartbeatWorldSevm heartbeatWorldPre heartbeatWorldCount
       heartbeatWorldOldExpiry heartbeatWorldTime heartbeatWorldInterval
       heartbeatWorldExpiry 0
@@ -3148,7 +3148,7 @@ theorem heartbeatWorld_run :
       heartbeatWorld_extension
   have hentry :
       heartbeatWorldPre.setMach ⟨[], Mem.empty,
-        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate⟩ =
+        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate, _⟩ =
         heartbeatWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
@@ -3325,7 +3325,7 @@ theorem attainable_heartbeatExpiry_heartbeatExpiry :
     heartbeatWorld_currentTarget ?_
     (fun found pathEq =>
       RuntimePersistentWrite.eq_of_path heartbeatExpiry_index_pin found pathEq)
-    (by decide) heartbeatWorld_run
+    (by decide) heartbeatWorld_run (hfork := hfork)
     (fun _devm _post h =>
       runtimeMain_routeTo_heartbeatExpiry h heartbeatWorld_selector)
   rw [heartbeatWorld_codeAddress, heartbeatWorld_currentTarget]
