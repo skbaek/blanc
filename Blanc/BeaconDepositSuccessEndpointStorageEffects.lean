@@ -188,7 +188,7 @@ theorem depositEndpoint_success_storageEffectRun
             accumulatedNode Bytes.sha256 (accOfStor stor).branch
               0 n depositDataRoot)])
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
-      (by simpa only [oldCount] using hcountValue) hstatic
+      hfork (by simpa only [oldCount] using hcountValue) hstatic
   let stagedBase := logged.setMach
     ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hsource :

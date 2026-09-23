@@ -161,7 +161,7 @@ private theorem deposit_success_settled_effects_of_processMessage
   have hsettledFinal : settled = final := by
     have hsettle := (RunFrame.some_inv hprocess).2
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle] at hsettle
+      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle] at hsettle
     have hnotError : final.error.isSome ≠ true := by
       rw [hfinalError]
       simp
