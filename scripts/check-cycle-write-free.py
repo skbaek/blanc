@@ -14,6 +14,8 @@ import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 
+import lean_mutant_batch
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "CycleWriteFreeRegression.lean"
@@ -51,6 +53,19 @@ REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.CycleWriteFreeRegression.SameOwnerChild.storage_equality_refuted",
     "Blanc.CycleWriteFreeRegression.required_positive_controls",
 }
+
+# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
+# reports/evidence-economy-20260923/trim-b1-ledger.md). These two mutants are
+# the only check that would notice a production change: no pinned positive
+# evaluates `outsideWriterProgram.entrySstoreFree writer []` (the entry
+# `localSstoreFree` conjunct on its own) or a call in a branch's right arm
+# (`Func.callsIn`). They stay in the main semantic row, batched into one
+# elaboration. The other 18 contradict a positive the main row compiles and
+# pins, or depend on fixture-local terms only; they run in --self-test.
+PRODUCTION_MUTANTS = (
+    "-- BODY-SUBSTITUTION-MUTANT-CONTROL",
+    "-- INDEX-SUBSTITUTION-MUTANT-CONTROL",
+)
 
 NATIVE_FALSE = ("Tactic `native_decide` evaluated that the proposition",)
 TYPE_MISMATCH = ("Application type mismatch", "Type mismatch")
@@ -219,7 +234,9 @@ class Decl:
     header: str | None
 
 
-@lru_cache(maxsize=128)
+# Unbounded: the audit reads about 340 contract modules, more than a bounded
+# cache of 128 holds, so every pass missed. Both functions are pure in `text`.
+@lru_cache(maxsize=None)
 def strip_comments(text: str) -> str:
     """Remove line and nested block comments while preserving offsets."""
     out: list[str] = []
@@ -267,7 +284,7 @@ def qualify(namespace: list[str], name: str) -> str:
     return ".".join([*namespace, name]) if namespace else name
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=None)
 def declarations(text: str) -> dict[str, Decl]:
     clean = strip_comments(text)
     scopes: list[tuple[str, list[str]]] = []
@@ -602,15 +619,61 @@ def missing_positives(source: str) -> list[str]:
     )
 
 
+def run_mutants(source: str, markers: tuple[str, ...]) -> int | None:
+    """One elaboration of every named mutant, each attributed to its lines."""
+    mutants = [
+        lean_mutant_batch.Mutant(marker, MUTANTS[marker][0], MUTANTS[marker][1])
+        for marker in markers
+    ]
+    text, spans = lean_mutant_batch.insert(source, mutants)
+    with tempfile.TemporaryDirectory(prefix="cycle-write-free-") as temp:
+        path = pathlib.Path(temp) / "CycleWriteFreeMutants.lean"
+        path.write_text(text, encoding="utf-8")
+        result = run(["lake", "env", "lean", str(path)])
+    problems = lean_mutant_batch.verdict(
+        result.stdout + result.stderr, result.returncode, mutants, spans
+    )
+    if problems:
+        return fail("batched mutants: " + "; ".join(problems), result)
+    return None
+
+
+def positive_deletion_controls(source: str) -> int | None:
+    with tempfile.TemporaryDirectory(prefix="cycle-write-free-static-") as temp:
+        temp_root = pathlib.Path(temp)
+        for index, theorem in enumerate(sorted(REQUIRED_POSITIVE_THEOREMS)):
+            short = theorem.rsplit(".", 1)[-1]
+            token = f"theorem {short}"
+            parsed = declarations(source)
+            declaration = parsed.get(theorem)
+            if declaration is None:
+                return fail(f"positive deletion cannot find `{theorem}`")
+            lines = source.splitlines(keepends=True)
+            line_index = declaration.line - 1
+            if lines[line_index].count(token) != 1:
+                return fail(f"positive deletion cannot locate header `{theorem}`")
+            lines[line_index] = lines[line_index].replace(
+                token, f"theorem {short}_removed", 1
+            )
+            path = temp_root / f"CycleWriteFreePositiveDeleted{index}.lean"
+            path.write_text("".join(lines), encoding="utf-8")
+            if theorem not in missing_positives(path.read_text(encoding="utf-8")):
+                return fail(f"positive deletion control failed for `{theorem}`")
+    return None
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     phase = parser.add_mutually_exclusive_group()
     phase.add_argument("--static-only", action="store_true")
     phase.add_argument("--semantic-only", action="store_true")
+    phase.add_argument("--self-test", action="store_true")
     arguments = parser.parse_args(argv)
+    static = not (arguments.semantic_only or arguments.self_test)
+    semantic = not (arguments.static_only or arguments.self_test)
     manifest: dict = {}
     owner_controls = 0
-    if not arguments.semantic_only:
+    if static or arguments.self_test:
         try:
             manifest = read_manifest()
             common_path = ROOT / manifest["commonModule"]
@@ -621,10 +684,17 @@ def main(argv: list[str]) -> int:
                 path: path.read_text(encoding="utf-8")
                 for path in contract_paths(manifest)
             }
+            # The self-test needs a clean baseline too, or a falsifier could
+            # see its tag from a real violation rather than from its mutation.
             errors = audit_sources(manifest, common, root, contracts)
             if errors:
                 return fail("ownership/signature audit failed: " + "; ".join(errors))
-            owner_controls = ownership_controls(manifest, common, root, contracts)
+            if arguments.self_test:
+                # Harness self-test (evidence economy rule 3): every in-memory
+                # falsifier shows audit_sources reports its tag. The real-tree
+                # audit is the static row's; this row's inputs are the harness
+                # and fixture only.
+                owner_controls = ownership_controls(manifest, common, root, contracts)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             return fail(f"ownership/signature setup failed: {exc}")
 
@@ -634,73 +704,55 @@ def main(argv: list[str]) -> int:
     for marker in MUTANTS:
         if source.count(marker) != 1:
             return fail(f"fixture must contain exactly one `{marker}` marker")
-    if not arguments.semantic_only:
+    if static:
         absent = missing_positives(source)
         if absent:
             return fail("required positive proofs missing/wrong-kind: " + ", ".join(absent))
 
-    if not arguments.static_only:
+    if semantic:
         positive = run(["lake", "env", "lean", str(FIXTURE)])
         if positive.returncode != 0:
             return fail("positive fixture did not compile", positive)
         if positive.stdout.strip() != EXPECTED or positive.stderr:
             return fail("positive fixture evaluator vector drifted", positive)
+        error = run_mutants(source, PRODUCTION_MUTANTS)
+        if error is not None:
+            return error
 
-    if not arguments.static_only:
-        with tempfile.TemporaryDirectory(prefix="cycle-write-free-") as temp:
-            temp_root = pathlib.Path(temp)
-            for index, (marker, (mutant_source, diagnostics)) in enumerate(MUTANTS.items()):
-                path = temp_root / f"CycleWriteFreeMutant{index}.lean"
-                path.write_text(source.replace(marker, mutant_source), encoding="utf-8")
-                result = run(["lake", "env", "lean", str(path)])
-                evidence = result.stdout + result.stderr
-                if result.returncode == 0:
-                    return fail(f"mutant `{marker}` unexpectedly compiled", result)
-                if not any(diagnostic in evidence for diagnostic in diagnostics):
-                    return fail(f"mutant `{marker}` failed unexpectedly", result)
-
-    if not arguments.semantic_only:
-        with tempfile.TemporaryDirectory(prefix="cycle-write-free-static-") as temp:
-            temp_root = pathlib.Path(temp)
-            for index, theorem in enumerate(sorted(REQUIRED_POSITIVE_THEOREMS)):
-                short = theorem.rsplit(".", 1)[-1]
-                token = f"theorem {short}"
-                parsed = declarations(source)
-                declaration = parsed.get(theorem)
-                if declaration is None:
-                    return fail(f"positive deletion cannot find `{theorem}`")
-                lines = source.splitlines(keepends=True)
-                line_index = declaration.line - 1
-                if lines[line_index].count(token) != 1:
-                    return fail(f"positive deletion cannot locate header `{theorem}`")
-                lines[line_index] = lines[line_index].replace(
-                    token, f"theorem {short}_removed", 1
-                )
-                path = temp_root / f"CycleWriteFreePositiveDeleted{index}.lean"
-                path.write_text("".join(lines), encoding="utf-8")
-                if theorem not in missing_positives(path.read_text(encoding="utf-8")):
-                    return fail(f"positive deletion control failed for `{theorem}`")
+    if arguments.self_test:
+        error = positive_deletion_controls(source)
+        if error is not None:
+            return error
+        self_test_markers = tuple(m for m in MUTANTS if m not in PRODUCTION_MUTANTS)
+        error = run_mutants(source, self_test_markers)
+        if error is not None:
+            return error
+        print(
+            "OK — cycle write free self-test: "
+            f"{owner_controls} parser/ownership falsifiers; "
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} positive-deletion controls; "
+            f"{len(self_test_markers)} fixture mutants each failing in its own lines"
+        )
+        return 0
 
     if arguments.static_only:
         print(
             "OK — cycle write free static: "
-            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + deletion controls; "
-            f"{len(manifest['owners'])} public owners + 7 exact signatures + "
-            f"{owner_controls} parser controls; 1 exact legacy exemption"
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs; "
+            f"{len(manifest['owners'])} public owners + 7 exact signatures; "
+            "1 exact legacy exemption"
         )
     elif arguments.semantic_only:
         print(
             "OK — cycle write free semantic: exact concrete evaluator; "
-            f"{len(MUTANTS)} diagnostic-pinned Lean mutants"
+            f"{len(PRODUCTION_MUTANTS)} diagnostic-pinned production mutants"
         )
     else:
         print(
             "OK — cycle write free: exact concrete evaluator; "
-            f"{len(MUTANTS)} diagnostic-pinned Lean mutants; "
-            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs + "
-            f"{len(REQUIRED_POSITIVE_THEOREMS)} deletion controls; "
-            f"{len(manifest['owners'])} public owners + 7 exact signatures + "
-            f"{owner_controls} parser controls; "
+            f"{len(PRODUCTION_MUTANTS)} diagnostic-pinned production mutants; "
+            f"{len(REQUIRED_POSITIVE_THEOREMS)} required positive proofs; "
+            f"{len(manifest['owners'])} public owners + 7 exact signatures; "
             "1 exact legacy exemption"
         )
     return 0

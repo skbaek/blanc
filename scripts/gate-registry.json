@@ -390,21 +390,6 @@
      {
       "pattern": "**/*.lean",
       "root": "Blanc"
-     },
-     {
-      "mode": "traversable",
-      "pattern": "*",
-      "root": "."
-     },
-     {
-      "mode": "traversable",
-      "pattern": "**/*",
-      "root": "docs"
-     },
-     {
-      "mode": "traversable",
-      "pattern": "**/*",
-      "root": "scripts"
      }
     ],
     "tools": [
@@ -412,7 +397,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The wrapper always passes --negative-controls, which makes one seed copy of the whole tree and eight case copies through nine unguarded shutil.copytree calls: a dangling symlink or an unreadable file anywhere outside .git/.lake/build makes one raise and the gate fail. Two earlier declarations of that were both wrong. Content hashing the tree reran the gate on every unrelated edit; membership reran it on every unrelated addition and still missed the case, because a dangling symlink is not is_file() and never entered the digest. The traversable mode declares the hazard instead of a corpus \u2014 it refuses to fingerprint a tree it cannot read and contributes nothing otherwise. Residue: chmod-ing an already-present file unreadable is caught, but a file made unreadable and readable again between two runs is not observed.",
+   "note": "Audits the real tree only: the lift manifest, the common module, the Blanc/Weth10*.lean and Blanc/Lido*.lean contract globs and the direct importer, all inside the declared files and the Blanc population. The nine negative controls moved to extraction-ownership-self-test under the evidence economy; with no whole-tree copy left in this row, the three traversable populations that declared the copytree hazard are gone.",
    "order": 10,
    "verdict": {
     "expect_exit": 0,
@@ -1317,6 +1302,7 @@
      "scripts/check-lido-circuit-breaker-deployment.py",
      "scripts/test-lido-circuit-breaker-deployment-falsifiers.py",
      "scripts/check.sh",
+     "scripts/AxiomCheck.lean",
      "Blanc/LidoCircuitBreakerDeploy.lean",
      "Blanc/DeploymentCompiled.lean",
      "Blanc/DeploymentMessage.lean",
@@ -1333,8 +1319,7 @@
      "scripts/gate-semaphore.sh"
     ],
     "lean_entries": [
-     "scripts/eval-lido-circuit-breaker-deployment.lean",
-     "scripts/AxiomCheck.lean"
+     "scripts/eval-lido-circuit-breaker-deployment.lean"
     ],
     "populations": [
      {
@@ -1353,7 +1338,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. AxiomCheck.lean is elaborated by check.sh and separately read as text by both check.sh and the deployment checker, and the Lean entry already covers its bytes. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
+   "note": "The fixture generator importlib-loads gen-weth-fixtures.py for its EEST helpers; it never calls build_fixture, so the EEST template that file names is not read and is not declared. check.sh and AxiomCheck.lean are read as text only: the deployment checker ties the 164 public names to their probes and pins the exact expectation set, and the repository axiom audit itself is the axiom-audit row's (evidence economy; this gate no longer reruns it). The 64 source falsifiers run in lido-deployment-self-test; the two compiled Lean controls stay here. The pinned EELS checkout gitignores its own virtualenv, so the commit identity `external` proves says nothing about which coincurve, ethereum_rlp or ethereum_types is installed there. The interpreter and every installed file under site-packages are hashed directly \u2014 package code, not just package names, because a same-version reinstall or an in-place edit moves neither the version nor the checkout, through the same EELS_ROOT the gate itself resolves.",
    "order": 34,
    "verdict": {
     "expect_exit": 0,
@@ -1402,6 +1387,7 @@
     "files": [
      "scripts/check-execution-occurrence.sh",
      "scripts/check-execution-occurrence.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/check-execution-raw-attribution-ownership.py",
      "scripts/check-execution-settlement.py",
      "scripts/check-extraction-ownership.py",
@@ -1442,6 +1428,7 @@
     "files": [
      "scripts/check-cycle-write-free.sh",
      "scripts/check-cycle-write-free.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/check-layering.py",
      "scripts/cycle-write-free-owner-manifest.json",
      "scripts/CycleWriteFreeRegression.lean",
@@ -1459,7 +1446,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits \u2014 gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. CycleWriteFreeRegression.lean is read as the source of the run-time mutant and deletion fixtures and is therefore declared directly.",
+   "note": "check-layering.py is importlib-loaded for its CONTRACTS literal, which decides which contract modules this gate audits \u2014 gate 24 regex-scrapes the same file as text, so the two couple to it by different mechanisms and a formatting change breaks only one of them. CycleWriteFreeRegression.lean is read as the source of the run-time mutant and deletion fixtures and is therefore declared directly. The in-memory ownership/signature falsifiers and the positive-deletion controls run in cycle-write-free-self-test (evidence economy); this row runs the real-tree audit once.",
    "order": 37,
    "verdict": {
     "expect_exit": 0,
@@ -1490,6 +1477,7 @@
      "scripts/check-execution-raw-attribution-ownership.py",
      "scripts/execution-raw-attribution-owner-manifest.json",
      "scripts/check-cycle-write-free.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/cycle-write-free-owner-manifest.json",
      "scripts/CycleWriteFreeRegression.lean",
      "Blanc/ExecutionSettlement.lean",
@@ -1515,7 +1503,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. ExecutionFrames.lean and ExecutionOccurrence.lean are both pinned because raw-attribution ownership is split across them. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity.",
+   "note": "The owner manifest SHA-256-pins the implementation, fixtures and manifests of the execution-settlement, execution-occurrence and cycle-write-free gates plus lakefile.lean and lake-manifest.json, so editing any of those reddens this gate; every pinned path is declared here. ExecutionFrames.lean and ExecutionOccurrence.lean are both pinned because raw-attribution ownership is split across them. It also folds every public declaration header in Blanc/Weth*.lean into one aggregate, so adding or removing such a file fails the gate \u2014 the recursive Blanc population is what preserves that membership sensitivity. The parser falsifiers and static deletion controls run in transient-settlement-self-test (evidence economy).",
    "order": 38,
    "verdict": {
     "expect_exit": 0,
@@ -3004,6 +2992,7 @@
     "files": [
      "scripts/check-execution-occurrence.sh",
      "scripts/check-execution-occurrence.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/check-extraction-ownership.py",
      "scripts/execution-occurrence-lift-manifest.json",
      "scripts/gate-semaphore.sh"
@@ -3018,7 +3007,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Compiled occurrence fixtures and mutants consume the independently registered settlement verdict instead of starting that body again.",
+   "note": "Compiled occurrence and direct-code positives, then the three production mutants (those no kept positive or theorem statement contradicts) in one elaboration, each attributed to its own lines by lean_mutant_batch.py; consumes the independently registered settlement verdict instead of starting that body again. The fixture-discrimination mutants and live deletions run in execution-occurrence-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
    "order": 65,
    "verdict": {
     "expect_exit": 0,
@@ -3037,6 +3026,7 @@
     "files": [
      "scripts/check-cycle-write-free.sh",
      "scripts/check-cycle-write-free.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/check-layering.py",
      "scripts/cycle-write-free-owner-manifest.json",
      "scripts/gate-semaphore.sh"
@@ -3050,7 +3040,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The concrete evaluator and diagnostic-pinned Lean mutants have their own transitive compiled identity.",
+   "note": "The concrete evaluator, then the two production mutants (BODY- and INDEX-SUBSTITUTION: no pinned positive contradicts them) in one elaboration, each attributed to its own lines. The 18 fixture-discrimination mutants run in cycle-write-free-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
    "order": 66,
    "verdict": {
     "expect_exit": 0,
@@ -3069,6 +3059,7 @@
     "files": [
      "scripts/check-transient-settlement.sh",
      "scripts/check-transient-settlement.py",
+     "scripts/lean_mutant_batch.py",
      "scripts/transient-settlement-owner-manifest.json",
      "scripts/gate_semaphore.py"
     ],
@@ -3081,7 +3072,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Evaluator vectors, compiled mutants and live positive-deletion controls are separated from the repository-wide owner and architecture census.",
+   "note": "The 25-control evaluator, then the two production mutants (OPERAND-ORDER, UNRELATED-TRANSACTIONS) in one elaboration, each attributed to its own lines. The 20 mutants that restate the negation of a pinned control, and the live positive deletions, run in transient-settlement-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
    "order": 67,
    "verdict": {
     "expect_exit": 0,
@@ -3586,6 +3577,168 @@
     "expect_exit": 0,
     "summary_patterns": [
      "^OK \u2014 elaboration migration comparison: 23 synthetic CLI controls passed$"
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-extraction-ownership.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "extraction-ownership"
+   ],
+   "id": "extraction-ownership-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-extraction-ownership.sh",
+     "scripts/check-extraction-ownership.py"
+    ],
+    "tools": [
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: the audit on the real tree, then eight mutations of a temporary copy of Blanc/ plus the lift manifest and one parser probe, each required to fail with its own tag. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 77,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 extraction ownership: .*9/9 negative controls live"
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-execution-occurrence.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "execution-occurrence-semantic"
+   ],
+   "id": "execution-occurrence-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-execution-occurrence.sh",
+     "scripts/check-execution-occurrence.py",
+     "scripts/lean_mutant_batch.py",
+     "scripts/check-extraction-ownership.py",
+     "scripts/execution-occurrence-lift-manifest.json",
+     "scripts/ExecutionOccurrenceRegression.lean",
+     "scripts/ExecutionOccurrenceControls.lean",
+     "scripts/gate-semaphore.sh"
+    ],
+    "tools": [
+     "lean",
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: the 17 occurrence and 2 direct-code mutants whose failure a kept positive or theorem already implies, in one elaboration each attributed to its own lines, and the 7 live direct-code deletions in one elaboration. The fixtures are files here, not Lean entries. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 78,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 execution occurrence self-test: "
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-cycle-write-free.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "cycle-write-free-static",
+    "cycle-write-free-semantic"
+   ],
+   "id": "cycle-write-free-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-cycle-write-free.sh",
+     "scripts/check-cycle-write-free.py",
+     "scripts/lean_mutant_batch.py",
+     "scripts/check-layering.py",
+     "scripts/cycle-write-free-owner-manifest.json",
+     "scripts/CycleWriteFreeRegression.lean",
+     "scripts/gate-semaphore.sh"
+    ],
+    "tools": [
+     "lean",
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: a clean real-tree audit baseline, the 21 in-memory ownership/signature falsifiers and the parser check, the 22 positive-deletion controls, and the 18 fixture-discrimination mutants in one elaboration each attributed to its own lines. The fixture is a file here, not a Lean entry. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 79,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 cycle write free self-test: "
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-transient-settlement.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "transient-settlement-static",
+    "transient-settlement-semantic"
+   ],
+   "id": "transient-settlement-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-transient-settlement.sh",
+     "scripts/check-transient-settlement.py",
+     "scripts/lean_mutant_batch.py",
+     "scripts/transient-settlement-owner-manifest.json",
+     "scripts/TransientSettlementRegression.lean",
+     "scripts/gate_semaphore.py"
+    ],
+    "tools": [
+     "lean",
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: parser falsifiers, a clean owner-audit baseline, the static and live positive-deletion controls, and the 20 mutants that restate the negation of a pinned control, in one elaboration each attributed to its own lines. The fixture is a file here, not a Lean entry. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 80,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 transient-settlement self-test: "
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-lido-circuit-breaker-deployment.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "lido-deployment"
+   ],
+   "id": "lido-deployment-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-lido-circuit-breaker-deployment.sh",
+     "scripts/test-lido-circuit-breaker-deployment-falsifiers.py",
+     "scripts/check-lido-circuit-breaker-deployment.py"
+    ],
+    "tools": [
+     "python3",
+     "bash"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: 64 source falsifiers, each mutating a temporary copy of the deployment sources (and re-pinning where the case says so) and requiring the Python checker to reject it with its named diagnostic. No Lean, EELS or Jaune. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 81,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 Lido CircuitBreaker deployment self-test: "
     ]
    }
   }

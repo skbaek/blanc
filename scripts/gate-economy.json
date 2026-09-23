@@ -29,7 +29,12 @@
   "drip-current-mainnet",
   "lido-twg-pinned-target-current-mainnet",
   "recipe-dispatch-controls",
-  "elab-migration-comparison-controls"
+  "elab-migration-comparison-controls",
+  "extraction-ownership-self-test",
+  "execution-occurrence-self-test",
+  "cycle-write-free-self-test",
+  "transient-settlement-self-test",
+  "lido-deployment-self-test"
  ],
  "rows": [
   {
@@ -131,8 +136,7 @@
   {
    "id": "extraction-ownership",
    "work": [
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "light",
    "prerequisites": [],
@@ -347,8 +351,7 @@
    "id": "lido-deployment",
    "work": [
     "candidate-positive",
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "elaboration",
    "prerequisites": [
@@ -383,8 +386,7 @@
   {
    "id": "execution-occurrence-semantic",
    "work": [
-    "candidate-positive",
-    "harness-self-test"
+    "candidate-positive"
    ],
    "resource_class": "elaboration",
    "prerequisites": [
@@ -396,8 +398,7 @@
   {
    "id": "cycle-write-free-static",
    "work": [
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "light",
    "prerequisites": [],
@@ -406,8 +407,7 @@
   {
    "id": "cycle-write-free-semantic",
    "work": [
-    "candidate-positive",
-    "harness-self-test"
+    "candidate-positive"
    ],
    "resource_class": "elaboration",
    "prerequisites": [
@@ -418,8 +418,7 @@
   {
    "id": "transient-settlement-static",
    "work": [
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "light",
    "prerequisites": [],
@@ -428,8 +427,7 @@
   {
    "id": "transient-settlement-semantic",
    "work": [
-    "candidate-positive",
-    "harness-self-test"
+    "candidate-positive"
    ],
    "resource_class": "elaboration",
    "prerequisites": [
@@ -916,6 +914,66 @@
    ],
    "historical_catches": [],
    "material_identity": "already precise: generated fixture sources, complete fixture population, target and native runtime closure are direct inputs"
+  },
+  {
+   "id": "extraction-ownership-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "extraction-ownership"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "execution-occurrence-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build",
+    "execution-occurrence-semantic"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "cycle-write-free-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build",
+    "cycle-write-free-static",
+    "cycle-write-free-semantic"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "transient-settlement-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build",
+    "transient-settlement-static",
+    "transient-settlement-semantic"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "lido-deployment-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "lido-deployment"
+   ],
+   "historical_catches": []
   }
  ]
 }

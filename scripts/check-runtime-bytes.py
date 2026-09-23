@@ -65,6 +65,7 @@ _TOKEN_RE = re.compile(r"0x[0-9a-fA-F]{2}")
 _DOCSTRING_COUNT_RE = re.compile(r"The\s+(\d+)-byte\b")
 _HEX_BODY_RE = re.compile(
     r"^\s*(?:0x[0-9a-fA-F]{2}\s*,\s*)*0x[0-9a-fA-F]{2}\s*,?\s*$", re.DOTALL)
+_RAW_STRING_RE = re.compile(r'r#*"')
 
 
 class ParseError(Exception):
@@ -101,7 +102,7 @@ def _mask_lean_comments_and_strings(text):
                     i += 1
             if depth:
                 raise ParseError("unterminated Lean block comment")
-        elif text[i] == "r" and re.match(r'r#*"', text[i:]):
+        elif text[i] == "r" and _RAW_STRING_RE.match(text, i):
             raise ParseError("raw Lean strings are outside the byte parser grammar")
         elif text[i] == '"':
             i += 1
@@ -122,6 +123,21 @@ def _mask_lean_comments_and_strings(text):
     return "".join(chars)
 
 
+# Masking is a pure function of the file text. A chunk join resolves each
+# chunk by re-entering parse_lean_literal on the same file, so without this
+# memo a literal of N chunks re-masked the whole file N+1 times (about 70 s
+# for the 70-chunk vault literal). Keyed by the text itself, so an edited
+# file is re-masked and a stale mask can never be served.
+_MASK_MEMO = {}
+
+
+def _masked_text(text):
+    masked = _MASK_MEMO.get(text)
+    if masked is None:
+        masked = _MASK_MEMO[text] = _mask_lean_comments_and_strings(text)
+    return masked
+
+
 def parse_lean_literal(lean_path, name, _resolving=None):
     if _resolving is None:
         _resolving = set()
@@ -131,7 +147,7 @@ def parse_lean_literal(lean_path, name, _resolving=None):
         raise ParseError(f"{lean_path} not found")
     with open(lean_path, encoding="utf-8") as source:
         text = source.read()
-    masked = _mask_lean_comments_and_strings(text)
+    masked = _masked_text(text)
     # These compiler-owned files use unindented declarations. Capture the
     # complete expression up to the next declaration/end, never a prefix that
     # happens to look like a literal or a chunk join.

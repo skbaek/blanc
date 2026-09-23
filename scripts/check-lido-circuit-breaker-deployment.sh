@@ -2,11 +2,29 @@
 # Fail-closed universal/source and finite replay assurance for the official
 # direct Lido Circuit Breaker deployment root. Generated replay products are
 # temporary and never become Lean premises or committed goldens.
+#
+# Evidence economy (scripts/GATES.md; ledger in Plans
+# reports/evidence-economy-20260923/trim-b1-ledger.md): the repository axiom
+# audit this gate used to rerun is the `axiom-audit` row's (`check.sh
+# --no-build`), which the deployment checker ties to by pinning the exact
+# expectation set. The 64 source falsifiers mutate temporary copies and run
+# only the Python checker, so they run under `--self-test`, when the harness
+# changes; the two compiled Lean controls stay here.
 
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [ "${1:-}" = "--self-test" ]; then
+  if ! python3 "$SCRIPT_DIR/test-lido-circuit-breaker-deployment-falsifiers.py" \
+      --source-cases-only; then
+    echo "REGRESSION — Lido CircuitBreaker deployment self-test: source falsifier controls failed" >&2
+    exit 1
+  fi
+  echo "OK — Lido CircuitBreaker deployment self-test: 64 source falsifiers each rejected by their named checker control"
+  exit 0
+fi
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
@@ -74,15 +92,12 @@ if ! python3 "$SCRIPT_DIR/check-lido-circuit-breaker-deployment.py" \
     >"$LOG" 2>&1; then
   fail "public declaration, premise, or trust assurance failed"
 fi
-if ! "$SCRIPT_DIR/check.sh" --no-build >"$LOG" 2>&1; then
-  fail "exact per-declaration axiom audit failed"
-fi
 if ! python3 "$SCRIPT_DIR/test-lido-circuit-breaker-deployment-falsifiers.py" \
-    >"$LOG" 2>&1; then
-  fail "deployment source/Lean falsifier controls failed"
+    --lean-controls-only >"$LOG" 2>&1; then
+  fail "deployment arbitrary-premise/synthetic Lean controls failed"
 fi
 if ! "$JAUNE_BIN" "$FIXTURE" --network Prague >"$LOG" 2>&1; then
   fail "strict Jaune replay of the pinned-EELS fixture failed"
 fi
 
-echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 165 exact axiom probes; 64 source mutants + 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
+echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 165 axiom probes pinned for the axiom-audit row; 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"

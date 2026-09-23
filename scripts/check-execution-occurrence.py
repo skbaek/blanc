@@ -12,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 
+import lean_mutant_batch
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "scripts" / "ExecutionOccurrenceRegression.lean"
@@ -266,6 +268,86 @@ private theorem chronologyCommitRequiredMutant :
 """,
 }
 
+MUTANT_DIAGNOSTICS = {
+    "-- TERMINAL-ERROR-MUTANT-CONTROL": ("Tactic `rfl` failed",),
+    "-- RAW-ERROR-PRUNE-MUTANT-CONTROL": ("Tactic `rfl` failed",),
+    "-- RAW-BYTE-SCAN-MUTANT-CONTROL":
+        ("Tactic `decide` proved that the proposition",),
+    "-- FIRST-WRITER-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- IDENTITY-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CODE-IDENTITY-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- COMMITMENT-FILTERED-RAW-CHILD-MUTANT-CONTROL":
+        ("Tactic `rfl` failed",),
+    "-- UNCONDITIONAL-MAIN-CURSOR-OOG-MUTANT-CONTROL":
+        ("Tactic `rfl` failed",),
+    "-- CHILD-CONTINUATION-ORDER-MUTANT-CONTROL":
+        ("Tactic `rfl` failed",),
+    "-- DUPLICATE-CHILD-ROOT-MUTANT-CONTROL":
+        ("Tactic `rfl` failed",),
+    "-- CONTINUATION-AS-FRAME-MUTANT-CONTROL":
+        ("Tactic `rfl` failed",),
+    "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL":
+        ("Application type mismatch",),
+    "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CHRONOLOGY-ORDER-REVERSAL-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CHRONOLOGY-MISSING-TARGET-PREFIX-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+    "-- CHRONOLOGY-SYNTAX-ONLY-MUTANT-CONTROL":
+        ("Dependent elimination failed",),
+    "-- CHRONOLOGY-COMMIT-REQUIRED-MUTANT-CONTROL":
+        ("Application type mismatch", "Type mismatch"),
+}
+
+# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
+# reports/evidence-economy-20260923/trim-b1-ledger.md). These three mutants are
+# the only check that would notice a production change: the type of
+# `SourceCursor.Chronology.initialToCursor`, the child-before-continuation
+# order of `Exec.rawFrameDescendants`, and the path/source indexing of
+# `Exec.Deriv.SourceCursor` are pinned by no kept positive or theorem
+# statement. They stay in the main semantic row, batched into one
+# elaboration. The other 17 occurrence mutants, both direct-code mutants and
+# the live deletions contradict a positive the main row compiles, or depend on
+# fixture-local terms only; they run in --self-test.
+PRODUCTION_MUTANTS = (
+    "-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL",
+    "-- CHILD-CONTINUATION-ORDER-MUTANT-CONTROL",
+    "-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL",
+)
+
+
+def run_batch(source: str, mutants: list[lean_mutant_batch.Mutant],
+              name: str) -> str | None:
+    """Elaborate every mutant in one copy; None, or the failure detail."""
+    text, spans = lean_mutant_batch.insert(source, mutants)
+    with tempfile.TemporaryDirectory(prefix="execution-occurrence-batch-") as temp:
+        path = pathlib.Path(temp) / f"{name}.lean"
+        path.write_text(text, encoding="utf-8")
+        result = run(["lake", "env", "lean", str(path)])
+    problems = lean_mutant_batch.verdict(
+        result.stdout + result.stderr, result.returncode, mutants, spans
+    )
+    if problems:
+        return "; ".join(problems) + "\n" + result.stdout + result.stderr
+    return None
+
+
+def occurrence_mutants(markers) -> list[lean_mutant_batch.Mutant]:
+    return [
+        lean_mutant_batch.Mutant(marker, MUTANTS[marker], MUTANT_DIAGNOSTICS[marker])
+        for marker in markers
+    ]
+
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -465,7 +547,8 @@ def contract_ownership_errors(
     return errors
 
 
-def check_direct_code_fixture(ownership, *, semantic: bool) -> int | None:
+def check_direct_code_fixture(ownership, *, semantic: bool,
+                              self_test: bool = False) -> int | None:
     if not DIRECT_CODE_FIXTURE.is_file():
         return fail(
             "direct-code fixture is missing: "
@@ -519,41 +602,41 @@ def check_direct_code_fixture(ownership, *, semantic: bool) -> int | None:
 
     with tempfile.TemporaryDirectory(prefix="execution-direct-code-") as temp:
         temp_root = pathlib.Path(temp)
-        if semantic:
-            for index, (marker, (mutant_source, diagnostics)) in enumerate(
-                DIRECT_CODE_MUTANTS.items()
-            ):
-                path = temp_root / f"ExecutionDirectCodeMutant{index}.lean"
-                path.write_text(
-                    source.replace(marker, mutant_source), encoding="utf-8"
-                )
-                result = run(["lake", "env", "lean", str(path)])
-                evidence = result.stdout + result.stderr
-                if result.returncode == 0:
-                    return fail(
-                        f"direct-code mutant `{marker}` unexpectedly compiled", result
-                    )
-                if not all(diagnostic in evidence for diagnostic in diagnostics):
-                    return fail(
-                        f"direct-code mutant `{marker}` failed unexpectedly", result
-                    )
-
-            for index, theorem in enumerate(
-                sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)
-            ):
+        if self_test:
+            # Harness self-test: the two premise-deletion mutants (each fails
+            # against a positive the main row compiles) and the seven live
+            # deletions, each batched into one elaboration.
+            detail = run_batch(source, [
+                lean_mutant_batch.Mutant(marker, mutant_source, diagnostics,
+                                         require_all=True)
+                for marker, (mutant_source, diagnostics) in DIRECT_CODE_MUTANTS.items()
+            ], "ExecutionDirectCodeMutants")
+            if detail is not None:
+                return fail("direct-code mutants: " + detail)
+            changed = source
+            checks = []
+            for theorem in sorted(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS):
                 short = theorem.rsplit(".", 1)[-1]
                 token = f"theorem {short}"
                 if source.count(token) != 1:
                     return fail(
                         f"direct-code deletion cannot uniquely locate `{theorem}`"
                     )
-                changed = source.replace(token, f"theorem {short}_removed", 1)
-                changed += f"\n#check {theorem}\n"
-                path = temp_root / f"ExecutionDirectCodeDeleted{index}.lean"
-                path.write_text(changed, encoding="utf-8")
-                result = run(["lake", "env", "lean", str(path)])
-                evidence = result.stdout + result.stderr
-                if result.returncode == 0 or short not in evidence:
+                changed = changed.replace(token, f"theorem {short}_removed", 1)
+                checks.append((theorem, short))
+            base_lines = changed.count("\n") + (0 if changed.endswith("\n") else 1)
+            changed = changed + ("" if changed.endswith("\n") else "\n")
+            changed += "".join(f"\n#check {theorem}\n" for theorem, _ in checks)
+            path = temp_root / "ExecutionDirectCodeDeleted.lean"
+            path.write_text(changed, encoding="utf-8")
+            result = run(["lake", "env", "lean", str(path)])
+            if result.returncode == 0:
+                return fail("direct-code live deletions all compiled", result)
+            reported = lean_mutant_batch.errors(result.stdout + result.stderr)
+            for index, (theorem, short) in enumerate(checks):
+                line = base_lines + 2 + 2 * index
+                if not any(at == line and short in message
+                           for at, message in reported):
                     return fail(
                         f"direct-code live deletion did not fail through `{theorem}`",
                         result,
@@ -579,13 +662,45 @@ def check_direct_code_fixture(ownership, *, semantic: bool) -> int | None:
     return None
 
 
+def self_test() -> int:
+    """Harness self-test (evidence economy rule 3).
+
+    Its registry inputs are the harness and the two fixtures only, so it reruns
+    when a control or fixture changes, not on every Lean edit. The fixtures'
+    green compile is the prerequisite main semantic row's verdict.
+    """
+    source = FIXTURE.read_text(encoding="utf-8")
+    try:
+        ownership = load_ownership_parser()
+    except (OSError, RuntimeError) as exc:
+        return fail(f"could not load fail-closed ownership parser: {exc}")
+    error = check_direct_code_fixture(ownership, semantic=False, self_test=True)
+    if error is not None:
+        return error
+    markers = tuple(marker for marker in MUTANTS if marker not in PRODUCTION_MUTANTS)
+    detail = run_batch(source, occurrence_mutants(markers),
+                       "ExecutionOccurrenceSelfTestMutants")
+    if detail is not None:
+        return fail("fixture mutants: " + detail)
+    print(
+        f"OK — execution occurrence self-test: {len(markers)} occurrence + "
+        f"{len(DIRECT_CODE_MUTANTS)} direct-code fixture mutants and "
+        f"{len(DIRECT_CODE_REQUIRED_POSITIVE_THEOREMS)} live direct-code deletions, "
+        "each failing in its own lines"
+    )
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     phase = parser.add_mutually_exclusive_group()
     phase.add_argument("--static-only", action="store_true")
     phase.add_argument("--semantic-only", action="store_true")
+    phase.add_argument("--self-test", action="store_true")
     parser.add_argument("--composed-prerequisites", action="store_true")
     arguments = parser.parse_args(argv)
+    if arguments.self_test:
+        return self_test()
     semantic = not arguments.static_only
     source = FIXTURE.read_text(encoding="utf-8")
     for marker in [*MUTANTS, "-- WETH-BRIDGE-MUTANT-CONTROL"]:
@@ -614,59 +729,11 @@ def main(argv: list[str]) -> int:
         if positive.stdout.strip() != EXPECTED or positive.stderr:
             return fail("positive fixture evaluator vector drifted", positive)
 
-    with tempfile.TemporaryDirectory(prefix="execution-occurrence-mutants-") as temp:
-        temp_root = pathlib.Path(temp)
-        for index, (marker, mutant_source) in enumerate(MUTANTS.items() if semantic else ()):
-            mutant_path = temp_root / f"ExecutionOccurrenceMutant{index}.lean"
-            mutant_path.write_text(
-                source.replace(marker, mutant_source), encoding="utf-8"
-            )
-            mutant = run(["lake", "env", "lean", str(mutant_path)])
-            evidence = mutant.stdout + mutant.stderr
-            if mutant.returncode == 0:
-                return fail(f"mutant `{marker}` unexpectedly compiled", mutant)
-            expected_failures = {
-                "-- TERMINAL-ERROR-MUTANT-CONTROL": ("Tactic `rfl` failed",),
-                "-- RAW-ERROR-PRUNE-MUTANT-CONTROL": ("Tactic `rfl` failed",),
-                "-- RAW-BYTE-SCAN-MUTANT-CONTROL":
-                    ("Tactic `decide` proved that the proposition",),
-                "-- FIRST-WRITER-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- IDENTITY-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CODE-IDENTITY-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- COMMITMENT-FILTERED-RAW-CHILD-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
-                "-- UNCONDITIONAL-MAIN-CURSOR-OOG-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
-                "-- CHILD-CONTINUATION-ORDER-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
-                "-- DUPLICATE-CHILD-ROOT-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
-                "-- CONTINUATION-AS-FRAME-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
-                "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL":
-                    ("Application type mismatch",),
-                "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CHRONOLOGY-REJECTED-BRANCH-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CHRONOLOGY-ORDER-REVERSAL-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CHRONOLOGY-MISSING-INITIAL-PREFIX-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CHRONOLOGY-MISSING-TARGET-PREFIX-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-                "-- CHRONOLOGY-SYNTAX-ONLY-MUTANT-CONTROL":
-                    ("Dependent elimination failed",),
-                "-- CHRONOLOGY-COMMIT-REQUIRED-MUTANT-CONTROL":
-                    ("Application type mismatch", "Type mismatch"),
-            }[marker]
-            if not any(expected in evidence for expected in expected_failures):
-                return fail(f"mutant `{marker}` failed unexpectedly", mutant)
+    if semantic:
+        detail = run_batch(source, occurrence_mutants(PRODUCTION_MUTANTS),
+                           "ExecutionOccurrenceMutants")
+        if detail is not None:
+            return fail("production mutants: " + detail)
 
     if arguments.semantic_only:
         if not arguments.composed_prerequisites:
@@ -677,8 +744,8 @@ def main(argv: list[str]) -> int:
                 return fail("CREATE settlement control verdict drifted", settlement)
         print(
             "OK — execution occurrence semantic: 16 concrete occurrence + 6 direct-code "
-            "controls; 20 occurrence + 2 direct-code Lean mutants; 26 required positive "
-            "proofs + 7 live direct-code deletions"
+            f"controls; {len(PRODUCTION_MUTANTS)} production Lean mutants in one "
+            "elaboration"
         )
         return 0
 
@@ -1258,11 +1325,11 @@ def main(argv: list[str]) -> int:
     else:
         print(
             "OK — execution occurrence: 16 concrete occurrence + 6 direct-code controls; "
-            "20 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
+            f"{len(PRODUCTION_MUTANTS)} production Lean mutants; WETH bridge-removal mutant; "
             "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
             "28 raw-attribution owners + exact source/chronology signatures + shared "
-            "kernel + 8 controls; 26 required positive proofs + legacy deletion + 7 live direct-code "
-            "deletions; 2 CREATE mutants"
+            "kernel + 8 controls; 26 required positive proofs + legacy deletion; "
+            "2 CREATE mutants"
         )
     return 0
 

@@ -14,7 +14,9 @@ and opens `Blanc.ExecutionTrace` directly.  It deliberately does not try to
 recognize propositionally equivalent declarations under unrelated names; that
 remains an independent review obligation.
 
-``--negative-controls`` runs nine controls: the historical donor alias, an
+``--negative-controls`` (the wrapper's ``--self-test``; evidence economy rule
+3, so it runs when the harness changes, not on every Lean edit) runs nine
+controls: the historical donor alias, an
 unexpected donor export, a Lido common-owner basename shadow, a Lido alias, a
 missing common declaration, a missing direct import, and distinct trailing-`?`
 declaration parsing, plus removal of the WETH flow compatibility block and
@@ -449,8 +451,14 @@ def negative_controls(root: Path) -> list[str]:
             failures.append(
                 f"CONTROL-FAILED — trailing-question-mark-parser: {exc}"
             )
+        # The audit reads only the lift manifest and Lean sources under
+        # Blanc/, so the seed copies exactly those rather than the whole tree.
         copied = Path(temp) / "blanc"
-        shutil.copytree(root, copied, ignore=shutil.ignore_patterns(".git", ".lake", "build", ".worktrees"))
+        shutil.copytree(root / "Blanc", copied / "Blanc")
+        (copied / MANIFEST).parent.mkdir(parents=True)
+        shutil.copy2(root / MANIFEST, copied / MANIFEST)
+        if audit(copied):
+            failures.append("CONTROL-SETUP — the seed copy does not audit clean")
         for name, expected, mutate in controls:
             case = Path(temp) / name
             shutil.copytree(copied, case)
