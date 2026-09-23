@@ -484,9 +484,9 @@ theorem constructorPatchPair_runCompiled
     (hargumentMemory : (M.read (32 * i.val) 32).2 = M)
     (hwrite : M.write offset value.toBytes = M')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M', G⟩) rest post) :
+      (base.setMach ⟨[], M', G, base.stateGas⟩) rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M, G + (pushGas + 9)⟩)
+      (base.setMach ⟨[], M, G + (pushGas + 9), base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
   have hindexBound : 32 * i.val < 2 ^ 256 := by
     apply Nat.lt_trans (show 32 * i.val < 224 by
@@ -525,7 +525,7 @@ theorem constructorPatchPair_runCompiled
         (by rw [hsize]) (by rw [hsize]; exact hfit)
     case a =>
       simp only [Devm.memory_setMach, Devm.stack_setMach, hindex,
-        hargumentMemory, hargument, Devm.setMach_setMach]
+        hargumentMemory, hargument, Devm.setMach_setMach, Devm.stateGas_setMach]
       rw [hwrite]
       have hg : G + 9 - 9 = G := by omega
       rw [hg]
@@ -541,10 +541,10 @@ theorem ConstructorPatchInvariant.runCompiled_write
     (hvalue : officialConstructorArgumentWord i = value)
     (hfit : offset + 32 ≤ 4512)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory.write offset value.toBytes, G⟩)
+      (base.setMach ⟨[], memory.write offset value.toBytes, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + (pushGas + 9)⟩)
+      (base.setMach ⟨[], memory, G + (pushGas + 9), base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
   apply constructorPatchPair_runCompiled hoffset hpush h.memory_size hfit
   · rw [h.read_argument i, hvalue]
@@ -589,10 +589,10 @@ theorem officialConstructorPatchLine1_4_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory4, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory4, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 44⟩)
+      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 44, base.stateGas⟩)
       (loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 398 +++
         loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 1318 +++
         loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 2057 +++
@@ -660,10 +660,10 @@ theorem officialConstructorPatchLine5_8_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory8, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory8, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory4, G + 48⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory4, G + 48, base.stateGas⟩)
       (loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 441 +++
         loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 937 +++
         loadArgumentIndexForProof 2 +++ storeByteOffsetForProof 482 +++
@@ -738,10 +738,10 @@ theorem officialConstructorPatchLine9_12_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory12, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory12, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory8, G + 48⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory8, G + 48, base.stateGas⟩)
       (loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 732 +++
         loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 1361 +++
         loadArgumentIndexForProof 4 +++ storeByteOffsetForProof 896 +++
@@ -1221,6 +1221,7 @@ private theorem officialConstructorColdStore_getStor
 
 theorem officialConstructorColdStore_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {key value : B256} {memory : Mem} {G : Nat} {rest : Func}
     (hcold : (sevm.currentTarget, key) ∉ base.accessedStorageKeys)
     (horiginal : getOrigStorVal sevm sevm.currentTarget key = 0)
@@ -1230,14 +1231,14 @@ theorem officialConstructorColdStore_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorColdStore sevm base key value).setMach
-        ⟨[], memory, G⟩)
+        ⟨[], memory, G, (officialConstructorColdStore sevm base key value).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[key, value], memory, G + 22100⟩)
+      (base.setMach ⟨[key, value], memory, G + 22100, base.stateGas⟩)
       (sstore ::: rest) post := by
   have hzeroValue : (0 : B256) ≠ value := Ne.symm hvalue
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_sstore_cold
+  · apply Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none
         (c := 22100) (G := G) (rc := base.refundCounter)
     · rfl
     · simpa only [Devm.setMach, Devm.accessedStorageKeys] using hcold
@@ -1250,7 +1251,7 @@ theorem officialConstructorColdStore_runCompiled
     · simp only [Devm.gasLeft_setMach]
   · change Func.RunCompiled fs sevm
       ((officialConstructorColdStore sevm base key value).setMach
-        ⟨[], memory, G⟩)
+        ⟨[], memory, G, (officialConstructorColdStore sevm base key value).stateGas⟩)
       rest post
     exact hrest
 
@@ -1442,10 +1443,10 @@ theorem constructorArgumentSstorePrefix_runCompiled
     (hvalue : Bytes.toB256 ((memory.read (32 * i.val) 32).1) = value)
     (hmemory : (memory.read (32 * i.val) 32).2 = memory)
     (hstore : Func.RunCompiled fs sevm
-      (base.setMach ⟨[key, value], memory, Gafter⟩)
+      (base.setMach ⟨[key, value], memory, Gafter, base.stateGas⟩)
       (sstore ::: rest) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, Gbefore⟩)
+      (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++
         pushB256 key ::: sstore ::: rest) post := by
   rw [hgas]
@@ -1484,7 +1485,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
         · simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
           omega
-      · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using hstore
 
 /-- Execute the deployment's 64-byte, one-topic event opcode from named
@@ -1502,12 +1503,12 @@ theorem constructorEventLog1Opcode_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((base.addLog ⟨sevm.currentTarget, [topic], data⟩).setMach
-        ⟨[], memory, Gafter⟩)
+        ⟨[], memory, Gafter, (base.addLog ⟨sevm.currentTarget, [topic], data⟩).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
-            (2 : B256) * 32, topic], memory, Gbefore⟩)
+            (2 : B256) * 32, topic], memory, Gbefore, base.stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post := by
   rw [hgas]
   have hi :
@@ -1534,7 +1535,7 @@ theorem constructorEventLog1Opcode_runCompiled
     · simp only [Devm.gasLeft_setMach]
   · change Func.RunCompiled fs sevm
       ((base.addLog ⟨sevm.currentTarget, [topic], data⟩).setMach
-        ⟨[], memory, Gafter⟩)
+        ⟨[], memory, Gafter, (base.addLog ⟨sevm.currentTarget, [topic], data⟩).stateGas⟩)
       rest post
     exact hrest
 
@@ -1549,10 +1550,10 @@ theorem constructorEventLog1Prefix_runCompiled
     (hlog : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
-            (2 : B256) * 32, topic], memory, Gafter⟩)
+            (2 : B256) * 32, topic], memory, Gafter, base.stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, Gbefore⟩)
+      (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (pushB256 topic :::
         logWith 0
           (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
@@ -1580,7 +1581,7 @@ theorem constructorEventLog1Prefix_runCompiled
         · simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
           omega
-      · simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+      · simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using hlog
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsBlocksMemory.lean`. -/
@@ -1600,17 +1601,17 @@ theorem constructorArgumentMstorePrefix_runCompiled
       pushCost ((Nat.toB256 (32 * i.val)).toBytes.sig) = indexPushCost)
     (hloadCost : ∀ (S : List B256) (G : Nat),
       gVerylow +
-        (base.setMach ⟨S, memory, G⟩).extCost
+        (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost
           [⟨32 * i.val, 32⟩] = loadCost)
     (hvalue : Bytes.toB256 ((memory.read (32 * i.val) 32).1) = value)
     (hmemory : (memory.read (32 * i.val) 32).2 = memory)
     (hstoreExt : ∀ (S : List B256) (G : Nat),
-      (base.setMach ⟨S, memory, G⟩).extCost [⟨offset, 32⟩] = storeExt)
+      (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost [⟨offset, 32⟩] = storeExt)
     (hwrite : memory.write offset value.toBytes = memory')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory', Gafter⟩) rest post) :
+      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, Gbefore⟩)
+      (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++
         storeByteOffsetForProof offset +++ rest) post := by
   rw [hgas]
@@ -1645,7 +1646,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
           (v := value) (s := []) (M := memory)
           (c := loadCost) (G := Gafter + (6 + storeExt))
       · simp only [Devm.stack_setMach]
-      · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach, hindex] using
           hloadCost [Nat.toB256 (32 * i.val)]
             (Gafter + (loadCost + 6 + storeExt))
@@ -1671,7 +1672,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
               (v := value) (s := []) (G := Gafter)
               (e := storeExt) (M := memory')
           · simp only [Devm.stack_setMach]
-          · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+          · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
               Devm.memory_setMach, Devm.gasLeft_setMach,
               hoffsetNat] using
               hstoreExt
@@ -1680,7 +1681,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
                 (Gafter + (3 + storeExt))
           · simp only [Devm.gasLeft_setMach, gVerylow]
           · simpa only [Devm.memory_setMach, hoffsetNat] using hwrite
-        · simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+        · simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
             Devm.memory_setMach] using hrest
 
 /-- Store a zero word at a fixed two-byte memory coordinate. The expansion
@@ -1692,12 +1693,12 @@ theorem constructorZeroMstorePrefix_runCompiled
     (hoffsetLt : offset < 2 ^ 16)
     (hgas : Gbefore = Gafter + (8 + storeExt))
     (hstoreExt : ∀ (S : List B256) (G : Nat),
-      (base.setMach ⟨S, memory, G⟩).extCost [⟨offset, 32⟩] = storeExt)
+      (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost [⟨offset, 32⟩] = storeExt)
     (hwrite : memory.write offset (0 : B256).toBytes = memory')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory', Gafter⟩) rest post) :
+      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, Gbefore⟩)
+      (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (pushB256 0 ::: storeByteOffsetForProof offset +++ rest) post := by
   rw [hgas]
   have hoffsetBound : offset < 2 ^ 256 :=
@@ -1733,7 +1734,7 @@ theorem constructorZeroMstorePrefix_runCompiled
             (v := 0) (s := []) (G := Gafter)
             (e := storeExt) (M := memory')
         · simp only [Devm.stack_setMach]
-        · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
             Devm.memory_setMach, Devm.gasLeft_setMach,
             hoffsetNat] using
             hstoreExt
@@ -1742,7 +1743,7 @@ theorem constructorZeroMstorePrefix_runCompiled
               (Gafter + (3 + storeExt))
         · simp only [Devm.gasLeft_setMach, gVerylow]
         · simpa only [Devm.memory_setMach, hoffsetNat] using hwrite
-      · simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+      · simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using hrest
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsBlocksLog2.lean`. -/
@@ -1762,12 +1763,12 @@ theorem constructorEventLog2Opcode_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((base.addLog ⟨sevm.currentTarget, [topic0, topic1], data⟩).setMach
-        ⟨[], memory, Gafter⟩)
+        ⟨[], memory, Gafter, (base.addLog ⟨sevm.currentTarget, [topic0, topic1], data⟩).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32, topic0, topic1],
-          memory, Gbefore⟩)
+          memory, Gbefore, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post := by
   rw [hgas]
   have hi : ((1 : B256) * 32).toNat = 32 := by decide
@@ -1789,7 +1790,7 @@ theorem constructorEventLog2Opcode_runCompiled
     · simp only [Devm.gasLeft_setMach]
   · change Func.RunCompiled fs sevm
       ((base.addLog ⟨sevm.currentTarget, [topic0, topic1], data⟩).setMach
-        ⟨[], memory, Gafter⟩)
+        ⟨[], memory, Gafter, (base.addLog ⟨sevm.currentTarget, [topic0, topic1], data⟩).stateGas⟩)
       rest post
     exact hrest
 
@@ -1807,7 +1808,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
       pushCost ((Nat.toB256 (32 * i.val)).toBytes.sig) = indexPushCost)
     (hloadCost : ∀ (S : List B256) (G : Nat),
       gVerylow +
-        (base.setMach ⟨S, memory, G⟩).extCost
+        (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost
           [⟨32 * i.val, 32⟩] = loadCost)
     (hvalue :
       Bytes.toB256 ((memory.read (32 * i.val) 32).1) = indexedTopic)
@@ -1816,10 +1817,10 @@ theorem constructorArgumentLog2Prefix_runCompiled
     (hlog : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32,
-            eventTopic, indexedTopic], memory, Gafter⟩)
+            eventTopic, indexedTopic], memory, Gafter, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, Gbefore⟩)
+      (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++
         pushB256 eventTopic ::: logWith 1 1 4 +++ rest) post := by
   rw [hgas]
@@ -1847,7 +1848,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
           (v := indexedTopic) (s := []) (M := memory)
           (c := loadCost) (G := Gafter + (eventPushCost + 6))
       · simp only [Devm.stack_setMach]
-      · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach, hindex] using
           hloadCost [Nat.toB256 (32 * i.val)]
             (Gafter + (loadCost + eventPushCost + 6))
@@ -1879,7 +1880,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
             · simp only [Devm.stack_setMach, List.length_cons,
                 List.length_nil]
               omega
-          · simpa only [prepend, Devm.setMach_setMach,
+          · simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach,
               Devm.stack_setMach, Devm.memory_setMach] using hlog
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsReturn.lean`. -/
@@ -1888,12 +1889,12 @@ private def officialConstructorReturnPre
     (sevm : Sevm) (base : Devm) (G : Nat) : Devm :=
   (officialConstructorEffectBase sevm base).setMach
     ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)],
-      officialConstructorFinalMemory, G⟩
+      officialConstructorFinalMemory, G, (officialConstructorEffectBase sevm base).stateGas⟩
 
 private def officialConstructorReturnRead
     (sevm : Sevm) (base : Devm) (G : Nat) : Bytes × Devm :=
   let pre := officialConstructorReturnPre sevm base G
-  (pre.setMach ⟨[], pre.memory, G⟩).memRead constructorRuntimeBaseForProof 4282
+  (pre.setMach ⟨[], pre.memory, G, pre.stateGas⟩).memRead constructorRuntimeBaseForProof 4282
 
 /-- Exact successful constructor post-frame at its final remaining gas. -/
 def officialConstructorPost
@@ -1903,29 +1904,29 @@ def officialConstructorPost
 
 private theorem withMemory_setMach_same
     (base : Devm) (stack : List B256) (memory : Mem) (gas : Nat) :
-    (base.setMach ⟨stack, memory, gas⟩).withMemory memory =
-      base.setMach ⟨stack, memory, gas⟩ := by
+    (base.setMach ⟨stack, memory, gas, base.stateGas⟩).withMemory memory =
+      base.setMach ⟨stack, memory, gas, base.stateGas⟩ := by
   rfl
 
 private theorem memRead_setMach_of_read
     (base : Devm) (stack : List B256) (memory : Mem)
     (gas i sz : Nat) (output : Bytes)
     (hread : memory.read i sz = (output, memory)) :
-    let pre := base.setMach ⟨stack, memory, gas⟩
-    (pre.setMach ⟨[], pre.memory, gas⟩).memRead i sz =
-      (output, base.setMach ⟨[], memory, gas⟩) := by
+    let pre := base.setMach ⟨stack, memory, gas, base.stateGas⟩
+    (pre.setMach ⟨[], pre.memory, gas, pre.stateGas⟩).memRead i sz =
+      (output, base.setMach ⟨[], memory, gas, base.stateGas⟩) := by
   dsimp only
   unfold Devm.memRead
   simp only [Devm.memory_setMach]
   rw [hread]
-  simp only [withMemory_setMach_same, Devm.setMach_setMach]
+  simp only [withMemory_setMach_same, Devm.setMach_setMach, Devm.stateGas_setMach]
 
 private theorem officialConstructorReturnRead_eq
     (sevm : Sevm) (base : Devm) (G : Nat) :
     officialConstructorReturnRead sevm base G =
       (lidoCircuitBreakerCode officialParams,
         (officialConstructorEffectBase sevm base).setMach
-          ⟨[], officialConstructorFinalMemory, G⟩) := by
+          ⟨[], officialConstructorFinalMemory, G, (officialConstructorEffectBase sevm base).stateGas⟩) := by
   unfold officialConstructorReturnRead officialConstructorReturnPre
   exact memRead_setMach_of_read
     (base := officialConstructorEffectBase sevm base)
@@ -1942,7 +1943,7 @@ theorem officialConstructorPost_eq
     (sevm : Sevm) (base : Devm) (G : Nat) :
     officialConstructorPost sevm base G =
       ((officialConstructorEffectBase sevm base).setMach
-        ⟨[], officialConstructorFinalMemory, G⟩).withOutput
+        ⟨[], officialConstructorFinalMemory, G, (officialConstructorEffectBase sevm base).stateGas⟩).withOutput
           (lidoCircuitBreakerCode officialParams) := by
   unfold officialConstructorPost
   rw [officialConstructorReturnRead_eq]
@@ -1952,15 +1953,16 @@ theorem officialConstructorReturnLine_runCompiled
     {memory : Mem} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)], memory, G⟩)
+        ⟨[Nat.toB256 constructorRuntimeBaseForProof, (4282 : B256)], memory, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 6⟩)
+      (base.setMach ⟨[], memory, G + 6, base.stateGas⟩)
       (pushFixedNatForProof 4282 :::
         pushCompactNatForProof constructorRuntimeBaseForProof ::: rest) post := by
   simp only [pushFixedNatForProof_eq, pushCompactNatForProof_eq,
     if_pos (show 4282 < 2 ^ 16 by decide)]
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 theorem officialConstructorReturn_runCompiled
@@ -1997,7 +1999,7 @@ theorem officialConstructorReturn_runCompiled
     simp only [officialConstructorReturnPre, Devm.gasLeft_setMach, Nat.add_zero]
   have hread :
       ((officialConstructorReturnPre sevm base G).setMach
-        ⟨[], (officialConstructorReturnPre sevm base G).memory, G⟩).memRead
+        ⟨[], (officialConstructorReturnPre sevm base G).memory, G, (officialConstructorReturnPre sevm base G).stateGas⟩).memRead
           (Nat.toB256 constructorRuntimeBaseForProof).toNat (4282 : B256).toNat =
         officialConstructorReturnRead sevm base G := by
     unfold officialConstructorReturnRead
@@ -2099,6 +2101,7 @@ private theorem officialConstructorHeartbeatStore_eq_effectBase
 
 theorem officialConstructorHeartbeatSstore_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {G : Nat} {rest : Func}
     (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
       (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
@@ -2109,25 +2112,25 @@ theorem officialConstructorHeartbeatSstore_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorEffectBase sevm base).setMach
-        ⟨[], officialConstructorFinalMemory, G⟩)
+        ⟨[], officialConstructorFinalMemory, G, (officialConstructorEffectBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorHeartbeatLoggedBase sevm base).setMach
         ⟨[heartbeatIntervalSlot,
             officialConstructorArgs.initialHeartbeatInterval],
-          officialConstructorHeartbeatMemory, G + 22100⟩)
+          officialConstructorHeartbeatMemory, G + 22100, (officialConstructorHeartbeatLoggedBase sevm base).stateGas⟩)
       (sstore ::: rest) post := by
   have hrest' : Func.RunCompiled fs sevm
       ((officialConstructorColdStore sevm
           (officialConstructorHeartbeatLoggedBase sevm base)
           heartbeatIntervalSlot
           officialConstructorArgs.initialHeartbeatInterval).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorColdStore sevm (officialConstructorHeartbeatLoggedBase sevm base) heartbeatIntervalSlot officialConstructorArgs.initialHeartbeatInterval).stateGas⟩)
       rest post := by
     rw [officialConstructorHeartbeatStore_eq_effectBase,
       officialConstructorHeartbeatMemory_eq_final]
     exact hrest
-  exact officialConstructorColdStore_runCompiled hcold horiginal hcurrent
+  exact officialConstructorColdStore_runCompiled (hfork := hfork) hcold horiginal hcurrent
     (by unfold officialConstructorArgs; decide)
     (by simp only [gCallStipend]; omega) hstatic hrest'
 
@@ -2156,6 +2159,7 @@ private theorem officialConstructorHeartbeatMemory_read_same :
 
 theorem officialConstructorHeartbeatStoreLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {G : Nat} {rest : Func}
     (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
       (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
@@ -2166,11 +2170,11 @@ theorem officialConstructorHeartbeatStoreLine_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorEffectBase sevm base).setMach
-        ⟨[], officialConstructorFinalMemory, G⟩)
+        ⟨[], officialConstructorFinalMemory, G, (officialConstructorEffectBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorHeartbeatLoggedBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G + 22109⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G + 22109, (officialConstructorHeartbeatLoggedBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 6 +++
         pushB256 heartbeatIntervalSlot ::: sstore ::: rest) post := by
   apply constructorArgumentSstorePrefix_runCompiled
@@ -2185,7 +2189,7 @@ theorem officialConstructorHeartbeatStoreLine_runCompiled
   · exact officialConstructorHeartbeatMemory_argument_window
   · exact officialConstructorHeartbeatMemory_read_initialInterval
   · exact officialConstructorHeartbeatMemory_read_same
-  · exact officialConstructorHeartbeatSstore_runCompiled
+  · exact officialConstructorHeartbeatSstore_runCompiled (hfork := hfork)
       hcold horiginal hcurrent hstatic hrest
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsHeartbeatLogOpcode.lean`. -/
@@ -2238,13 +2242,13 @@ theorem officialConstructorHeartbeatLogOpcode_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorHeartbeatLoggedBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorHeartbeatLoggedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
             (2 : B256) * 32, heartbeatIntervalUpdatedEvent],
-          officialConstructorHeartbeatMemory, G + 1262⟩)
+          officialConstructorHeartbeatMemory, G + 1262, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post := by
   apply constructorEventLog1Opcode_runCompiled
       (topic := heartbeatIntervalUpdatedEvent)
@@ -2268,11 +2272,11 @@ theorem officialConstructorHeartbeatLogLine_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorHeartbeatLoggedBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorHeartbeatLoggedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G + 1271⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G + 1271, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (pushB256 heartbeatIntervalUpdatedEvent :::
         logWith 0
           (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
@@ -2326,11 +2330,11 @@ theorem officialConstructorHeartbeatScratchValue_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatZeroMemory, G + 12⟩)
+        ⟨[], officialConstructorHeartbeatZeroMemory, G + 12, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 6 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
@@ -2348,7 +2352,7 @@ theorem officialConstructorHeartbeatScratchValue_runCompiled
   · intro S G'
     change gVerylow +
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨S, officialConstructorHeartbeatZeroMemory, G'⟩).extCost
+        ⟨S, officialConstructorHeartbeatZeroMemory, G', (officialConstructorPauseStoredBase sevm base).stateGas⟩).extCost
           [⟨192, 32⟩] = 3
     rw [Devm.extCost_zero_of_le
       (N := officialConstructorHeartbeatZeroMemory)
@@ -2391,11 +2395,11 @@ theorem officialConstructorHeartbeatScratchZero_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatZeroMemory, G + 12⟩)
+        ⟨[], officialConstructorHeartbeatZeroMemory, G + 12, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G + 20⟩)
+        ⟨[], officialConstructorPauseMemory, G + 20, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
   apply constructorZeroMstorePrefix_runCompiled
@@ -2421,11 +2425,11 @@ theorem officialConstructorHeartbeatScratchLine_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorHeartbeatMemory, G⟩)
+        ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G + 20⟩)
+        ⟨[], officialConstructorPauseMemory, G + 20, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++
         loadArgumentIndexForProof 6 +++
@@ -2438,6 +2442,7 @@ theorem officialConstructorHeartbeatScratchLine_runCompiled
 
 theorem officialConstructorHeartbeatSuffix_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcold : (sevm.currentTarget, heartbeatIntervalSlot) ∉
       (officialConstructorHeartbeatLoggedBase sevm base).accessedStorageKeys)
     (horiginal : getOrigStorVal sevm sevm.currentTarget
@@ -2447,7 +2452,7 @@ theorem officialConstructorHeartbeatSuffix_runCompiled
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G + 23406⟩)
+        ⟨[], officialConstructorPauseMemory, G + 23406, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       officialConstructorHeartbeatSuffix
       (officialConstructorPost sevm base G) := by
   -- Spell the entry gas as the walk accumulates it.  The two forms are equal
@@ -2457,7 +2462,7 @@ theorem officialConstructorHeartbeatSuffix_runCompiled
   have hret := officialConstructorReturn_runCompiled
     (fs := fs) (sevm := sevm) (base := base) (G := G)
   have hreturn := officialConstructorReturnLine_runCompiled hret
-  have hstore := officialConstructorHeartbeatStoreLine_runCompiled
+  have hstore := officialConstructorHeartbeatStoreLine_runCompiled (hfork := hfork)
     hcold horiginal hcurrent hstatic hreturn
   have hlog := officialConstructorHeartbeatLogLine_runCompiled hstatic hstore
   have hscratch :=
@@ -2490,6 +2495,7 @@ private theorem officialConstructorPauseMemory_read_same_store :
 
 private theorem officialConstructorPauseSstore_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {G : Nat} {rest : Func}
     (hcold : (sevm.currentTarget, pauseDurationSlot) ∉
       (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
@@ -2500,28 +2506,29 @@ private theorem officialConstructorPauseSstore_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseLoggedBase sevm base).setMach
         ⟨[pauseDurationSlot, officialConstructorArgs.initialPauseDuration],
-          officialConstructorPauseMemory, G + 22100⟩)
+          officialConstructorPauseMemory, G + 22100, (officialConstructorPauseLoggedBase sevm base).stateGas⟩)
       (sstore ::: rest) post := by
   have hrest' : Func.RunCompiled fs sevm
       ((officialConstructorColdStore sevm
           (officialConstructorPauseLoggedBase sevm base)
           pauseDurationSlot
           officialConstructorArgs.initialPauseDuration).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorColdStore sevm (officialConstructorPauseLoggedBase sevm base) pauseDurationSlot officialConstructorArgs.initialPauseDuration).stateGas⟩)
       rest post := by
     simpa only [officialConstructorPauseStoredBase] using hrest
-  exact officialConstructorColdStore_runCompiled
+  exact officialConstructorColdStore_runCompiled (hfork := hfork)
     hcold horiginal hcurrent
     (by unfold officialConstructorArgs; decide)
     (by simp only [gCallStipend]; omega) hstatic hrest'
 
 theorem officialConstructorPauseStoreLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {G : Nat} {rest : Func}
     (hcold : (sevm.currentTarget, pauseDurationSlot) ∉
       (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
@@ -2532,11 +2539,11 @@ theorem officialConstructorPauseStoreLine_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseLoggedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G + 22109⟩)
+        ⟨[], officialConstructorPauseMemory, G + 22109, (officialConstructorPauseLoggedBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 5 +++
         pushB256 pauseDurationSlot ::: sstore ::: rest) post := by
   apply constructorArgumentSstorePrefix_runCompiled
@@ -2551,7 +2558,7 @@ theorem officialConstructorPauseStoreLine_runCompiled
   · exact officialConstructorPauseMemory_argument_window
   · exact officialConstructorPauseMemory_read_initialDuration
   · exact officialConstructorPauseMemory_read_same_store
-  · exact officialConstructorPauseSstore_runCompiled
+  · exact officialConstructorPauseSstore_runCompiled (hfork := hfork)
       hcold horiginal hcurrent hstatic hrest
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsConfigurationLog.lean`. -/
@@ -2604,13 +2611,13 @@ private theorem officialConstructorPauseLogOpcode_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseLoggedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorPauseLoggedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[Nat.toB256 (officialConstructorEventScratch / 32) * 32,
             (2 : B256) * 32, pauseDurationUpdatedEvent],
-          officialConstructorPauseMemory, G + 1262⟩)
+          officialConstructorPauseMemory, G + 1262, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (Ninst.log (Fin.succ 0) ::: rest) post := by
   apply constructorEventLog1Opcode_runCompiled
       (topic := pauseDurationUpdatedEvent)
@@ -2632,11 +2639,11 @@ theorem officialConstructorPauseLogLine_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseLoggedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorPauseLoggedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G + 1271⟩)
+        ⟨[], officialConstructorPauseMemory, G + 1271, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (pushB256 pauseDurationUpdatedEvent :::
         logWith 0
           (Nat.toB256 (officialConstructorEventScratch / 32)) 2 +++
@@ -2684,11 +2691,11 @@ theorem officialConstructorPauseScratchValue_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPauseZeroMemory, G + 15⟩)
+        ⟨[], officialConstructorPauseZeroMemory, G + 15, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 5 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
@@ -2706,7 +2713,7 @@ theorem officialConstructorPauseScratchValue_runCompiled
   · intro S G'
     change gVerylow +
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨S, officialConstructorPauseZeroMemory, G'⟩).extCost
+        ⟨S, officialConstructorPauseZeroMemory, G', (officialConstructorInitializedBase sevm base).stateGas⟩).extCost
           [⟨160, 32⟩] = 3
     rw [Devm.extCost_zero_of_le
       (N := officialConstructorPauseZeroMemory)
@@ -2736,11 +2743,11 @@ theorem officialConstructorPauseScratchZero_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPauseZeroMemory, G + 15⟩)
+        ⟨[], officialConstructorPauseZeroMemory, G + 15, (officialConstructorInitializedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPatchedMemory, G + 27⟩)
+        ⟨[], officialConstructorPatchedMemory, G + 27, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
   apply constructorZeroMstorePrefix_runCompiled
@@ -2764,11 +2771,11 @@ theorem officialConstructorPauseScratchLine_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPauseMemory, G⟩)
+        ⟨[], officialConstructorPauseMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPatchedMemory, G + 27⟩)
+        ⟨[], officialConstructorPatchedMemory, G + 27, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++
         loadArgumentIndexForProof 5 +++
@@ -2787,6 +2794,7 @@ theorem officialConstructorConfigurationSuffix_eq_prefix :
 
 theorem officialConstructorConfigurationSuffix_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
       (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
     (hpauseOriginal : getOrigStorVal sevm sevm.currentTarget
@@ -2803,15 +2811,15 @@ theorem officialConstructorConfigurationSuffix_runCompiled
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPatchedMemory, G + 46813⟩)
+        ⟨[], officialConstructorPatchedMemory, G + 46813, (officialConstructorInitializedBase sevm base).stateGas⟩)
       officialConstructorConfigurationSuffix
       (officialConstructorPost sevm base G) := by
   -- As above: the walk's own accumulation, not the folded offset.
   rw [show G + 46813 = G + 23406 + 22109 + 1271 + 27 from by omega]
-  have hheartbeat := officialConstructorHeartbeatSuffix_runCompiled
+  have hheartbeat := officialConstructorHeartbeatSuffix_runCompiled (hfork := hfork)
     (fs := fs) (G := G) hheartbeatCold hheartbeatOriginal
     hheartbeatCurrent hstatic
-  have hpauseStore := officialConstructorPauseStoreLine_runCompiled
+  have hpauseStore := officialConstructorPauseStoreLine_runCompiled (hfork := hfork)
     hpauseCold hpauseOriginal hpauseCurrent hstatic hheartbeat
   have hpauseLog := officialConstructorPauseLogLine_runCompiled
     hstatic hpauseStore
@@ -2842,13 +2850,13 @@ theorem officialConstructorInitializedLogOpcode_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPatchedMemory, G⟩)
+        ⟨[], officialConstructorPatchedMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32,
             circuitBreakerInitializedEvent, officialParams.admin],
-          officialConstructorPatchedMemory, G + 2149⟩)
+          officialConstructorPatchedMemory, G + 2149, base.stateGas⟩)
       (Ninst.log (Fin.succ 1) ::: rest) post := by
   apply constructorEventLog2Opcode_runCompiled
       (topic0 := circuitBreakerInitializedEvent)
@@ -2876,10 +2884,10 @@ theorem officialConstructorInitializedLogLine_runCompiled
     (hstatic : sevm.isStatic = false)
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
-        ⟨[], officialConstructorPatchedMemory, G⟩)
+        ⟨[], officialConstructorPatchedMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchedMemory, G + 2163⟩)
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G + 2163, base.stateGas⟩)
       (officialConstructorInitializedPrefix +++ rest) post := by
   have hvalue : Bytes.toB256
       ((officialConstructorPatchedMemory.read 0 32).1) =
@@ -2906,7 +2914,7 @@ theorem officialConstructorInitializedLogLine_runCompiled
   · decide
   · intro S G'
     change gVerylow +
-      (base.setMach ⟨S, officialConstructorPatchedMemory, G'⟩).extCost
+      (base.setMach ⟨S, officialConstructorPatchedMemory, G', base.stateGas⟩).extCost
         [⟨0, 32⟩] = 3
     exact Devm.extCost_add_of_size
       (a := gVerylow) officialConstructorPatchedMemory_size
@@ -2949,13 +2957,13 @@ private theorem officialConstructorPatchLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 140⟩)
+      (base.setMach ⟨[], officialConstructorCopiedMemory, G + 140, base.stateGas⟩)
       (officialConstructorPatchLine +++ rest) post := by
   have hrest12 : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchMemory12, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchMemory12, G, base.stateGas⟩)
       rest post := by
     rw [officialConstructorPatchMemory12_eq_patched]
     exact hrest
@@ -2969,22 +2977,22 @@ theorem officialConstructorCopyPatch_runCompiled
     {G : Nat} {rest : Func}
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorPatchedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorPatchedMemory, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 985⟩)
+          officialConstructorDecodedMemory, G + 985, base.stateGas⟩)
       (codecopy ::: patchRuntimeLineForProof constructorRuntimeBaseForProof +++ rest) post := by
   have hpatch := officialConstructorPatchLine_runCompiled hrest
   refine Func.RunCompiled.next
     (devm' := base.setMach
-      ⟨[], officialConstructorCopiedMemory, G + 140⟩) ?_ ?_
+      ⟨[], officialConstructorCopiedMemory, G + 140, base.stateGas⟩) ?_ ?_
   · have hstep := Ninst.runCompiled_codecopy_of
       (sevm := sevm)
       (devm := base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 985⟩)
+          officialConstructorDecodedMemory, G + 985, base.stateGas⟩)
       (di := (224 : B256)) (si := (616 : B256)) (sz := (4282 : B256))
       (s := []) (c := 845) (G := G + 140)
       (M := officialConstructorCopiedMemory)
@@ -3003,7 +3011,7 @@ theorem officialConstructorCopyPatch_runCompiled
         rw [officialFullCreateInput_slice_runtimeTemplate hcode]
         rfl)
       (by simp only [Devm.gasLeft_setMach])
-    simpa only [Devm.setMach_setMach] using hstep
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach] using hstep
   · rw [patchRuntimeLine_official_eq]
     exact hpatch
 
@@ -3011,6 +3019,7 @@ theorem officialConstructorCopyPatch_runCompiled
 
 theorem officialConstructorEffectBody_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
       (officialConstructorPauseLoggedBase sevm base).accessedStorageKeys)
@@ -3029,10 +3038,10 @@ theorem officialConstructorEffectBody_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G + 49961⟩)
+          officialConstructorDecodedMemory, G + 49961, base.stateGas⟩)
       officialConstructorEffectBody
       (officialConstructorPost sevm base G) := by
-  have hconfiguration := officialConstructorConfigurationSuffix_runCompiled
+  have hconfiguration := officialConstructorConfigurationSuffix_runCompiled (hfork := hfork)
     (fs := fs) (G := G) hpauseCold hpauseOriginal hpauseCurrent
     hheartbeatCold hheartbeatOriginal hheartbeatCurrent hstatic
   have hinitialized := officialConstructorInitializedLogLine_runCompiled
@@ -3043,10 +3052,10 @@ theorem officialConstructorEffectBody_runCompiled
       base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
             officialConstructorDecodedMemory,
-            G + 46813 + 2163 + 985⟩ =
+            G + 46813 + 2163 + 985, base.stateGas⟩ =
         base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-            officialConstructorDecodedMemory, G + 49961⟩ := by
+            officialConstructorDecodedMemory, G + 49961, base.stateGas⟩ := by
     congr
   rw [← hstart]
   exact hcopy
@@ -3142,26 +3151,27 @@ private theorem officialConstructorValidationFinish_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, G⟩)
+          officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorEffectBody post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 9⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 9, base.stateGas⟩)
       officialConstructorValidationFinish post := by
   unfold officialConstructorValidationFinish
   simp only [pushCompactNatForProof_eq, pushFixedNatForProof_eq,
     if_pos (show 4282 < 2 ^ 16 by decide),
     if_pos (show 616 < 2 ^ 16 by decide)]
   func_run (3)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorValidationFinish post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialHeartbeatMaxStage post := by
   have hv4 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 128 32).1) =
@@ -3182,6 +3192,7 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
   unfold officialConstructorInitialHeartbeatMaxStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
   all_goals try simp_rw [hm4, hv4]
   all_goals try
@@ -3189,6 +3200,7 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm4, hv4]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 192).toNat = 192 by decide]
   all_goals try simp_rw [hm6, hv6]
   all_goals try
@@ -3196,16 +3208,17 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm6, hv6]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorInitialHeartbeatMaxStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialHeartbeatMinStage post := by
   have hv3 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 96 32).1) =
@@ -3226,6 +3239,7 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
   unfold officialConstructorInitialHeartbeatMinStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
   all_goals try simp_rw [hm3, hv3]
   all_goals try
@@ -3233,6 +3247,7 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm3, hv3]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 192).toNat = 192 by decide]
   all_goals try simp_rw [hm6, hv6]
   all_goals try
@@ -3240,16 +3255,17 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm6, hv6]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorInitialPauseMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorInitialHeartbeatMinStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialPauseMaxStage post := by
   have hv2 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 64 32).1) =
@@ -3270,6 +3286,7 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
   unfold officialConstructorInitialPauseMaxStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
   all_goals try simp_rw [hm2, hv2]
   all_goals try
@@ -3277,6 +3294,7 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm2, hv2]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 160).toNat = 160 by decide]
   all_goals try simp_rw [hm5, hv5]
   all_goals try
@@ -3284,16 +3302,17 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm5, hv5]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorInitialPauseMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorInitialPauseMaxStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialPauseMinStage post := by
   have hv1 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 32 32).1) =
@@ -3314,6 +3333,7 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
   unfold officialConstructorInitialPauseMinStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
   all_goals try simp_rw [hm1, hv1]
   all_goals try
@@ -3321,6 +3341,7 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm1, hv1]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 160).toNat = 160 by decide]
   all_goals try simp_rw [hm5, hv5]
   all_goals try
@@ -3328,16 +3349,17 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm5, hv5]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorHeartbeatBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorInitialPauseMinStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorHeartbeatBoundsStage post := by
   have hv4 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 128 32).1) =
@@ -3358,6 +3380,7 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
   unfold officialConstructorHeartbeatBoundsStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
   all_goals try simp_rw [hm4, hv4]
   all_goals try
@@ -3365,6 +3388,7 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm4, hv4]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
   all_goals try simp_rw [hm3, hv3]
   all_goals try
@@ -3372,16 +3396,17 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm3, hv3]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorHeartbeatBoundsStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22, base.stateGas⟩)
       officialConstructorMinHeartbeatNonzeroStage post := by
   have hv3 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 96 32).1) =
@@ -3394,6 +3419,7 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
   unfold officialConstructorMinHeartbeatNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
   all_goals try simp_rw [hm3, hv3]
   all_goals try
@@ -3401,16 +3427,17 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm3, hv3]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorPauseBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorMinHeartbeatNonzeroStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorPauseBoundsStage post := by
   have hv2 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 64 32).1) =
@@ -3431,6 +3458,7 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
   unfold officialConstructorPauseBoundsStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
   all_goals try simp_rw [hm2, hv2]
   all_goals try
@@ -3438,6 +3466,7 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm2, hv2]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
   all_goals try simp_rw [hm1, hv1]
   all_goals try
@@ -3445,16 +3474,17 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm1, hv1]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorMinPauseNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorPauseBoundsStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22, base.stateGas⟩)
       officialConstructorMinPauseNonzeroStage post := by
   have hv1 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 32 32).1) =
@@ -3467,6 +3497,7 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
   unfold officialConstructorMinPauseNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
   all_goals try simp_rw [hm1, hv1]
   all_goals try
@@ -3474,16 +3505,17 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm1, hv1]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorAdminNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorMinPauseNonzeroStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 21⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 21, base.stateGas⟩)
       officialConstructorAdminNonzeroStage post := by
   have hv0 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 0 32).1) =
@@ -3496,6 +3528,7 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
   unfold officialConstructorAdminNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
   all_goals try simp_rw [hm0, hv0]
   all_goals try
@@ -3503,16 +3536,17 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm0, hv0]
   func_run (2) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 set_option maxRecDepth 930 in
 private theorem officialConstructorCanonicalAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorAdminNonzeroStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 32⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G + 32, base.stateGas⟩)
       officialConstructorCanonicalAdminStage post := by
   have hv0 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 0 32).1) =
@@ -3525,6 +3559,7 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
   unfold officialConstructorCanonicalAdminStage checkNonAddress pushAddressMask
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
   all_goals try simp_rw [hm0, hv0]
   all_goals try
@@ -3532,6 +3567,7 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
       (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
   try rw [hm0, hv0]
   func_run (6) [~~~(0 : B256), addressMask, 0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
 private theorem officialConstructorValidationDecode_runCompiled
@@ -3539,10 +3575,10 @@ private theorem officialConstructorValidationDecode_runCompiled
     (hvalue : sevm.value = 0)
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], officialConstructorDecodedMemory, G⟩)
+      (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
       officialConstructorCanonicalAdminStage post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 93⟩)
+      (base.setMach ⟨[], Mem.empty, G + 93, base.stateGas⟩)
       lidoCircuitBreakerConstructorProgram.main post := by
   have hcodeSize : sevm.code.size = 5122 := by
     rw [ByteArray.size_eq_length_toList, hcode,
@@ -3553,6 +3589,7 @@ private theorem officialConstructorValidationDecode_runCompiled
     if_pos (show 5122 < 2 ^ 16 by decide),
     if_pos (show 4898 < 2 ^ 16 by decide)]
   func_run (11) [1, 0, 45]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp [B256.eqCheck, hvalue]
   all_goals try simp_rw [hcodeSize]
   all_goals try
@@ -3585,12 +3622,12 @@ theorem officialConstructorValidationPrefix_runCompiled
       sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, g - 367⟩)
+          officialConstructorDecodedMemory, g - 367, base.stateGas⟩)
       officialConstructorEffectBody post) :
     Func.RunCompiled
       (lidoCircuitBreakerConstructorProgram.main ::
         lidoCircuitBreakerConstructorProgram.aux)
-      sevm (base.setMach ⟨[], Mem.empty, g⟩)
+      sevm (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩)
       lidoCircuitBreakerConstructorProgram.main post := by
   have hfinish :=
     officialConstructorValidationFinish_runCompiled hrest
@@ -3628,6 +3665,7 @@ end validation
 
 private theorem officialConstructorProgram_runCompiled
     {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
@@ -3645,10 +3683,10 @@ private theorem officialConstructorProgram_runCompiled
         sevm.currentTarget heartbeatIntervalSlot = 0)
     (hstatic : sevm.isStatic = false) :
     Prog.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩)
       lidoCircuitBreakerConstructorProgram
       (officialConstructorPost sevm base G) := by
-  have heffect := officialConstructorEffectBody_runCompiled
+  have heffect := officialConstructorEffectBody_runCompiled (hfork := hfork)
     (fs := lidoCircuitBreakerConstructorProgram.main ::
       lidoCircuitBreakerConstructorProgram.aux)
     (G := G) hcode hpauseCold hpauseOriginal hpauseCurrent
@@ -3659,7 +3697,7 @@ private theorem officialConstructorProgram_runCompiled
       sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-          officialConstructorDecodedMemory, (G + 50328) - 367⟩)
+          officialConstructorDecodedMemory, (G + 50328) - 367, base.stateGas⟩)
       officialConstructorEffectBody
       (officialConstructorPost sevm base G) := by
     have hgas : (G + 50328) - 367 = G + 49961 := by omega
@@ -3669,11 +3707,11 @@ private theorem officialConstructorProgram_runCompiled
     (base := base) (g := G + 50328) hvalue hcode (by omega) heffect'
   apply Prog.runCompiled_intro
     (G := G + 50328)
-    (mid := base.setMach ⟨[], Mem.empty, G + 50328⟩)
+    (mid := base.setMach ⟨[], Mem.empty, G + 50328, base.stateGas⟩)
   · simp only [Devm.gasLeft_setMach, officialConstructorRequiredGas,
       gJumpdest]
   · simp only [Devm.stack_setMach, Devm.memory_setMach,
-      Devm.setMach_setMach]
+      Devm.setMach_setMach, Devm.stateGas_setMach]
   · exact hmain
 
 /-- The exact official constructor run from a fresh target frame. The cold and
@@ -3682,6 +3720,7 @@ corresponding intermediate premises after the first logs and configuration
 write. -/
 theorem officialConstructorProgram_runCompiled_fresh
     {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
@@ -3698,10 +3737,10 @@ theorem officialConstructorProgram_runCompiled_fresh
       heartbeatIntervalSlot = 0)
     (hstatic : sevm.isStatic = false) :
     Prog.RunCompiled sevm
-      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩)
       lidoCircuitBreakerConstructorProgram
       (officialConstructorPost sevm base G) := by
-  apply officialConstructorProgram_runCompiled hvalue hcode
+  apply officialConstructorProgram_runCompiled (hfork := hfork) hvalue hcode
   · rw [officialConstructorPauseLoggedBase_accessedStorageKeys]
     exact hpauseCold
   · exact hpauseOriginal
@@ -3728,6 +3767,7 @@ image: the compiled constructor prefix followed by the runtime template and
 the seven-word ABI suffix observed by `CODESIZE` and `CODECOPY`. -/
 theorem officialConstructor_exec_fresh
     {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hpauseCold : (sevm.currentTarget, pauseDurationSlot) ∉
@@ -3744,13 +3784,13 @@ theorem officialConstructor_exec_fresh
       heartbeatIntervalSlot = 0)
     (hstatic : sevm.isStatic = false) :
     exec ⟨0, sevm,
-        base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+        base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩⟩ =
       .ok (officialConstructorPost sevm base G) := by
   apply Prog.exec_of_runCompiled_appended
     (pfxCode := lidoCircuitBreakerInitPrefix)
     (sfxData := runtimeTemplateCode ++
       abiEncodeConstructorArgs officialConstructorArgs)
-    (officialConstructorProgram_runCompiled_fresh hvalue hcode
+    (officialConstructorProgram_runCompiled_fresh (hfork := hfork) hvalue hcode
       hpauseCold hpauseOriginal hpauseCurrent hheartbeatCold
       hheartbeatOriginal hheartbeatCurrent hstatic)
   · exact lidoCircuitBreakerConstructorProgram_compile.symm
